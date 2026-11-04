@@ -34,6 +34,7 @@ from dw_purchasing.application.approvals import (
     RequestSettlement,
 )
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
+from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.master_data import MasterDataService
 from dw_purchasing.application.orders import PurchaseOrders
@@ -230,6 +231,7 @@ def services_of(world: World) -> PurchasingServices:
         words=world.words,
         master_data=world.master_data,
         rfq_mails=world.rfq_mails,
+        follow_up=world.follow_up,
     )
 
 
@@ -259,6 +261,7 @@ class World:
     master_imports: MemoryMasterImports
     rfq_mails: RfqMailService
     rfq_mail_rows: MemoryRfqMails
+    follow_up: OrderFollowUp
 
 
 def open_world(
@@ -374,4 +377,14 @@ def open_world(
             enabled=True,
         ),
         rfq_mail_rows,
+        OrderFollowUp(
+            uow=store,
+            gate=Gate(Authz()),
+            master=master,
+            inbox=service.inbox,
+            model=model if with_model else None,
+            worker=Worker("purchasing-dw2", "1.0.0"),
+            clock=clock,
+            ids=ids,
+        ),
     )

@@ -32,6 +32,7 @@ from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
 from dw_purchasing.adapters.policy_files import platform_rule_book
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import RequestApprovals
+from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.ports import NoNotices
@@ -47,6 +48,7 @@ NOW = datetime(2026, 11, 3, 2, 0, tzinfo=UTC)
 FIXTURES = REPO / "evals/fixtures/cases"
 INTAKE = json.loads((FIXTURES / "purchasing_pr_intake.json").read_text(encoding="utf-8"))
 SOURCING = json.loads((FIXTURES / "purchasing_sourcing.json").read_text(encoding="utf-8"))
+FOLLOW_UP = json.loads((FIXTURES / "purchasing_follow_up.json").read_text(encoding="utf-8"))
 HEAD = uuid.UUID(int=0x4EAD)
 
 
@@ -158,6 +160,49 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
                     await session.execute(
                         sa.text(f"UPDATE purchasing.cases SET {patch} WHERE id = :i"),
                         {"i": case_id},
+                    )
+
+    # DW02 function 5 on the SQL store: Bravo's number, a confirmation read
+    # and accepted, a receipt; kept in the body and read back whole.
+    model.by_schema["ModelConfirmation"] = FOLLOW_UP["answers"]
+    follow = OrderFollowUp(store, Gate(Authz()), master, inbox, model, worker, clock, ids)
+
+    async def version() -> int:
+        return (await intake.case(me, case_id)).case_version
+
+    await follow.record_bravo_no(
+        me, case_id, "PR-2611-004-03", "PO-26110007", case_version=await version()
+    )
+    await follow.read_confirmation(me, case_id, "C01", case_version=await version())
+    await follow.accept_confirmation(me, case_id, "PR-2611-004-03", case_version=await version())
+    await follow.record_receipt(
+        me,
+        case_id,
+        "PR-2611-004-03",
+        line_no=1,
+        quantity=Decimal(4),
+        received_on=NOW.date(),
+        case_version=await version(),
+    )
+    (followed,) = (await intake.case(me, case_id)).tracking
+    assert followed.bravo_no == "PO-26110007" and len(followed.receipts) == 1
+    assert followed.confirmation is not None and followed.confirmation.accepted_by is not None
+    assert await follow.late(caller(tenancy.beta), today=NOW.date().replace(year=2027)) == []
+
+    # The catalog refuses tracking that is no list, and tracking on a case
+    # with no orders.
+    other = (await intake.read_mail(me, "P02")).case_id
+    async with store(me) as work:
+        session = work.cases._session
+        for patch, row in (
+            ("body = jsonb_set(body, '{tracking}', '{}')", case_id),
+            ("""body = jsonb_set(body, '{tracking}', '[{"po_ref": "X"}]')""", other),
+        ):
+            with pytest.raises(sa.exc.DBAPIError, match="ck_cases_tracking"):
+                async with session.begin_nested():
+                    await session.execute(
+                        sa.text(f"UPDATE purchasing.cases SET {patch} WHERE id = :i"),
+                        {"i": row},
                     )
 
 

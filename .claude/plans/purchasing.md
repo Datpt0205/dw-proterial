@@ -450,6 +450,31 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   lines compared, sender mails excluded, replay strict, DW2 dispatch, DW2's
   lane. Found on the way and fixed first (`e95b996b`): the SQL store wrote
   the case body from a hand list that lacked `read_from`.
+- 2026-11-04, **function 5a — each drafted order followed** (DW02 function
+  5, a buyer's presses; the lane comes in 5b): `domain.tracking` +
+  `application.follow_up`, per `po_ref` in the case body (`tracking`,
+  migration `13bff35b038b`: `ck_cases_tracking`, a list, only at
+  `po_drafted`). Bravo's number typed once by the buyer; a supplier's
+  confirmation found by code (verified mail of the order's own supplier
+  naming Bravo's number or the `po_ref`: `named_order`, listed by
+  `GET .../po/confirmations`), read by spans
+  (`purchasing.order_confirmation_reading@1.0.0`,
+  `domain.confirmation_reading`), held line by line to the order
+  (`differences`: quantity, unit price, a later date, a missing line, a line
+  not ordered), kept unaccepted until a buyer accepts it; receipts never
+  past what is owed; `GET /orders/late` (a line past the confirmed date,
+  else its need-by, less arrived than ordered). All `purchasing.po.prepare`.
+  Case page: Bravo's number, the confirmation tag and its differences, "DW2
+  đọc xác nhận" per listed mail, "Ghi nhận hàng". Demo mails C01 (Kimura,
+  matches) and C02 (Bảo Hộ: 40 of 50 gloves, 22/11, and an injected note).
+  Eval `purchasing_follow_up@1.0.0` 5/5 with full security coverage, **and
+  5/5 live on Qwen3.5-9B** (golden 1.0; the injected note ignored). Checks:
+  domain 17, service 13, routes (403 before the body on all six), DB flow on
+  Postgres with the CHECK; 16 mutations, each red (three first green or
+  mistyped, closed with tests). Found on the way: a confirmation naming the
+  `po_ref` also names the PR number, so it listed as an RFQ reply; demo
+  confirmations name Bravo's number, as a supplier's real ones would.
+  Not yet seen on a browser (owed with the chat frame's walk).
 
 ## Next
 
@@ -466,8 +491,12 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    live run as ticket 43's, with a buyer's folder and a PIC's. Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
    (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
-4. Function 5 — supplier confirmation and delivery tracking (the PO number
-   Bravo assigns recorded back; confirmations read from mail).
+4. Function 5b: the lane reads a listed confirmation on its own and accepts
+   one that differs in nothing (a new switch step `confirmation_reading`, a
+   bar for `purchasing_order_confirmation_reading`, an automation policy
+   1.1.0 and what an older tenant version without the step reads as); a
+   late line told to the buyer once per due date; a reminder worded for the
+   buyer to send; a closed state once every line arrived.
 5. Function 6 — the morning brief and status Q&A over purchase cases.
 6. Bars and live measurements for DW2's other model steps (a supplier's
    quote, a sentence to a PR, an RFQ's wording): only the PR mail reading
@@ -475,6 +504,11 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 7. A sent request cannot be withdrawn (a question on the Proterial list).
 
 ## Not done, on purpose
+
+- Bravo's number is typed: nothing reads it back (Bravo has no connection).
+  `late` reads the 500 oldest `po_drafted` cases and logs when it hits that
+  bound: a case stays `po_drafted` after every line arrived until 5b's
+  closed state.
 
 - A purchase approval is decided on the web only: no subject version is
   registered for the Zalo decision command.
@@ -496,6 +530,12 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   mock; anchors come with the mail drop's move (ADR 0013 decision 3).
 
 ## Decisions Đạt owes (Purchasing)
+
+- **A confirmation dearer than the order** (2026-11-04): a buyer may accept
+  it; the difference stays recorded and shown, and nothing in DW2 or Bravo
+  changes the order's price. Whether a higher confirmed price must go back
+  for approval at its tier (as a choice past the tier does) is Đạt's or
+  Proterial's call.
 
 - ~~**Internal mail in DW's store**~~ Decided by Đạt 2026-11-02: kept and read,
   since the model runs on the plant's own host and nothing leaves it; not a

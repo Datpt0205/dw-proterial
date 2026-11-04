@@ -144,3 +144,12 @@ export const GLOSSARY_LINES: Record<string, Record<string, string>> = {
   "Mail reasons": MAIL_REASON,
   Marks: MARK,
 };
+
+/** What a supplier's confirmation differs from its order in (`Difference.field`). */
+export const DIFFERENCE: Record<string, string> = {
+  quantity: "số lượng",
+  unit_price: "đơn giá",
+  delivery_on: "ngày giao",
+  missing: "thiếu dòng",
+  not_ordered: "dòng ngoài đơn",
+};

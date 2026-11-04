@@ -18,6 +18,7 @@ from dw_purchasing.domain.checks import CrossCheck
 from dw_purchasing.domain.orders import PoRound
 from dw_purchasing.domain.requests import Currency, Price, PurchaseRequest
 from dw_purchasing.domain.sourcing import Offer, RfqRound, Selection
+from dw_purchasing.domain.tracking import OrderTracking
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -177,6 +178,8 @@ class PurchaseCase(BaseModel):
     po: PoRound | None = None
     # The last choice that went back for approval past the tier.
     reapproval: Reapproval | None = None
+    # DW02 function 5: what happened to each drafted order since, by po_ref.
+    tracking: tuple[OrderTracking, ...] = ()
 
     @model_validator(mode="after")
     def _a_mail_names_its_message(self) -> Self:
@@ -208,6 +211,10 @@ class PurchaseCase(BaseModel):
             raise ValueError("a case with suppliers chosen holds the choice, and only it does")
         if (self.status is CaseStatus.PO_DRAFTED) != (self.po is not None):
             raise ValueError("a case with orders drafted holds them, and only it does")
+        drafted = {o.po_ref for o in self.po.orders} if self.po is not None else set()
+        followed = [t.po_ref for t in self.tracking]
+        if len(followed) != len(set(followed)) or not set(followed) <= drafted:
+            raise ValueError("an order is followed once, and only an order drafted here")
         if sourcing and (self.decision is None or not self.decision.approved):
             raise ValueError("only an approved request is sourced")
         if sent != (self.check is not None and self.approval is not None):

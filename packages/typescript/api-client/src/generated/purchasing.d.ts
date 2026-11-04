@@ -139,6 +139,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/orders/late": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Late Lines */
+        get: operations["late_lines_api_v1_purchasing_orders_late_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests": {
         parameters: {
             query?: never;
@@ -304,6 +321,91 @@ export interface paths {
         get: operations["bravo_file_api_v1_purchasing_requests__case_id__po_bravo_xlsx_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Confirmation Mails */
+        get: operations["confirmation_mails_api_v1_purchasing_requests__case_id__po_confirmations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/confirmations/from-mail/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Confirmation */
+        post: operations["read_confirmation_api_v1_purchasing_requests__case_id__po_confirmations_from_mail__message_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/bravo-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Bravo No */
+        post: operations["record_bravo_no_api_v1_purchasing_requests__case_id__po__po_ref__bravo_number_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/confirmation/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Confirmation */
+        post: operations["accept_confirmation_api_v1_purchasing_requests__case_id__po__po_ref__confirmation_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Receipt */
+        post: operations["record_receipt_api_v1_purchasing_requests__case_id__po__po_ref__receipts_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -592,6 +694,13 @@ export interface components {
             /** Header */
             header: string;
         };
+        /** BravoNoBody */
+        BravoNoBody: {
+            /** Bravo No */
+            bravo_no: string;
+            /** Case Version */
+            case_version: number;
+        };
         /**
          * BravoPoLayout
          * @description The import file's shape, as the tenant's Bravo expects it.
@@ -702,6 +811,67 @@ export interface components {
             lines: components["schemas"]["ComparedLine"][];
         };
         /**
+         * Confirmation
+         * @description A supplier's confirmation of one order, read from one mail.
+         */
+        Confirmation: {
+            /** Accepted At */
+            accepted_at?: string | null;
+            /** Accepted By */
+            accepted_by?: string | null;
+            /** Differences */
+            differences: components["schemas"]["Difference"][];
+            /** Lines */
+            lines: components["schemas"]["ConfirmedLine"][];
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /**
+             * Read By
+             * Format: uuid
+             */
+            read_by: string;
+            /** Source Ref */
+            source_ref: string;
+        };
+        /**
+         * ConfirmationMail
+         * @description A verified mail from the supplier of one of a case's orders that names
+         *     the order, not read yet: what a buyer presses "DW2 đọc" on.
+         */
+        ConfirmationMail: {
+            /** Message Id */
+            message_id: string;
+            /** Po Ref */
+            po_ref: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+        };
+        /**
+         * ConfirmedLine
+         * @description One line as the supplier confirmed it; None where the mail says
+         *     nothing of that value.
+         */
+        ConfirmedLine: {
+            /** Delivery On */
+            delivery_on?: string | null;
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity?: string | null;
+            /** Unit Price */
+            unit_price?: string | null;
+        };
+        /**
          * CrossCheck
          * @description What code found, stamped on the case when it goes to its approver.
          */
@@ -742,6 +912,23 @@ export interface components {
              * Format: uuid
              */
             decided_by: string;
+        };
+        /**
+         * Difference
+         * @description Where a confirmation and its order part, as text a buyer reads.
+         */
+        Difference: {
+            /** Confirmed */
+            confirmed: string | null;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "quantity" | "unit_price" | "delivery_on" | "missing" | "not_ordered";
+            /** Line No */
+            line_no: number;
+            /** Ordered */
+            ordered: string | null;
         };
         /**
          * Disposition
@@ -793,6 +980,32 @@ export interface components {
             sender: string;
             /** Subject */
             subject: string;
+        };
+        /**
+         * LateLine
+         * @description One line past its date with less arrived than ordered.
+         */
+        LateLine: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Due On
+             * Format: date
+             */
+            due_on: string;
+            /** Line No */
+            line_no: number;
+            /** Owed */
+            owed: string;
+            /** Po Ref */
+            po_ref: string;
+            /** Pr No */
+            pr_no: string;
+            /** Supplier Code */
+            supplier_code: string;
         };
         /** LineCheck */
         LineCheck: {
@@ -1004,6 +1217,26 @@ export interface components {
             valid_until?: string | null;
         };
         /**
+         * OrderTracking
+         * @description What happened to one drafted order, by its `po_ref`.
+         */
+        OrderTracking: {
+            /** Bravo At */
+            bravo_at?: string | null;
+            /** Bravo By */
+            bravo_by?: string | null;
+            /** Bravo No */
+            bravo_no?: string | null;
+            confirmation?: components["schemas"]["Confirmation"] | null;
+            /** Po Ref */
+            po_ref: string;
+            /**
+             * Receipts
+             * @default []
+             */
+            receipts: components["schemas"]["Receipt"][];
+        };
+        /**
          * PoDraft
          * @description One supplier's draft order.
          */
@@ -1163,6 +1396,11 @@ export interface components {
             /** Source Ref */
             source_ref?: string | null;
             status: components["schemas"]["CaseStatus"];
+            /**
+             * Tracking
+             * @default []
+             */
+            tracking: components["schemas"]["OrderTracking"][];
         };
         /**
          * PurchaseCheckView
@@ -1332,13 +1570,16 @@ export interface components {
         /**
          * ReadFrom
          * @description Where in a mail DW2 read the request, when a document was attached:
-         *     the file's name when the lines were in it (None: the mail's own words),
-         *     and whether any value was read only on a scanned page, which a person
-         *     compares with the paper before DW2 sends it on (`review`).
+         *     the file (its id in the stored mailbox, and its name) when the lines
+         *     were in it (None: the mail's own words), and whether any value was read
+         *     only on a scanned page, which a person compares with the paper before
+         *     DW2 sends it on (`review`).
          */
         ReadFrom: {
             /** Attachment */
             attachment?: string | null;
+            /** Attachment Id */
+            attachment_id?: string | null;
             /**
              * Scanned
              * @default false
@@ -1361,6 +1602,45 @@ export interface components {
             /** Explanation */
             explanation?: string | null;
             selection: components["schemas"]["Selection"];
+        };
+        /**
+         * Receipt
+         * @description Goods of one line that arrived, as a buyer recorded them.
+         */
+        Receipt: {
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity: string;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /**
+             * Recorded By
+             * Format: uuid
+             */
+            recorded_by: string;
+        };
+        /** ReceiptBody */
+        ReceiptBody: {
+            /** Case Version */
+            case_version: number;
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity: number | string;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
         };
         /**
          * Rejected
@@ -1896,6 +2176,26 @@ export interface operations {
             };
         };
     };
+    late_lines_api_v1_purchasing_orders_late_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LateLine"][];
+                };
+            };
+        };
+    };
     list_requests_api_v1_purchasing_requests_get: {
         parameters: {
             query?: {
@@ -2260,6 +2560,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmation_mails_api_v1_purchasing_requests__case_id__po_confirmations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationMail"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_confirmation_api_v1_purchasing_requests__case_id__po_confirmations_from_mail__message_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_bravo_no_api_v1_purchasing_requests__case_id__po__po_ref__bravo_number_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                po_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BravoNoBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_confirmation_api_v1_purchasing_requests__case_id__po__po_ref__confirmation_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                po_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_receipt_api_v1_purchasing_requests__case_id__po__po_ref__receipts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                po_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
                 };
             };
             /** @description Validation Error */

@@ -125,6 +125,7 @@ def _mounted(world: World) -> PurchasingMount:
             words=world.words,
             master_data=world.master_data,
             rfq_mails=world.rfq_mails,
+            follow_up=world.follow_up,
         )
     )
 
@@ -290,7 +291,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 32
+    assert len(routes) == 38
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -631,3 +632,35 @@ async def _rfq_drafted(world: World) -> tuple[uuid.UUID, str]:
 SOURCING_WORDS = json.loads(
     (REPO / "evals/fixtures/cases/purchasing_sourcing.json").read_text(encoding="utf-8")
 )["rfq_words"]["good"]
+
+
+async def test_following_an_order_is_refused_to_whoever_does_not_buy() -> None:
+    """DW02 function 5's routes ask `purchasing.po.prepare` before the body:
+    a reader is refused, the case untouched."""
+    from dw_purchasing.testing.flows import orders_drafted, sourcing_world
+
+    world = sourcing_world(REPO)
+    case_id = await orders_drafted(world)
+    version = (await world.service.case(world_caller(), case_id)).case_version
+    container = _container(frozenset({"purchasing.request.read"}), _mounted(world))
+    for path, body in (
+        (
+            f"/requests/{case_id}/po/PR-2611-004-03/bravo-number",
+            {"case_version": version, "bravo_no": "PO-1"},
+        ),
+        (f"/requests/{case_id}/po/confirmations/from-mail/C01", {"case_version": version}),
+        (f"/requests/{case_id}/po/PR-2611-004-03/confirmation/accept", {"case_version": version}),
+        (
+            f"/requests/{case_id}/po/PR-2611-004-03/receipts",
+            {"case_version": version, "line_no": 1, "quantity": "1", "received_on": "2026-11-20"},
+        ),
+    ):
+        response = await _call(container, "POST", path, body)
+        assert response.status_code == 403, (path, response.text)
+    assert (await _call(container, "GET", "/orders/late")).status_code == 403
+    confirmations = f"/requests/{case_id}/po/confirmations"
+    assert (await _call(container, "GET", confirmations)).status_code == 403
+    assert (await world.service.case(world_caller(), case_id)).case_version == version
+    buyer = _container(EVERY_SCOPE, _mounted(world))
+    late = await _call(buyer, "GET", "/orders/late")
+    assert late.status_code == 200, late.text
