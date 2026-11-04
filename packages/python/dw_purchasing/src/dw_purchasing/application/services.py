@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dw_purchasing.application.approvals import RequestApprovals
+from dw_purchasing.application.assistant import AssistantService
 from dw_purchasing.application.automation import SwitchesService
 from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests
@@ -30,3 +31,4 @@ class PurchasingServices:
     master_data: MasterDataService
     rfq_mails: RfqMailService
     follow_up: OrderFollowUp
+    assistant: AssistantService

@@ -475,6 +475,28 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   `po_ref` also names the PR number, so it listed as an RFQ reply; demo
   confirmations name Bravo's number, as a supplier's real ones would.
   Not yet seen on a browser (owed with the chat frame's walk).
+- 2026-11-04, **function 6 (Q&A) — Hỏi đáp DW2**, DW1's design (dw_sales
+  ADR 0007) in DW2's own code: `purchasing.question_intent@1.0.0` reads a
+  question (and the session's last 6 turns, both untrusted) into
+  `request_status` / `my_work` / `late_orders` / `out_of_scope`; code
+  answers through `PurchaseRequests.cases` (the list page's query, a
+  requester's own only), never an amount; a PR number the question does
+  not write is dropped (`written_in`), part of a number names nothing, two
+  matches are not guessed between. `steps` (how the question was read, what
+  was looked up) go with each answer: the chat frame's "DW2 đã làm gì".
+  Sessions `purchasing.assistant_sessions/_turns` (migration `63b96e56db85`,
+  RLS by user, append-only, `prune_assistant_sessions()` at 30 days by the
+  `purchasing_assistant_retention` lane). Routes `/assistant/ask`,
+  `/assistant/sessions[/{id}]` (any reader). Page "Hỏi đáp DW2" on
+  `AssistantChat`. Eval `purchasing_assistant@1.0.0` 5/5, **5/5 live on
+  Qwen3.5-9B**. Unit 15, integration 2 (round trip, other person /
+  workspace / tenant read none, no UPDATE/DELETE, CHECK, prune), platform
+  RLS/privileges/offboarding green; 7 mutations each red (three first
+  green, closed with tests). Found on the way: DW2's models named like
+  DW1's (`TurnView`, `QuestionKind`, `AskBody`) made FastAPI rename both and
+  broke DW1's TypeScript; renamed, and a contract test now fails on any
+  `<module>__<Name>` schema. The morning brief (step 12's other half) is
+  not built.
 
 ## Next
 
@@ -497,7 +519,8 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    1.1.0 and what an older tenant version without the step reads as); a
    late line told to the buyer once per due date; a reminder worded for the
    buyer to send; a closed state once every line arrived.
-5. Function 6 — the morning brief and status Q&A over purchase cases.
+5. Function 6's morning brief (the Q&A is built, 11-04): DW1's
+   `followups` lane shape, counts only, once per working day.
 6. Bars and live measurements for DW2's other model steps (a supplier's
    quote, a sentence to a PR, an RFQ's wording): only the PR mail reading
    has a bar and a measurement (11-04).

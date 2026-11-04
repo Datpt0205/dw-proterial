@@ -104,6 +104,21 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "166f36fc74e80c8d56b63825082d98323b9dbe680f0175c6f61e18afeea7dac9",
+      "dataset_id": "purchasing_assistant",
+      "files": [
+        {
+          "checksum": "8ecdc691d25aff93b002f3b2beb605e347bfc928c8d03b84bd447cc99847babd",
+          "path": "evals/expected/purchasing_assistant.json"
+        },
+        {
+          "checksum": "c67c50553e5998cf7b1e89ecda6968079c1e7d29d451ff484162fc38c07c63d0",
+          "path": "evals/fixtures/cases/purchasing_assistant.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "120ff663019b0828c22862d251c622ae21565016259d70226c9b412e330d6db0",
       "dataset_id": "purchasing_automation",
       "files": [
@@ -766,7 +781,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "a38aa80542c416b43d44a33ced6da43f9551887b",
+  "git_sha": "d26819436d40a6fa7f12e42d41a9d6baa45a595a",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1014,6 +1029,11 @@
       "checksum": "f4c783700809b4d0799695e98b1b5b77bbe571223dca70150f8fba134249f595",
       "prompt_id": "purchasing.pr_mail_reading",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "1389b5e354f5bdfe3d4d970bac2a91b650a7d0d4c8e140641520055a0c2593a7",
+      "prompt_id": "purchasing.question_intent",
+      "version": "1.0.0"
     },
     {
       "checksum": "5dc5749eff297fd6086ad43f3f089b9a47a094b3d4bb716cdd3a4c96234a9c66",

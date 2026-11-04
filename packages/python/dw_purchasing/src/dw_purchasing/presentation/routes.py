@@ -36,6 +36,11 @@ from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import PurchaseCheckView
+from dw_purchasing.application.assistant import (
+    AssistantAnswerView,
+    AssistantSessionDetailView,
+    AssistantSessionView,
+)
 from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.follow_up import ConfirmationMail, LateLine
 from dw_purchasing.application.intake import CaseChange, InboxItem
@@ -46,6 +51,7 @@ from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import ComparisonView, OfferForm, ReplyItem, SupplierName
+from dw_purchasing.domain.assistant import QUESTION_CHARS
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.requests import Code, PurchaseRequest, Quantity
 from dw_purchasing.domain.sourcing import Choice
@@ -138,6 +144,15 @@ class ReceiptBody(BaseModel):
     line_no: int = Field(ge=1)
     quantity: Quantity
     received_on: date
+
+
+class AssistantAskBody(BaseModel):
+    """A question, and the session it continues (None opens one)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=QUESTION_CHARS)
+    session_id: uuid.UUID | None = None
 
 
 class RulesBody(BaseModel):
@@ -480,6 +495,31 @@ def build_router(
             case_version=body.case_version,
         )
         return await idem.record(change)
+
+    # DW02 function 6: status questions, in the asker's own sessions. Any
+    # reader of requests asks; the service narrows what each may see.
+    @router.post("/assistant/ask", response_model=AssistantAnswerView, dependencies=reader)
+    async def assistant_ask(
+        body: AssistantAskBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> AssistantAnswerView:
+        answer = await svc.assistant.ask(context, body.question.strip(), body.session_id)
+        return await idem.record(answer)
+
+    @router.get(
+        "/assistant/sessions", response_model=list[AssistantSessionView], dependencies=reader
+    )
+    async def assistant_sessions(context: Ctx, svc: Svc) -> list[AssistantSessionView]:
+        return await svc.assistant.sessions(context)
+
+    @router.get(
+        "/assistant/sessions/{session_id}",
+        response_model=AssistantSessionDetailView,
+        dependencies=reader,
+    )
+    async def assistant_session(
+        session_id: uuid.UUID, context: Ctx, svc: Svc
+    ) -> AssistantSessionDetailView:
+        return await svc.assistant.session(context, session_id)
 
     @router.get("/orders/late", response_model=list[LateLine], dependencies=po)
     async def late_lines(context: Ctx, svc: Svc) -> list[LateLine]:

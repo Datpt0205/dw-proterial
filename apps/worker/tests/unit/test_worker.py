@@ -152,6 +152,9 @@ def test_only_the_platform_lanes_are_wired() -> None:
     uploads (2026-11-03): a database holds the queue, and the reader and the
     scanner it reads through are the settings' own, as Sales' file lanes'.
 
+    `purchasing_assistant_retention` drops DW2's Hỏi đáp sessions thirty
+    days after their last turn (2026-11-04), as Sales' does.
+
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
     """
@@ -170,6 +173,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "channel_deliveries_retention",
         "approval_codes_retention",
         "purchasing_retention",
+        "purchasing_assistant_retention",
         "purchasing_master_import",
     }
 

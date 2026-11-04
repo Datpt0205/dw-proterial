@@ -33,6 +33,7 @@ from dw_purchasing.application.approvals import (
     RequestDecisions,
     RequestSettlement,
 )
+from dw_purchasing.application.assistant import AssistantService
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests, Worker
@@ -55,7 +56,12 @@ from dw_purchasing.application.rules import (
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.measurements import FixedModel, MemoryMeasurements
-from dw_purchasing.testing.memory import MemoryMasterImports, MemoryRfqMails, MemoryStore
+from dw_purchasing.testing.memory import (
+    MemoryAssistantStore,
+    MemoryMasterImports,
+    MemoryRfqMails,
+    MemoryStore,
+)
 
 ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
 BETA: Final = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
@@ -232,6 +238,7 @@ def services_of(world: World) -> PurchasingServices:
         master_data=world.master_data,
         rfq_mails=world.rfq_mails,
         follow_up=world.follow_up,
+        assistant=world.assistant,
     )
 
 
@@ -262,6 +269,7 @@ class World:
     rfq_mails: RfqMailService
     rfq_mail_rows: MemoryRfqMails
     follow_up: OrderFollowUp
+    assistant: AssistantService
 
 
 def open_world(
@@ -312,6 +320,16 @@ def open_world(
     )
     master_imports = MemoryMasterImports()
     rfq_mail_rows = MemoryRfqMails()
+    follow_up = OrderFollowUp(
+        uow=store,
+        gate=Gate(Authz()),
+        master=master,
+        inbox=service.inbox,
+        model=model if with_model else None,
+        worker=Worker("purchasing-dw2", "1.0.0"),
+        clock=clock,
+        ids=ids,
+    )
     return World(
         service,
         store,
@@ -377,11 +395,12 @@ def open_world(
             enabled=True,
         ),
         rfq_mail_rows,
-        OrderFollowUp(
-            uow=store,
+        follow_up,
+        AssistantService(
+            store=MemoryAssistantStore(),
             gate=Gate(Authz()),
-            master=master,
-            inbox=service.inbox,
+            requests=service,
+            follow_up=follow_up,
             model=model if with_model else None,
             worker=Worker("purchasing-dw2", "1.0.0"),
             clock=clock,

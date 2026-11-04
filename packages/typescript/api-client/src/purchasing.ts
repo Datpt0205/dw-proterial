@@ -35,6 +35,7 @@ export type PurchasingRuleVersion =
 export type PurchasingWordsDraft = PurchasingSchemas["WordsDraft"];
 export type PurchaseConfirmationMail = PurchasingSchemas["ConfirmationMail"];
 export type PurchaseLateLine = PurchasingSchemas["LateLine"];
+export type PurchaseAssistantTurn = PurchasingSchemas["AssistantTurnView"];
 export type PurchasingMasterData = PurchasingSchemas["MasterDataView"];
 export type PurchasingMasterImport = PurchasingSchemas["MasterImportView"];
 export type PurchasingListChange = PurchasingSchemas["ListChange"];
@@ -301,6 +302,32 @@ export class PurchasingApi {
   /** Every line past its date with less arrived than ordered. */
   lateLines() {
     return this.get<"/api/v1/purchasing/orders/late">(`${BASE}/orders/late`);
+  }
+
+  // ---- Hỏi đáp DW2 (DW02 function 6) ---------------------------------------
+
+  assistantAsk(
+    question: string,
+    sessionId: string | null,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/assistant/ask">(
+      `${BASE}/assistant/ask`,
+      { question, session_id: sessionId },
+      idempotencyKey,
+    );
+  }
+
+  assistantSessions() {
+    return this.get<"/api/v1/purchasing/assistant/sessions">(
+      `${BASE}/assistant/sessions`,
+    );
+  }
+
+  assistantSession(sessionId: string) {
+    return this.get<"/api/v1/purchasing/assistant/sessions/{session_id}">(
+      `${BASE}/assistant/sessions/${enc(sessionId)}`,
+    );
   }
 
   // ---- a requester's own --------------------------------------------------

@@ -212,7 +212,7 @@ The twelve steps, the default proposed, and where each stands:
 | 9 | The PO number Bravo gave, read back | AI tự làm | function 5, not built |
 | 10 | A supplier's confirmation read and compared with the PO | AI tự làm when it matches | function 5, not built |
 | 11 | Delivery tracked (code); a reminder worded (model), a buyer sends | AI làm, người duyệt | function 5, not built |
-| 12 | Each person's morning brief, questions about a case | AI tự làm | function 6, not built |
+| 12 | Each person's morning brief, questions about a case | AI tự làm | Q&A built (Hỏi đáp DW2, 11-04); the brief not built |
 
 A step gets its switch the day code reads it, never before.
 

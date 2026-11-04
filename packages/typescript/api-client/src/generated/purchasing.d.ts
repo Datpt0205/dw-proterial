@@ -3,6 +3,57 @@
  * Regenerate with `make generate-contracts`.
  */
 export interface paths {
+    "/api/v1/purchasing/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Ask */
+        post: operations["assistant_ask_api_v1_purchasing_assistant_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/assistant/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Sessions */
+        get: operations["assistant_sessions_api_v1_purchasing_assistant_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/assistant/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Session */
+        get: operations["assistant_session_api_v1_purchasing_assistant_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/automation": {
         parameters: {
             query?: never;
@@ -670,6 +721,114 @@ export interface components {
             submitted_by: string;
             /** Tier Label */
             tier_label: string;
+        };
+        /** AssistantAnswerView */
+        AssistantAnswerView: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            turn: components["schemas"]["AssistantTurnView"];
+        };
+        /**
+         * AssistantAskBody
+         * @description A question, and the session it continues (None opens one).
+         */
+        AssistantAskBody: {
+            /** Question */
+            question: string;
+            /** Session Id */
+            session_id?: string | null;
+        };
+        /** AssistantCaseRef */
+        AssistantCaseRef: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * AssistantQuestionKind
+         * @description What DW2 answers, and everything else.
+         * @enum {string}
+         */
+        AssistantQuestionKind: "request_status" | "my_work" | "late_orders" | "out_of_scope";
+        /** AssistantSessionDetailView */
+        AssistantSessionDetailView: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Turn At
+             * Format: date-time
+             */
+            last_turn_at: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Title */
+            title: string;
+            /** Turns */
+            turns: components["schemas"]["AssistantTurnView"][];
+        };
+        /** AssistantSessionView */
+        AssistantSessionView: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Turn At
+             * Format: date-time
+             */
+            last_turn_at: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Title */
+            title: string;
+        };
+        /** AssistantStepView */
+        AssistantStepView: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** AssistantTurnView */
+        AssistantTurnView: {
+            /** Answer */
+            answer: string;
+            /**
+             * Answered By
+             * @enum {string}
+             */
+            answered_by: "model" | "code";
+            /**
+             * Asked At
+             * Format: date-time
+             */
+            asked_at: string;
+            /** Cites */
+            cites: components["schemas"]["AssistantCaseRef"][];
+            kind: components["schemas"]["AssistantQuestionKind"];
+            /** Question */
+            question: string;
+            /** Seq */
+            seq: number;
+            /** Steps */
+            steps: components["schemas"]["AssistantStepView"][];
         };
         /**
          * AutomationLevel
@@ -1961,6 +2120,93 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    assistant_ask_api_v1_purchasing_assistant_ask_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantAskBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantAnswerView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_sessions_api_v1_purchasing_assistant_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSessionView"][];
+                };
+            };
+        };
+    };
+    assistant_session_api_v1_purchasing_assistant_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSessionDetailView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     automation_api_v1_purchasing_automation_get: {
         parameters: {
             query?: never;

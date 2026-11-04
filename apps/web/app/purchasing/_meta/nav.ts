@@ -3,6 +3,7 @@ import {
   DatabaseOutlined,
   FolderOpenOutlined,
   InboxOutlined,
+  MessageOutlined,
   PlusCircleOutlined,
   ScheduleOutlined,
   ShoppingOutlined,
@@ -53,6 +54,13 @@ export const purchasingNav: NavEntry[] = [
         label: "Hồ sơ mua hàng",
         hint: "Mọi yêu cầu mua hàng theo trạng thái, mới nhất trước",
         icon: FolderOpenOutlined,
+        anyScope: [SCOPE.read, SCOPE.readOwn],
+      },
+      {
+        href: "/purchasing/assistant",
+        label: "Hỏi đáp DW2",
+        hint: "Hỏi một yêu cầu mua hàng đang ở bước nào, việc đang chờ bạn, đơn nào trễ hạn",
+        icon: MessageOutlined,
         anyScope: [SCOPE.read, SCOPE.readOwn],
       },
       {

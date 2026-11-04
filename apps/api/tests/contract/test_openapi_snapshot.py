@@ -41,3 +41,13 @@ def test_key_endpoints_present() -> None:
         "/api/v1/integrations",
     ):
         assert expected in paths, f"missing endpoint {expected}"
+
+
+def test_no_two_contexts_name_a_schema_alike() -> None:
+    """FastAPI renames two models of one name to `<module>__<Name>`, and the
+    generated TypeScript of the context that had the name first loses it:
+    DW2's Hỏi đáp once took `TurnView` from DW1's page (2026-11-04)."""
+    from generate_contracts import build_openapi  # type: ignore[import-not-found]
+
+    schemas = build_openapi()["components"]["schemas"]  # type: ignore[index]
+    assert [name for name in schemas if "__" in name] == []
