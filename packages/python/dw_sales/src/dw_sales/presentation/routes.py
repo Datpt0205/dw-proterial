@@ -68,7 +68,7 @@ from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
-from dw_sales.application.pc_dates import PcDatesView
+from dw_sales.application.pc_dates import PcDatesView, PcMailView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
@@ -547,6 +547,34 @@ def build_router(
     ) -> PcDatesView:
         view = await svc.pc_dates.read(
             context, case_id, case_version=body.case_version, text=body.text
+        )
+        return await idem.record(view)
+
+    # The verified mails naming the order (PC's answer, since every mail is
+    # stored), and one of them read as a paste is.
+    @router.get(
+        "/orders/{case_id}/pc-mails",
+        response_model=list[PcMailView],
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def pc_mails(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[PcMailView]:
+        return await svc.pc_dates.mails(context, case_id)
+
+    @router.post(
+        "/orders/{case_id}/pc-dates/from-mail/{message_id}",
+        response_model=PcDatesView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def pc_dates_from_mail(
+        case_id: uuid.UUID,
+        message_id: _MessageId,
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> PcDatesView:
+        view = await svc.pc_dates.read_mail(
+            context, case_id, message_id, case_version=body.case_version
         )
         return await idem.record(view)
 

@@ -512,6 +512,26 @@ export class SalesApi {
     );
   }
 
+  /** The verified mails naming the order, PC's answer among them. */
+  pcMails(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/pc-mails">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-mails`,
+    );
+  }
+
+  readPcDatesFromMail(
+    caseId: string,
+    messageId: string,
+    caseVersion: number,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/pc-dates/from-mail/{message_id}">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-dates/from-mail/${enc(messageId)}`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   /** A reminder to the customer the case waits on, drafted by the model
    * (DW01 function 4); nothing is sent or stored. */
   customerReminder(kind: "order" | "quote", caseId: string) {

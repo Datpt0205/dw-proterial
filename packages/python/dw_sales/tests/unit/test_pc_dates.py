@@ -164,3 +164,143 @@ def test_a_full_stop_ending_the_sentence_is_no_part_of_the_date() -> None:
     assert written_in("06/11/2026", "as requested, 06/11/2026.\nPC")
     assert written_in("05/12", "giao được từ 05/12. Các dòng khác")
     assert not written_in("30.10", "ngày 30.10.26")
+
+
+# ------------------------------------------------- PC's mail in the mailbox --
+
+PASSED = {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
+FAILED = {"spf": "fail", "dkim": "fail", "dmarc": "fail"}
+# M01's PO: VLX-PO-2609-0118, from velatrix.example.
+PC_MAIL = {
+    "message_id": "PC01",
+    "sender": "pc@proterial.example",
+    "subject": "Re: ngày giao VLX-PO-2609-0118",
+    "received_at": "2026-10-28T09:00:00+07:00",
+    "body": MAIL,
+    "authentication": PASSED,
+}
+OTHERS = [
+    PC_MAIL,
+    # The customer's own mail naming its PO: not PC's answer.
+    {**PC_MAIL, "message_id": "PC02", "sender": "an.trinh@velatrix.example"},
+    # A mail the mail system did not verify.
+    {**PC_MAIL, "message_id": "PC03", "authentication": FAILED},
+    # A mail about another order.
+    {**PC_MAIL, "message_id": "PC04", "subject": "Ngày giao VLX-PO-2609-0999"},
+]
+
+
+async def _order_with(model: Any) -> tuple[World, OrderCase, Any]:
+    from dw_sales.evals.world import SampleWith
+
+    sample = SampleWith(OTHERS)
+    data = sample.__enter__()
+    world = open_world(REPO, data, CALLERS, model=model, measured=False)
+    _, case = (await world.process_each(AN, ["M01"]))["M01"]
+    assert isinstance(case, OrderCase)
+    return world, case, sample
+
+
+async def test_the_mails_naming_the_order_s_po_are_listed_verified_and_not_the_customer_s() -> None:
+    world, case, sample = await _order_with(Answering(RIGHT))
+    try:
+        listed = await world.services.pc_dates.mails(AN.context(), case.case_id)
+        assert [m.message_id for m in listed] == ["PC01"]
+        assert listed[0].sender == "pc@proterial.example"
+    finally:
+        sample.__exit__(None, None, None)
+
+
+async def test_dates_are_read_from_a_listed_mail_as_from_a_pasted_one() -> None:
+    model = Answering(RIGHT)
+    world, case, sample = await _order_with(model)
+    try:
+        view = await world.services.pc_dates.read_mail(
+            AN.context(), case.case_id, "PC01", case_version=case.case_version
+        )
+        assert view.status == "read"
+        assert [(d.line_no, d.date) for d in view.dates] == [
+            (1, date(2026, 10, 30)),
+            (2, date(2026, 11, 5)),
+        ]
+        _, _, inputs = model.calls[-1]
+        # The mail's newest part: its subject, then what PC wrote.
+        assert inputs["mail"].endswith(MAIL) and "VLX-PO-2609-0118" in inputs["mail"]
+    finally:
+        sample.__exit__(None, None, None)
+
+
+@pytest.mark.parametrize("message_id", ["PC02", "PC03", "PC04", "M01", "nope"])
+async def test_a_mail_not_listed_is_not_read(message_id: str) -> None:
+    from dw_kernel.errors import NotFoundError
+
+    model = Answering(RIGHT)
+    world, case, sample = await _order_with(model)
+    try:
+        calls = len(model.calls)
+        with pytest.raises(NotFoundError):
+            await world.services.pc_dates.read_mail(
+                AN.context(), case.case_id, message_id, case_version=case.case_version
+            )
+        assert len(model.calls) == calls
+    finally:
+        sample.__exit__(None, None, None)
+
+
+async def test_only_who_prepares_the_order_lists_or_reads_pc_s_mail() -> None:
+    model = Answering(RIGHT)
+    world, case, sample = await _order_with(model)
+    try:
+        with pytest.raises(PermissionDeniedError):
+            await world.services.pc_dates.mails(READER.context(), case.case_id)
+        with pytest.raises(PermissionDeniedError):
+            await world.services.pc_dates.read_mail(
+                READER.context(), case.case_id, "PC01", case_version=case.case_version
+            )
+    finally:
+        sample.__exit__(None, None, None)
+
+
+async def test_the_mail_the_order_came_in_is_never_pc_s_answer() -> None:
+    """A PO a Sales address forwarded names no customer by its sender: the
+    case's own mail is left out all the same."""
+    import dataclasses
+    from datetime import UTC, datetime
+
+    from dw_sales.application.ports import Snapshot
+
+    class NoCustomer:
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        async def customer_by_sender(self, scope: Any, address: str) -> Any:
+            return Snapshot(None, datetime(2026, 10, 1, tzinfo=UTC))
+
+    world, case, sample = await _order_with(Answering(RIGHT))
+    try:
+        reader = world.services.pc_dates
+        blind = dataclasses.replace(reader, catalog=NoCustomer(reader.catalog))
+        listed = [m.message_id for m in await blind.mails(AN.context(), case.case_id)]
+        assert "M01" not in listed and "PC01" in listed
+    finally:
+        sample.__exit__(None, None, None)
+
+
+async def test_another_tenant_lists_no_mail_of_ours_and_reads_none() -> None:
+    from dw_kernel.errors import NotFoundError
+    from dw_sales.evals.graders import OUTSIDER
+    from dw_sales.evals.world import BETA
+
+    model = Answering(RIGHT)
+    world, case, sample = await _order_with(model)
+    try:
+        calls = len(model.calls)
+        with pytest.raises(NotFoundError):
+            await world.services.pc_dates.mails(OUTSIDER.context(BETA), case.case_id)
+        with pytest.raises(NotFoundError):
+            await world.services.pc_dates.read_mail(
+                OUTSIDER.context(BETA), case.case_id, "PC01", case_version=case.case_version
+            )
+        assert len(model.calls) == calls
+    finally:
+        sample.__exit__(None, None, None)
