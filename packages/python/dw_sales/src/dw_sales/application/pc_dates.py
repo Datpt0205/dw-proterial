@@ -17,6 +17,12 @@ PC gives, copied as the mail writes it.
 - **Nothing is recorded**: the dates fill the confirmation's fields, and
   Sales still confirms each line and presses "Ghi đã gửi xác nhận", the one
   door that records them. Nothing is stored of the pasted text.
+- **Or from the mailbox** (2026-11-04: every mail is stored since 11-02):
+  `mails` lists the verified mails that name the order's PO number or its
+  Bravo sales order, other than the customer's own and the case's revisions;
+  `read_mail` reads one of those as if it were pasted. Which mail is PC's
+  answer is code's list and Sales' choice, never the model's; who sent it
+  is shown, since no setting yet names PC's mailboxes.
 """
 
 from __future__ import annotations
@@ -25,7 +31,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,11 +43,14 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
-from dw_kernel.errors import QuotaExceededError
+from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.ports import InboxPort, SalesCatalogPort
 from dw_sales.application.support import same_version, stored_order
 from dw_sales.domain.orders import OrderCase
 
@@ -171,6 +180,17 @@ def _facts(case: OrderCase) -> list[dict[str, object]]:
     ]
 
 
+class PcMailView(BaseModel):
+    """A verified mail that names the order: what Sales may have DW1 read."""
+
+    model_config = ConfigDict(frozen=True)
+
+    message_id: str
+    sender: str
+    subject: str
+    received_at: datetime
+
+
 @dataclass(frozen=True)
 class PcDateReplies:
     """`POST /orders/{case_id}/pc-dates` (module docstring)."""
@@ -182,6 +202,61 @@ class PcDateReplies:
     ids: IdGenerator
     worker_id: str
     worker_version: str
+    # The stored mailbox and the customers it is told apart by; None where
+    # no mailbox is wired: nothing is listed, and a paste still reads.
+    inbox: InboxPort | None = None
+    catalog: SalesCatalogPort | None = None
+
+    async def mails(self, context: AccessContext, case_id: uuid.UUID) -> list[PcMailView]:
+        """The verified mails naming the order (module docstring), newest first."""
+        found = await self._naming(context, case_id)
+        return [
+            PcMailView(
+                message_id=m.message_id,
+                sender=m.sender.address,
+                subject=m.subject,
+                received_at=m.received_at,
+            )
+            for m in found
+        ]
+
+    async def read_mail(
+        self, context: AccessContext, case_id: uuid.UUID, message_id: str, *, case_version: int
+    ) -> PcDatesView:
+        """One mail `mails` lists, read as a paste is; any other is not found."""
+        found = {m.message_id: m for m in await self._naming(context, case_id)}
+        message = found.get(message_id)
+        if message is None:
+            raise NotFoundError(
+                "không có thư này trong các thư nêu đơn", details={"message_id": message_id}
+            )
+        return await self.read(
+            context, case_id, case_version=case_version, text=newest_part(message).text
+        )
+
+    async def _naming(self, context: AccessContext, case_id: uuid.UUID) -> list[InboundMessage]:
+        await self.gate.require(
+            context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
+        )
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+        if self.inbox is None or self.catalog is None:
+            return []
+        scope = sales_scope(context)
+        names = [case.document.header.po_no, *([case.bravo_so_no] if case.bravo_so_no else [])]
+        own = {case.message_id, *(r.message_id for r in case.superseded)}
+        found: list[InboundMessage] = []
+        for message in await self.inbox.list_messages(scope):
+            if message.message_id in own or not message.authentication.verified:
+                continue
+            text = f"{message.subject}\n{newest_part(message).text}"
+            if not any(written_in(name, text) for name in names):
+                continue
+            customer = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
+            if customer is not None and customer.code == case.customer_code:
+                continue
+            found.append(message)
+        return sorted(found, key=lambda m: m.received_at, reverse=True)
 
     async def read(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int, text: str

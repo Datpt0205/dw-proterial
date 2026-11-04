@@ -1099,6 +1099,20 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   reads (dropped on reading; mutated red). Item 7's premise ("internal mail
   never reaches DW1") no longer holds: PC's mail reaches the mailbox now,
   so DW1 could read PC's dates itself (not built; Sales still pastes them).
+  **Built 2026-11-04:** `PcDateReplies.mails` lists the verified mails that
+  name the order's PO number or its Bravo SO, other than the case's own
+  revisions and the customer's mail (`GET /orders/{id}/pc-mails`);
+  `read_mail` reads one of them through the same reader and checks as a
+  paste (`POST /orders/{id}/pc-dates/from-mail/{message_id}`); any other
+  message is not found and no model is asked. The dates still only fill the
+  form; "Ghi đã gửi xác nhận" records them. Web: the PC block lists the
+  mails with "DW1 đọc ngày từ thư này", the paste stays. Unit 7 new (listed,
+  read, five unlisted, scope, the case's forwarded mail, another tenant);
+  6 mutations, each red (one first green, closed with a test). **Owed to
+  Đạt:** no setting names PC's mailboxes, so any verified non-customer mail
+  naming the PO is offered, its sender shown; a `pc_mailboxes` trust
+  setting (as `design_mailboxes`) would narrow it, and would let the lane
+  read PC's answer unasked.
 
 - 2026-11-02, one inbound flow for DW1 and DW2, built (`purchasing.md`
   State): DW1 reads the folders of those holding `sales.inbox.process` in
@@ -1111,10 +1125,11 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   packages, 22 images); copyleft runs only as separate, unmodified programs
   (ClamAV and poppler GPL-2.0, LibreOffice MPL-2.0, libvips LGPL-3.0 in
   sharp). Models: Qwen3.5-9B Apache-2.0, bge-m3 MIT, bge-reranker-v2-m3
-  Apache-2.0; no Gemma. **Owed before the on-prem hand-over:** a generated
-  third-party notices file (Apache/MIT/GPL need the notices shipped, and a
-  source offer for the GPL programs); none exists. Contract wording
-  (carve-outs, cap) is FPT legal's call.
+  Apache-2.0; no Gemma. The notices are generated from the built on-prem
+  images (`make third-party-notices`, `2c9c8d52`, run 10-28 into `dist/`):
+  re-run it on the images handed over, since DW2 and the reader changed
+  after 10-28 (2026-11-04: this line said "none exists", stale). Contract
+  wording (carve-outs, cap) is FPT legal's call.
 - From tickets 32, 33 and 30 (2026-10-13, agent, Đạt away):
     - ADR 0005's addendum and ADR 0004's amendment (a PO layout decided
       on a run-less `sales.layout` approval the worker carries out):

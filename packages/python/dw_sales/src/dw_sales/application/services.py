@@ -256,7 +256,9 @@ def assemble(
         thread_summaries=ThreadSummaries(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
         ),
-        pc_dates=PcDateReplies(uow, gate, one_call, clock, ids, worker_id, worker_version),
+        pc_dates=PcDateReplies(
+            uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
+        ),
         design_text_replies=DesignTextReplies(
             uow, gate, inbox, quotation, one_call, clock, ids, worker_id, worker_version
         ),
