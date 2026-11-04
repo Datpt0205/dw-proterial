@@ -135,6 +135,14 @@ of shadcn/ui; the measurements behind it are in `.claude/plans/web-ui.md`.
   `app/sales/_components/process-flow.tsx` imports it; the antd-only test and
   ESLint fail any other file, and the test holds both manifests' runtime
   dependencies to an allowlist, so any further library is a decision here.
+- **A second exception, Ant Design X** (Đạt, 2026-11-04: "đừng tự code
+  khung chat, dùng thư viện free có sẵn"): `@ant-design/x` 2.9.0 (MIT,
+  pinned; antd's own chat components, on the same theme) draws the one chat
+  frame, `@dw/ui`'s `AssistantChat`, and only that file imports it, one
+  component per path so its diagram renderer (mermaid, 120-odd transitive
+  packages in the lockfile) never loads. It ships no Vietnamese: the frame
+  passes its own words through `XProvider`. Agent-chat UIs built on
+  shadcn/Radix (assistant-ui, LangChain's agent-chat-ui) stay out.
 - **Tailwind is for layout only** (flex, grid, spacing). Colour, type and
   radius come from the antd theme.
 - **One owner of the tokens:** the antd theme (`ConfigProvider`, `vi_VN`
