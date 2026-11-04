@@ -406,3 +406,42 @@ def test_dw1s_drop_reads_only_the_folders_of_those_who_process_its_mailbox(
         scope.tenant_id.value,
         scope.workspace_id.value,
     )
+
+
+@pytest.mark.parametrize(
+    ("profile", "mailbox", "built"),
+    [
+        ("local", "mock", True),
+        ("uat", "stored", True),
+        ("production", "stored", True),
+        ("uat", "mock", False),
+        ("production", "mock", False),
+    ],
+)
+def test_dw2s_automation_runs_where_deployed_on_the_stored_mailbox_only(
+    profile: str, mailbox: str, built: bool
+) -> None:
+    """Where deployed, DW2's lane works the stored mailbox like every other
+    DW2 lane there, so a tenant's "AI tự làm" switch does something; the mock
+    mailbox is refused there, as the API refuses it."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from dw_kernel.ports import SystemClock, Uuid4Generator
+    from dw_observability.telemetry import NullTelemetry
+    from dw_worker.main import build_purchasing_automation
+
+    settings = bare_settings(
+        profile=profile,
+        database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+        sales_demo_tenant_id="d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d",
+        sales_demo_workspace_id="64764894-718d-5558-ba17-9a2949214063",
+        purchasing_mailbox=mailbox,
+        model_provider="onprem",
+        onprem_model_base_url="http://model:11434/v1",
+        outbound_allowed_hosts=["model"],
+    )
+    sessions = async_sessionmaker(create_async_engine(settings.database_url or ""))
+    lane = build_purchasing_automation(
+        settings, sessions, clock=SystemClock(), ids=Uuid4Generator(), telemetry=NullTelemetry()
+    )
+    assert (lane is not None) is built

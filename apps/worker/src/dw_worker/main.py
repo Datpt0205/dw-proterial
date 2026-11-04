@@ -482,14 +482,18 @@ def build_purchasing_automation(
     ids: IdGenerator,
     telemetry: TelemetryPort,
 ) -> Callable[[], Awaitable[None]] | None:
-    """DW2's automation lane over the workspace its mock mailbox is bound to,
-    built by the call the API makes (`build_purchasing`), or None: no such
-    workspace, a deployed profile (DW2's mocks are refused there), or the
-    host's switch off. Its model calls go through the one-call door, the
-    plan's daily allowance checked first, and only where this process reaches
-    a model server of its own."""
+    """DW2's automation lane over the workspace its mailbox is bound to (the
+    demo's pair, as every DW2 lane here), built by the call the API makes
+    (`build_purchasing`), or None: no such workspace, the mock mailbox where
+    deployed (refused there, as the API refuses it), or the host's switch
+    off. Where deployed it works the stored mailbox and the tenant's own
+    master data, so each tenant's switches decide what it does. Its model
+    calls go through the one-call door, the plan's daily allowance checked
+    first, and only where this process reaches a model server of its own."""
     demo = settings.sales_demo_scope()
-    if demo is None or settings.is_deployed or not settings.purchasing_automation_lane:
+    if demo is None or not settings.purchasing_automation_lane:
+        return None
+    if settings.is_deployed and settings.purchasing_mailbox == "mock":
         return None
     runtime = build_workflow_runtime(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
     notices = PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions))
