@@ -1,0 +1,58 @@
+// Alloy reads the containers' json-file logs straight from the Docker host's
+// disk, read-only, and pushes them to Loki. No Docker socket: a socket is the
+// whole Docker API (start a privileged container, read every secret), and a
+// log shipper needs none of it.
+//
+// Which service wrote a line comes from the line itself: every service in
+// infra/compose logs with `labels: com.docker.compose.service,...`
+// (x-logging there), so json-file writes those labels into each line's
+// `attrs`. A container without them (another project on the same daemon)
+// carries no service label and is dropped below.
+
+local.file_match "containers" {
+  path_targets = [{"__path__" = "/var/lib/docker/containers/*/*-json.log"}]
+}
+
+loki.source.file "containers" {
+  targets    = local.file_match.containers.targets
+  forward_to = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+  stage.json {
+    expressions = {
+      service = "attrs.\"com.docker.compose.service\"",
+      project = "attrs.\"com.docker.compose.project\"",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service = "",
+      project = "",
+    }
+  }
+
+  stage.match {
+    selector = "{service=\"\"}"
+    action   = "drop"
+  }
+
+  // The line becomes what the process wrote; the stream and time come from
+  // json-file's own fields.
+  stage.docker {}
+
+  // The file path names a container id, not a service: one label per
+  // restart would only grow Loki's index.
+  stage.label_drop {
+    values = ["filename"]
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

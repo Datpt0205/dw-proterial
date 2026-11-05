@@ -57,6 +57,58 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Logs, traces, Grafana (2026-11-05, Đạt: everything on Proterial's
+  server, no cloud).**
+    - **Built:** `observability` is now Prometheus (with a volume, 30 days)
+      + Alertmanager + Loki 3.7.9 + Alloy v1.21.3 + Tempo 2.10.10 + Grafana
+      13.2.5. Langfuse moved to its own `langfuse` profile, for UAT or
+      debugging only.
+        - Four provisioned dashboards (`infra/grafana/dashboards`).
+        - New metrics `dw_model_calls_total` and `dw_model_call_seconds_total`
+          by prompt and model.
+        - Alert `DwTelemetryStoreDown`, the 8th rule.
+        - Every service uses json-file rotation (5 × 10 MB) with its service
+          label; Alloy reads the files, not the socket.
+        - `make onprem-up` runs the profile. README: "Watching it run".
+    - **Ran on Docker Desktop:**
+        - Loki labels only this project's lines.
+        - Real `dw.model.call` spans from the worker reached Tempo with
+          metadata only.
+        - `sales.morning_brief` calls showed on the AI dashboard.
+        - Every panel query returned `success`.
+        - Stopping Tempo put the alert in `pending`.
+        - Grafana took 4.5 minutes on its first start and 39 s after that.
+        - postgres-exporter's WAL collector failed on every scrape
+          (`pg_ls_waldir`); it is now off.
+    - **Log audit before shipping:** the API runs without uvicorn's access
+      log, every runtime engine sets `hide_parameters` (invariant check 4),
+      a refused outbox payload names fields not values, and the reader
+      mismatch is no longer chained.
+        - **Still open:**
+            - Postgres's own error text can quote one value (a bad cast, a
+              unique-key DETAIL), measured with `hide_parameters` on. A
+              formatter that reduces a DB error to its SQLSTATE is owed.
+            - Model output chained under `ModelOutputInvalidError`.
+            - `str(refused)` used as a reader refusal reason.
+            - OSError paths naming a mailbox address or attachment.
+            - The knowledge parser's filename.
+            - docgen's document name.
+        - The API configures no logging (only uvicorn's).
+    - **trivy 0.74.0, HIGH, fixed upstream:**
+        - Loki 0; Tempo 1 (go-jose); Alloy 2 (apt).
+        - Grafana 35, almost all Go stdlib/x/net in bundled datasource
+          plugins; 13.3.0 has 39 and Tempo 3.1.1 still has 1, so the pins
+          stay.
+        - Grafana is on loopback and reads only internal stores.
+    - **Owed:**
+        - Grafana behind Caddy with Keycloak sign-in; today it is loopback
+          plus an SSH tunnel.
+        - Retention per store (question 40).
+        - AGPL of Grafana, Loki and Tempo for FPT legal.
+        - DW1's accepted vs to-a-person rate stays on the portal, read from
+          `sales.step_outcomes`; DW2 records no per-step outcome.
+        - Model call failures are not counted, only answered calls.
+        - No link yet from an alert to the same run's log lines.
 - **On premises (2026-10-18, `7eabeb4`, `2338aec`).** `infra/onprem/README.md`
   and `docker-compose.onprem.yml`: Ollama 0.34.4 (qwen3.5-9b-dw, bge-m3) and
   llama.cpp b11146 (bge-reranker-v2-m3) on dw-internal, pinned by digest;

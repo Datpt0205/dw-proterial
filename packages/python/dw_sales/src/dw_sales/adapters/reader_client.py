@@ -136,7 +136,9 @@ def _value(operation: ReaderOp, reply: ReaderReply) -> Any:
     try:
         return reply.value(operation)
     except ValidationError as mismatch:
-        raise ReaderMismatchError(operation, mismatch) from mismatch
+        # Not chained: pydantic's text quotes the file's own values, and a
+        # lane that logs this with its traceback prints every cause.
+        raise ReaderMismatchError(operation, mismatch) from None
 
 
 class ReaderTransport(Protocol):
@@ -538,4 +540,4 @@ class HttpReaderTransport:
         except ValidationError as mismatch:
             # An answer came, in a shape this version does not read: asking
             # again gets the same one.
-            raise ReaderMismatchError(request.operation, mismatch) from mismatch
+            raise ReaderMismatchError(request.operation, mismatch) from None

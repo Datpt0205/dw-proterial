@@ -785,7 +785,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # Handlers are keyed by event type. A context registers its own here;
         # an event with no handler is left in the table rather than dropped, so
         # adding the handler later drains the backlog.
-        engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        engine = create_async_engine(
+            settings.database_url, pool_pre_ping=True, hide_parameters=True
+        )
         sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         # Remembering runs here rather than on the request that produced the
         # fact: a run that stops to decide what is worth keeping is a run someone

@@ -45,7 +45,7 @@ def build_catalog_import_handler(parsing: CatalogParsingPort) -> EventHandler:
         try:
             payload = ImportedPayload.model_validate(event.payload)
         except ValidationError as exc:
-            raise UndeliverableEventError(f"payload does not parse: {exc}") from exc
+            raise UndeliverableEventError.unparsable(exc) from None
         scope = SalesScope(TenantId(event.tenant_id.value), WorkspaceId(event.workspace_id.value))
         return await parsing.parse(scope, payload.snapshot_id)
 

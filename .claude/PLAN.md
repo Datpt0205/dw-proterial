@@ -11,7 +11,7 @@ git: every slice's commit message, and the pre-split narrative at
 
 | Area                               | File                                | State                      |
 | ---------------------------------- | ----------------------------------- | -------------------------- |
-| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem ran locally  |
+| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + Grafana/Loki/Tempo 11-05 |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |

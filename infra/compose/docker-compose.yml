@@ -5,13 +5,27 @@
 #   infra          → data plane only (Postgres, Qdrant, Valkey, MinIO, Keycloak)
 #                    for local development where API/worker/web run on the host
 #   full           → everything: infra + migration job + API + worker + web
-#   observability  → optional Langfuse stack (web/worker/ClickHouse)
+#   observability  → metrics (Prometheus, Alertmanager), logs (Loki, Alloy),
+#                    traces (Tempo), seen in Grafana; all on this host
+#   langfuse       → Langfuse (web/worker/ClickHouse), for UAT or a short
+#                    debugging window only, never a production default
 #
 # Examples:
 #   docker compose --profile infra up -d --wait
 #   docker compose --profile full up --build -d --wait
 #   docker compose --profile full --profile observability up --build -d
 # ===========================================================================
+
+# Every service logs the same way. json-file rotates (a single-disk plant
+# host otherwise grows each container's log without bound) and writes the
+# compose service and project into each line's `attrs`, which is how Alloy
+# (infra/alloy/config.alloy) labels a line without the Docker socket.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    labels: "com.docker.compose.service,com.docker.compose.project"
 
 networks:
   dw-internal:
@@ -41,6 +55,13 @@ volumes:
   s3-data:
   keycloak-data:
   clickhouse-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+  # Alloy's read positions in each log file, so a restart neither resends
+  # nor skips lines.
+  alloy-data:
   # Rendered from alertmanager.yml.template by the alertmanager-config
   # service below — Alertmanager's own YAML has no env-var substitution.
   alertmanager-config:
@@ -56,11 +77,12 @@ volumes:
 services:
   # ------------------------------------------------------------------ data --
   postgres:
+    logging: *default-logging
     # An exact version, as every third-party image here: a floating tag moves
     # under measured behaviour (the ICU Vietnamese collation names sort by,
     # dw_platform tenant_members.py) without a commit saying so.
     image: postgres:16.15-alpine
-    profiles: ["infra", "full", "observability", "migration"]
+    profiles: ["infra", "full", "observability", "langfuse", "migration"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -91,6 +113,7 @@ services:
     restart: unless-stopped
 
   qdrant:
+    logging: *default-logging
     image: qdrant/qdrant:v1.13.4
     profiles: ["infra", "full"]
     volumes:
@@ -108,8 +131,9 @@ services:
     restart: unless-stopped
 
   valkey:
+    logging: *default-logging
     image: valkey/valkey:8.1.10-alpine
-    profiles: ["infra", "full", "observability"]
+    profiles: ["infra", "full", "langfuse"]
     command:
       ["valkey-server", "--maxmemory-policy", "noeviction", "--save", "60", "1"]
     volumes:
@@ -126,6 +150,7 @@ services:
     restart: unless-stopped
 
   s3:
+    logging: *default-logging
     # SeaweedFS in single-node `mini` mode: the S3-compatible object store
     # (Apache-2.0). It replaced MinIO on 2026-09-29, after MinIO withdrew its
     # images from Docker Hub and then quay.io. The platform speaks plain S3
@@ -139,7 +164,7 @@ services:
     # it. The variable names are still MINIO_ROOT_* so existing .env files and
     # server env keep working; they are the object store's root credentials.
     image: chrislusf/seaweedfs:4.48
-    profiles: ["infra", "full", "observability"]
+    profiles: ["infra", "full", "langfuse"]
     command: ["mini", "-dir=/data"]
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?}
@@ -158,11 +183,12 @@ services:
     restart: unless-stopped
 
   s3-setup:
+    logging: *default-logging
     # Creates the buckets with a generic S3 client (rclone), not the server's
     # own tooling, so the next server swap leaves this job alone. `rclone
     # mkdir` on an existing bucket succeeds (measured), so re-running is safe.
     image: rclone/rclone:1.75.1
-    profiles: ["infra", "full", "observability"]
+    profiles: ["infra", "full", "langfuse"]
     depends_on:
       s3:
         condition: service_healthy
@@ -186,6 +212,7 @@ services:
     restart: "no"
 
   keycloak:
+    logging: *default-logging
     image: quay.io/keycloak/keycloak:26.7.2
     profiles: ["infra", "full"]
     # Production mode ("start", not "start-dev"): start-dev disables production
@@ -249,6 +276,7 @@ services:
 
   # ------------------------------------------------------------ migrations --
   migrate:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/api.Dockerfile
@@ -268,6 +296,7 @@ services:
 
   # ------------------------------------------------------------------ apps --
   api:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/api.Dockerfile
@@ -332,7 +361,10 @@ services:
       DW_API_RERANK_MODEL: ${DW_API_RERANK_MODEL:-bge-reranker-v2-m3}
       DW_API_RERANK_TIMEOUT_SECONDS: ${DW_API_RERANK_TIMEOUT_SECONDS:-10}
       DW_APPROVAL_REMINDER_SECONDS: ${DW_APPROVAL_REMINDER_SECONDS:-5}
-      # Observability → Langfuse (OTLP). Empty = NullTelemetry (no export).
+      # Traces → Tempo (OTLP/HTTP), e.g. http://tempo:4318/v1/traces when the
+      # `observability` profile runs. Empty: no span leaves the process.
+      DW_API_OTEL_ENDPOINT: ${DW_OTEL_TRACES_ENDPOINT:-}
+      # Observability → Langfuse (OTLP), the `langfuse` profile, UAT only.
       LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
@@ -399,6 +431,7 @@ services:
   # a scanner that publishes no port, and scans with DW_SALES_MALWARE_SCAN=skip
   # (refused in a deployed profile). `scan` starts it alone.
   clamav:
+    logging: *default-logging
     image: clamav/clamav:1.5.4@sha256:638d90201ee7ee6a82d249a2fc23b132e578673b5f1f2766852b127676ca1ef6
     profiles: ["full", "scan"]
     entrypoint: ["clamd", "--config-file=/etc/dw/clamd.conf"]
@@ -441,6 +474,7 @@ services:
   # view through it. Built and measured after the WSL reboot of 2026-10-13
   # (ticket 25, "Post-reboot checks").
   reader:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/reader.Dockerfile
@@ -472,6 +506,7 @@ services:
   # docgen uses. It runs no reading process and holds no state. The api and
   # worker containers (`full`) mount the socket and never come through here.
   reader-gateway:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/reader.Dockerfile
@@ -504,6 +539,7 @@ services:
   # needs somewhere for a document to be generated, and there is nothing to
   # generate one on a laptop.
   docgen:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/docgen.Dockerfile
@@ -566,6 +602,7 @@ services:
   # single member of dw-sandbox that also sits on dw-internal: the sandbox can
   # open a socket to it and get the sandbox's own API back.
   docgen-gateway:
+    logging: *default-logging
     # The sandbox image, reused: it is already on the machine and carries a
     # Python interpreter. Nothing else of it is used.
     #
@@ -595,6 +632,7 @@ services:
     restart: unless-stopped
 
   worker:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/worker.Dockerfile
@@ -620,7 +658,9 @@ services:
       DW_ONPREM_MODEL_BASE_URL: ${DW_ONPREM_MODEL_BASE_URL:-}
       DW_ONPREM_MODEL_API_KEY: ${DW_ONPREM_MODEL_API_KEY:-}
       DW_WORKER_OPENAI_STRUCTURED_MODE: ${DW_API_OPENAI_STRUCTURED_MODE:-json_schema}
-      # Observability -> Langfuse (OTLP). Empty = no export.
+      # Traces -> Tempo, as the API's.
+      DW_WORKER_OTEL_ENDPOINT: ${DW_OTEL_TRACES_ENDPOINT:-}
+      # Observability -> Langfuse (OTLP), the `langfuse` profile, UAT only.
       LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
@@ -673,6 +713,7 @@ services:
     restart: unless-stopped
 
   web:
+    logging: *default-logging
     build:
       context: ../..
       dockerfile: infra/docker/web.Dockerfile
@@ -699,10 +740,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ------------------------------------------------- optional observability --
+  # ------------------------------------------------------------- langfuse --
+  # Its own profile, out of `observability` (Đạt, 2026-11-05): Langfuse is
+  # worth running only when a trace carries the prompt and the model's answer,
+  # which for DW is a customer's document, a second copy of it outside
+  # PostgreSQL's row security. Production traces go to Tempo with ids, codes
+  # and timings only; Langfuse is for UAT or a short debugging window, with
+  # Proterial's consent.
   clickhouse:
+    logging: *default-logging
     image: clickhouse/clickhouse-server:24.8.14.39-alpine
-    profiles: ["observability"]
+    profiles: ["langfuse"]
     environment:
       CLICKHOUSE_DB: langfuse
       CLICKHOUSE_USER: langfuse
@@ -723,8 +771,9 @@ services:
     restart: unless-stopped
 
   langfuse-worker:
+    logging: *default-logging
     image: langfuse/langfuse-worker:3.225.11
-    profiles: ["observability"]
+    profiles: ["langfuse"]
     environment: &langfuse-env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -754,8 +803,9 @@ services:
     restart: unless-stopped
 
   langfuse-web:
+    logging: *default-logging
     image: langfuse/langfuse:3.225.11
-    profiles: ["observability"]
+    profiles: ["langfuse"]
     environment:
       <<: *langfuse-env
       NEXTAUTH_URL: http://localhost:3001
@@ -781,8 +831,14 @@ services:
   # (`docker compose --profile full --profile observability up`), since
   # what's scraped — api, worker — lives there.
   postgres-exporter:
+    logging: *default-logging
     image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
     profiles: ["observability"]
+    # The WAL collector calls pg_ls_waldir(), which dw_app may not run: it
+    # failed every scrape, writing an ERROR into Postgres' log and the
+    # exporter's each 15 s, which drowned real errors once logs went to Loki
+    # (2026-11-05). WAL size is not on any dashboard or alert.
+    command: ["--no-collector.wal"]
     environment:
       # dw_app, not a new role: it holds no BYPASSRLS, and the catalog views
       # this exporter reads (pg_stat_database, pg_settings, pg_stat_bgwriter)
@@ -802,6 +858,7 @@ services:
   # is already in every base image, so this needs no package install (and no
   # network call) on every `up`.
   alertmanager-config:
+    logging: *default-logging
     image: alpine:3.20.10
     profiles: ["observability"]
     environment:
@@ -814,6 +871,7 @@ services:
     restart: "no"
 
   alertmanager:
+    logging: *default-logging
     image: prom/alertmanager:v0.28.1
     profiles: ["observability"]
     volumes:
@@ -832,11 +890,20 @@ services:
     restart: unless-stopped
 
   prometheus:
+    logging: *default-logging
     image: prom/prometheus:v3.6.0
     profiles: ["observability"]
+    # The image's own arguments, plus how long a sample is kept: a dashboard
+    # that answers "since when" needs history that survives a restart, so
+    # the TSDB has a volume (before 2026-11-05 it had none).
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${DW_PROMETHEUS_RETENTION:-30d}
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:${DW_PROMETHEUS_HOST_PORT:-9090}:9090"
     networks: [dw-internal, dw-edge]
@@ -845,4 +912,103 @@ services:
         condition: service_started
       postgres-exporter:
         condition: service_started
+    restart: unless-stopped
+
+  # Logs, traces and the screen that shows them with the metrics above
+  # (Đạt, 2026-11-05). All on the plant's host, nothing in a cloud: each
+  # tool's usage reporting is off, and Loki, Tempo and Alloy have no route
+  # off the machine (dw-internal only, no published port).
+  loki:
+    logging: *default-logging
+    image: grafana/loki:3.7.9
+    profiles: ["observability"]
+    command: ["-config.file=/etc/loki/loki.yaml", "-config.expand-env=true"]
+    environment:
+      DW_LOKI_RETENTION: ${DW_LOKI_RETENTION:-720h}
+    volumes:
+      - ../loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    networks: [dw-internal]
+    restart: unless-stopped
+
+  tempo:
+    logging: *default-logging
+    image: grafana/tempo:2.10.10
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo/tempo.yaml", "-config.expand-env=true"]
+    environment:
+      DW_TEMPO_RETENTION: ${DW_TEMPO_RETENTION:-168h}
+    volumes:
+      - ../tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks: [dw-internal]
+    restart: unless-stopped
+
+  alloy:
+    logging: *default-logging
+    image: grafana/alloy:v1.21.3
+    profiles: ["observability"]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    volumes:
+      - ../alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      # The containers' json-file logs, read-only. Not the Docker socket
+      # (infra/alloy/config.alloy says why).
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks: [dw-internal]
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    logging: *default-logging
+    image: grafana/grafana:13.2.5
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      # Nothing calls home: no usage stats, no update or plugin checks, no
+      # news feed, and no plugin fetched at start (the plant may have no
+      # internet at all, and a dashboard here needs no plugin).
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      # Loopback, like Prometheus and Alertmanager: IT reaches it on the host
+      # or through a tunnel until it is put behind Caddy and Keycloak.
+      - "127.0.0.1:${DW_GRAFANA_HOST_PORT:-3030}:3000"
+    # dw-edge only to publish the port above.
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # The first start builds Grafana's own database: measured 4.5 minutes
+      # on Docker Desktop (2026-11-05). Later starts skip it.
+      start_period: 600s
     restart: unless-stopped

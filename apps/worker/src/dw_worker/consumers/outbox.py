@@ -34,6 +34,8 @@ import logging
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import timedelta
 
+from pydantic import ValidationError
+
 from dw_kernel.ports import UtcClock
 from dw_observability.metrics import DW_OUTBOX_BACKLOG_SIZE, DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS
 from dw_observability.telemetry import TelemetryPort
@@ -69,6 +71,19 @@ class UndeliverableEventError(Exception):
     on the next look (9704778) — so a bounded retry is the safe answer, and a
     handler should still raise this only when a retry is not expected to help.
     """
+
+    @classmethod
+    def unparsable(cls, invalid: ValidationError) -> UndeliverableEventError:
+        """A payload that does not parse, said by where and why only. The
+        reason is logged and stored on the event's row, and pydantic's own
+        text quotes the input: a model's answer, a customer's value. A loc
+        segment that is not a name (a key a payload could carry) is a "?"."""
+        where = ", ".join(
+            ".".join(str(p) if isinstance(p, int) or p.isidentifier() else "?" for p in e["loc"])
+            + f":{e['type']}"
+            for e in invalid.errors(include_url=False, include_input=False)[:5]
+        )
+        return cls(f"payload does not parse ({invalid.error_count()} errors: {where})")
 
 
 async def _deliver(

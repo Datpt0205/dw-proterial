@@ -149,9 +149,9 @@ onprem-models: ## Fetch the on-prem models once, on a host with internet (infra/
 
 ONPREM := $(COMPOSE) -f infra/compose/docker-compose.uat.yml \
   -f infra/compose/docker-compose.onprem.yml -f infra/compose/docker-compose.onprem-gpu.yml \
-  -f infra/compose/docker-compose.host.yml --profile full
+  -f infra/compose/docker-compose.host.yml --profile full --profile observability
 
-onprem-up: ## Full stack on premises, uat profile, GPU (infra/onprem/README.md)
+onprem-up: ## Full stack on premises, uat profile, GPU, with Grafana/Loki/Tempo (infra/onprem/README.md)
 	$(ONPREM) up -d --build
 
 latency-report: ## p50/p95/p99 per API route from the compose stack's API log (scripts/route_latency.py)
