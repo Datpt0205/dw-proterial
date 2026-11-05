@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import traceback
 from pathlib import Path
 
 import httpx
@@ -336,6 +337,18 @@ async def test_a_result_of_another_version_is_a_worded_refusal(
     assert "cập nhật trình đọc" in refused.value.message
     assert "cells.0.text_unseen:missing" in caplog.text
     assert "SECRET-PRICE" not in caplog.text
+
+
+async def test_a_refused_result_carries_none_of_the_files_text_into_a_traceback() -> None:
+    """A lane that logs the error with its traceback prints the chain of
+    causes; pydantic's over the reader's answer quotes the file's cells."""
+    view = ClientSourceView(_Replying(_older_grid()), CAPS)
+
+    with pytest.raises(ReaderMismatchError) as refused:
+        await view.sheet_grid(_content(M01).data, "PO")
+
+    printed = "".join(traceback.format_exception(refused.value))
+    assert "SECRET-PRICE" not in printed
 
 
 async def test_a_po_result_of_another_version_is_refused_not_unreadable() -> None:

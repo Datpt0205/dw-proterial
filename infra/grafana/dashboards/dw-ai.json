@@ -1,0 +1,166 @@
+{
+  "uid": "dw-ai",
+  "title": "DW · Bước AI",
+  "description": "Bước AI nào chạy bao nhiêu lần, chậm hay nhanh.",
+  "tags": [
+    "dw"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Mỗi dòng là một bước AI (tên prompt, ví dụ `sales.message_intent`, `purchasing.pr_mail_reading`). Tỷ lệ AI làm được hay chuyển người xem ở **portal → Hoạt động**: số đó lấy từ cơ sở dữ liệu, nơi ghi từng việc DW đã làm, nên không chép sang đây. Muốn xem một lần gọi chậm: Explore → Tempo, tìm span `dw.model.call`."
+      },
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "Số lần gọi model mỗi phút, theo bước",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (prompt) (rate(dw_model_calls_total[5m])) * 60",
+          "legendFormat": "{{prompt}}"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Thời gian trung bình mỗi lần gọi, theo bước",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (prompt) (rate(dw_model_call_seconds_total[15m])) / sum by (prompt) (rate(dw_model_calls_total[15m]))",
+          "legendFormat": "{{prompt}}"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "type": "timeseries",
+      "title": "Lần gọi trong 24 giờ, theo model",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model) (increase(dw_model_calls_total[24h]))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "type": "logs",
+      "title": "Log của bước đọc thư và tài liệu",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=~\"worker|reader|api\"} |~ \"(?i)(model|reader|refus)\""
+        }
+      ],
+      "id": 5
+    }
+  ]
+}

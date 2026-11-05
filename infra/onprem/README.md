@@ -66,6 +66,32 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
 
     Both serve on `dw-internal` only, with no route off the host, but the pins should move. Before bumping Ollama, scan the newer image (the host's 0.40.4 matched 0.34.4 on the evals) and rerun this section's checks. That is Đạt's call. Scanning the Ollama image needs `--timeout 30m`: its 3.4 GB layer outlasts the default 5 minutes.
 
+## Watching it run (Grafana, Loki, Tempo)
+
+`make onprem-up` starts the `observability` profile beside `full` (2026-11-05). Everything stays on this host: no cloud, no SaaS, and each tool's usage reporting is off.
+
+| Tool | Holds | Kept (default) | Set in `.env` |
+| --- | --- | --- | --- |
+| Prometheus | Numbers: up/down, queues, model calls per step, tokens | 30 days | `DW_PROMETHEUS_RETENTION` |
+| Loki, fed by Alloy | Every container's stdout/stderr | 30 days | `DW_LOKI_RETENTION` |
+| Tempo | Spans: which step, which model, how long, which error. No document text | 7 days | `DW_TEMPO_RETENTION` |
+| Alertmanager | Firing alerts, to `ALERTMANAGER_WEBHOOK_URL` | n/a | |
+| Grafana | The screen over the three stores, with four dashboards in the "Digital Worker" folder | n/a | `GRAFANA_ADMIN_PASSWORD` (required, random) |
+
+How long each store keeps data is Proterial's call (question 40 in `docs/proterial/Cau-hoi-Proterial-DW1-DW2.xlsx`). The numbers above are defaults until they decide.
+
+- **Reaching Grafana.** It listens on `127.0.0.1:3030` only. From IT's PC, use `ssh -L 3030:127.0.0.1:3030 <host>` and open `http://localhost:3030`. Putting it behind Caddy with Keycloak sign-in is not done yet.
+- **First start.** Grafana builds its own database the first time, which took 4.5 minutes on Docker Desktop. Later starts skip this step.
+- **Logs.** Alloy reads `/var/lib/docker/containers` read-only. It does not use the Docker socket. Each service logs through json-file, rotated at 5 × 10 MB, with its compose service name in the line. Lines from containers outside this project are dropped. Logs carry ids, codes and counts, not mail text or prices:
+    - the API runs without uvicorn's access log;
+    - database errors hide their parameters;
+    - a refused payload or reader answer is described by field, not value.
+
+    What is still open is in `.claude/plans/ops-hardening.md` (2026-11-05).
+- **Langfuse** is a separate profile, `langfuse`. Use it for UAT or a short debugging window only, and only with Proterial's consent. It is useful only when traces carry prompts and answers, which would be a second copy of customers' documents.
+- **Offline images.** Add `grafana/grafana:13.2.5`, `grafana/loki:3.7.9`, `grafana/tempo:2.10.10` and `grafana/alloy:v1.21.3` to the `docker save` list in step 3 above.
+- **Licences.** Grafana, Loki and Tempo are AGPL-3.0, and Alloy is Apache-2.0. `make third-party-notices` lists them. FPT legal should confirm the AGPL terms for an unmodified on-premises install.
+
 ## Signing in and out
 
 The portal signs people in through **Keycloak, on the same host**. On premises it stays that way; the only question is where the accounts come from.

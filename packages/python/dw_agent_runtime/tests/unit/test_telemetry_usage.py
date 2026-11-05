@@ -10,7 +10,11 @@ from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.gateway import ModelUsage
 from dw_agent_runtime.ports import ModelRequest
-from dw_observability.metrics import DW_MODEL_TOKENS_TOTAL
+from dw_observability.metrics import (
+    DW_MODEL_CALL_SECONDS_TOTAL,
+    DW_MODEL_CALLS_TOTAL,
+    DW_MODEL_TOKENS_TOTAL,
+)
 from dw_observability.telemetry import RecordingTelemetry
 
 pytestmark = pytest.mark.unit
@@ -55,3 +59,30 @@ async def test_records_token_metrics_and_model_span() -> None:
     assert attributes["dw.prompt_id"] == "demo.extract"
     # prompt content must never appear in telemetry attributes
     assert all("salary" not in str(v) for v in attributes.values())
+
+
+async def test_counts_each_call_and_its_time_by_prompt_and_model() -> None:
+    """What a dashboard reads per AI step, DW1 and DW2 alike: how many calls
+    each prompt made and how long they took (rate of one over the other is
+    the mean latency). The prompt id is the step; never its variables."""
+    telemetry = RecordingTelemetry()
+    request = ModelRequest(
+        prompt_id="sales.message_intent",
+        prompt_version="1.2.0",
+        model_profile="onprem",
+        task="structured_extraction",
+        variables={"mail": "Đơn giá 12.345 USD"},
+    )
+    usage = ModelUsage(
+        provider="onprem",
+        model="qwen3.5-9b-dw",
+        input_tokens=900,
+        output_tokens=60,
+        latency_ms=2500.0,
+    )
+
+    await TelemetryUsageRecorder(telemetry).record(_run_context(), request, usage)
+
+    labels = {"prompt": "sales.message_intent", "model": "qwen3.5-9b-dw"}
+    assert (DW_MODEL_CALLS_TOTAL, 1, labels) in telemetry.metrics
+    assert (DW_MODEL_CALL_SECONDS_TOTAL, 2.5, labels) in telemetry.metrics

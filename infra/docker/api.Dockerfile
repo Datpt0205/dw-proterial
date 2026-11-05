@@ -88,4 +88,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200 else 1)"]
 
-CMD ["uvicorn", "dw_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# No access log: uvicorn's writes the real path and query string, and those
+# carry a customer's sheet name, item and supplier codes and each person's IP
+# into every log store downstream (Loki since 2026-11-05). `dw_api.timing`
+# logs the route TEMPLATE, status and time instead, which is what
+# scripts/route_latency.py reads.
+CMD ["uvicorn", "dw_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

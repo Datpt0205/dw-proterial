@@ -1,0 +1,12 @@
+# The dashboards in infra/grafana/dashboards, loaded at start. A change made
+# in the UI is not kept: a dashboard changes by changing its file here.
+apiVersion: 1
+
+providers:
+  - name: dw
+    folder: Digital Worker
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

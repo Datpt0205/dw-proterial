@@ -21,12 +21,24 @@
 #     name those two hosts as the only private ones they may call. No gateway,
 #     no key, no Zalo (the bot is reached through Zalo's servers).
 
+# Every service logs the same way. json-file rotates (a single-disk plant
+# host otherwise grows each container's log without bound) and writes the
+# compose service and project into each line's `attrs`, which is how Alloy
+# (infra/alloy/config.alloy) labels a line without the Docker socket.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    labels: "com.docker.compose.service,com.docker.compose.project"
+
 volumes:
   # Ollama's models: about 6.6 GB for qwen3.5:9b and 1.2 GB for bge-m3.
   model-data:
 
 services:
   model:
+    logging: *default-logging
     # Pinned by tag and digest. 0.34.4 (2026-09-24); qwen3.5 and bge-m3 are in
     # its library. Not yet scanned with trivy: owed with the first pull.
     image: ollama/ollama:0.34.4@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
@@ -56,6 +68,7 @@ services:
   # out (dw-edge), and it runs its own server against the same volume, so
   # stop `model` first. `make onprem-models` runs it.
   model-init:
+    logging: *default-logging
     image: ollama/ollama:0.34.4@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
     profiles: ["onprem-init"]
     entrypoint: ["/bin/sh", "-c"]
@@ -70,6 +83,7 @@ services:
     networks: [dw-edge]
 
   rerank:
+    logging: *default-logging
     # llama.cpp b11146 (2026-09-23), CPU build, pinned by tag and digest. Its
     # /rerank takes {query, documents, top_n} and answers results[{index,
     # relevance_score}] (tools/server/tests/unit/test_rerank.py); not yet
@@ -116,6 +130,9 @@ services:
       QDRANT_COLLECTION: dw_knowledge_bge_m3
       ZALO_BOT_TOKEN: ""
       TELEGRAM_BOT_TOKEN: ""
+      # Spans to Tempo on this host: `make onprem-up` runs the
+      # `observability` profile beside `full`.
+      DW_API_OTEL_ENDPOINT: http://tempo:4318/v1/traces
     depends_on:
       model:
         condition: service_healthy
@@ -140,6 +157,7 @@ services:
       # purchasing.request.intake, each only with its DW_*_MAILBOX=stored in
       # .env; `infra/onprem/README.md` says how the share reaches this host.
       DW_MAIL_DROP_DIR: /mail-drop
+      DW_WORKER_OTEL_ENDPOINT: http://tempo:4318/v1/traces
     volumes:
       - ${DW_MAIL_DROP_HOST_DIR:-/srv/dw/mail-drop}:/mail-drop:ro
     depends_on:

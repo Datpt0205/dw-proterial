@@ -15,6 +15,12 @@ DW_TOOL_CALL_TOTAL: Final = "dw_tool_call_total"  # labels: tool, status
 DW_APPROVAL_WAIT_SECONDS: Final = "dw_approval_wait_seconds"  # labels: worker, approval_type
 DW_MODEL_TOKENS_TOTAL: Final = "dw_model_tokens_total"  # labels: provider, model, direction
 DW_MODEL_COST_USD_TOTAL: Final = "dw_model_cost_usd_total"  # labels: worker, provider
+# One per answered model call, and the seconds it took: rate(seconds) over
+# rate(calls) is the mean latency of a step. `prompt` is the prompt id, which
+# names the step (sales.message_intent, purchasing.pr_mail_reading...): a
+# closed, versioned set, so a label and not a cardinality risk.
+DW_MODEL_CALLS_TOTAL: Final = "dw_model_calls_total"  # labels: prompt, model
+DW_MODEL_CALL_SECONDS_TOTAL: Final = "dw_model_call_seconds_total"  # labels: prompt, model
 DW_RETRIEVAL_HIT_RATE: Final = "dw_retrieval_hit_rate"  # labels: worker
 # A search answered in vector order because the reranker failed.
 DW_RETRIEVAL_RERANK_SKIPPED_TOTAL: Final = "dw_retrieval_rerank_skipped_total"  # labels: error

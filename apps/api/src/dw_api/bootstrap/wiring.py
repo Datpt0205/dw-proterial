@@ -211,9 +211,13 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     # The library default (pool_size=5, max_overflow=10) serialises past 15
     # concurrent DB-touching requests in an async app. 10/20 gives real
     # headroom and stays well under Postgres' default 100 across all pools.
+    # hide_parameters: a DB error's text otherwise carries the row being
+    # written (a mail body, a price) into every traceback that is logged
+    # (scripts/verify_invariants.py check 4).
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
+        hide_parameters=True,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
     )
@@ -310,7 +314,7 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     service_accounts: list[ServiceAccount] = []
     if settings.provisioner_database_url:
         provisioner_engine = create_async_engine(
-            settings.provisioner_database_url, pool_pre_ping=True
+            settings.provisioner_database_url, pool_pre_ping=True, hide_parameters=True
         )
         container.provisioner_engine = provisioner_engine
         container.provisioning = ProvisioningService(
@@ -707,4 +711,4 @@ def register_purchasing_service_accounts(accounts: list[ServiceAccount]) -> None
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:
     """Shared engine construction, for processes that need one outside the API."""
-    return create_async_engine(url, pool_pre_ping=pool_pre_ping)
+    return create_async_engine(url, pool_pre_ping=pool_pre_ping, hide_parameters=True)

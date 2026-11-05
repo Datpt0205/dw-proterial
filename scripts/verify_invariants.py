@@ -1,4 +1,4 @@
-"""Check the three invariants this repository has actually broken.
+"""Check the four invariants this repository has actually broken.
 
 Not a linter and not a generic security scanner — both already run in CI and
 neither would have caught any of these. Each check below exists because the
@@ -18,6 +18,12 @@ detect. The counts are from `.claude/rules/failure-modes.md`.
 3. A value a `Literal` accepts that no code branches on (found 4 times). The schema
    took `approval_policy: conditional`, no branch matched it, and it silently
    behaved as `never` — so anyone who wrote it expecting a gate got none.
+
+4. A runtime database engine that prints the row it failed on. SQLAlchemy's
+   error text carries `[parameters: ...]`, the values being written: a mail
+   body, a price, a model's answer. Every traceback a lane logs then puts
+   them in the log store (Loki since 2026-11-05) unless the engine is built
+   with `hide_parameters=True`. Found by the audit before logs left the host.
 
 Usage: uv run python scripts/verify_invariants.py
 Exit 0 clean, 1 violations.
@@ -170,12 +176,51 @@ def check_literal_values_are_handled(sources: dict[Path, str]) -> list[str]:
     return violations
 
 
+# ---------------------------------------------------------------- check 4 --
+
+# Runtime code only: a seed or demo script's engine is run by a person at a
+# terminal, not by a lane whose tracebacks are shipped to a log store.
+_RUNTIME_SOURCE = re.compile(r"^(apps/[^/]+/src|packages/python/[^/]+/src)/")
+
+# path -> why its engine may print parameters. Empty today.
+ENGINE_EXEMPT: dict[str, str] = {}
+
+
+def check_runtime_engines_hide_parameters(sources: dict[Path, str]) -> list[str]:
+    violations = []
+    for path, text in sorted(sources.items()):
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        if not _RUNTIME_SOURCE.match(relative) or "/testing/" in relative:
+            continue
+        if relative in ENGINE_EXEMPT or "create_async_engine" not in text:
+            continue
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            if name != "create_async_engine":
+                continue
+            hides = any(
+                k.arg == "hide_parameters"
+                and isinstance(k.value, ast.Constant)
+                and k.value.value is True
+                for k in node.keywords
+            )
+            if not hides:
+                violations.append(
+                    f"{relative}:{node.lineno} builds an engine without hide_parameters=True"
+                )
+    return violations
+
+
 def main() -> int:
     sources = _python_sources()
     checks = (
         ("tenant tables have row-level security", check_tenant_tables_have_rls()),
         ("declared fields are read", check_declared_fields_are_read(sources)),
         ("literal values are handled", check_literal_values_are_handled(sources)),
+        ("runtime engines hide parameters", check_runtime_engines_hide_parameters(sources)),
     )
     failed = False
     for label, violations in checks:

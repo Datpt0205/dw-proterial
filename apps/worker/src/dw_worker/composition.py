@@ -196,7 +196,8 @@ def build_ingest_components(settings: WorkerSettings) -> IngestComponents | None
     if not (settings.database_url and settings.s3_endpoint_url):
         return None
 
-    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    # hide_parameters: scripts/verify_invariants.py check 4.
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True, hide_parameters=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     clock = SystemClock()
     id_generator = Uuid7Generator()

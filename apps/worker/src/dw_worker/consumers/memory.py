@@ -201,7 +201,7 @@ def build_memory_handler(
         try:
             payload = MemoryCandidatePayload.model_validate(event.payload)
         except ValidationError as exc:
-            raise UndeliverableEventError(f"payload does not parse: {exc}") from exc
+            raise UndeliverableEventError.unparsable(exc) from None
         try:
             result = await service.propose(
                 payload.candidate,
@@ -253,7 +253,7 @@ def build_review_handler(
         try:
             payload = ReviewDecidedPayload.model_validate(event.payload)
         except ValidationError as exc:
-            raise UndeliverableEventError(f"payload does not parse: {exc}") from exc
+            raise UndeliverableEventError.unparsable(exc) from None
         try:
             item = await service.settle_review(payload.approval_id, _decider_access(event, payload))
         except (DomainError, NotFoundError) as exc:

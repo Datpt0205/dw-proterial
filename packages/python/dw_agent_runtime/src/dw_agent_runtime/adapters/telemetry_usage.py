@@ -11,7 +11,12 @@ from dataclasses import dataclass
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.gateway import ModelUsage
 from dw_agent_runtime.ports import ModelRequest
-from dw_observability.metrics import DW_MODEL_COST_USD_TOTAL, DW_MODEL_TOKENS_TOTAL
+from dw_observability.metrics import (
+    DW_MODEL_CALL_SECONDS_TOTAL,
+    DW_MODEL_CALLS_TOTAL,
+    DW_MODEL_COST_USD_TOTAL,
+    DW_MODEL_TOKENS_TOTAL,
+)
 from dw_observability.telemetry import TelemetryPort
 
 
@@ -31,6 +36,9 @@ class TelemetryUsageRecorder:
         self.telemetry.add_metric(
             DW_MODEL_TOKENS_TOTAL, usage.output_tokens, {**labels, "direction": "output"}
         )
+        step = {"prompt": request.prompt_id, "model": usage.model}
+        self.telemetry.add_metric(DW_MODEL_CALLS_TOTAL, 1, step)
+        self.telemetry.add_metric(DW_MODEL_CALL_SECONDS_TOTAL, usage.latency_ms / 1000, step)
         if usage.cost_usd:
             self.telemetry.add_metric(
                 DW_MODEL_COST_USD_TOTAL,

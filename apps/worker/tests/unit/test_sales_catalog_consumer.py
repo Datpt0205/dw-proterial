@@ -60,3 +60,16 @@ async def test_a_payload_that_names_anything_else_is_undeliverable() -> None:
             _event({"snapshot_id": str(uuid.uuid4()), "tenant_id": str(uuid.uuid4())})
         )
     assert parsing.calls == []
+
+
+async def test_an_undeliverable_payload_is_described_without_its_values() -> None:
+    # The reason is logged and stored on the outbox row: it names where the
+    # payload failed, never what it held (pydantic's text quotes the input).
+    with pytest.raises(UndeliverableEventError) as refused:
+        await build_catalog_import_handler(_Parsing())(
+            _event({"snapshot_id": "Đơn giá 12.345 USD, khách ACME"})
+        )
+    reason = str(refused.value)
+    assert "snapshot_id" in reason
+    assert "ACME" not in reason
+    assert "12.345" not in reason

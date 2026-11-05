@@ -66,6 +66,7 @@ PRESERVE_LOCAL = frozenset(
         "CLICKHOUSE_PASSWORD",
         "LANGFUSE_NEXTAUTH_SECRET",
         "LANGFUSE_SALT",
+        "GRAFANA_ADMIN_PASSWORD",
         # Signing secrets for dev-mode tokens. Replacing them invalidates every
         # token already issued on this machine.
         "DW_API_DEV_SECRET",

@@ -57,7 +57,7 @@ def build_decided_handler(settlement: SettlementPort, *, applied: str) -> EventH
         try:
             payload = DecidedPayload.model_validate(event.payload)
         except ValidationError as exc:
-            raise UndeliverableEventError(f"payload does not parse: {exc}") from exc
+            raise UndeliverableEventError.unparsable(exc) from None
         decider = AccessContext(
             tenant_id=event.tenant_id.value,
             workspace_id=event.workspace_id.value,

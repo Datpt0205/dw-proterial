@@ -1,0 +1,27 @@
+# Grafana reads three stores, all on the same host and on dw-internal:
+# metrics (Prometheus), logs (Loki), traces (Tempo). Provisioned and not
+# editable in the UI, so what a dashboard reads is what this file says.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false

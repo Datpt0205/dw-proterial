@@ -68,7 +68,7 @@ def build_rule_draft_handler(drafting: RuleDraftingPort) -> EventHandler:
         try:
             payload = DraftRequestedPayload.model_validate(event.payload)
         except ValidationError as exc:
-            raise UndeliverableEventError(f"payload does not parse: {exc}") from exc
+            raise UndeliverableEventError.unparsable(exc) from None
         scope = SalesScope(TenantId(event.tenant_id.value), WorkspaceId(event.workspace_id.value))
         return await drafting.draft(scope, payload.draft_id)
 

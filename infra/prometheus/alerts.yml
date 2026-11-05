@@ -97,3 +97,15 @@ groups:
           description: >
             {{ $value }} run(s) of {{ $labels.worker }} failed in node
             {{ $labels.node }} with {{ $labels.error_type }} in the last 15 minutes.
+
+      - alert: DwTelemetryStoreDown
+        # The log and trace pipeline (2026-11-05). DW keeps working without
+        # it, so a warning; but every minute it is down is a minute nobody can
+        # look back on, so it is not left to be noticed in Grafana.
+        expr: up{job=~"loki|tempo|alloy"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} is down: logs or traces are not being kept"
+          description: "Prometheus has not been able to scrape {{ $labels.job }} for 5 minutes."

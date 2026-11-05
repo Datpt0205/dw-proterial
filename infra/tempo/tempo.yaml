@@ -1,0 +1,38 @@
+# Tempo, one process, on the plant's own disk (Đạt, 2026-11-05: nothing in a
+# cloud). Receives the spans api and worker export over OTLP/HTTP
+# (DW_*_OTEL_ENDPOINT). A span carries ids, codes, counts, model names and
+# timings, never document text (dw_sales.application.telemetry,
+# dw_observability.telemetry.safe_attributes). No auth: Tempo sits on
+# dw-internal with no published port, and Grafana is the only reader.
+# Started with -config.expand-env=true.
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # How long a trace is kept: Proterial's call (question 40); 7 days until then.
+    block_retention: ${DW_TEMPO_RETENTION:-168h}
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

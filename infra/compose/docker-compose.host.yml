@@ -17,6 +17,17 @@
 #     API's per-IP rate limit and Keycloak's brute-force detection see the real
 #     client rather than one proxy address for everybody.
 
+# Every service logs the same way. json-file rotates (a single-disk plant
+# host otherwise grows each container's log without bound) and writes the
+# compose service and project into each line's `attrs`, which is how Alloy
+# (infra/alloy/config.alloy) labels a line without the Docker socket.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    labels: "com.docker.compose.service,com.docker.compose.project"
+
 networks:
   # Caddy and the three services it forwards to, nothing else: not Postgres,
   # Qdrant or Valkey, which run unauthenticated on dw-internal. Internal (no
@@ -43,6 +54,7 @@ volumes:
 
 services:
   caddy:
+    logging: *default-logging
     # Pinned by tag and digest; trivy 0.74.0 reported 0 HIGH/CRITICAL on
     # 2026-10-07 (alpine 3.23.6 and the caddy binary).
     image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
