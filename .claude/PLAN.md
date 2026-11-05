@@ -35,8 +35,9 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** usage of the brief and Hỏi đáp after go-live (11-04's pages
-  walked). HITL kept, resurveyed at the plant (`.claude/plans/hitl-review.md`).
+- **Next:** the process survey and UAT method with Proterial (11-05 decks in
+  Downloads; questions 32–47 in `docs/proterial/`); HITL resurveyed there
+  (`plans/hitl-review.md`); then usage of the brief and Hỏi đáp after go-live.
 
 ## Decisions Đạt owes
 
