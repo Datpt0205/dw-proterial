@@ -57,6 +57,27 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Reaching the portal on premises (2026-11-06, answered for Đạt).**
+    - Staff open `https://<DW_WEB_HOST>` on the plant's network only; Caddy
+      (ADR 0009) is the one door, no Cloudflare or CDN (a third party would
+      see decrypted traffic). Outside the plant: the company VPN, not a
+      published port. Mail is unaffected (Exchange Online, the flows run in
+      Microsoft's cloud); only portal actions need the network.
+    - Fixed: the README said `DW_CADDY_LOCAL_CERTS=1`; the Caddyfile pastes
+      the value as a global option, so it is `local_certs` (`949472a9`).
+    - Still not run: `make onprem-up` behind Caddy in the `uat` profile.
+      Certificates from Proterial's own CA need a Caddyfile `tls` change.
+    - Asked of Proterial (questions 48–50, `docs/proterial/`): the three DNS
+      names and which CA; who needs access from outside and whether a VPN
+      exists; whether email reminders are wanted (the process does not
+      require them; the bell carries them today).
+    - **Agent chat (Đạt, 2026-11-06):** Đạt plans a larger model at the
+      plant (2-bit). Proposed, not built: measure it on the existing evals
+      against 9B first (ADR 0007 rejected a tool loop because of 9B), then
+      read-only tools, then drafts, then HITL cards in the chat that call
+      the same approval API. The model never approves. Owed: the plant
+      GPU and VRAM.
+
 - **Logs, traces, Grafana (2026-11-05, Đạt: everything on Proterial's
   server, no cloud).**
     - **Built:** `observability` is now Prometheus (with a volume, 30 days)

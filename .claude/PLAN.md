@@ -48,7 +48,7 @@ own file and a row here.
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; whether the
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
-  not only by configuration).
+  not only by configuration); the plant GPU/VRAM (agent chat, `ops-hardening.md`).
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
 - **Model:** its Qwen Community License for on-prem use (FPT legal).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
