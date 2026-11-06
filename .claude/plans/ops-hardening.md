@@ -77,6 +77,14 @@ context. All five are done and on `main`. The full narrative is at
       read-only tools, then drafts, then HITL cards in the chat that call
       the same approval API. The model never approves. Owed: the plant
       GPU and VRAM.
+    - **Measuring on Giang's home lab (2026-11-06):** keys in the local
+      `.env` only (`GIANG_*`). The live lane now sends
+      `DW_ONPREM_MODEL_API_KEY` (`d3621fda`). LM Studio
+      (`qwen3.5-9b-mtp`, gemma-4-12b) answers and honours
+      `reasoning_effort: none`; through it `sales_assistant` and
+      `purchasing_assistant` were 5/5 each (DW1 p50 0.8 s). Strata, where
+      Đạt expects the qwen3.8 model, answered Cloudflare 1033/530 (the
+      tunnel is down), so the candidate model is **not measured yet**.
 
 - **Logs, traces, Grafana (2026-11-05, Đạt: everything on Proterial's
   server, no cloud).**
