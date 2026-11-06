@@ -60,6 +60,12 @@ export interface ChatTurn {
   cites: { key: string; label: ReactNode }[];
 }
 
+/** The turn being answered, as far as it has come. */
+export interface ChatLive {
+  steps: ChatStep[];
+  answer: string;
+}
+
 export interface AssistantChatProps {
   /** The worker's name as people call it: "DW1", "DW2". */
   worker: string;
@@ -72,6 +78,10 @@ export interface AssistantChatProps {
   loading?: boolean;
   /** A question is being answered. */
   pending?: boolean;
+  /** How far the answer has come, while ``pending``. */
+  live?: ChatLive | null;
+  /** Stops the answer being written. */
+  onStop?: () => void;
   question: string;
   onQuestion: (value: string) => void;
   onAsk: (question: string) => void;
@@ -98,6 +108,8 @@ export function AssistantChat({
   turns,
   loading = false,
   pending = false,
+  live = null,
+  onStop,
   question,
   onQuestion,
   onAsk,
@@ -140,6 +152,7 @@ export function AssistantChat({
             className="m-0 flex list-none flex-col gap-3 p-0"
             aria-label="Các lượt hỏi đáp"
             aria-live="polite"
+            aria-busy={pending}
           >
             {turns.map((turn) => (
               <li key={turn.key}>
@@ -206,9 +219,23 @@ export function AssistantChat({
                     <Bubble placement="end" content={question.trim()} />
                   ) : null}
                   <Typography.Text role="status">
-                    {worker} đang trả lời…
+                    {live?.steps.at(-1)?.title ?? `${worker} đang trả lời…`}
                   </Typography.Text>
-                  <Bubble placement="start" loading content="" />
+                  {live?.answer ? (
+                    <Bubble
+                      placement="start"
+                      header={<Typography.Text strong>{worker}</Typography.Text>}
+                      content={live.answer}
+                      streaming
+                      contentRender={(text) => (
+                        <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
+                          {text}
+                        </Typography.Paragraph>
+                      )}
+                    />
+                  ) : (
+                    <Bubble placement="start" loading content="" />
+                  )}
                 </Flex>
               </li>
             ) : null}
@@ -219,6 +246,7 @@ export function AssistantChat({
           onChange={(value) => onQuestion(value.slice(0, maxLength))}
           onSubmit={ask}
           loading={pending}
+          onCancel={onStop}
           disabled={blocked !== null}
           placeholder={
             blocked ??

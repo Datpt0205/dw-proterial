@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,8 @@ from dw_agent_runtime.model.interpretation import (
     ModelUnavailableError,
     estimated_tokens,
 )
-from dw_kernel.errors import NotFoundError
+from dw_agent_runtime.model.streaming import ChatDelta, ChatDone, ChatReplace, ChatStep
+from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_sales.application.assistant import (
     ANSWER_TOKENS,
     ASSISTANT_ANSWER,
@@ -309,3 +310,161 @@ async def test_who_reads_no_case_asks_nothing_and_sees_no_session() -> None:
         await world.services.assistant.ask(viewer.context(), "Cáp CB-2006 giá bao nhiêu?")
     with pytest.raises(PermissionDeniedError):
         await world.services.assistant.sessions(viewer.context())
+
+
+# ------------------------------------------------------------- as it comes --
+
+
+class Writing(Scripted):
+    """`Scripted`, its wording arriving a few characters at a time. ``fails``
+    stops it after that many characters, as a model that dies mid-sentence."""
+
+    def __init__(
+        self,
+        read: Reading,
+        word: Callable[[dict[str, Any]], str],
+        fails: int | None = None,
+    ) -> None:
+        super().__init__(read, word)
+        self.fails = fails
+        self.closed = False
+
+    async def stream_field(
+        self, prompt: Any, inputs: Any, schema: Any, field: str, **kwargs: Any
+    ) -> AsyncGenerator[str, None]:
+        self.calls.append((prompt, kwargs["run"], inputs))
+        text = self.word(json.loads(inputs["facts"]))
+        try:
+            for start in range(0, len(text), 3):
+                if self.fails is not None and start >= self.fails:
+                    raise ModelUnavailableError("died")
+                yield text[start : start + 3]
+        finally:
+            self.closed = True
+
+
+async def _turn(world: World, question: str) -> list[Any]:
+    return [event async for event in world.services.assistant.stream(AN.context(), question)]
+
+
+def _said(events: list[Any]) -> str:
+    return "".join(e.text for e in events if isinstance(e, ChatDelta))
+
+
+QUESTION = "PO NRV-PO-26-0457 tới đâu rồi?"
+
+
+async def test_a_wording_arrives_word_by_word_and_is_what_the_turn_keeps() -> None:
+    model = Writing(_reads, lambda facts: f"PO {facts['po_no']} đang {facts['status']} rồi")
+    world = await _orders(_world(model))
+    events = await _turn(world, QUESTION)
+    assert [e.key for e in events if isinstance(e, ChatStep)] == ["read", "look"]
+    assert len([e for e in events if isinstance(e, ChatDelta)]) > 3
+    assert model.closed
+    done = events[-1]
+    assert isinstance(done, ChatDone)
+    assert done.view.turn.answer == _said(events)
+    assert done.view.turn.answered_by == "model"
+    kept = await world.services.assistant.session(AN.context(), done.view.session_id)
+    assert kept.turns[0].answer == _said(events)
+
+
+async def test_the_step_is_said_before_the_model_is_asked() -> None:
+    model = Writing(_reads, lambda facts: "xong")
+    world = await _orders(_world(model))
+    stream = world.services.assistant.stream(AN.context(), QUESTION)
+    first = await anext(stream)
+    assert isinstance(first, ChatStep) and model.calls == []
+    await stream.aclose()
+
+
+@pytest.mark.parametrize(
+    "tail", ["vào ngày 2099-01-01 nhé", "giá USD ổn", "giảm 7% nhé"], ids=["figure", "code", "pct"]
+)
+async def test_a_wording_that_stops_being_checkable_is_replaced_and_never_shown(
+    tail: str,
+) -> None:
+    """The stream's own guard: the unchecked word reaches no one, and the turn
+    keeps code's sentence, not the words that had been shown."""
+    model = Writing(_reads, lambda facts: f"Hồ sơ đang được xử lý {tail} thêm chữ")
+    world = await _orders(_world(model))
+    events = await _turn(world, QUESTION)
+    assert _said(events).startswith("Hồ sơ đang")
+    for bad in tail.split():
+        if any(c.isdigit() for c in bad) or bad in {"USD", "7%"}:
+            assert bad not in _said(events)
+    replaced = [e for e in events if isinstance(e, ChatReplace)]
+    assert len(replaced) == 1
+    done = events[-1]
+    assert isinstance(done, ChatDone)
+    assert done.view.turn.answered_by == "code"
+    assert done.view.turn.answer == replaced[0].text
+    assert "NRV-PO-26-0457" in replaced[0].text
+    # A wording nobody will read is not written to its end.
+    assert model.closed
+
+
+async def test_a_model_that_dies_mid_sentence_gives_codes_sentence_in_its_place() -> None:
+    model = Writing(_reads, lambda facts: "Hồ sơ đang được xử lý bình thường nhé", fails=12)
+    world = await _orders(_world(model))
+    events = await _turn(world, QUESTION)
+    assert _said(events) and any(isinstance(e, ChatReplace) for e in events)
+    done = events[-1]
+    assert isinstance(done, ChatDone) and done.view.turn.answered_by == "code"
+
+
+async def test_a_model_that_dies_before_a_word_gives_codes_sentence_as_the_answer() -> None:
+    model = Writing(_reads, lambda facts: "Hồ sơ", fails=0)
+    world = await _orders(_world(model))
+    events = await _turn(world, QUESTION)
+    assert not any(isinstance(e, ChatReplace) for e in events)
+    done = events[-1]
+    assert isinstance(done, ChatDone)
+    assert _said(events) == done.view.turn.answer and done.view.turn.answered_by == "code"
+
+
+async def test_out_of_scope_streams_the_catalog_and_asks_for_no_wording() -> None:
+    model = Writing(_reads, lambda facts: "không được gọi")
+    world = await _orders(_world(model))
+    events = await _turn(world, "Cáp giá bao nhiêu một mét?")
+    assert CATALOG in _said(events)
+    assert all(prompt != ASSISTANT_ANSWER for prompt, _, _ in model.calls)
+
+
+async def test_a_turn_left_early_is_not_kept() -> None:
+    model = Writing(_reads, lambda facts: "Hồ sơ đang được xử lý bình thường nhé")
+    world = await _orders(_world(model))
+    stream = world.services.assistant.stream(AN.context(), QUESTION)
+    async for event in stream:
+        if isinstance(event, ChatDelta):
+            break
+    await stream.aclose()
+    assert model.closed
+    assert await world.services.assistant.sessions(AN.context()) == []
+
+
+async def test_who_reads_no_case_is_refused_before_the_first_event() -> None:
+    """The route takes the first event before it answers 200."""
+    import uuid as _uuid
+
+    from dw_sales.application.access import SalesScopes
+    from dw_sales.evals.graders import Caller
+
+    viewer = Caller(
+        _uuid.UUID(int=0x5E),
+        "Trần Quản Lý",
+        "viewer@alpha.local",
+        frozenset({SalesScopes.OVERVIEW_READ}),
+    )
+    world = await _orders(_world(Writing(_reads, lambda facts: "x")))
+    stream = world.services.assistant.stream(viewer.context(), QUESTION)
+    with pytest.raises(PermissionDeniedError):
+        await anext(stream)
+
+
+async def test_another_persons_session_is_refused_before_the_first_event() -> None:
+    world = await _orders(_world(Writing(_reads, lambda facts: "x")))
+    view = await world.services.assistant.ask(AN.context(), QUESTION)
+    stream = world.services.assistant.stream(READER.context(), QUESTION, view.session_id)
+    with pytest.raises(NotFoundError):
+        await anext(stream)

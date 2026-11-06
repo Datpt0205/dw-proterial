@@ -21,12 +21,14 @@ this closes. Built by `ModelStack.one_call`, which both composition roots use.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import aclosing
 from dataclasses import dataclass
 
 from dw_agent_runtime.allowance import DailyAllowance
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger
-from dw_agent_runtime.ports import ModelGateway, ModelRequest, OutputT
+from dw_agent_runtime.ports import ModelGateway, ModelRequest, OutputT, StreamingModelGateway
 
 
 @dataclass(frozen=True)
@@ -54,4 +56,26 @@ class SingleCallModelGateway:
         finally:
             # The run is over when this call is: nothing will ever check
             # this entry again, and nothing else would ever free it.
+            self.ledger.forget(run_context.run_id)
+
+    async def stream_structured(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> AsyncGenerator[str | OutputT, None]:
+        """`generate_structured` as it is written: the same check before, the
+        same entry freed after, a stream left early included."""
+        if not isinstance(self.inner, StreamingModelGateway):
+            yield await self.generate_structured(request, output_type, run_context=run_context)
+            return
+        await self.allowance.require(run_context)
+        try:
+            async with aclosing(
+                self.inner.stream_structured(request, output_type, run_context=run_context)
+            ) as pieces:
+                async for piece in pieces:
+                    yield piece
+        finally:
             self.ledger.forget(run_context.run_id)

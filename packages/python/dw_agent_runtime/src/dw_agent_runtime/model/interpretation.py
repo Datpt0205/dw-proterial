@@ -17,9 +17,9 @@ error: it stops the run, and is reported as a stop.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -99,3 +99,24 @@ class InterpretationPort(Protocol):
         run: RunContext,
         max_output_tokens: int,
     ) -> OutputT: ...
+
+
+@runtime_checkable
+class StreamingInterpretationPort(Protocol):
+    """`InterpretationPort`'s answer as the model writes it: the text of one
+    string ``field`` of ``schema``, in pieces. Ends once the whole answer has
+    validated, or raises `ModelUnavailableError`, so what was shown is only
+    final when the stream ended without one. Unchecked: a caller releases it
+    through `dw_agent_runtime.model.streaming.released`.
+    """
+
+    def stream_field(
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[BaseModel],
+        field: str,
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> AsyncGenerator[str, None]: ...

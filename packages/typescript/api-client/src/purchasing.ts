@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ApiClient } from "./client";
+import type { ApiClient, ChatStreamEvent } from "./client";
 import type { components, paths } from "./generated/purchasing";
 
 /**
@@ -306,15 +306,18 @@ export class PurchasingApi {
 
   // ---- Hỏi đáp DW2 (DW02 function 6) ---------------------------------------
 
-  assistantAsk(
+  /** A status question as it happens: what DW2 is doing, then its answer. */
+  assistantStream(
     question: string,
     sessionId: string | null,
     idempotencyKey: string,
+    onEvent: (event: ChatStreamEvent) => void,
+    signal?: AbortSignal,
   ) {
-    return this.post<"/api/v1/purchasing/assistant/ask">(
-      `${BASE}/assistant/ask`,
-      { question, session_id: sessionId },
-      idempotencyKey,
+    return this.client.chatStream<PurchasingSchemas["AssistantAnswerView"]>(
+      `${BASE}/assistant/ask/stream`,
+      { body: { question, session_id: sessionId }, idempotencyKey, signal },
+      onEvent,
     );
   }
 

@@ -6,9 +6,9 @@ and application handlers depend only on the protocols.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from decimal import Decimal
-from typing import Literal, Protocol, TypeVar
+from typing import Literal, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -59,6 +59,21 @@ class ModelGateway(Protocol):
         *,
         run_context: RunContext,
     ) -> OutputT: ...
+
+
+@runtime_checkable
+class StreamingModelGateway(ModelGateway, Protocol):
+    """Gateway that hands over a model's text as it is written: `str` pieces of
+    the raw answer, then the validated output as the last item. A provider that
+    cannot stream gives the output alone."""
+
+    def stream_structured(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> AsyncGenerator[str | OutputT, None]: ...
 
 
 class TracedModelGateway(ModelGateway, Protocol):

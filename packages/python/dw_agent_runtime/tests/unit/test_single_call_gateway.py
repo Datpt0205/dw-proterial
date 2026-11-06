@@ -198,3 +198,24 @@ async def test_a_one_call_run_under_its_plan_reaches_the_model() -> None:
 
     assert result.answer == "ok"
     assert len(adapter.calls) == 1
+
+
+async def test_a_stream_is_held_to_the_same_check_and_leaves_nothing_behind() -> None:
+    adapter = MockModelAdapter()
+    adapter.register_builder("demo.answer", "1.0.0", lambda prompt: {"answer": "ok"})
+    gateway, ledger = _gateways(adapter)
+    door = SingleCallModelGateway(inner=gateway, ledger=ledger, allowance=_allowance())
+    run = _run_context()
+    out = [p async for p in door.stream_structured(_REQUEST, Answer, run_context=run)]
+    assert out == [Answer(answer="ok")]
+    assert len(ledger.spend) == 0
+
+
+async def test_a_stream_is_refused_before_the_call_once_the_plan_has_nothing_left() -> None:
+    gateway, ledger = _gateways(MockModelAdapter())
+    door = SingleCallModelGateway(
+        inner=gateway, ledger=ledger, allowance=_allowance(_Plan(runs=1), _Used(runs=1))
+    )
+    stream = door.stream_structured(_REQUEST, Answer, run_context=_run_context())
+    with pytest.raises(QuotaExceededError):
+        await anext(stream)

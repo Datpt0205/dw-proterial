@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import {
   type ChatTurn,
 } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
+import { liveAfter, NOTHING_YET } from "../../../lib/chat-live";
 import { formatDateTime } from "../../../lib/dates";
 import { useIdempotencyKeys } from "../../../lib/idempotency";
 import { salesApi } from "../_lib/api";
@@ -218,25 +219,35 @@ function Conversation({
   const [asked, setAsked] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(NOTHING_YET);
   const [error, setError] = useState<unknown>(null);
+  const stopper = useRef<AbortController | null>(null);
   const turns = [...(loaded.data?.turns ?? []), ...asked];
 
   const ask = async (text: string) => {
     const payload = { question: text, sessionId };
+    const stop = new AbortController();
+    stopper.current = stop;
     setBusy(true);
+    setLive(NOTHING_YET);
     setError(null);
     try {
-      const answer = await salesApi().assistantAsk(
+      const answer = await salesApi().assistantStream(
         text,
         sessionId,
         keys.keyFor("assistant-ask", payload),
+        (event) => setLive((now) => liveAfter(now, event)),
+        stop.signal,
       );
       keys.settle("assistant-ask");
       setAsked((earlier) => [...earlier, answer.turn]);
       setQuestion("");
       onOpened(answer.session_id);
     } catch (e) {
-      setError(e);
+      // A person who pressed stop was told nothing went wrong, and asking the
+      // same thing again is a new question.
+      if (stop.signal.aborted) keys.settle("assistant-ask");
+      else setError(e);
     } finally {
       setBusy(false);
     }
@@ -256,6 +267,8 @@ function Conversation({
           turns={turns.map(chatTurn)}
           loading={sessionId !== null && loaded.loading}
           pending={busy}
+          live={live}
+          onStop={() => stopper.current?.abort()}
           question={question}
           onQuestion={setQuestion}
           onAsk={(text) => void ask(text)}

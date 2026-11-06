@@ -14,7 +14,8 @@ continues. Per turn:
 3. **The model words the answer** (`sales.assistant_answer@1.0.0`) from the
    facts code built; code keeps the wording only when every figure is among
    the facts and it names no amount, and otherwise answers in its own
-   sentence. Facts never hold an amount.
+   sentence. Facts never hold an amount. As it streams, each word is held
+   to that same check before it leaves (`dw_agent_runtime.model.streaming`).
 4. **The turn is kept** in the caller's own session (RLS by tenant,
    workspace and user; `sales.prune_assistant_sessions()` after 30 days).
 
@@ -27,8 +28,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Callable, Sequence
-from contextlib import AbstractAsyncContextManager
+from collections.abc import AsyncGenerator, Callable, Sequence
+from contextlib import AbstractAsyncContextManager, aclosing
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Final, Literal, Protocol
@@ -41,6 +42,16 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
+    StreamingInterpretationPort,
+)
+from dw_agent_runtime.model.streaming import (
+    ChatDelta,
+    ChatDone,
+    ChatEvent,
+    ChatReplace,
+    ChatStep,
+    WordingRefusedError,
+    released,
 )
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -195,6 +206,14 @@ def _session_view(session: Session) -> SessionView:
 # --------------------------------------------------------------- facts --
 
 
+@dataclass(frozen=True, slots=True)
+class _Worded:
+    """The text a turn keeps, and who wrote it."""
+
+    text: str
+    by: Literal["model", "code"]
+
+
 @dataclass(frozen=True)
 class _Found:
     """What code found for a question: facts for the wording call (or None
@@ -321,6 +340,18 @@ class AssistantService:
     async def ask(
         self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
     ) -> AnswerView:
+        """`stream`'s turn, whole: one path, so neither can drift from the other."""
+        async with aclosing(self.stream(context, question, session_id)) as events:
+            async for event in events:
+                if isinstance(event, ChatDone):
+                    return event.view
+        raise AssertionError("a turn always ends in ChatDone")
+
+    async def stream(
+        self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
+    ) -> AsyncGenerator[ChatEvent[AnswerView], None]:
+        """A turn as it happens. Whatever refuses the caller raises before the
+        first event, while the route can still answer with a status."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
         now = self.clock.now()
         opened: Session | None = None
@@ -339,9 +370,18 @@ class AssistantService:
                 session = await self._own(store, context, session_id)
                 earlier = await store.turns(session_id)
         focus = earlier[-1].focus if earlier else None
+        yield ChatStep(key="read", title="Đang đọc câu hỏi")
         intent = await self._intent(context, question, earlier, focus)
+        yield ChatStep(key="look", title="Đang tra trong phạm vi bạn được xem")
         found = await self._find(context, intent, focus)
-        answer, by = await self._worded(context, question, found)
+        answer: str = found.sentence
+        by: Literal["model", "code"] = "code"
+        async with aclosing(self._worded(context, question, found)) as wording:
+            async for event in wording:
+                if isinstance(event, _Worded):
+                    answer, by = event.text, event.by
+                else:
+                    yield event
         turn = Turn(
             session_id=session.session_id,
             seq=len(earlier) + 1,
@@ -359,7 +399,7 @@ class AssistantService:
             if opened is not None:
                 await store.open(opened)
             await store.add(turn)
-        return AnswerView(session_id=session.session_id, turn=_turn_view(turn))
+        yield ChatDone(AnswerView(session_id=session.session_id, turn=_turn_view(turn)))
 
     async def _own(
         self, store: AssistantStorePort, context: AccessContext, session_id: uuid.UUID
@@ -492,25 +532,60 @@ class AssistantService:
 
     async def _worded(
         self, context: AccessContext, question: str, found: _Found
-    ) -> tuple[str, Literal["model", "code"]]:
-        """The model's wording of the facts when code can check it; code's
-        sentence otherwise."""
+    ) -> AsyncGenerator[ChatDelta | ChatReplace | _Worded, None]:
+        """The model's wording of the facts while code can check it, word by
+        word; code's sentence otherwise, in place of any words already shown.
+        Ends in the text to keep."""
         if found.facts is None or self.model is None:
-            return found.sentence, "code"
+            yield ChatDelta(text=found.sentence)
+            yield _Worded(found.sentence, "code")
+            return
         facts = json.dumps(found.facts, ensure_ascii=False, indent=1)
+
+        def checkable(text: str) -> bool:
+            return not unsupported(text, facts, names=DW_NAMES) and not names_amount(text)
+
+        shown = ""
         try:
-            answer = await self.model.interpret(
+            words = released(self._wording(context, question, facts), checkable)
+            async with aclosing(words) as stream:
+                async for word in stream:
+                    shown += word
+                    yield ChatDelta(text=word)
+        except (ModelUnavailableError, QuotaExceededError, WordingRefusedError):
+            yield ChatReplace(text=found.sentence) if shown else ChatDelta(text=found.sentence)
+            yield _Worded(found.sentence, "code")
+            return
+        if not shown:
+            yield ChatDelta(text=found.sentence)
+            yield _Worded(found.sentence, "code")
+            return
+        yield _Worded(shown, "model")
+
+    async def _wording(
+        self, context: AccessContext, question: str, facts: str
+    ) -> AsyncGenerator[str, None]:
+        """The model's text on the facts, as it writes it where it can."""
+        assert self.model is not None
+        inputs = {"question": question, "facts": facts}
+        run = self._run(context, "sales-assistant-answer")
+        if isinstance(self.model, StreamingInterpretationPort):
+            pieces = self.model.stream_field(
                 ASSISTANT_ANSWER,
-                {"question": question, "facts": facts},
+                inputs,
                 ModelAnswer,
-                run=self._run(context, "sales-assistant-answer"),
+                "answer",
+                run=run,
                 max_output_tokens=_ANSWER_OUTPUT,
             )
-        except (ModelUnavailableError, QuotaExceededError):
-            return found.sentence, "code"
-        if unsupported(answer.answer, facts, names=DW_NAMES) or names_amount(answer.answer):
-            return found.sentence, "code"
-        return answer.answer, "model"
+            async with aclosing(pieces) as stream:
+                async for piece in stream:
+                    yield piece
+            return
+        answer = await self.model.interpret(
+            ASSISTANT_ANSWER, inputs, ModelAnswer, run=run, max_output_tokens=_ANSWER_OUTPUT
+        )
+        yield answer.answer
 
 
 def _not_found(what: str, reference: str | None) -> _Found:

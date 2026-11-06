@@ -28,5 +28,6 @@ export {
   AssistantChat,
   type AssistantChatProps,
   type ChatStep,
+  type ChatLive,
   type ChatTurn,
 } from "./assistant-chat";

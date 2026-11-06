@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ApiClient } from "./client";
+import type { ApiClient, ChatStreamEvent } from "./client";
 import type { components, paths } from "./generated/sales";
 
 /**
@@ -479,13 +479,20 @@ export class SalesApi {
     );
   }
 
-  /** A status question to DW1 (ADR 0007), continuing ``sessionId`` or
-   * opening a session; the model reads it, code answers from live data. */
-  assistantAsk(question: string, sessionId: string | null, key: string) {
-    return this.post<"/api/v1/sales/assistant/ask">(
-      "/api/v1/sales/assistant/ask",
-      { question, session_id: sessionId },
-      key,
+  /** A status question, in a session or opening one, as it happens: what DW1
+   * is doing, then its answer word by word, each word checked before it
+   * leaves the server. */
+  assistantStream(
+    question: string,
+    sessionId: string | null,
+    idempotencyKey: string,
+    onEvent: (event: ChatStreamEvent) => void,
+    signal?: AbortSignal,
+  ) {
+    return this.client.chatStream<SalesSchemas["AnswerView"]>(
+      "/api/v1/sales/assistant/ask/stream",
+      { body: { question, session_id: sessionId }, idempotencyKey, signal },
+      onEvent,
     );
   }
 
