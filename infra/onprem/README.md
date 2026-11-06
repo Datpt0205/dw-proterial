@@ -53,7 +53,7 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
     - **chat**: `qwen3.5-9b-dw` in the container, with 32/33 layers on the GPU and both models resident (6.9 of 8 GB). Ollama 0.34.4 matched the 0.40.4 host build on the live evals: intent 89.8%, layout 97.7%, hand-off 98.6%.
 - **Measured on 2026-10-19 and not handled yet:**
     - **The first GPU discovery can time out.** Ollama gives up after 30 s and serves on CPU, while the `ollama list` healthcheck still reports healthy. A restart found the GPU. Check `docker logs <model>` for `inference compute ... library=CUDA` after every start.
-    - **The first request loads the model.** Loading took 582 s for qwen and 68 s for bge-m3 from the Docker Desktop volume on this laptop. DW1's 120 s route timeout fails such a first call, which then degrades to a person. Send one warm-up call after `up`. `OLLAMA_KEEP_ALIVE=-1` keeps the model loaded from then on.
+    - **The first request loads the model.** Loading took 582 s for qwen and 68 s for bge-m3 from the Docker Desktop volume on this laptop. DW1's 120 s route timeout fails such a first call, which then degrades to a person. Handled since 2026-11-06: `make onprem-up` returns only once `scripts/warm_model.py` has loaded every model the profile names, and says if one landed on the CPU. The `model-warm` service repeats it every five minutes, so a reboot or a crash of the model server is warm again with nobody asking. `make onprem-warm` runs it by hand. `OLLAMA_KEEP_ALIVE=-1` keeps a model loaded between those calls. Not run yet on the plant's host or inside compose: the script ran against the home lab's LM Studio.
     - **qwen35 serves one request at a time.** Ollama logs that this architecture "does not currently support parallel requests", so `OLLAMA_NUM_PARALLEL=4` does not apply to it. Requests queue instead.
     - **api and worker can still reach the internet.** They sit on `dw-edge`, so "nothing is called outside" holds only through configuration (the provider settings and `DW_*_OUTBOUND_ALLOWED_HOSTS`), not through the network. Whether the on-premises overlay should drop `dw-edge` is Đạt's decision.
 
@@ -126,7 +126,7 @@ Zalo (and Microsoft Teams) bots work only through the provider's servers, which 
 
 **What people use instead:**
 
-- **The portal on the LAN** (`https://<DW_WEB_HOST>`, behind Caddy). This is the product: every list, case, approval and decision is there already.
+- **The portal on the LAN** (`https://<DW_WEB_HOST>`, behind Caddy). This is the product: every list, case, approval and decision is there already. Its chat streams over Server-Sent Events on the API host, which Caddy passes on frame by frame (measured 2026-11-06, the repository's Caddyfile on `caddy:2.11.7-alpine`). A proxy Proterial puts in front must not buffer `text/event-stream`.
 - **The in-app inbox** (the bell): every approval, hand-off and reminder lands there. It needs nothing outside the host.
 - **Email through Proterial's own mail relay**, as a link only (`/approvals/<id>`, never a price or a PO line). This is the one channel that is not built yet.
 

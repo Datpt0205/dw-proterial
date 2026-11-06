@@ -64,6 +64,30 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Keeps the models loaded (scripts/warm_model.py): the first call after a
+  # start loads them, minutes that a step's timeout does not wait out, and a
+  # host that rebooted at night must be warm by morning. One-token calls every
+  # five minutes, on the worker's image; it reaches the model and nothing else.
+  model-warm:
+    logging: *default-logging
+    image: dw-worker:local
+    profiles: ["full"]
+    command: ["python", "/warm/warm_model.py", "--profile", "/warm/onprem.yaml", "--every", "300"]
+    environment:
+      DW_ONPREM_MODEL_BASE_URL: http://model:11434/v1
+    volumes:
+      - ../../scripts/warm_model.py:/warm/warm_model.py:ro
+      - ../../configs/models/onprem.yaml:/warm/onprem.yaml:ro
+    networks: [dw-internal]
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    depends_on:
+      model:
+        condition: service_healthy
+    restart: unless-stopped
+
   # One-shot, `--profile onprem-init` only: the only container here with a way
   # out (dw-edge), and it runs its own server against the same volume, so
   # stop `model` first. `make onprem-models` runs it.

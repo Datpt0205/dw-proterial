@@ -21,7 +21,7 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
         test-unit coverage test-integration test-architecture test-contract test-hooks \
         test-e2e test-web test-web-sales test-web-accounts web-screens demo-reset test-all eval-smoke test-eval-smoke \
         generate-contracts new-context release-manifest release-manifest-check ci \
-        onprem-models onprem-up
+        onprem-models onprem-up onprem-warm
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -151,8 +151,12 @@ ONPREM := $(COMPOSE) -f infra/compose/docker-compose.uat.yml \
   -f infra/compose/docker-compose.onprem.yml -f infra/compose/docker-compose.onprem-gpu.yml \
   -f infra/compose/docker-compose.host.yml --profile full --profile observability
 
-onprem-up: ## Full stack on premises, uat profile, GPU, with Grafana/Loki/Tempo (infra/onprem/README.md)
+onprem-up: ## Full stack on premises, uat profile, GPU, with Grafana/Loki/Tempo; returns once the models are loaded (infra/onprem/README.md)
 	$(ONPREM) up -d --build
+	$(MAKE) onprem-warm
+
+onprem-warm: ## Load the on-prem models now and say whether they landed on the GPU (scripts/warm_model.py)
+	$(ONPREM) run --rm --no-deps model-warm python /warm/warm_model.py --profile /warm/onprem.yaml
 
 latency-report: ## p50/p95/p99 per API route from the compose stack's API log (scripts/route_latency.py)
 	$(COMPOSE) logs --no-log-prefix api | uv run python scripts/route_latency.py
