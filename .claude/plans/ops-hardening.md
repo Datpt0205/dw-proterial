@@ -85,6 +85,14 @@ context. All five are done and on `main`. The full narrative is at
       `purchasing_assistant` were 5/5 each (DW1 p50 0.8 s). Strata, where
       Đạt expects the qwen3.8 model, answered Cloudflare 1033/530 (the
       tunnel is down), so the candidate model is **not measured yet**.
+    - **Content guardrails (2026-11-06, asked by Đạt):** today's holds by
+      allow-list, not by topic: a closed intent schema (`out_of_scope` gets
+      the fixed catalog), ADR 0010 input framing, code-written or
+      figure-checked answers, no tools. Open: no content classifier on the
+      two free-text surfaces (DW1's worded answer, drafted mails); no eval
+      case for sexual, political, abusive or chit-chat jailbreak questions
+      (offered to Đạt, not added). A free agent chat needs an on-prem guard
+      model (e.g. Qwen3Guard, measured in VI/EN/JA first), failing closed.
 
 - **Logs, traces, Grafana (2026-11-05, Đạt: everything on Proterial's
   server, no cloud).**
