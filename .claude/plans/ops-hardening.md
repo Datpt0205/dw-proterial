@@ -57,6 +57,16 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Process deck for Proterial (2026-11-06, outside the repo).**
+  `Downloads/proterial/DW1-DW2_Quy-trinh-va-luong-nghiep-vu_Proterial.pptx`,
+  31 slides: as is, with DW and who stays, every status and move of orders,
+  quotes and purchasing. Built by `DW-decks-src/build_flows.py` from
+  `flow.json`, dumped from `process_settings.EDGES` and `STATUS_BUCKETS`; the
+  build stops on a DW1 move not drawn. DW2's moves are read by hand from the
+  application services (no move table in code). DW2's as-is is still assumed.
+  The 11-05 survey deck's slide 4 promises a hand-off drawing it does not
+  have; master deck slide 21 still lacks the plant GPU.
+
 - **Reaching the portal on premises (2026-11-06, answered for Đạt).**
     - Staff open `https://<DW_WEB_HOST>` on the plant's network only; Caddy
       (ADR 0009) is the one door, no Cloudflare or CDN (a third party would
