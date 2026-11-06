@@ -84,7 +84,10 @@ context. All five are done and on `main`. The full narrative is at
       `reasoning_effort: none`; through it `sales_assistant` and
       `purchasing_assistant` were 5/5 each (DW1 p50 0.8 s). Strata, where
       Đạt expects the qwen3.8 model, answered Cloudflare 1033/530 (the
-      tunnel is down), so the candidate model is **not measured yet**.
+      tunnel is down; still down after 2 h of polling), so the candidate
+      model is **not measured yet**. Next: when Giang's tunnel is up, the
+      21 datasets with a live 9B report through the scratch runner, compared
+      field by field.
     - **Content guardrails (2026-11-06, asked by Đạt):** today's holds by
       allow-list, not by topic: a closed intent schema (`out_of_scope` gets
       the fixed catalog), ADR 0010 input framing, code-written or
