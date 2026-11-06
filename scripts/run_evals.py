@@ -202,6 +202,7 @@ def live_model_for(profile: str) -> object:
         openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
         openai_base_url=os.environ.get("OPENAI_BASE_URL") or None,
         onprem_base_url=os.environ.get("DW_ONPREM_MODEL_BASE_URL") or None,
+        onprem_api_key=os.environ.get("DW_ONPREM_MODEL_API_KEY") or None,
     )
     gateway = RoutingModelGateway(
         profiles=profiles,
