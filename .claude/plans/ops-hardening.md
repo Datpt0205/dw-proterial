@@ -57,6 +57,37 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
+    - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
+      `fetch`, because `EventSource` sends no bearer token). `/assistant/ask`
+      reads the same stream to its end. `dw_agent_runtime.model.streaming`:
+      `released` holds each word until the text so far passes the figure and
+      amount check; `replace` puts code's sentence over words that stopped
+      passing. Decisions: `dw_sales` ADR 0007 addendum, a rule in `CLAUDE.md`.
+      The chat frame shows the step in progress, the words, and a stop button.
+      This is the existing question list, streamed. It is **not** the agent
+      with tools proposed below.
+    - **Built:** `scripts/warm_model.py`, the `model-warm` service in the
+      on-prem overlay (every 300 s), `make onprem-warm`; `make onprem-up`
+      returns once the models are loaded. It fails on a model held on CPU.
+    - **Ran:** Qwen3.5-9B on local Ollama behind a real browser: DW1 step at
+      0.1 s, first word 3.9 s, whole 6.2 s (the intent call is 2.4 s of it);
+      DW2 answer at 2.2 s; stop keeps the question, stores no turn, releases
+      the key. LM Studio: first word 0.45 s, whole 1.2 s. The real app and
+      the repository's Caddyfile on `caddy:2.11.7-alpine`: frames arrive as
+      written, a client leaving stops the generator. Cold load by the script:
+      110 s, fully on the GPU. The script also ran in `dw-worker:local`.
+    - **Mutation:** 23 guards, each red. Three survived at first: two were
+      missing tests, one a condition that did nothing (removed).
+    - **Open:** `sales_assistant` evals run through `interpret`, not the
+      stream. DW1's `my_work` wording was replaced on its one live run, so
+      that kind flashes words and then code's list; if it does so at the
+      plant, skip the wording for lists. `model-warm` has not run inside the
+      compose stack, nor anything here on the plant's host or on Qwen3.8.
+      `request_timing` measures to the first event, so `route_latency.py`
+      reads a stream as fast. The intent call has no words to show, so a
+      cold or queued model still shows only the step.
+
 - **Process deck for Proterial (2026-11-06, outside the repo).**
   `Downloads/proterial/DW1-DW2_Quy-trinh-va-luong-nghiep-vu_Proterial.pptx`,
   31 slides: as is, with DW and who stays, every status and move of orders,
