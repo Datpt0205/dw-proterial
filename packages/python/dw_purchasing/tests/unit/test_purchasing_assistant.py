@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
+from dw_agent_runtime.model.streaming import ChatDelta, ChatDone, ChatStep
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.assistant import QUESTION_INTENT
@@ -224,3 +225,30 @@ async def test_two_requests_of_one_number_are_not_guessed_between() -> None:
     world.assistant = dataclasses.replace(world.assistant, requests=Twins())  # type: ignore[arg-type]
     answer = await _ask(world, "PR-2611-004 tới đâu rồi?")
     assert answer.turn.cites == []
+
+
+async def test_a_turn_says_what_it_is_doing_and_ends_in_the_kept_answer() -> None:
+    world = _world()
+    await world.service.read_mail(caller(), "P01")
+    events = [e async for e in world.assistant.stream(caller(), "PR-2611-004 tới đâu rồi?")]
+    assert [e.key for e in events if isinstance(e, ChatStep)] == ["read", "look"]
+    said = "".join(e.text for e in events if isinstance(e, ChatDelta))
+    done = events[-1]
+    assert isinstance(done, ChatDone)
+    assert said == done.view.turn.answer
+    assert [s.key for s in done.view.turn.steps] == ["read", "look"]
+
+
+async def test_the_step_is_said_before_the_model_is_asked() -> None:
+    world = _world()
+    stream = world.assistant.stream(caller(), "PR-2611-004 tới đâu rồi?")
+    assert isinstance(await anext(stream), ChatStep)
+    assert not [c for c in world.model.calls if c[0] == QUESTION_INTENT]
+    await stream.aclose()
+
+
+async def test_who_may_not_ask_is_refused_before_the_first_event() -> None:
+    world = _world()
+    stream = world.assistant.stream(caller(scopes=frozenset()), "PR-2611-004 tới đâu rồi?")
+    with pytest.raises(PermissionDeniedError):
+        await anext(stream)

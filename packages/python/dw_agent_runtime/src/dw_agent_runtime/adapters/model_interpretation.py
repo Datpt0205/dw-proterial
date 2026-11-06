@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Mapping
+from collections.abc import AsyncGenerator, Mapping
+from contextlib import aclosing
 from dataclasses import dataclass
 
 from pydantic import BaseModel
@@ -25,7 +26,13 @@ from pydantic import BaseModel
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import ModelUnavailableError, PromptRef
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
-from dw_agent_runtime.ports import ModelGateway, ModelOutputInvalidError, ModelRequest
+from dw_agent_runtime.model.streaming import JsonStringField
+from dw_agent_runtime.ports import (
+    ModelGateway,
+    ModelOutputInvalidError,
+    ModelRequest,
+    StreamingModelGateway,
+)
 from dw_kernel.errors import InfrastructureError, NotFoundError
 
 _LOG = logging.getLogger("dw_agent_runtime.model")
@@ -62,7 +69,57 @@ class GatewayInterpretation:
         run: RunContext,
         max_output_tokens: int,
     ) -> OutputT:
-        request = ModelRequest(
+        request = self._request(prompt, inputs, max_output_tokens)
+        try:
+            return await self.gateway.generate_structured(request, schema, run_context=run)
+        except (InfrastructureError, ModelOutputInvalidError, NotFoundError) as exc:
+            raise self._unavailable(run, prompt, exc) from exc
+
+    async def stream_field(
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[BaseModel],
+        field: str,
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> AsyncGenerator[str, None]:
+        """Implements `StreamingInterpretationPort`. A gateway or provider that
+        cannot stream gives the field whole, once it has validated."""
+        request = self._request(prompt, inputs, max_output_tokens)
+        reader = JsonStringField(field)
+        written = ""
+        try:
+            if not isinstance(self.gateway, StreamingModelGateway):
+                output = await self.gateway.generate_structured(request, schema, run_context=run)
+                yield str(getattr(output, field))
+                return
+            async with aclosing(
+                self.gateway.stream_structured(request, schema, run_context=run)
+            ) as pieces:
+                async for piece in pieces:
+                    if isinstance(piece, str):
+                        text = reader.feed(piece)
+                        if text:
+                            written += text
+                            yield text
+                    elif not written:
+                        yield str(getattr(piece, field))
+                    elif written != getattr(piece, field):
+                        # The reader and the schema read the JSON differently
+                        # (a key twice): what was shown is not the answer.
+                        raise ModelOutputInvalidError(
+                            "streamed text is not the answer",
+                            details={"prompt_id": prompt.prompt_id},
+                        )
+        except (InfrastructureError, ModelOutputInvalidError, NotFoundError) as exc:
+            raise self._unavailable(run, prompt, exc) from exc
+
+    def _request(
+        self, prompt: PromptRef, inputs: Mapping[str, str], max_output_tokens: int
+    ) -> ModelRequest:
+        return ModelRequest(
             task=STRUCTURED_TASK,
             prompt_id=prompt.prompt_id,
             prompt_version=prompt.version,
@@ -70,19 +127,20 @@ class GatewayInterpretation:
             model_profile=self.model_profile,
             max_output_tokens=max_output_tokens,
         )
-        try:
-            return await self.gateway.generate_structured(request, schema, run_context=run)
-        except (InfrastructureError, ModelOutputInvalidError, NotFoundError) as exc:
-            # Ids and the error's kind only: never an input or an answer,
-            # which are a customer's words.
-            _LOG.warning(
-                "model reading unavailable for run %s (%s, %s): %s",
-                run.run_id,
-                prompt,
-                self.model_profile,
-                type(exc).__name__,
-            )
-            raise ModelUnavailableError(type(exc).__name__) from exc
+
+    def _unavailable(
+        self, run: RunContext, prompt: PromptRef, exc: Exception
+    ) -> ModelUnavailableError:
+        # Ids and the error's kind only: never an input or an answer, which
+        # are a customer's words.
+        _LOG.warning(
+            "model reading unavailable for run %s (%s, %s): %s",
+            run.run_id,
+            prompt,
+            self.model_profile,
+            type(exc).__name__,
+        )
+        return ModelUnavailableError(type(exc).__name__)
 
 
 @dataclass(frozen=True)

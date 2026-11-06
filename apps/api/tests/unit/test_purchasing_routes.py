@@ -292,7 +292,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 41
+    assert len(routes) == 42
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -665,3 +665,71 @@ async def test_following_an_order_is_refused_to_whoever_does_not_buy() -> None:
     buyer = _container(EVERY_SCOPE, _mounted(world))
     late = await _call(buyer, "GET", "/orders/late")
     assert late.status_code == 200, late.text
+
+
+def _frames(body: str) -> list[tuple[str, dict[str, Any]]]:
+    frames = []
+    for block in body.strip().split("\n\n"):
+        event, data = block.split("\n", 1)
+        frames.append((event.removeprefix("event: "), json.loads(data.removeprefix("data: "))))
+    return frames
+
+
+async def test_a_question_streams_its_steps_and_ends_in_the_kept_turn() -> None:
+    world = _world()
+    world.model.by_schema["QuestionIntent"] = {"giá": {"kind": "out_of_scope"}}
+    response = await _call(
+        _container(EVERY_SCOPE, _mounted(world)),
+        "POST",
+        "/assistant/ask/stream",
+        {"question": "giá?"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["cache-control"] == "no-store"
+    frames = _frames(response.text)
+    assert [name for name, _ in frames] == ["step", "step", "delta", "done"]
+    assert frames[-1][1]["turn"]["answer"] == frames[2][1]["text"]
+
+
+async def test_a_refused_question_is_a_status_not_a_frame_in_a_200() -> None:
+    world = _world()
+    container = _container(frozenset({"sales.case.read"}), _mounted(world))
+    refused = await _call(container, "POST", "/assistant/ask/stream", {"question": "giá?"})
+    assert refused.status_code == 403, refused.text
+    unsigned = await _call(
+        container, "POST", "/assistant/ask/stream", {"question": "giá?"}, signed_in=False
+    )
+    assert unsigned.status_code == 401
+
+
+async def test_another_session_is_a_404_before_the_stream_starts() -> None:
+    world = _world()
+    response = await _call(
+        _container(EVERY_SCOPE, _mounted(world)),
+        "POST",
+        "/assistant/ask/stream",
+        {"question": "giá?", "session_id": str(uuid.uuid4())},
+    )
+    assert response.status_code == 404, response.text
+
+
+async def test_a_failure_after_the_start_is_one_fixed_frame_saying_nothing_more() -> None:
+    """Headers are gone: it cannot be a status, and it names nothing inside."""
+    world = _world()
+    world.model.by_schema["QuestionIntent"] = {"giá": {"kind": "out_of_scope"}}
+
+    async def broken(*_: object, **__: object) -> None:
+        raise RuntimeError("postgres://secret@db/leak")
+
+    world.assistant.store.append = broken  # type: ignore[method-assign]
+    response = await _call(
+        _container(EVERY_SCOPE, _mounted(world)),
+        "POST",
+        "/assistant/ask/stream",
+        {"question": "giá?"},
+    )
+    assert response.status_code == 200
+    frames = _frames(response.text)
+    assert frames[-1] == ("error", {"message": "Không trả lời được lúc này. Hãy hỏi lại."})
+    assert "secret" not in response.text

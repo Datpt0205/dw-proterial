@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal, Protocol
@@ -34,6 +35,7 @@ from dw_agent_runtime.model.interpretation import (
     ModelUnavailableError,
     PromptRef,
 )
+from dw_agent_runtime.model.streaming import ChatDelta, ChatDone, ChatEvent, ChatStep
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -201,6 +203,20 @@ class AssistantService:
     async def ask(
         self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
     ) -> AssistantAnswerView:
+        """`stream`'s turn, whole: one path, so neither can drift from the other."""
+        async with aclosing(self.stream(context, question, session_id)) as events:
+            async for event in events:
+                if isinstance(event, ChatDone):
+                    return event.view
+        raise AssertionError("a turn always ends in ChatDone")
+
+    async def stream(
+        self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
+    ) -> AsyncGenerator[ChatEvent[AssistantAnswerView], None]:
+        """A turn as it happens: DW2 words its answers itself, so what arrives
+        as it goes is what it is doing. Whatever refuses the caller raises
+        before the first event, while the route can still answer with a
+        status."""
         await self._may_ask(context)
         now = self.clock.now()
         if session_id is None:
@@ -212,8 +228,10 @@ class AssistantService:
             found = await self._own(context, session_id)
             session = Session(found.session_id, found.user_id, found.title, found.created_at, now)
             history = await self.store.turns(context, session_id)
+        yield ChatStep(key="read", title="Đang đọc câu hỏi")
         intent = await self._intent(context, question, history)
         focus = history[-1].focus if history else None
+        yield ChatStep(key="look", title="Đang tra trong phạm vi bạn được xem")
         answer = (
             _Answer(_NOT_UNDERSTOOD, (), focus)
             if intent is None
@@ -232,7 +250,8 @@ class AssistantService:
             answered_by="code",
         )
         await self.store.append(context, session, turn)
-        return AssistantAnswerView(session_id=session.session_id, turn=_view(turn))
+        yield ChatDelta(text=answer.text)
+        yield ChatDone(AssistantAnswerView(session_id=session.session_id, turn=_view(turn)))
 
     # ------------------------------------------------------------ steps --
 

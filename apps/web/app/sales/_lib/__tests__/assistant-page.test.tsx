@@ -45,11 +45,11 @@ vi.mock("next/navigation", async () => {
   };
 });
 
-const assistantAsk = vi.fn();
+const assistantStream = vi.fn();
 const assistantSessions = vi.fn();
 const assistantSession = vi.fn();
 vi.mock("../api", () => ({
-  salesApi: () => ({ assistantAsk, assistantSessions, assistantSession }),
+  salesApi: () => ({ assistantStream, assistantSessions, assistantSession }),
 }));
 
 import AssistantPage from "../../assistant/page";
@@ -69,7 +69,7 @@ const TURN = {
 afterEach(() => {
   cleanup();
   nav.reset();
-  [assistantAsk, assistantSessions, assistantSession, nav.replace].forEach(
+  [assistantStream, assistantSessions, assistantSession, nav.replace].forEach(
     (m) => m.mockReset(),
   );
 });
@@ -98,13 +98,13 @@ describe("Hỏi đáp DW1 (ADR 0007)", () => {
   });
 
   it("asks on Enter, shows the answer marked as the machine's with its case, and opens the session", async () => {
-    assistantAsk.mockResolvedValue({ session_id: SESSION, turn: TURN });
+    assistantStream.mockResolvedValue({ session_id: SESSION, turn: TURN });
     renderIt();
     const box = screen.getByRole("textbox", { name: "Câu hỏi cho DW1" });
     fireEvent.change(box, { target: { value: TURN.question } });
     fireEvent.keyDown(box, { key: "Enter" });
-    await waitFor(() => expect(assistantAsk).toHaveBeenCalledTimes(1));
-    expect(assistantAsk.mock.calls[0]!.slice(0, 2)).toEqual([
+    await waitFor(() => expect(assistantStream).toHaveBeenCalledTimes(1));
+    expect(assistantStream.mock.calls[0]!.slice(0, 2)).toEqual([
       TURN.question,
       null,
     ]);
@@ -122,6 +122,6 @@ describe("Hỏi đáp DW1 (ADR 0007)", () => {
     fireEvent.change(box, { target: { value: "PO đó" } });
     fireEvent.keyDown(box, { key: "Enter", isComposing: true });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
-    expect(assistantAsk).not.toHaveBeenCalled();
+    expect(assistantStream).not.toHaveBeenCalled();
   });
 });

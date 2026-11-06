@@ -30,8 +30,10 @@ from typing import Annotated, Any, Protocol
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi import Path as PathParam
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.model.streaming import SSE_HEADERS, SSE_MEDIA_TYPE, opened_stream
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.application.access import PurchasingScopes
@@ -504,6 +506,20 @@ def build_router(
     ) -> AssistantAnswerView:
         answer = await svc.assistant.ask(context, body.question.strip(), body.session_id)
         return await idem.record(answer)
+
+    @router.post(
+        "/assistant/ask/stream",
+        response_class=StreamingResponse,
+        responses={200: {"content": {SSE_MEDIA_TYPE: {}}}},
+        dependencies=reader,
+    )
+    async def assistant_stream(
+        body: AssistantAskBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> StreamingResponse:
+        frames = await opened_stream(
+            svc.assistant.stream(context, body.question.strip(), body.session_id), idem.record
+        )
+        return StreamingResponse(frames, media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
 
     @router.get(
         "/assistant/sessions", response_model=list[AssistantSessionView], dependencies=reader

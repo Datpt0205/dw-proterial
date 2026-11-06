@@ -7,16 +7,20 @@ are selected per profile (Strategy). Usage/cost is recorded per call.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import aclosing
 from dataclasses import dataclass, field, replace
 from time import perf_counter
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger, route_cost
+from dw_agent_runtime.model.interpretation import estimated_tokens
 from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry, ModelRoute
 from dw_agent_runtime.model.prompts import PromptRegistry, RenderedPrompt
+from dw_agent_runtime.model.streaming import StreamedAnswer
 from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest, OutputT
 from dw_kernel.errors import InfrastructureError, NotFoundError
 
@@ -52,6 +56,22 @@ class ModelProviderAdapter(Protocol):
         max_output_tokens: int | None,
     ) -> tuple[dict[str, object], ModelUsage, str | None]:
         """Returns (parsed_json, usage, visible_reasoning_or_None)."""
+        ...
+
+
+@runtime_checkable
+class StreamingProviderAdapter(ModelProviderAdapter, Protocol):
+    """A provider that hands its text over as it is written."""
+
+    def stream_json(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+    ) -> AsyncGenerator[str | StreamedAnswer, None]:
+        """Pieces of the raw answer, then a `StreamedAnswer` when it is whole."""
         ...
 
 
@@ -140,6 +160,114 @@ class RoutingModelGateway:
         *,
         run_context: RunContext,
     ) -> tuple[OutputT, str]:
+        prompt, request, profile = self._prepared(request, run_context)
+
+        last_error: Exception | None = None
+        for index, route in enumerate(self._attempts(request, profile)):
+            adapter = self.adapters.get(route.provider)
+            if adapter is None:
+                if index == 0:
+                    raise NotFoundError(
+                        "model provider not configured",
+                        details={"provider": route.provider, "profile": request.model_profile},
+                    )
+                continue  # fallback route pointing at an unwired provider
+            started = perf_counter()
+            try:
+                raw, usage, reasoning = await adapter.complete_json(
+                    prompt,
+                    output_type.model_json_schema(),
+                    route,
+                    max_output_tokens=request.max_output_tokens,
+                )
+            except InfrastructureError as exc:
+                last_error = exc
+                continue
+            usage = replace(usage, latency_ms=(perf_counter() - started) * 1000)
+            priced = self._priced(route, usage)
+            self._spend(run_context, priced)
+            await self._record(run_context, request, priced)
+            try:
+                return output_type.model_validate(raw), reasoning or ""
+            except ValidationError as exc:
+                last_error = self._invalid(request, output_type, exc)
+                continue
+        assert last_error is not None  # attempts list is never empty
+        raise last_error
+
+    async def stream_structured(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> AsyncGenerator[str | OutputT, None]:
+        """The primary route's text as it arrives, then the validated output.
+
+        One attempt: a person may already be reading the words, so a retry or
+        a fallback would be a second answer on the same screen, and the caller
+        has an answer of its own to fall back on. The budget is checked before
+        the call and charged after it, a call cut short included, at an
+        estimate when the provider reports no usage (a ceiling nothing feeds
+        is no ceiling, failure-modes #5).
+        """
+        prompt, request, profile = self._prepared(request, run_context)
+        route = self._attempts(request, profile)[0]
+        adapter = self.adapters.get(route.provider)
+        if adapter is None:
+            raise NotFoundError(
+                "model provider not configured",
+                details={"provider": route.provider, "profile": request.model_profile},
+            )
+        if not isinstance(adapter, StreamingProviderAdapter):
+            yield await self.generate_structured(request, output_type, run_context=run_context)
+            return
+        written: list[str] = []
+        answer: StreamedAnswer | None = None
+        started = perf_counter()
+        try:
+            async with aclosing(
+                adapter.stream_json(
+                    prompt,
+                    output_type.model_json_schema(),
+                    route,
+                    max_output_tokens=request.max_output_tokens,
+                )
+            ) as pieces:
+                async for piece in pieces:
+                    if isinstance(piece, StreamedAnswer):
+                        answer = piece
+                    else:
+                        written.append(piece)
+                        yield piece
+        finally:
+            if written or answer is not None:
+                usage = answer.usage if answer is not None else None
+                usage = usage or ModelUsage(
+                    provider=adapter.provider_name,
+                    model=route.model,
+                    input_tokens=estimated_tokens(prompt.system + prompt.user),
+                    output_tokens=estimated_tokens("".join(written)),
+                )
+                usage = replace(usage, latency_ms=(perf_counter() - started) * 1000)
+                priced = self._priced(route, usage)
+                self._spend(run_context, priced)
+                await self._record(run_context, request, priced)
+        if answer is None:
+            raise InfrastructureError(
+                "model stream ended without an answer", details={"provider": route.provider}
+            )
+        try:
+            output = output_type.model_validate(answer.parsed)
+        except ValidationError as exc:
+            raise self._invalid(request, output_type, exc) from exc
+        yield output
+
+    def _prepared(
+        self, request: ModelRequest, run_context: RunContext
+    ) -> tuple[RenderedPrompt, ModelRequest, ModelProfile]:
+        """The prompt, the request with its profile named, and the profile,
+        with the run's budget checked: what every call starts from."""
         # The tenant comes from the run, never from the request: a caller that
         # could name the tenant whose prompt to render could read another
         # customer's wording.
@@ -162,47 +290,22 @@ class RoutingModelGateway:
         profile = self.profiles.resolve(profile_id, tenant_id=run_context.tenant_id)
         # Checked before the call, not after: the point is to not make it.
         self.budget.check(run_context.run_id, profile.budgets, task=request.task)
+        return prompt, request, profile
 
-        last_error: Exception | None = None
-        for index, route in enumerate(self._attempts(request, profile)):
-            adapter = self.adapters.get(route.provider)
-            if adapter is None:
-                if index == 0:
-                    raise NotFoundError(
-                        "model provider not configured",
-                        details={"provider": route.provider, "profile": profile_id},
-                    )
-                continue  # fallback route pointing at an unwired provider
-            started = perf_counter()
-            try:
-                raw, usage, reasoning = await adapter.complete_json(
-                    prompt,
-                    output_type.model_json_schema(),
-                    route,
-                    max_output_tokens=request.max_output_tokens,
-                )
-            except InfrastructureError as exc:
-                last_error = exc
-                continue
-            usage = replace(usage, latency_ms=(perf_counter() - started) * 1000)
-            priced = self._priced(route, usage)
-            self._spend(run_context, priced)
-            await self._record(run_context, request, priced)
-            try:
-                return output_type.model_validate(raw), reasoning or ""
-            except ValidationError as exc:
-                last_error = ModelOutputInvalidError(
-                    "model output failed schema validation",
-                    details={
-                        "prompt_id": request.prompt_id,
-                        "output_type": output_type.__name__,
-                        "errors": str(exc.error_count()),
-                    },
-                )
-                last_error.__cause__ = exc
-                continue
-        assert last_error is not None  # attempts list is never empty
-        raise last_error
+    @staticmethod
+    def _invalid(
+        request: ModelRequest, output_type: type[BaseModel], exc: ValidationError
+    ) -> ModelOutputInvalidError:
+        error = ModelOutputInvalidError(
+            "model output failed schema validation",
+            details={
+                "prompt_id": request.prompt_id,
+                "output_type": output_type.__name__,
+                "errors": str(exc.error_count()),
+            },
+        )
+        error.__cause__ = exc
+        return error
 
     def _priced(self, route: ModelRoute, usage: ModelUsage) -> ModelUsage:
         """The call's usage with a cost on it, priced once for every reader.

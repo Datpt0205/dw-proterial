@@ -8,6 +8,7 @@ the production profile refuses to run with the mock instead of this.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 import httpx
@@ -15,6 +16,7 @@ import httpx
 from dw_agent_runtime.model.gateway import ModelUsage
 from dw_agent_runtime.model.profiles import ModelRoute, Provider
 from dw_agent_runtime.model.prompts import RenderedPrompt
+from dw_agent_runtime.model.streaming import StreamedAnswer
 from dw_kernel.errors import InfrastructureError
 from dw_kernel.resilience import CircuitBreaker
 
@@ -101,6 +103,87 @@ class OpenAICompatibleAdapter:
             output_tokens=int(usage_data.get("completion_tokens", 0)),
         )
         return parsed, usage, str(reasoning) if reasoning else None
+
+    async def stream_json(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+    ) -> AsyncGenerator[str | StreamedAnswer, None]:
+        """`complete_json` with ``stream: true``: the visible text as the
+        server sends it (a thinking model's reasoning is not visible text),
+        then the parsed answer. ``timeout_seconds`` is the longest silence,
+        so a model still loading is waited for as long as an unstreamed call
+        waits, and closing this generator closes the connection, which ends
+        the generation on the server."""
+        body = {
+            **_build_request_body(
+                prompt,
+                json_schema,
+                route,
+                structured_mode=self.structured_mode,
+                max_output_tokens=max_output_tokens,
+            ),
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        if self.breaker is not None:
+            self.breaker.before_call()
+        written: list[str] = []
+        usage: ModelUsage | None = None
+        try:
+            async with (
+                httpx.AsyncClient(
+                    base_url=self.base_url,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=route.timeout_seconds,
+                ) as client,
+                client.stream("POST", "/chat/completions", json=body) as response,
+            ):
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    payload = line.removeprefix("data:").strip()
+                    if not line.startswith("data:") or payload == "[DONE]":
+                        continue
+                    chunk = json.loads(payload)
+                    if chunk.get("usage"):
+                        usage = ModelUsage(
+                            provider=self.provider,
+                            model=route.model,
+                            input_tokens=int(chunk["usage"].get("prompt_tokens", 0)),
+                            output_tokens=int(chunk["usage"].get("completion_tokens", 0)),
+                        )
+                    for choice in chunk.get("choices") or []:
+                        text = (choice.get("delta") or {}).get("content")
+                        if text:
+                            written.append(text)
+                            yield text
+        except httpx.TimeoutException as exc:
+            if self.breaker is not None:
+                self.breaker.record_failure()
+            raise InfrastructureError(
+                "model provider timed out",
+                details={"provider": self.provider, "model": route.model},
+            ) from exc
+        except httpx.HTTPError as exc:
+            if self.breaker is not None:
+                self.breaker.record_failure()
+            raise InfrastructureError(
+                "model provider request failed",
+                details={"provider": self.provider, "error": type(exc).__name__},
+            ) from exc
+        if self.breaker is not None:
+            self.breaker.record_success()
+        try:
+            parsed = _extract_json_object("".join(written))
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise InfrastructureError(
+                "model provider returned an unparseable response",
+                details={"provider": self.provider},
+            ) from exc
+        yield StreamedAnswer(parsed, usage)
 
 
 def _build_request_body(

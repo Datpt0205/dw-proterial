@@ -287,8 +287,97 @@ const _auditEventMirrorsTheRoute: [
 ] = [true, true];
 void _auditEventMirrorsTheRoute;
 
+/** What a worker's chat says as it answers (`dw_agent_runtime.model.streaming`). */
+export type ChatStreamEvent =
+  | { event: "step"; key: string; title: string }
+  | { event: "delta"; text: string }
+  | { event: "replace"; text: string };
+
+interface ChatFrame {
+  event: string;
+  data: string;
+}
+
+/**
+ * The whole Server-Sent Events frames in ``buffer``, and what is left for the
+ * next read: a network chunk ends anywhere, inside a frame included.
+ */
+export function chatFrames(buffer: string): {
+  frames: ChatFrame[];
+  rest: string;
+} {
+  const blocks = buffer.split("\n\n");
+  const rest = blocks.pop() ?? "";
+  const frames = blocks.flatMap((block) => {
+    const event = /^event: (.*)$/m.exec(block)?.[1];
+    const data = /^data: (.*)$/m.exec(block)?.[1];
+    return event && data !== undefined ? [{ event, data }] : [];
+  });
+  return { frames, rest };
+}
+
 export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {}
+
+  /**
+   * A chat turn as it happens, over `fetch`: `EventSource` sends no bearer
+   * token. A refusal is a status, raised as `request` raises it. Resolves
+   * with the turn the server kept; a replayed `Idempotency-Key` answers that
+   * turn at once, as JSON, with no events. A stream that ends with no turn
+   * is an error: the turn was not kept.
+   */
+  async chatStream<T>(
+    path: string,
+    init: { body: unknown; idempotencyKey: string; signal?: AbortSignal },
+    onEvent: (event: ChatStreamEvent) => void,
+  ): Promise<T> {
+    const fetchImpl = this.options.fetchImpl ?? fetch;
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+      "Idempotency-Key": init.idempotencyKey,
+    };
+    const token = await this.options.getAccessToken?.();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetchImpl(`${this.options.baseUrl}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(init.body),
+      signal: init.signal,
+    });
+    if (!response.ok) {
+      const json: unknown = await response.json().catch(() => null);
+      const parsedError = errorResponseSchema.safeParse(json);
+      throw new ApiError(
+        response.status,
+        parsedError.success
+          ? parsedError.data
+          : { code: "internal", message: `HTTP ${response.status}`, details: {} },
+      );
+    }
+    const type = response.headers.get("content-type") ?? "";
+    if (!type.startsWith("text/event-stream") || !response.body) {
+      return (await response.json()) as T;
+    }
+    const reader = response.body
+      .pipeThrough(new TextDecoderStream())
+      .getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error("Không trả lời được lúc này. Hãy hỏi lại.");
+      const { frames, rest } = chatFrames(buffer + value);
+      buffer = rest;
+      for (const frame of frames) {
+        const data: unknown = JSON.parse(frame.data);
+        if (frame.event === "done") return data as T;
+        if (frame.event === "error") {
+          throw new Error((data as { message: string }).message);
+        }
+        onEvent({ event: frame.event, ...(data as object) } as ChatStreamEvent);
+      }
+    }
+  }
 
   async request<T>(
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",

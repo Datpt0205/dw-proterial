@@ -90,3 +90,42 @@ right in context.
   assistant still says it did not understand rather than guessing.
 - Eval `sales_assistant@1.0.0` holds the four kinds, the session's focus,
   out-of-scope, prompt injection, another tenant's PO, and a model down.
+
+## Addendum, 2026-11-06: the answer as it is written
+
+Đạt asked that people see the words arrive, not wait for the whole sentence.
+`POST /sales/assistant/ask/stream` (and DW2's) answers in Server-Sent Events;
+`/assistant/ask` stays, reading the same stream to its end, so the two cannot
+drift.
+
+- **The check moves with the words.** Decision 3 kept a wording only when the
+  whole of it passed, which a stream cannot wait for. `released` holds the
+  provider's chunks until a word is whole and asks the same check of all the
+  text so far before that word leaves, so what a person saw is always a prefix
+  that passed. A word that fails stops the call (its one slot is freed) and
+  `replace` puts code's sentence in the words' place; that sentence is what the
+  turn keeps. Facts hold no amount, so what can flash on a screen is a figure
+  the facts hold, never a price.
+- **Same prompt, same schema.** The model still answers `{"answer": ...}`;
+  `JsonStringField` reads the field as it arrives and the schema validates at
+  the end. `sales.assistant_answer@1.0.0` and its eval do not change. The eval
+  runs through `interpret`, not the stream; the stream's guards are held by
+  unit tests and a mutation of each.
+- **One attempt.** No retry and no fallback once words may be on a screen.
+  Code's sentence is the fallback.
+- **Refusals stay statuses.** The first event is taken before the response
+  starts, and everything that refuses happens before it, so a 403 or a 404 is
+  never a frame in a 200. After that a failure is one `error` frame in fixed
+  words.
+- **The spend ceiling still sees it.** Charged after the stream, a call cut
+  short included, at an estimate when the provider reports no usage.
+- **DW2 streams its steps only.** It words its answers itself, so nothing is
+  written word by word there; what arrives as it goes is what it is doing.
+
+Measured 2026-11-06: Qwen3.5-9B on the home lab's LM Studio, first word 0.45 s,
+whole answer 1.2 s, warm; the real app and the repository's Caddyfile on
+`caddy:2.11.7-alpine`, frames 0.4 s apart as written, and a client leaving
+stopped the generator at once. FastAPI 0.141 runs a dependency's exit after a
+streamed response, so `Idempotency-Key` is released or recorded when the turn
+ends. `request_timing` logs the time to the first event, not the turn.
+

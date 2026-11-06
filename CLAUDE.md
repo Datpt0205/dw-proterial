@@ -224,6 +224,10 @@ kind of change nobody makes and everybody works around.
   (`docs/adr/0010-prompt-variables-are-untrusted-by-default.md`).
 - Graph state is typed and versioned; LLM output is always validated into a
   Pydantic schema.
+- A model's prose reaches a person only through its check. Streamed, that is
+  `dw_agent_runtime.model.streaming.released`, which holds each word until the
+  text so far passes, so nothing unchecked is ever on a screen; code's own
+  sentence replaces the words when it stops passing (`dw_sales` ADR 0007).
 - Workflow nodes contain no provider SDK and no SQL, and never import a concrete
   adapter — they take what they need by injection.
 - A tool definition carries version, schemas, scopes, side-effect level,
