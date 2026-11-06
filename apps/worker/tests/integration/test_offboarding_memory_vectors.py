@@ -89,7 +89,9 @@ class _Clock:
 @pytest.fixture
 async def memory_store() -> AsyncIterator[QdrantMemoryRanker]:
     url = load_env().get("QDRANT_URL", "http://127.0.0.1:6333")
-    client = AsyncQdrantClient(url=url)
+    # Creating a collection took 7.6 s on a Docker Desktop volume (2026-11-06),
+    # past the client's default 5 s.
+    client = AsyncQdrantClient(url=url, timeout=60)
     collection = f"dw_memory_offboarding_{uuid.uuid4().hex[:8]}"
     store = QdrantMemoryRanker(
         client=client, embedder=HashEmbeddingAdapter(), collection=collection

@@ -186,7 +186,12 @@ async def test_each_persona_signs_in_with_the_roles_the_roster_shows(
     roster = yaml.safe_load(
         (REPO / "configs" / "demo" / "demo_users.yaml").read_text(encoding="utf-8")
     )["users"]
-    shown = {entry["subject"]: frozenset(entry["roles"]) for entry in roster}
+    # The roster is both DWs'; this seed is Sales' (contexts never import each
+    # other), so a Purchasing role is `dw_purchasing.testing.seed_personas`' to give.
+    shown = {
+        entry["subject"]: frozenset(r for r in entry["roles"] if not r.startswith("purchasing_"))
+        for entry in roster
+    }
     signed_in = {subject: access.roles for (subject, _), access in personas.items()}
     assert signed_in == {subject: shown[subject] for subject in signed_in}
 
