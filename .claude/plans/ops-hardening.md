@@ -75,8 +75,9 @@ context. All five are done and on `main`. The full narrative is at
       plant (2-bit). Proposed, not built: measure it on the existing evals
       against 9B first (ADR 0007 rejected a tool loop because of 9B), then
       read-only tools, then drafts, then HITL cards in the chat that call
-      the same approval API. The model never approves. Owed: the plant
-      GPU and VRAM.
+      the same approval API. The model never approves. The plant GPU is
+      known: an RTX PRO 4000 Blackwell, 24 GB (`sales.md` State), so nothing
+      is owed there; asking for it on 11-06 was a mistake.
     - **Measuring on Giang's home lab (2026-11-06):** keys in the local
       `.env` only (`GIANG_*`). The live lane now sends
       `DW_ONPREM_MODEL_API_KEY` (`d3621fda`). LM Studio
@@ -84,10 +85,16 @@ context. All five are done and on `main`. The full narrative is at
       `reasoning_effort: none`; through it `sales_assistant` and
       `purchasing_assistant` were 5/5 each (DW1 p50 0.8 s). Strata, where
       Đạt expects the qwen3.8 model, answered Cloudflare 1033/530 (the
-      tunnel is down; still down after 2 h of polling), so the candidate
-      model is **not measured yet**. Next: when Giang's tunnel is up, the
-      21 datasets with a live 9B report through the scratch runner, compared
-      field by field.
+      tunnel is down; still down after 2 h of polling).
+    - **Already measured, found 11-06 and missing from these plans:**
+      Qwen3.8-Flash-Next 125B on Strata (RTX 3090 24 GB), 26/10, six DW1
+      golden sets, `Downloads/DW1_Qwen3.8-Flash-Next-IQ3XXS_Strata_ket-qua-test_2026-10-26.xlsx`.
+      Against 9B: PRV-code hints 0.978 vs 0.711, mail intent 1.0 vs 0.898,
+      RFQ 0.917 vs 0.946; 0 dangerous errors; all six bars passed; p50
+      3.3–19.8 s. Q2_0: same bars, about half the time. Not measured:
+      DW2's sets, the Q&A sets, security cases, tool calling, the plant's
+      GPU. Next, when Giang's tunnel is up: those, through the scratch
+      runner, field by field against the 9B reports.
     - **Content guardrails (2026-11-06, asked by Đạt):** today's holds by
       allow-list, not by topic: a closed intent schema (`out_of_scope` gets
       the fixed catalog), ADR 0010 input framing, code-written or
