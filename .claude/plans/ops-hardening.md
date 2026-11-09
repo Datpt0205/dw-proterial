@@ -116,6 +116,14 @@ context. All five are done and on `main`. The full narrative is at
       applies at once (proposed, with a change log) or waits for the second
       person's approval DW2 asks today. UAT keeps the manual path; build
       after go-live.
+    - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
+      principle. The API's rate limit keys on the bearer token and
+      Keycloak's lockout on the account, so one shared plant IP throttles
+      no one. IT to configure: PC-to-DW traffic bypassed locally (else DW
+      depends on the internet), DW's three names in Cato's DNS, no TLS
+      inspection on them (it may buffer the chat's frames and break the
+      certificate). Proposed: a Cato account for FPT that reaches only the
+      DW host, as the sanctioned way to support without a VPN.
       Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
