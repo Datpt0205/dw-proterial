@@ -71,14 +71,17 @@ context. All five are done and on `main`. The full narrative is at
       fixed IP, 443 from the PC subnet and 22 from IT only; **no internet**
       for the host, updates as a monthly USB bundle; DW's own CA, its root
       put on the PCs; a separate plant PC for the OneDrive mail drop, never
-      the Bravo server; DW accounts first, AD later; NTP from AD; UPS;
-      daily backup to a second disk and weekly to Proterial's share, kept
-      30 days; Grafana in the browser behind Keycloak (to build); alerts by
+      the Bravo server; DW accounts first, AD later; NTP from AD; the
+      BIOS set to power on when power returns (no UPS asked for); backups
+      on the host only, as built (Đạt, 11-09: a lost machine loses DW's own
+      data, not Bravo's or the mail; the hand-over states UPS and off-host
+      backup are Proterial's, so they do not count against the 99%); Grafana in the browser behind Keycloak (to build); alerts by
       internal SMTP; FPT on site for UAT and go-live week, Teams after;
       a step-by-step runbook and two training sessions.
     - Asked of Proterial (7, drafted, not yet in the workbook): IP, names
-      and the PC subnet; domain-joined PCs; an SMTP relay; a backup share;
+      and the PC subnet; domain-joined PCs; an SMTP relay;
       the screen-share tool; AD or not (q3); a security agent (q47).
+      No longer asked: UPS, a backup share.
       Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
