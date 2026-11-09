@@ -66,12 +66,20 @@ context. All five are done and on `main`. The full narrative is at
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
-    - Owed by Proterial (drafted, not in the workbook until Đạt says): the
-      Ubuntu host's sizing, RAID and UPS; wired LAN, fixed IP, ports from
-      the PC subnet; internet or none for the host; which Windows machine
-      keeps OneDrive synced for the mail drop; NTP and AD reachability; an
-      off-host backup target; who operates Linux day to day; how FPT
-      supports without VPN.
+    - FPT proposes rather than asks (Đạt, 11-09): the host as sized; FPT
+      installs Ubuntu 24.04, the driver and Docker on site; wired LAN, a
+      fixed IP, 443 from the PC subnet and 22 from IT only; **no internet**
+      for the host, updates as a monthly USB bundle; DW's own CA, its root
+      put on the PCs; a separate plant PC for the OneDrive mail drop, never
+      the Bravo server; DW accounts first, AD later; NTP from AD; UPS;
+      daily backup to a second disk and weekly to Proterial's share, kept
+      30 days; Grafana in the browser behind Keycloak (to build); alerts by
+      internal SMTP; FPT on site for UAT and go-live week, Teams after;
+      a step-by-step runbook and two training sessions.
+    - Asked of Proterial (7, drafted, not yet in the workbook): IP, names
+      and the PC subnet; domain-joined PCs; an SMTP relay; a backup share;
+      the screen-share tool; AD or not (q3); a security agent (q47).
+      Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
