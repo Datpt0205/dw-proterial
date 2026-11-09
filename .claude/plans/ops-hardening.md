@@ -116,6 +116,13 @@ context. All five are done and on `main`. The full narrative is at
       applies at once (proposed, with a change log) or waits for the second
       person's approval DW2 asks today. UAT keeps the manual path; build
       after go-live.
+      **Confirmed by Proterial IT (11-09):** Bravo is two-tier, a client
+      app on each PC talking straight to SQL Server on the Windows Server,
+      no firewall between, roles inside Bravo; one database, nothing to
+      sync. So DW reads like one more client, with a SQL login that is
+      read-only and limited to views, from the DW host's IP only. Never an
+      admin or a person's login, never a direct write (Bravo's logic lives
+      in its client).
     - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
       principle. The API's rate limit keys on the bearer token and
       Keycloak's lockout on the account, so one shared plant IP throttles
