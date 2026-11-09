@@ -57,22 +57,21 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
-- **The plant's host is a Windows Server (Đạt, 2026-11-09, before the
-  meeting with Proterial IT).** It has a desktop, is on wifi, and VPN will
-  likely be refused; staff use desktop PCs only, no laptops.
-    - Every assumption here was a Linux host. Proposed: an Ubuntu VM on
-      Hyper-V with the GPU assigned by DDA. Not measured: DDA for the RTX PRO
-      4000 Blackwell. Fallback: WSL2. Not Docker Desktop: unsupported on
-      Windows Server, and paid for a large company. The server's Windows
-      side can be the OneDrive-sync machine for the mail drop, replacing the
-      separate plant PC.
-    - Falls with it: support over VPN (ADR 0024 open item 3), Grafana over
-      an SSH tunnel, and question 49 (access from outside).
-    - Owed by Proterial (questions drafted, not in the workbook until Đạt
-      says): Windows Server version and Hyper-V, sizing, wired LAN and fixed
-      IP, internet or proxy, a domain and GPO, UPS and reboot policy,
-      antivirus exclusions, backup target, how FPT supports without VPN, and
-      an M365 account kept signed in on the server.
+- **The plant's hosts (Đạt, 2026-11-09, corrected the same day).** DW runs
+  on its own Ubuntu Server, as designed. Bravo runs on-prem on a separate
+  Windows Server (it has a desktop and can reach wifi). VPN will likely be
+  refused; staff use desktop PCs only, no laptops.
+    - DW never connects to Bravo: a person imports the file DW drafts. No
+      network path between the two hosts is needed for that.
+    - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
+      over an SSH tunnel from home, and question 49 (access from outside).
+      Updates go in as an image bundle on site.
+    - Owed by Proterial (drafted, not in the workbook until Đạt says): the
+      Ubuntu host's sizing, RAID and UPS; wired LAN, fixed IP, ports from
+      the PC subnet; internet or none for the host; which Windows machine
+      keeps OneDrive synced for the mail drop; NTP and AD reachability; an
+      off-host backup target; who operates Linux day to day; how FPT
+      supports without VPN.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
