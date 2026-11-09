@@ -131,6 +131,13 @@ context. All five are done and on `main`. The full narrative is at
       key. Plus: a DW-only key with least rights, HTTPS on the LAN, coded
       errors, the Bravo test company first, docs and versions. UAT keeps
       the manual path until the API exists.
+      **The request, 11-09:** `docs/proterial/Danh-sach-bieu-mau-va-API-Bravo_DW1-DW2.xlsx`
+      (gitignored, like the questions workbook): 40 forms and documents to
+      ask for at once, 38 APIs (15 P1 before UAT: reads; validate-only
+      calls P2; writes P3, each on a person's press, with an idempotency
+      key) and 16 common requirements; yellow cells for Proterial and the
+      vendor. Fields come from the import sheets and Bravo layouts in code.
+      It supersedes the workbook's "Tài liệu cần gửi" sheet (10 rows).
     - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
       principle. The API's rate limit keys on the bearer token and
       Keycloak's lockout on the account, so one shared plant IP throttles
