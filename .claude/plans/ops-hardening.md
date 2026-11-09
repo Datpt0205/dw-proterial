@@ -79,6 +79,19 @@ context. All five are done and on `main`. The full narrative is at
       110 s, fully on the GPU. The script also ran in `dw-worker:local`.
     - **Mutation:** 23 guards, each red. Three survived at first: two were
       missing tests, one a condition that did nothing (removed).
+    - **Integration, 2026-11-06** (both DWs, platform, API, worker; run on the
+      code before streaming): 2 not green, both old and neither the chat's.
+      `test_sales_personas` read the roster's Purchasing roles against Sales'
+      seed since 11-01 (fixed). `test_offboarding_memory_vectors` timed out:
+      creating a Qdrant collection takes 7.6 s on this Docker volume, past the
+      client's default 5 s (fixed in the test). The same default stands in the
+      composition roots (`AsyncQdrantClient(url=..., api_key=...)`), so a slow
+      plant disk could fail `ensure_ready` at start: measure it there.
+      On the streaming code, the assistant integration files
+      (`test_assistant_sessions_db`, `test_purchasing_assistant_db`,
+      `test_sales_api_access`) passed 13 before the run outlived its session;
+      a whole rerun is owed. The chat's unit, route and web tests passed, and
+      the browser walk wrote through real Postgres.
     - **Open:** `sales_assistant` evals run through `interpret`, not the
       stream. DW1's `my_work` wording was replaced on its one live run, so
       that kind flashes words and then code's list; if it does so at the
