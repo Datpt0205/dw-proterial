@@ -91,6 +91,18 @@ context. All five are done and on `main`. The full narrative is at
       senders (11-02). If it holds, the fix is to accept Exchange's own
       intra-org stamp, a change to the trust boundary that needs its own
       review and tests.
+    - **UAT and production, drafted 11-09 for Proterial IT (not yet in the
+      workbook):** Power Automate and Teams allowed or blocked by DLP (the
+      mail drop's precondition, measured only on FPT's tenant); internal
+      mail verification (above); a Bravo account on the test company and
+      which Bravo role may import a file; software brought in on an
+      encrypted SSD (no internet on the host); where FPT's engineer works on
+      site; real-data defects fixed on site only; key-user accounts. At go-
+      live on the same host: keep accounts, rules, master data and learned
+      layouts, delete cases, mail and history. Master data re-exported from
+      Bravo monthly by each department's admin; IT onboards and offboards
+      people by runbook; cutover at a week's start, away from month-end
+      close, two weeks in parallel; one Teams group for support.
       Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
