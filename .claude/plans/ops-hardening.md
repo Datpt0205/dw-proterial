@@ -103,6 +103,19 @@ context. All five are done and on `main`. The full narrative is at
       Bravo monthly by each department's admin; IT onboards and offboards
       people by runbook; cutover at a week's start, away from month-end
       close, two weeks in parallel; one Teams group for support.
+    - **Bravo read-only sync, proposed 11-09 (Đạt: "DW chỉ read"):** today
+      DW neither reads nor writes Bravo; people move files both ways and
+      type Bravo's numbers back. Proposed: read Bravo's database through
+      views the vendor makes, with a read-only login, on a schedule (every
+      15 min for order numbers and receipts, nightly for master data).
+      Gains: DW1 compares the Bravo entry with the PO itself (O7/O9), DW2
+      takes Bravo's PO number and received quantities, and master data stays
+      current. Still no writes: Bravo is the ledger. Needs: the database
+      kind, views and a read-only login from the vendor, port 1433 from the
+      DW host to the Bravo server. Owed: whether a synced master-data change
+      applies at once (proposed, with a change log) or waits for the second
+      person's approval DW2 asks today. UAT keeps the manual path; build
+      after go-live.
       Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
