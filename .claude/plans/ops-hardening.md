@@ -103,7 +103,7 @@ context. All five are done and on `main`. The full narrative is at
       Bravo monthly by each department's admin; IT onboards and offboards
       people by runbook; cutover at a week's start, away from month-end
       close, two weeks in parallel; one Teams group for support.
-    - **Bravo read-only sync, proposed 11-09 (Đạt: "DW chỉ read"):** today
+    - **Bravo integration (11-09), first proposed as a read-only sync:** today
       DW neither reads nor writes Bravo; people move files both ways and
       type Bravo's numbers back. Proposed: read Bravo's database through
       views the vendor makes, with a read-only login, on a schedule (every
@@ -119,10 +119,18 @@ context. All five are done and on `main`. The full narrative is at
       **Confirmed by Proterial IT (11-09):** Bravo is two-tier, a client
       app on each PC talking straight to SQL Server on the Windows Server,
       no firewall between, roles inside Bravo; one database, nothing to
-      sync. So DW reads like one more client, with a SQL login that is
-      read-only and limited to views, from the DW host's IP only. Never an
-      admin or a person's login, never a direct write (Bravo's logic lives
-      in its client).
+      sync. **Superseded the same day:** Proterial gives no database login;
+      the Bravo vendor builds an API over its own stored procedures, so the
+      business logic stays theirs. DW calls it through a Bravo port and
+      adapter, no database access at all. FPT's part: the list of endpoints
+      DW needs. Reads first (DW1: customers, items, conversions, valid
+      prices, sales orders by the customer's PO; DW2: items, suppliers with
+      email, prices paid, budgets left, POs and goods receipts). Writes
+      later and only if Proterial wants them: create a sales order or a PO
+      from DW's draft, called when a person presses, with an idempotency
+      key. Plus: a DW-only key with least rights, HTTPS on the LAN, coded
+      errors, the Bravo test company first, docs and versions. UAT keeps
+      the manual path until the API exists.
     - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
       principle. The API's rate limit keys on the bearer token and
       Keycloak's lockout on the account, so one shared plant IP throttles
