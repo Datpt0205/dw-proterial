@@ -82,6 +82,15 @@ context. All five are done and on `main`. The full narrative is at
       and the PC subnet; domain-joined PCs; an SMTP relay;
       the screen-share tool; AD or not (q3); a security agent (q47).
       No longer asked: UPS, a backup share.
+    - **Risk found 11-09, to test on UAT day 1:** `proterial.com` is on
+      Exchange Online with SPF `-all`, DKIM and DMARC `p=none` (public DNS).
+      DW2 reads a request only from a sender `Authentication-Results`
+      verifies, unknown being unverified (`dw_platform.domain.messages`). A
+      mail inside the tenant may carry no such header, which would send
+      every internal request to a person. Measured so far only with outside
+      senders (11-02). If it holds, the fix is to accept Exchange's own
+      intra-org stamp, a change to the trust boundary that needs its own
+      review and tests.
       Close q49.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
