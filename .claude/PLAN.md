@@ -46,9 +46,9 @@ own file and a row here.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
 - **Ops:** nothing pushed until Đạt says so (ClamAV bump off, ticket 25).
 - **On premises:** Proterial's AD details for LDAP federation, and whether
-  the plant keeps internet (M365, Exchange Online) or none; whether the
-  on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
-  not only by configuration).
+  the plant keeps internet (M365, Exchange Online) or none; the host is a
+  Windows Server (11-09): Hyper-V VM vs WSL2, support without VPN
+  (`ops-hardening.md`); api/worker off `dw-edge` or not.
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
 - **Model:** its Qwen Community License for on-prem use (FPT legal).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around

@@ -57,6 +57,23 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **The plant's host is a Windows Server (Đạt, 2026-11-09, before the
+  meeting with Proterial IT).** It has a desktop, is on wifi, and VPN will
+  likely be refused; staff use desktop PCs only, no laptops.
+    - Every assumption here was a Linux host. Proposed: an Ubuntu VM on
+      Hyper-V with the GPU assigned by DDA. Not measured: DDA for the RTX PRO
+      4000 Blackwell. Fallback: WSL2. Not Docker Desktop: unsupported on
+      Windows Server, and paid for a large company. The server's Windows
+      side can be the OneDrive-sync machine for the mail drop, replacing the
+      separate plant PC.
+    - Falls with it: support over VPN (ADR 0024 open item 3), Grafana over
+      an SSH tunnel, and question 49 (access from outside).
+    - Owed by Proterial (questions drafted, not in the workbook until Đạt
+      says): Windows Server version and Hyper-V, sizing, wired LAN and fixed
+      IP, internet or proxy, a domain and GPO, UPS and reboot policy,
+      antivirus exclusions, backup target, how FPT supports without VPN, and
+      an M365 account kept signed in on the server.
+
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
       `fetch`, because `EventSource` sends no bearer token). `/assistant/ask`
