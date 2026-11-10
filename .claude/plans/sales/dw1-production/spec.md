@@ -111,7 +111,7 @@ the electronic stamp; anything typed into Bravo by DW.
 - Every layout, rule and template here is a tenant version of a policy,
   never an edit of the platform's file.
 
-## Questions for Proterial (into the questions workbook)
+## Questions for Proterial (questions workbook rows 51–56, in this order)
 
 - **Q-B1** What does "Create CDO" make, and who presses it after the SO?
 - **Q-B2** "Sent to G-Samit": which system, sent by whom, and does DW need it?
