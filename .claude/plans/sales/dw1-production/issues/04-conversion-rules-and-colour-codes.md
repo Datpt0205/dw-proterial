@@ -34,3 +34,8 @@ and what Sales confirmed (item 3), not through these rules.
   stays usable until Bravo has the row. DW1 lists the confirmed mappings
   Bravo does not have yet, for Sales to enter and approve there. Bravo's row
   then answers first, so the facts do not end up kept in two places.
+- 2026-11-10: states 1 and 2 of Bravo's convert list were empty that day,
+  but they are steps (Đạt: an empty screen is no data, not no step). A
+  mapping Sales confirms in DW1 is followed through Bravo's states 1 → 2 → 3.
+  Only state 3 (approved) answers a PO line; 1 and 2 show as "waiting for
+  approval in Bravo".

@@ -164,7 +164,10 @@ Booking report, new-item lead time.
 
 **Third batch (11-10): the sales process, the YCBG and colour codes.** An
 earlier note here called these screens empty. They are not: they had not
-been photographed yet. Only the convert list has no state before approval.
+been photographed yet. The convert list's states 1 and 2 (before approval)
+held no rows on 11-10. **An empty screen is a step with no data at that
+moment, never a step that does not exist** (Đạt, 11-10). So a mapping still
+goes through Bravo's states 1 → 2 → 3 (approved), and DW1 reads all three.
 
 - **Quy trình bán hàng** is a diagram of Bravo's own process:
   - start → customer management (fed by the sales contract and the ECP)
