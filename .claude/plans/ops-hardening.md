@@ -161,6 +161,12 @@ context. All five are done and on `main`. The full narrative is at
   the 64 GB of RAM, but runs on Strata, not Ollama: packaging Strata for
   offline use, its licence and a measurement on the RTX PRO 4000 are owed
   before it replaces Qwen3.5-9B, which ships first.
+  **Đạt's chosen path (11-10):** install from USB, then fetch everything
+  over the plant's guest wifi before the LAN is plugged in. Checks owed on
+  site: a wifi card or a phone's USB tethering, no captive portal, IT's
+  consent to wifi then LAN, wifi off before the LAN. The code must still
+  come by USB (`git bundle`): `main` is 184 commits past GitHub. An SSD of
+  saved images and models goes along as the fallback.
 
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
