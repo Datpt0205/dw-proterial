@@ -162,13 +162,34 @@ Booking of new items, Order history, Sales and booking summarization, Report
 of backlog, Shipment schedule, Exchange rate report, Sales daily report,
 Booking report, new-item lead time.
 
-**Screens opened and empty (Đạt, 11-10):** Phiếu yêu cầu báo giá, Color code,
-Quy trình bán hàng, the convert list before approval, and the print
-templates. So the YCBG is not kept in Bravo. DW1 today waits for "the Bravo
-YCBG number" before `ycbg_recorded` and matches Design's reply by it
-(ticket 16). Colour codes live only in the conversion workbook (B43,
-ticket 04). Quotations and confirmations are printed from Proterial's own
-Word/Excel templates (B11, B18).
+**Third batch (11-10): the sales process, the YCBG and colour codes.** An
+earlier note here called these screens empty. They are not: they had not
+been photographed yet. Only the convert list has no state before approval.
+
+- **Quy trình bán hàng** is a diagram of Bravo's own process:
+  - start → customer management (fed by the sales contract and the ECP)
+    → customer asks for a product (fed by the forecast) → quotation;
+  - → order recorded, or a sample order → delivery order → invoice and
+    packing list (commercial or not) → shipping instruction → debit or
+    credit note (fed by customer complaints) → end.
+
+  DW1 covers the request, the quotation and the order recorded. Customer
+  management with the ECP is the pre-sales and export-control part
+  (tickets 15, 08). The rest is the later delivery DW.
+- **Phiếu yêu cầu báo giá** is the YCBG in Bravo.
+  - Number `RFQ` + yymmdd + `-` + nnn (`RFQ261110-002`). The description
+    is usually the customer's mail subject (`HEV-[!]RFQ HEV26-2237 PRV
+    HEV-2026-399 ASTI CORPORATION`, `KNT-[!]Re: 見積り依頼`).
+  - The person who made it, a status (PENDING), Duyệt and Đánh lại số.
+  - Lines: received date, RFQ no., direct and indirect customer, customer
+    item description, **Design Check**, status.
+
+  DW1's model (the Bravo YCBG number, Design's reply matched by it) holds.
+  Ticket 16 now covers Bravo's real shape.
+- **Color code** holds six rows only: S001 GR/YE (2 stripes/1 base, "Green/
+  2Yellow or Yellow/2Green"), S002 EX (not G/Y), S003–S006 empty. Ordinary
+  colours (WHITE, BLACK…) are written in the convert list's descriptions.
+  The rule that puts a colour into a PRV code is asked (Q-B12).
 
 ## Before the RFQ: pre-sales (whiteboard, 11-10)
 
@@ -242,10 +263,10 @@ the electronic stamp; anything typed into Bravo by DW.
 - **Q-B9** On the board: what are "SPA", "BP 01234 – AI" and "20% →", and
   which form is "Form?" beside the new Bravo code?
 - **Q-B10** Quote numbers `QN-…` and `QV-…`: what tells them apart?
-- **Q-B11** Bravo's "Phiếu yêu cầu báo giá" screen is empty: where is the
-  request to Design made and numbered (`RFQ2611…` on the board)?
-- **Q-B12** Bravo's "Color code" screen is empty: where does the colour
-  table live, and who keeps it?
+- **Q-B11** Does Design write its result in the YCBG's Design Check column in
+  Bravo, or reply by mail? Who changes the status, and to what?
+- **Q-B12** Where are the colour codes S001–S002 used, and is there a rule
+  that puts an ordinary colour (WHITE, BLACK) into a PRV code?
 
 ## Tickets
 
