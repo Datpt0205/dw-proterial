@@ -15,7 +15,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10     |
-| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Live run owed; Proterial?  |
 | Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–6 built, measured    |
 
 After working in an area, update its file. Update this index only when an
