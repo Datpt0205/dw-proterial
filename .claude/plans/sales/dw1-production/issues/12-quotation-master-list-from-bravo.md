@@ -22,3 +22,9 @@ drift (failure-modes #2).
 2. With Bravo unreachable, the check says it could not run; it never passes.
 
 ## Comments
+
+- 2026-11-10 (Bravo screens): "Báo giá, chào hàng" and "Master list báo
+  giá" are live. A quotation carries an LME band (7,500–15,000), the price
+  at fixed LME, and a "Duyệt" approval. The master list joins the request,
+  the base price at quotation time and the quotation. Confirms the shape:
+  DW1 reads it and records nothing of its own.

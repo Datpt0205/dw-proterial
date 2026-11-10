@@ -33,3 +33,9 @@ typed by hand.
    passes.
 
 ## Comments
+
+- 2026-11-10 (Bravo screens): the grid to compare is "Edit detailSO all".
+  Its checks are computable: amount = quantity × price, rounded half up to
+  2 decimals; price in USD = price ÷ rate for VND. Delivered quantities are
+  in the item's "Đơn hàng bán" tab (quantity done) and in "Chi tiết thực
+  hiện".

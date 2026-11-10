@@ -56,7 +56,7 @@ own file and a row here.
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
   DW2 go-live week 4 vs 6; rollout `.xlsx` out of git (repo public); dw_sales
-  ADR 0008 (price: Bravo or DW1); `sales/dw1-production` ticket 08.
+  ADR 0008 (price: Bravo or DW1); `sales/dw1-production` tickets 08, 15.
 - **Purchasing:** Proterial list (`docs/proterial/`). **Roles:** ~7 for both DWs (`sales.md` Open).
 
 ## How a feature is checked here

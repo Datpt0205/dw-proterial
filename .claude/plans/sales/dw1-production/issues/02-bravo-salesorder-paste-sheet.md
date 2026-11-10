@@ -35,3 +35,11 @@ offers no connection, and the file has to paste without retyping.
 4. A layout missing a required field is refused (mutation: drop the check).
 
 ## Comments
+
+- 2026-11-10 (Bravo screens): the target grid's order is now known ("Edit
+  detailSO all"): PO line, PO number, item code, description, base price
+  name, specification, design number, other information 1–4 (customer line
+  ref, second ref, empty, end customer), invoice separation (the item's
+  product group, `CA`), quantity, unit, price, amount, currency, USD rate,
+  price USD, total USD, delivery date, sales counting date. B41 still fixes
+  which of these the paste sheet carries.
