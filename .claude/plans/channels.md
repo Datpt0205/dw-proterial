@@ -90,6 +90,16 @@ schema, policies and grants identical to the platform chain alone.
       the OA only when Proterial needs company ownership and admins, or
       messages to customers.
     - Neither changes where the data goes: through VNG.
+  - **For Proterial IT (11-10):**
+    - one outbound rule: DW host → `bot-api.zaloplatforms.com:443` (the
+      only base URL in `dw_connectors/adapters/zalo_bot.py`);
+    - nothing inbound. `getUpdates` long-polls for 25 s, so a message
+      arrives about as fast as with a webhook;
+    - the bot token rides in the URL path (Telegram dialect), so a proxy
+      that inspects TLS or logs full URLs must exempt that host, or its
+      logs hold a secret;
+    - webhook mode (ADR 0008) is for hosted deployments only, never the
+      plant.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
