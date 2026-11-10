@@ -75,6 +75,21 @@ schema, policies and grants identical to the platform chain alone.
     - Qwen3.8 with several users chatting at once on the one GPU;
     - tool calling;
     - the live bot run owed above.
+  - **Which Zalo (11-10, from web sources, not Zalo's own price page):**
+    - zBusiness Pro (about 5,500 VND/day) is a feature pack for one personal
+      account: auto-reply, catalog, bulk send. It has no official API; the
+      unofficial libraries that drive a personal account break Zalo's terms.
+      Never.
+    - The Official Account (OA, a verified business, server-to-server API;
+      ZNS for templated customer notices, with quotas) belongs to the
+      company, not to a person. It is a new adapter behind the same
+      channel port.
+    - The Bot Platform is what Z1–Z5 speak (Telegram-style API, 2,000
+      characters per message, no groups for creator bots). Proposed for an
+      internal pilot, created under a company-held Zalo account. Move to
+      the OA only when Proterial needs company ownership and admins, or
+      messages to customers.
+    - Neither changes where the data goes: through VNG.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
