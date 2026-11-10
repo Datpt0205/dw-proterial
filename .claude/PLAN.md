@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + SSE chat, warm 11-06     |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10     |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
 | Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–6 built, measured    |
 
@@ -55,8 +55,8 @@ own file and a row here.
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
-  DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
-  rollout plan `.xlsx` stays out of git (repo public).
+  DW2 go-live week 4 vs 6; rollout `.xlsx` out of git (repo public); dw_sales
+  ADR 0008 (price: Bravo or DW1); `sales/dw1-production` ticket 08.
 - **Purchasing:** Proterial list (`docs/proterial/`). **Roles:** ~7 for both DWs (`sales.md` Open).
 
 ## How a feature is checked here
