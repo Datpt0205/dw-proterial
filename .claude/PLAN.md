@@ -35,8 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** survey and UAT method with Proterial (11-05/06 decks; questions
-  32–50 in `docs/proterial/`), HITL resurveyed there (`plans/hitl-review.md`).
+- **Now:** onsite survey since 11-09 (DW1 90%, DW2 60%; daily status in the
+  rollout `.xlsx`, kept out of commits); then UAT (`plans/hitl-review.md`).
 
 ## Decisions Đạt owes
 
