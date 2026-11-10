@@ -111,6 +111,26 @@ schema, policies and grants identical to the platform chain alone.
       token from the environment there, never writing it into the file,
       then the first live bot run. The token is issued when the bot is
       created under the company-held Zalo account, and reissued if it leaks.
+  - **Without Zalo (Đạt, 11-10: Proterial has Cato, iPhones join the LAN
+    through it):** no new chat UI and no open-source one. The portal
+    already is the phone app:
+    - a manifest (`apps/web/app/manifest.ts`, standalone) for "Add to Home
+      Screen";
+    - lists that fold to one column below `md`;
+    - the assistant at `/sales/assistant` and `/purchasing/assistant`
+      (`@dw/ui` `AssistantChat`, Ant Design X), streamed with
+      `X-Accel-Buffering: no`.
+  - Open WebUI, LibreChat and the like talk to the model directly. That
+    skips the sign-in, the tenant, the check on the model's words, approvals
+    and audit, and adds a second login and a second app to run.
+  - Owed:
+    - the chat page in Safari at 390 px (keyboard, streaming) has never been
+      looked at;
+    - SSE through Cato measured on a real iPhone;
+    - an iOS-trusted certificate on the portal's LAN name.
+  - Not covered: notifications. Web push needs iOS 16.4+, a home-screen
+    install, and the server going out to Apple's push service. Until then a
+    person opens the app, or mail notifies them.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
