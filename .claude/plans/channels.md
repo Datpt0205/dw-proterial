@@ -100,6 +100,12 @@ schema, policies and grants identical to the platform chain alone.
       logs hold a secret;
     - webhook mode (ADR 0008) is for hosted deployments only, never the
       plant.
+    - measured 11-10 from the dev machine: the host answers, and a fake
+      token gets `{"ok":false,"error_code":401}`. A browser showing 404 is
+      not a fault: it is an API, not a page;
+    - Cato (the SASE on Proterial's PCs) may sit on the host's path. Ask
+      whether the host goes out through Cato, and whether Cato decrypts
+      HTTPS or logs URLs for this host.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
