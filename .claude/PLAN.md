@@ -50,7 +50,7 @@ own file and a row here.
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
   `ops-hardening.md`); api/worker off `dw-edge` or not.
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
-- **Model:** its Qwen Community License for on-prem use (FPT legal).
+- **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
