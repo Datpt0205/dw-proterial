@@ -162,6 +162,14 @@ Booking of new items, Order history, Sales and booking summarization, Report
 of backlog, Shipment schedule, Exchange rate report, Sales daily report,
 Booking report, new-item lead time.
 
+**Screens opened and empty (Đạt, 11-10):** Phiếu yêu cầu báo giá, Color code,
+Quy trình bán hàng, the convert list before approval, and the print
+templates. So the YCBG is not kept in Bravo. DW1 today waits for "the Bravo
+YCBG number" before `ycbg_recorded` and matches Design's reply by it
+(ticket 16). Colour codes live only in the conversion workbook (B43,
+ticket 04). Quotations and confirmations are printed from Proterial's own
+Word/Excel templates (B11, B18).
+
 ## Before the RFQ: pre-sales (whiteboard, 11-10)
 
 Drawn by Proterial and discussed as a step before DW1's RFQ lane. Read as:
@@ -216,7 +224,7 @@ the electronic stamp; anything typed into Bravo by DW.
 - Every layout, rule and template here is a tenant version of a policy,
   never an edit of the platform's file.
 
-## Questions for Proterial (questions workbook rows 51–60, in this order)
+## Questions for Proterial (questions workbook rows 51–62, in this order)
 
 - **Q-B1** What does "Create CDO" make, and who presses it after the SO?
 - **Q-B2** "Sent to G-Samit": which system, sent by whom, and does DW need it?
@@ -234,8 +242,12 @@ the electronic stamp; anything typed into Bravo by DW.
 - **Q-B9** On the board: what are "SPA", "BP 01234 – AI" and "20% →", and
   which form is "Form?" beside the new Bravo code?
 - **Q-B10** Quote numbers `QN-…` and `QV-…`: what tells them apart?
+- **Q-B11** Bravo's "Phiếu yêu cầu báo giá" screen is empty: where is the
+  request to Design made and numbered (`RFQ2611…` on the board)?
+- **Q-B12** Bravo's "Color code" screen is empty: where does the colour
+  table live, and who keeps it?
 
 ## Tickets
 
-`issues/01` … `issues/15`, in the order to build. Each names what it waits
+`issues/01` … `issues/16`, in the order to build. Each names what it waits
 on.
