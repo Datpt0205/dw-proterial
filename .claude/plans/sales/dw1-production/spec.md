@@ -247,6 +247,15 @@ the electronic stamp; anything typed into Bravo by DW.
   and decides; a person approves and sends (dw_sales ADR 0005, 0006).
 - Every layout, rule and template here is a tenant version of a policy,
   never an edit of the platform's file.
+- **DW reproduces the outcome of Sales' Excel work, not its steps** (11-10).
+  Sales today goes from a PO (Excel, PDF) through the conversion workbook
+  (B43) and the "in put PO" check (B42) to the SalesOrder paste sheet
+  (B41). DW reads the PO itself, applies the workbook's rules as code and
+  master data (ticket 04), and turns its TRUE/FALSE column into findings
+  (ticket 03). The only Excel DW makes is the last one, the sheet pasted
+  into Bravo (ticket 02), until the API takes writes. The workbooks are
+  needed to learn the rules and as a check: DW's result on past POs must
+  equal what the workbooks produced (B01/B02).
 
 ## Questions for Proterial (questions workbook rows 51–62, in this order)
 
