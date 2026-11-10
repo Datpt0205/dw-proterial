@@ -25,3 +25,12 @@ and what Sales confirmed (item 3), not through these rules.
 2. A colour not in the table leaves the line unmapped, with a finding.
 
 ## Comments
+
+- 2026-11-10 (Bravo screens): the convert list is Bravo's own, "Converting
+  customer to PRV item", with an approval ("Duyệt Convert Master List") and
+  the colour written into the converting description. So this ticket reads
+  Bravo's approved rows through the Bravo port (ticket 14); it does not
+  rebuild the workbook's formulas. A mapping Sales confirms in DW1 (item 3)
+  stays usable until Bravo has the row. DW1 lists the confirmed mappings
+  Bravo does not have yet, for Sales to enter and approve there. Bravo's row
+  then answers first, so the facts do not end up kept in two places.

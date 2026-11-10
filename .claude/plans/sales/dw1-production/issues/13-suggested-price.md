@@ -16,3 +16,8 @@ the real formula lives in Excel, and perhaps in Bravo's module.
   it. Sales decides and the head approves, as today.
 
 ## Comments
+
+- 2026-11-10 (Bravo screens): Bravo's quotation already holds the price at
+  a fixed LME and an LME band. Monthly LME and LME center are entered in
+  Bravo. This leans ADR 0008 towards option A. The rule that moves a price
+  with the LME center is asked of Sales (Q-B8).
