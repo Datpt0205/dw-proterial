@@ -190,6 +190,31 @@ API and the plan use the English terms. The spec is
   company's own included; DW1's model sorts what each one is (Đạt,
   2026-11-02). "Tên miền không đưa vào DW1" (`ignored_sender_domains`,
   1.7.0–1.8.0) is gone from 1.9.0; a version that holds it still reads.
+- **Production type** (Mass / Pcs): whether a request is for mass
+  production or a piece order. Bravo's SO header carries it; a pcs request
+  is priced by JP & HQ, not by Sales (production ticket 05).
+- **Paste sheet** (File SalesOrder): the rows Sales pastes into Bravo's
+  "Đơn đặt hàng bán" grid, one row per delivery date, in the layout of the
+  tenant's `sales_bravo_upload` version. DW1 makes it; a person pastes it.
+  Was "Bravo upload file" while the layout was a mock.
+- **SO number** (SO order): Bravo's number for a sales order, `SO` + yymm +
+  sequence (`SO2611-000161`); one per customer PO as far as seen. Kept on
+  the order case as `bravo_so_no`.
+- **First confirmed date** (Ngày XN giao hàng đầu tiên): the delivery date
+  PC confirmed first; kept when PC confirms again. **Confirmed date** (XN
+  giao hàng) is the current one.
+- **Sales accounting** (Sales Date / hạch toán bán hàng): the date a line is
+  booked as a sale; a column of the paste sheet.
+- **LME center**: the metal-price reference an order or a quotation is
+  priced against (Bravo's SO header). **LME band** is the range a price
+  formula reads it in (dw_sales ADR 0008).
+- **Base price, BP code** (Giá cơ sở, mã BP): what Design returns with a
+  YCBG reply for pricing; a price reader's field only (production ticket 11).
+- **Colour code** (Mã màu): a part of a PRV code given by the item's colour,
+  from the conversion workbook (production ticket 04).
+- **Read-back** (Đối chiếu SO): DW1 reading the SO Bravo holds for a
+  customer PO and comparing it line by line with the approved case
+  (production ticket 03; the "in put PO" workbook's job).
 
 ## Roles and permission sets
 
