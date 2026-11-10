@@ -106,6 +106,11 @@ schema, policies and grants identical to the platform chain alone.
     - Cato (the SASE on Proterial's PCs) may sit on the host's path. Ask
       whether the host goes out through Cato, and whether Cato decrypts
       HTTPS or logs URLs for this host.
+    - Zalo is off at the plant on purpose: `docker-compose.onprem.yml` pins
+      `ZALO_BOT_TOKEN: ""` (lines 155, 176). Turning it on means reading the
+      token from the environment there, never writing it into the file,
+      then the first live bot run. The token is issued when the bot is
+      created under the company-held Zalo account, and reissued if it leaks.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
