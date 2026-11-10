@@ -148,6 +148,20 @@ context. All five are done and on `main`. The full narrative is at
       DW host, as the sanctioned way to support without a VPN.
       Close q49.
 
+- **Offline install of the DW host (given to Đạt 11-10, not yet written into
+  the README):** Ubuntu Server 24.04 LTS from USB (Rufus, GPT/UEFI), RAID 1
+  in the installer, OpenSSH ticked, no snaps; the BIOS powers on after an
+  outage. Driver (Blackwell needs 570+, `-open`, with Ubuntu's signed
+  modules), Docker and the NVIDIA Container Toolkit as `.deb`s downloaded
+  on a VM from the same ISO and installed with `apt-get install ./*.deb`;
+  images by `docker save $(compose config --images)`; models by
+  `fetch-models.sh --export/--import`; the repo by `git archive`. Not run
+  end to end anywhere. Offered: `make onprem-bundle` to do the export.
+  **Qwen3.8-Flash-Next** fits a disk (about 35–50 GB, to check) and needs
+  the 64 GB of RAM, but runs on Strata, not Ollama: packaging Strata for
+  offline use, its licence and a measurement on the RTX PRO 4000 are owed
+  before it replaces Qwen3.5-9B, which ships first.
+
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
       `fetch`, because `EventSource` sends no bearer token). `/assistant/ask`
