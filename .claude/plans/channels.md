@@ -55,6 +55,27 @@ schema, policies and grants identical to the platform chain alone.
 
 ## Owed
 
+- **Proterial over Zalo (asked by Đạt 11-10, not decided).** Proterial staff
+  would ask questions and give commands in Zalo instead of the portal.
+  - **Feasible on what exists:** Z1–Z5, plus the status assistant as a
+    product command. Polling needs only outbound HTTPS from the host to
+    Zalo's API, with no port open inward.
+  - **Blocked on Proterial, not on code:**
+    - the plant host's outbound internet (still owed);
+    - IT and security accepting that questions and answers pass through
+      VNG's servers;
+    - staff's personal Zalo accounts on personal phones.
+  - **Unchanged:**
+    - decisions still need a portal view and a code (ADR 0007), so they
+      only work inside the plant network;
+    - no prices in chat;
+    - free-text commands become a typed intent that code authorizes and
+      a person confirms.
+  - **Not yet measured:**
+    - Qwen3.8 with several users chatting at once on the one GPU;
+    - tool calling;
+    - the live bot run owed above.
+
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
   documents them (Telegram's dialect) and have not been measured.
