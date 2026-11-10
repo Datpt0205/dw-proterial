@@ -168,6 +168,12 @@ context. All five are done and on `main`. The full narrative is at
   come by USB (`git bundle`): `main` is 184 commits past GitHub. An SSD of
   saved images and models goes along as the fallback.
 
+- **Contract baseline (11-10, for Linh's tracking tool):** `Downloads/proterial/Baseline_Proterial_DW1-DW2.xlsx`,
+  outside the repo. Dates count working days from a kick-off cell set to
+  11-09 (the rollout plan says 11-03; Đạt to confirm). Hardware ready by
+  11-13 (contract 5.1); DW02 go-live 11-30–12-04 and DW01 12-14–12-18 by
+  the contract (the rollout plan puts DW02 in week 6).
+
 - **Chat that streams, and models kept loaded (2026-11-06, Đạt).**
     - **Built:** `POST /{sales,purchasing}/assistant/ask/stream` (SSE over
       `fetch`, because `EventSource` sends no bearer token). `/assistant/ask`
