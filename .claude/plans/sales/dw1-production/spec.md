@@ -256,6 +256,24 @@ the electronic stamp; anything typed into Bravo by DW.
   into Bravo (ticket 02), until the API takes writes. The workbooks are
   needed to learn the rules and as a check: DW's result on past POs must
   equal what the workbooks produced (B01/B02).
+- **One rule source, not one per person** (11-10). Each Sales PIC may
+  convert differently. DW follows three sources only:
+  - Bravo's approved convert list (mappings);
+  - one shared rule sheet that the Sales head signs off (B47), loaded as a
+    tenant rule;
+  - Sales' decision on the case.
+
+  B48 (three full chains per PIC: PO → conversion workbook → SalesOrder →
+  SO) shows where PICs differ; the head picks one rule per difference. A
+  case no rule covers goes to a person, never to a guess. The person's
+  decision can then be proposed as a rule through the rules editor, which
+  needs a second person's approval.
+- **Learning how they work without a transcript:** screen recordings (B50)
+  are read frame by frame, as the 11-09 recording was. A written step
+  sheet per person and process (B51) gives the why and the exceptions. The
+  recording guide asks them to narrate in a self-recorded Teams meeting.
+  Golden sets and UAT scenarios are in the forms workbook's own sheets
+  ("Bộ kiểm thử (golden)", "Kịch bản UAT", B40, B53).
 
 ## Questions for Proterial (questions workbook rows 51–62, in this order)
 
