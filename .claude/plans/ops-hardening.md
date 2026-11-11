@@ -86,7 +86,11 @@ context. All five are done and on `main`. The full narrative is at
           path;
         - DW's names in Cato's DNS and routes, as for Bravo.
 
-      The decision on the host OS:
+      **Decided 11-11 (Proterial, through Đạt): Windows Server with
+      virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
+      the GPU by DDA.** Still owed: the Windows Server version (2025
+      preferred), IOMMU and DDA on the board, measured on the host. The
+      options as weighed before:
       If Windows is imposed, in order of preference:
       - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
         boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
@@ -148,6 +152,29 @@ context. All five are done and on `main`. The full narrative is at
       `web.push.apple.com` outbound. On the office VLAN, which has
       internet, that is likely already open: ask IT. Nothing inbound is
       needed, and the portal stays LAN- and Cato-only.
+      - **Mail on that host (Đạt, 11-11).** A dedicated OneDrive account
+        means asking Proterial to create one, which is slow. The Teams
+        route (`infra/onprem/README.md`, measured on FPT's tenant 11-02)
+        needs none: the files belong to the private team, and the Windows
+        host plays the plant PC. It signs in to OneDrive as one of the
+        team's owners (an existing person, or the sales account if that is
+        an ordinary licensed user; an Exchange shared mailbox cannot sign
+        in) and shares `DW-mail` over SMB, read-only, to the Ubuntu VM
+        alone. If that person's password, MFA or job changes, sync stops;
+        the lane then tells the mailbox's processors once a day.
+      - **A customer who Cc's the shared sales mailbox** makes no
+        duplicate: an exported mail is stored once by its Message-ID from
+        the same sender (`dw_sales`/`dw_purchasing` `mail_drop.py`). Not
+        yet measured on a real tenant with one mail To a PIC and Cc the
+        shared box. A forward has a new Message-ID, so it is a new mail.
+      - **The shared sales mailbox itself is read by nobody today:** a
+        lane reads only the folders named by the address of a member
+        holding its scope, and no one signs in to DW as the shared box.
+        Customers who write only to it would be missed. Reading it needs a
+        tenant setting naming the shared mailboxes each DW reads, and its
+        flow on the "shared mailbox" trigger, run by someone with access.
+        Not built; owed from Proterial: whether customers ever write only
+        to the shared box.
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
