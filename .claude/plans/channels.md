@@ -146,6 +146,15 @@ schema, policies and grants identical to the platform chain alone.
     internet at all (owed: `ops-hardening.md`). The natural seam is a
     `webpush` channel in `platform.channel_deliveries` (ADR 0006), with a
     subscription per device rather than one link per person.
+    - On the office VLAN (83.x, internet) the call likely goes out as is.
+      Ask IT:
+      - whether servers there are held tighter than PCs;
+      - whether a TLS-inspecting proxy or Cato sits on the path. If so, the
+        sender fails on certificates unless the host is exempted or the
+        proxy's root is trusted;
+      - whether the proxy needs credentials.
+
+      Not built yet (11-11).
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
