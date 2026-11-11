@@ -103,16 +103,19 @@ schema, policies and grants identical to the platform chain alone.
     - measured 11-10 from the dev machine: the host answers, and a fake
       token gets `{"ok":false,"error_code":401}`. A browser showing 404 is
       not a fault: it is an API, not a page;
-    - Cato (the SASE on Proterial's PCs) may sit on the host's path. Ask
-      whether the host goes out through Cato, and whether Cato decrypts
-      HTTPS or logs URLs for this host.
+    - ~~Cato may sit on the host's path~~. Corrected 11-11
+      (`ops-hardening.md`, "How Proterial's network works"): the host goes
+      out from the office VLAN directly. Cato is a client on PCs and phones,
+      so the token never passes it. An office proxy on the host's path would
+      still need this host exempted.
     - Zalo is off at the plant on purpose: `docker-compose.onprem.yml` pins
       `ZALO_BOT_TOKEN: ""` (lines 155, 176). Turning it on means reading the
       token from the environment there, never writing it into the file,
       then the first live bot run. The token is issued when the bot is
       created under the company-held Zalo account, and reissued if it leaks.
-  - **Without Zalo (Đạt, 11-10: Proterial has Cato, iPhones join the LAN
-    through it):** no new chat UI and no open-source one. The portal
+  - **Without Zalo (Đạt, 11-10, on the belief that Cato sat on the host's
+    path; that reason fell on 11-11, so whether to use Zalo or the portal is
+    open again and is Đạt's call):** no new chat UI and no open-source one. The portal
     already is the phone app:
     - a manifest (`apps/web/app/manifest.ts`, standalone) for "Add to Home
       Screen";
@@ -141,17 +144,18 @@ schema, policies and grants identical to the platform chain alone.
     - Apple reaches the phone over the phone's own connection.
 
     The payload is encrypted for the phone (RFC 8291), and a send is signed
-    with DW's VAPID key. So unlike Zalo, the URL carries no secret, and Cato
-    inspecting TLS sees only ciphertext. Needs the plant host to have
+    with DW's VAPID key. So unlike Zalo, the URL carries no secret, and a
+    proxy inspecting TLS sees only ciphertext. Needs the plant host to have
     internet at all (owed: `ops-hardening.md`). The natural seam is a
     `webpush` channel in `platform.channel_deliveries` (ADR 0006), with a
     subscription per device rather than one link per person.
     - On the office VLAN (83.x, internet) the call likely goes out as is.
       Ask IT:
       - whether servers there are held tighter than PCs;
-      - whether a TLS-inspecting proxy or Cato sits on the path. If so, the
-        sender fails on certificates unless the host is exempted or the
-        proxy's root is trusted;
+      - whether a TLS-inspecting office proxy sits on the path. Cato does
+        not: it is on the phones and PCs. If one does, the sender fails on
+        certificates unless the host is exempted or the proxy's root is
+        trusted;
       - whether the proxy needs credentials.
 
       Not built yet (11-11).

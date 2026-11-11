@@ -64,10 +64,29 @@ context. All five are done and on `main`. The full narrative is at
     - **11-11, whiteboard with IT: Ubuntu may be refused, Windows Server
       instead.** The options on the board: run on Windows, confirm Linux, or
       a Windows intermediary. The network is split into a production LAN
-      (172.x) and an office VLAN (83.x: Bravo, internet, O365). Cato adds
-      the local LAN (Bravo) for remote PCs and iPhones and does not block
-      their internet (Đạt, 11-11, correcting a misreading of "Internet free
-      X").
+      (172.x) and an office VLAN (83.x: Bravo, internet, O365).
+    - **How Proterial's network works (Đạt, 11-11; deploy by this):**
+      - Bravo and DW sit on the office VLAN and go out to the internet
+        directly, **not through Cato**.
+      - Cato is a client on staff PCs and iPhones. It brings them into the
+        office LAN from outside, and lets the parent company see what they do
+        on Bravo. It blocks neither their internet nor calls coming in.
+      - **The host's own calls never pass Cato:** O365 for OneDrive, Apple
+        for web push, Zalo if it returns. The Zalo worry (the bot token in
+        the URL logged by Cato) does not apply to the host.
+      - **People's calls to DW do pass Cato's client** (portal, chat; from
+        home always). So the parent company sees DW's use as it sees
+        Bravo's. That is acceptable: DW's URLs carry ids, never a secret, and
+        the sign-in code is one-time (PKCE). If Cato inspects TLS on that
+        traffic, it may buffer the chat's streamed words and re-sign the
+        certificate. Measure both on a real iPhone at UAT.
+      - Still to confirm with IT:
+        - that the server's outbound is not held tighter than the PCs';
+        - any office-side proxy (TLS inspection, credentials) on the host's
+          path;
+        - DW's names in Cato's DNS and routes, as for Bravo.
+
+      The decision on the host OS:
       If Windows is imposed, in order of preference:
       - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
         boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
