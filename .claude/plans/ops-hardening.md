@@ -115,6 +115,31 @@ context. All five are done and on `main`. The full narrative is at
         policy forbids the role on a server.
       - Also unmeasured: Windows Server drivers for a consumer Z890 board
         and its NIC.
+      - **If Hyper-V is refused, WSL2 goes with it** (it runs on the same
+        hypervisor), and Docker on Windows Server without them runs Windows
+        containers only, never DW's Linux images (Đạt asked 11-11; not
+        decided). In order:
+        - ask why Linux is refused. If the reason is "IT cannot run it",
+          propose the DW box as an FPT-run appliance: its OS is FPT's job,
+          like a firewall's. If the reason is policy on Ubuntu, a supported
+          enterprise distro (RHEL) with Podman is a smaller change than
+          Windows;
+        - only then a native Windows install. Mostly runs as Windows
+          services: Postgres, Qdrant, SeaweedFS, Keycloak, Caddy, Ollama
+          with CUDA, the llama.cpp reranker, ClamAV, Node, and the Python
+          api/worker (the tests already pass on this Windows machine).
+          Valkey ships no Windows build (Garnet or Memurai in its place,
+          to measure). What does not carry over: the reader and docgen
+          sandboxes (`ulimit`, `os.killpg`, a Unix socket, no network,
+          read-only root; `dw_reader/settings.py` turns the limits off on
+          Windows). They would need a new design (job objects, a
+          low-privilege user, a firewall rule) with an ADR and its own
+          security review, because parsing a customer's file in a sandbox
+          is not negotiable. Compose's network isolation becomes localhost
+          binding plus firewall rules (Qdrant and Valkey are
+          unauthenticated). Weeks of work, not measured, so not before DW1
+          go-live. The contract has Bên A deliver the server with its OS
+          (HĐ Điều 5.1), so this is a change to write down and sign (Điều 7).
 
       Either way OneDrive can run on that Windows host and the separate
       mail-drop PC goes. That needs a session kept signed in (autologon,
