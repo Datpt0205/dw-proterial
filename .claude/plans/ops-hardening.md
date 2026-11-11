@@ -175,6 +175,16 @@ context. All five are done and on `main`. The full narrative is at
         flow on the "shared mailbox" trigger, run by someone with access.
         Not built; owed from Proterial: whether customers ever write only
         to the shared box.
+      - **The shared box as DW1's main source (Đạt asked 11-11; proposed):**
+        one flow, one account (which can also be the host's OneDrive
+        sign-in), instead of a flow per PIC. It sees only what reaches the
+        shared box: a customer mail sent to a PIC alone, PC's replies to a
+        PIC (read for dates since 11-04) and every DW2 mail (buyers'
+        boxes) would be missed. So: the shared box for customer mail, plus
+        per-person flows only where mail bypasses it (PICs for PC's
+        replies, buyers); the Message-ID dedupe makes the overlap safe.
+        Hinges on Proterial: do customers always write to or Cc the shared
+        box, and does PC Cc it.
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
