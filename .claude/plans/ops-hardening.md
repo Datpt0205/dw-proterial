@@ -84,6 +84,19 @@ context. All five are done and on `main`. The full narrative is at
 
         Measured only on Windows 10 with Docker Desktop (10-19, README).
 
+      Windows Server goes straight on the DW box. (a) and (b) are how DW's
+      Linux images get a kernel there, not a second layer of servers; WSL2
+      is itself a small Hyper-V VM.
+      - A native Windows install of DW is not proposed: Postgres, Qdrant,
+        Keycloak and the rest would need a second install path, and the
+        `reader` sandbox (no network, `ulimit`, a Unix socket) is
+        Linux-only.
+      - Hyper-V is a built-in Windows Server role, and an Ubuntu guest needs
+        no Windows licence. What remains to ask is whether Proterial's
+        policy forbids the role on a server.
+      - Also unmeasured: Windows Server drivers for a consumer Z890 board
+        and its NIC.
+
       Either way OneDrive can run on that Windows host and the separate
       mail-drop PC goes. That needs a session kept signed in (autologon,
       disconnect only) and the host reaching O365, so the host sits on, or
