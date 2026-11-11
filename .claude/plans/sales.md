@@ -51,6 +51,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
     - **Acceptance documents per milestone (11-11, Linh asked; outside git).**
       - Sheet "Hồ sơ nghiệm thu" in `Downloads/proterial/Baseline_Proterial_DW1-DW2.xlsx`, read from the contract: 34 documents over the baseline's milestones, each marked as named by the contract or proposed as evidence.
       - State: 15 missing, 8 partial, 2 drafts.
+      - Same day, Đạt: the sheet is an expected set to send, so it was rebuilt without the state and FPT's notes: 33 documents (TL01–TL33), 21 by contract and 12 proposed, the two DW user guides merged into one row "mỗi DW một bản". The version with the 11-11 state is `Baseline-ban-noi-bo-co-hien-trang-11-11.xlsx` in the session scratchpad, which does not outlive the session.
       - Named by the contract and missing: the rule set (waits on Proterial), the incident guide, the DW02 user guide, training material, the pre-test confirmation (data, rules, approvers), the per-function acceptance report, and the acceptance-and-handover minutes.
       - DW02 is due by contract in week 4 (04/12). Moving it to week 6 needs a signed change (art. 7, 15.3).
     - **Forms workbook made a one-shot request (11-10, Đạt sends it once; outside git).** 51 forms:
