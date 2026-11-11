@@ -135,6 +135,17 @@ schema, policies and grants identical to the platform chain alone.
   - Not covered: notifications. Web push needs iOS 16.4+, a home-screen
     install, and the server going out to Apple's push service. Until then a
     person opens the app, or mail notifies them.
+  - Web push, if built (Đạt asked, 11-10). The path:
+    - the phone hands the portal its Apple endpoint over the LAN;
+    - the DW host POSTs to `web.push.apple.com:443`, outbound only;
+    - Apple reaches the phone over the phone's own connection.
+
+    The payload is encrypted for the phone (RFC 8291), and a send is signed
+    with DW's VAPID key. So unlike Zalo, the URL carries no secret, and Cato
+    inspecting TLS sees only ciphertext. Needs the plant host to have
+    internet at all (owed: `ops-hardening.md`). The natural seam is a
+    `webpush` channel in `platform.channel_deliveries` (ADR 0006), with a
+    subscription per device rather than one link per person.
 
 - A live run against a real bot: the message id field, the webhook's secret
   header and the 400/403/404 "unreachable" classification are read as Zalo
