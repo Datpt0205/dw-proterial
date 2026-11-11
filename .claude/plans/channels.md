@@ -55,8 +55,22 @@ schema, policies and grants identical to the platform chain alone.
 
 ## Owed
 
-- **Proterial over Zalo (asked by Đạt 11-10, not decided).** Proterial staff
-  would ask questions and give commands in Zalo instead of the portal.
+- **Proterial: no Zalo, the portal (Đạt, 11-11, decided).** What follows
+  under this bullet is the record of the 11-10 assessment; Z1–Z5 stay in the
+  platform, off at the plant (`ZALO_BOT_TOKEN: ""`). The phone reaches DW2 and
+  DW1 through the portal as a home-screen app.
+  - **Chat bound to a case (Đạt, 11-11, proposed, not built):** one chat per
+    process instance (a PR in DW2, an order in DW1) instead of one general
+    chat, so the history and the model's context are that case's alone. The
+    case id comes from the URL and is checked server-side against what the
+    asker may see, never read out of the question. Drawn as a panel on the
+    case page (a bottom `Drawer` on a phone, open state in the URL so a
+    notification link lands in it), not a page of its own. Cross-case
+    questions ("việc của tôi", "đơn nào trễ") keep the current page. Owed
+    from Đạt: a thread per person per case (default, as today's RLS by
+    user) or one shared by everyone on the case.
+  - The 11-10 assessment: Proterial staff would ask questions and give
+    commands in Zalo instead of the portal.
   - **Feasible on what exists:** Z1–Z5, plus the status assistant as a
     product command. Polling needs only outbound HTTPS from the host to
     Zalo's API, with no port open inward.
