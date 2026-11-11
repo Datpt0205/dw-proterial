@@ -127,7 +127,11 @@ schema, policies and grants identical to the platform chain alone.
     - the chat page in Safari at 390 px (keyboard, streaming) has never been
       looked at;
     - SSE through Cato measured on a real iPhone;
-    - an iOS-trusted certificate on the portal's LAN name.
+    - an iOS-trusted certificate on the portal's LAN name;
+    - the DW host inside what Cato routes for phones, as Bravo's already
+      is. It is a new Ubuntu server, so it is not covered by default.
+  - The home-screen icon needs no App Store: Safari's "Add to Home Screen"
+    reads `app/apple-icon.png` and the manifest.
   - Not covered: notifications. Web push needs iOS 16.4+, a home-screen
     install, and the server going out to Apple's push service. Until then a
     person opens the app, or mail notifies them.
