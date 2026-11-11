@@ -61,8 +61,32 @@ context. All five are done and on `main`. The full narrative is at
   on its own Ubuntu Server, as designed. Bravo runs on-prem on a separate
   Windows Server (it has a desktop and can reach wifi). VPN will likely be
   refused; staff use desktop PCs only, no laptops.
-    - DW never connects to Bravo: a person imports the file DW drafts. No
-      network path between the two hosts is needed for that.
+    - **11-11, whiteboard with IT: Ubuntu may be refused, Windows Server
+      instead.** The options on the board: run on Windows, confirm Linux, or
+      a Windows intermediary. The network is split into a production LAN
+      (172.x) and an office VLAN (83.x: Bravo, internet, O365). Cato gives
+      remote PCs and iPhones the local LAN and O365, never free internet.
+      If Windows is imposed, in order of preference:
+      - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
+        boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
+        and Windows Server drivers for that board's NIC: neither measured.
+      - **(b) WSL2 with docker-ce inside the distro.** Docker Desktop is
+        unsupported on Windows Server (Docker's install page). GPU in WSL is
+        documented for Windows 11 and Server 2025; on Server 2022 it is
+        unconfirmed and reported failing. Costs:
+        - a boot task to start the distro;
+        - NAT plus portproxy for 443, since mirrored mode fails on Server
+          2025 (WSL #12569);
+        - data kept in ext4, not `/mnt/c`;
+        - the WSL hangs this dev machine has had (`sales.md`).
+
+        Measured only on Windows 10 with Docker Desktop (10-19, README).
+
+      Either way OneDrive can run on that Windows host and the separate
+      mail-drop PC goes. That needs a session kept signed in (autologon,
+      disconnect only) and the host reaching O365, so the host sits on, or
+      routes to, the office VLAN. Web push would need `web.push.apple.com`
+      besides, which "no free internet" may refuse.
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
