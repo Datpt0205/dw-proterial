@@ -48,7 +48,7 @@ own file and a row here.
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; Bravo is on its
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
-  `ops-hardening.md`); api/worker off `dw-edge` or not.
+  `ops-hardening.md`); api/worker off `dw-edge` or not; iPhone push (`channels.md`).
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
 - **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
