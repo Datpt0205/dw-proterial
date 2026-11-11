@@ -64,8 +64,10 @@ context. All five are done and on `main`. The full narrative is at
     - **11-11, whiteboard with IT: Ubuntu may be refused, Windows Server
       instead.** The options on the board: run on Windows, confirm Linux, or
       a Windows intermediary. The network is split into a production LAN
-      (172.x) and an office VLAN (83.x: Bravo, internet, O365). Cato gives
-      remote PCs and iPhones the local LAN and O365, never free internet.
+      (172.x) and an office VLAN (83.x: Bravo, internet, O365). Cato adds
+      the local LAN (Bravo) for remote PCs and iPhones and does not block
+      their internet (Đạt, 11-11, correcting a misreading of "Internet free
+      X").
       If Windows is imposed, in order of preference:
       - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
         boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
@@ -85,8 +87,10 @@ context. All five are done and on `main`. The full narrative is at
       Either way OneDrive can run on that Windows host and the separate
       mail-drop PC goes. That needs a session kept signed in (autologon,
       disconnect only) and the host reaching O365, so the host sits on, or
-      routes to, the office VLAN. Web push would need `web.push.apple.com`
-      besides, which "no free internet" may refuse.
+      routes to, the office VLAN. Web push needs the host to reach
+      `web.push.apple.com` outbound. On the office VLAN, which has
+      internet, that is likely already open: ask IT. Nothing inbound is
+      needed, and the portal stays LAN- and Cato-only.
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
