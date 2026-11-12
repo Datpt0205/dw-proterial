@@ -44,7 +44,7 @@ own file and a row here.
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
   repo never had; renumbering duplicate ADRs.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** nothing pushed until Đạt says so (ClamAV bump off, ticket 25).
+- **Ops:** push only when Đạt asks (236 commits pushed 11-12, repo public, plans describe Proterial's network: his call); ClamAV bump off (ticket 25).
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; Bravo is on its
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
