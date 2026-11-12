@@ -140,6 +140,7 @@ def _sheets(case: OrderCase) -> dict[int, str]:
 
 
 async def _serve(world: World, caller: Caller, case: OrderCase, sheet: str) -> None:
+    assert case.document.attachment_id is not None
     await world.services.sources.order_source(
         caller.context(), case.case_id, case.document.attachment_id, page=None, sheet=sheet
     )

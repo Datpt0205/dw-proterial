@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -33,7 +35,9 @@ FOLLOW_UP = json.loads(
 KIMURA, BAOHO, ANPHAT = "PR-2611-004-03", "PR-2611-004-02", "PR-2611-004-01"
 
 
-async def _drafted(answers: dict[str, object] | None = None) -> tuple[World, uuid.UUID]:
+async def _drafted(
+    answers: Mapping[str, Mapping[str, Any]] | None = None,
+) -> tuple[World, uuid.UUID]:
     world = sourcing_world(REPO)
     world.model.by_schema["ModelConfirmation"] = answers or FOLLOW_UP["answers"]
     return world, await orders_drafted(world)
@@ -56,7 +60,7 @@ async def _read(world: World, case_id: uuid.UUID, message_id: str) -> None:
     )
 
 
-def _tracked(case: object, po_ref: str):  # type: ignore[no-untyped-def]
+def _tracked(case: object, po_ref: str):
     return next(t for t in case.tracking if t.po_ref == po_ref)  # type: ignore[attr-defined]
 
 

@@ -334,7 +334,7 @@ async def test_the_demo_team_narrows_each_pic_to_their_own_and_the_head_to_the_t
         an = await _sign_in(app_sessions, "dev|an.nguyen", ALPHA)
         head = await _sign_in(app_sessions, "dev|giang.do", ALPHA)
         assert an is not None and head is not None
-        assert an.visible_owners == {sid("user", "dev|an.nguyen")}
+        assert an.visible_owners == frozenset({sid("user", "dev|an.nguyen")})
         assert head.visible_owners is not None and team <= head.visible_owners
     finally:
         async with migrator.begin() as conn:

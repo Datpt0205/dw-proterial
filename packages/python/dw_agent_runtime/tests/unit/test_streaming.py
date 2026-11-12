@@ -421,7 +421,8 @@ async def test_a_gateway_that_cannot_stream_gives_the_field_whole() -> None:
 async def test_a_refusal_before_the_first_event_is_raised_to_the_route() -> None:
     async def refused() -> AsyncGenerator[ChatEvent[Answer], None]:
         raise PermissionError("no")
-        yield ChatStep(key="x", title="x")
+        # Never runs: the yield only makes this an async generator.
+        yield ChatStep(key="x", title="x")  # type: ignore[unreachable]
 
     async def keep(view: Answer) -> Answer:
         return view

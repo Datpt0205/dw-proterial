@@ -44,7 +44,7 @@ def _world() -> World:
     return world
 
 
-async def _ask(world: World, question: str, session: uuid.UUID | None = None, who: Any = None):  # type: ignore[no-untyped-def]
+async def _ask(world: World, question: str, session: uuid.UUID | None = None, who: Any = None):
     return await world.assistant.ask(who or caller(), question, session)
 
 
@@ -95,7 +95,7 @@ async def test_my_work_lists_what_the_asker_s_scopes_let_them_do_next() -> None:
 async def test_late_order_lines_are_said_without_a_price_and_only_to_a_buyer() -> None:
     world = _world()
     await orders_drafted(world)
-    world.clock.advance_to(world.clock.now().replace(month=11, day=25))  # type: ignore[attr-defined]
+    world.clock.advance_to(world.clock.now().replace(month=11, day=25))
     answer = await _ask(world, "đơn nào trễ?")
     # Line 3 has no need-by date, so it is never late.
     assert answer.turn.answer.startswith("2 dòng trễ hạn:")

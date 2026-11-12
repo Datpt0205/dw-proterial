@@ -174,7 +174,7 @@ def _line(span: str, code: str | None, **values: str | None) -> dict[str, str | 
     }
 
 
-def _read(*lines: dict[str, str | None], text: str = MAIL):  # type: ignore[no-untyped-def]
+def _read(*lines: dict[str, str | None], text: str = MAIL):
     from dw_purchasing.domain.confirmation_reading import (
         ModelConfirmation,
         read_confirmation_mail,

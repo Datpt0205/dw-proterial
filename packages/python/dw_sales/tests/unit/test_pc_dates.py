@@ -267,18 +267,27 @@ async def test_the_mail_the_order_came_in_is_never_pc_s_answer() -> None:
     import dataclasses
     from datetime import UTC, datetime
 
-    from dw_sales.application.ports import Snapshot
+    from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
+    from dw_sales.domain.catalog import Customer
 
     class NoCustomer:
-        def __init__(self, inner: Any) -> None:
+        """The catalog it wraps, except that no sender names a customer."""
+
+        def __init__(self, inner: SalesCatalogPort) -> None:
             self.inner = inner
 
-        async def customer_by_sender(self, scope: Any, address: str) -> Any:
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.inner, name)
+
+        async def customer_by_sender(
+            self, scope: SalesScope, address: str
+        ) -> Snapshot[Customer | None]:
             return Snapshot(None, datetime(2026, 10, 1, tzinfo=UTC))
 
     world, case, sample = await _order_with(Answering(RIGHT))
     try:
         reader = world.services.pc_dates
+        assert reader.catalog is not None
         blind = dataclasses.replace(reader, catalog=NoCustomer(reader.catalog))
         listed = [m.message_id for m in await blind.mails(AN.context(), case.case_id)]
         assert "M01" not in listed and "PC01" in listed

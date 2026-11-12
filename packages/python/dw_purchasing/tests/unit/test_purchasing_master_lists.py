@@ -130,7 +130,8 @@ def test_a_list_left_out_is_kept_and_one_in_the_file_replaces_it() -> None:
         {"Vật tư": [*_ITEMS, (3, ["GT-02", "Kính", "cái"])]},
     )
 
-    merged = merge(parsed.lists, in_force, version="1.0.1")
+    # Keyed by str, as the service hands `merge` the lists it stored.
+    merged = merge(dict(parsed.lists.items()), in_force, version="1.0.1")
 
     document = PurchasingMasterData.model_validate(merged.document)
     assert [i.code for i in document.items] == ["GT-01", "GT-02"]
@@ -164,7 +165,8 @@ def test_a_quotation_whose_supplier_the_file_removes_goes_and_is_counted() -> No
         ],
     )
 
-    merged = merge(parse_workbook({"Nhà cung cấp": _SUPPLIERS}).lists, in_force, version="1.0.1")
+    lists = parse_workbook({"Nhà cung cấp": _SUPPLIERS}).lists
+    merged = merge(dict(lists.items()), in_force, version="1.0.1")
 
     assert merged.dropped == {"Báo giá": 1}
     assert PurchasingMasterData.model_validate(merged.document).quotes == ()

@@ -17,13 +17,13 @@ import yaml
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.drop_folder import DroppedFile
 from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import ReaderUnavailableError
 from dw_sales.application.mail_drop import (
     SETTLE,
-    DroppedFile,
     DropTick,
     MailDrop,
     MailDropNotices,

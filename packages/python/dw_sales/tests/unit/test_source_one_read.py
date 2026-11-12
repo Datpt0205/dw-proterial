@@ -25,6 +25,7 @@ from dw_sales.application.source import (
     source_cache_key,
 )
 from dw_sales.domain.orders import OrderCase
+from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.graders import AN, CALLERS
 from dw_sales.evals.world import ALPHA, SampleSet, World, open_world
 
@@ -41,6 +42,7 @@ async def test_a_sheet_view_is_one_read_and_names_every_sheet(
     assert isinstance(case, OrderCase)
     first = case.header.anchors.po_no.sheet
     assert first is not None
+    assert case.document.attachment_id is not None
 
     asked: list[ReaderOp] = []
     original = InProcessReaderTransport.call
@@ -101,6 +103,7 @@ async def test_a_page_opened_again_reads_no_file_and_is_still_recorded_as_opened
 ) -> None:
     cache = MemoryCache()
     world, case, sheet, asked, sources = await _opened(monkeypatch, cache)
+    assert case.document.attachment_id is not None
     open_ = partial(
         sources.order_source, case_id=case.case_id, attachment_id=case.document.attachment_id
     )
@@ -132,6 +135,7 @@ async def test_another_companys_entry_for_the_same_file_is_never_served(
     )
     cache.entries[source_cache_key(other, sha, page=None, sheet=sheet)] = planted.model_dump_json()
 
+    assert case.document.attachment_id is not None
     view = await sources.order_source(
         AN.context(),
         case.case_id,
@@ -173,6 +177,7 @@ async def test_reading_ahead_fills_the_cache_and_records_nobody_as_served(
     # Whoever opens it now waits for no file.
     asked.clear()
     sheet = case.header.anchors.po_no.sheet
+    assert case.document.attachment_id is not None
     await sources.order_source(
         AN.context(), case.case_id, case.document.attachment_id, page=None, sheet=sheet
     )
@@ -184,7 +189,7 @@ async def test_dw1_reads_a_new_case_ahead_and_a_failure_to_does_not_stop_it(
 ) -> None:
     warmed: list[uuid.UUID] = []
 
-    async def failing(self: SourceService, scope: SalesScope, case: object) -> None:
+    async def failing(self: SourceService, scope: SalesScope, case: OrderCase | QuoteCase) -> None:
         warmed.append(case.case_id)
         raise RuntimeError("the cache is down")
 

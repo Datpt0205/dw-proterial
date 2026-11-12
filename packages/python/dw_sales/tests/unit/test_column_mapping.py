@@ -50,7 +50,7 @@ async def _lme_file(world: World) -> bytes:
     sheet.append([])
     sheet.append([_their(c.header) for c in spec.columns])
     for month in (await world.catalog.lme_months(ALPHA)).data:
-        cells = spec.cells(month.model_dump(mode="json"))  # type: ignore[attr-defined]
+        cells = spec.cells(month.model_dump(mode="json"))
         sheet.append([cells.get(c.header) or None for c in spec.columns])
     out = io.BytesIO()
     book.save(out)
