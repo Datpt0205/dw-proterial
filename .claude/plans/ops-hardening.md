@@ -175,7 +175,16 @@ context. All five are done and on `main`. The full narrative is at
         flow on the "shared mailbox" trigger, run by someone with access.
         Not built; owed from Proterial: whether customers ever write only
         to the shared box.
-      - **The shared box as DW1's main source (Đạt asked 11-11; proposed):**
+      - **Decided 11-12 (Đạt): the Teams route, a flow per person, not the
+        shared box as main source.** Each flow writes into the team's
+        library under the person's own connection, so if the account
+        signed in on the host fails, mail keeps landing on Teams. Another
+        of the team's two owners signs in on the host, and the lane reads
+        every file it has not handled yet. Nothing is lost, only delayed.
+        The shared-box question stays open only for customers who write
+        to it alone.
+      - ~~The shared box as DW1's main source~~ (Đạt asked 11-11; dropped
+        11-12, above):
         one flow, one account (which can also be the host's OneDrive
         sign-in), instead of a flow per PIC. It sees only what reaches the
         shared box: a customer mail sent to a PIC alone, PC's replies to a
