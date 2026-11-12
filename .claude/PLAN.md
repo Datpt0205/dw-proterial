@@ -50,7 +50,7 @@ own file and a row here.
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
   `ops-hardening.md`); host: Windows Server + Hyper-V VM (11-11), its version and DDA; mail via Teams (11-12), customers writing only to the shared box?; api/worker off `dw-edge`; iPhone push.
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
-- **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement.
+- **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement; scans by its vision, else PaddleOCR-VL/small CPU model + Tesseract boxes (11-12; Giang: Strata vision, WAF).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
