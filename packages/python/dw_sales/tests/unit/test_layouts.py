@@ -184,6 +184,7 @@ async def test_a_proposal_opens_a_stamped_approval_that_names_its_maker_and_no_l
     await world.process_each(AN, ["M43"])
     layout_id = await _proposed(world)
     layout = world.store.state(ALPHA).layouts[layout_id]
+    assert layout.approval_id is not None
 
     request = world.runtime.approvals.rows[layout.approval_id]
     assert (request.approval_type, request.required_scope, request.run_id) == (
@@ -202,6 +203,7 @@ async def test_the_guard_refuses_a_decision_the_layout_would_refuse_before_it_is
     await world.process_each(AN, ["M43"])
     layout_id = await _proposed(world)
     layout = world.store.state(ALPHA).layouts[layout_id]
+    assert layout.approval_id is not None
     flow, giang = world.runtime.approval_flow, GIANG.context()
 
     # From `/approvals`, which sends no version: decided on the layouts page only.
@@ -233,6 +235,7 @@ async def test_a_decision_is_carried_out_once_from_the_approval_row_and_audited(
     await world.process_each(AN, ["M43"])
     layout_id = await _proposed(world)
     approval_id = world.store.state(ALPHA).layouts[layout_id].approval_id
+    assert approval_id is not None
     await world.runtime.approval_flow.decide(
         approval_id=approval_id,
         approve=False,
@@ -261,6 +264,7 @@ async def test_another_tenants_decider_cannot_carry_out_a_decision() -> None:
     await world.process_each(AN, ["M43"])
     layout_id = await _proposed(world)
     approval_id = world.store.state(ALPHA).layouts[layout_id].approval_id
+    assert approval_id is not None
 
     with pytest.raises(NotFoundError):
         await world.layout_settlement.settle(approval_id, GIANG.context(BETA))

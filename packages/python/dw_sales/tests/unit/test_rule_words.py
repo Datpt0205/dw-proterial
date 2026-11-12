@@ -172,7 +172,6 @@ def test_the_prompt_is_offered_only_the_leaves_of_the_part_asked_about() -> None
 def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     from dw_agent_runtime.model.interpretation import estimated_tokens
     from dw_agent_runtime.model.prompts import PromptRegistry
-    from dw_kernel.ids import TenantId
     from dw_sales.application.rule_words import PROMPT_TOKENS, RULE_CHANGE_IN_WORDS
     from dw_sales.evals.world import ALPHA
 
@@ -182,6 +181,6 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
         RULE_CHANGE_IN_WORDS.prompt_id,
         RULE_CHANGE_IN_WORDS.version,
         {"rule_name": "", "document": "", "paths": "", "request": ""},
-        tenant_id=TenantId(ALPHA.tenant_id.value),
+        tenant_id=ALPHA.tenant_id.value,
     )
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS

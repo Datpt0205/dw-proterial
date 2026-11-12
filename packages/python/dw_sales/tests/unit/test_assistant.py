@@ -295,7 +295,7 @@ async def test_who_reads_no_case_asks_nothing_and_sees_no_session() -> None:
 
     from dw_kernel.errors import PermissionDeniedError
     from dw_sales.application.access import SalesScopes
-    from dw_sales.evals.graders import Caller
+    from dw_sales.evals.world import Caller
 
     viewer = Caller(
         _uuid.UUID(int=0x5E),
@@ -448,7 +448,7 @@ async def test_who_reads_no_case_is_refused_before_the_first_event() -> None:
     import uuid as _uuid
 
     from dw_sales.application.access import SalesScopes
-    from dw_sales.evals.graders import Caller
+    from dw_sales.evals.world import Caller
 
     viewer = Caller(
         _uuid.UUID(int=0x5E),

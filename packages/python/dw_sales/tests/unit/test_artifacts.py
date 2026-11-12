@@ -79,6 +79,7 @@ from dw_sales.application.artifacts_service import (
     QUOTE_GATES,
     SIGNED_KIND,
     SIGNED_MAX_BYTES,
+    ArtifactGate,
     ArtifactService,
     ArtifactView,
 )
@@ -710,7 +711,10 @@ def _who(kind: str) -> AccessContext:
 
 
 def test_every_kind_in_the_gate_tables_is_tested_here() -> None:
-    gates = {**ORDER_GATES, **QUOTE_GATES}
+    gates: dict[str, ArtifactGate[OrderCase] | ArtifactGate[QuoteCase]] = {
+        **ORDER_GATES,
+        **QUOTE_GATES,
+    }
     assert set(KINDS) == {kind for kind, gate in gates.items() if gate.compose is not None}
     # Uploaded, never rendered: tested below, under "the signed copy".
     assert {kind for kind, gate in gates.items() if gate.compose is None} == {SIGNED_KIND}
@@ -1756,7 +1760,11 @@ async def test_the_send_draft_drawn_after_it_attaches_the_signed_copy_not_the_un
     (draft,) = await render(world, signed, "send_draft")
 
     message = _eml(world.objects[world.artifacts[(SCOPE, draft.artifact_id)].object_key(SCOPE)])
-    parts = {part.get_filename(): part.get_content() for part in message.iter_attachments()}
+    parts: dict[str, Any] = {}
+    for part in message.iter_attachments():
+        name = part.get_filename()
+        assert name is not None
+        parts[name] = part.get_content()
     assert SIGNED_PDF in parts.values()
     assert any(name.endswith("-da-ky.pdf") for name in parts)
     assert [n for n in parts if n.endswith(".pdf")] == [n for n in parts if "-da-ky" in n]

@@ -167,14 +167,16 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
     model.by_schema["ModelConfirmation"] = FOLLOW_UP["answers"]
     follow = OrderFollowUp(store, Gate(Authz()), master, inbox, model, worker, clock, ids)
 
-    async def version() -> int:
+    async def current_version() -> int:
         return (await intake.case(me, case_id)).case_version
 
     await follow.record_bravo_no(
-        me, case_id, "PR-2611-004-03", "PO-26110007", case_version=await version()
+        me, case_id, "PR-2611-004-03", "PO-26110007", case_version=await current_version()
     )
-    await follow.read_confirmation(me, case_id, "C01", case_version=await version())
-    await follow.accept_confirmation(me, case_id, "PR-2611-004-03", case_version=await version())
+    await follow.read_confirmation(me, case_id, "C01", case_version=await current_version())
+    await follow.accept_confirmation(
+        me, case_id, "PR-2611-004-03", case_version=await current_version()
+    )
     await follow.record_receipt(
         me,
         case_id,
@@ -182,7 +184,7 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
         line_no=1,
         quantity=Decimal(4),
         received_on=NOW.date(),
-        case_version=await version(),
+        case_version=await current_version(),
     )
     (followed,) = (await intake.case(me, case_id)).tracking
     assert followed.bravo_no == "PO-26110007" and len(followed.receipts) == 1
@@ -213,7 +215,7 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
                 line_no=line.line_no,
                 quantity=line.quantity,
                 received_on=NOW.date(),
-                case_version=await version(),
+                case_version=await current_version(),
             )
     assert (await intake.case(me, case_id)).status is CaseStatus.DELIVERED
     assert tenancy.alpha not in await due()

@@ -97,9 +97,10 @@ async def test_a_status_outside_the_set_or_an_error_without_failure_is_refused(
     for status, error in (("delivered", None), ("failed", None), ("sent", "flow_failed")):
         with pytest.raises(DBAPIError, match="check constraint"):
             async with uow(world.alpha) as work:
+                # Values the types refuse, on purpose: the CHECK must refuse them too.
                 await work.outbound.settle(
                     mail.mail_id,
-                    status,
+                    status,  # type: ignore[arg-type]
                     AT + timedelta(minutes=1),
                     error,  # type: ignore[arg-type]
                 )

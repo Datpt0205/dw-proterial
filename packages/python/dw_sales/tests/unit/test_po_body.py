@@ -65,7 +65,7 @@ def _read(answer: dict[str, Any], spec: dict[str, Any] = VI["message"]) -> Any:
 
 
 def _answer(**line_change: Any) -> dict[str, Any]:
-    answer = copy.deepcopy(VI["answer"])
+    answer: dict[str, Any] = copy.deepcopy(VI["answer"])
     answer["lines"][0].update(line_change)
     return answer
 
