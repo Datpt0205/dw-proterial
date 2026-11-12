@@ -161,7 +161,11 @@ describe("the /audit page reads background lanes and long ids", () => {
           action: "sales.mail.stored",
           resource_type: "sales.message",
           resource_id: id,
-          details: { actor: "system:sales_mail_drop", source: "a.eml", model: null },
+          details: {
+            actor: "system:sales_mail_drop",
+            source: "a.eml",
+            model: null,
+          },
         }),
         event({
           actor_id: "99999999-0000-5000-8000-000000000009",

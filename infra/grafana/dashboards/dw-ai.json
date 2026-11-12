@@ -2,9 +2,7 @@
   "uid": "dw-ai",
   "title": "DW · Bước AI",
   "description": "Bước AI nào chạy bao nhiêu lần, chậm hay nhanh.",
-  "tags": [
-    "dw"
-  ],
+  "tags": ["dw"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,

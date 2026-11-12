@@ -15,6 +15,7 @@ band, the customer's margin, and the exchange rate. A strategy decides
 among the results. Today Sales does this in Excel.
 
 DW1 already does part of the job:
+
 - `suggest_price` proposes a price from evidence (past quotations and
   orders);
 - Sales decides the price and the head approves it.

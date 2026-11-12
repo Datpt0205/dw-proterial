@@ -2,9 +2,7 @@
   "uid": "dw-tokens",
   "title": "DW · Token",
   "description": "Tải lên model: token vào, ra.",
-  "tags": [
-    "dw"
-  ],
+  "tags": ["dw"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,

@@ -36,7 +36,8 @@ const SUGGESTED = {
 
 afterEach(() => {
   cleanup();
-  for (const f of [senderCustomer, confirmSenderCustomer, customers]) f.mockReset();
+  for (const f of [senderCustomer, confirmSenderCustomer, customers])
+    f.mockReset();
   scopes = ["sales.case.read", "sales.inbox.process"];
 });
 
@@ -53,7 +54,10 @@ function renderIt(onConfirmed = vi.fn()) {
 describe("DW1 đoán khách cho người gửi lạ (AI item 5)", () => {
   it("shows the guess as the machine's, with the words it rests on, and confirms it", async () => {
     senderCustomer.mockResolvedValue(SUGGESTED);
-    confirmSenderCustomer.mockResolvedValue({ job_id: "j-1", message_id: "S01" });
+    confirmSenderCustomer.mockResolvedValue({
+      job_id: "j-1",
+      message_id: "S01",
+    });
     const onConfirmed = renderIt();
     expect(await screen.findByText("Máy đoán")).toBeTruthy();
     expect(
@@ -79,7 +83,9 @@ describe("DW1 đoán khách cho người gửi lạ (AI item 5)", () => {
       evidence: "Talverra Trading",
     });
     renderIt();
-    expect(await screen.findByText(/“Talverra Trading”, không khớp khách nào/)).toBeTruthy();
+    expect(
+      await screen.findByText(/“Talverra Trading”, không khớp khách nào/),
+    ).toBeTruthy();
     expect(screen.queryByText("Máy đoán")).toBeNull();
   });
 

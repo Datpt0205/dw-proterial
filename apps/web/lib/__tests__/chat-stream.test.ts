@@ -31,10 +31,8 @@ describe("chatFrames", () => {
 
 describe("chatStream", () => {
   const ask = (api: ApiClient, seen: unknown[] = []) =>
-    api.chatStream(
-      "/x",
-      { body: {}, idempotencyKey: "k" },
-      (event) => seen.push(event),
+    api.chatStream("/x", { body: {}, idempotencyKey: "k" }, (event) =>
+      seen.push(event),
     );
 
   it("hands over each event and resolves with the kept turn", async () => {
@@ -49,7 +47,11 @@ describe("chatStream", () => {
   });
 
   it("raises a refusal as the status it is", async () => {
-    const body = JSON.stringify({ code: "forbidden", message: "no", details: {} });
+    const body = JSON.stringify({
+      code: "forbidden",
+      message: "no",
+      details: {},
+    });
     await expect(ask(client(body, { status: 403 }))).rejects.toBeInstanceOf(
       ApiError,
     );

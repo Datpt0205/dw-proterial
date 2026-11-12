@@ -2,9 +2,7 @@
   "uid": "dw-health",
   "title": "DW · Sức khỏe hệ thống",
   "description": "Tiến trình nào đang chạy, cảnh báo nào đang bật, lỗi gần nhất.",
-  "tags": [
-    "dw"
-  ],
+  "tags": ["dw"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
@@ -67,9 +65,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -121,9 +117,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -175,9 +169,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -229,9 +221,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -283,9 +273,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -337,9 +325,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -392,9 +378,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"
@@ -451,9 +435,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "colorMode": "background",
         "textMode": "value"

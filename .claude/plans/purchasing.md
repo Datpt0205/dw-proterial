@@ -176,7 +176,7 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
     4. template learning generic (DW2's Bravo PO layout from its file);
     5. model readiness + measurements → platform; DW2's three-level switch;
     6. master-data import; 7. mail drop (`DW_PURCHASING_MAILBOX`);
-    8. outbox (sent from the buyer's own mailbox).
+    7. outbox (sent from the buyer's own mailbox).
 - Phase 2: functions 1–4 automated (requester role, auto-submit, re-approval
   past the tier, notices, retention). Phase 3: web pages; then stop and report.
 
@@ -527,28 +527,28 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   it); before, every DW2 switch did nothing on UAT and production.
   Mutations: see the commit.
 - 2026-11-04, **5b's rest and the morning brief** (Đạt: "ok làm đi"):
-  - `delivered` (Đã nhận đủ hàng): the receipt that completes every line of
-    every order moves the case there, code's, audited
-    `purchasing.case.delivered`; the case refuses more receipts and is never
-    late. The domain refuses a delivered case with anything owed.
-  - Late lines told: the lane tells the buyers each line past its date
-    (confirmed, else need-by) once per (order, line, date). `late` now
-    counts in the plant's day (it counted UTC's, a day behind from 00:00
-    to 07:00). `automation_scopes_due()` also returns a workspace with
-    orders still followed. Migration `e13dd31820b5`.
-  - The brief (`domain.brief`): each working day from `brief.at` at the
-    plant (`purchasing_rules@1.8.0`: 07:30, Monday to Saturday, as DW1's;
-    Proterial's to set), counts only: the buyers their states and late
-    lines, whoever reviews what DW2 read their queue, each approver the
-    requests stamped with their own scope. Once per person and day by its
-    source key; nothing sent to someone with nothing waiting. No switch
-    for either: they tell, they decide nothing.
-  - Corrected on the way: the 5b commit said a tenant's older automation
-    version reads the new steps as `person`; in force it is read over the
-    platform's (`read_over`) and takes its level. Tests now cover both
-    paths. Mutations, each red: closing, "in full", the domain's refusal,
-    the plant's day, the lane's late step, the web's disabled receipt;
-    the brief's time, days, zone, an approver's own tier, late lines.
+    - `delivered` (Đã nhận đủ hàng): the receipt that completes every line of
+      every order moves the case there, code's, audited
+      `purchasing.case.delivered`; the case refuses more receipts and is never
+      late. The domain refuses a delivered case with anything owed.
+    - Late lines told: the lane tells the buyers each line past its date
+      (confirmed, else need-by) once per (order, line, date). `late` now
+      counts in the plant's day (it counted UTC's, a day behind from 00:00
+      to 07:00). `automation_scopes_due()` also returns a workspace with
+      orders still followed. Migration `e13dd31820b5`.
+    - The brief (`domain.brief`): each working day from `brief.at` at the
+      plant (`purchasing_rules@1.8.0`: 07:30, Monday to Saturday, as DW1's;
+      Proterial's to set), counts only: the buyers their states and late
+      lines, whoever reviews what DW2 read their queue, each approver the
+      requests stamped with their own scope. Once per person and day by its
+      source key; nothing sent to someone with nothing waiting. No switch
+      for either: they tell, they decide nothing.
+    - Corrected on the way: the 5b commit said a tenant's older automation
+      version reads the new steps as `person`; in force it is read over the
+      platform's (`read_over`) and takes its level. Tests now cover both
+      paths. Mutations, each red: closing, "in full", the domain's refusal,
+      the plant's day, the lane's late step, the web's disabled receipt;
+      the brief's time, days, zone, an approver's own tier, late lines.
 - 2026-11-04, **walked on a browser** (local stack, Qwen on Ollama, as the
   buyer `khoa.lam`): home, a case with orders, recording the last receipt
   (the case turns "Đã nhận đủ hàng", the form locks), Hỏi đáp DW2 (status,

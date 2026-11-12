@@ -66,138 +66,139 @@ context. All five are done and on `main`. The full narrative is at
       a Windows intermediary. The network is split into a production LAN
       (172.x) and an office VLAN (83.x: Bravo, internet, O365).
     - **How Proterial's network works (Đạt, 11-11; deploy by this):**
-      - Bravo and DW sit on the office VLAN and go out to the internet
-        directly, **not through Cato**.
-      - Cato is a client on staff PCs and iPhones. It brings them into the
-        office LAN from outside, and lets the parent company see what they do
-        on Bravo. It blocks neither their internet nor calls coming in.
-      - **The host's own calls never pass Cato:** O365 for OneDrive, Apple
-        for web push, Zalo if it returns. The Zalo worry (the bot token in
-        the URL logged by Cato) does not apply to the host.
-      - **People's calls to DW do pass Cato's client** (portal, chat; from
-        home always). So the parent company sees DW's use as it sees
-        Bravo's. That is acceptable: DW's URLs carry ids, never a secret, and
-        the sign-in code is one-time (PKCE). If Cato inspects TLS on that
-        traffic, it may buffer the chat's streamed words and re-sign the
-        certificate. Measure both on a real iPhone at UAT.
-      - Still to confirm with IT:
-        - that the server's outbound is not held tighter than the PCs';
-        - any office-side proxy (TLS inspection, credentials) on the host's
-          path;
-        - DW's names in Cato's DNS and routes, as for Bravo.
+        - Bravo and DW sit on the office VLAN and go out to the internet
+          directly, **not through Cato**.
+        - Cato is a client on staff PCs and iPhones. It brings them into the
+          office LAN from outside, and lets the parent company see what they do
+          on Bravo. It blocks neither their internet nor calls coming in.
+        - **The host's own calls never pass Cato:** O365 for OneDrive, Apple
+          for web push, Zalo if it returns. The Zalo worry (the bot token in
+          the URL logged by Cato) does not apply to the host.
+        - **People's calls to DW do pass Cato's client** (portal, chat; from
+          home always). So the parent company sees DW's use as it sees
+          Bravo's. That is acceptable: DW's URLs carry ids, never a secret, and
+          the sign-in code is one-time (PKCE). If Cato inspects TLS on that
+          traffic, it may buffer the chat's streamed words and re-sign the
+          certificate. Measure both on a real iPhone at UAT.
+        - Still to confirm with IT:
+            - that the server's outbound is not held tighter than the PCs';
+            - any office-side proxy (TLS inspection, credentials) on the host's
+              path;
+            - DW's names in Cato's DNS and routes, as for Bravo.
 
-      **Decided 11-11 (Proterial, through Đạt): Windows Server with
-      virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
-      the GPU by DDA.** Still owed: the Windows Server version (2025
-      preferred: 2022 left mainstream support on 2026-10-13, security fixes
-      only to 2031-10; 2025 mainstream to 2029-11, extended to 2034-11. DDA
-      is the same in both; GPU-P, new in 2025, needs a data-centre card and
-      does not apply to a consumer one. Standard edition is enough for one
-      Ubuntu VM), IOMMU and DDA on the board, measured on the host. The
-      options as weighed before:
-      If Windows is imposed, in order of preference:
-      - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
-        boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
-        and Windows Server drivers for that board's NIC: neither measured.
-      - **(b) WSL2 with docker-ce inside the distro.** Docker Desktop is
-        unsupported on Windows Server (Docker's install page). GPU in WSL is
-        documented for Windows 11 and Server 2025; on Server 2022 it is
-        unconfirmed and reported failing. Costs:
-        - a boot task to start the distro;
-        - NAT plus portproxy for 443, since mirrored mode fails on Server
-          2025 (WSL #12569);
-        - data kept in ext4, not `/mnt/c`;
-        - the WSL hangs this dev machine has had (`sales.md`).
+        **Decided 11-11 (Proterial, through Đạt): Windows Server with
+        virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
+        the GPU by DDA.** Still owed: the Windows Server version (2025
+        preferred: 2022 left mainstream support on 2026-10-13, security fixes
+        only to 2031-10; 2025 mainstream to 2029-11, extended to 2034-11. DDA
+        is the same in both; GPU-P, new in 2025, needs a data-centre card and
+        does not apply to a consumer one. Standard edition is enough for one
+        Ubuntu VM), IOMMU and DDA on the board, measured on the host. The
+        options as weighed before:
+        If Windows is imposed, in order of preference:
+        - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
+          boot and has its own LAN IP. Needs IOMMU on a consumer Z890 board,
+          and Windows Server drivers for that board's NIC: neither measured.
+        - **(b) WSL2 with docker-ce inside the distro.** Docker Desktop is
+          unsupported on Windows Server (Docker's install page). GPU in WSL is
+          documented for Windows 11 and Server 2025; on Server 2022 it is
+          unconfirmed and reported failing. Costs:
+            - a boot task to start the distro;
+            - NAT plus portproxy for 443, since mirrored mode fails on Server
+              2025 (WSL #12569);
+            - data kept in ext4, not `/mnt/c`;
+            - the WSL hangs this dev machine has had (`sales.md`).
 
-        Measured only on Windows 10 with Docker Desktop (10-19, README).
+            Measured only on Windows 10 with Docker Desktop (10-19, README).
 
-      Windows Server goes straight on the DW box. (a) and (b) are how DW's
-      Linux images get a kernel there, not a second layer of servers; WSL2
-      is itself a small Hyper-V VM.
-      - A native Windows install of DW is not proposed: Postgres, Qdrant,
-        Keycloak and the rest would need a second install path, and the
-        `reader` sandbox (no network, `ulimit`, a Unix socket) is
-        Linux-only.
-      - Hyper-V is a built-in Windows Server role, and an Ubuntu guest needs
-        no Windows licence. What remains to ask is whether Proterial's
-        policy forbids the role on a server.
-      - Also unmeasured: Windows Server drivers for a consumer Z890 board
-        and its NIC.
-      - **If Hyper-V is refused, WSL2 goes with it** (it runs on the same
-        hypervisor), and Docker on Windows Server without them runs Windows
-        containers only, never DW's Linux images (Đạt asked 11-11; not
-        decided). In order:
-        - ask why Linux is refused. If the reason is "IT cannot run it",
-          propose the DW box as an FPT-run appliance: its OS is FPT's job,
-          like a firewall's. If the reason is policy on Ubuntu, a supported
-          enterprise distro (RHEL) with Podman is a smaller change than
-          Windows;
-        - only then a native Windows install. Mostly runs as Windows
-          services: Postgres, Qdrant, SeaweedFS, Keycloak, Caddy, Ollama
-          with CUDA, the llama.cpp reranker, ClamAV, Node, and the Python
-          api/worker (the tests already pass on this Windows machine).
-          Valkey ships no Windows build (Garnet or Memurai in its place,
-          to measure). What does not carry over: the reader and docgen
-          sandboxes (`ulimit`, `os.killpg`, a Unix socket, no network,
-          read-only root; `dw_reader/settings.py` turns the limits off on
-          Windows). They would need a new design (job objects, a
-          low-privilege user, a firewall rule) with an ADR and its own
-          security review, because parsing a customer's file in a sandbox
-          is not negotiable. Compose's network isolation becomes localhost
-          binding plus firewall rules (Qdrant and Valkey are
-          unauthenticated). Weeks of work, not measured, so not before DW1
-          go-live. The contract has Bên A deliver the server with its OS
-          (HĐ Điều 5.1), so this is a change to write down and sign (Điều 7).
+        Windows Server goes straight on the DW box. (a) and (b) are how DW's
+        Linux images get a kernel there, not a second layer of servers; WSL2
+        is itself a small Hyper-V VM.
+        - A native Windows install of DW is not proposed: Postgres, Qdrant,
+          Keycloak and the rest would need a second install path, and the
+          `reader` sandbox (no network, `ulimit`, a Unix socket) is
+          Linux-only.
+        - Hyper-V is a built-in Windows Server role, and an Ubuntu guest needs
+          no Windows licence. What remains to ask is whether Proterial's
+          policy forbids the role on a server.
+        - Also unmeasured: Windows Server drivers for a consumer Z890 board
+          and its NIC.
+        - **If Hyper-V is refused, WSL2 goes with it** (it runs on the same
+          hypervisor), and Docker on Windows Server without them runs Windows
+          containers only, never DW's Linux images (Đạt asked 11-11; not
+          decided). In order:
+            - ask why Linux is refused. If the reason is "IT cannot run it",
+              propose the DW box as an FPT-run appliance: its OS is FPT's job,
+              like a firewall's. If the reason is policy on Ubuntu, a supported
+              enterprise distro (RHEL) with Podman is a smaller change than
+              Windows;
+            - only then a native Windows install. Mostly runs as Windows
+              services: Postgres, Qdrant, SeaweedFS, Keycloak, Caddy, Ollama
+              with CUDA, the llama.cpp reranker, ClamAV, Node, and the Python
+              api/worker (the tests already pass on this Windows machine).
+              Valkey ships no Windows build (Garnet or Memurai in its place,
+              to measure). What does not carry over: the reader and docgen
+              sandboxes (`ulimit`, `os.killpg`, a Unix socket, no network,
+              read-only root; `dw_reader/settings.py` turns the limits off on
+              Windows). They would need a new design (job objects, a
+              low-privilege user, a firewall rule) with an ADR and its own
+              security review, because parsing a customer's file in a sandbox
+              is not negotiable. Compose's network isolation becomes localhost
+              binding plus firewall rules (Qdrant and Valkey are
+              unauthenticated). Weeks of work, not measured, so not before DW1
+              go-live. The contract has Bên A deliver the server with its OS
+              (HĐ Điều 5.1), so this is a change to write down and sign (Điều 7).
 
-      Either way OneDrive can run on that Windows host and the separate
-      mail-drop PC goes. That needs a session kept signed in (autologon,
-      disconnect only) and the host reaching O365, so the host sits on, or
-      routes to, the office VLAN. Web push needs the host to reach
-      `web.push.apple.com` outbound. On the office VLAN, which has
-      internet, that is likely already open: ask IT. Nothing inbound is
-      needed, and the portal stays LAN- and Cato-only.
-      - **Mail on that host (Đạt, 11-11).** A dedicated OneDrive account
-        means asking Proterial to create one, which is slow. The Teams
-        route (`infra/onprem/README.md`, measured on FPT's tenant 11-02)
-        needs none: the files belong to the private team, and the Windows
-        host plays the plant PC. It signs in to OneDrive as one of the
-        team's owners (an existing person, or the sales account if that is
-        an ordinary licensed user; an Exchange shared mailbox cannot sign
-        in) and shares `DW-mail` over SMB, read-only, to the Ubuntu VM
-        alone. If that person's password, MFA or job changes, sync stops;
-        the lane then tells the mailbox's processors once a day.
-      - **A customer who Cc's the shared sales mailbox** makes no
-        duplicate: an exported mail is stored once by its Message-ID from
-        the same sender (`dw_sales`/`dw_purchasing` `mail_drop.py`). Not
-        yet measured on a real tenant with one mail To a PIC and Cc the
-        shared box. A forward has a new Message-ID, so it is a new mail.
-      - **The shared sales mailbox itself is read by nobody today:** a
-        lane reads only the folders named by the address of a member
-        holding its scope, and no one signs in to DW as the shared box.
-        Customers who write only to it would be missed. Reading it needs a
-        tenant setting naming the shared mailboxes each DW reads, and its
-        flow on the "shared mailbox" trigger, run by someone with access.
-        Not built; owed from Proterial: whether customers ever write only
-        to the shared box.
-      - **Decided 11-12 (Đạt): the Teams route, a flow per person, not the
-        shared box as main source.** Each flow writes into the team's
-        library under the person's own connection, so if the account
-        signed in on the host fails, mail keeps landing on Teams. Another
-        of the team's two owners signs in on the host, and the lane reads
-        every file it has not handled yet. Nothing is lost, only delayed.
-        The shared-box question stays open only for customers who write
-        to it alone.
-      - ~~The shared box as DW1's main source~~ (Đạt asked 11-11; dropped
-        11-12, above):
-        one flow, one account (which can also be the host's OneDrive
-        sign-in), instead of a flow per PIC. It sees only what reaches the
-        shared box: a customer mail sent to a PIC alone, PC's replies to a
-        PIC (read for dates since 11-04) and every DW2 mail (buyers'
-        boxes) would be missed. So: the shared box for customer mail, plus
-        per-person flows only where mail bypasses it (PICs for PC's
-        replies, buyers); the Message-ID dedupe makes the overlap safe.
-        Hinges on Proterial: do customers always write to or Cc the shared
-        box, and does PC Cc it.
+        Either way OneDrive can run on that Windows host and the separate
+        mail-drop PC goes. That needs a session kept signed in (autologon,
+        disconnect only) and the host reaching O365, so the host sits on, or
+        routes to, the office VLAN. Web push needs the host to reach
+        `web.push.apple.com` outbound. On the office VLAN, which has
+        internet, that is likely already open: ask IT. Nothing inbound is
+        needed, and the portal stays LAN- and Cato-only.
+        - **Mail on that host (Đạt, 11-11).** A dedicated OneDrive account
+          means asking Proterial to create one, which is slow. The Teams
+          route (`infra/onprem/README.md`, measured on FPT's tenant 11-02)
+          needs none: the files belong to the private team, and the Windows
+          host plays the plant PC. It signs in to OneDrive as one of the
+          team's owners (an existing person, or the sales account if that is
+          an ordinary licensed user; an Exchange shared mailbox cannot sign
+          in) and shares `DW-mail` over SMB, read-only, to the Ubuntu VM
+          alone. If that person's password, MFA or job changes, sync stops;
+          the lane then tells the mailbox's processors once a day.
+        - **A customer who Cc's the shared sales mailbox** makes no
+          duplicate: an exported mail is stored once by its Message-ID from
+          the same sender (`dw_sales`/`dw_purchasing` `mail_drop.py`). Not
+          yet measured on a real tenant with one mail To a PIC and Cc the
+          shared box. A forward has a new Message-ID, so it is a new mail.
+        - **The shared sales mailbox itself is read by nobody today:** a
+          lane reads only the folders named by the address of a member
+          holding its scope, and no one signs in to DW as the shared box.
+          Customers who write only to it would be missed. Reading it needs a
+          tenant setting naming the shared mailboxes each DW reads, and its
+          flow on the "shared mailbox" trigger, run by someone with access.
+          Not built; owed from Proterial: whether customers ever write only
+          to the shared box.
+        - **Decided 11-12 (Đạt): the Teams route, a flow per person, not the
+          shared box as main source.** Each flow writes into the team's
+          library under the person's own connection, so if the account
+          signed in on the host fails, mail keeps landing on Teams. Another
+          of the team's two owners signs in on the host, and the lane reads
+          every file it has not handled yet. Nothing is lost, only delayed.
+          The shared-box question stays open only for customers who write
+          to it alone.
+        - ~~The shared box as DW1's main source~~ (Đạt asked 11-11; dropped
+          11-12, above):
+          one flow, one account (which can also be the host's OneDrive
+          sign-in), instead of a flow per PIC. It sees only what reaches the
+          shared box: a customer mail sent to a PIC alone, PC's replies to a
+          PIC (read for dates since 11-04) and every DW2 mail (buyers'
+          boxes) would be missed. So: the shared box for customer mail, plus
+          per-person flows only where mail bypasses it (PICs for PC's
+          replies, buyers); the Message-ID dedupe makes the overlap safe.
+          Hinges on Proterial: do customers always write to or Cc the shared
+          box, and does PC Cc it.
+
     - Falls with no VPN: support over VPN (ADR 0024 open item 3), Grafana
       over an SSH tunnel from home, and question 49 (access from outside).
       Updates go in as an image bundle on site.
@@ -425,16 +426,16 @@ context. All five are done and on `main`. The full narrative is at
 - **Logs, traces, Grafana (2026-11-05, Đạt: everything on Proterial's
   server, no cloud).**
     - **Built:** `observability` is now Prometheus (with a volume, 30 days)
-      + Alertmanager + Loki 3.7.9 + Alloy v1.21.3 + Tempo 2.10.10 + Grafana
-      13.2.5. Langfuse moved to its own `langfuse` profile, for UAT or
-      debugging only.
-        - Four provisioned dashboards (`infra/grafana/dashboards`).
-        - New metrics `dw_model_calls_total` and `dw_model_call_seconds_total`
-          by prompt and model.
-        - Alert `DwTelemetryStoreDown`, the 8th rule.
-        - Every service uses json-file rotation (5 × 10 MB) with its service
-          label; Alloy reads the files, not the socket.
-        - `make onprem-up` runs the profile. README: "Watching it run".
+        - Alertmanager + Loki 3.7.9 + Alloy v1.21.3 + Tempo 2.10.10 + Grafana
+          13.2.5. Langfuse moved to its own `langfuse` profile, for UAT or
+          debugging only.
+            - Four provisioned dashboards (`infra/grafana/dashboards`).
+            - New metrics `dw_model_calls_total` and `dw_model_call_seconds_total`
+              by prompt and model.
+            - Alert `DwTelemetryStoreDown`, the 8th rule.
+            - Every service uses json-file rotation (5 × 10 MB) with its service
+              label; Alloy reads the files, not the socket.
+            - `make onprem-up` runs the profile. README: "Watching it run".
     - **Ran on Docker Desktop:**
         - Loki labels only this project's lines.
         - Real `dw.model.call` spans from the worker reached Tempo with

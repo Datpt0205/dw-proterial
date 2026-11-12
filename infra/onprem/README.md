@@ -70,13 +70,13 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
 
 `make onprem-up` starts the `observability` profile beside `full` (2026-11-05). Everything stays on this host: no cloud, no SaaS, and each tool's usage reporting is off.
 
-| Tool | Holds | Kept (default) | Set in `.env` |
-| --- | --- | --- | --- |
-| Prometheus | Numbers: up/down, queues, model calls per step, tokens | 30 days | `DW_PROMETHEUS_RETENTION` |
-| Loki, fed by Alloy | Every container's stdout/stderr | 30 days | `DW_LOKI_RETENTION` |
-| Tempo | Spans: which step, which model, how long, which error. No document text | 7 days | `DW_TEMPO_RETENTION` |
-| Alertmanager | Firing alerts, to `ALERTMANAGER_WEBHOOK_URL` | n/a | |
-| Grafana | The screen over the three stores, with four dashboards in the "Digital Worker" folder | n/a | `GRAFANA_ADMIN_PASSWORD` (required, random) |
+| Tool               | Holds                                                                                 | Kept (default) | Set in `.env`                               |
+| ------------------ | ------------------------------------------------------------------------------------- | -------------- | ------------------------------------------- |
+| Prometheus         | Numbers: up/down, queues, model calls per step, tokens                                | 30 days        | `DW_PROMETHEUS_RETENTION`                   |
+| Loki, fed by Alloy | Every container's stdout/stderr                                                       | 30 days        | `DW_LOKI_RETENTION`                         |
+| Tempo              | Spans: which step, which model, how long, which error. No document text               | 7 days         | `DW_TEMPO_RETENTION`                        |
+| Alertmanager       | Firing alerts, to `ALERTMANAGER_WEBHOOK_URL`                                          | n/a            |                                             |
+| Grafana            | The screen over the three stores, with four dashboards in the "Digital Worker" folder | n/a            | `GRAFANA_ADMIN_PASSWORD` (required, random) |
 
 How long each store keeps data is Proterial's call (question 40 in `docs/proterial/Cau-hoi-Proterial-DW1-DW2.xlsx`). The numbers above are defaults until they decide.
 
@@ -88,6 +88,7 @@ How long each store keeps data is Proterial's call (question 40 in `docs/proteri
     - a refused payload or reader answer is described by field, not value.
 
     What is still open is in `.claude/plans/ops-hardening.md` (2026-11-05).
+
 - **Langfuse** is a separate profile, `langfuse`. Use it for UAT or a short debugging window only, and only with Proterial's consent. It is useful only when traces carry prompts and answers, which would be a second copy of customers' documents.
 - **Offline images.** Add `grafana/grafana:13.2.5`, `grafana/loki:3.7.9`, `grafana/tempo:2.10.10` and `grafana/alloy:v1.21.3` to the `docker save` list in step 3 above.
 - **Licences.** Grafana, Loki and Tempo are AGPL-3.0, and Alloy is Apache-2.0. `make third-party-notices` lists them. FPT legal should confirm the AGPL terms for an unmodified on-premises install.
@@ -155,7 +156,7 @@ and for that it gives nothing a Sales or Purchasing user needs.
 
 Decided 2026-10-27 (Sales ticket 43): Proterial gives DW1 no Microsoft 365 access and its administrators are abroad, so nothing here needs one.
 
-- **One flow for every DW, into a Team's library** (Đạt, 2026-11-02). A private Microsoft Teams team ("DW - chuyen thu", two owners, no staff as members) holds `DW-mail/<address>` at the root of its SharePoint library, one subfolder per person who works with DW1 or DW2, named by the address that person signs in to DW with, and shared (edit) with that person alone. The files belong to the team, not to a person, and an ordinary user can usually create the team: no Microsoft 365 administrator and no new licence. Fallback where Proterial forbids it: a DW account's OneDrive, the same steps with its own Site Address and Folder Path. An owner builds one flow (standard connectors) that exports every mail reaching the Inbox as an `.eml` file into a person's folder (SharePoint *Create file*, Site Address `https://<org>.sharepoint.com/sites/DW-chuyenthu`, Folder Path `/Shared Documents/DW-mail/<address>`; the Message Id field holds the token alone, a stray character fails as "Id is malformed"). Its trigger folder is the literal `Inbox`: picked from the list, the flow keeps the owner's folder id and a copy never fires in another mailbox (measured 2026-10-27).
+- **One flow for every DW, into a Team's library** (Đạt, 2026-11-02). A private Microsoft Teams team ("DW - chuyen thu", two owners, no staff as members) holds `DW-mail/<address>` at the root of its SharePoint library, one subfolder per person who works with DW1 or DW2, named by the address that person signs in to DW with, and shared (edit) with that person alone. The files belong to the team, not to a person, and an ordinary user can usually create the team: no Microsoft 365 administrator and no new licence. Fallback where Proterial forbids it: a DW account's OneDrive, the same steps with its own Site Address and Folder Path. An owner builds one flow (standard connectors) that exports every mail reaching the Inbox as an `.eml` file into a person's folder (SharePoint _Create file_, Site Address `https://<org>.sharepoint.com/sites/DW-chuyenthu`, Folder Path `/Shared Documents/DW-mail/<address>`; the Message Id field holds the token alone, a stray character fails as "Id is malformed"). Its trigger folder is the literal `Inbox`: picked from the list, the flow keeps the owner's folder id and a copy never fires in another mailbox (measured 2026-10-27).
 - **Each person** (a Sales PIC, a buyer, or both) receives a copy of that flow ("Send a copy", which needs one successful run after the last edit), points it at their own folder, signs its Outlook and SharePoint connections in as themselves and turns it on. Nobody's flow differs by DW.
 - **Which DW reads whose mail is the members page, not the flow**: DW1 reads the folders of the members holding `sales.inbox.process`, DW2 those holding `purchasing.request.intake`, a person holding both is read by both, asked each minute (`dw_platform.application.drop_folder.OwnedFolders`). Granting or withdrawing the scope starts or stops it. A folder named by an address no holder signs in with, and a file in the root, are read by no one. Each DW's model then sorts every mail it reads, internal included: neither the flows nor DW leave a sender out (DW1's `ignored_sender_domains` left in `sales_order_rules@1.9.0`; DW2 decides which senders may be a request by `internal_domains` and SPF/DKIM/DMARC).
 - **A Windows PC in the plant** (a Windows Server with Desktop Experience works too) signs in to OneDrive as one of the team's owners, adds `DW-mail` with "Add shortcut to OneDrive → My files" (it appears as `DW - chuyen thu - DW-mail`), keeps it on disk ("Always keep on this device") and shares it over SMB, read-only, to one local user, firewalled to this host. OneDrive runs only in a live Windows session: Remote Desktop is left by Disconnect, never Sign out, the disconnected-session time limit is Never, and Autologon brings the session back after a restart.
@@ -169,11 +170,11 @@ Decided 2026-10-29: "Gửi cho khách" sends a case's send draft from the mailbo
 
 - **Storage in Proterial's tenant, never a personal account.** The same team's library holds `DW-outbox/<sign-in address>/` per person, shared (edit) with that person alone. A personal Microsoft account would put customers' mail outside Proterial's control, and the connector it needs is usually blocked by Power Platform DLP.
 - **Each PIC's flow**, a second one beside the receiving flow, signed in as themselves (standard connectors):
-  1. *When a file is created in a folder* (OneDrive for Business or SharePoint): `DW-outbox/<their address>/outbox`.
-  2. *Get file content*, *Parse JSON* of the job: `job`, `from`, `to`, `cc` (`;`-separated), `subject`, `body_html`, `attachments` (file names).
-  3. For each attachment name: *Get file content* of `outbox/files/<job file stem>/<name>` (retry a few times: OneDrive may bring the job before its files).
-  4. *Send an email (V2)* from their Outlook: To, CC, Subject, Body (HTML), Attachments. It lands in their Sent Items; replies come back to them and the receiving flow brings those to DW1.
-  5. *Create file* `receipts/<job file stem>.json` with `{"status": "sent"}`; on any failure (a *Configure run after: has failed* branch) `{"status": "failed"}`; then delete the job file.
+    1. _When a file is created in a folder_ (OneDrive for Business or SharePoint): `DW-outbox/<their address>/outbox`.
+    2. _Get file content_, _Parse JSON_ of the job: `job`, `from`, `to`, `cc` (`;`-separated), `subject`, `body_html`, `attachments` (file names).
+    3. For each attachment name: _Get file content_ of `outbox/files/<job file stem>/<name>` (retry a few times: OneDrive may bring the job before its files).
+    4. _Send an email (V2)_ from their Outlook: To, CC, Subject, Body (HTML), Attachments. It lands in their Sent Items; replies come back to them and the receiving flow brings those to DW1.
+    5. _Create file_ `receipts/<job file stem>.json` with `{"status": "sent"}`; on any failure (a _Configure run after: has failed_ branch) `{"status": "failed"}`; then delete the job file.
 - **The plant PC** syncs `DW-outbox` like `DW-mail`, but shares it **read-write** to the same local user, firewalled to this host. The host mounts it at `/srv/dw/outbox` (`cifs`, `rw`).
 - **This host**: an override mounts `/srv/dw/outbox:/outbox` into the worker alone with `DW_OUTBOX_DIR=/outbox` (`DW_SALES_OUTBOX_DIR` still read), and sets `DW_OUTBOX_ENABLED=true` for the API, which never touches the share. The worker's `sales_outbound` lane writes each pressed mail as `outbox/<tenant>.<workspace>.<mail>.json` (its files under `outbox/files/<same>/`) every 30 s, reads `receipts/`, marks a quotation "Đã gửi KH" as the person who pressed, and tells them when their folder is missing, their flow failed, or no receipt came within 30 minutes.
 - **What a receipt cannot do**: it settles only a job DW1 wrote into that same person's folder; anything but `"sent"` counts as failed. Who receives the mail was checked by the API against the customer's contacts before the job existed.

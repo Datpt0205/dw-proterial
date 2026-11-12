@@ -60,27 +60,23 @@ import OverviewPage from "../../overview/page";
 afterEach(cleanup);
 
 describe("Tổng quan quy trình (2026-10-27)", () => {
-  it(
-    "names no mock set, splits the PRV counts, and says no case went through a holder",
-    async () => {
-      render(
-        <UiProvider>
-          <OverviewPage />
-        </UiProvider>,
-      );
-      expect(screen.queryByText(/giả lập/)).toBeNull();
-      expect(screen.getByText("Thư chưa có hướng xử lý")).toBeTruthy();
-      expect(screen.getByText("Mã PRV khớp convert list")).toBeTruthy();
-      expect(screen.getByText("Mã PRV chưa giải quyết")).toBeTruthy();
+  it("names no mock set, splits the PRV counts, and says no case went through a holder", async () => {
+    render(
+      <UiProvider>
+        <OverviewPage />
+      </UiProvider>,
+    );
+    expect(screen.queryByText(/giả lập/)).toBeNull();
+    expect(screen.getByText("Thư chưa có hướng xử lý")).toBeTruthy();
+    expect(screen.getByText("Mã PRV khớp convert list")).toBeTruthy();
+    expect(screen.getByText("Mã PRV chưa giải quyết")).toBeTruthy();
 
-      // A holder no case has been through reads "none yet", not "unknown".
-      const sales = screen.getByText("Sales quyết định").closest("tr")!;
-      expect(within(sales).getAllByText("Chưa có hồ sơ")).toHaveLength(2);
-      expect(screen.queryByText(/Không rõ/)).toBeNull();
-      // A target with nothing measured says so; one with cases counts them.
-      expect(screen.getByText(/· Chưa có hồ sơ$/)).toBeTruthy();
-      expect(screen.getByText(/\(2 báo giá\)$/)).toBeTruthy();
-    },
-    20_000,
-  );
+    // A holder no case has been through reads "none yet", not "unknown".
+    const sales = screen.getByText("Sales quyết định").closest("tr")!;
+    expect(within(sales).getAllByText("Chưa có hồ sơ")).toHaveLength(2);
+    expect(screen.queryByText(/Không rõ/)).toBeNull();
+    // A target with nothing measured says so; one with cases counts them.
+    expect(screen.getByText(/· Chưa có hồ sơ$/)).toBeTruthy();
+    expect(screen.getByText(/\(2 báo giá\)$/)).toBeTruthy();
+  }, 20_000);
 });

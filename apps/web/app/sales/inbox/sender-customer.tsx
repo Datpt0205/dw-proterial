@@ -35,7 +35,9 @@ export function SenderCustomerPanel({
   const [picked, setPicked] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const allowed = hasScope(SCOPE.inbox);
-  const reason = allowed ? null : "Chỉ người xử lý thư mới xác nhận được khách.";
+  const reason = allowed
+    ? null
+    : "Chỉ người xử lý thư mới xác nhận được khách.";
   const ref = messageRef(messageId);
   const id = `sender/${messageId}`;
 

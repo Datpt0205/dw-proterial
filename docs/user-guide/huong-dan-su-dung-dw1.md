@@ -18,40 +18,40 @@ Tài liệu hướng dẫn người dùng Proterial sử dụng DW1 trên cổng
 
 DW1 là nhân sự số (Digital Worker) hỗ trợ bộ phận Sales xử lý đơn hàng (PO) và yêu cầu báo giá (RFQ) gửi đến qua email. DW1 đọc thư và tệp đính kèm, mở hồ sơ, đối chiếu với dữ liệu chủ và quy tắc của công ty, gắn cờ những điểm cần người xem, rồi soạn sẵn tệp nhập Bravo và thư trả lời khách. Người của Proterial vẫn là người quyết định: DW1 không tự xác nhận đơn, không tự gửi báo giá và không tự ghi vào Bravo.
 
-| DW1 làm | Người dùng làm |
-|---|---|
-| Đọc thư, tệp PO, tệp RFQ; mở hồ sơ hoặc gắn vào hồ sơ có sẵn | Xem lại giá trị DW1 đọc, mở bản gốc để đối chiếu |
+| DW1 làm                                                          | Người dùng làm                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| Đọc thư, tệp PO, tệp RFQ; mở hồ sơ hoặc gắn vào hồ sơ có sẵn     | Xem lại giá trị DW1 đọc, mở bản gốc để đối chiếu              |
 | Kiểm tra mã hàng, giá, số lượng, ngày giao, NOC/ESF theo quy tắc | Quyết định từng cờ: chấp nhận có lý do hoặc yêu cầu khách sửa |
-| Soạn tệp nhập Bravo, thư xác nhận, thư yêu cầu khách sửa | Nhập Bravo, gửi thư, ghi số đơn Bravo |
-| Chuyển cho Sales những thư DW1 không xử lý được, kèm lý do | Xử lý thư được chuyển, kiểm chéo, duyệt báo giá |
+| Soạn tệp nhập Bravo, thư xác nhận, thư yêu cầu khách sửa         | Nhập Bravo, gửi thư, ghi số đơn Bravo                         |
+| Chuyển cho Sales những thư DW1 không xử lý được, kèm lý do       | Xử lý thư được chuyển, kiểm chéo, duyệt báo giá               |
 
 ## Ai đọc chương nào
 
 Mỗi người dùng chỉ cần đọc Chương 2, Chương 3 và chương của vai mình.
 
-| Vai trên cổng DW | Công việc chính | Chương cần đọc |
-|---|---|---|
-| Sales phụ trách (PIC) | Xử lý hộp thư, đơn hàng, báo giá; kiểm chéo đơn của người khác | Chương 4 |
-| Trưởng bộ phận Sales | Duyệt báo giá, mẫu PO, dữ liệu chủ, phiên bản quy tắc; cho DW1 chạy lại | Chương 4 và Chương 5 |
-| Lãnh đạo (xem tổng hợp) | Xem số liệu tổng hợp của quy trình | Chương 6 |
-| IT / Quản trị hệ thống | Tạo tài khoản, gán vai, đặt lại mật khẩu, khoá đăng nhập | Chương 7 |
+| Vai trên cổng DW        | Công việc chính                                                         | Chương cần đọc       |
+| ----------------------- | ----------------------------------------------------------------------- | -------------------- |
+| Sales phụ trách (PIC)   | Xử lý hộp thư, đơn hàng, báo giá; kiểm chéo đơn của người khác          | Chương 4             |
+| Trưởng bộ phận Sales    | Duyệt báo giá, mẫu PO, dữ liệu chủ, phiên bản quy tắc; cho DW1 chạy lại | Chương 4 và Chương 5 |
+| Lãnh đạo (xem tổng hợp) | Xem số liệu tổng hợp của quy trình                                      | Chương 6             |
+| IT / Quản trị hệ thống  | Tạo tài khoản, gán vai, đặt lại mật khẩu, khoá đăng nhập                | Chương 7             |
 
 Một người có thể giữ nhiều vai, ví dụ Sales phụ trách kiêm người duyệt báo giá thay. Khi đó cổng DW hiện đủ các chức năng của mọi vai người đó giữ.
 
 ## Thuật ngữ
 
-| Thuật ngữ | Giải thích |
-|---|---|
-| Hồ sơ | Một đơn hàng hoặc một yêu cầu báo giá, từ lúc nhận thư đến lúc đóng |
-| Cờ | Điểm DW1 phát hiện cần người xem, ví dụ giá lệch quy tắc, mã hàng chưa có trong bảng quy đổi |
-| Cờ chặn | Cờ phải được quyết định trước khi hồ sơ đi tiếp |
-| Mở nguồn | Mở bản gốc (trang PDF hoặc ô Excel) nơi DW1 đọc ra một giá trị; cổng DW yêu cầu mở nguồn trước khi xác nhận |
-| Kiểm chéo | Một Sales khác đối chiếu đơn đã nhập Bravo với PO; người chuẩn bị đơn không tự kiểm chéo |
-| YCBG | Yêu cầu báo giá nội bộ lập trên Bravo để gửi Design |
-| Mẫu PO | Cách DW1 đọc mẫu PO của một khách; DW1 tự học ở PO đầu tiên, người lập tay chỉ khi DW1 không học được |
-| Dữ liệu chủ | Danh mục khách hàng, mã hàng, bảng quy đổi mã, báo giá còn hiệu lực, giá LME |
-| Phiên bản quy tắc | Bộ quy tắc kiểm tra mà DW1 đang áp dụng; mỗi thay đổi là một phiên bản mới, có người duyệt |
-| Tạm dừng DW1 | Dừng DW1 xử lý thư mới trong workspace; các bước của Sales vẫn làm bình thường |
+| Thuật ngữ         | Giải thích                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| Hồ sơ             | Một đơn hàng hoặc một yêu cầu báo giá, từ lúc nhận thư đến lúc đóng                                         |
+| Cờ                | Điểm DW1 phát hiện cần người xem, ví dụ giá lệch quy tắc, mã hàng chưa có trong bảng quy đổi                |
+| Cờ chặn           | Cờ phải được quyết định trước khi hồ sơ đi tiếp                                                             |
+| Mở nguồn          | Mở bản gốc (trang PDF hoặc ô Excel) nơi DW1 đọc ra một giá trị; cổng DW yêu cầu mở nguồn trước khi xác nhận |
+| Kiểm chéo         | Một Sales khác đối chiếu đơn đã nhập Bravo với PO; người chuẩn bị đơn không tự kiểm chéo                    |
+| YCBG              | Yêu cầu báo giá nội bộ lập trên Bravo để gửi Design                                                         |
+| Mẫu PO            | Cách DW1 đọc mẫu PO của một khách; DW1 tự học ở PO đầu tiên, người lập tay chỉ khi DW1 không học được       |
+| Dữ liệu chủ       | Danh mục khách hàng, mã hàng, bảng quy đổi mã, báo giá còn hiệu lực, giá LME                                |
+| Phiên bản quy tắc | Bộ quy tắc kiểm tra mà DW1 đang áp dụng; mỗi thay đổi là một phiên bản mới, có người duyệt                  |
+| Tạm dừng DW1      | Dừng DW1 xử lý thư mới trong workspace; các bước của Sales vẫn làm bình thường                              |
 
 # Bắt đầu sử dụng
 
@@ -81,12 +81,12 @@ Khi quên mật khẩu, người dùng liên hệ IT. IT đặt lại mật kh�
 
 Mọi trang của cổng DW có cùng một bố cục.
 
-| Vùng | Vị trí | Nội dung |
-|---|---|---|
-| Thanh menu | Trên cùng | Các trang người dùng được vào: Việc cần làm, Hộp thư, Hồ sơ, Quản lý. Con số cạnh mục là số việc đang chờ |
-| Chuông thông báo | Góc phải | Việc mới giao cho mình, yêu cầu duyệt, kết quả duyệt |
-| Menu tài khoản | Góc phải, bấm vào tên | Vai đang giữ, Nhật ký hoạt động (nếu có quyền), Đổi mật khẩu, Đăng xuất |
-| Thanh trạng thái DW1 | Dưới thanh menu, trên các trang Sales | DW1 đang chạy hay tạm dừng, đã xử lý bao nhiêu thư, nút Tạm dừng DW1 |
+| Vùng                 | Vị trí                                | Nội dung                                                                                                  |
+| -------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Thanh menu           | Trên cùng                             | Các trang người dùng được vào: Việc cần làm, Hộp thư, Hồ sơ, Quản lý. Con số cạnh mục là số việc đang chờ |
+| Chuông thông báo     | Góc phải                              | Việc mới giao cho mình, yêu cầu duyệt, kết quả duyệt                                                      |
+| Menu tài khoản       | Góc phải, bấm vào tên                 | Vai đang giữ, Nhật ký hoạt động (nếu có quyền), Đổi mật khẩu, Đăng xuất                                   |
+| Thanh trạng thái DW1 | Dưới thanh menu, trên các trang Sales | DW1 đang chạy hay tạm dừng, đã xử lý bao nhiêu thư, nút Tạm dừng DW1                                      |
 
 Trên màn hình nhỏ (điện thoại), thanh menu thu vào nút ba gạch ở góc trái.
 
@@ -111,33 +111,33 @@ Bấm vào tên ở góc phải, chọn **Đăng xuất**. Phiên đăng nhập 
 
 Một đơn hàng đi qua các trạng thái theo thứ tự dưới đây. Trang Pipeline hồ sơ hiện mỗi trạng thái là một cột.
 
-| Trạng thái | Ai đang giữ | Việc ở bước này |
-|---|---|---|
-| Đã nhận | DW1 | DW1 đọc thư và tệp PO |
-| Đã kiểm tra | DW1 | DW1 đối chiếu với dữ liệu chủ và quy tắc, gắn cờ |
-| Chờ PIC tự kiểm | Sales phụ trách | Xem từng cờ, mở nguồn, quyết định |
-| Chờ khách sửa PO | Khách hàng | Đã gửi yêu cầu khách sửa; bản PO sửa (Rev.) tự gắn vào hồ sơ |
-| PIC đã tự kiểm | Sales phụ trách | Tải tệp nhập Bravo, nhập Bravo |
-| Đã nhập Bravo | Sales khác | Kiểm chéo đơn trên Bravo với PO |
-| Đã kiểm chéo | Sales phụ trách | Gửi xác nhận cho khách |
-| Đã xác nhận | – | Đơn đã xác nhận với khách |
-| Xem thay đổi PO | Sales phụ trách | Khách gửi thay đổi sau khi đã xác nhận |
-| Đã đóng | – | Kết thúc (kèm lý do đóng) |
+| Trạng thái       | Ai đang giữ     | Việc ở bước này                                              |
+| ---------------- | --------------- | ------------------------------------------------------------ |
+| Đã nhận          | DW1             | DW1 đọc thư và tệp PO                                        |
+| Đã kiểm tra      | DW1             | DW1 đối chiếu với dữ liệu chủ và quy tắc, gắn cờ             |
+| Chờ PIC tự kiểm  | Sales phụ trách | Xem từng cờ, mở nguồn, quyết định                            |
+| Chờ khách sửa PO | Khách hàng      | Đã gửi yêu cầu khách sửa; bản PO sửa (Rev.) tự gắn vào hồ sơ |
+| PIC đã tự kiểm   | Sales phụ trách | Tải tệp nhập Bravo, nhập Bravo                               |
+| Đã nhập Bravo    | Sales khác      | Kiểm chéo đơn trên Bravo với PO                              |
+| Đã kiểm chéo     | Sales phụ trách | Gửi xác nhận cho khách                                       |
+| Đã xác nhận      | –               | Đơn đã xác nhận với khách                                    |
+| Xem thay đổi PO  | Sales phụ trách | Khách gửi thay đổi sau khi đã xác nhận                       |
+| Đã đóng          | –               | Kết thúc (kèm lý do đóng)                                    |
 
 ## Quy trình báo giá
 
 Một yêu cầu báo giá đi qua các trạng thái sau.
 
-| Trạng thái | Ai đang giữ | Việc ở bước này |
-|---|---|---|
-| Đã nhận | Sales phụ trách | Xem yêu cầu, soạn YCBG |
-| Đã soạn YCBG, Đã lập YCBG trên Bravo | Sales phụ trách | Lập YCBG trên Bravo, ghi số YCBG |
-| Chờ Design | Design | Design phản hồi qua email; phản hồi tự gắn vào hồ sơ |
-| Design đã phản hồi, Thảo luận spec với khách | Sales phụ trách | Thống nhất spec với khách nếu cần |
-| Đã định giá | Sales phụ trách | Ghi giá, MOQ, lead time và căn cứ giá |
-| Chờ duyệt | Người duyệt báo giá | Duyệt hoặc trả lại định giá |
-| Đã duyệt, Đã gửi khách | Sales phụ trách | Gửi báo giá cho khách |
-| Đã ghi master list | – | Ghi vào master list, kết thúc |
+| Trạng thái                                   | Ai đang giữ         | Việc ở bước này                                      |
+| -------------------------------------------- | ------------------- | ---------------------------------------------------- |
+| Đã nhận                                      | Sales phụ trách     | Xem yêu cầu, soạn YCBG                               |
+| Đã soạn YCBG, Đã lập YCBG trên Bravo         | Sales phụ trách     | Lập YCBG trên Bravo, ghi số YCBG                     |
+| Chờ Design                                   | Design              | Design phản hồi qua email; phản hồi tự gắn vào hồ sơ |
+| Design đã phản hồi, Thảo luận spec với khách | Sales phụ trách     | Thống nhất spec với khách nếu cần                    |
+| Đã định giá                                  | Sales phụ trách     | Ghi giá, MOQ, lead time và căn cứ giá                |
+| Chờ duyệt                                    | Người duyệt báo giá | Duyệt hoặc trả lại định giá                          |
+| Đã duyệt, Đã gửi khách                       | Sales phụ trách     | Gửi báo giá cho khách                                |
+| Đã ghi master list                           | –                   | Ghi vào master list, kết thúc                        |
 
 Người định giá không tự duyệt báo giá của mình; người kiểm chéo đơn phải khác người chuẩn bị đơn. Cổng DW chặn hai trường hợp này ngay trên nút bấm.
 
@@ -165,12 +165,12 @@ Trang **Hộp thư** liệt kê thư khách gửi vào hộp thư Sales, cùng h
 
 DW1 tự xử lý thư mới. Người dùng cũng có thể bấm **DW xử lý** trên một thư, hoặc **DW xử lý tất cả** để xếp mọi thư chưa xử lý; thư chuyển "Đang chờ DW1", rồi "DW1 đang xử lý", rồi có kết quả. Mỗi thư có một trong các kết quả sau.
 
-| Kết quả | Ý nghĩa | Người dùng làm gì |
-|---|---|---|
-| Đã tạo hồ sơ | DW1 mở hồ sơ đơn hàng hoặc báo giá mới | Mở hồ sơ từ Việc cần làm |
-| Đã gắn vào hồ sơ | Thư thuộc hồ sơ có sẵn (bản PO sửa, phản hồi Design, trả lời của khách) | Xem hồ sơ đó |
-| Chuyển Sales xử lý | DW1 không xử lý thư này; dòng thư ghi lý do và người phụ trách | Đọc thư và xử lý như thường lệ |
-| DW1 chưa xử lý được | Có lỗi khi đọc thư; dòng thư ghi lý do | Bấm **DW xử lý lại**, hoặc báo IT nếu lỗi lặp lại |
+| Kết quả             | Ý nghĩa                                                                 | Người dùng làm gì                                 |
+| ------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- |
+| Đã tạo hồ sơ        | DW1 mở hồ sơ đơn hàng hoặc báo giá mới                                  | Mở hồ sơ từ Việc cần làm                          |
+| Đã gắn vào hồ sơ    | Thư thuộc hồ sơ có sẵn (bản PO sửa, phản hồi Design, trả lời của khách) | Xem hồ sơ đó                                      |
+| Chuyển Sales xử lý  | DW1 không xử lý thư này; dòng thư ghi lý do và người phụ trách          | Đọc thư và xử lý như thường lệ                    |
+| DW1 chưa xử lý được | Có lỗi khi đọc thư; dòng thư ghi lý do                                  | Bấm **DW xử lý lại**, hoặc báo IT nếu lỗi lặp lại |
 
 Nếu DW1 không đọc được một tệp thư (tệp hỏng hoặc lớn hơn 20 MB), thư đó không vào Hộp thư. DW1 gửi thông báo "Có thư DW1 không đọc được" kèm tên tệp cho người xử lý hộp thư; mở thư gốc trong Outlook và xử lý tay. Nếu DW1 không đọc được cả thư mục thư, người xử lý hộp thư nhận thông báo "DW1 không đọc được thư mục thư", mỗi ngày một lần cho tới khi thư mục được nối lại; báo IT.
 
@@ -194,8 +194,8 @@ Mọi cờ chặn phải được quyết định trước khi đơn đi tiếp;
 2. Bấm **Mở bản gốc** hoặc **Mở nguồn** cạnh giá trị cần xem. Trang PDF hoặc bảng Excel hiện ra, khung quanh đúng chỗ DW1 đã đọc.
 3. Chưa rõ một cờ nghĩa là gì, bấm **DW1 giải thích**: DW1 viết vài câu về điều đã so sánh, các giá trị, và nên kiểm gì tiếp, chỉ dùng số liệu có trong hồ sơ (gắn nhãn "Máy viết"). DW1 không quyết thay; người vẫn chọn cách xử lý.
 4. Với từng cờ, chọn một trong hai:
-   - **Chấp nhận + lý do**: nhập lý do, ví dụ "Khách xác nhận giá theo thư ngày 22/09".
-   - **Yêu cầu khách sửa**: dòng này cần khách gửi lại PO.
+    - **Chấp nhận + lý do**: nhập lý do, ví dụ "Khách xác nhận giá theo thư ngày 22/09".
+    - **Yêu cầu khách sửa**: dòng này cần khách gửi lại PO.
 5. Bấm **Ghi quyết định**. Mỗi quyết định tạo một phiên bản hồ sơ mới.
 6. Khi mọi cờ đã quyết định, bấm **Chuẩn bị xong**. Nếu nút mờ với lý do "Chưa mở nguồn", bấm **Mở nguồn** của phiên bản hồ sơ hiện tại rồi bấm lại.
 
@@ -262,7 +262,7 @@ Sau khi báo giá được duyệt:
 
 1. Trong khung **Tệp và thư nháp DW1 soạn**, soạn thư gửi khách (nháp) và đọc lại.
 2. Bấm **Gửi cho khách từ hộp thư của bạn**, rồi xác nhận. Thư đi từ hộp thư Outlook của chính người bấm (nằm trong Thư đã gửi của họ), tới người nhận ghi trong thư nháp; DW1 chỉ cho gửi tới người liên hệ của khách trong Dữ liệu chủ. Sau vài phút khung ghi "Đã gửi … lúc …" và hồ sơ tự chuyển **Đã gửi KH**. Nếu khung báo chưa gửi được (hộp thư chưa được nối, luồng gửi báo lỗi, hoặc quá 30 phút chưa có xác nhận), người bấm cũng nhận thông báo; tải tệp .eml, gửi từ Outlook rồi bấm **Đã gửi KH**.
-   - Nút này chỉ dùng được khi công ty đã nối hộp thư gửi của từng người (luồng Power Automate của chính họ); trước đó nút bị mờ và ghi rõ lý do, cách làm vẫn như cũ: tải .eml, tự gửi, bấm **Đã gửi KH**.
+    - Nút này chỉ dùng được khi công ty đã nối hộp thư gửi của từng người (luồng Power Automate của chính họ); trước đó nút bị mờ và ghi rõ lý do, cách làm vẫn như cũ: tải .eml, tự gửi, bấm **Đã gửi KH**.
 3. Bấm **Xác nhận master list** khi đã ghi vào master list.
 
 ### Rà soát báo giá năm
@@ -336,13 +336,13 @@ Trưởng bộ phận Sales dùng mọi chức năng ở Chương 4 và thêm c�
 
 Trang **Duyệt** gom mọi yêu cầu đang chờ người dùng quyết định. Mở trang từ chuông thông báo hoặc từ thông báo trên các trang Sales.
 
-| Loại yêu cầu | Quyết định ở đâu |
-|---|---|
-| Phiên bản quy tắc | Ngay trên trang Duyệt: xem thay đổi, ghi nhận xét, bấm **Duyệt** hoặc **Từ chối** |
-| Dữ liệu chủ | Ngay trên trang Duyệt, như phiên bản quy tắc |
-| Duyệt báo giá | Bấm **Mở hồ sơ để quyết định**, quyết định trên trang hồ sơ báo giá |
-| Kiểm chéo đơn hàng | Bấm **Mở hồ sơ để quyết định** |
-| Mẫu PO lập tay | Mở trang Mẫu PO từ đường dẫn trên thư trong **Hộp thư** |
+| Loại yêu cầu       | Quyết định ở đâu                                                                  |
+| ------------------ | --------------------------------------------------------------------------------- |
+| Phiên bản quy tắc  | Ngay trên trang Duyệt: xem thay đổi, ghi nhận xét, bấm **Duyệt** hoặc **Từ chối** |
+| Dữ liệu chủ        | Ngay trên trang Duyệt, như phiên bản quy tắc                                      |
+| Duyệt báo giá      | Bấm **Mở hồ sơ để quyết định**, quyết định trên trang hồ sơ báo giá               |
+| Kiểm chéo đơn hàng | Bấm **Mở hồ sơ để quyết định**                                                    |
+| Mẫu PO lập tay     | Mở trang Mẫu PO từ đường dẫn trên thư trong **Hộp thư**                           |
 
 ## Duyệt báo giá
 
@@ -404,11 +404,11 @@ IT quản lý tài khoản và quyền trên menu **Quản trị**, trang **Vai 
 
 Bảng vai IT có thể gán:
 
-| Vai | Dùng cho |
-|---|---|
-| Sales phụ trách (PIC) | Nhân viên Sales xử lý đơn hàng, báo giá |
-| Trưởng bộ phận Sales | Người duyệt báo giá, mẫu PO, dữ liệu chủ, quy tắc |
-| Lãnh đạo (xem tổng hợp) | Ban lãnh đạo chỉ xem số liệu tổng hợp |
+| Vai                     | Dùng cho                                          |
+| ----------------------- | ------------------------------------------------- |
+| Sales phụ trách (PIC)   | Nhân viên Sales xử lý đơn hàng, báo giá           |
+| Trưởng bộ phận Sales    | Người duyệt báo giá, mẫu PO, dữ liệu chủ, quy tắc |
+| Lãnh đạo (xem tổng hợp) | Ban lãnh đạo chỉ xem số liệu tổng hợp             |
 
 Vai quản trị hệ thống chỉ Quản trị toàn quyền mới gán được.
 
@@ -436,10 +436,10 @@ IT không tự khoá đăng nhập của chính mình, và chỉ Quản trị to
 
 Một số việc ít gặp làm trên trang quản trị đăng nhập (Keycloak), tại địa chỉ `<địa chỉ đăng nhập>/admin/dw/console/`. IT đăng nhập bằng chính tài khoản cổng DW của mình; tài khoản cần thuộc nhóm `dw-it`, do FPT thêm khi bàn giao. Trang quản trị chỉ hiện hai mục Users và Groups: phần cấu hình hệ thống do FPT quản lý nên không hiện cho IT.
 
-| Việc | Cách làm |
-|---|---|
-| Mở khoá người nhập sai mật khẩu nhiều lần | Users → chọn người → tắt "Temporarily locked" |
-| Đăng xuất một người khỏi mọi thiết bị | Users → chọn người → Sessions → Sign out |
+| Việc                                         | Cách làm                                                                                                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Mở khoá người nhập sai mật khẩu nhiều lần    | Users → chọn người → tắt "Temporarily locked"                                                                               |
+| Đăng xuất một người khỏi mọi thiết bị        | Users → chọn người → Sessions → Sign out                                                                                    |
 | Yêu cầu một người cài xác thực hai lớp (OTP) | Users → chọn người → ô "Required user actions" → chọn "Configure OTP" → Save; lần đăng nhập sau người đó được hướng dẫn cài |
 
 Không tạo người dùng trực tiếp trên trang quản trị đăng nhập: tài khoản tạo ở đó không có vai trên cổng DW và không đặt lại mật khẩu được từ khung Thành viên.
@@ -460,12 +460,12 @@ DW1 xử lý lần lượt, thư cũ trước. Nếu thư đứng quá vài phú
 
 Rê chuột vào nút hoặc đọc dòng chữ cạnh nút để xem lý do. Các lý do thường gặp:
 
-| Lý do hiện trên màn hình | Cách xử lý |
-|---|---|
-| Chưa mở nguồn | Bấm **Mở nguồn** của phiên bản hồ sơ hiện tại |
-| Bạn đã chuẩn bị đơn này nên không tự kiểm chéo được | Nhờ một Sales khác kiểm chéo |
-| Bạn đã định giá báo giá này nên không tự duyệt được | Nhờ người duyệt khác |
-| Chỉ Trưởng bộ phận Sales … | Việc này thuộc quyền Trưởng bộ phận Sales |
+| Lý do hiện trên màn hình                            | Cách xử lý                                    |
+| --------------------------------------------------- | --------------------------------------------- |
+| Chưa mở nguồn                                       | Bấm **Mở nguồn** của phiên bản hồ sơ hiện tại |
+| Bạn đã chuẩn bị đơn này nên không tự kiểm chéo được | Nhờ một Sales khác kiểm chéo                  |
+| Bạn đã định giá báo giá này nên không tự duyệt được | Nhờ người duyệt khác                          |
+| Chỉ Trưởng bộ phận Sales …                          | Việc này thuộc quyền Trưởng bộ phận Sales     |
 
 ## Không thấy giá, hiện "Đã ẩn"
 

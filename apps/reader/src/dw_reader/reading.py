@@ -35,7 +35,6 @@ from dw_sales.adapters.reader_wire import Failure, ReaderReply
 logger = logging.getLogger("dw_reader")
 
 
-
 class LimitsUnavailableError(RuntimeError):
     """The reading process refused to start without its limits."""
 
