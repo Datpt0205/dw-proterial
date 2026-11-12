@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -42,7 +42,11 @@ from dw_platform.domain.audit import (
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime(2026, 10, 8, 9, 0, tzinfo=UTC)
+# Near the wall clock, not a fixed date: `support_grants_for_staff()` keeps a
+# grant listed until 30 days after it ends, measured against the database's
+# own now(). A fixed 2026-10-08 made sa12 pass when written and fail from
+# 2026-11-10 on, with nothing in the code changed.
+NOW = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
 OTP = frozenset({"pwd", "otp"})
 
 
