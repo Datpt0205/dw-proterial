@@ -22,3 +22,17 @@
 # credential. The line now carries `# gitleaks:allow`; this covers the commit
 # that introduced it.
 dfa0f399fa358671928216004984c62b9e1c187b:apps/worker/tests/unit/test_zalo_poll_consumer.py:generic-api-key:58
+
+# Checked by hand 2026-11-12, after the first CI run of the Oct–Nov work:
+# the migration's downgrade deletes a role row by its key (`key = 'purchasing_dw2'`),
+# SQL, not a credential.
+530aba4c4a76b822e5fcec41bfd01dd842734cd7:db/migrations/versions/6971b41fcdf6_purchasing_automation_lane_and_its_.py:generic-api-key:75
+# Keycloak account tests: made-up temporary passwords ("Abcd-Efgh-Jkm2" and
+# siblings) handed to a fake or a throwaway test realm, never a real account's.
+cf6811ec94d79ab5df165a6d05728f713b55a21c:apps/web/components/__tests__/sign-in-accounts.test.tsx:generic-api-key:163
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:139
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:160
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:201
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:217
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:220
+cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:235
