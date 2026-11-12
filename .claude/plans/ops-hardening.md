@@ -282,6 +282,18 @@ context. All five are done and on `main`. The full narrative is at
       certificate). Proposed: a Cato account for FPT that reaches only the
       DW host, as the sanctioned way to support without a VPN.
       Close q49.
+    - **Claude Code for support on site (asked 11-12, proposed):** Claude
+      Code supports Windows Server 2019+ (its setup page; no sandbox on
+      native Windows); VS Code lists Windows client only; the Claude
+      desktop app has no stated Server support. But DW lives in the Ubuntu
+      VM, so the work is there, not on the Windows host. Proposed: Claude
+      Code on FPT's own machine reaching the VM over SSH with a limited
+      account, changes made in the repo and shipped as the image bundle,
+      prompts kept on (never bypass mode), the database read as
+      `dw_agent_ro` if at all, and no real mail or rows read. Anything
+      Claude Code reads goes to Anthropic, which breaks "nothing leaves the
+      plant" (model on the host, 11-02) unless Proterial IT agrees: owed,
+      with the Cato/SSH access above.
 
 - **Offline install of the DW host (given to Đạt 11-10, not yet written into
   the README):** Ubuntu Server 24.04 LTS from USB (Rufus, GPT/UEFI), RAID 1
