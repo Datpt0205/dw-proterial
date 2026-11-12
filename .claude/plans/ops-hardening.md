@@ -89,7 +89,11 @@ context. All five are done and on `main`. The full narrative is at
       **Decided 11-11 (Proterial, through Đạt): Windows Server with
       virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
       the GPU by DDA.** Still owed: the Windows Server version (2025
-      preferred), IOMMU and DDA on the board, measured on the host. The
+      preferred: 2022 left mainstream support on 2026-10-13, security fixes
+      only to 2031-10; 2025 mainstream to 2029-11, extended to 2034-11. DDA
+      is the same in both; GPU-P, new in 2025, needs a data-centre card and
+      does not apply to a consumer one. Standard edition is enough for one
+      Ubuntu VM), IOMMU and DDA on the board, measured on the host. The
       options as weighed before:
       If Windows is imposed, in order of preference:
       - **(a) Hyper-V VM with Ubuntu and the GPU by DDA.** The VM starts at
