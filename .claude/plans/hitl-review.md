@@ -30,6 +30,7 @@ decide is below. Nothing here is built yet: each line is Đạt's choice.
    `bravo_po.mock: true`) refuse real work until Proterial's own are in.
 
 ## Done on 2026-11-04 (Đạt: "tự khớp nếu bước không quan trọng, bước
+
 quan trọng người xác nhận; khảo sát lại khi làm thật ở nhà máy")
 
 - Item 1 above: DW2's lane runs where deployed, on the stored mailbox.
@@ -52,8 +53,7 @@ quan trọng người xác nhận; khảo sát lại khi làm thật ở nhà m�
    ceilings in code and the service account's scopes still hold.
 2. Turn on DW1's four measured steps in the tenant's order rules: each only
    pre-fills or proposes; the person still confirms.
-3. DW2 reads supplier mail on its own: quotes already tied to an RFQ (step
-   6) and confirmations with zero differences accepted (5b). No money moves,
+3. DW2 reads supplier mail on its own: quotes already tied to an RFQ (step 6) and confirmations with zero differences accepted (5b). No money moves,
    no mail leaves.
 4. One press to confirm every model-read value found verbatim in the source
    (Q1, O3) instead of retyping each; the first-POs-of-a-new-layout count

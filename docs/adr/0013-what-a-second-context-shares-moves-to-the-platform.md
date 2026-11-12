@@ -20,18 +20,18 @@ code: two answers to one question that drift.
 A survey of the code on 2026-10-30 (recorded in `.claude/plans/sales.md`)
 sorted each capability by how Sales-bound it is:
 
-| Capability | Where | Bound to Sales by |
-| --- | --- | --- |
-| Malware scan port, verdict, ClamAV adapter | `application/malware.py`, `adapters/clamd.py` | an inbox helper only |
-| Figure check, amount check | `application/figure_check.py` | the names `DW1`, `DW2` |
-| One-call model door (`caller_run`, `InterpretationPort`, `GatewayInterpretation`) | `application/runs.py`, `model_reading.py`, `adapters/model_interpretation.py` | the files they share with Sales types |
-| Reader sandbox wire and transport | `apps/reader`, `adapters/reader_wire.py`, `reader_client.py` | `ReaderOp` (all `po.*`, `quote.*`) and Sales result types |
-| Stored message, attachment content | `domain/messages.py`, `domain/mail_parts.py` | nothing material |
-| Outbox folder (send from the presser's mailbox) | `adapters/outbox_folder.py` | nothing |
-| Mail drop lane and stored mailbox | `mail_drop.py`, `mailbox_*` tables | the ignored-sender rule from `OrderRules` |
-| Tenant rule versions | `rules.py`, `rule_versions` | the `RuleKey` registry |
-| Master-data import from Excel | `catalog_imports.py`, `catalog_*` tables | the `SPECS` / `CatalogList` registry |
-| Follow-ups, brief, assistant, pipeline, pause | many | Sales statuses and views throughout |
+| Capability                                                                        | Where                                                                         | Bound to Sales by                                         |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Malware scan port, verdict, ClamAV adapter                                        | `application/malware.py`, `adapters/clamd.py`                                 | an inbox helper only                                      |
+| Figure check, amount check                                                        | `application/figure_check.py`                                                 | the names `DW1`, `DW2`                                    |
+| One-call model door (`caller_run`, `InterpretationPort`, `GatewayInterpretation`) | `application/runs.py`, `model_reading.py`, `adapters/model_interpretation.py` | the files they share with Sales types                     |
+| Reader sandbox wire and transport                                                 | `apps/reader`, `adapters/reader_wire.py`, `reader_client.py`                  | `ReaderOp` (all `po.*`, `quote.*`) and Sales result types |
+| Stored message, attachment content                                                | `domain/messages.py`, `domain/mail_parts.py`                                  | nothing material                                          |
+| Outbox folder (send from the presser's mailbox)                                   | `adapters/outbox_folder.py`                                                   | nothing                                                   |
+| Mail drop lane and stored mailbox                                                 | `mail_drop.py`, `mailbox_*` tables                                            | the ignored-sender rule from `OrderRules`                 |
+| Tenant rule versions                                                              | `rules.py`, `rule_versions`                                                   | the `RuleKey` registry                                    |
+| Master-data import from Excel                                                     | `catalog_imports.py`, `catalog_*` tables                                      | the `SPECS` / `CatalogList` registry                      |
+| Follow-ups, brief, assistant, pipeline, pause                                     | many                                                                          | Sales statuses and views throughout                       |
 
 ## Decision
 

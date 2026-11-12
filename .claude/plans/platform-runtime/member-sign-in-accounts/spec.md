@@ -24,7 +24,7 @@ cần máy chủ mail); IT gán được mọi vai nghiệp vụ (kể cả quy�
   vào bảng idempotency (replay trả `temporary_password: null`), gửi kèm `Cache-Control: no-store`.
 - **Keycloak** (`infra/keycloak/dw-realm.json`): client `dw-accounts` (service account,
   `manage-users`/`view-users`/`query-users`); user profile `unmanagedAttributePolicy:
-  ADMIN_EDIT`, email chỉ admin sửa. Secret từ `DW_API_ACCOUNTS_CLIENT_SECRET`, compose không
+ADMIN_EDIT`, email chỉ admin sửa. Secret từ `DW_API_ACCOUNTS_CLIENT_SECRET`, compose không
   khởi động Keycloak lẫn API khi thiếu; profile deployed từ chối giá trị `change-me…` hoặc
   dưới 32 ký tự. Realm đã có từ trước: `scripts/keycloak_accounts_client.py`.
 - **Vá kèm:** `KeycloakTokenVerifier` coi email chưa xác minh (`email_verified` khác `true`)

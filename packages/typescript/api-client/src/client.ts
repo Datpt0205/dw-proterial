@@ -352,7 +352,11 @@ export class ApiClient {
         response.status,
         parsedError.success
           ? parsedError.data
-          : { code: "internal", message: `HTTP ${response.status}`, details: {} },
+          : {
+              code: "internal",
+              message: `HTTP ${response.status}`,
+              details: {},
+            },
       );
     }
     const type = response.headers.get("content-type") ?? "";

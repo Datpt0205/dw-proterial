@@ -2,9 +2,7 @@
   "uid": "dw-flow",
   "title": "DW · Luồng việc",
   "description": "Hàng đợi việc, việc bị thu hồi, lỗi theo bước.",
-  "tags": [
-    "dw"
-  ],
+  "tags": ["dw"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,

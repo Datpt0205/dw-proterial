@@ -174,7 +174,9 @@ describe("the shell's navbar", () => {
     renderShell();
     expect(
       screen
-        .getByRole("link", { name: "Digital Worker · DW1 Đơn hàng & Báo giá, về trang đầu" })
+        .getByRole("link", {
+          name: "Digital Worker · DW1 Đơn hàng & Báo giá, về trang đầu",
+        })
         .getAttribute("href"),
     ).toBe("/sales");
 

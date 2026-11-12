@@ -89,8 +89,8 @@ export function ThreadSummary({
         <Typography.Text role="status">{NONE[view.status]}</Typography.Text>
       ) : (
         <Typography.Text>
-          DW1 đọc các thư của hồ sơ và tóm tắt điều đang diễn ra, mỗi ý kèm
-          thư làm căn cứ.
+          DW1 đọc các thư của hồ sơ và tóm tắt điều đang diễn ra, mỗi ý kèm thư
+          làm căn cứ.
         </Typography.Text>
       )}
       <ActionError error={error} />

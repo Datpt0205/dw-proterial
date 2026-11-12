@@ -128,4 +128,3 @@ whole answer 1.2 s, warm; the real app and the repository's Caddyfile on
 stopped the generator at once. FastAPI 0.141 runs a dependency's exit after a
 streamed response, so `Idempotency-Key` is released or recorded when the turn
 ends. `request_timing` logs the time to the first event, not the turn.
-

@@ -38,18 +38,18 @@ customer order information (SP, Form 1, Form 2), complaints, replacements,
 orders, my documents, by month, suspended. Toolbar: Mẫu in, **Duyệt**,
 Đánh lại số. Rows are grouped by status ("Đã hoàn thiện"). Header columns:
 
-| Bravo column | Seen | Meaning for DW1 |
-| --- | --- | --- |
-| PO No. | `240588001101`, `261109-010`, `VN-261109-2527`, `81260051` | the customer's PO number, in the customer's own format |
-| SO order | `SO2611-000161` … `000176` | Bravo's number; `SO` + yymm + sequence |
-| Input / Booking / Receipt date | 10/11, 10/11, 09/11 | receipt = the day the PO came in; booking = the day it was entered |
-| KH trực tiếp / gián tiếp | `FG13100024`, `FG00010874` | direct and indirect customer codes |
-| TotalQuantity, Tổng tiền, Tiền tệ, Tỷ giá | USD at rate 1.00; VND at 25,972 | **the books are kept in USD** |
-| Create CDO | a button per row | unknown, asked (Q-B1) |
-| Delivery mode / term / destination | ROAD·FCA·PRV, AIR·CIP·NARITA, ROAD·DAP·TEV | constant per customer in every row seen |
-| Actual payment terms | "T/T at the end of following month", "AMS60", "AMS45" | constant per customer |
-| Cán bộ nhân viên | three Sales PICs | the customer's PIC |
-| Returned, Closed, Sent to G-Samit | button, two check boxes | asked (Q-B2, Q-B3) |
+| Bravo column                              | Seen                                                       | Meaning for DW1                                                    |
+| ----------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| PO No.                                    | `240588001101`, `261109-010`, `VN-261109-2527`, `81260051` | the customer's PO number, in the customer's own format             |
+| SO order                                  | `SO2611-000161` … `000176`                                 | Bravo's number; `SO` + yymm + sequence                             |
+| Input / Booking / Receipt date            | 10/11, 10/11, 09/11                                        | receipt = the day the PO came in; booking = the day it was entered |
+| KH trực tiếp / gián tiếp                  | `FG13100024`, `FG00010874`                                 | direct and indirect customer codes                                 |
+| TotalQuantity, Tổng tiền, Tiền tệ, Tỷ giá | USD at rate 1.00; VND at 25,972                            | **the books are kept in USD**                                      |
+| Create CDO                                | a button per row                                           | unknown, asked (Q-B1)                                              |
+| Delivery mode / term / destination        | ROAD·FCA·PRV, AIR·CIP·NARITA, ROAD·DAP·TEV                 | constant per customer in every row seen                            |
+| Actual payment terms                      | "T/T at the end of following month", "AMS60", "AMS45"      | constant per customer                                              |
+| Cán bộ nhân viên                          | three Sales PICs                                           | the customer's PIC                                                 |
+| Returned, Closed, Sent to G-Samit         | button, two check boxes                                    | asked (Q-B2, Q-B3)                                                 |
 
 **Line tabs:** Chi tiết đơn hàng, Thay đổi chi tiết (change history),
 Báo giá, Công việc, Phát sinh bán hàng, Duyệt chứng từ, Mẫu in tài liệu kinh
@@ -91,16 +91,16 @@ Forwarder, Black list, Invoice Separation, category, Sales special notice.
 In production DW1 reads each of them from Bravo (ticket 14). It does not
 keep a second copy that someone has to import (failure-modes #2).
 
-| Bravo list | What it holds | DW1's use |
-| --- | --- | --- |
-| Đối tượng | groups 01 Direct, 02 Temporary (`TEMPSALES`), 03 Indirect, Maker, Supplier, potential supplier (approved by "Duyệt nhà cung cấp tiềm năng"); code (`FG…`, `TDC…`), name, second and short name, HMGM and TDC codes, address, type, tax code, payment terms; tabs for contracts, ECP tracking, invoices, debts, SOs, POs | the customer, payment terms; a `TDC…` code is a customer not yet official |
-| Vật tư hàng hóa | groups Thành phẩm CA/EPB/HC/MR/OF and materials; code by family (`9000…` cable assembly, `2000…` hook-up wire, `7600…` magnet roll, `1000…` copper wire); tabs **Mô tả của khách hàng** (customer code → customer item codes, several per PRV code), **Tồn tức thời** (stock by warehouse), **Đơn hàng bán** (every SO of the item), Phát sinh bán hàng (invoices) | the PRV code and unit; "never produced" = no SO in the item's history; stock from Tồn tức thời |
-| Converting customer to PRV item | input date, PRV code and name, specification, direct customer, converting description (colour written out: `HKV 0.30(12/0.18) TA WHITE`), invoice description, all-customer code and description, remark, id; approval states (only "3. Đã duyệt" seen) with "Duyệt Convert Master List" | **this is the convert list**: DW1 reads the approved rows (ticket 04) |
-| Base price | BP date, BP code (`BP003874`: `BP` + 6 digits), short description, BP unit (km), convert rate (1,000 to m), STD unit, spec, category (CB, HK, SW, CA…), Cu weight kg/BP unit, base price USD/BP unit, lead time (weeks), MOQ, LME of BP (7,750), %MR of BP, material, variable and fixed cost, LT-MOQ notice, remark, scope; history of changes | the BP code Design answers is checked here (ticket 11) |
-| LME | month, LME actual, LME center, who entered it | the LME center the price band reads; all seven months seen fit `floor(actual / 500) × 500 + 250` (12,891.38 → 12,750; 14,532.48 → 14,750), to confirm with Sales |
-| Export code | item, export code (`ACA0001`), HS code, VN description, unit weight and length, carton size and weight, packing, coil/box, voltage, design sheet, valid and expiry dates | shipping and customs, not DW1 |
-| Black list | input and effective dates, full name, key word, class (Customer, Maker, Vessel), reason | a customer on it holds the order (the hold DW1 has) |
-| Export control program | ECP number (`ECP25-022`), direct and indirect customer, effective and terminated dates (fiscal year 01/04–31/03), country, product, application | **the ESF in Bravo**: an order is clear when an ECP covers its direct and indirect customer on the PO date |
+| Bravo list                      | What it holds                                                                                                                                                                                                                                                                                                                                                      | DW1's use                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Đối tượng                       | groups 01 Direct, 02 Temporary (`TEMPSALES`), 03 Indirect, Maker, Supplier, potential supplier (approved by "Duyệt nhà cung cấp tiềm năng"); code (`FG…`, `TDC…`), name, second and short name, HMGM and TDC codes, address, type, tax code, payment terms; tabs for contracts, ECP tracking, invoices, debts, SOs, POs                                            | the customer, payment terms; a `TDC…` code is a customer not yet official                                                                                        |
+| Vật tư hàng hóa                 | groups Thành phẩm CA/EPB/HC/MR/OF and materials; code by family (`9000…` cable assembly, `2000…` hook-up wire, `7600…` magnet roll, `1000…` copper wire); tabs **Mô tả của khách hàng** (customer code → customer item codes, several per PRV code), **Tồn tức thời** (stock by warehouse), **Đơn hàng bán** (every SO of the item), Phát sinh bán hàng (invoices) | the PRV code and unit; "never produced" = no SO in the item's history; stock from Tồn tức thời                                                                   |
+| Converting customer to PRV item | input date, PRV code and name, specification, direct customer, converting description (colour written out: `HKV 0.30(12/0.18) TA WHITE`), invoice description, all-customer code and description, remark, id; approval states (only "3. Đã duyệt" seen) with "Duyệt Convert Master List"                                                                           | **this is the convert list**: DW1 reads the approved rows (ticket 04)                                                                                            |
+| Base price                      | BP date, BP code (`BP003874`: `BP` + 6 digits), short description, BP unit (km), convert rate (1,000 to m), STD unit, spec, category (CB, HK, SW, CA…), Cu weight kg/BP unit, base price USD/BP unit, lead time (weeks), MOQ, LME of BP (7,750), %MR of BP, material, variable and fixed cost, LT-MOQ notice, remark, scope; history of changes                    | the BP code Design answers is checked here (ticket 11)                                                                                                           |
+| LME                             | month, LME actual, LME center, who entered it                                                                                                                                                                                                                                                                                                                      | the LME center the price band reads; all seven months seen fit `floor(actual / 500) × 500 + 250` (12,891.38 → 12,750; 14,532.48 → 14,750), to confirm with Sales |
+| Export code                     | item, export code (`ACA0001`), HS code, VN description, unit weight and length, carton size and weight, packing, coil/box, voltage, design sheet, valid and expiry dates                                                                                                                                                                                           | shipping and customs, not DW1                                                                                                                                    |
+| Black list                      | input and effective dates, full name, key word, class (Customer, Maker, Vessel), reason                                                                                                                                                                                                                                                                            | a customer on it holds the order (the hold DW1 has)                                                                                                              |
+| Export control program          | ECP number (`ECP25-022`), direct and indirect customer, effective and terminated dates (fiscal year 01/04–31/03), country, product, application                                                                                                                                                                                                                    | **the ESF in Bravo**: an order is clear when an ECP covers its direct and indirect customer on the PO date                                                       |
 
 **Quotations are already in Bravo.** "Báo giá, chào hàng" (made 30/10/26) has
 the customer, the indirect customer, currency and rate, **LME from 7,500 to
@@ -108,6 +108,7 @@ the customer, the indirect customer, currency and rate, **LME from 7,500 to
 and lines with customer, short and design description, specification, Cu
 weight, LME at base price (7,750), base price, lot, MOQ and **price at fixed
 LME**. "Master list báo giá" joins three blocks per row:
+
 - the request (received and requested dates, customer description,
   end-user or project, consumption in km, application, MP, HCV check,
   status);
@@ -126,13 +127,14 @@ moves it. The formula is not on any screen (ADR 0008, Q-B8).
 
 **The order grid ("Edit detailSO all", Layout1)** is the paste target.
 Columns:
+
 - PO line, PO number, item code, item description, base price name,
   specification, design number;
 - other information 1–4, used as:
-  1. the customer's line reference (`PTR/26/11/096-1`, `11TG5HA`);
-  2. a second reference (`LJ18438`);
-  3. (empty in every row seen);
-  4. the end customer (`KOKUSAI ELECTRIC`);
+    1. the customer's line reference (`PTR/26/11/096-1`, `11TG5HA`);
+    2. a second reference (`LJ18438`);
+    3. (empty in every row seen);
+    4. the end customer (`KOKUSAI ELECTRIC`);
 - invoice separation (`CA`, the item's product group);
 - quantity, unit (m, Pcs), price (5 decimals), amount, currency, USD rate,
   price in USD, total in USD;
@@ -141,6 +143,7 @@ Columns:
   consignee, notify party, delivery to), which belong to shipping, not DW1.
 
 Checks code can make on every row, all of which hold on the rows seen:
+
 - amount = quantity × price, rounded half up to 2 decimals
   (6,100 × 0.02203 = 134.38);
 - for VND, price in USD = price ÷ rate (101,533 ÷ 25,972 = 3.90933);
@@ -150,6 +153,7 @@ A PO of 15 lines is 15 rows under one SO. POs 261109-010 to -016 are seven
 SOs with the same seven items each.
 
 **After the SO:**
+
 - "Create CDO" makes the row in "Customer order information (SP)": invoice
   number (`FBHP2611-008`), "Create IV", customs code, ETD, ETA, forwarder,
   booking. That is shipping and invoicing, the later "Giao hàng & CDO" DW,
@@ -170,25 +174,27 @@ moment, never a step that does not exist** (Đạt, 11-10). So a mapping still
 goes through Bravo's states 1 → 2 → 3 (approved), and DW1 reads all three.
 
 - **Quy trình bán hàng** is a diagram of Bravo's own process:
-  - start → customer management (fed by the sales contract and the ECP)
-    → customer asks for a product (fed by the forecast) → quotation;
-  - → order recorded, or a sample order → delivery order → invoice and
-    packing list (commercial or not) → shipping instruction → debit or
-    credit note (fed by customer complaints) → end.
+    - start → customer management (fed by the sales contract and the ECP)
+      → customer asks for a product (fed by the forecast) → quotation;
+    - → order recorded, or a sample order → delivery order → invoice and
+      packing list (commercial or not) → shipping instruction → debit or
+      credit note (fed by customer complaints) → end.
 
-  DW1 covers the request, the quotation and the order recorded. Customer
-  management with the ECP is the pre-sales and export-control part
-  (tickets 15, 08). The rest is the later delivery DW.
+    DW1 covers the request, the quotation and the order recorded. Customer
+    management with the ECP is the pre-sales and export-control part
+    (tickets 15, 08). The rest is the later delivery DW.
+
 - **Phiếu yêu cầu báo giá** is the YCBG in Bravo.
-  - Number `RFQ` + yymmdd + `-` + nnn (`RFQ261110-002`). The description
-    is usually the customer's mail subject (`HEV-[!]RFQ HEV26-2237 PRV
-    HEV-2026-399 ASTI CORPORATION`, `KNT-[!]Re: 見積り依頼`).
-  - The person who made it, a status (PENDING), Duyệt and Đánh lại số.
-  - Lines: received date, RFQ no., direct and indirect customer, customer
-    item description, **Design Check**, status.
+    - Number `RFQ` + yymmdd + `-` + nnn (`RFQ261110-002`). The description
+      is usually the customer's mail subject (`HEV-[!]RFQ HEV26-2237 PRV
+HEV-2026-399 ASTI CORPORATION`, `KNT-[!]Re: 見積り依頼`).
+    - The person who made it, a status (PENDING), Duyệt and Đánh lại số.
+    - Lines: received date, RFQ no., direct and indirect customer, customer
+      item description, **Design Check**, status.
 
-  DW1's model (the Bravo YCBG number, Design's reply matched by it) holds.
-  Ticket 16 now covers Bravo's real shape.
+    DW1's model (the Bravo YCBG number, Design's reply matched by it) holds.
+    Ticket 16 now covers Bravo's real shape.
+
 - **Color code** holds six rows only: S001 GR/YE (2 stripes/1 base, "Green/
   2Yellow or Yellow/2Green"), S002 EX (not G/Y), S003–S006 empty. Ordinary
   colours (WHITE, BLACK…) are written in the convert list's descriptions.
@@ -197,13 +203,14 @@ goes through Bravo's states 1 → 2 → 3 (approved), and DW1 reads all three.
 ## Before the RFQ: pre-sales (whiteboard, 11-10)
 
 Drawn by Proterial and discussed as a step before DW1's RFQ lane. Read as:
+
 - **Customers:** TDC (prospect) → direct (PRV, PRV(O)) or indirect through
   the group (PRHK, PRAP, PRCH) → official.
 - **Pre-sales, in a circle:** new customer, approach, send (company profile,
   catalogue), verify.
-  - It is linked to Design (new product).
-  - It ends in a **new customer code in Bravo** (marked "A").
-  - A "Form?" sits beside it.
+    - It is linked to Design (new product).
+    - It ends in a **new customer code in Bravo** (marked "A").
+    - A "Form?" sits beside it.
 - **Left side:** the RFQ form gives Design its needs ("DS need"), then the
   Base Price quote, numbered `RFQ2611…`. "SPA" and a circled `BP 01234`
   marked "AI", and "20% →".
@@ -217,24 +224,24 @@ procedures, so it waits on Đạt (needs-triage).
 
 Pages of the drawio → what changes. "Built" means a demo ticket did it.
 
-| Step | Today (person) | DW1 in production | Ticket |
-| --- | --- | --- | --- |
-| 1a RFQ arrives | reads mail or portal | reads it, opens a quote case (built) | — |
-| 1a mass or pcs | Sales knows | proposes mass/pcs, pcs → request to JP & HQ drafted | 05 |
-| 1a code unknown | asks Design | drafts the new-code request with the nearest PRV codes | 06 |
-| 1a YCBG, Design reply | Bravo + mail | drafted, reply read (built); Base price and BP code kept | 11 |
-| 1b price | Excel, LME band, margin, rate | suggested price, Sales decides, head approves | 13 (after ADR 0008) |
-| 1b quotation sent | signed PDF, master list | printed and signed (built, 44); master list read from Bravo | 12 |
-| 2a PO arrives | portal / mail | read, mapped, checked (built); PO before quotation opens one | 09 |
-| 2a conversion | conversion workbook | its rules and colour codes as master data | 04 |
-| 2a export hold | export-control PIC | hold (built); NOEC request drafted | 08 (triage) |
-| 2a PC dates | mail to PC | request drafted, reminded, dates read (read: built) | 07 |
-| 2a enter in Bravo | paste SalesOrder sheet | the sheet in Bravo's real layout; a person pastes | 02 |
-| 2a check entry | "in put PO" TRUE/FALSE | DW reads the SO back and compares line by line | 03 |
-| 2b changes | customer or internal | customer revision (built); internal changes and bulk splits | 10 |
-| all | master lists | read from Bravo, not imported | 14 |
-| before 1a | new customer | introduce, RFQ form complete, verify, code request | 15 (triage) |
-| all | — | the model is Qwen3.8 on Strata | 01 |
+| Step                  | Today (person)                | DW1 in production                                            | Ticket              |
+| --------------------- | ----------------------------- | ------------------------------------------------------------ | ------------------- |
+| 1a RFQ arrives        | reads mail or portal          | reads it, opens a quote case (built)                         | —                   |
+| 1a mass or pcs        | Sales knows                   | proposes mass/pcs, pcs → request to JP & HQ drafted          | 05                  |
+| 1a code unknown       | asks Design                   | drafts the new-code request with the nearest PRV codes       | 06                  |
+| 1a YCBG, Design reply | Bravo + mail                  | drafted, reply read (built); Base price and BP code kept     | 11                  |
+| 1b price              | Excel, LME band, margin, rate | suggested price, Sales decides, head approves                | 13 (after ADR 0008) |
+| 1b quotation sent     | signed PDF, master list       | printed and signed (built, 44); master list read from Bravo  | 12                  |
+| 2a PO arrives         | portal / mail                 | read, mapped, checked (built); PO before quotation opens one | 09                  |
+| 2a conversion         | conversion workbook           | its rules and colour codes as master data                    | 04                  |
+| 2a export hold        | export-control PIC            | hold (built); NOEC request drafted                           | 08 (triage)         |
+| 2a PC dates           | mail to PC                    | request drafted, reminded, dates read (read: built)          | 07                  |
+| 2a enter in Bravo     | paste SalesOrder sheet        | the sheet in Bravo's real layout; a person pastes            | 02                  |
+| 2a check entry        | "in put PO" TRUE/FALSE        | DW reads the SO back and compares line by line               | 03                  |
+| 2b changes            | customer or internal          | customer revision (built); internal changes and bulk splits  | 10                  |
+| all                   | master lists                  | read from Bravo, not imported                                | 14                  |
+| before 1a             | new customer                  | introduce, RFQ form complete, verify, code request           | 15 (triage)         |
+| all                   | —                             | the model is Qwen3.8 on Strata                               | 01                  |
 
 **Out of scope:** logging in to customer portals and downloading from them;
 the electronic stamp; anything typed into Bravo by DW.
@@ -258,16 +265,17 @@ the electronic stamp; anything typed into Bravo by DW.
   equal what the workbooks produced (B01/B02).
 - **One rule source, not one per person** (11-10). Each Sales PIC may
   convert differently. DW follows three sources only:
-  - Bravo's approved convert list (mappings);
-  - one shared rule sheet that the Sales head signs off (B47), loaded as a
-    tenant rule;
-  - Sales' decision on the case.
+    - Bravo's approved convert list (mappings);
+    - one shared rule sheet that the Sales head signs off (B47), loaded as a
+      tenant rule;
+    - Sales' decision on the case.
 
-  B48 (three full chains per PIC: PO → conversion workbook → SalesOrder →
-  SO) shows where PICs differ; the head picks one rule per difference. A
-  case no rule covers goes to a person, never to a guess. The person's
-  decision can then be proposed as a rule through the rules editor, which
-  needs a second person's approval.
+    B48 (three full chains per PIC: PO → conversion workbook → SalesOrder →
+    SO) shows where PICs differ; the head picks one rule per difference. A
+    case no rule covers goes to a person, never to a guess. The person's
+    decision can then be proposed as a rule through the rules editor, which
+    needs a second person's approval.
+
 - **Learning how they work without a transcript:** screen recordings (B50)
   are read frame by frame, as the 11-09 recording was. A written step
   sheet per person and process (B51) gives the why and the exceptions. The

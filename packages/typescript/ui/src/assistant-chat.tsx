@@ -224,7 +224,9 @@ export function AssistantChat({
                   {live?.answer ? (
                     <Bubble
                       placement="start"
-                      header={<Typography.Text strong>{worker}</Typography.Text>}
+                      header={
+                        <Typography.Text strong>{worker}</Typography.Text>
+                      }
                       content={live.answer}
                       streaming
                       contentRender={(text) => (

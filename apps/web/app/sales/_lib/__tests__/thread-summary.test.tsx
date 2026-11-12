@@ -44,7 +44,9 @@ describe("Tóm tắt chuỗi thư (AI item 8)", () => {
     expect(
       screen.getByRole("link", { name: "Mở thư M07" }).getAttribute("href"),
     ).toBe("/sales/inbox?message=M07");
-    expect(screen.getByText(/1 ý bị bỏ vì không khớp thư được trích/)).toBeTruthy();
+    expect(
+      screen.getByText(/1 ý bị bỏ vì không khớp thư được trích/),
+    ).toBeTruthy();
     expect(threadSummary).toHaveBeenCalledWith("order", "c-1");
   });
 

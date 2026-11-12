@@ -29,10 +29,10 @@ and its p50 was 3.3–19.8 s. Q2_0 held the same bars in about half the time.
 2. The routing profile stays the one place that names it. A step never
    names a model.
 3. Nothing ships until four things are done:
-   - Strata is packaged for an offline install;
-   - its licence is checked for on-premises commercial use;
-   - DW2's, the assistant's and the security sets are measured on it;
-   - the whole suite is measured on the RTX PRO 4000 itself.
+    - Strata is packaged for an offline install;
+    - its licence is checked for on-premises commercial use;
+    - DW2's, the assistant's and the security sets are measured on it;
+    - the whole suite is measured on the RTX PRO 4000 itself.
 
 ## Consequences
 
