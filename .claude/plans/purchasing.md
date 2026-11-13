@@ -23,9 +23,12 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
   appear; RoHS/REACH surveys go from a finished good's BOM. The Bravo API
   request was redone for DW2 on these flows (R20–R35, writes after a person
   approves: W11–W18; `docs/proterial/API-Bravo_DW1-DW2_2026-11-13.xlsx`).
-  **Next:** a comparison of both flows with the six built functions, as DW1's
-  `GAP.md`, before changing code; the BA's open points OP-02…OP-25 are the
-  questions for Proterial.
+  **Compared and decided the same day:** DW2 was built in the reverse order (of 53
+  raw-material rows 1 built, 14 partly; of 48 tools rows 1 built, 19 partly;
+  `Downloads/proterial/DW1-flow-review/GAP-DW2.md`, outside git). Đạt: the
+  sourcing case is DW2's axis, DW2 approves no PR, no budget check by
+  default, no pre-selected quotation (`dw_purchasing` ADR 0002). The rebuild
+  is `purchasing/dw2-rebuild/spec.md`, T2–T24, coded in its own session.
 - 2026-11-01, **ADR 0013 decision 1 done**, one commit each, behaviour unchanged,
   unit suite green after the five (4037 passed), lint-imports kept:
   malware port + clamd → `dw_platform` (`0c75ddb`); figure/amount check →
