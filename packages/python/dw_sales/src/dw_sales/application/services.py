@@ -205,7 +205,7 @@ def assemble(
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
-        inbox=InboxQueries(uow, gate, inbox, book),
+        inbox=InboxQueries(uow, gate, inbox, book, directory),
         processing=queue,
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=orders,
