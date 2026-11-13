@@ -410,3 +410,24 @@ exchange-rate rule; stock and production plan from PC; NOC/NOEC/ESF
 records; the lists named but not sent (Special list, Decline list);
 customer 4's conversion codes; whether the signed PDF or the Excel wins when
 they disagree; which customers send through portals, and how many POs a day.
+
+## 11-13: the customer conversation (grilling with Đạt, Q1–Q12)
+
+Decided, all on the agent's recommendations; recorded as dw_sales ADRs
+0009 (a conversation is a mail thread read from headers; cases hang off
+it; Sales' sent mail joins it; Power Automate transports and decides
+nothing; the customer is Bravo's contacts first, then the sender ledger),
+0010 (thread intents; a change asked in a mail is a change request
+confirmed line by line; the update loop is the BA's step 6), 0011
+(confirmation sent, then accepted or implied, recorded by a person; days
+per customer, off by default) and 0012 (read-only tools scoped by code,
+tenant skills in words, measured before use), and ADR 0005's amendments.
+
+Measured (headers' shape only, script outside git): mail as received
+carries `In-Reply-To`, `References` (7–16 ids) and `Thread-Index`; copies
+saved from Sent Items carry none. One thread covers several POs.
+
+Order of work (tickets 23–35 added): 17, 18, 24 → 19 → 22; 20 → 21;
+26 → 27 → 07 → 29; 23 (measure) → 25 → 28; 30 (eval gate) → 31 → 32,
+33 → 34; 35 (process map, simple configuration) redrawn as they land;
+then 10, 09, 06, follow-ups 1.2.0, the RFQ branches.
