@@ -10,8 +10,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from http import HTTPStatus
 
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 from dw_kernel.errors import InfrastructureError
 from dw_knowledge.contracts import DEFAULT_COLLECTION, SHARED_DOMAIN
@@ -35,16 +37,6 @@ _KEYWORD_PAYLOAD_INDEXES = (
     # per-document delete and tombstone.
     "source_document_id",
 )
-
-
-def _is_missing_collection(exc: BaseException) -> bool:
-    """Qdrant answers 404 "Collection ... doesn't exist" for an unknown name.
-
-    Matched on the message rather than the exception class because the client
-    raises the same ``UnexpectedResponse`` for every HTTP error.
-    """
-    text = str(exc).lower()
-    return "doesn't exist" in text or "not found" in text or "404" in text
 
 
 @dataclass
@@ -318,7 +310,7 @@ class QdrantVectorIndexAdapter:
                 with_payload=True,
             )
         except Exception as exc:
-            if _is_missing_collection(exc):
+            if await self._is_missing_collection(exc):
                 # Nothing has been indexed here yet. That is an empty result,
                 # not a broken system: on a fresh install the first question
                 # asked before the first upload would otherwise fail the whole
@@ -344,6 +336,25 @@ class QdrantVectorIndexAdapter:
                 )
             )
         return hits
+
+    async def _is_missing_collection(self, exc: Exception) -> bool:
+        """Whether a failed search failed only because the collection is absent.
+
+        Only the client's typed 404 qualifies, and only once Qdrant confirms
+        the collection does not exist: a proxy or a wrong base path also
+        answers 404, and every other failure (a timeout, a refused key, a
+        malformed filter) read as "nothing there" would reach a person as "no
+        evidence" when it is a broken system (pinned qdrant-client 1.14.3
+        against Qdrant 1.13.4, measured 2026-11-13: an unknown collection
+        raises `UnexpectedResponse` with `status_code` 404; a dead server
+        raises `ResponseHandlingException`, which has none).
+        """
+        if not isinstance(exc, UnexpectedResponse) or exc.status_code != HTTPStatus.NOT_FOUND:
+            return False
+        try:
+            return not await self.client.collection_exists(self.collection)
+        except Exception:
+            return False
 
 
 def _uuid(value: object) -> uuid.UUID:

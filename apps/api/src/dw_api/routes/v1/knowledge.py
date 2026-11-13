@@ -15,19 +15,14 @@ from pydantic import BaseModel, ValidationError
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
-from dw_kernel.errors import (
-    DomainError,
-    InfrastructureError,
-    NotFoundError,
-    PermissionDeniedError,
-)
+from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError
 from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
 from dw_knowledge.ingest_jobs import EnqueueIngestCommand
+from dw_platform.application.authorization import PLATFORM_ADMIN_SCOPE
 
 # Documents up to this size are accepted for ingestion (raw bytes staged to
 # object storage). Larger files should use a pre-signed multipart flow (future).
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-_PLATFORM_ADMIN_ROLE = "platform_admin"
 
 
 class KnowledgeDocumentView(BaseModel):
@@ -119,11 +114,14 @@ async def upload_document(
         context=context, action="knowledge.write", resource_type="knowledge_document"
     )
     # Publishing a GLOBAL (cross-tenant legal) document is a platform-admin act:
-    # a tenant member must not seed content every other tenant can read.
+    # a tenant member must not seed content every other tenant can read. Asked
+    # of the platform's scope check, which owns who holds that authority.
     if scope not in ("tenant", "global"):
         raise DomainError("scope must be 'tenant' or 'global'")
-    if scope == "global" and _PLATFORM_ADMIN_ROLE not in context.roles:
-        raise PermissionDeniedError("publishing a global document requires platform_admin")
+    if scope == "global":
+        await container.authorization.require(
+            context=context, action=PLATFORM_ADMIN_SCOPE, resource_type="knowledge_document"
+        )
     filename = file.filename or "document"
     content_type = file.content_type or "application/octet-stream"
     # Built before anything is staged: the command refuses what the columns would

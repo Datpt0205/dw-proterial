@@ -23,7 +23,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
@@ -38,8 +37,7 @@ from dw_sales.application.ports import (
     ScopeHoldersPort,
 )
 from dw_sales.application.views import WorkerStateView, worker_state
-
-_LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
+from dw_sales.domain.order_checks import SALES_TIME_ZONE
 
 logger = logging.getLogger("dw_sales.worker_service")
 
@@ -132,7 +130,7 @@ class WorkerService:
         )
         names = {m.user_id: m.display_name for m in await self.directory.list_members(context)}
         assert paused.changed_at is not None
-        when = paused.changed_at.astimezone(_LOCAL).strftime("%H:%M %d/%m/%Y")
+        when = paused.changed_at.astimezone(SALES_TIME_ZONE).strftime("%H:%M %d/%m/%Y")
         who = names.get(context.principal_id, "Một PIC")
         await self.notifications.deliver(
             context,

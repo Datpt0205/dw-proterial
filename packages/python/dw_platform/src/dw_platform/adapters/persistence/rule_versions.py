@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.rule_versions import (
     ONE_OPEN_PROPOSAL,
@@ -58,12 +59,6 @@ def _version(row: RowMapping) -> RuleVersion:
     )
 
 
-def _constraint(error: IntegrityError) -> str:
-    cause = getattr(error.orig, "__cause__", None)
-    name = getattr(cause, "constraint_name", None)
-    return name if isinstance(name, str) else "unknown"
-
-
 @asynccontextmanager
 async def _refusals_named(session: AsyncSession, **details: object) -> AsyncIterator[None]:
     """Writes in a savepoint; a refusal comes out as a conflict naming the
@@ -72,7 +67,7 @@ async def _refusals_named(session: AsyncSession, **details: object) -> AsyncIter
         async with session.begin_nested():
             yield
     except IntegrityError as exc:
-        constraint = _constraint(exc)
+        constraint = constraint_of(exc) or "unknown"
         if constraint == _ONE_PROPOSED:
             raise ConflictError(
                 "quy tắc này đã có một phiên bản chờ duyệt",

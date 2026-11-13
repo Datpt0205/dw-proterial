@@ -26,6 +26,7 @@ from dw_platform.domain.messages import (
     InboundMessage,
     is_email_address,
 )
+from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.quote_ports import (
     DesignReplyReaderPort,
@@ -121,9 +122,10 @@ class QuoteRules(BaseModel):
         return self.version
 
 
-class QuotePoliciesPort(Protocol):
+class QuotePoliciesPort(LocalZonePort, Protocol):
     """The quote rules and the pricing policy a scope's tenant has in force,
-    and the quote rules a case's stamp names (ticket 36)."""
+    the quote rules a case's stamp names (ticket 36), and the time zone the
+    tenant's quotation days are counted in."""
 
     async def quote_rules(self, scope: SalesScope) -> QuoteRules: ...
 
@@ -276,6 +278,11 @@ class QuotationService:
     # (ticket 29), for a tenant whose rules turn it on. None: no model is
     # wired in this process, and such a request goes to a person as before.
     requests: ModelRequests | None = None
+
+    async def today(self, scope: SalesScope, now: datetime) -> date:
+        """The seller's calendar day at ``now``: the day a quotation is issued,
+        screened and counted due on, in the tenant's time zone."""
+        return local_day(now, await self.policies.time_zone(scope))
 
     # ---------------------------------------------------------- step 1 --
 

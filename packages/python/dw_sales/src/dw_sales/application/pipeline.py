@@ -36,13 +36,13 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.local_time import local_day
 from dw_sales.application.overview_ports import Bucket
 from dw_sales.application.overview_service import (
     PROCEDURE_KIND,
     STATUS_BUCKETS,
     OverviewService,
 )
-from dw_sales.application.quotes_service import local_day
 from dw_sales.application.support import seen_by, stored_order, stored_quote
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderStatus
@@ -151,7 +151,7 @@ class PipelineService:
     async def board(self, context: AccessContext) -> PipelineView:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_pipeline")
         now = self.clock.now()
-        today = local_day(now)
+        today = local_day(now, await self.work.time_zone(sales_scope(context)))
         mine = await self._mine(context)
         everything = {
             kind: frozenset(s.value for s in enum) for kind, enum in CASE_STATUSES.items()

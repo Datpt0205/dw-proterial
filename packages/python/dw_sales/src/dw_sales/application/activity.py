@@ -48,13 +48,13 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.activity_ports import HandledBy, StepActivityReadPort, day_window
 from dw_sales.application.case_store import LoggedEvent, SalesUnitOfWorkFactory
+from dw_sales.application.local_time import local_day
 from dw_sales.application.model_readiness import BARS
 from dw_sales.application.process_settings import model_steps
-from dw_sales.application.quotes_service import local_day
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.activity import StepOutcome, StepResult, StepTally, percentile, tally
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
-from dw_sales.domain.order_checks import ModelStep
+from dw_sales.domain.order_checks import SALES_TIME_ZONE, ModelStep
 from dw_sales.domain.orders import AMOUNT_FIELDS, OrderCase
 from dw_sales.domain.process import StepId
 from dw_sales.domain.quotes import QuoteCase
@@ -469,7 +469,7 @@ def activity_summary(
 
     by_day: dict[date, list[StepOutcome]] = {}
     for row in rows:
-        by_day.setdefault(local_day(row.occurred_at), []).append(row)
+        by_day.setdefault(local_day(row.occurred_at, SALES_TIME_ZONE), []).append(row)
     days: list[DayView] = []
     day = start
     while day <= end:
@@ -550,7 +550,7 @@ class ActivityService:
                 context, SalesScopes.OVERVIEW_READ, resource_type="sales_activity"
             )
         now = self.clock.now()
-        last = end or local_day(now)
+        last = end or local_day(now, SALES_TIME_ZONE)
         first = start or last - timedelta(days=DEFAULT_SUMMARY_DAYS - 1)
         since, until = day_window(first, last)
         rows = await self.reader.between(sales_scope(context), since, until, lane)

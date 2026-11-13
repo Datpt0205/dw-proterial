@@ -243,7 +243,7 @@ def quotation_book(d: QuoteDrafting, *, final: bool) -> tuple[Workbook, str]:
         approval = _approval(d.case)
         heading += [
             (label(doc, "approved_by"), d.people.name(approval.approved_by)),
-            (label(doc, "approved_at"), time_text(approval.approved_at, language)),
+            (label(doc, "approved_at"), time_text(approval.approved_at, language, d.copy.zone)),
         ]
         stamped = approval.approved_at
     keys = (

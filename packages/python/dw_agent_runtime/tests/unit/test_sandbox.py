@@ -215,6 +215,15 @@ async def test_a_path_outside_the_session_is_explained_not_just_named() -> None:
     assert sandbox.root in results[0].error
 
 
+@pytest.mark.parametrize("reply", [{}, {"output": "ok"}], ids=["empty", "no-results-key"])
+async def test_a_reply_with_no_results_is_an_error_not_no_errors(reply: dict[str, Any]) -> None:
+    """Read as `[]`, it would say every file went through (audit 17)."""
+    with pytest.raises(InfrastructureError, match="no results list"):
+        await a_client(Recorder(reply)).upload("s-1", [("gen.py", b"print(1)")])
+    with pytest.raises(InfrastructureError, match="no results list"):
+        await a_client(Recorder(reply)).download("s-1", ["out.docx"])
+
+
 async def test_an_unreachable_sandbox_reports_per_file_rather_than_raising() -> None:
     """`deepagents` requires batch file operations to report failures per file;
     raising here kills the turn instead of letting the model react."""

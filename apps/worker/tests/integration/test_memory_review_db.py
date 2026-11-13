@@ -294,7 +294,16 @@ async def test_a_held_candidate_opens_one_pending_review_without_its_content(
     assert row.requested_by == tenancy.proposer
     # Identifiers and the label: the inbox shows this to every holder of
     # `approvals.read`, whatever their clearance.
-    assert set(row.payload) == {"candidate_id", "worker_id", "memory_type", "classification"}
+    # The proposer as its maker: `memory.` is a strict prefix, which refuses
+    # every maker and fails closed on a payload that names none (audit 16).
+    assert set(row.payload) == {
+        "candidate_id",
+        "worker_id",
+        "memory_type",
+        "classification",
+        "makers",
+    }
+    assert row.payload["makers"] == [str(tenancy.proposer)]
     assert CONTENT not in str(row.payload)
     [held] = await audit(lane, tenancy, "memory.write_held_for_review")
     assert held.details["approval_id"] == str(approval_id)

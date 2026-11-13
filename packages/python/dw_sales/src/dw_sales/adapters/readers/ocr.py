@@ -18,6 +18,9 @@ by the same layout, with the same anchors (a page and a box).
 a page it OCRed (`RegionFlag.OCR`), so each is `value_uncertain` until Sales
 confirms it, whatever confidence the engine gave. Confidence is kept on the
 word only to drop what the engine itself calls noise (below `MIN_CONFIDENCE`).
+A line that loses every word that way is counted (`OcrPage.unread_lines`)
+when one of them had a letter or a digit: it may have been a PO row, and the
+PDF reader names its page as not checked rather than let it vanish (audit 22).
 
 The engine and its language data are the image's (`tesseract-ocr`,
 `tesseract-ocr-vie` from Debian); `tesseract --version` names it on every
@@ -84,6 +87,9 @@ class OcrPage:
     height: float
     # Each line's cells, top of the page first, each line left to right.
     lines: tuple[tuple[OcrCell, ...], ...]
+    # Lines whose every word fell under `MIN_CONFIDENCE`, one of them with a
+    # letter or a digit: printed, and read by nobody.
+    unread_lines: int
 
     @property
     def empty(self) -> bool:
@@ -184,9 +190,11 @@ class TesseractOcr:
 def page_from_tsv(tsv: str, size: tuple[float, float], dpi: int = DPI) -> OcrPage:
     """Tesseract's TSV of one page rendered at ``dpi``, as a page in points
     of ``size``: its words (level 5) above `MIN_CONFIDENCE`, grouped by the
-    line Tesseract put them on, each line split into cells."""
+    line Tesseract put them on, each line split into cells, and how many
+    lines lost every word with a letter or a digit to the threshold."""
     scale = POINTS_PER_INCH / dpi
     words: list[OcrWord] = []
+    dropped: set[tuple[int, int, int]] = set()
     for row in csv.DictReader(io.StringIO(tsv), delimiter="\t", quoting=csv.QUOTE_NONE):
         text = (row.get("text") or "").strip()
         if row.get("level") != "5" or not text:
@@ -198,6 +206,10 @@ def page_from_tsv(tsv: str, size: tuple[float, float], dpi: int = DPI) -> OcrPag
         except (KeyError, ValueError):
             continue
         if confidence < MIN_CONFIDENCE:
+            # A speck or a rule reads as "|" or "—"; a word with a letter or
+            # a digit may have been a value.
+            if any(char.isalnum() for char in text):
+                dropped.add(line)
             continue
         words.append(OcrWord(text, box[0], box[1], box[2], box[3], line))
     by_line: dict[tuple[int, int, int], list[OcrWord]] = {}
@@ -208,7 +220,9 @@ def page_from_tsv(tsv: str, size: tuple[float, float], dpi: int = DPI) -> OcrPag
         for line in sorted(by_line.values(), key=lambda ws: min(w.top for w in ws))
     ]
     width, height = size
-    return OcrPage(width=width, height=height, lines=tuple(lines))
+    return OcrPage(
+        width=width, height=height, lines=tuple(lines), unread_lines=len(dropped - set(by_line))
+    )
 
 
 def _cells(words: list[OcrWord]) -> tuple[OcrCell, ...]:

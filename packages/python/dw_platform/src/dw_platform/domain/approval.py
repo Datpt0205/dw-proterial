@@ -109,10 +109,12 @@ class ApprovalRequest:
         The requester is one of them by definition; a case can have more (an
         order's preparer, its Bravo recorder in this round and earlier ones).
         A strict approval type refuses every one of them as its decider.
-        Unreadable fails closed: a request whose makers cannot be read is
-        decided by nobody, rather than by a maker the parse dropped.
+        Unreadable or absent fails closed: a request whose makers cannot be
+        read is decided by nobody, rather than by a maker the parse dropped,
+        and a raiser that forgot the key is not read as "the requester alone
+        made it" (an empty list is how a raiser says that).
         """
-        raw = self.payload.get("makers", [])
+        raw = self.payload.get("makers")
         if not isinstance(raw, list):
             raise ConflictError(
                 "approval request names its makers unreadably",

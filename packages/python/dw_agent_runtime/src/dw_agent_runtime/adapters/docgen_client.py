@@ -134,7 +134,9 @@ def _error_of(item: dict[str, Any]) -> str | None:
 
 
 def _results(body: dict[str, Any]) -> list[dict[str, Any]]:
-    results = body.get("results", [])
+    # A reply without the key is not "every file went through": an empty list
+    # here is read by the backend as no per-file errors at all.
+    results = body.get("results")
     if not isinstance(results, list):
         raise InfrastructureError("the document sandbox returned a reply with no results list")
     return [item for item in results if isinstance(item, dict)]

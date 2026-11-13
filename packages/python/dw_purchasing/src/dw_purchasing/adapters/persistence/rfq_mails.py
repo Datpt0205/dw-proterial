@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.rule_versions import ContextScope
 from dw_platform.domain.audit import AuditEvent
@@ -103,7 +104,7 @@ class SqlRfqMails:
                 )
                 await self.audit(session).append(event)
         except IntegrityError as refused:
-            if "uq_rfq_mails_case_id_supplier_code_active" not in str(refused.orig):
+            if constraint_of(refused) != "uq_rfq_mails_case_id_supplier_code_active":
                 raise
             raise ConflictError(ALREADY_SENT, details={"rule": "already_sent"}) from None
 

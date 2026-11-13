@@ -50,7 +50,7 @@ from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import InboxProcessing
 from dw_sales.application.ports import NotificationSenderPort
 from dw_sales.application.quotation import QuotationService
-from dw_sales.application.quotes_service import local_day, parse_finding_key
+from dw_sales.application.quotes_service import parse_finding_key
 from dw_sales.application.runs import (
     DECIDE_SCOPES,
     DecisionAsked,
@@ -150,7 +150,7 @@ class CaseDecisions:
                 scope,
                 case,
                 quote_no=quote_no,
-                issued_on=local_day(now),
+                issued_on=await self.quotation.today(scope, now),
                 by=context.principal_id,
                 at=now,
             )

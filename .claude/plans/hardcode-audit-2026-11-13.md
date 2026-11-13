@@ -26,17 +26,17 @@ findings it closes, and this file marks them.
 | 9   | MED  | `dw_sales/domain/rfq_reading.py:336-342`, `dw_purchasing/domain/mail_reading.py:142,180-196`                                                  | Dates always day first: US "05/11/2026" becomes 5 Nov; "11/15/2026" silently swapped — fixed 2026-11-13 |
 | 10  | MED  | `dw_sales/adapters/readers/text_parts.py:48-49,155-160,20-23`                                                                                 | The model sees ≤1000 rows, columns A–Z, no scanned pages of a mixed PDF; nobody is told                                       |
 | 11  | MED  | `dw_sales/application/artifact_content.py:362-375`, `order_artifacts.py:264` vs `dw_purchasing/application/orders.py:88-91`                   | Sales' mock Bravo upload layout and mock mail copy are only noted when deployed (Purchasing refuses its mock)                 |
-| 12  | MED  | `dw_knowledge/adapters/qdrant_index.py:38-47,320-328`                                                                                         | Any error whose text says "404"/"not found" becomes an empty search, read as "no evidence"                                    |
+| 12  | MED  | `dw_knowledge/adapters/qdrant_index.py:38-47,320-328`                                                                                         | Any error whose text says "404"/"not found" becomes an empty search, read as "no evidence" — fixed 2026-11-13 |
 | 13  | MED  | `dw_purchasing/domain/master_lists.py:181-186` (used `automation_lane.py:766`, `sourcing.py:666`, `follow_up.py:120`)                         | A supplier contact on gmail makes gmail.com its domain: any verified gmail sender counts as that supplier — fixed 2026-11-13  |
-| 14  | MED  | `dw_sales/domain/order_checks.py:65,279`, `artifact_content.py:50`, `overview_service.py:75`, `quotes_service.py:82`                          | Asia/Ho_Chi_Minh in code 4+ times while `working_hours.time_zone` is tenant config                                            |
+| 14  | MED  | `dw_sales/domain/order_checks.py:65,279`, `artifact_content.py:50`, `overview_service.py:75`, `quotes_service.py:82`                          | Asia/Ho_Chi_Minh in code 4+ times while `working_hours.time_zone` is tenant config — partly fixed 2026-11-13 (see below) |
 | 15  | LOW  | `apps/web/app/sales/page.tsx:57`, `apps/web/app/sales/quotes/[caseId]/page.tsx:80,277-279`                                                    | "Due soon" 48 h / 1–2 days in the UI beside the policy's `hours_before_due` / `due_within_days`                               |
-| 16  | LOW  | `dw_platform/domain/approval.py:115`                                                                                                          | A strict approval with no `makers` key excludes only the requester                                                            |
-| 17  | LOW  | `dw_agent_runtime/adapters/docgen_client.py:137`                                                                                              | A reply with no `results` gives `[]`, read as "uploaded with no errors"                                                       |
-| 18  | LOW  | `apps/api/src/dw_api/routes/v1/knowledge.py:30,125`                                                                                           | The route keeps its own `platform_admin` string and decides authorization there                                               |
-| 19  | LOW  | `run_store.py:195`, `approval_codes.py:85`, `provisioning_repo.py:213,218`, `admin_console_repo.py:99`, `rfq_mails.py:106`, purchasing `store.py:216` | Constraint names found by substring in the error text (others read `constraint_name`)                                |
+| 16  | LOW  | `dw_platform/domain/approval.py:115`                                                                                                          | A strict approval with no `makers` key excludes only the requester — fixed 2026-11-13 |
+| 17  | LOW  | `dw_agent_runtime/adapters/docgen_client.py:137`                                                                                              | A reply with no `results` gives `[]`, read as "uploaded with no errors" — fixed 2026-11-13 |
+| 18  | LOW  | `apps/api/src/dw_api/routes/v1/knowledge.py:30,125`                                                                                           | The route keeps its own `platform_admin` string and decides authorization there — fixed 2026-11-13 |
+| 19  | LOW  | `run_store.py:195`, `approval_codes.py:85`, `provisioning_repo.py:213,218`, `admin_console_repo.py:99`, `rfq_mails.py:106`, purchasing `store.py:216` | Constraint names found by substring in the error text (others read `constraint_name`) — fixed 2026-11-13 |
 | 20  | LOW  | `rfq_reading.py:253-270`, `mail_reading.py:144-156`                                                                                           | "$" always USD, "¥" always JPY; the table exists twice — fixed 2026-11-13 |
 | 21  | LOW  | `dw_sales/application/artifact_content.py:128`                                                                                                | `%d %b %Y` prints the month in the server's locale on customer documents — fixed 2026-11-13 |
-| 22  | LOW  | `dw_sales/adapters/readers/ocr.py:51,197`; `pc_dates.py:64` + `routes.py:231` + `pc-dates.tsx:17`                                             | A scanned line under 30 confidence vanishes unflagged; the 8000-character PC paste limit written three times                  |
+| 22  | LOW  | `dw_sales/adapters/readers/ocr.py:51,197`; `pc_dates.py:64` + `routes.py:231` + `pc-dates.tsx:17`                                             | A scanned line under 30 confidence vanishes unflagged; the 8000-character PC paste limit written three times — OCR half fixed 2026-11-13; the limit owes its route and web reads (see below) |
 
 ## Suggested fixes (from the audit)
 
@@ -94,3 +94,57 @@ findings it closes, and this file marks them.
   a different question (does prose name an amount); left as is.
 - `adapters/mock/generate_attachments.py:830,843` still formats `%b`: mock
   fixtures only, never a customer document.
+- Batch D (11-13), findings 12, 14-19, 22 (6 and 10 wait for their ticket):
+  - 12: only the client's typed 404 (`UnexpectedResponse.status_code`) that
+    `collection_exists` then confirms is "nothing there"; measured on the
+    pinned qdrant-client 1.14.3 against Qdrant 1.13.4: an unknown collection
+    raises `UnexpectedResponse` 404, a dead server `ResponseHandlingException`.
+    Creating a collection took ~7 s on Docker Desktop, past the client's 5 s
+    default, so `dw_knowledge`'s Qdrant integration tests (the existing
+    `test_qdrant_tenant_filter.py` too) error on this machine with a read
+    timeout; the new search test sets its own client timeout.
+  - 14, done: the owner is `TenantRuleBook.time_zone` (`working_hours.time_zone`
+    of `sales_followups`), declared as `LocalZonePort` in
+    `application/local_time.py`; the overview's figures, the pipeline, quote
+    dates (issued, screened, due), the assistant and every document's dates
+    and times (through `ArtifactCopy.zone`; "(UTC+7)" is now the zone's own
+    offset) read it. Owed, because the services are built in files ticket 18
+    was editing (`application/services.py`, `adapters/assembly.py`,
+    `application/order_intake.py`): `ActivityService`, `WorkerService`,
+    `CustomerReminders` and the order intake (received date, lead-time start,
+    `rfq_reading`/`po_body_reading`'s received date) still name
+    `domain/order_checks.SALES_TIME_ZONE` at each call, and its comment lists
+    them. Each needs the rule book (as `LocalZonePort`) passed where it is
+    built and the zone passed into `received_date`/`lead_time_start`/
+    `day_window`; then the constant and `process_settings`'
+    `LockReason.TWO_OWNERS` lock on `working_hours.time_zone` go (the lock is
+    in the OpenAPI enum and `rule-labels.ts`, so that is a contract change).
+    Outside Sales, `dw_platform/application/rule_versions.py:76`,
+    `dw_purchasing/application/follow_up.py:78`, `domain/brief.py:39` and
+    `dw_agent_runtime/model/readiness.py:41` hold the same zone for messages
+    of their own; Purchasing has no tenant zone setting to read yet.
+  - 15, not done: the my-work list is `Page[WorkItem]` (route in
+    `presentation/routes.py`) and the quote page reads `QuoteCaseView`
+    (`application/views.py`); serving the thresholds needs a field there and
+    a regenerated contract (`contracts/`, `packages/typescript/api-client`),
+    all in ticket 18's files. Suggested: `WorkItem.due_soon: bool` decided in
+    `overview_service.py` from `quote_deadline.warn.hours_before_due` (and the
+    quote view the same from the quote's own policy), so the web draws what the
+    server decided instead of holding 48 h and 1-2 days.
+  - 16: also found `memory.review` (strict prefix `memory.`) raised with no
+    `makers`; it now names its proposer. Pending `memory.review` approvals
+    already stored without the key are decided by nobody until re-raised
+    (none outside test data today).
+  - 19: one helper, `dw_platform.adapters.persistence.integrity.constraint_of`;
+    `rule_versions`, `separation_of_duties.refusal` and Sales' `_rows` now
+    read it too instead of three private copies.
+  - 22: a scanned line whose every word with a letter or digit fell under
+    `MIN_CONFIDENCE` is counted (`OcrPage.unread_lines`), and the PDF reader
+    names its page in the PO's `unchecked_regions` ("Chưa kiểm: page N", a
+    `value_uncertain`); a line of specks ("|", "—") stays noise. The 8000
+    limit's owner is `application/pc_dates.MAX_TEXT`, which no longer cuts a
+    longer text (a listed mail could be longer: its later lines lost their
+    dates silently) but answers `unavailable`. Owed: `PcDatesBody.text` in
+    `presentation/routes.py` to read `max_length=MAX_TEXT`, and
+    `pc-dates.tsx` to read it from the API (the route's schema, or a field on
+    the PC-dates view) instead of `TEXT_MAX = 8000`.

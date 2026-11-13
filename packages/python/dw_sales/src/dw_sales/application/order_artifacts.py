@@ -28,10 +28,10 @@ from dw_sales.application.artifact_content import (
     column,
     day_text,
     label,
-    local_time,
     time_text,
 )
 from dw_sales.application.drafting import Drafting, Rendered, anchor_text, filled, line_template
+from dw_sales.application.local_time import local_day
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Language
 from dw_sales.domain.orders import (
@@ -312,7 +312,11 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
         (label(doc, "bravo_recorded_by"), _people_line(d, case.bravo_recorded_by)),
         (
             label(doc, "bravo_recorded_at"),
-            time_text(case.bravo_recorded_at, INTERNAL) if case.bravo_recorded_at else None,
+            (
+                time_text(case.bravo_recorded_at, INTERNAL, d.copy.zone)
+                if case.bravo_recorded_at
+                else None
+            ),
         ),
         (label(doc, "prepared_by"), _people_line(d, case.prepared_by)),
     )
@@ -595,7 +599,11 @@ def convert_list_proposal(d: OrderDrafting) -> tuple[Rendered, ...]:
             line.effective.customer_item_code,
             line.mapping.prv_code,
             _people_line(d, line.mapping.confirmed_by),
-            local_time(line.mapping.confirmed_at).date() if line.mapping.confirmed_at else None,
+            (
+                local_day(line.mapping.confirmed_at, d.copy.zone)
+                if line.mapping.confirmed_at
+                else None
+            ),
         )
         for line in case.lines
         if line.mapping.status is MappingStatus.CANDIDATE_CONFIRMED

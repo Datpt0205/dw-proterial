@@ -33,6 +33,7 @@ from contextlib import AbstractAsyncContextManager, aclosing
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Final, Literal, Protocol
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,8 +57,8 @@ from dw_agent_runtime.model.streaming import (
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes
-from dw_sales.application.artifact_content import local_time
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.local_time import local_day
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
 from dw_sales.application.quotes_service import QuoteQueries
@@ -233,14 +234,14 @@ def _quote_ref(quote: QuoteSummaryView) -> CaseRef:
     return CaseRef(CaseKind.QUOTE, quote.case_id, f"Yêu cầu báo giá {quote.rfq_no or '(chưa số)'}")
 
 
-def order_facts(order: OrderSummaryView) -> dict[str, Any]:
+def order_facts(order: OrderSummaryView, zone: ZoneInfo) -> dict[str, Any]:
     return {
         "question_kind": "order_status",
         "po_no": order.po_no,
         "revision": order.revision,
         "customer_code": order.customer_code,
         "status": label(ORDER_STATE, order.status),
-        "received_on": day(local_time(order.received_at).date()),
+        "received_on": day(local_day(order.received_at, zone)),
         "open_flags": order.open_findings,
         "blocking_flags": order.open_blocking_findings,
         "awaits_cross_check": order.awaits_cross_check,
@@ -259,13 +260,13 @@ def order_sentence(facts: dict[str, Any]) -> str:
     return text
 
 
-def quote_facts(quote: QuoteSummaryView) -> dict[str, Any]:
+def quote_facts(quote: QuoteSummaryView, zone: ZoneInfo) -> dict[str, Any]:
     return {
         "question_kind": "quote_status",
         "request_no": quote.rfq_no,
         "customer_code": quote.customer_code,
         "status": label(QUOTE_STATE, quote.status),
-        "received_on": day(local_time(quote.received_at).date()),
+        "received_on": day(local_day(quote.received_at, zone)),
         "quote_due": day(quote.quote_due) if quote.quote_due else None,
         "overdue": quote.overdue,
         "ycbg_no": quote.ycbg_no,
@@ -482,7 +483,7 @@ class AssistantService:
             return _not_found("PO", intent.reference)
         # A PO sent twice is two cases; the latest is the one in play.
         order = max(matches, key=lambda o: o.received_at)
-        facts = order_facts(order)
+        facts = order_facts(order, await self.overview.time_zone(sales_scope(context)))
         ref = _order_ref(order)
         return _Found(order_sentence(facts), facts, (ref,), ref)
 
@@ -499,12 +500,12 @@ class AssistantService:
         if not matches:
             return _not_found("yêu cầu báo giá", intent.reference)
         quote = max(matches, key=lambda q: q.received_at)
-        facts = quote_facts(quote)
+        facts = quote_facts(quote, await self.overview.time_zone(sales_scope(context)))
         ref = _quote_ref(quote)
         return _Found(quote_sentence(facts), facts, (ref,), ref)
 
     async def _work(self, context: AccessContext, kind: QuestionKind) -> _Found:
-        today = local_time(self.clock.now()).date()
+        today = local_day(self.clock.now(), await self.overview.time_zone(sales_scope(context)))
         items = list((await self.overview.my_work(context, limit=_WORK_PAGE)).items)
         if kind is QuestionKind.OVERDUE:
             items = [i for i in items if i.due is not None and i.due < today]

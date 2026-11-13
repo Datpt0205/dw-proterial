@@ -47,7 +47,6 @@ EML: Final = "message/rfc822"
 # The seller's own working language: what an internal sheet or a note to
 # Design is written in, whoever the customer is.
 INTERNAL: Final[Language] = "vi"
-_LOCAL: Final = ZoneInfo("Asia/Ho_Chi_Minh")
 
 Value = str | int | Decimal | date | None
 
@@ -155,14 +154,20 @@ def day_text(day: date, language: Language) -> str:
     return _DATE_FORMATS[language](day)
 
 
-def local_time(at: datetime) -> datetime:
-    """A time as the seller reads it: Asia/Ho_Chi_Minh (ui-quality §8)."""
-    return at.astimezone(_LOCAL)
+def time_text(at: datetime, language: Language, zone: ZoneInfo) -> str:
+    """A time as the seller reads it, in the tenant's time zone (ui-quality
+    §8), with the offset it is in written out: "(UTC+7)", "(UTC+5:30)"."""
+    local = at.astimezone(zone)
+    return f"{day_text(local.date(), language)} {local:%H:%M} ({_utc_offset(local)})"
 
 
-def time_text(at: datetime, language: Language) -> str:
-    local = local_time(at)
-    return f"{day_text(local.date(), language)} {local:%H:%M} (UTC+7)"
+def _utc_offset(local: datetime) -> str:
+    offset = local.utcoffset()
+    assert offset is not None  # an aware time, converted to a zone
+    minutes = int(offset.total_seconds()) // 60
+    sign = "-" if minutes < 0 else "+"
+    hours, rest = divmod(abs(minutes), 60)
+    return f"UTC{sign}{hours}" + (f":{rest:02d}" if rest else "")
 
 
 # ----------------------------------------------------------------- the copy --

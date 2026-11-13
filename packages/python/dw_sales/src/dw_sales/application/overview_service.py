@@ -38,6 +38,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Final, Literal, Protocol
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
@@ -46,6 +47,7 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import LoggedMessage, SalesUnitOfWorkFactory, Stored
+from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.next_steps import DECIDED_ON_THE_CASE, ORDER_NEXT, QUOTE_NEXT
 from dw_sales.application.overview_ports import (
     Bucket,
@@ -71,8 +73,6 @@ from dw_sales.domain.process import WIV_STEPS, Procedure, StepId
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 
 _VIEW = ConfigDict(frozen=True)
-# The zone a month is counted in (giờ Việt Nam).
-_LOCAL_ZONE: Final = "Asia/Ho_Chi_Minh"
 
 # Whose time a case's interval in each status is: the status it was in.
 _ORDER_BUCKETS: Final[Mapping[str, Bucket]] = {
@@ -236,13 +236,14 @@ _SURVEY: Final = tuple(
 )
 
 
-def figure_basis(inbox_ids: frozenset[str]) -> FigureBasis:
-    """What the store computes the figures against, from this module's facts."""
+def figure_basis(inbox_ids: frozenset[str], zone: ZoneInfo) -> FigureBasis:
+    """What the store computes the figures against, from this module's facts
+    and the tenant's time zone."""
     return FigureBasis(
         buckets=STATUS_BUCKETS,
         draft_ready={kind: str(status) for kind, status in _DRAFT_READY.items()},
         steps=_SURVEY,
-        zone=_LOCAL_ZONE,
+        zone=zone.key,
         inbox_ids=inbox_ids,
     )
 
@@ -268,8 +269,9 @@ WHOSE_TURN: Final[Mapping[CaseKind, Mapping[str, Literal["pic", "head"]]]] = {
 WORK_PAGE: Final = 50
 
 
-class KpiPort(Protocol):
-    """The KPI policy that applies to ``scope``'s tenant."""
+class KpiPort(LocalZonePort, Protocol):
+    """The KPI policy that applies to ``scope``'s tenant, and the time zone
+    its months and days are counted in."""
 
     async def kpi(self, scope: SalesScope) -> SalesKpi: ...
 
@@ -281,10 +283,14 @@ class OverviewService:
     clock: UtcClock
     inbox: InboxPort
     # The KPI policy in force for the caller's tenant (its own approved
-    # version, or the platform's: ticket 19).
+    # version, or the platform's: ticket 19), and its time zone.
     kpi: KpiPort
     directory: MemberDirectoryPort
     decisions: PendingDecisionsPort
+
+    async def time_zone(self, scope: SalesScope) -> ZoneInfo:
+        """The tenant's time zone, for a reader counting days beside this one."""
+        return await self.kpi.time_zone(scope)
 
     async def overview(self, context: AccessContext) -> OverviewView:
         await self.gate.require(context, SalesScopes.OVERVIEW_READ, resource_type="sales_overview")
@@ -293,7 +299,9 @@ class OverviewService:
         inbox = {m.message_id: m.received_at for m in await self.inbox.list_messages(scope)}
         kpi = await self.kpi.kpi(scope)
         async with self.uow(scope) as work:
-            figures = await work.overview.figures(figure_basis(frozenset(inbox)))
+            figures = await work.overview.figures(
+                figure_basis(frozenset(inbox), await self.kpi.time_zone(scope))
+            )
             worker = await work.worker.state()
         return OverviewView(
             as_of=now,

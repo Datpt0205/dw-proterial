@@ -60,7 +60,10 @@ from dw_sales.domain.orders import OrderCase
 PC_DATES: Final = PromptRef("sales.pc_dates", "1.0.0")
 PROMPT_TOKENS: Final = 900
 _OUTPUT_TOKENS: Final = 800
-# The longest text pasted that is read at all.
+# The longest text that is read at all, pasted or a listed mail: its one
+# owner, which the route's body limit and the paste box are to read (audit 22).
+# Longer is not cut (later lines would lose their dates with no word): it is
+# a reading DW1 could not make, for Sales to do by hand.
 MAX_TEXT: Final = 8000
 _ORDER: Final = "sales_order_case"
 
@@ -269,9 +272,12 @@ class PcDateReplies:
         same_version(case_id, case.case_version, case_version)
         if self.model is None:
             return PcDatesView(status="unavailable")
-        pasted = text[:MAX_TEXT]
+        pasted = text
         stamp = {"prompt_ref": str(PC_DATES), "model_profile": self.model.model_profile}
-        if estimated_tokens(pasted) > self.model.max_input_tokens - PROMPT_TOKENS:
+        if (
+            len(pasted) > MAX_TEXT
+            or estimated_tokens(pasted) > self.model.max_input_tokens - PROMPT_TOKENS
+        ):
             return PcDatesView(**stamp, status="unavailable")
         try:
             answer = await self.model.interpret(

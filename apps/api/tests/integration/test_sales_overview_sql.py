@@ -25,6 +25,7 @@ from collections.abc import AsyncIterator
 from dataclasses import asdict, replace
 from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -67,6 +68,9 @@ from dw_sales.domain.orders import OrderStatus
 from dw_sales.evals.overview_memory import PythonOverviewReader
 
 pytestmark = pytest.mark.integration
+
+# What the platform's `sales_followups` ships (`working_hours.time_zone`).
+_ZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 
 # Named rather than the whole mailbox, so the walk does not move with every
 # message a later ticket adds to it.
@@ -168,7 +172,7 @@ def _differences(sql: Any, python: Any, at: str = "") -> list[str]:
 
 async def test_the_sql_figures_are_the_python_figures(demo: Api) -> None:
     inbox = frozenset({"M01", "M02", "M03", "M10", "M99-not-processed"})
-    basis = figure_basis(inbox)
+    basis = figure_basis(inbox, _ZONE)
     async with _uow(demo)(ALPHA) as work:
         sql = await work.overview.figures(basis)
     python = await (await _python_reader(demo, ALPHA)).figures(basis)
@@ -327,7 +331,7 @@ async def test_another_tenant_or_workspace_reads_no_figure_and_no_work(
         TenantId(sid("tenant", "tenant-beta")), WorkspaceId(sid("workspace", "tenant-beta:main"))
     )
     elsewhere = SalesScope(ALPHA.tenant_id, WorkspaceId(other_workspace))
-    basis = figure_basis(frozenset({"M01"}))
+    basis = figure_basis(frozenset({"M01"}), _ZONE)
     for scope in (beta, elsewhere):
         async with _uow(demo)(scope) as work:
             figures = await work.overview.figures(basis)

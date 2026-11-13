@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import ConflictError
 from dw_platform.application.directory import WorkspaceMember
@@ -44,12 +45,15 @@ from dw_sales.domain.catalog import Customer, Language
 class ArtifactCopy:
     """The versioned sources an artifact is rendered with, pinned by the
     release manifest: the drafts' words, the sheets' words, the upload
-    layout, and Design's mailboxes (`sales_quote_rules`, their owner)."""
+    layout, Design's mailboxes (`sales_quote_rules`, their owner), and the
+    time zone a document's times are printed in (`working_hours.time_zone`
+    of `sales_followups`, its owner)."""
 
     emails: SalesEmailCopy
     documents: SalesDocumentCopy
     upload: BravoUploadLayout
     design_mailboxes: tuple[str, ...]
+    zone: ZoneInfo
 
 
 class ArtifactCopyPort(Protocol):
@@ -167,12 +171,12 @@ class Drafting[CaseT]:
 
     def stamp(self, ref: str) -> tuple[tuple[str, Value], ...]:
         """What every internal sheet carries: the case version, the template and
-        when it was generated, Vietnam time (ui-quality §6, exports)."""
+        when it was generated, in the tenant's time zone (ui-quality §6, exports)."""
         common = self.copy.documents.template("common", INTERNAL)
         return (
             (label(common, "case_version"), self.case_version),
             (label(common, "template"), ref),
-            (label(common, "generated_at"), time_text(self.at, INTERNAL)),
+            (label(common, "generated_at"), time_text(self.at, INTERNAL, self.copy.zone)),
         )
 
     def internal(self, kind: str) -> Bound[DocumentTemplate]:

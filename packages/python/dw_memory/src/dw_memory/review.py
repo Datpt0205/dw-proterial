@@ -76,6 +76,9 @@ def review_request(
             "worker_id": candidate.worker_id,
             "memory_type": candidate.memory_type.value,
             "classification": candidate.classification,
+            # `memory.` is a strict prefix, which reads every maker and fails
+            # closed on a payload without the key: the proposer is the one.
+            "makers": [str(context.principal_id)],
         },
         required_scope=MEMORY_REVIEW_SCOPE,
     )

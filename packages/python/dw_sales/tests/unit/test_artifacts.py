@@ -17,13 +17,14 @@ import io
 import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from email import policy
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, cast
+from zoneinfo import ZoneInfo
 
 import pytest
 from openpyxl import load_workbook
@@ -55,6 +56,7 @@ from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.policy_files import (
     load_bravo_upload,
     load_copy,
+    load_followups,
     load_pricing,
     load_quote_rules,
 )
@@ -73,6 +75,7 @@ from dw_sales.application.artifact_content import (
     BravoUploadLayout,
     SalesDocumentCopy,
     SalesEmailCopy,
+    time_text,
 )
 from dw_sales.application.artifacts_service import (
     ORDER_GATES,
@@ -93,6 +96,7 @@ from dw_sales.application.rules import Policy, TenantRuleBook
 from dw_sales.application.views import order_line
 from dw_sales.domain.catalog import LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
@@ -145,16 +149,24 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
+# The owner of the tenant's time zone (`working_hours.time_zone`).
+FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.2.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
     emails=load_copy(COPY / "sales_emails@1.2.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
+    zone=FOLLOWUPS.working_hours.zone,
 )
 # The platform layer every service here resolves through: no tenant holds a
 # version of its own until a test proposes one.
 BOOK = platform_book(
-    QUOTE_RULES, PRICING, ARTIFACT_COPY.emails, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
+    QUOTE_RULES,
+    PRICING,
+    ARTIFACT_COPY.emails,
+    ARTIFACT_COPY.documents,
+    ARTIFACT_COPY.upload,
+    FOLLOWUPS,
 )
 WRITER = ArtifactFiles()
 GATE = Gate(ScopeAuthorizationService())
@@ -1355,7 +1367,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
         }
     )
     copy = platform_book(
-        QUOTE_RULES, PRICING, without_ja, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
+        QUOTE_RULES, PRICING, without_ja, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload, FOLLOWUPS
     )
     world = World()
     case = await m10("approved")
@@ -1515,7 +1527,12 @@ async def test_the_ycbg_and_the_design_request_go_to_design_in_vietnamese() -> N
 def _tenant_book() -> TenantRuleBook:
     """The platform's copy and quote rules, and room for a tenant's own."""
     return platform_book(
-        QUOTE_RULES, PRICING, ARTIFACT_COPY.emails, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
+        QUOTE_RULES,
+        PRICING,
+        ARTIFACT_COPY.emails,
+        ARTIFACT_COPY.documents,
+        ARTIFACT_COPY.upload,
+        FOLLOWUPS,
     )
 
 
@@ -1866,3 +1883,38 @@ def test_a_date_reads_the_same_under_another_process_locale() -> None:
         ]
     finally:
         locale.setlocale(locale.LC_TIME, before)
+
+
+# ------------------------------------- the tenant's own time zone (audit 14) --
+
+
+def _in_zone(zone: str) -> SalesFollowups:
+    document = FOLLOWUPS.model_dump(mode="json", by_alias=True)
+    document["working_hours"]["time_zone"] = zone
+    return SalesFollowups.model_validate({**document, "policy_version": "9.0.1"})
+
+
+async def test_a_tenants_time_zone_is_its_follow_up_policys_and_no_one_elses() -> None:
+    """One owner, `working_hours.time_zone`: a tenant that sets its own has
+    its days and its documents' times counted there; another tenant keeps the
+    platform's, never the first tenant's."""
+    book = _tenant_book()
+    _seed(book, SCOPE, _in_zone("Asia/Tokyo"))
+
+    assert await book.time_zone(SCOPE) == ZoneInfo("Asia/Tokyo")
+    assert (await book.artifact_copy(SCOPE, ())).zone == ZoneInfo("Asia/Tokyo")
+    assert await book.time_zone(OTHER) == ZoneInfo("Asia/Ho_Chi_Minh")
+    assert (await book.artifact_copy(OTHER, ())).zone == ZoneInfo("Asia/Ho_Chi_Minh")
+    # 23:30 in Hồ Chí Minh City is already the next day in Tokyo.
+    late = datetime(2026, 11, 13, 16, 30, tzinfo=UTC)
+    quotation = replace(quotation_service(), policies=book)
+    assert await quotation.today(SCOPE, late) == date(2026, 11, 14)
+    assert await quotation.today(OTHER, late) == date(2026, 11, 13)
+
+
+def test_a_document_time_says_the_offset_it_is_in() -> None:
+    at = datetime(2026, 11, 13, 16, 30, tzinfo=UTC)
+
+    assert time_text(at, "vi", ZoneInfo("Asia/Ho_Chi_Minh")) == "13/11/2026 23:30 (UTC+7)"
+    assert time_text(at, "vi", ZoneInfo("Asia/Tokyo")) == "14/11/2026 01:30 (UTC+9)"
+    assert time_text(at, "en", ZoneInfo("Asia/Kolkata")) == "13 Nov 2026 22:00 (UTC+5:30)"

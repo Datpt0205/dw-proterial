@@ -62,6 +62,14 @@ from dw_sales.domain.orders import (
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 # Where the received date is counted: the Sales office's own calendar day.
+# The tenant's zone has one owner, `working_hours.time_zone` in its
+# `sales_followups` (`TenantRuleBook.time_zone`), which the overview, the
+# pipeline, quote dates, the assistant and every document already read. This
+# copy is the default that policy ships, left only for the readers built where
+# no rule book reaches yet (audit 14, owed to the wiring in
+# `application/services.py`, `adapters/assembly.py` and `order_intake.py`):
+# the received date and lead-time start here, the activity page's days, the
+# customer reminders and the worker-paused notice. Each names it at its call.
 SALES_TIME_ZONE: Final = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
