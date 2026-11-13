@@ -58,6 +58,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
 )
+from dw_sales.application.inbox_service import own_address
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     MemberDirectoryPort,
@@ -311,14 +312,13 @@ class OutboundMailService:
 
     async def _mailbox(self, context: AccessContext) -> str:
         """The caller's own sign-in address: the mailbox the mail goes from."""
-        members = await self.directory.list_members(context)
-        me = next((m for m in members if m.user_id == context.principal_id), None)
-        if me is None or not me.email:
+        address = await own_address(self.directory, context)
+        if address is None:
             raise ConflictError(
                 "tài khoản của bạn chưa có địa chỉ thư để gửi",
                 details={"rule": "no_mailbox"},
             )
-        return me.email.lower()
+        return address
 
 
 # -------------------------------------------------------- the worker side --

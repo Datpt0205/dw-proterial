@@ -133,6 +133,11 @@ class RegionFlag(StrEnum):
     # with a password its own mail carries (ticket 17): ClamAV could not scan
     # inside it, and every value read still waits for a person (Đạt, 11-13).
     OPENED_WITH_PASSWORD = "opened_with_password"
+    # The file prints no such value (ticket 18: a customer portal's export
+    # prints no price and no currency). DW1 holds the currency the PO layout
+    # states, and zero for a price, beside the value it stands with; Sales
+    # confirms or types it.
+    NOT_PRINTED = "not_printed"
 
 
 class FlaggedValue(BaseModel):
@@ -262,6 +267,18 @@ class DeliverySchedule(BaseModel):
     anchor: SourceAnchor
 
 
+class LinePo(BaseModel):
+    """The PO number a line prints for itself (ticket 18): a customer portal's
+    export puts one PO number on every row. Where a line has one, it is the
+    line's PO number, and the PO's own (`PoHeader.po_no`) is the first line's.
+    Grouping a file's lines into one case per PO number is ticket 19's."""
+
+    model_config = _FROZEN
+
+    po_no: PrintedText
+    anchor: SourceAnchor
+
+
 class PoLine(BaseModel):
     """One line as the PO states it, before anything is mapped or checked.
 
@@ -301,6 +318,9 @@ class PoLine(BaseModel):
     # which are its one schedule. A flag on a schedule's cells is the line's
     # `requested_date`'s: its dates are asked of the customer, never typed.
     printed_schedules: tuple[DeliverySchedule, ...] = ()
+    # The line's own PO number, where the file prints one per line (ticket
+    # 18); None: the PO's.
+    line_po: LinePo | None = None
 
     @model_validator(mode="after")
     def _flags_name_line_fields(self) -> Self:
@@ -476,6 +496,10 @@ class PoDocument(BaseModel):
     derivation: Derivation | None = None
     # The message's newest part a PO written in the mail was read from.
     body: MessageText | None = None
+    # Rows the file marks as other than a firm order (ticket 18: a customer
+    # portal's export mixes forecast rows with firm ones): counted and shown,
+    # never read as lines and never ordered.
+    forecast_rows: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -543,6 +567,8 @@ class PoDocument(BaseModel):
         yield from (anchor for _, anchor in self.header.anchors)
         for line in self.lines:
             yield from (anchor for _, anchor in line.anchors)
+            if line.line_po is not None:
+                yield line.line_po.anchor
         if self.buyer_anchor is not None:
             yield self.buyer_anchor
         if self.total is not None:
@@ -1402,6 +1428,8 @@ class Coverage(BaseModel):
     regions: tuple[str, ...]
     checks_run: int
     findings: int
+    # Rows the file marks as other than a firm order, never read (ticket 18).
+    forecast_rows: int = 0
 
 
 # -------------------------------------------------------------------- case --
@@ -1738,6 +1766,7 @@ class OrderCase(BaseModel):
             regions=self.document.regions,
             checks_run=sum(len(line.basis.checks_run) for line in self.lines),
             findings=len(self.findings),
+            forecast_rows=self.document.forecast_rows,
         )
 
     # ------------------------------------------------------------ the flow --

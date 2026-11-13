@@ -815,8 +815,16 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
     # it out; `test_malware_scan.py` and clamd's own test give it.
     # `attachment_locked` (ticket 17): no mock file is locked with a password;
     # `test_locked_files.py` locks the sample set's own files at test time.
+    # `portal_notice` (ticket 18) is a model's reading alone, as
+    # `reply_to_case` is; `test_message_intent.py` and the intent evals give it.
     given = {reason for _, reason in claimed if reason}
-    not_in_the_sample = {"other", "reply_to_case", "malware_detected", "attachment_locked"}
+    not_in_the_sample = {
+        "other",
+        "reply_to_case",
+        "malware_detected",
+        "attachment_locked",
+        "portal_notice",
+    }
     assert given - {"other"} == reasons - not_in_the_sample
     # Not one message is left without a decision.
     assert "not_yet_processed" not in {kind for kind, _ in claimed}

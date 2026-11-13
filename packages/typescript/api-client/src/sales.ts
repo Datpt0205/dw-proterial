@@ -295,6 +295,21 @@ export class SalesApi {
   }
 
   /** "DW xử lý tất cả": one job per message still without a disposition. */
+  /** "Tải PO lên" (ticket 18): files a person downloaded from a customer's
+   * portal, for the customer they chose, stored as one message and queued
+   * (202). Who uploads is the session's person, never a field. */
+  uploadPo(
+    body: Body<"/api/v1/sales/inbox/upload">,
+    key: string,
+  ): Promise<Accepted<"/api/v1/sales/inbox/upload">> {
+    return this.client.request(
+      "POST",
+      "/api/v1/sales/inbox/upload",
+      shaped<Accepted<"/api/v1/sales/inbox/upload">>(),
+      { body, idempotencyKey: key },
+    );
+  }
+
   processAll(key: string) {
     return this.postAccepted<"/api/v1/sales/inbox/process-all">(
       "/api/v1/sales/inbox/process-all",

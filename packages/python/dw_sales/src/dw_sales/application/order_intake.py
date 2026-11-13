@@ -32,11 +32,19 @@ the keyword tables over the subject and the attachment names, then the body.
 A miss lands where it is safe: routed to Sales as ``other``. Neither a
 keyword nor the model sets a value.
 
+**A PO a person uploaded is that customer's PO** ("Tải PO lên", ticket 18):
+the customer is the one they chose, which the server stamped on the stored
+message (`UploadLookupPort`), never the sender (the person) and never
+anything the message carries. It is a PO by that person's word: when no
+reader accepts its file it goes the way of a PO no layout reads, and no
+model or keyword classifies it.
+
 **The body never changes a value.** Customer, items, quantities, prices and
 dates come from the sender's domain (or, for a forwarded PO, the buyer the
-document names, which Sales then confirms), the attachment's cells and the
-master data. The body is read for routing alone, and only when the subject
-and the attachment names say nothing.
+document names, which Sales then confirms; for an uploaded PO, the customer
+the person chose), the attachment's cells and the master data. The body is
+read for routing alone, and only when the subject and the attachment names
+say nothing.
 
 **A file is what its bytes say.** Attachments are routed by sniffing their
 content, never by their name or the media type the sender declared.
@@ -78,8 +86,10 @@ from dw_sales.application.order_ports import (
     OrderCaseLookupPort,
     OrderRulesPort,
     PoDocumentReaderPort,
+    PoUpload,
     QuoteFormPort,
     ThreadLinkPort,
+    UploadLookupPort,
 )
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
@@ -166,6 +176,7 @@ INTENT_ROUTES: Final[Mapping[IntentKind, MessageKind | RoutingReason]] = {
     "delivery_change": RoutingReason.DELIVERY_CHANGE,
     "complaint": RoutingReason.COMPLAINT,
     "sample_request": RoutingReason.SAMPLE_REQUEST,
+    "portal_notice": RoutingReason.PORTAL_NOTICE,
     "other": RoutingReason.OTHER,
 }
 # The routing reasons a hand-off to PC or QA is pre-filled for (ticket 33):
@@ -299,6 +310,10 @@ class OrderIntake:
     model_steps: ModelStepGatePort | None = None
     # The id a learned layout is stored under (dw_sales ADR 0006).
     new_layout_id: Callable[[], uuid.UUID] = uuid.uuid4
+    # Which stored messages are POs a person uploaded, and for which customer
+    # (ticket 18). None: no upload is stored in this process (the mock
+    # mailbox), and every message's customer is its sender's.
+    uploads: UploadLookupPort | None = None
 
     async def classify(
         self,
@@ -342,7 +357,7 @@ class OrderIntake:
             return IntakeOutcome(message.message_id, kind, None)
         if classification.thread is not None:
             return await self._reply(scope, message, classification.thread, run)
-        sender = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
+        sender = await self._customer(scope, message, await self._upload(scope, message))
         if kind is MessageKind.OTHER:
             reason = classification.reason or _other_reason(message)
             outcome = self._routed(message, kind, reason, sender, classification.detail)
@@ -369,7 +384,8 @@ class OrderIntake:
                 RoutingReason.MALWARE_DETECTED,
                 "; ".join(f"{a.attachment_id}: {a.infected}" for a in infected),
             )
-        sender = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
+        upload = await self._upload(scope, message)
+        sender = await self._customer(scope, message, upload)
         rules = await self.rules.rules(scope)
         by_content = await self._by_content(scope, attached, sender, rules.intake)
         if len(by_content) > 1:
@@ -381,6 +397,10 @@ class OrderIntake:
         if by_content:
             (kind,) = by_content
             return Classification(kind)
+        if upload is not None:
+            # A person uploaded it as a PO: no reader read it, so it goes the
+            # way a PO no layout reads goes (module docstring).
+            return Classification(MessageKind.PO)
         if self.threads is not None and message.references:
             thread = await self.threads.linked_case(scope, message, sender)
             if thread is not None:
@@ -393,6 +413,27 @@ class OrderIntake:
             return await self._intent(scope, message, attached, sender, rules, run, now)
         body = await self._reads_body(scope, rules, attached, run)
         return Classification(self._kind(message, attached, body=body))
+
+    async def customer_of(self, scope: SalesScope, message: InboundMessage) -> Customer | None:
+        """Whose message it is, as intake reads it: the one answer the layout
+        screen asks too, so a form mapped from an uploaded PO is that
+        customer's (ticket 18)."""
+        return await self._customer(scope, message, await self._upload(scope, message))
+
+    async def _upload(self, scope: SalesScope, message: InboundMessage) -> PoUpload | None:
+        """The upload the server stamped on the stored message, if it is one."""
+        if self.uploads is None:
+            return None
+        return await self.uploads.upload_of(scope, message.message_id)
+
+    async def _customer(
+        self, scope: SalesScope, message: InboundMessage, upload: PoUpload | None
+    ) -> Customer | None:
+        """Whose message it is: the customer a person chose for a PO they
+        uploaded, else the sender's (by address, then domain)."""
+        if upload is not None:
+            return (await self.catalog.customer_by_code(scope, upload.customer_code)).data
+        return (await self.catalog.customer_by_sender(scope, message.sender.address)).data
 
     async def _model_step(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
         """Whether ``step`` may call a model for this tenant now: on in its
@@ -714,7 +755,7 @@ class OrderIntake:
         if self.layouts is None:
             return None
         read_as = READ_AS.get(self.reader.sniff(content.data) or "", "")
-        kind = {"xlsx": "excel", "pdf": "pdf"}.get(read_as)
+        kind = {"xlsx": "excel", "pdf": "pdf", "csv": "csv"}.get(read_as)
         approved = await self.layouts.approved(scope, customer_code)
         return next((layout for layout in approved if layout.kind == kind), None)
 
@@ -739,7 +780,9 @@ class OrderIntake:
             return None
         for content in readable:
             file_type = self.reader.sniff(content.data)
-            if file_type is None or file_type == "unsupported":
+            # A portal's export is mapped by a person (ticket 18): no model
+            # pre-fills its columns.
+            if file_type is None or file_type in ("unsupported", "csv"):
                 continue
             if await self.reader.has_layout(customer.code, file_type):
                 continue

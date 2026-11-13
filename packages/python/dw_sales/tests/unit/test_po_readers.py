@@ -140,6 +140,7 @@ def test_an_excel_po_is_read_with_every_value_at_its_cell() -> None:
         "amount": Decimal(2910),
         "requested_date": date(2026, 11, 27),
         "printed_schedules": (),
+        "line_po": None,
     }
     assert [_ref(a) for _, a in third.anchors] == [
         "PO!A12",

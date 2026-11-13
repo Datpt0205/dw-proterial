@@ -72,6 +72,7 @@ from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailVi
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pc_dates import PcDatesView, PcMailView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
+from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
@@ -111,7 +112,7 @@ from dw_sales.domain.activity import StepResult
 from dw_sales.domain.assistant import QUESTION_CHARS
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.layouts import LayoutMapping
+from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import CloseReason, Note
@@ -142,13 +143,14 @@ def case_list_activity(
 
 
 class LayoutBody(BaseModel):
-    """A mapping of the form one message's attachment prints (ticket 30)."""
+    """A mapping of the form one message's attachment prints (ticket 30), or
+    of a portal's export's columns (ticket 18)."""
 
     model_config = _BODY
 
     message_id: _MessageId
     attachment_id: _AttachmentId
-    mapping: LayoutMapping
+    mapping: PoMapping
 
 
 class RuleProposalBody(BaseModel):
@@ -175,6 +177,31 @@ class CatalogUploadBody(BaseModel):
 
     def data(self) -> bytes:
         return _file_bytes(self.content_b64)
+
+
+class UploadFileBody(BaseModel):
+    """One file of a PO upload (ticket 18): its name and its bytes, base64,
+    decoded here and never opened: the worker reads it in the reader sandbox."""
+
+    model_config = _BODY
+
+    file_name: Annotated[str, Field(min_length=1, max_length=255)]
+    # 10 MiB of bytes, as base64; the service holds each file to the tenant's
+    # own cap (`IntakeCaps.max_attachment_bytes`).
+    content_b64: Annotated[str, Field(min_length=1, max_length=13_981_016)]
+
+    def data(self) -> bytes:
+        return _file_bytes(self.content_b64)
+
+
+class PoUploadBody(BaseModel):
+    """ "Tải PO lên": the customer a person chose and the files they dropped.
+    Who uploads is the caller, never a field here."""
+
+    model_config = _BODY
+
+    customer_code: CustomerCode
+    files: Annotated[list[UploadFileBody], Field(min_length=1, max_length=MAX_UPLOAD_FILES)]
 
 
 class SenderCustomerBody(BaseModel):
@@ -687,6 +714,20 @@ def build_router(
     async def process_all(context: Ctx, svc: Svc, idem: Idem) -> ProcessingQueuedView:
         jobs = await svc.processing.enqueue_waiting(context)
         return await idem.record(ProcessingQueuedView(jobs=jobs), status_code=202)
+
+    # "Tải PO lên" (ticket 18): a PO a person downloaded from a customer's
+    # portal, stored as one message for the customer they chose and queued
+    # (202), as "DW xử lý" queues a mail.
+    @router.post(
+        "/inbox/upload",
+        response_model=PoUploadView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
+    )
+    async def upload_po(body: PoUploadBody, context: Ctx, svc: Svc, idem: Idem) -> PoUploadView:
+        files = [UploadedFile(name=f.file_name, data=f.data()) for f in body.files]
+        view = await svc.uploads.upload(context, body.customer_code, files)
+        return await idem.record(view, status_code=202)
 
     @router.post(
         "/inbox/{message_id}/process",

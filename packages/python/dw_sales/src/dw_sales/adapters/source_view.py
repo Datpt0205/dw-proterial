@@ -6,7 +6,8 @@ for the browser to render (pdf.js): nothing is rasterised here. A sheet is
 its cells with every flag a person could miss a value by: a hidden sheet,
 row or column, a font the colour of its fill (or white on none, or too
 small to read), a formula with no cached
-value, and the colours themselves.
+value, and the colours themselves. A portal's export (ticket 18) is shown as
+one sheet of its rows, ``CSV``, each cell its text as written.
 """
 
 from __future__ import annotations
@@ -17,11 +18,13 @@ from datetime import date, datetime
 from typing import Final, Literal
 
 from openpyxl.cell.cell import Cell
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from pypdf import PdfReader, PdfWriter
 
 from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import font_matches_fill, open_for_viewing, text_unseen
+from dw_sales.adapters.readers.export import EXPORT_SHEET, export_grid
 from dw_sales.application.source import SheetCell, SheetGrid
 from dw_sales.domain.order_checks import IntakeCaps
 
@@ -40,7 +43,7 @@ class FileSourceView:
         match sniff(data):
             case "pdf":
                 return "pdf"
-            case "xlsx":
+            case "xlsx" | "csv":
                 return "xlsx"
             case _:
                 return None
@@ -49,6 +52,8 @@ class FileSourceView:
         return await asyncio.to_thread(self._pdf_page, data, page)
 
     async def sheet_names(self, data: bytes) -> list[str]:
+        if sniff(data) == "csv":
+            return [EXPORT_SHEET]
         values, _ = await asyncio.to_thread(open_for_viewing, data, self._caps)
         return [sheet.title for sheet in values.worksheets]
 
@@ -71,6 +76,8 @@ class FileSourceView:
         return out.getvalue(), count
 
     def _grid(self, data: bytes, title: str) -> SheetGrid | None:
+        if sniff(data) == "csv":
+            return self._export_grid(data, title)
         values, formulas = open_for_viewing(data, self._caps)
         if title not in values.sheetnames:
             return None
@@ -122,6 +129,31 @@ class FileSourceView:
             truncated=sheet.max_row > _MAX_ROWS or sheet.max_column > _MAX_COLUMNS,
             cells=cells,
             sheets=list(values.sheetnames),
+        )
+
+    def _export_grid(self, data: bytes, title: str) -> SheetGrid | None:
+        """A portal's export as one sheet: its cells as text, nothing hidden
+        (text has no rows to hide, no fonts and no formulas)."""
+        if title != EXPORT_SHEET:
+            return None
+        rows, columns, truncated, cells = export_grid(data, self._caps)
+        return SheetGrid(
+            sheet=EXPORT_SHEET,
+            hidden_sheet=False,
+            rows=rows,
+            columns=columns,
+            truncated=truncated,
+            cells=[
+                SheetCell(
+                    ref=f"{get_column_letter(column)}{row}",
+                    row=row,
+                    column=column,
+                    text=text,
+                    text_unseen=False,
+                )
+                for row, column, text in cells
+            ],
+            sheets=[EXPORT_SHEET],
         )
 
 

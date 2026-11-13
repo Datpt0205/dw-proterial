@@ -17,11 +17,12 @@ from typing import TypeVar
 from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.readers.excel import ExcelPoReader
+from dw_sales.adapters.readers.export import export_source, read_export
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
 from dw_sales.adapters.readers.pdf import PdfPoReader
 from dw_sales.adapters.readers.stored import excel_layout, pdf_layout
 from dw_sales.application.order_ports import FileType
-from dw_sales.domain.layouts import LayoutMapping, LayoutSource
+from dw_sales.domain.layouts import LayoutSource, PoMapping
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 
@@ -81,6 +82,9 @@ class PoDocumentReaders:
             return await self._within(lambda: self._excel.read(document, customer_code, caps))
         if kind == "pdf":
             return await self._within(lambda: self._pdf.read(document, customer_code, caps))
+        if kind == "csv":
+            # No platform layout reads an export: it is the customer's own.
+            return Unreadable(reason="a portal's export is read with the customer's layout only")
         return Unreadable(reason="not a PO format read in this slice (text PDF or .xlsx)")
 
     def has_layout(self, customer_code: str, file_type: FileType) -> bool:
@@ -94,14 +98,20 @@ class PoDocumentReaders:
     async def read_with(
         self,
         document: AttachmentContent,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
         caps: IntakeCaps,
         *,
         layout_ref: str,
     ) -> PoDocument | Unreadable:
         """``document`` read with a layout people mapped (ticket 30): the same
-        reader as every other PO, given the tenant's labels."""
+        reader as every other PO, given the tenant's labels; a portal's
+        export by its rows (ticket 18)."""
         kind = sniff(document.data)
+        if kind == "csv" and mapping.kind == "csv":
+            export = mapping
+            return await self._within(
+                lambda: read_export(document, export, caps, layout_ref=layout_ref)
+            )
         try:
             if kind == "xlsx" and mapping.kind == "excel":
                 layout = excel_layout(mapping)
@@ -136,6 +146,12 @@ class PoDocumentReaders:
             return LayoutSource(
                 kind="excel", cells=tuple(cells[:2000]), rows=tuple(map(tuple, rows[:60]))
             )
+        if kind == "csv":
+            try:
+                found = await self._within(lambda: export_source(document, caps))
+            except ValueError:
+                return None
+            return None if isinstance(found, Unreadable) else found
         if kind == "pdf":
             printed = await self._within(
                 lambda: (

@@ -55,7 +55,7 @@ from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import static_rule_book
-from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
+from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.assistant import SqlAssistantStoreFactory
@@ -258,8 +258,12 @@ def build_dw1(
     stored = SqlMailbox(session_factory, audit)
     if mail_drop is not None and mailbox != "stored":
         raise ValueError("a drop folder is read into the stored mailbox only")
+    # The mock beside the stored mailbox in a demo: what people upload ("Tải
+    # PO lên", ticket 18) is stored either way, and read with the mail.
     inbox = ScannedInbox(
-        stored if mailbox == "stored" else MockInbox.load(scope), scanner, readers.po
+        stored if mailbox == "stored" else WithUploads(MockInbox.load(scope), stored),
+        scanner,
+        readers.po,
     )
     # The platform's rules, with a tenant's own approved version where it has
     # one (ticket 19): stored, proposed and approved through `/sales/rules`.
@@ -343,6 +347,7 @@ def build_dw1(
         ),
         body_pos=None if interpretation is None else PoBodyReader(interpretation),
         model_steps=readiness,
+        uploads=stored,
     )
     runs = RuntimeDw1Runs(
         runtime.runner,
@@ -387,6 +392,7 @@ def build_dw1(
         converts=catalog,
         senders=catalog,
         assistant=SqlAssistantStoreFactory(session_factory),
+        uploads=stored,
         one_call=(
             None
             if one_call_model is None

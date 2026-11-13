@@ -59,7 +59,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
 from dw_platform.domain.audit import AuditEvent
-from dw_platform.domain.messages import AttachmentContent
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.order_ports import OrderRulesPort
@@ -67,14 +67,20 @@ from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.support import decided
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.layouts import (
+    NO_FIRM_ROW,
+    ExportMapping,
+    LayoutKind,
     LayoutMapping,
     LayoutPrefill,
+    LayoutProblem,
     LayoutSample,
     LayoutSource,
     ModelLayoutProposal,
     PoLayout,
+    PoMapping,
     Problem,
     check_labels,
+    check_titles,
     form_parts,
     pdf_columns,
     plausible,
@@ -157,7 +163,7 @@ class LayoutApprovalAsked(BaseModel):
     required_scope: str
     layout_id: uuid.UUID
     customer_code: str = Field(pattern=r"^[A-Z][A-Z0-9]{1,15}$")
-    kind: Literal["excel", "pdf"]
+    kind: LayoutKind
     version: int = Field(ge=1)
     makers: tuple[uuid.UUID, ...]
 
@@ -185,11 +191,19 @@ class LayoutReaderPort(Protocol):
     async def read_with(
         self,
         document: AttachmentContent,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
         caps: IntakeCaps,
         *,
         layout_ref: str,
     ) -> PoDocument | Unreadable: ...
+
+
+class MessageCustomerPort(Protocol):
+    """Whose message it is, as intake reads it (`OrderIntake.customer_of`):
+    the customer a person chose for a PO they uploaded (ticket 18), else the
+    sender's."""
+
+    async def customer_of(self, scope: SalesScope, message: InboundMessage) -> Customer | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,7 +211,7 @@ class Checked:
     """A mapping as code judged it: with a PDF's titles in print order filled
     in, the PO the reader read with it, and every problem found."""
 
-    mapping: LayoutMapping
+    mapping: PoMapping
     document: PoDocument | None
     problems: tuple[Problem, ...]
 
@@ -218,13 +232,15 @@ class LayoutChecks:
         scope: SalesScope,
         content: AttachmentContent,
         customer: Customer,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
         rules: OrderRules,
         source: LayoutSource | None = None,
     ) -> Checked:
         source = source or await self.reader.label_source(content, rules.intake)
         if source is None or source.kind != mapping.kind:
             return Checked(mapping, None, (Problem(problem="unreadable"),))
+        if mapping.kind == "csv":
+            return await self._export(scope, content, customer, mapping, rules, source)
         problems = check_labels(mapping, source)
         if mapping.kind == "pdf":
             columns = pdf_columns(mapping, source)
@@ -244,6 +260,38 @@ class LayoutChecks:
             read,
             quoted_prices=await self._quoted(scope, customer, read.header.currency),
             known_codes=await self._known(scope, customer, read),
+        )
+        return Checked(mapping, read, tuple(problems))
+
+    async def _export(
+        self,
+        scope: SalesScope,
+        content: AttachmentContent,
+        customer: Customer,
+        mapping: ExportMapping,
+        rules: OrderRules,
+        source: LayoutSource,
+    ) -> Checked:
+        """A portal's export (ticket 18): its titles on one row, every firm
+        row read, and each column plausible. No total: an export prints
+        none. Prices are checked against the quoted range only where the
+        export prints them."""
+        problems = check_titles(mapping, source)
+        if problems:
+            return Checked(mapping, None, tuple(problems))
+        read = await self.reader.read_with(content, mapping, rules.intake, layout_ref=PROBE_REF)
+        if isinstance(read, Unreadable):
+            refused: LayoutProblem = (
+                "no_firm_line" if read.reason.startswith(NO_FIRM_ROW) else "unreadable"
+            )
+            return Checked(mapping, None, (Problem(problem=refused),))
+        quoted = (
+            await self._quoted(scope, customer, read.header.currency)
+            if mapping.unit_price is not None
+            else []
+        )
+        problems += plausible(
+            read, quoted_prices=quoted, known_codes=await self._known(scope, customer, read)
         )
         return Checked(mapping, read, tuple(problems))
 
@@ -308,6 +356,9 @@ class LayoutPrefiller:
             )
         except ModelUnavailableError:
             return LayoutPrefill.model_validate({**stamp, "outcome": "unavailable"})
+        if source.kind == "csv":
+            # A portal's export is mapped by a person (ticket 18).
+            return None
         mapping = answer.mapping(source.kind)
         if mapping is None:
             return LayoutPrefill.model_validate(
@@ -375,7 +426,7 @@ class LayoutView(BaseModel):
     kind: str
     version: int
     status: str
-    mapping: LayoutMapping
+    mapping: PoMapping
     sample: LayoutSample
     proposed_by: uuid.UUID
     proposed_at: datetime
@@ -418,7 +469,7 @@ class LayoutSourceView(BaseModel):
     message_id: str
     attachment_id: str
     customer_code: str
-    kind: Literal["excel", "pdf"]
+    kind: LayoutKind
     cells: list[LabelCellView]
     prefill: LayoutPrefill | None
     approved: LayoutView | None
@@ -450,6 +501,8 @@ class LayoutPreviewView(BaseModel):
     revision: int | None = None
     total: Decimal | None = None
     lines: list[PreviewLineView] = []
+    # A portal's export (ticket 18): the rows marked other than firm, counted.
+    forecast_rows: int = 0
 
 
 def preview_view(checked: Checked) -> LayoutPreviewView:
@@ -465,6 +518,7 @@ def preview_view(checked: Checked) -> LayoutPreviewView:
         currency=header.currency,
         revision=header.revision,
         total=document.total.amount if document.total else None,
+        forecast_rows=document.forecast_rows,
         lines=[
             PreviewLineView(
                 line_no=line.line_no,
@@ -496,6 +550,8 @@ class LayoutService:
     catalog: SalesCatalogPort
     rules: OrderRulesPort
     checks: LayoutChecks
+    # Whose message a form came with: intake's answer (ticket 18).
+    customers: MessageCustomerPort
 
     async def list(self, context: AccessContext) -> list[LayoutView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_LAYOUT)
@@ -513,7 +569,7 @@ class LayoutService:
         source = await self.checks.reader.label_source(content, rules.intake)
         if source is None:
             raise ConflictError(
-                "the file is no form a layout can map: a text PDF or an .xlsx",
+                "the file is no form a layout can map: a text PDF, an .xlsx or an export",
                 details={"message_id": message_id, "attachment_id": attachment_id},
             )
         async with self.uow(scope) as work:
@@ -543,7 +599,7 @@ class LayoutService:
         context: AccessContext,
         message_id: str,
         attachment_id: str,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
     ) -> LayoutPreviewView:
         await self._mapper(context, message_id)
         scope = sales_scope(context)
@@ -555,7 +611,7 @@ class LayoutService:
         context: AccessContext,
         message_id: str,
         attachment_id: str,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
     ) -> LayoutView:
         """The caller's mapping of the form, once every check passes, stored
         with the platform approval a second person decides it on. The caller
@@ -634,7 +690,8 @@ class LayoutService:
     async def _form(
         self, scope: SalesScope, message_id: str, attachment_id: str
     ) -> tuple[AttachmentContent, Customer, OrderRules]:
-        """The attachment, the customer its sender's domain is, and the rules."""
+        """The attachment, the customer the message is from (as intake reads
+        it), and the rules."""
         message = await self.inbox.get_message(scope, message_id)
         content = await self.inbox.read_attachment(scope, message_id, attachment_id)
         if message is None or content is None:
@@ -642,7 +699,7 @@ class LayoutService:
                 "no such attachment",
                 details={"message_id": message_id, "attachment_id": attachment_id},
             )
-        customer = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
+        customer = await self.customers.customer_of(scope, message)
         if customer is None:
             raise ConflictError(
                 "the sender is no customer: a layout is a customer's form",

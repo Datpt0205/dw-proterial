@@ -19,6 +19,12 @@ An encrypted Office file sniffs as ``encrypted``, which is read as a workbook
 once opened: the sandbox holds the opened bytes to that, as it holds every
 file to what it is.
 
+**A portal's export** (ticket 18) is text, not a container: what Excel saves
+as "Unicode text", UTF-16 with its byte-order mark and one tab-separated row
+per line. It sniffs as ``csv`` by those bytes alone (the mark, then a tab
+before the first line ends), whatever it is named; it is read as rows of
+text, and a cell is never evaluated as a formula.
+
 This module stays in every process that holds an attachment, the API among
 them, while every parser of a file's content runs in the reader sandbox
 (ticket 25, `dw_sales.adapters.reader_client`). What it does to a file of the
@@ -56,6 +62,13 @@ _LEGACY: Final[tuple[tuple[str, FileType], ...]] = (
     ("Book", "xls"),
     ("WordDocument", "doc"),
 )
+# A UTF-16 byte-order mark, little- and big-endian: how Excel's "Unicode
+# text" (a portal's export, ticket 18) begins.
+_UTF16_LE: Final = b"\xff\xfe"
+_UTF16: Final = (_UTF16_LE, b"\xfe\xff")
+# How much of a text file is decoded to find its first line: a header row of
+# titles, well under this.
+_FIRST_LINE_BYTES: Final = 4096
 # A compound file's directory entry: 128 bytes, the name first (UTF-16LE,
 # NUL-terminated, at most 64 bytes), its length in bytes at offset 64.
 _ENTRY: Final = 128
@@ -107,7 +120,8 @@ def sniff(data: bytes) -> FileType | None:
 
     ``pdf`` and ``xlsx`` are read; ``xls`` and ``doc`` are read once the
     reader sandbox converted them (ticket 27), ``encrypted`` once it opened
-    it with a password from its mail (ticket 17). ``unsupported`` is a
+    it with a password from its mail (ticket 17), ``csv`` with a layout of
+    the customer's export (ticket 18). ``unsupported`` is a
     document DW1 does not read (an image, another legacy Office file, an
     archive), which routes the message to Sales with the reason. None is
     anything else.
@@ -125,7 +139,18 @@ def sniff(data: bytes) -> FileType | None:
         return _legacy(data)
     if data.startswith(_IMAGES):
         return "unsupported"
+    if data.startswith(_UTF16) and _tab_separated(data[:_FIRST_LINE_BYTES]):
+        return "csv"
     return None
+
+
+def _tab_separated(head: bytes) -> bool:
+    """Whether UTF-16 text's first line holds a tab: the first bytes only,
+    decoded as far as they go, so nothing past them is read."""
+    encoding = "utf-16-le" if head.startswith(_UTF16_LE) else "utf-16-be"
+    text = head[2 : len(head) - len(head) % 2].decode(encoding, errors="replace")
+    first = text.split("\n", 1)[0]
+    return "\t" in first
 
 
 def _legacy(data: bytes) -> FileType:

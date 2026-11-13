@@ -20,10 +20,11 @@ import { formatDate } from "../../../../lib/dates";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
 import {
+  EXPORT_FIELDS,
   LAYOUT_FIELDS,
   problemText,
+  type ExportMapping,
   type Mapping,
-  type MappingField,
 } from "../../_lib/layouts";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
@@ -35,10 +36,14 @@ import { useAuth } from "../../../../lib/auth/auth-context";
 
 type Source = SalesSchemas["LayoutSourceView"];
 type Preview = SalesSchemas["LayoutPreviewView"];
-type Values = Partial<Record<MappingField, string>> & {
+type Values = Partial<Record<string, string>> & {
   thousands_separator?: Mapping["thousands_separator"];
   decimal_separator?: Mapping["decimal_separator"];
   date_format?: Mapping["date_format"];
+  // A portal's export (ticket 18): the order-type values that mean firm,
+  // and the currency the export does not print.
+  firm_values?: string[];
+  currency?: ExportMapping["currency"];
 };
 
 const DATE_FORMATS: Mapping["date_format"][] = [
@@ -48,7 +53,15 @@ const DATE_FORMATS: Mapping["date_format"][] = [
   "%m/%d/%Y",
   "%d.%m.%Y",
   "%Y/%m/%d",
+  "%y-%m-%d",
 ];
+const CURRENCIES: ExportMapping["currency"][] = ["USD", "VND", "JPY"];
+/** What a file of each kind is called on this screen. */
+const KIND_WORDS: Record<string, string> = {
+  pdf: "PDF",
+  excel: "Excel",
+  csv: "xuất từ cổng khách (CSV)",
+};
 const THOUSANDS: { value: Mapping["thousands_separator"]; label: string }[] = [
   { value: ",", label: "dấu phẩy (1,200)" },
   { value: ".", label: "dấu chấm (1.200)" },
@@ -96,7 +109,7 @@ function Onboarding() {
         title="Thiết lập mẫu PO"
         subtitle={
           source.data
-            ? `Khách ${source.data.customer_code} · tệp ${source.data.kind === "pdf" ? "PDF" : "Excel"} của thư ${messageId}`
+            ? `Khách ${source.data.customer_code} · tệp ${KIND_WORDS[source.data.kind] ?? source.data.kind} của thư ${messageId}`
             : undefined
         }
         help="Gán mỗi trường của PO với nhãn in trên mẫu của khách; người thứ hai duyệt trước khi DW1 đọc các PO sau theo mẫu này."
@@ -141,6 +154,7 @@ function MappingForm({
   } | null>(null);
   const [proposed, setProposed] = useState<string | null>(null);
   const prefill = source.prefill;
+  const exported = source.kind === "csv";
   const prefilled = prefill?.outcome === "proposed" ? prefill.mapping : null;
   const options = useMemo(
     () =>
@@ -151,25 +165,36 @@ function MappingForm({
     [source.cells],
   );
   const initial: Values = prefilled
-    ? Object.fromEntries(
+    ? (Object.fromEntries(
         Object.entries(prefilled).filter(([, v]) => v !== null),
-      )
+      ) as Values)
     : {
         thousands_separator: ",",
         decimal_separator: ".",
-        date_format: "%d/%m/%Y",
+        date_format: exported ? "%y-%m-%d" : "%d/%m/%Y",
       };
 
-  const mapping = (values: Values): Mapping =>
-    ({
-      ...values,
-      kind: source.kind,
-      revision: values.revision || null,
-      page_label: source.kind === "pdf" ? null : values.page_label || null,
-      thousands_separator: values.thousands_separator ?? ",",
-      decimal_separator: values.decimal_separator ?? ".",
-      date_format: values.date_format ?? "%d/%m/%Y",
-    }) as Mapping;
+  const mapping = (values: Values): Mapping | ExportMapping =>
+    exported
+      ? ({
+          ...values,
+          kind: "csv",
+          description: values.description || null,
+          unit_price: values.unit_price || null,
+          firm_values: values.firm_values ?? [],
+          thousands_separator: values.thousands_separator ?? ",",
+          decimal_separator: values.decimal_separator ?? ".",
+          date_format: values.date_format ?? "%y-%m-%d",
+        } as ExportMapping)
+      : ({
+          ...values,
+          kind: source.kind,
+          revision: values.revision || null,
+          page_label: source.kind === "pdf" ? null : values.page_label || null,
+          thousands_separator: values.thousands_separator ?? ",",
+          decimal_separator: values.decimal_separator ?? ".",
+          date_format: values.date_format ?? "%d/%m/%Y",
+        } as Mapping);
 
   const body = () => ({
     message_id: messageId,
@@ -240,7 +265,7 @@ function MappingForm({
         <Alert
           type="info"
           showIcon
-          title={`Khách ${source.customer_code} đã có mẫu ${source.kind === "pdf" ? "PDF" : "Excel"} được duyệt (phiên bản ${source.approved.version}).`}
+          title={`Khách ${source.customer_code} đã có mẫu ${KIND_WORDS[source.kind] ?? source.kind} được duyệt (phiên bản ${source.approved.version}).`}
           description="Mẫu bạn gửi chỉ thay mẫu đó khi được duyệt."
         />
       ) : null}
@@ -261,8 +286,11 @@ function MappingForm({
         </Card>
         <Card size="small" title="Gán trường với nhãn">
           <Form form={form} layout="vertical" initialValues={initial}>
-            {LAYOUT_FIELDS.filter(
-              (f) => !(source.kind === "pdf" && f.pdf === false),
+            {(exported
+              ? EXPORT_FIELDS
+              : LAYOUT_FIELDS.filter(
+                  (f) => !(source.kind === "pdf" && f.pdf === false),
+                )
             ).map(({ field, label, optional }) => (
               <Form.Item
                 key={field}
@@ -270,7 +298,8 @@ function MappingForm({
                 label={
                   <Space size="small">
                     {label}
-                    {prefilled && prefilled[field] ? (
+                    {prefilled &&
+                    (prefilled as unknown as Record<string, unknown>)[field] ? (
                       <StatusTag tone="warn">Mô hình gợi ý</StatusTag>
                     ) : null}
                   </Space>
@@ -291,7 +320,36 @@ function MappingForm({
                 />
               </Form.Item>
             ))}
-            {source.kind === "pdf" ? (
+            {exported ? (
+              <>
+                <Form.Item
+                  name="firm_values"
+                  label="Giá trị ở cột loại đơn nghĩa là đặt hàng (firm)"
+                  rules={[
+                    {
+                      required: true,
+                      message: "Chọn hoặc gõ ít nhất một giá trị",
+                    },
+                  ]}
+                >
+                  <Select
+                    mode="tags"
+                    options={options}
+                    placeholder="Ví dụ: giá trị in ở các dòng đặt hàng"
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="currency"
+                  label="Tiền tệ khách đặt (tệp không in)"
+                  rules={[{ required: true, message: "Chọn tiền tệ" }]}
+                >
+                  <Select
+                    options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                  />
+                </Form.Item>
+              </>
+            ) : null}
+            {source.kind === "pdf" || exported ? (
               <>
                 <Form.Item
                   name="thousands_separator"
@@ -314,7 +372,8 @@ function MappingForm({
                       label: f
                         .replace("%d", "dd")
                         .replace("%m", "mm")
-                        .replace("%Y", "yyyy"),
+                        .replace("%Y", "yyyy")
+                        .replace("%y", "yy"),
                     }))}
                   />
                 </Form.Item>
@@ -366,7 +425,11 @@ function PreviewCard({ preview }: { preview: Preview }) {
         <Alert
           type="success"
           showIcon
-          title={`Mọi kiểm tra đạt: đọc được PO ${preview.po_no} ngày ${preview.po_date ? formatDate(preview.po_date) : ""}, ${preview.lines.length} dòng, tổng ${preview.total ?? ""} ${preview.currency ?? ""}.`}
+          title={
+            preview.forecast_rows
+              ? `Mọi kiểm tra đạt: ${preview.lines.length} dòng đặt hàng, ${preview.forecast_rows} dòng dự báo không đặt hàng.`
+              : `Mọi kiểm tra đạt: đọc được PO ${preview.po_no} ngày ${preview.po_date ? formatDate(preview.po_date) : ""}, ${preview.lines.length} dòng, tổng ${preview.total ?? ""} ${preview.currency ?? ""}.`
+          }
         />
       ) : (
         <Alert

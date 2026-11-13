@@ -424,6 +424,10 @@ mailbox_messages = sa.Table(
     sa.Column("source_name", sa.Text, nullable=False),
     sa.Column("message", JSONB, nullable=False),
     sa.Column("stored_at", _TS, nullable=False, server_default=sa.func.now()),
+    # A PO a person uploaded ("Tải PO lên", ticket 18): who, and the customer
+    # they chose. Null on every mail.
+    sa.Column("uploaded_by", UUID(as_uuid=True)),
+    sa.Column("uploaded_for", sa.Text),
 )
 
 mailbox_attachments = sa.Table(

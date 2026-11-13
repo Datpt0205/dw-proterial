@@ -66,6 +66,7 @@ import {
 import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandledPanel } from "./handled-panel";
+import { PoUpload } from "./po-upload";
 import { HandoffDraft } from "./handoff-draft";
 import { SenderCustomerPanel } from "./sender-customer";
 import { DesignTextPanel } from "./design-text";
@@ -343,22 +344,28 @@ function Inbox() {
         }
         help="Thư khách hàng gửi về: PO, yêu cầu báo giá, thư trả lời và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         actions={
-          <GuardedButton
-            type="primary"
-            icon={<RobotOutlined aria-hidden />}
-            loading={pending === "inbox/all"}
-            reason={
-              processReason ??
-              (inbox.data && pressable === 0
-                ? busy
-                  ? "DW1 đang xử lý các thư đã xếp, chờ xong rồi xem kết quả."
-                  : "Mọi thư đã có hướng xử lý."
-                : null)
-            }
-            onClick={processAll}
-          >
-            DW xử lý tất cả ({pressable})
-          </GuardedButton>
+          <Space wrap>
+            <PoUpload
+              reason={processReason}
+              onUploaded={() => after({ ok: true })}
+            />
+            <GuardedButton
+              type="primary"
+              icon={<RobotOutlined aria-hidden />}
+              loading={pending === "inbox/all"}
+              reason={
+                processReason ??
+                (inbox.data && pressable === 0
+                  ? busy
+                    ? "DW1 đang xử lý các thư đã xếp, chờ xong rồi xem kết quả."
+                    : "Mọi thư đã có hướng xử lý."
+                  : null)
+              }
+              onClick={processAll}
+            >
+              DW xử lý tất cả ({pressable})
+            </GuardedButton>
+          </Space>
         }
       />
       <ActionError error={error} />

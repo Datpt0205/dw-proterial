@@ -135,6 +135,7 @@ export function order(overrides: Partial<Order> = {}): Order {
       unchecked_regions: [],
       checks_run: 9,
       findings: 1,
+      forecast_rows: 0,
     },
     findings: [],
     changes: [],

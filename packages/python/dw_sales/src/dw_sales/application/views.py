@@ -472,6 +472,10 @@ class OrderLineView(BaseModel):
     model_config = _VIEW
 
     line_no: int
+    # The line's own PO number, where the file prints one per line (a
+    # portal's export, ticket 18), and where; None: the PO's.
+    po_no: str | None = None
+    po_no_anchor: SourceAnchor | None = None
     customer_item_code: str
     description: str
     quantity: Decimal
@@ -606,6 +610,8 @@ def order_line(
     confirmed = {index: day for index, (_, day) in enumerate(line.confirmed_schedules())}
     return OrderLineView(
         line_no=po.line_no,
+        po_no=po.line_po.po_no if po.line_po is not None else None,
+        po_no_anchor=po.line_po.anchor if po.line_po is not None else None,
         customer_item_code=po.customer_item_code,
         description=po.description,
         quantity=po.quantity,
@@ -683,6 +689,9 @@ class CoverageView(BaseModel):
     unchecked_regions: list[str]
     checks_run: int
     findings: int
+    # Rows the file marks as other than a firm order (a portal's forecast,
+    # ticket 18): counted, never read: "N dòng dự báo, không đặt hàng".
+    forecast_rows: int = 0
 
 
 class OrderSummaryView(BaseModel):
@@ -971,6 +980,7 @@ def order_case(
             unchecked_regions=list(document.unchecked_regions),
             checks_run=coverage.checks_run,
             findings=coverage.findings,
+            forecast_rows=coverage.forecast_rows,
         ),
         lines=[order_line(case, line, prices, checked=checked) for line in case.lines],
         findings=[order_finding(case, f, prices) for f in case.findings],

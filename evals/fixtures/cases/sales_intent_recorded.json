@@ -1,110 +1,19 @@
 {
   "_comment": "The local model's answers (onprem profile) to sales.message_intent, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
   "answers": {
-    "00251042e9f5073063f644df": {
-      "language": "en",
+    "03f6d13df092a2a9c8e332fb": {
+      "language": "vi",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "02b6a0bfdfd491282f0f4814": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "035872f9afcc5d1b637c3562": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "0660d487601d9e7bbe7f5dc1": {
+    "070fb31a1abc7a3cdb92c895": {
       "language": "vi",
       "referenced_number_spans": [
-        "BRN-PO-2609-044"
+        "BRN-PO-2609-031"
       ],
       "kind": "complaint"
     },
-    "06b56d4876644478045477d0": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "reply_to_case"
-    },
-    "0f5c8c38d5c44b7583d228db": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "16a1ce867e4fa1488a96c501": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "LMR-PO-2609-001"
-      ],
-      "kind": "delivery_change"
-    },
-    "177cf9e2f055f42871fe1207": {
-      "language": "en",
-      "referenced_number_spans": [
-        "NRV-PO-26-0457"
-      ],
-      "kind": "delivery_change"
-    },
-    "1a82674c5175731986cdce0a": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "1c09062ff92bff046f9b2a67": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "complaint"
-    },
-    "1eaa795c3ff79e0daa8e9b19": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "21c1220b57dd7fafe025219a": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "YCBG-2610-011"
-      ],
-      "kind": "design_reply"
-    },
-    "23f95ade1104be01eb685cbf": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-RFQ-261002-01"
-      ],
-      "kind": "quote_request"
-    },
-    "25de5ac7848b3e01c5572086": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-PO-0926-12"
-      ],
-      "kind": "delivery_change"
-    },
-    "2668228ab5394e01d120b6a3": {
-      "language": "en",
-      "referenced_number_spans": [
-        "YCBG-2610-004"
-      ],
-      "kind": "design_reply"
-    },
-    "296909706d7149f9158bd3ba": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "VLX-PO-2608-0102"
-      ],
-      "kind": "complaint"
-    },
-    "29a225453bd387b85bdba912": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "YCBG-2610-006"
-      ],
-      "kind": "design_reply"
-    },
-    "2acbfe431c1b735f80b6cf30": {
+    "0a6a0b670646c558d9d4332b": {
       "language": "en",
       "referenced_number_spans": [
         "SO26-0408",
@@ -112,484 +21,592 @@
       ],
       "kind": "other"
     },
-    "2b0a3e8a6deb52e4d20b5251": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-PO-0930-16"
-      ],
-      "kind": "delivery_change"
-    },
-    "2b19d64688bcee99c11e296c": {
+    "0f2ed71ed213374f507c0448": {
       "language": "vi",
       "referenced_number_spans": [
-        "BRN-PO-2609-052"
+        "LMR-PO-2609-001"
       ],
       "kind": "delivery_change"
     },
-    "2eaf138bc78d9602a4c28cdc": {
+    "179d981b2409eb889b1462ea": {
       "language": "en",
       "referenced_number_spans": [],
-      "kind": "po"
+      "kind": "other"
     },
-    "2f656cd29a749e76e1a0d24f": {
-      "language": "vi",
+    "185c89a4785640bae82b11d8": {
+      "language": "en",
       "referenced_number_spans": [],
       "kind": "sample_request"
     },
-    "2fddda55a33e0ca85021027b": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-2026-0930-C"
-      ],
-      "kind": "delivery_change"
-    },
-    "30499154281ffda9e737343e": {
-      "language": "vi",
+    "19de7df099afbcd859b6649f": {
+      "language": "en",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "308428f63c4c8364b303ae86": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "31b9eccff9feea302c1f4c78": {
-      "language": "en",
-      "referenced_number_spans": [
-        "TVT-PO-0929-01"
-      ],
-      "kind": "delivery_change"
-    },
-    "3d71722c07cd411eb60ecacd": {
+    "1a153be1faa98ceb137c1403": {
       "language": "vi",
-      "referenced_number_spans": [
-        "BRN-PO-2609-052"
-      ],
-      "kind": "po"
-    },
-    "3dea3a957d1efd9d955f493f": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-PO-0930-15"
-      ],
-      "kind": "reply_to_case"
-    },
-    "3e8b3d3b546fc6a85f9ab963": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "44057d87524859a80309a94c": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "440a5b8d8e715f1130670754": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-21-0045"
-      ],
-      "kind": "other"
-    },
-    "47bacca7c4a7a99a8043841a": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "complaint"
-    },
-    "52dd35039cb6ae328840359c": {
-      "language": "en",
       "referenced_number_spans": [],
       "kind": "po"
     },
-    "53a1615e4c2b6bb5216d77b7": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "5620197d63bcecc6f09ff997": {
-      "language": "en",
-      "referenced_number_spans": [
-        "AWG26",
-        "2609-14"
-      ],
-      "kind": "complaint"
-    },
-    "57b1c627a57868047a4c227e": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-PO-0918-07"
-      ],
-      "kind": "complaint"
-    },
-    "6356ee5a1061a151f773266d": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "BRN-PO-2609-052"
-      ],
-      "kind": "delivery_change"
-    },
-    "653524c6f123d0be51101feb": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "complaint"
-    },
-    "6736966eb79b18fe2a5625dc": {
-      "language": "en",
-      "referenced_number_spans": [
-        "YCBG-2609-028"
-      ],
-      "kind": "other"
-    },
-    "6c31cae4e6e321115ffb67f8": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "complaint"
-    },
-    "6c4b04ee606bd286076a994b": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "709a4785eaa621a4518c6872": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "VLX-PO-2610-0007"
-      ],
-      "kind": "delivery_change"
-    },
-    "71c7ab829267af0ba2e849c8": {
-      "language": "en",
-      "referenced_number_spans": [
-        "CVG-260922-07"
-      ],
-      "kind": "complaint"
-    },
-    "741181a0167e6b7c0350fd5e": {
-      "language": "en",
-      "referenced_number_spans": [
-        "YCBG-2610-009"
-      ],
-      "kind": "design_reply"
-    },
-    "7b3ac0e6238dccac23b54c15": {
+    "1e4b275601f8335e885184bb": {
       "language": "vi",
       "referenced_number_spans": [
         "BRN-PO-2610-007"
       ],
       "kind": "po"
     },
-    "84a537a3aa1e1cfc3426ed23": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "84dccbc4e7980fc0ba5f4307": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-2026-1010-A"
-      ],
-      "kind": "po"
-    },
-    "874739cff07993b938a251cc": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-RFQ-2610-01"
-      ],
-      "kind": "quote_request"
-    },
-    "88039400d41b16e93ad6fcfc": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "88229dfc5d48f3e7b210fa81": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "po"
-    },
-    "8876f43f272367e162b5a84f": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-2026-0925-A"
-      ],
-      "kind": "complaint"
-    },
-    "89a7750ebdcb4bba47eefdd9": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "8a777a6045a4dad81dc286b0": {
+    "261059fdbf221525bdaebe9a": {
       "language": "en",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "8c3c4ba8ef252184ddbf1688": {
+    "282236f7b36e1699bb64a9b2": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "28d16a1c1a4c88cb01493392": {
       "language": "en",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "8f73a0d1b1209e0a3610d8bd": {
+    "29c957375e6c861bbc3fa0c7": {
       "language": "en",
-      "referenced_number_spans": [
-        "NRV-RFQ-26-0130"
-      ],
-      "kind": "quote_request"
-    },
-    "8f8617fe0d6b0576e91ea5f1": {
-      "language": "vi",
       "referenced_number_spans": [],
-      "kind": "sample_request"
+      "kind": "portal_notice"
     },
-    "90a8eb08ea75f452f3517e70": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "po"
-    },
-    "95b6805eeeb220e23ab9d377": {
-      "language": "ja",
-      "referenced_number_spans": [
-        "KMH-2026-0925-A"
-      ],
-      "kind": "delivery_change"
-    },
-    "973df4ec608c7add08a56e58": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "BRN-PO-2609-044"
-      ],
-      "kind": "delivery_change"
-    },
-    "9d72e263fffa730b270d5366": {
+    "2c6b5025336b37008d08c2e1": {
       "language": "en",
       "referenced_number_spans": [
         "NRV-PO-26-0457"
       ],
-      "kind": "reply_to_case"
+      "kind": "delivery_change"
     },
-    "9ed609f54ce02b40e1910071": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "complaint"
-    },
-    "9f99cac0ed13b2e202726786": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "po"
-    },
-    "a21d418ae5331eb4bb4fdeb0": {
-      "language": "vi",
+    "2d2c4dafa329df286aa7909b": {
+      "language": "en",
       "referenced_number_spans": [
-        "LMR-PO-2609-001"
+        "QRL-PO-0918-07"
       ],
       "kind": "complaint"
     },
-    "a71b18005987ea87da50b099": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "aa15961ff877624054e7849c": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "po"
-    },
-    "abbba45797bccbe33e364e06": {
+    "2ee9322843339e94b6828b78": {
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "quote_request"
     },
-    "abd0c393dfdf9ee31ecea638": {
+    "305f12a835bea8a6dae6d8a4": {
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "ad66a67cc77ffd19e842e5a0": {
+    "35d72d9381e15c6a2cabda2f": {
       "language": "vi",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "portal_notice"
     },
-    "af5550f927902fd165a4f563": {
+    "3643d66ea3f0fde34413d4b3": {
+      "language": "en",
+      "referenced_number_spans": [
+        "TVT-PO-0929-01"
+      ],
+      "kind": "delivery_change"
+    },
+    "3689c3605d9d1047202c9c05": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "3a074259ea7244dbe2717662": {
       "language": "vi",
       "referenced_number_spans": [
         "BRN-PO-2609-052"
       ],
       "kind": "delivery_change"
     },
-    "af81d5fb0bb7c70091eec83f": {
-      "language": "en",
-      "referenced_number_spans": [
-        "QRL-PO-1007-03"
-      ],
-      "kind": "po"
-    },
-    "b6473d5f77fe14fc935c55d3": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "b743be84f64ab10355c9c7ba": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "bc148bb1046d5fa1ed4819f1": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "c22d3ba7c30dbbc5af3cc7d3": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "c5ffb9514a5457afea3dcf45": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "BRN-PO-2609-031"
-      ],
-      "kind": "complaint"
-    },
-    "c84a58be29a6a2e103bf3706": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "sample_request"
-    },
-    "c861af4631084a01c5c148fc": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "reply_to_case"
-    },
-    "cace9ef50938608a5d5fe497": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "cdf24e481c1a622a9fba3c7c": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "ceec04c3fcac426a646f972a": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "other"
-    },
-    "d0ca6b2a9e1899e596a9c859": {
-      "language": "ja",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "d365ddfbe949a5812c3eed6c": {
+    "3a32f1aeb2f71870f672c561": {
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "quote_request"
     },
-    "d559bd0cdc0ccb05b5aaf99e": {
-      "language": "vi",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
-    },
-    "d56028c49cd2820a343a4fbb": {
-      "language": "en",
-      "referenced_number_spans": [
-        "NRV-RFQ-26-0130"
-      ],
-      "kind": "quote_request"
-    },
-    "d5b69e3e3f80006b77cfca77": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "VLX-PO-2610-0004"
-      ],
-      "kind": "delivery_change"
-    },
-    "da9ca761418ac37561a4dfde": {
+    "3cedecce61d64a1a1481bf68": {
       "language": "vi",
       "referenced_number_spans": [
         "VLX-PO-2609-0131"
       ],
       "kind": "delivery_change"
     },
-    "dc5d6f54a0da487a1d425f5e": {
+    "415bc829bb97904bbd3948a6": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "reply_to_case"
+    },
+    "4190b5300aaeb9686520e4f9": {
+      "language": "en",
+      "referenced_number_spans": [
+        "YCBG-2610-009"
+      ],
+      "kind": "design_reply"
+    },
+    "459c02db6d7af6865ebc1947": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "46cde1a74eae5780956acf36": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "4a9634aaab600a28575769b7": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "4d87b096c7332092fa88910e": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "4dc9061fae0e10fcbde84cf9": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-21-0045"
+      ],
+      "kind": "other"
+    },
+    "4e537ce1ce3385f78c1a91cb": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "4ea54aec43a18b398040414a": {
       "language": "en",
       "referenced_number_spans": [],
       "kind": "quote_request"
     },
-    "dd7128eb7a7815972875fc18": {
+    "4ffdb04dd520992a2797f5f0": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "570350b0063a8b0aac9702c6": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "576214cd3702b7878578b8bd": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0004"
+      ],
+      "kind": "delivery_change"
+    },
+    "591cbaba2240bb2b3f1bd62f": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "5d6efe8de9259835599a5a69": {
       "language": "vi",
       "referenced_number_spans": [
         "VLX-PO-2609-0118"
       ],
       "kind": "reply_to_case"
     },
-    "de1e11509eae3703c65cce68": {
-      "language": "ja",
-      "referenced_number_spans": [],
+    "5f2098bf989c9d1874a4ac9f": {
+      "language": "en",
+      "referenced_number_spans": [
+        "NRV-RFQ-26-0130"
+      ],
       "kind": "quote_request"
     },
-    "dea1f0c3fd43d84800f93aaf": {
-      "language": "vi",
-      "referenced_number_spans": [
-        "VLX-PO-2610-0015"
-      ],
-      "kind": "po"
-    },
-    "e3b57ef8a3a4a33e007004ce": {
-      "language": "en",
-      "referenced_number_spans": [],
-      "kind": "po"
-    },
-    "e5bcfe0b40457d91fc8d03be": {
+    "60361f8ce9003f0fe2085d62": {
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "e9a71aa812f8838e81839fad": {
+    "65bb0072d358b1105911ff8d": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-RFQ-261002-01"
+      ],
+      "kind": "quote_request"
+    },
+    "6f07cbf44632e83370d62adb": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "78bc487d0d4722af77183ed0": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "7c7506e22c168cd2a2fe1cf1": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "7caa201270e72f93ace6a033": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "7cd7a3c9068d8d14c2cfa00d": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "7cdd74802a4ec0c570e58c66": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "YCBG-2610-011"
+      ],
+      "kind": "design_reply"
+    },
+    "830fc286fb6178ecbfc8e861": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "BRN-PO-2609-044"
+      ],
+      "kind": "complaint"
+    },
+    "8a19cbf0b41d50bc36fdfc3f": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "8bcc3e07f767431e02cc1162": {
+      "language": "en",
+      "referenced_number_spans": [
+        "CVG-260922-07"
+      ],
+      "kind": "complaint"
+    },
+    "93c8d4d8c69613ccb4284787": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "94df4ee6ee7a10c36dded7bc": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "BRN-PO-2609-044"
+      ],
+      "kind": "delivery_change"
+    },
+    "9d27e983e2157cd53d0dd76e": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "a156651caad19222728dbcea": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "a1a3fbfb59b5105ce3de14f2": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0007"
+      ],
+      "kind": "delivery_change"
+    },
+    "a1b441cfe5d3d3cf3d32e4e3": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "a407b0a7439fc8aee6d7865b": {
+      "language": "en",
+      "referenced_number_spans": [
+        "QRL-PO-0930-16"
+      ],
+      "kind": "delivery_change"
+    },
+    "a4c789dd3f06f7493ce4f687": {
       "language": "en",
       "referenced_number_spans": [
         "CVG-260930-12"
       ],
       "kind": "delivery_change"
     },
-    "ea6f1b1e8e68d009c2aa69fa": {
+    "a5b928f2b9b5f77fa9b3b94c": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "a635e7f2338a16c4d7955bb0": {
+      "language": "en",
+      "referenced_number_spans": [
+        "VLX-PO-2611-0042"
+      ],
+      "kind": "portal_notice"
+    },
+    "a6a5b6e879a8608c7106d010": {
       "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "reply_to_case"
+    },
+    "a7b5856d91c629cf5e948f74": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-1010-A"
+      ],
+      "kind": "po"
+    },
+    "a7c744d6ac191bd1c7074713": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "portal_notice"
+    },
+    "a8d18a6fe4ca81e2eb09f450": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "aca158772c2c2316c798cc39": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0015"
+      ],
+      "kind": "po"
+    },
+    "aed90cb8644eb3448c7c797e": {
+      "language": "ja",
       "referenced_number_spans": [],
       "kind": "quote_request"
     },
-    "ee4cc26939d58480c889c592": {
-      "language": "ja",
+    "b18a9521b7bc236a16a6ba41": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "b5123180a0f07d5d647118dd": {
+      "language": "vi",
       "referenced_number_spans": [
-        "KMH-2026-0930-C"
+        "BRN-PO-2609-052"
       ],
       "kind": "delivery_change"
     },
-    "f179956e023182aa1038cecb": {
+    "b64a901f9fe3dd1194d29bf7": {
       "language": "en",
-      "referenced_number_spans": [],
-      "kind": "quote_request"
+      "referenced_number_spans": [
+        "QRL-PO-0926-12"
+      ],
+      "kind": "delivery_change"
     },
-    "f4287f6a6e6fc5e26973f003": {
+    "bb10c6730a61032c820e910e": {
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "f5a356e963379a59240bbe5b": {
+    "bce471af0781fdb35c9df639": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-0925-A"
+      ],
+      "kind": "complaint"
+    },
+    "c0e31964154c11c152b1d3be": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "c1d79d27e5e82127f53fc2d0": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2608-0102"
+      ],
+      "kind": "complaint"
+    },
+    "c29ca0fb449db1ad74d2cbf9": {
       "language": "vi",
       "referenced_number_spans": [
         "VLX-PO-2609-0118"
       ],
       "kind": "delivery_change"
     },
-    "f708dc7142927a006afa8e6e": {
+    "c5547bcdd9bd0ab776791cb2": {
+      "language": "en",
+      "referenced_number_spans": [
+        "QRL-PO-1007-03"
+      ],
+      "kind": "po"
+    },
+    "c782f0223ca96d09ca63a619": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "c97992b93ef21941158d7837": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "cc91777d2c30eea680da095f": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "BRN-PO-2609-052"
+      ],
+      "kind": "po"
+    },
+    "d269a67d9fac93a8d71cead9": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "LMR-PO-2609-001"
+      ],
+      "kind": "complaint"
+    },
+    "d2ee08bf3153076ac2b2cce4": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-0930-C"
+      ],
+      "kind": "delivery_change"
+    },
+    "d5a4f2247c9256295f5b5943": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "d5f907e9dcc4851ddf77bfa4": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "d739d796c435f9ff5755d91c": {
+      "language": "en",
+      "referenced_number_spans": [
+        "YCBG-2609-028"
+      ],
+      "kind": "other"
+    },
+    "d80c1d40a3fb35b718a08f9b": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "YCBG-2610-006"
+      ],
+      "kind": "design_reply"
+    },
+    "db213f5356caf47d8dd5eede": {
+      "language": "en",
+      "referenced_number_spans": [
+        "NRV-PO-26-0457"
+      ],
+      "kind": "reply_to_case"
+    },
+    "de8a16dd75a7286c37691dae": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-0930-C"
+      ],
+      "kind": "delivery_change"
+    },
+    "deb440d46c931594fe58351b": {
+      "language": "en",
+      "referenced_number_spans": [
+        "QRL-PO-0930-15"
+      ],
+      "kind": "design_reply"
+    },
+    "e1a4ba0313a4517ba13d2e03": {
+      "language": "en",
+      "referenced_number_spans": [
+        "YCBG-2610-004"
+      ],
+      "kind": "design_reply"
+    },
+    "e2a68a14c1e19d1a1cc93f55": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "e36af3db23bfaf17892e9ea0": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "e443968258ce5ab7554a8b2e": {
+      "language": "en",
+      "referenced_number_spans": [
+        "QRL-RFQ-2610-01"
+      ],
+      "kind": "quote_request"
+    },
+    "e4a805e3874a39b2eba4d8ec": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
+    "e8dd93ba5d09c93c47428285": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "eaffe72ece2ead189ef027ce": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
+    "ebb5a29e5a8280429d968f3d": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "BRN-PO-2609-052"
+      ],
+      "kind": "delivery_change"
+    },
+    "ef33e6bfaa0b794da71750c0": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "efe4e6df92be3892a39c61af": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "portal_notice"
+    },
+    "f3300829ad7e9b1b92b063c8": {
       "language": "en",
       "referenced_number_spans": [],
       "kind": "other"
     },
-    "fd062bdf4eeeb6f0119db5f8": {
-      "language": "en",
+    "f40be20e06ba652afb8ad630": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-0925-A"
+      ],
+      "kind": "delivery_change"
+    },
+    "f44680d9b094cec4d7e799a7": {
+      "language": "ja",
       "referenced_number_spans": [],
       "kind": "sample_request"
+    },
+    "f588ddad8369ea60d76677ce": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "complaint"
+    },
+    "fbf1ea84e1e87e3abd4cdba1": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "fc46a83cc6c9ff1f905bfd78": {
+      "language": "ja",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "fd0a9825dca20e86907ff0f2": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "other"
+    },
+    "ff63ae234bae69bc3e0ac9bb": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "other"
     }
   }
 }

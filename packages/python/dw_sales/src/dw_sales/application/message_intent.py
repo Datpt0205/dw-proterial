@@ -43,9 +43,10 @@ from dw_sales.domain.message_intent import (
 )
 
 # The prompt the intent is read with. Its file is
-# `configs/prompts/sales/message_intent@1.0.0.yaml`; a test holds the two
-# together, and a new wording is a new version here and a new file there.
-MESSAGE_INTENT: Final = PromptRef("sales.message_intent", "1.0.0")
+# `configs/prompts/sales/message_intent@1.1.0.yaml` (1.1.0 adds
+# `portal_notice`, ticket 18); a test holds the two together, and a new
+# wording is a new version here and a new file there.
+MESSAGE_INTENT: Final = PromptRef("sales.message_intent", "1.1.0")
 # A kind, a language and up to five short spans: about 60 tokens measured.
 _OUTPUT_TOKENS: Final = 200
 # What the prompt itself costs, held above its rendered size by a test, so

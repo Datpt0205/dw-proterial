@@ -74,7 +74,7 @@ from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.application.scanned_inbox import LockedContent
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.layouts import LayoutMapping, LayoutSource
+from dw_sales.domain.layouts import LayoutSource, PoMapping
 from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
@@ -241,7 +241,7 @@ class ClientPoReaders:
     async def read_with(
         self,
         document: AttachmentContent,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
         caps: IntakeCaps,
         *,
         layout_ref: str,
@@ -391,8 +391,10 @@ class ClientSourceView:
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None:
         """What the file is shown as: a legacy one as its converted copy is
-        (ticket 27), which the reader makes again to show it."""
-        return READ_AS.get(sniff(data) or "")
+        (ticket 27), which the reader makes again to show it; a portal's
+        export as a sheet of its rows (ticket 18)."""
+        read_as = READ_AS.get(sniff(data) or "")
+        return "xlsx" if read_as == "csv" else read_as
 
     # A file to open is its bytes, or an attachment as the scanned mailbox
     # handed it over, which a locked one needs to be opened (ticket 17).

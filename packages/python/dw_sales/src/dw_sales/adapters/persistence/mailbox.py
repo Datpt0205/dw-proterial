@@ -1,7 +1,8 @@
 """DW1's stored mailbox in PostgreSQL (ticket 43, migration e544ff20fad6).
 
 `SqlMailbox` is the mailbox once real mail arrives: the `sales_mail_drop`
-lane writes it (`MailStorePort`) and every service reads it (`InboxPort`),
+lane writes it (`MailStorePort`), "Tải PO lên" writes a person's upload into
+it (`UploadStorePort`, ticket 18), and every service reads it (`InboxPort`),
 in the API and the worker alike. Each call is one short transaction bound to
 the scope it is asked about; RLS keeps one workspace's mail from another, and
 nothing here names a tenant beyond binding the scope.
@@ -28,6 +29,7 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import scope_values
 from dw_sales.adapters.persistence.uow import AuditFactory
 from dw_sales.application.mail_drop import MailFile
+from dw_sales.application.order_ports import PoUpload
 from dw_sales.application.ports import SalesScope
 
 _M = tables.mailbox_messages
@@ -41,7 +43,8 @@ def _bound(scope: SalesScope) -> TenantScope:
 
 @dataclass(frozen=True)
 class SqlMailbox:
-    """Implements `InboxPort` and `MailStorePort` over the stored mailbox."""
+    """Implements `InboxPort`, `MailStorePort`, `UploadStorePort` and
+    `UploadLookupPort` over the stored mailbox."""
 
     session_factory: async_sessionmaker[AsyncSession]
     audit: AuditFactory
@@ -149,22 +152,77 @@ class SqlMailbox:
                     message_id=message.message_id,
                 )
             )
-            if message.attachments:
-                await session.execute(
-                    sa.insert(_A),
-                    [
-                        {
-                            **scope_values(scope),
-                            "message_id": message.message_id,
-                            "received_at": message.received_at,
-                            "attachment_id": attachment.attachment_id,
-                            "content": mail.contents[attachment.attachment_id],
-                        }
-                        for attachment in message.attachments
-                    ],
-                )
+            await _store_attachments(session, scope, mail)
             await self.audit(session).append(event)
         return True
+
+    # ------------------------------------------------------ UploadStorePort --
+
+    async def store_upload(
+        self, scope: SalesScope, mail: MailFile, upload: PoUpload, *, event: AuditEvent
+    ) -> bool:
+        message = mail.message
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            # Its id is its files' hash and its time is when it was uploaded,
+            # so the key the primary key would catch differs on a second
+            # upload: one writer per id, and the id looked for first.
+            await session.execute(
+                sa.select(
+                    sa.func.pg_advisory_xact_lock(sa.func.hashtextextended(message.message_id, 0))
+                )
+            )
+            if await session.scalar(
+                sa.select(_M.c.message_id).where(_M.c.message_id == message.message_id)
+            ):
+                return False
+            await session.execute(
+                sa.insert(_M).values(
+                    **scope_values(scope),
+                    message_id=message.message_id,
+                    received_at=message.received_at,
+                    sender_address=message.sender.address,
+                    internet_message_id=None,
+                    source_name=message.attachments[0].name,
+                    message=message.model_dump(mode="json"),
+                    uploaded_by=upload.uploaded_by,
+                    uploaded_for=upload.customer_code,
+                )
+            )
+            await _store_attachments(session, scope, mail)
+            await self.audit(session).append(event)
+        return True
+
+    async def upload_of(self, scope: SalesScope, message_id: str) -> PoUpload | None:
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            row = (
+                await session.execute(
+                    sa.select(_M.c.uploaded_for, _M.c.uploaded_by).where(
+                        _M.c.message_id == message_id, _M.c.uploaded_by.is_not(None)
+                    )
+                )
+            ).first()
+        if row is None:
+            return None
+        return PoUpload(customer_code=row.uploaded_for, uploaded_by=row.uploaded_by)
+
+
+async def _store_attachments(session: AsyncSession, scope: SalesScope, mail: MailFile) -> None:
+    message = mail.message
+    if not message.attachments:
+        return
+    await session.execute(
+        sa.insert(_A),
+        [
+            {
+                **scope_values(scope),
+                "message_id": message.message_id,
+                "received_at": message.received_at,
+                "attachment_id": attachment.attachment_id,
+                "content": mail.contents[attachment.attachment_id],
+            }
+            for attachment in message.attachments
+        ],
+    )
 
 
 async def _message(session: AsyncSession, message_id: str) -> InboundMessage | None:

@@ -31,6 +31,15 @@ approves. The first POs read through a new layout keep every value
 `value_uncertain` (`sales_order_rules.layout_onboarding`), for Sales to
 confirm field by field, so an approved but wrong mapping cannot repeat
 silently.
+
+**A portal's export** (ticket 18) is a table, not a form: one PO line per
+row, each row naming its own PO number and whether it is a firm order or a
+forecast. Its layout (`ExportMapping`) names the column titles, which column
+says firm or forecast and which of its values mean firm: the customer's PO
+layout, mapped by a person and approved by another like any form, never
+code and never a keyword list. Only firm rows are read as lines; the others
+are counted. What the export does not print (a price, the currency) is held
+as `not_printed` for Sales to confirm.
 """
 
 from __future__ import annotations
@@ -47,7 +56,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from dw_kernel.errors import ConflictError
 from dw_platform.domain.messages import AttachmentId, Sha256Hex
-from dw_sales.domain.catalog import CustomerCode
+from dw_sales.domain.catalog import Currency, CustomerCode
 from dw_sales.domain.orders import (
     FlaggedValue,
     PoDocument,
@@ -58,9 +67,15 @@ from dw_sales.domain.orders import (
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
-LayoutKind = Literal["excel", "pdf"]
+# A form a person maps label by label; and every kind a layout can be, a
+# portal's export (ticket 18) among them.
+FormKind = Literal["excel", "pdf"]
+LayoutKind = Literal["excel", "pdf", "csv"]
 # How a date typed as text reads on the form (a `datetime.strptime` format).
-DateFormat = Literal["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%d.%m.%Y", "%Y/%m/%d"]
+# ``%y-%m-%d``: a portal's export writes a two-digit year (ticket 18).
+DateFormat = Literal[
+    "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%d.%m.%Y", "%Y/%m/%d", "%y-%m-%d"
+]
 ThousandsSeparator = Literal[",", ".", " ", "none"]
 DecimalSeparator = Literal[".", ","]
 
@@ -94,7 +109,7 @@ class LayoutMapping(BaseModel):
 
     model_config = _FROZEN
 
-    kind: LayoutKind
+    kind: FormKind
     po_no: _Label
     revision: _Label | None = None
     po_date: _Label
@@ -149,6 +164,80 @@ class LayoutMapping(BaseModel):
         return found
 
 
+# The columns of a portal's export a layout names, in the order a person maps
+# them; ``description`` and ``unit_price`` only where the export prints them.
+EXPORT_COLUMNS: Final = (
+    "po_no",
+    "po_date",
+    "customer_item_code",
+    "description",
+    "quantity",
+    "uom",
+    "unit_price",
+    "requested_date",
+    "order_type",
+)
+_FirmValue = Annotated[str, Field(min_length=1, max_length=40)]
+
+
+class ExportMapping(BaseModel):
+    """A customer portal's export (ticket 18): the title of each column read,
+    the column saying whether a row is a firm order, and the values of it
+    that mean firm. Every other row is a forecast, counted and never ordered.
+    The export prints no currency, so the person mapping it states the one
+    the customer orders in; each PO read with it has that value flagged
+    `not_printed`, for Sales to confirm."""
+
+    model_config = _FROZEN
+
+    kind: Literal["csv"]
+    po_no: _Label
+    po_date: _Label
+    customer_item_code: _Label
+    description: _Label | None = None
+    quantity: _Label
+    uom: _Label
+    # None: the export prints no price; each line's is `not_printed`.
+    unit_price: _Label | None = None
+    requested_date: _Label
+    order_type: _Label
+    firm_values: tuple[_FirmValue, ...] = Field(min_length=1, max_length=10)
+    currency: Currency
+    thousands_separator: ThousandsSeparator = ","
+    decimal_separator: DecimalSeparator = "."
+    date_format: DateFormat = "%y-%m-%d"
+
+    @model_validator(mode="after")
+    def _a_title_names_one_column(self) -> Self:
+        named = [label_key(title) for title in self.titles().values()]
+        if len(named) != len(set(named)):
+            raise ValueError("one title names two columns")
+        firm = [label_key(value) for value in self.firm_values]
+        if len(firm) != len(set(firm)) or not all(firm):
+            raise ValueError("each firm value is named once")
+        if self.thousands_separator == self.decimal_separator:
+            raise ValueError("thousands and decimals are written with different separators")
+        return self
+
+    def titles(self) -> dict[str, str]:
+        """Every column title the export must print, by what it holds."""
+        found = {field: getattr(self, field) for field in EXPORT_COLUMNS}
+        return {field: title for field, title in found.items() if title is not None}
+
+    def is_firm(self, value: str) -> bool:
+        """Whether a row's order type is one this layout says is firm."""
+        return label_key(value) in {label_key(v) for v in self.firm_values}
+
+
+# Why an export read with a layout gave no PO: none of its rows holds a firm
+# value the layout names. The reader's refusal starts with it, and the
+# layout check names it `no_firm_line`.
+NO_FIRM_ROW: Final = "the export holds no firm order row"
+
+# What a layout maps: a form's labels, or an export's columns.
+PoMapping = Annotated[LayoutMapping | ExportMapping, Field(discriminator="kind")]
+
+
 # ------------------------------------------------ what the model proposes --
 
 
@@ -180,7 +269,7 @@ class ModelLayoutProposal(BaseModel):
     decimal_separator: DecimalSeparator
     date_format: DateFormat
 
-    def mapping(self, kind: LayoutKind) -> LayoutMapping | None:
+    def mapping(self, kind: FormKind) -> LayoutMapping | None:
         """The proposal as a mapping, or None when a required label is missing
         or the proposal is not one (two fields under one label)."""
         answered = self.model_dump()
@@ -323,6 +412,8 @@ LayoutProblem = Literal[
     "requested_is_po_date",
     "requested_date_empty",
     "no_item_known",
+    # A portal's export with no row of the firm values named (ticket 18).
+    "no_firm_line",
 ]
 
 
@@ -365,6 +456,24 @@ def check_labels(mapping: LayoutMapping, source: LayoutSource) -> list[Problem]:
                 problems.append(Problem(problem="label_repeated", field=field))
     columns = [places[field] for field in COLUMN_FIELDS if field in places]
     if len(columns) == len(COLUMN_FIELDS) and len({(c.sheet, c.row) for c in columns}) != 1:
+        problems.append(Problem(problem="columns_not_on_one_row"))
+    return problems
+
+
+def check_titles(mapping: ExportMapping, source: LayoutSource) -> list[Problem]:
+    """Check 1 for a portal's export (ticket 18): each title is one cell of
+    one row of the export, and every title is on that row."""
+    problems: list[Problem] = []
+    places: dict[str, LabelCell] = {}
+    for field, title in mapping.titles().items():
+        found = source.find(title)
+        if not found:
+            problems.append(Problem(problem="label_not_found", field=field))
+        elif len({(cell.sheet, cell.row) for cell in found}) != len(found):
+            problems.append(Problem(problem="label_repeated", field=field))
+        else:
+            places[field] = found[0]
+    if not problems and len({(c.sheet, c.row) for c in places.values()}) != 1:
         problems.append(Problem(problem="columns_not_on_one_row"))
     return problems
 
@@ -495,7 +604,7 @@ class PoLayout(BaseModel):
     layout_id: uuid.UUID
     customer_code: CustomerCode
     version: int = Field(ge=1)
-    mapping: LayoutMapping
+    mapping: PoMapping
     sample: LayoutSample
     status: LayoutStatus = "proposed"
     proposed_by: uuid.UUID
