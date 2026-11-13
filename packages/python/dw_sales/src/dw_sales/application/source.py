@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import (
     MESSAGE_TEXT,
@@ -148,12 +149,15 @@ class SourceViewPort(Protocol):
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None: ...
 
-    async def pdf_page(self, data: bytes, page: int) -> tuple[bytes, int] | None:
+    # The file as the scanned mailbox handed it over: a locked one is opened
+    # with the passwords its own mail carries (ticket 17).
+
+    async def pdf_page(self, data: AttachmentContent, page: int) -> tuple[bytes, int] | None:
         """That page as a one-page PDF, and how many pages the file has; None
         when the file has no such page."""
         ...
 
-    async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None:
+    async def sheet_grid(self, data: AttachmentContent, sheet: str) -> SheetGrid | None:
         """The sheet's cells with their flags; None when there is no such sheet."""
         ...
 
@@ -689,7 +693,7 @@ class SourceService:
         now = self.clock.now()
         view: SourceView
         if kind == "pdf" and page is not None:
-            opened = await self._pdf_page(scope, source.sha256, content.data, page)
+            opened = await self._pdf_page(scope, source.sha256, content, page)
             if opened is None:
                 raise NotFoundError("the file has no such page", details={**details, "page": page})
             pdf_base64, count = opened
@@ -707,7 +711,7 @@ class SourceService:
                 served_at=now,
             )
         elif kind == "xlsx" and sheet is not None:
-            grid = await self._sheet_grid(scope, source.sha256, content.data, sheet)
+            grid = await self._sheet_grid(scope, source.sha256, content, sheet)
             if grid is None:
                 raise NotFoundError(
                     "the file has no such sheet", details={**details, "sheet": sheet}
@@ -776,15 +780,15 @@ class SourceService:
             kind = self.files.kind(content.data)
             for page, sheet in regions:
                 if kind == "pdf" and page is not None:
-                    await self._pdf_page(scope, source.sha256, content.data, page)
+                    await self._pdf_page(scope, source.sha256, content, page)
                 elif kind == "xlsx" and sheet is not None:
-                    await self._sheet_grid(scope, source.sha256, content.data, sheet)
+                    await self._sheet_grid(scope, source.sha256, content, sheet)
             left -= len(regions)
             if left <= 0:
                 return
 
     async def _pdf_page(
-        self, scope: SalesScope, sha256: str, data: bytes, page: int
+        self, scope: SalesScope, sha256: str, content: AttachmentContent, page: int
     ) -> tuple[str, int] | None:
         """The page as base64 and the file's page count, from the cache when
         it holds them; None when the file has no such page."""
@@ -795,7 +799,7 @@ class SourceService:
                 return cached.pdf_base64, cached.page_count
             except ValidationError:
                 pass  # an entry from another version: read the file
-        opened = await self.files.pdf_page(data, page)
+        opened = await self.files.pdf_page(content, page)
         if opened is None:
             return None
         pdf, count = opened
@@ -804,7 +808,7 @@ class SourceService:
         return encoded, count
 
     async def _sheet_grid(
-        self, scope: SalesScope, sha256: str, data: bytes, sheet: str
+        self, scope: SalesScope, sha256: str, content: AttachmentContent, sheet: str
     ) -> SheetGrid | None:
         key = source_cache_key(scope, sha256, page=None, sheet=sheet)
         if (held := await self.cache.get(key)) is not None:
@@ -812,7 +816,7 @@ class SourceService:
                 return SheetGrid.model_validate_json(held)
             except ValidationError:
                 pass
-        grid = await self.files.sheet_grid(data, sheet)
+        grid = await self.files.sheet_grid(content, sheet)
         if grid is not None:
             await self._keep(key, grid.model_dump_json())
         return grid

@@ -6,10 +6,18 @@ are the sender's claim.
 
 **A file that is not what its name says is refused** before any reader opens
 it (`refusal`, ticket 25): a ``.xlsx`` that is no workbook, a ``.pdf`` that is
-no PDF (a renamed program among them), and an encrypted Office file, which no
-reader can open and whose name says nothing of that. A name that claims no
-document type (an image, a signature) is not checked: it is sniffed, as
-before.
+no PDF (a renamed program among them). A name that claims no document type
+(an image, a signature) is not checked: it is sniffed, as before.
+
+**A file locked with a password is not refused** (`encrypted`, ticket 17): an
+Office file encrypted as a whole (an OLE compound file holding an
+``EncryptedPackage`` stream, what Excel writes for "Encrypt with Password")
+or a PDF whose trailer names an ``/Encrypt`` dictionary. Its contents are not
+scannable by ClamAV, so it is read only in the reader sandbox, opened there
+with the passwords its own mail carries (`dw_sales.domain.file_passwords`).
+An encrypted Office file sniffs as ``encrypted``, which is read as a workbook
+once opened: the sandbox holds the opened bytes to that, as it holds every
+file to what it is.
 
 This module stays in every process that holds an attachment, the API among
 them, while every parser of a file's content runs in the reader sandbox
@@ -35,7 +43,11 @@ _OLE: Final = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 _IMAGES: Final = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*", b"GIF8")
 _WORKBOOK: Final = "xl/workbook.xml"
 # An encrypted OOXML file is an OLE compound file holding this stream.
-_ENCRYPTED: Final = "EncryptedPackage".encode("utf-16-le")
+_ENCRYPTED: Final = "EncryptedPackage"
+# A PDF encrypted with a password names its encryption dictionary in its
+# trailer (or its cross-reference stream's dictionary, which is never
+# compressed), so the key is in the bytes as written.
+_PDF_ENCRYPT: Final = b"/Encrypt"
 # The streams that make an OLE compound file a legacy workbook or Word file
 # (ticket 27): Excel 97-2003's `Workbook` (`Book` before it), Word's
 # `WordDocument`.
@@ -65,28 +77,38 @@ def refusal(name: str, data: bytes) -> str | None:
     """Why a file is refused before anything reads it, or None (module
     docstring). The reason names the claim and what the bytes are, never a
     byte of the file."""
-    if data.startswith(_OLE) and _ENCRYPTED in data:
-        return "an encrypted Office file: a password-protected file is not read"
     extension = name[name.rfind(".") :].casefold() if "." in name else ""
     claimed = _CLAIMS.get(extension)
     if claimed is None:
         return None
     is_claimed = {
         "pdf": data.startswith(_PDF),
-        "ooxml": data.startswith(_ZIP),
+        # An encrypted OOXML file is an OLE compound file (module docstring).
+        "ooxml": data.startswith(_ZIP) or sniff(data) == "encrypted",
         "ole": data.startswith(_OLE),
     }[claimed]
-    if is_claimed and extension in (".xlsx", ".xlsm") and sniff(data) != "xlsx":
+    if is_claimed and extension in (".xlsx", ".xlsm") and sniff(data) not in ("xlsx", "encrypted"):
         is_claimed = False
     return None if is_claimed else f"named {extension} but its bytes are not one"
+
+
+def encrypted(data: bytes) -> bool:
+    """Whether the file is locked with a password (module docstring): an
+    Office file encrypted as a whole, or a PDF naming an encryption
+    dictionary. A PDF whose text merely says ``/Encrypt`` is let through as
+    encrypted here and opened as it is by the reader, which asks pypdf."""
+    if data.startswith(_PDF):
+        return _PDF_ENCRYPT in data
+    return data.startswith(_OLE) and _entry_named(data, _ENCRYPTED)
 
 
 def sniff(data: bytes) -> FileType | None:
     """What the bytes are, as far as a PO goes.
 
     ``pdf`` and ``xlsx`` are read; ``xls`` and ``doc`` are read once the
-    reader sandbox converted them (ticket 27). ``unsupported`` is a document
-    DW1 does not read (an image, an encrypted or other legacy Office file, an
+    reader sandbox converted them (ticket 27), ``encrypted`` once it opened
+    it with a password from its mail (ticket 17). ``unsupported`` is a
+    document DW1 does not read (an image, another legacy Office file, an
     archive), which routes the message to Sales with the reason. None is
     anything else.
     """
@@ -110,8 +132,8 @@ def _legacy(data: bytes) -> FileType:
     """A compound file's kind by the streams its directory names: a name is
     taken only where a directory entry starts and its length field agrees, so
     the same words in a document's text name no stream."""
-    if _ENCRYPTED in data:
-        return "unsupported"
+    if _entry_named(data, _ENCRYPTED):
+        return "encrypted"
     for name, kind in _LEGACY:
         if _entry_named(data, name):
             return kind

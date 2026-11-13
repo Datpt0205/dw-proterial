@@ -109,6 +109,7 @@ export const ROUTING_REASON = {
   sample_request: "Yêu cầu hàng mẫu",
   customer_unknown: "Chưa xác định được khách hàng",
   attachment_unreadable: "Không đọc được file",
+  attachment_locked: "Tệp có mật khẩu, DW không mở được",
   malware_detected: "Tệp đính kèm có mã độc",
   reply_to_case: "Trả lời về hồ sơ đang xử lý",
   other: "Khác",
@@ -129,6 +130,8 @@ export const ROUTING_ADVICE = {
     "DW1 không xác định được khách hàng từ địa chỉ gửi và tài liệu: xem khách DW1 đoán bên dưới rồi xác nhận, hoặc chọn khách khác; nếu là khách mới, thêm vào Dữ liệu chủ.",
   attachment_unreadable:
     "DW1 không đọc được tệp đính kèm: mở tệp gốc để xử lý tay, hoặc thiết lập mẫu PO nếu đây là PO của khách.",
+  attachment_locked:
+    "Tệp có mật khẩu mà không mật khẩu nào trong chính thư này mở được: mở tệp bằng mật khẩu khách gửi để xử lý tay, hoặc nhờ khách gửi lại mật khẩu.",
   malware_detected:
     "Tệp đính kèm có mã độc nên DW1 không mở: đừng mở tệp, báo IT.",
   reply_to_case:
@@ -390,6 +393,7 @@ export const REGION_FLAG = {
   new_layout: "Mẫu PO mới duyệt, cần xác nhận",
   print_differs: "Bản in PDF ghi khác",
   ocr: "Đọc bằng OCR, cần xác nhận",
+  opened_with_password: "Tệp có mật khẩu, cần xác nhận",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */

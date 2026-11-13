@@ -813,8 +813,11 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
     # is a scanner's verdict (ticket 25): no mock file carries malware, since
     # an EICAR file in git is quarantined by the antivirus of whoever checks
     # it out; `test_malware_scan.py` and clamd's own test give it.
+    # `attachment_locked` (ticket 17): no mock file is locked with a password;
+    # `test_locked_files.py` locks the sample set's own files at test time.
     given = {reason for _, reason in claimed if reason}
-    assert given - {"other"} == reasons - {"other", "reply_to_case", "malware_detected"}
+    not_in_the_sample = {"other", "reply_to_case", "malware_detected", "attachment_locked"}
+    assert given - {"other"} == reasons - not_in_the_sample
     # Not one message is left without a decision.
     assert "not_yet_processed" not in {kind for kind, _ in claimed}
 

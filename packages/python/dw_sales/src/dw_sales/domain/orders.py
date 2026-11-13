@@ -129,6 +129,10 @@ class RegionFlag(StrEnum):
     # Read by OCR from a scanned page (ticket 27): what the engine saw is not
     # what the page says until a person compares them, whatever its confidence.
     OCR = "ocr"
+    # Read from a file locked with a password, which the reader sandbox opened
+    # with a password its own mail carries (ticket 17): ClamAV could not scan
+    # inside it, and every value read still waits for a person (Đạt, 11-13).
+    OPENED_WITH_PASSWORD = "opened_with_password"
 
 
 class FlaggedValue(BaseModel):
@@ -510,6 +514,12 @@ class PoDocument(BaseModel):
         """Whether the PO was written in the mail, not attached to it."""
         return self.body is not None
 
+    @property
+    def opened_with_password(self) -> bool:
+        """Whether it was read from a file the reader sandbox opened with a
+        password its mail carries (ticket 17), as its values are flagged."""
+        return any(f.flag is RegionFlag.OPENED_WITH_PASSWORD for f in self.header.flags)
+
     def legacy_texts(self) -> list[tuple[str, SourceAnchor, LegacyEncoding]]:
         """Each value read from text typed in a TCVN3 or VNI font, in reading
         order (header, then the lines, then the total): its field, where it
@@ -560,6 +570,9 @@ class Unreadable(BaseModel):
 
     reason: str = Field(min_length=1, max_length=500)
     anchor: SourceAnchor | None = None
+    # The file is locked with a password, and none its mail carries opens it
+    # (ticket 17): routed as `attachment_locked`, not as unreadable.
+    locked: bool = False
 
 
 # ---------------------------------------------------------------- findings --

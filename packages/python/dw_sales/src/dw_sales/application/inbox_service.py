@@ -27,7 +27,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Final, Protocol
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, NotFoundError
@@ -97,6 +97,14 @@ from dw_sales.domain.quotes import QuoteCase
 
 # A message on a case is not processed again ("DW xử lý lại" is for a routed one).
 ON_A_CASE = frozenset({DispositionKind.CASE_CREATED, DispositionKind.ATTACHED_TO_CASE})
+
+# What the audit says of a PO read from a file locked with a password (ticket
+# 17): that it was opened, where, with what kind of password, and what that
+# means for the scan. Never which password.
+OPENED_WITH_MAIL_PASSWORD: Final = (
+    "encrypted, its contents not scannable by ClamAV; opened in the reader sandbox"
+    " with a password from its own mail"
+)
 
 # A message's disposition, and the case it left as stored, if it is on one.
 type _Processed = tuple[MessageDisposition, OrderCase | QuoteCase | None]
@@ -613,6 +621,14 @@ class InboxProcessing:
             # Which attachment and which signature (ticket 25); the detail is
             # built by the intake from ids and signature names, never bytes.
             details["malware"] = disposition.detail
+        if isinstance(case, OrderCase) and case.document.opened_with_password:
+            # That it was opened, and with what kind of password: never which
+            # one (ticket 17). The detail is code's sentence.
+            details["encrypted_file"] = (
+                f"{case.document.attachment_id}: {OPENED_WITH_MAIL_PASSWORD}"
+            )
+        elif disposition.reason is RoutingReason.ATTACHMENT_LOCKED:
+            details["encrypted_file"] = disposition.detail
         if disposition.case_id is not None and disposition.case_kind is not None:
             details |= {
                 "case_kind": disposition.case_kind.value,

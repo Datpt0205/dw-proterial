@@ -178,6 +178,13 @@ disallow_incomplete_defs = false
 module = ["asyncpg", "asyncpg.*"]
 ignore_missing_imports = true
 
+# msoffcrypto-tool ships no py.typed marker. Used in exactly one place: the
+# reader sandbox opening a workbook locked with a password (sales ticket 17,
+# `dw_sales.adapters.readers.locked`).
+[[tool.mypy.overrides]]
+module = ["msoffcrypto", "msoffcrypto.*"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # pytest
 # ---------------------------------------------------------------------------
@@ -329,6 +336,7 @@ forbidden_modules = [
     "openpyxl",
     "pypdf",
     "reportlab",
+    "msoffcrypto",
 ]
 
 [[tool.importlinter.contracts]]
@@ -348,6 +356,7 @@ forbidden_modules = [
     "dw_sales.adapters.source_view",
     "dw_reader",
     "pypdf",
+    "msoffcrypto",
 ]
 
 [[tool.importlinter.contracts]]

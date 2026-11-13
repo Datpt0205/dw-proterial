@@ -40,6 +40,12 @@ and the attachment names say nothing.
 
 **A file is what its bytes say.** Attachments are routed by sniffing their
 content, never by their name or the media type the sender declared.
+
+**A file locked with a password is opened with its own mail's** (ticket 17):
+the scanned mailbox hands it over locked, the reader sandbox opens it with
+the candidates the mail carries, and every value read from it is flagged for
+Sales. One none of them opens routes the message `attachment_locked`, as an
+unreadable file is routed; the password is never held here.
 """
 
 from __future__ import annotations
@@ -598,14 +604,22 @@ class OrderIntake:
 
         documents: list[PoDocument] = []
         kinds: list[str] = []
+        locked = False
         for content in readable:
             result = await self._read_po(scope, content, customer.code, caps, flag=rules)
             if isinstance(result, Unreadable):
                 reasons.append(f"{content.attachment.attachment_id}: {result.reason}")
+                locked = locked or result.locked
             else:
                 documents.append(result)
                 # A legacy workbook pairs with its print as a workbook does.
                 kinds.append(READ_AS.get(self.reader.sniff(content.data) or "", ""))
+        if not documents and locked:
+            # A file locked with a password none its mail carries opens
+            # (ticket 17): Sales opens it by hand; nothing is learned from a
+            # form nobody could open.
+            reason = RoutingReason.ATTACHMENT_LOCKED
+            return self._routed(message, kind, reason, customer, "; ".join(reasons))
         if not documents:
             routed = self._routed(message, kind, unreadable, customer, "; ".join(reasons))
             learned = await self._learn(scope, message, readable, customer, rules, run)

@@ -49,6 +49,9 @@ class RoutingReason(StrEnum):
     SAMPLE_REQUEST = "sample_request"
     CUSTOMER_UNKNOWN = "customer_unknown"
     ATTACHMENT_UNREADABLE = "attachment_unreadable"
+    # A file locked with a password that no password its own mail carries
+    # opens (ticket 17): routed as an unreadable file is, saying why.
+    ATTACHMENT_LOCKED = "attachment_locked"
     # The scanner found malware in an attachment (ticket 25): nothing in the
     # message is read, and its bytes are never served.
     MALWARE_DETECTED = "malware_detected"

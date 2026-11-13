@@ -39,6 +39,11 @@ dependencies = [
     # The reader sandbox's client (`adapters/reader_client.py`, ticket 25): HTTP
     # over its Unix socket. The range `dw_agent_runtime` declares for docgen's.
     "httpx>=0.28,<1",
+    # Opens a PO workbook the customer locked with a password, with the
+    # passwords its own mail carries (ticket 17), in memory, in the reader
+    # sandbox only (an import-linter contract keeps it out of the API).
+    # Pinned exactly: it decides which bytes a locked file is read as.
+    "msoffcrypto-tool==6.0.0",
 ]
 
 [project.optional-dependencies]
