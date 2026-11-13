@@ -310,3 +310,91 @@ the electronic stamp; anything typed into Bravo by DW.
 
 `issues/01` … `issues/16`, in the order to build. Each names what it waits
 on.
+
+## 11-13: the BA's merged flows, the Box samples, and what changes
+
+Sources, all outside git (customer data, the repository is public):
+
+- the BA's two merged pages, "QUY TRÌNH ĐƠN HÀNG (PO)" (steps 0–6.3, states
+  [O1]–[O10]) and "QUY TRÌNH BÁO GIÁ (RFQ)" (steps 1–2.1.6, states
+  [Q1]–[Q10]), `Downloads/Untitled Diagram (1).drawio` and
+  `Untitled Diagram.drawio` (the same pages as the team's diagrams.net file);
+- 53 real files from Proterial's Box share (B01–B39: POs of four customers,
+  revisions, confirmations, conversion list, item master, lead times, base
+  prices, RFQ form, calendars, procedure documents), in
+  `Downloads/proterial/Box-DW1/`, inventoried in its `_INVENTORY.md`;
+- the comparison of both pages with what is built,
+  `Downloads/proterial/DW1-flow-review/GAP.md` (PO: 11 built, 14 partly, 11
+  missing, 6 against a decision; RFQ: 5, 8, 12, 5).
+
+Here the four customers are "customer 1–4"; which is which is in the local
+inventory only.
+
+**Decided 11-13 (Đạt):**
+
+1. **The decisions stand; the diagrams change.** Eleven boxes have DW write
+   Bravo, send mail to a customer, or log into a customer's portal. They
+   become "DW drafts, a person does it in Bravo / sends it / downloads it,
+   DW reads the result back". The wording per box is in `GAP.md` §2, for
+   the BA.
+2. **A password-protected PO (Excel or PDF) is opened with the password its
+   own mail carries**, inside the `reader` sandbox (no network). The password is
+   used for that one opening: never stored, logged, audited or shown; the
+   audit says only that the file was opened with a password from its mail.
+   No password found, or a wrong one: the file goes to a person, as an
+   unreadable one does today. Every value read still waits for a person.
+   **A PO on a customer's portal is downloaded by a person** (Đạt, 11-13: DW
+   never logs into a customer's portal) and uploaded to DW1 ("Tải PO lên",
+   ticket 18).
+3. **Real PO intake first**, then PC and after-confirmation, then the RFQ
+   branches.
+
+**What the real files break** (inventory, the ten that matter):
+
+- customer 1: an `.xlsx` with a password (decision 2), nine POs and 225
+  lines in one mail; the code needed for conversion is only in a second
+  sheet with Japanese headers;
+- customer 2: no PO by mail. A notice mail says the PO is on the
+  customer's portal; Sales downloads a UTF-16, tab-separated CSV mixing
+  forecast and firm lines, one PO number per line;
+- customer 3: a signed PDF and an Excel of the same PO disagree on delivery
+  dates; one mail carries two POs; one priced per km;
+- customer 4: an image-only PDF (vision model), US dates, two prices per
+  line, codes absent from the conversion list, confirmation due in 48 h;
+- "confirming a PO" is stamping the customer's own PO (by hand and scan, or
+  text inserted in the PDF) plus the processed Excel; there is no PRV form;
+- the company and nine group companies share one mail domain, some of them
+  customers: domain alone cannot tell internal from customer;
+- the conversion list is keyed by (customer, customer code): one
+  description maps to different PRV codes at different customers;
+- no LME band table; the material rate varies by product group;
+- lead time depends on customer and product family; the holiday calendar
+  marks days off by cell colour, 2027 is a scan;
+- a revision is marked only by a suffix on the file name (R, R1, -2, -RE11).
+
+**Tickets**, continuing 01–16:
+
+| #   | What                                                                                                         | Waits on                     |
+| --- | ------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| 17  | A PO file with a password, opened with its mail's password                                                   | none                         |
+| 18  | A portal export (UTF-16 CSV, firm lines only) and "Tải PO lên" for a file Sales downloaded                   | none                         |
+| 19  | One mail or one file with several POs opens one case per PO                                                  | none                         |
+| 20  | Customer from the sender's address, not its domain, when group companies share it                            | Proterial: customer contacts |
+| 21  | A customer absent from the conversion list (the list is already keyed by customer and code, `convert_entry`) | none                         |
+| 22  | The same PO in two files that disagree; a revision named by the file name                                    | none                         |
+
+After them, in order: 07 (PC request, reminders, splits), 10 (internal
+changes, bulk splits), the confirmation as the customer's own PO plus the
+processed Excel (replaces the "PDF in the customer's form" idea; DW does not
+stamp), 09, 06, the follow-up timings of the diagrams
+(`sales_followups@1.2.0`: customer reminders repeated, the third to the
+head; PC and JP/HQ late), then the RFQ branches (mass skips Design,
+"pending", the customer's answer after a quote, 05, sign before send).
+
+**Owed by Proterial** (short, to the questions workbook): customer contacts
+per customer and their Sales PIC; mail templates for each step that writes
+to a customer, PC or JP/HQ; the LME band table, margins by customer and the
+exchange-rate rule; stock and production plan from PC; NOC/NOEC/ESF
+records; the lists named but not sent (Special list, Decline list);
+customer 4's conversion codes; whether the signed PDF or the Excel wins when
+they disagree; which customers send through portals, and how many POs a day.
