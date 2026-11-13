@@ -439,7 +439,9 @@ saved from Sent Items carry none. One thread covers several POs.
 Order of work (tickets 23–35 added; 02 moved up 11-13, Đạt: "các excel mỗi
 khách mỗi khác, cần đưa về 1 file chuẩn để keyin lên bravo"): 17, 18, 02
 (the real SalesOrder paste sheet; B41 only fixes the final headers), 36
-(Bravo's B04/B06 imported as exported, a measured run on the real files), 24 → 19 → 22; 20 → 21;
+(Bravo's B04/B06 imported as exported, a measured run on the real files),
+38 (a customer's SalesOrder rules learned from a worked pair, proven by
+replay: dw_sales ADR 0013), 24 → 19 → 22; 20 → 21;
 26 → 27 → 07 → 29; 23 (measure) → 25 → 28; 30 (eval gate) → 31 → 32,
 33 → 34; 35 (process map, simple configuration) redrawn as they land;
 then 10, 09, 06, follow-ups 1.2.0, the RFQ branches.
