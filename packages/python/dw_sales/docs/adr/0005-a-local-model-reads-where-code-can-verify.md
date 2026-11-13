@@ -261,3 +261,13 @@ not told apart (the measurement names `id@version`); the RFQ step's
 measurement names its own prompt, not the description prompt it also calls;
 `sales.bravo_template_mapping` (a one-call draft, not a `model_assist`
 switch) is outside this gate.
+
+## Amendments 2026-11-13 (Đạt)
+
+- **The body.** "The body never changes a value" becomes "the body changes
+  no value a person has not confirmed": a change a customer asks for in a
+  mail is a change request, confirmed line by line (ADR 0010).
+- **Decision 5.** DW1 may call read-only tools whose scope code binds from
+  the run, as platform ADR 0007 (SEC02) allows; still no tool that writes,
+  sends or approves, and none until the tool-calling eval passes on the
+  plant's model (ADR 0012).

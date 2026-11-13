@@ -1,7 +1,7 @@
 # 19 — One mail or one file with several POs opens one case per PO
 
 Status: ready-for-agent
-Blocked by: none
+Blocked by: 24 (a reply in a multi-PO thread must still link: dw_sales ADR 0009)
 Category: enhancement
 
 ## Why

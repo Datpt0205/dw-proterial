@@ -123,13 +123,48 @@ API and the plan use the English terms. The spec is
   case; Sales confirms each one, typing it as it should be, before the YCBG.
   The customer is the sender domain's; a target price the customer states
   is kept as their words only and never reaches price evidence (ticket 29).
+- **Mail thread** (Luồng thư): the messages one Outlook conversation holds,
+  joined by their `Message-ID`, `In-Reply-To` and `References`, within one
+  workspace and one customer. It has no status of its own: a thread holds
+  the talk before a PO and after it, and its cases hold the state. One
+  thread may carry several cases, and one case may be talked about in
+  several threads (dw_sales ADR 0009). Avoid: "conversation case".
+- **Outgoing message** (Thư Sales gửi): a message in a thread whose sender
+  is the member's own address. It never opens a case and never changes a
+  value; it tells what Sales asked and when a confirmation left.
 - **Reply in a case's thread** (Khách trả lời trong luồng thư): a message
-  whose `In-Reply-To`/`References` name a message already on one case of the
+  whose `In-Reply-To`/`References` name a message already on a case of the
   sender's own customer; it is attached to that case (`attached_to_case`)
-  with no model. Where the tenant turns it on, a model reads what it says
-  (accepts the spec, rejects it, keeps the PO as it is, ...), quoting the
-  sentences code then locates, and the case proposes its next step; Sales
-  takes the step, or another (ticket 32).
+  with no model. Where the thread carries several cases, the numbers the
+  message names decide which, else Sales picks. Where the tenant turns it
+  on, a model reads its **thread intents** and the case proposes its next
+  step; Sales takes the step, or another (tickets 32, 24, 27).
+- **Thread intent** (Ý định của thư): what a message in a thread does, from
+  one closed set: `sends_po` (gửi PO), `requests_change` (xin điều chỉnh),
+  `cancels` (huỷ), `accepts` (đồng ý), `rejects` (không đồng ý), `asks`
+  (hỏi), `adds_info` (bổ sung thông tin), `sends_rfq` (gửi RFQ), `unclear`
+  (chưa rõ). A message may carry several, each standing on sentences of it
+  that code located (dw_sales ADR 0010).
+- **Change request** (Yêu cầu điều chỉnh): what a customer asked to change
+  on an order, in a mail's words or table: per line, the field, the value
+  the case holds and the value asked, each with where the mail says it.
+  Nothing of it reaches the case until the PIC confirms each line. One is
+  open per case at a time; a later one waits behind it.
+- **Implied acceptance** (Đồng ý ngầm): a customer's silence after a
+  confirmation, taken as agreement once that customer's number of days has
+  passed, recorded by a person. A customer with no number never has it
+  (dw_sales ADR 0011).
+- **Confirmed sender** (Người gửi đã xác nhận): an address no customer's
+  contacts list, which Sales confirmed as one customer's, with who and on
+  which mail. Bravo's contacts come first; a confirmed sender never
+  overrides them (dw_sales ADR 0009).
+- **Triage card** (Thẻ phân loại thư): for a mail nothing else read, what
+  DW1 thinks it is, which case it seems to concern and one step from the
+  closed set, for Sales to take or not (dw_sales ADR 0012).
+- **Skill** (Kỹ năng đọc thư): an instruction in words telling DW1 how to
+  read a kind of mail, for one customer or all, proposed by a PIC or the
+  head and approved by the head, never its proposer. It adds no permission,
+  tool, recipient or number.
 - **Hand-off** (Bản chuyển PC/QA): the mail Sales sends PC or QA about a
   delivery change, a complaint or a sample request, pre-filled by code from
   a versioned template with the values a model copied and code located,
