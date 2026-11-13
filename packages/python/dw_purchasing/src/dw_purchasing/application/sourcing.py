@@ -10,7 +10,9 @@
   buyer sends each draft.
 - **Record an offer**: typed by a buyer (`record_offer`), or read from a
   supplier's reply (`read_offer_mail`). A reply counts only from a verified
-  sender whose domain is one of an asked supplier's; the model copies spans
+  sender an asked supplier writes from (`Supplier.writes_from`), and only
+  when it fits whole before the model (a value is checked against what the
+  model was shown, and a cut reads "1500" as "15"); the model copies spans
   (`purchasing.supplier_quote_reading@1.0.0`), code ties them to the lines that
   supplier was asked for and parses them. A reply is read once.
 - **Compare** (`comparison`): code's, cheapest valid offer first per line.
@@ -40,7 +42,7 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
-    cut_to_tokens,
+    estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, DomainError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
@@ -55,7 +57,7 @@ from dw_purchasing.application.reapprovals import Reapprovals, over_limit
 from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData, Supplier
-from dw_purchasing.domain.mail_reading import fold
+from dw_purchasing.domain.mail_reading import fold, occurrences
 from dw_purchasing.domain.offer_reading import MAX_OFFER_LINES, ModelOffer, read_offer_mail
 from dw_purchasing.domain.requests import Code, Currency, Price, PrLine
 from dw_purchasing.domain.sourcing import (
@@ -354,7 +356,7 @@ class SupplierSourcing:
             )
         assert case.rfq is not None
         master = await self.master.for_context(context)
-        supplier = _replying(case.rfq, master, message.sender.domain)
+        supplier = _replying(case.rfq, master, message.sender.address)
         if supplier is None or not message.authentication.verified:
             raise ConflictError(
                 "thư không phải của một nhà cung cấp đã được hỏi giá, hoặc chưa xác thực",
@@ -373,13 +375,18 @@ class SupplierSourcing:
         if self.model is None:
             raise InfrastructureError(NOT_READ_NOW, details={"reason_code": "no_model"})
         part = newest_part(message)
-        shown = cut_to_tokens(
-            part.text, self.model.max_input_tokens - _PROMPT_TOKENS - _OFFER_TOKENS
-        )
+        if (
+            estimated_tokens(part.text)
+            > self.model.max_input_tokens - _PROMPT_TOKENS - _OFFER_TOKENS
+        ):
+            raise ConflictError(
+                "thư quá dài để DW2 đọc trọn: nhập tay",
+                details={"message_id": message_id, "rule": "mail_too_long"},
+            )
         try:
             answer = await self.model.interpret(
                 SUPPLIER_QUOTE_READING,
-                {"mail": shown},
+                {"mail": part.text},
                 ModelOffer,
                 run=self._run(context, f"purchasing_mail:{message_id}", "dw2-offer-mail"),
                 max_output_tokens=_OFFER_TOKENS,
@@ -387,7 +394,7 @@ class SupplierSourcing:
         except ModelUnavailableError as exc:
             raise InfrastructureError(NOT_READ_NOW, details={"reason_code": "model"}) from exc
         verdict = read_offer_mail(
-            shown,
+            part.text,
             answer,
             asked=asked,
             received_on=message.received_at.date(),
@@ -454,11 +461,11 @@ class SupplierSourcing:
         for message in await self.inbox.list_messages(context):
             if message.message_id in read or not message.authentication.verified:
                 continue
-            supplier = _replying(case.rfq, master, message.sender.domain)
+            supplier = _replying(case.rfq, master, message.sender.address)
             if supplier is None:
                 continue
             text = f"{message.subject}\n{newest_part(message).text}"
-            answered = reply_case(asking, master, message.sender.domain, text)
+            answered = reply_case(asking, master, message.sender.address, text)
             if answered is None or answered.case_id != case.case_id:
                 continue
             found.append(
@@ -640,28 +647,29 @@ def _change(case: PurchaseCase) -> CaseChange:
 
 
 def reply_case(
-    cases: Sequence[PurchaseCase], master: MasterData, domain: str, text: str
+    cases: Sequence[PurchaseCase], master: MasterData, sender: str, text: str
 ) -> PurchaseCase | None:
     """The case a supplier's mail answers, decided by code: the one case
-    still asking (`rfq_drafted`) that asked a supplier this domain is one of
-    and whose PR number the mail names (an RFQ's subject carries it, and a
-    reply keeps it). A supplier writes about other things too, a request of
-    its own or another order: anything else is None, and a buyer picks."""
+    still asking (`rfq_drafted`) that asked a supplier ``sender`` writes from
+    and whose PR number the mail names as a whole token run (an RFQ's subject
+    carries it, and a reply keeps it; "PR-12" does not name PR-1). A
+    supplier writes about other things too, a request of its own or another
+    order: anything else is None, and a buyer picks."""
     folded = fold(text)
     asking = [
         c
         for c in cases
         if c.status is CaseStatus.RFQ_DRAFTED
         and c.rfq is not None
-        and _replying(c.rfq, master, domain) is not None
-        and fold(c.request.pr_no) in folded
+        and _replying(c.rfq, master, sender) is not None
+        and occurrences(folded, fold(c.request.pr_no))
     ]
     return asking[0] if len(asking) == 1 else None
 
 
-def _replying(rfq: RfqRound, master: MasterData, domain: str) -> Supplier | None:
-    """The asked supplier whose domain the reply came from; None for anyone
-    else, or when two asked suppliers share it."""
+def _replying(rfq: RfqRound, master: MasterData, sender: str) -> Supplier | None:
+    """The asked supplier ``sender`` writes from (`Supplier.writes_from`);
+    None for anyone else, or when two asked suppliers would."""
     asked = [master.supplier(d.supplier_code) for d in rfq.drafts]
-    found = [s for s in asked if s is not None and domain in s.domains]
+    found = [s for s in asked if s is not None and s.writes_from(sender)]
     return found[0] if len(found) == 1 else None

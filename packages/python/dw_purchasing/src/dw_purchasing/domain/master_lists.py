@@ -179,13 +179,6 @@ class ListSpec:
     key: Callable[[Any], tuple[Any, ...]]
     example: tuple[CellValue, ...]
 
-    def complete(self, record: dict[str, Any]) -> dict[str, Any]:
-        """What a row leaves out and the list can say: a supplier's mail
-        domains are its contacts' when no column names them."""
-        if self.name == "suppliers" and not record.get("domains"):
-            record["domains"] = sorted({a.rsplit("@", 1)[-1] for a in record.get("contacts", [])})
-        return record
-
 
 SHEETS: Final[tuple[ListSpec, ...]] = (
     ListSpec(
@@ -335,7 +328,7 @@ def _parse_sheet(
             rejected.append(Rejected(sheet=spec.sheet, row=number, reason=str(exc)[:120]))
             continue
         try:
-            model = spec.model.model_validate(spec.complete(raw))
+            model = spec.model.model_validate(raw)
         except ValidationError as exc:
             rejected.append(Rejected(sheet=spec.sheet, row=number, reason=_label(spec, exc)))
             continue

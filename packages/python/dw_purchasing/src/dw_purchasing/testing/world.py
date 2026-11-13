@@ -8,6 +8,7 @@ recorded live answer replays. Nothing here reaches a database or a model.
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ from dw_kernel.errors import PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import RuleVersion
+from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.master_template import XlsxMasterTemplate
 from dw_purchasing.adapters.mock.inbox import MockInbox
@@ -411,3 +413,19 @@ def open_world(
             ids=ids,
         ),
     )
+
+
+async def with_mail(world: World, *added: InboundMessage) -> None:
+    """``world``'s mailbox with ``added`` beside the demo's mails, in every
+    service that reads it: a test's own mail, such as one too long to read."""
+    inbox = world.service.inbox
+    messages = [*await inbox.list_messages(caller()), *added]
+    readings = {
+        m.message_id: found
+        for m in messages
+        if (found := await inbox.attachment_readings(caller(), m.message_id))
+    }
+    mailbox = MockInbox(messages, tenant_id=ALPHA[0], workspace_id=ALPHA[1], readings=readings)
+    world.service = dataclasses.replace(world.service, inbox=mailbox)
+    world.sourcing = dataclasses.replace(world.sourcing, inbox=mailbox)
+    world.follow_up = dataclasses.replace(world.follow_up, inbox=mailbox)

@@ -23,7 +23,7 @@ from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.follow_up import ORDER_CONFIRMATION_READING
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.testing.flows import orders_drafted, sourcing_world
-from dw_purchasing.testing.world import ALPHA, BETA, EVERY_SCOPE, World, caller
+from dw_purchasing.testing.world import ALPHA, BETA, EVERY_SCOPE, World, caller, with_mail
 
 pytestmark = pytest.mark.unit
 
@@ -117,6 +117,28 @@ async def test_a_confirmation_that_differs_says_where_and_waits_for_the_buyer() 
     )
     accepted = _tracked(await world.service.case(caller(), case_id), BAOHO).confirmation
     assert accepted is not None and accepted.accepted_by == caller().principal_id
+
+
+async def test_a_confirmation_too_long_to_show_whole_is_not_read_and_the_buyer_reads_it() -> None:
+    """Hardcode audit finding 3: a quantity is checked against what the model
+    was shown, so a confirmation is shown whole or not at all."""
+    world, case_id = await _drafted()
+    await _numbered(world, case_id)
+    c01 = await world.service.inbox.get_message(caller(), "C01")
+    assert c01 is not None
+    await with_mail(
+        world,
+        c01.model_copy(
+            update={"message_id": "C99", "body_text": c01.body_text + "\nGhi chú\n" * 4000}
+        ),
+    )
+
+    with pytest.raises(ConflictError) as refused:
+        await _read(world, case_id, "C99")
+
+    assert refused.value.details["rule"] == "mail_too_long"
+    assert not [c for c in world.model.calls if c[0] == ORDER_CONFIRMATION_READING]
+    assert _tracked(await world.service.case(caller(), case_id), KIMURA).confirmation is None
 
 
 async def test_a_mail_that_names_no_order_of_its_supplier_is_not_read() -> None:

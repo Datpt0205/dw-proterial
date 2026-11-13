@@ -107,6 +107,7 @@ export const MAIL_REASON: Record<string, string> = {
   attachment_infected: "tệp đính kèm có mã độc",
   several_documents: "thư có nhiều tệp tài liệu",
   document_too_long: "tệp đính kèm quá dài để đọc trọn",
+  mail_too_long: "thư quá dài để đọc trọn",
   attachment_unreadable: "DW2 không đọc được tệp đính kèm",
 };
 

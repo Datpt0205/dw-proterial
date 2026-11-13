@@ -16,8 +16,8 @@ findings it closes, and this file marks them.
 | #   | Sev  | Where                                                                                                                                         | Failure                                                                                                                       |
 | --- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 1   | HIGH | `dw_sales/application/snapshot_catalog.py:383-392`, `adapters/assembly.py:246-262`, `apps/api/src/dw_api/settings.py:147`                     | Deployed DW1 checks real POs against the mock catalog's ERP orders and open YCBGs, and the mock master lists until approved    |
-| 2   | HIGH | `dw_purchasing/application/sourcing.py:657`                                                                                                   | A supplier's reply naming PR-12 attaches to PR-1 (substring match); at AI_AUTO the offer is recorded on the wrong case        |
-| 3   | HIGH | `dw_purchasing/application/intake.py:346,365`, `sourcing.py:376,389`, `follow_up.py:201`; `dw_agent_runtime/model/interpretation.py:50-57`    | `cut_to_tokens` cuts mid-line and spans are verified against the cut text: "1500" can pass as "15"; later lines vanish        |
+| 2   | HIGH | `dw_purchasing/application/sourcing.py:657`                                                                                                   | A supplier's reply naming PR-12 attaches to PR-1 (substring match); at AI_AUTO the offer is recorded on the wrong case — fixed 2026-11-13 |
+| 3   | HIGH | `dw_purchasing/application/intake.py:346,365`, `sourcing.py:376,389`, `follow_up.py:201`; `dw_agent_runtime/model/interpretation.py:50-57`    | `cut_to_tokens` cuts mid-line and spans are verified against the cut text: "1500" can pass as "15"; later lines vanish — fixed 2026-11-13 |
 | 4   | HIGH | `dw_sales/domain/handoffs.py:230-279`, `application/handoffs.py:312`                                                                          | "3 km" reaches PC as 3 m when the model's span omits the unit; yards, kgs, spools pass as metres                              |
 | 5   | HIGH | `dw_sales/application/design_text_reading.py:101-110,139`                                                                                    | Copper weight anchored by `str.find`: "2.5" accepted inside "12.5 kg/km"; kg/m or g/m taken as kg/km                         |
 | 6   | MED  | `dw_sales/application/order_intake.py:179-195,1184-1207,1271-1278`                                                                            | Keyword tables are the default path (model step shipped off); a complaint about an order with a PDF reads as a PO             |
@@ -27,7 +27,7 @@ findings it closes, and this file marks them.
 | 10  | MED  | `dw_sales/adapters/readers/text_parts.py:48-49,155-160,20-23`                                                                                 | The model sees ≤1000 rows, columns A–Z, no scanned pages of a mixed PDF; nobody is told                                       |
 | 11  | MED  | `dw_sales/application/artifact_content.py:362-375`, `order_artifacts.py:264` vs `dw_purchasing/application/orders.py:88-91`                   | Sales' mock Bravo upload layout and mock mail copy are only noted when deployed (Purchasing refuses its mock)                 |
 | 12  | MED  | `dw_knowledge/adapters/qdrant_index.py:38-47,320-328`                                                                                         | Any error whose text says "404"/"not found" becomes an empty search, read as "no evidence"                                    |
-| 13  | MED  | `dw_purchasing/domain/master_lists.py:181-186` (used `automation_lane.py:766`, `sourcing.py:666`, `follow_up.py:120`)                         | A supplier contact on gmail makes gmail.com its domain: any verified gmail sender counts as that supplier                     |
+| 13  | MED  | `dw_purchasing/domain/master_lists.py:181-186` (used `automation_lane.py:766`, `sourcing.py:666`, `follow_up.py:120`)                         | A supplier contact on gmail makes gmail.com its domain: any verified gmail sender counts as that supplier — fixed 2026-11-13  |
 | 14  | MED  | `dw_sales/domain/order_checks.py:65,279`, `artifact_content.py:50`, `overview_service.py:75`, `quotes_service.py:82`                          | Asia/Ho_Chi_Minh in code 4+ times while `working_hours.time_zone` is tenant config                                            |
 | 15  | LOW  | `apps/web/app/sales/page.tsx:57`, `apps/web/app/sales/quotes/[caseId]/page.tsx:80,277-279`                                                    | "Due soon" 48 h / 1–2 days in the UI beside the policy's `hours_before_due` / `due_within_days`                               |
 | 16  | LOW  | `dw_platform/domain/approval.py:115`                                                                                                          | A strict approval with no `makers` key excludes only the requester                                                            |
@@ -55,3 +55,12 @@ findings it closes, and this file marks them.
 13. Match by address for public mail providers, as Sales' sender ledger does.
 14. Read `working_hours.time_zone` everywhere.
 15–22. Read from the policy; raise on a missing `makers` / `results`; `PLATFORM_ADMIN_ROLE` or a scope via `authz.require`; `getattr(exc.orig, "constraint_name")`; one currency table, a bare symbol unknown; month names per language; flag low-confidence OCR lines; one owner for the 8000 limit.
+
+## Found while fixing
+
+- Batch B (11-13): `cut_to_tokens` now cuts on whole lines only; the DW1
+  callers verify against the whole text, but `dw_sales/application/handoffs.py`
+  reads values from a cut text and drops lines past the cut with no flag:
+  taken into batch C with finding 4 (refuse `too_long`, as `rfq_reading` does).
+- Supplier versions already stored keep any domain the removed derivation
+  wrote; a re-import of the supplier sheet clears them (only mock data today).

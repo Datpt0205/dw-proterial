@@ -142,6 +142,7 @@ _MAIL_REASONS: Final = {
     "attachment_infected": "tệp đính kèm có mã độc",
     "several_documents": "thư có nhiều tệp tài liệu",
     "document_too_long": "tệp đính kèm quá dài để đọc trọn",
+    "mail_too_long": "thư quá dài để đọc trọn",
     "attachment_unreadable": "DW2 không đọc được tệp đính kèm",
 }
 
@@ -365,16 +366,16 @@ class AutomationLane:
         """The order or the case a supplier's mail is about, decided by code,
         and the step its switch allows there; None for neither."""
         text = f"{message.subject}\n{newest_part(message).text}"
-        domain = message.sender.domain
+        sender = message.sender.address
         orders = [
             (case, order)
             for case in waiting.ordered
-            if (order := named_order(case, master, domain, text)) is not None
+            if (order := named_order(case, master, sender, text)) is not None
         ]
         if len(orders) == 1:
             case, order = orders[0]
             return await self._confirmation(context, supplier, message.message_id, case, order)
-        answered = reply_case(waiting.asking, master, domain, text)
+        answered = reply_case(waiting.asking, master, sender, text)
         if answered is not None:
             return await self._quote(context, supplier, message.message_id, answered)
         return None
@@ -760,10 +761,10 @@ class AutomationLane:
 
 
 def _supplier_of(master: MasterData, sender: str) -> str | None:
-    """The master data's supplier a sender's domain belongs to, by name;
-    None for anyone else, or when two suppliers share the domain."""
-    domain = sender.rpartition("@")[2].lower()
-    found = [s for s in master.suppliers if domain in s.domains]
+    """The master data's supplier ``sender`` writes from
+    (`Supplier.writes_from`), by name; None for anyone else, or when two
+    suppliers would."""
+    found = [s for s in master.suppliers if s.writes_from(sender)]
     return found[0].name if len(found) == 1 else None
 
 

@@ -42,7 +42,7 @@ from dw_purchasing.domain.requests import (
     PrLine,
     PurchaseRequest,
 )
-from dw_purchasing.testing.world import ALPHA, BETA, BUYER, World, caller, open_world
+from dw_purchasing.testing.world import ALPHA, BETA, BUYER, World, caller, open_world, with_mail
 
 pytestmark = pytest.mark.unit
 
@@ -384,6 +384,50 @@ async def test_a_file_too_long_to_show_whole_goes_to_a_person_unread() -> None:
     item = await world.service.read_mail(caller(), "P07")
     assert (item.disposition, item.reason) == (Disposition.TO_PERSON, "document_too_long")
     assert world.model.calls == []
+
+
+async def test_a_mail_too_long_to_show_whole_goes_to_a_person_and_1500_never_reads_as_15() -> None:
+    """Hardcode audit finding 3: a mail was cut to fit and its spans checked
+    against the cut, so a cut ending inside "1500" let "15" through as the
+    quantity. This mail is sized so that cut (from the end, by quarters)
+    ended at "(cuon): 15"; a model that read the cut answers 15."""
+    body = (
+        "Bo phan: Kho\nMa ngan sach: CC-WH-01\nGhi chu: "
+        + "x" * 7114
+        + "\n1. Day dien DY-24, so luong (cuon): 1500\n"
+        + "Ghi chu them ve giao hang\n" * 600
+    )
+    read_from_cut = {
+        "pr_no_span": "PR-2611-777",
+        "department_span": "Kho",
+        "budget_code_span": "CC-WH-01",
+        "currency_span": None,
+        "need_by_span": None,
+        "lines": [
+            {
+                "line_span": "1. Day dien DY-24, so luong (cuon): 15",
+                "item_code_span": "DY-24",
+                "description_span": "Day dien DY-24",
+                "quantity_span": "15",
+                "unit_span": "cuon",
+                "need_by_span": None,
+            }
+        ],
+    }
+    world = _world({"PR-2611-777": read_from_cut, **ANSWERS})
+    p01 = await world.service.inbox.get_message(caller(), "P01")
+    assert p01 is not None
+    await with_mail(
+        world,
+        p01.model_copy(
+            update={"message_id": "P99", "subject": "PR-2611-777 day dien", "body_text": body}
+        ),
+    )
+
+    item = await world.service.read_mail(caller(), "P99")
+
+    assert (item.disposition, item.reason) == (Disposition.TO_PERSON, "mail_too_long")
+    assert world.model.calls == [] and world.store.rows(*ALPHA).cases == {}
 
 
 async def test_no_request_beside_a_document_dw2_could_not_read_names_the_file() -> None:

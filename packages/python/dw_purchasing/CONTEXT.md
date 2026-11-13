@@ -278,8 +278,8 @@ dạng), `no_lines` (thư không có dòng hàng nào), `too_many_lines` (thư c
 nhiều dòng hàng hơn quy tắc cho phép), `currency_not_allowed` (loại tiền
 quy tắc không cho phép), `attachment_infected` (tệp đính kèm có mã độc),
 `several_documents` (thư có nhiều tệp tài liệu), `document_too_long` (tệp
-đính kèm quá dài để đọc trọn), `attachment_unreadable` (DW2 không đọc được
-tệp đính kèm).
+đính kèm quá dài để đọc trọn), `mail_too_long` (thư quá dài để đọc trọn),
+`attachment_unreadable` (DW2 không đọc được tệp đính kèm).
 
 Marks: `machine_read` (Máy đọc), `machine_written` (Máy viết), `template`
 (Mẫu cố định), `person` (Người nhập).
