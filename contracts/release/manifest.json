@@ -511,7 +511,7 @@
           "path": "evals/expected/sales_handoff_flow.json"
         },
         {
-          "checksum": "58c1f8343c4d14582832ff04821bcbaf858b1bf4f2881bac3c216b4ab330d14e",
+          "checksum": "34810e20e765d981dcf3b1130a623e81843426c668a5d3aef9ad37417e66e00f",
           "path": "evals/expected/sales_handoff_golden.json"
         },
         {
@@ -538,7 +538,7 @@
           "path": "evals/expected/sales_intent.json"
         },
         {
-          "checksum": "e67967ced32f6fd9444c23ecd423837a26afe83b48f12552c7004b7255d99906",
+          "checksum": "025c8b9d2ffdc48dc2230d91206d708c8050661436d8ee21964f5cfcda0d08de",
           "path": "evals/expected/sales_intent_golden.json"
         },
         {
@@ -546,11 +546,11 @@
           "path": "evals/fixtures/cases/sales_intent.json"
         },
         {
-          "checksum": "80846269b4707d2e651dbbb8cd9bedd8c03e58c310630f43e2dfc2ceb2d5de33",
+          "checksum": "d7d06e682a366afa0b8c425074a709545b416f2c8963fbaf28832c0c7a3c340d",
           "path": "evals/fixtures/cases/sales_intent_golden.json"
         },
         {
-          "checksum": "025fddee9239bde4ee6218180a3c3f0ac159343124a4cf5d8dc8ba92bb68c026",
+          "checksum": "63da078a6d4e669bdbcfc7436e784747ead852533553a6f16357605e5f98c1d8",
           "path": "evals/fixtures/cases/sales_intent_security.json"
         }
       ],
@@ -637,7 +637,7 @@
           "path": "evals/expected/sales_po_body.json"
         },
         {
-          "checksum": "114d74997af766f13fc59d5d543ed0776b2ccde13398891e4e6771194e974540",
+          "checksum": "94f46892c59b02b7cc273921a43ab118fd644096b4de64060176e47f7c8df783",
           "path": "evals/fixtures/cases/sales_po_body.json"
         }
       ],
@@ -679,11 +679,11 @@
           "path": "evals/expected/sales_rfq.json"
         },
         {
-          "checksum": "a2ecffad9f64d7173c31fbd7bf6c01abaf28a56145673b94dbf095a77f89651e",
+          "checksum": "b19c9b80ca9dfc01585c67454152d2a43c7168a88fad59ede30a8bfa5c5d5da9",
           "path": "evals/expected/sales_rfq_flow.json"
         },
         {
-          "checksum": "460fc0112c0709da3a0c7e668800077d53aaef41e56b813b5c058b0da5db3921",
+          "checksum": "8ad5695e20b5d51fc66a743cef3a9eecdee43b9cbf20fc8c287fe451313c4b20",
           "path": "evals/expected/sales_rfq_golden.json"
         },
         {
@@ -781,7 +781,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "821a6b9007832714717e3871b624e685f6aadb80",
+  "git_sha": "3808dc122423928ebe6d13a3e759f974034bd9a1",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -927,6 +927,11 @@
       "checksum": "280946cde22a22631cff7ec85637d71043228ff804878763e9ace9c1f7c8aaae",
       "policy_id": "sales_followups",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "bd513bbaca5f902e5e3f431b509dee76f688f64c8467b63dd0ca537b93d938dd",
+      "policy_id": "sales_followups",
+      "version": "1.2.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
@@ -1109,6 +1114,11 @@
       "checksum": "8d09212cc494ecdd4d1cbb1f7f7ebf3de9f91260d77eb3beb9cc6bfab5015c0f",
       "prompt_id": "sales.message_intent",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "e5334a24850bf62e5cc4df96d5ccaf8771113ca700494ff356a9acfc922d6322",
+      "prompt_id": "sales.message_intent",
+      "version": "1.1.0"
     },
     {
       "checksum": "d9c2b50c6bdee757321fa4af6e4457d57d60b5d274f77e9a6658c2cafb20a0dc",
