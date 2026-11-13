@@ -59,6 +59,7 @@ from dw_sales.domain.rfq_reading import (
     VerifiedItem,
     VerifiedRfq,
     normalised,
+    notations,
     text_digest,
     verify_rfq,
 )
@@ -131,6 +132,8 @@ class RfqModelReader:
         if len(calls) > MAX_CALLS:
             return "too_long"
         verdict = VerifiedRfq()
+        # Each document's notation from all of it, not from one call's pieces.
+        documents = notations(parts)
         received_on = received_date(message.received_at)
         for call in calls:
             inputs = {
@@ -151,7 +154,7 @@ class RfqModelReader:
                 )
             except ModelUnavailableError:
                 return "unavailable"
-            verify_rfq(call, answer, received_on, into=verdict)
+            verify_rfq(call, answer, received_on, into=verdict, documents=documents)
         return await self._request(scope, message, contents, customer, rules, verdict, run, calls)
 
     async def _request(

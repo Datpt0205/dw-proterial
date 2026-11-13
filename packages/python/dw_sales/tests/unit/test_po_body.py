@@ -29,8 +29,8 @@ from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION, PROMPT_TOKE
 from dw_sales.application.source import required_regions
 from dw_sales.domain.anchors import MessageText
 from dw_sales.domain.orders import FindingCode, OrderCase, PoDocument, RegionFlag
-from dw_sales.domain.po_body_reading import ModelPoBody, parse_amount, read_po_body
-from dw_sales.domain.rfq_reading import normalised, parse_number
+from dw_sales.domain.po_body_reading import ModelPoBody, read_po_body
+from dw_sales.domain.rfq_reading import normalised, parse_number, parse_price
 from dw_sales.evals.graders import AN, CALLERS, OUTSIDER, READER
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import BETA, SampleWith, World, open_world
@@ -41,7 +41,23 @@ REPO = Path(__file__).resolve().parents[5]
 FIXTURE = json.loads(
     (REPO / "evals" / "fixtures" / "cases" / "sales_po_body.json").read_text(encoding="utf-8")
 )
+
+
+# Its unit prices carry a decimal comma ("0,0420"), as many Vietnamese
+# customers write them: what tells code that its "6.100 m" is six thousand one
+# hundred (audit 11-13, finding 8).
 VI = FIXTURE["golden"][0]
+
+
+def _point_priced(spec: dict[str, Any]) -> dict[str, Any]:
+    """``spec`` with its unit prices written with a decimal point instead."""
+    text = json.dumps(spec, ensure_ascii=False)
+    for price in ("0,0420", "0,4850"):
+        text = text.replace(price, price.replace(",", "."))
+    pointed: dict[str, Any] = json.loads(text)
+    return pointed
+
+
 RECEIVED = date(2026, 10, 2)
 PARSER = str(PO_BODY_EXTRACTION)
 
@@ -161,15 +177,39 @@ def test_the_injected_and_the_missing_answers_read_no_po() -> None:
     assert _read(missing["claimed"], missing["message"]).document is None
 
 
-def test_an_amount_with_cents_reads_with_both_separators_and_nothing_else_does() -> None:
-    assert parse_amount("2,792.00") == Decimal("2792.00")
-    assert parse_amount("2.792,00 USD") == Decimal("2792.00")
-    assert parse_amount("1,234,567.50") == Decimal("1234567.50")
-    assert parse_amount("408.00") == Decimal("408.00")
-    assert parse_amount("1,234.567,89") is None
-    # A quantity or a price written so stays unread, as before (ticket 29).
-    assert parse_amount("1.200,5") is None
-    assert parse_number("1.200,5") is None
+def test_a_po_whose_mail_does_not_settle_its_numbers_or_dates_goes_to_a_person() -> None:
+    """Audit 11-13, findings 8 and 9: "6.100 m" beside a price "0.0420" says
+    nothing about which mark is the decimal (a technical decimal point is
+    written so in every locale), and "05/11/2026" beside no other date says
+    nothing about which number is the day. Neither is guessed."""
+    pointed = _point_priced(VI)
+
+    verdict = _read(pointed["answer"], pointed["message"])
+    assert verdict.document is None and verdict.refused["quantity_unparsed"] == 1
+
+    undated = copy.deepcopy(VI)
+    undated["message"]["body"] = undated["message"]["body"].replace("20/10/2026", "06/11/2026")
+    line = undated["answer"]["lines"][0]
+    line["line_span"] = line["line_span"].replace("20/10/2026", "06/11/2026")
+    line["requested_date_span"] = "06/11/2026"
+    document = _read(undated["answer"], undated["message"]).document
+    assert document is not None
+    # The PO date "01/10/2026" and both delivery dates read either way: none
+    # is taken; the PO date falls back to the day the mail arrived, and a
+    # line's date is left for Sales (`requested_date_missing`).
+    assert [line.requested_date for line in document.lines] == [None, None]
+    assert document.header.po_date == RECEIVED
+
+
+def test_an_amount_reads_by_the_platform_rule_for_separators() -> None:
+    # Audit 11-13 finding 8: an amount, a price and a quantity are read by one
+    # rule (`dw_platform.domain.notation`): both separators read by their order.
+    assert parse_price("2,792.00") == Decimal("2792.00")
+    assert parse_price("2.792,00 USD") == Decimal("2792.00")
+    assert parse_price("1,234,567.50") == Decimal("1234567.50")
+    assert parse_price("408.00") == Decimal("408.00")
+    assert parse_price("1,234.567,89") is None
+    assert parse_number("1.200,5") == Decimal("1200.5")
 
 
 # ---------------------------------------------------- the document's rules --

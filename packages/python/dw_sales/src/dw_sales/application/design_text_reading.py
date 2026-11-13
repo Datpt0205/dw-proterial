@@ -12,7 +12,9 @@ the one-call door, as the caller).
 - **Code checks** each value: it is found in the mail's newest part, where
   its anchor points (characters into that text, with its digest), and it
   parses into the field's own type (a BP code, a spec number, a PRV code, a
-  copper weight). One value that fails and there is no reading.
+  copper weight). A copper weight is found exactly once as a whole number,
+  with kg/km written right after it (kg/m or g/m is not kg/km). One value
+  that fails and there is no reading.
 - **Code matches** the reply to its case exactly as a form's is matched
   (`QuotationService.awaiting_reply`: the YCBG number, the one case waiting
   on Design under it, every requested line answered).
@@ -28,7 +30,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -45,6 +47,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
+from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -59,7 +62,8 @@ from dw_sales.domain.dispositions import (
     RoutingReason,
 )
 from dw_sales.domain.quotes import DesignReply, DesignReplyDocument
-from dw_sales.domain.rfq_reading import normalised, text_digest
+from dw_sales.domain.rfq_reading import normalised, parse_number, text_digest
+from dw_sales.domain.spans import FoldedText
 
 # The prompt the reply is read with. Its file is
 # `configs/prompts/sales/design_text_reply@1.0.0.yaml`; a test holds the two
@@ -68,8 +72,13 @@ DESIGN_TEXT_REPLY: Final = PromptRef("sales.design_text_reply", "1.0.0")
 PROMPT_TOKENS: Final = 900
 _OUTPUT_TOKENS: Final = 800
 _RESOURCE: Final = "sales_message"
+# The unit a copper weight is stated in, right after its number, as a whole
+# word: kg per km. Any other unit (kg/m, a thousand times off; g/m) or none
+# is not converted or assumed: the value is Sales' to type.
+_PER_KM: Final = r"\s*kg\s*(?:/|per|trên|mỗi)\s*km(?![^\W_])"
+_KG_PER_KM: Final = re.compile(_PER_KM, re.IGNORECASE)
 # A copper weight as a mail states one: a number and kg per km.
-_WEIGHT: Final = re.compile(r"\d+(?:[.,]\d+)?\s*kg\s*(?:/|per|trên|mỗi)\s*km", re.IGNORECASE)
+_WEIGHT: Final = re.compile(rf"\d+(?:[.,]\d+)?{_PER_KM}", re.IGNORECASE)
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -114,6 +123,28 @@ def _sourced(text: str, digest: str, value: str | None) -> dict[str, object] | N
     return None if value is None else {"value": value, "source": _anchor(text, digest, value)}
 
 
+def _copper(text: str, digest: str, notation: Notation, value: str) -> dict[str, object]:
+    """A copper weight where the mail writes it: the number found exactly
+    once as a whole token (``2.5`` is not inside ``12.5``), kg per km right
+    after it, read as the mail's other numbers settle ``1.250``."""
+    place = FoldedText(text).locate(value.strip(), bounded=True)
+    if isinstance(place, str) or not _KG_PER_KM.match(text, place[1]):
+        raise _UnanchoredError(value)
+    start, end = place
+    number = parse_number(text[start:end], notation)
+    if number is None:
+        raise _UnanchoredError(value)
+    return {
+        "value": number,
+        "source": SourceAnchor(
+            attachment_id=None,
+            attachment_sha256=digest,
+            quote=text[start:end],
+            chars=TextRange(start=start, end=end),
+        ),
+    }
+
+
 def verified(answer: ModelDesignReply, body: str, received: date) -> DesignReplyDocument | None:
     """The answer as a reply document when every value is in ``body`` as
     written and parses into its field; None otherwise. The reply's date is
@@ -129,16 +160,14 @@ def verified(answer: ModelDesignReply, body: str, received: date) -> DesignReply
     ):
         return None
     digest = text_digest(body)
+    notation = notation_of(body)
     try:
         ycbg = _anchor(body, digest, answer.ycbg_no)
         lines = []
         for line in answer.lines:
             copper = None
             if line.copper_kg_per_km is not None:
-                copper = {
-                    "value": Decimal(line.copper_kg_per_km.replace(",", ".")),
-                    "source": _anchor(body, digest, line.copper_kg_per_km),
-                }
+                copper = _copper(body, digest, notation, line.copper_kg_per_km)
             lines.append(
                 {
                     "line_no": line.line_no,

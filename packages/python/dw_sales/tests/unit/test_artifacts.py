@@ -1817,3 +1817,52 @@ async def test_a_signed_copy_over_10_mb_is_refused_by_its_size() -> None:
         await _signed(world, case, SIGNED_PDF + b"0" * SIGNED_MAX_BYTES)
     assert refused.value.details["rule"] == "file_size"
     assert world.objects == {}
+
+
+# ---------------------------------------------- dates on a customer's file --
+
+
+class _NoLocaleDate(date):
+    """A date that refuses to be formatted by `strftime` or a format spec,
+    both of which print month names in the process's locale."""
+
+    def strftime(self, fmt: str) -> str:
+        raise AssertionError(f"a customer's date went through strftime({fmt!r})")
+
+    def __format__(self, fmt: str) -> str:
+        raise AssertionError(f"a customer's date went through format({fmt!r})")
+
+
+def test_a_date_on_a_customers_document_never_reads_the_servers_locale() -> None:
+    """Audit 11-13, finding 21: `%b` printed "Dez" on a host set to German."""
+    from dw_sales.application.artifact_content import day_text
+
+    december = _NoLocaleDate(2026, 12, 3)
+    assert day_text(december, "en") == "03 Dec 2026"
+    assert day_text(december, "vi") == "03/12/2026"
+    assert day_text(december, "ja") == "2026/12/03"
+
+
+def test_a_date_reads_the_same_under_another_process_locale() -> None:
+    import locale
+
+    from dw_sales.application.artifact_content import day_text
+
+    before = locale.setlocale(locale.LC_TIME)
+    for name in ("de_DE.UTF-8", "de_DE.utf8", "de-DE", "German_Germany.1252"):
+        try:
+            locale.setlocale(locale.LC_TIME, name)
+            break
+        except locale.Error:
+            continue
+    else:
+        pytest.skip("no German locale on this host; the strftime guard above still runs")
+    try:
+        assert date(2026, 12, 3).strftime("%b") != "Dec"  # the locale did change
+        assert [day_text(date(2026, month, 3), "en")[3:6] for month in (5, 10, 12)] == [
+            "May",
+            "Oct",
+            "Dec",
+        ]
+    finally:
+        locale.setlocale(locale.LC_TIME, before)

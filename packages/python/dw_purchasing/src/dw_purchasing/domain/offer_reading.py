@@ -31,6 +31,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_platform.domain.notation import notation_of
 from dw_purchasing.domain.mail_reading import (
     Span,
     fold,
@@ -101,6 +102,8 @@ def read_offer_mail(
     """What code accepts of one reply. ``asked`` maps each item code the
     supplier was asked for (as the RFQ named it) to its request line."""
     folded = fold(text)
+    # How this reply writes "1.200" and "05/11", and which "$" it means.
+    notation = notation_of(text)
     asked_folded = {fold(code): line_no for code, line_no in asked.items()}
     offers: list[ReadOffer] = []
     unasked = 0
@@ -132,11 +135,11 @@ def read_offer_mail(
         if line_no in seen_items:
             return OfferVerdict((), "line_unreadable")
         seen_items.add(line_no)
-        price = parse_quantity(line.unit_price_span)
+        price = parse_quantity(line.unit_price_span, notation)
         lead = parse_lead_time(line.lead_time_span)
-        written = parse_currency(line.currency_span) if line.currency_span else currency
+        written = parse_currency(line.currency_span, notation) if line.currency_span else currency
         valid = (
-            parse_date(line.valid_until_span, received_on=received_on)
+            parse_date(line.valid_until_span, received_on=received_on, notation=notation)
             if line.valid_until_span
             else None
         )

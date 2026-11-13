@@ -223,3 +223,52 @@ def test_a_mail_stating_more_weights_than_lines_is_no_reading() -> None:
         assert verified(ModelDesignReply.model_validate(answer), told, date(2026, 10, 3)) is None
     clean = told.split("\n", 1)[1]
     assert verified(ModelDesignReply.model_validate(answer), f"{YCBG}\n{clean}", date(2026, 10, 3))
+
+
+@pytest.mark.parametrize(
+    ("written", "weight", "read"),
+    [
+        ("copper 38.4 kg/km", "38.4", "38.4"),
+        ("copper 38,4 kg / km", "38,4", "38.4"),
+        ("copper 38.4 kg per km", "38.4", "38.4"),
+        # Audit 11-13, finding 5: "2.5" is not inside "12.5", and a weight in
+        # another unit, or in none, is not kg/km.
+        ("copper 12.5 kg/km", "2.5", None),
+        ("copper 38.4 kg/m", "38.4", None),
+        ("copper 38.4 g/m", "38.4", None),
+        ("copper 38.4 kg/kmm", "38.4", None),
+        ("copper 38.4", "38.4", None),
+        # Twelve hundred and fifty, or one and a quarter: the mail does not say.
+        ("copper 1.250 kg/km", "1.250", None),
+    ],
+)
+def test_a_copper_weight_is_one_whole_number_with_kg_per_km_after_it(
+    written: str, weight: str, read: str | None
+) -> None:
+    from datetime import date
+
+    from dw_sales.application.design_text_reading import verified
+
+    body = f"Reply to {YCBG}.\nLine 1: BP-2609-030-04, spec SP-2609-030-04, PRV CB-2006, {written}."
+    answer = {
+        "ycbg_no": YCBG,
+        "lines": [
+            {
+                "line_no": 1,
+                "bp_code": "BP-2609-030-04",
+                "spec_no": "SP-2609-030-04",
+                "prv_code": "CB-2006",
+                "copper_kg_per_km": weight,
+            }
+        ],
+    }
+
+    document = verified(ModelDesignReply.model_validate(answer), body, date(2026, 10, 3))
+
+    if read is None:
+        assert document is None
+    else:
+        assert document is not None
+        copper = document.lines[0].copper_kg_per_km
+        assert copper is not None and str(copper.value) == read
+        assert copper.source.quote == weight

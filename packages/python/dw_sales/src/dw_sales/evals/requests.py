@@ -504,7 +504,8 @@ def grade_field_confusion(
     the span check, and come out flagged for Sales, never silently."""
     problems: list[str] = []
     seen: dict[str, Any] = {}
-    awg = _body("Sent 02/10/2026. Please quote 2C AWG24 BLK reel 305 m, in USD.")
+    # A send date whose day is over 12 reads one way (audit 11-13, finding 9).
+    awg = _body("Sent 25/09/2026. Please quote 2C AWG24 BLK reel 305 m, in USD.")
     line = "Please quote 2C AWG24 BLK reel 305 m, in USD."
     cases: dict[str, tuple[dict[str, str], Callable[[RequestedItem], bool]]] = {
         "awg_digits": ({"quantity_span": "24"}, lambda r: r.quantity.value is None),
@@ -514,8 +515,8 @@ def grade_field_confusion(
         ),
         "send_date": (
             {
-                "line_span": "Sent 02/10/2026. Please quote 2C AWG24 BLK reel 305 m, in USD.",
-                "required_date_span": "02/10/2026",
+                "line_span": "Sent 25/09/2026. Please quote 2C AWG24 BLK reel 305 m, in USD.",
+                "required_date_span": "25/09/2026",
             },
             lambda r: r.needed_by.value is not None and "needed_by" in r.model_read,
         ),

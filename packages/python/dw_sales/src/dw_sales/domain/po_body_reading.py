@@ -30,8 +30,10 @@ value, a customer, an item code of ours or a route.
    whole PO: reading part of an order would leave out lines nobody knows are
    missing. The same line twice refuses it too.
 3. Every value is parsed from its span (`rfq_reading`'s parsers: numbers as
-   customers group them, dates day first, a year guessed from the day the
-   mail arrived). A currency nobody wrote is not guessed (``currency_missing``).
+   customers group them, a numeric date's order and an ambiguous grouping
+   such as ``1.250`` only as the mail's own other values settle them, a year
+   guessed from the day the mail arrived). A currency nobody wrote is not
+   guessed (``currency_missing``), and neither is the one a bare ``$`` means.
 4. What the mail does not write is the value it implies, anchored where the
    values it is made from are, as a form that prints no revision reads as
    revision 0 at its PO number (ticket 30): no revision is revision 0, no PO
@@ -54,11 +56,11 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.domain.anchors import MessageText, SourceAnchor, TextRange
 from dw_sales.domain.layouts import flagged_everywhere
 from dw_sales.domain.orders import (
@@ -150,26 +152,6 @@ def _uom(span: str) -> str | None:
     return text if _UOM_TEXT.fullmatch(text) else None
 
 
-# An amount with cents, grouped one way and pointed the other: `2,792.00`,
-# `2.792,00`. Only for an amount or a total: a quantity or a price written
-# `1.200,5` stays unread (`rfq_reading.parse_number`).
-_MONEY = re.compile(r"(\d{1,3}(?:([.,])\d{3})+)([.,])(\d{2})")
-
-
-def parse_amount(span: str) -> Decimal | None:
-    """A printed amount or total: one number, currency words around it."""
-    numbers = re.findall(r"\d[\d.,]*\d|\d", normalised(span))
-    if len(numbers) == 1:
-        money = _MONEY.fullmatch(numbers[0])
-        if (
-            money is not None
-            and money.group(2) != money.group(3)
-            and {c for c in money.group(1) if not c.isdigit()} == {money.group(2)}
-        ):
-            return Decimal(f"{money.group(1).replace(money.group(2), '')}.{money.group(4)}")
-    return parse_price(span)
-
-
 class _Body:
     """The message's text, and where a span is in it."""
 
@@ -208,6 +190,8 @@ def read_po_body(
     the prompt it was read under, stamped on the PO. Never raises on the
     model's answer."""
     body = _Body(text)
+    # How this mail writes "1.250" and "05/11": its own other values say.
+    notation = notation_of(text)
     refused: Counter[str] = Counter()
 
     def none(reason: str) -> PoBodyVerdict:
@@ -229,16 +213,16 @@ def read_po_body(
     po_no = header(answer.po_no_span, _printed, "po_no")
     if po_no is None:
         return none("no_po_number")
-    currency = header(answer.currency_span, parse_currency, "currency")
+    currency = header(answer.currency_span, lambda s: parse_currency(s, notation), "currency")
     if currency is None:
         return none("currency_missing")
     if not answer.lines:
         return none("no_lines")
-    po_date = header(answer.po_date_span, lambda s: parse_date(s, received_on), "po_date")
+    po_date = header(answer.po_date_span, lambda s: parse_date(s, received_on, notation), "po_date")
     lines: list[PoLine] = []
     starts: set[int] = set()
     for number, raw in enumerate(answer.lines, start=1):
-        line = _line(body, raw, number, received_on, refused)
+        line = _line(body, raw, number, received_on, notation, refused)
         if line is None:
             return none("line_refused")
         start = line.anchors.line_no.chars
@@ -248,7 +232,7 @@ def read_po_body(
             return none("line_refused")
         starts.add(start.start)
         lines.append(line)
-    total = header(answer.total_span, parse_amount, "total")
+    total = header(answer.total_span, lambda s: parse_price(s, notation), "total")
     document = PoDocument(
         attachment_id=None,
         attachment_sha256=body.sha256,
@@ -275,7 +259,12 @@ def read_po_body(
 
 
 def _line(
-    body: _Body, raw: ModelPoLine, number: int, received_on: date, refused: Counter[str]
+    body: _Body,
+    raw: ModelPoLine,
+    number: int,
+    received_on: date,
+    notation: Notation,
+    refused: Counter[str],
 ) -> PoLine | None:
     line = body.folded.locate(normalised(raw.line_span), bounded=True)
     if isinstance(line, str):
@@ -297,8 +286,8 @@ def _line(
 
     line_anchor = body.anchor(*line)
     code = read(raw.customer_item_code_span, _printed, "customer_item_code")
-    quantity = read(raw.quantity_span, parse_quantity, "quantity")
-    unit_price = read(raw.unit_price_span, parse_price, "unit_price")
+    quantity = read(raw.quantity_span, lambda s: parse_quantity(s, notation), "quantity")
+    unit_price = read(raw.unit_price_span, lambda s: parse_price(s, notation), "unit_price")
     uom = read(raw.uom_span, _uom, "uom")
     if code is None or quantity is None or unit_price is None:
         refused["line_incomplete"] += 1
@@ -312,8 +301,10 @@ def _line(
         refused["uom_missing"] += 1
         return None
     description = read(raw.description_span, _printed, "description")
-    amount = read(raw.amount_span, parse_amount, "amount")
-    requested = read(raw.requested_date_span, lambda s: parse_date(s, received_on), "date")
+    amount = read(raw.amount_span, lambda s: parse_price(s, notation), "amount")
+    requested = read(
+        raw.requested_date_span, lambda s: parse_date(s, received_on, notation), "date"
+    )
     return PoLine(
         line_no=number,
         customer_item_code=code.value,

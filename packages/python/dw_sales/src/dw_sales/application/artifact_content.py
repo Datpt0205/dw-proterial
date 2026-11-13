@@ -24,7 +24,7 @@ does not have refuses to render rather than leaving the placeholder in.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -124,16 +124,35 @@ class ArtifactWriterPort(Protocol):
 # ----------------------------------------------------------- the formatting --
 
 
-_DATE_FORMATS: Final[Mapping[Language, str]] = {
-    "vi": "%d/%m/%Y",
-    "en": "%d %b %Y",
-    "ja": "%Y/%m/%d",
+# English month names, written out here: `%b` prints the server's locale, so
+# a customer's document would change with the host it was rendered on.
+_EN_MONTHS: Final = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
+
+
+_DATE_FORMATS: Final[Mapping[Language, Callable[[date], str]]] = {
+    "vi": lambda day: f"{day.day:02d}/{day.month:02d}/{day.year}",
+    "en": lambda day: f"{day.day:02d} {_EN_MONTHS[day.month - 1]} {day.year}",
+    "ja": lambda day: f"{day.year}/{day.month:02d}/{day.day:02d}",
 }
 
 
 def day_text(day: date, language: Language) -> str:
-    """One date format per language, in every file and draft."""
-    return day.strftime(_DATE_FORMATS[language])
+    """One date format per language, in every file and draft, the same on
+    every host: digits, and English month names from `_EN_MONTHS`."""
+    return _DATE_FORMATS[language](day)
 
 
 def local_time(at: datetime) -> datetime:

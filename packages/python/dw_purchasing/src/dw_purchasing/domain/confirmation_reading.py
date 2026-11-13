@@ -31,6 +31,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_platform.domain.notation import notation_of
 from dw_purchasing.domain.mail_reading import Span, fold, occurrences, parse_date, parse_quantity
 from dw_purchasing.domain.tracking import ConfirmedLine
 
@@ -70,6 +71,8 @@ def read_confirmation_mail(
     """What code accepts of one confirmation. ``ordered`` maps each item code
     the order holds to its line."""
     folded = fold(text)
+    # How this mail writes "1.200" and "05/11", by its own other values.
+    notation = notation_of(text)
     ordered_folded = {fold(code): line_no for code, line_no in ordered.items()}
     if not answer.lines:
         return ConfirmationVerdict((), "no_lines")
@@ -92,10 +95,10 @@ def read_confirmation_mail(
             return ConfirmationVerdict((), "item_not_ordered")
         if any(r.line_no == line_no for r in read):
             return ConfirmationVerdict((), "line_unreadable")
-        quantity = parse_quantity(line.quantity_span) if line.quantity_span else None
-        price = parse_quantity(line.unit_price_span) if line.unit_price_span else None
+        quantity = parse_quantity(line.quantity_span, notation) if line.quantity_span else None
+        price = parse_quantity(line.unit_price_span, notation) if line.unit_price_span else None
         on = (
-            parse_date(line.delivery_date_span, received_on=received_on)
+            parse_date(line.delivery_date_span, received_on=received_on, notation=notation)
             if line.delivery_date_span
             else None
         )

@@ -30,8 +30,11 @@ item code of ours or a route.
    not inside this one. A span that is not found is dropped, never repaired.
 3. Every value is parsed from its span by the parsers below. A quantity is
    taken only in metres (the seller's one unit), from a unit the span or the
-   unit span states: ``5 reels`` is no quantity. A date without a year takes
-   the one that puts it on or after the day the mail arrived, less a month.
+   unit span states: ``5 reels`` is no quantity. ``1.250`` and ``05/11/2026``
+   are read only where the document the span is in settles them (its other
+   numbers and dates, `notations`); else the value is left for Sales. A date
+   without a year takes the one that puts it on or after the day the mail
+   arrived, less a month.
 4. The request's own values are found anywhere in the parts, and need not be
    unique: a number in the subject and the body is one number.
 5. Every value the model's words gave is flagged `model_read`, and Sales
@@ -52,11 +55,19 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
-from typing import Final, Literal
+from decimal import Decimal
+from typing import Final, Literal, cast, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from dw_platform.domain.notation import (
+    UNSTATED,
+    Notation,
+    day_and_month,
+    notation_of,
+    read_currency,
+    read_number,
+)
 from dw_sales.domain.anchors import SourceAnchor, TextRange
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo
 from dw_sales.domain.spans import FoldedText
@@ -193,42 +204,35 @@ def text_digest(text: str) -> str:
 
 # --------------------------------------------------------------- parsers --
 # Deterministic, from the span alone, NFKC-normalised. Each refuses what it
-# does not read rather than guess.
+# does not read rather than guess. How a number's separators, a numeric date's
+# order and a bare currency symbol read is the platform's one answer
+# (`dw_platform.domain.notation`), settled by the document the span is in
+# (`notations`); this module only adds Sales' own stricter rules on top.
 
-_METRE_UNIT = r"(?:m|mtrs?|meters?|metres?|mét|met|メートル)"
-_QUANTITY = re.compile(rf"(?P<number>[\d.,  ]+?)\s*(?P<unit>{_METRE_UNIT})?", re.IGNORECASE)
-_UOM = re.compile(rf"(?:per\s+|/\s*)?{_METRE_UNIT}\.?", re.IGNORECASE)
+# Metres, in the spellings customers use: the one unit DW1 quotes in, and the
+# one a hand-off reads a quantity in (`domain.handoffs`). Longest first, so a
+# match that stops short of a word's end ("m" of "mét") is never the only one.
+METRE_UNIT: Final = r"(?:metres?|meters?|mtrs?|mét|met|メートル|m)"
+_QUANTITY = re.compile(rf"(?P<number>[\d.,  ]+?)\s*(?P<unit>{METRE_UNIT})?", re.IGNORECASE)
+_UOM = re.compile(rf"(?:per\s+|/\s*)?{METRE_UNIT}\.?", re.IGNORECASE)
 
 
-def parse_number(text: str) -> Decimal | None:
-    """A number as a customer writes it: ``1,200``, ``1.200``, ``1 200``
-    (thousands), ``1200``, ``0.42``, ``0,42``. A separator followed by exactly
-    three digits groups thousands; otherwise it is the decimal point."""
+def parse_number(text: str, notation: Notation = UNSTATED) -> Decimal | None:
+    """A number as a customer writes it (`notation.read_number`): ``1 200``,
+    ``1200``, ``0.42``, ``0,42``, ``1.250,50``; ``1.200`` or ``1,200`` only
+    where the document fixed its decimal mark. Never negative."""
     value = text.strip()
-    if not value:
+    if value.startswith("-"):
         return None
-    grouped = re.fullmatch(r"\d{1,3}(?:([.,  ])\d{3})+", value)
-    if grouped is not None:
-        separator = grouped.group(1)
-        if len({c for c in value if not c.isdigit()}) != 1:
-            return None
-        return Decimal(value.replace(separator, ""))
-    plain = re.fullmatch(r"(\d+)(?:[.,](\d+))?", value)
-    if plain is None:
-        return None
-    whole, fraction = plain.group(1), plain.group(2)
-    try:
-        return Decimal(whole if fraction is None else f"{whole}.{fraction}")
-    except InvalidOperation:
-        return None
+    return read_number(value, notation)
 
 
-def parse_quantity(span: str) -> tuple[Decimal, bool] | None:
+def parse_quantity(span: str, notation: Notation = UNSTATED) -> tuple[Decimal, bool] | None:
     """A quantity, and whether the span itself states metres."""
     match = _QUANTITY.fullmatch(normalised(span).strip())
     if match is None:
         return None
-    number = parse_number(match.group("number"))
+    number = parse_number(match.group("number"), notation)
     if number is None or number <= 0:
         return None
     return number, match.group("unit") is not None
@@ -240,38 +244,24 @@ def parse_uom(span: str) -> Literal["m"] | None:
     return "m" if _UOM.fullmatch(normalised(span).strip()) else None
 
 
-def parse_price(span: str) -> Decimal | None:
+def parse_price(span: str, notation: Notation = UNSTATED) -> Decimal | None:
     """A unit price as the customer states it, currency words around it
     ignored: one number, read by `parse_number`."""
     numbers = re.findall(r"\d[\d.,  ]*\d|\d", normalised(span))
     if len(numbers) != 1:
         return None
-    value = parse_number(numbers[0])
+    value = parse_number(numbers[0], notation)
     return value if value is not None and value > 0 else None
 
 
-_CURRENCIES: Final[Mapping[str, Currency]] = {
-    "USD": "USD",
-    "US$": "USD",
-    "$": "USD",
-    "US DOLLAR": "USD",
-    "US DOLLARS": "USD",
-    "ĐÔ LA MỸ": "USD",
-    "VND": "VND",
-    "VNĐ": "VND",
-    "ĐỒNG": "VND",
-    "Đ": "VND",
-    "₫": "VND",
-    "JPY": "JPY",
-    "YEN": "JPY",
-    "円": "JPY",
-    "日本円": "JPY",
-    "¥": "JPY",
-}
+_SALES_CURRENCIES: Final = frozenset(get_args(Currency))
 
 
-def parse_currency(span: str) -> Currency | None:
-    return _CURRENCIES.get(" ".join(normalised(span).upper().split()))
+def parse_currency(span: str, notation: Notation = UNSTATED) -> Currency | None:
+    """One of the three currencies DW1 prices in (`notation.read_currency`):
+    a bare ``$`` or ``¥`` only where the document names the one it means."""
+    code = read_currency(span, notation)
+    return cast("Currency", code) if code in _SALES_CURRENCIES else None
 
 
 _MONTHS: Final = {
@@ -296,7 +286,7 @@ _MONTHS: Final = {
     for name in names
 }
 _ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
-_DAY_FIRST = re.compile(r"(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2}|\d{4}))?")
+_NUMERIC = re.compile(r"(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2}|\d{4}))?")
 _JA = re.compile(r"(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日")
 # Reiwa, as a Japanese customer's form prints it: 令和8年11月15日, R8.11.15,
 # 令和元年 for its first year (2019). Lower-cased with the rest, so `r`.
@@ -308,14 +298,15 @@ _EN_MONTH_DAY = re.compile(r"([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?(?:\s+
 _DATE_PREFIX = re.compile(r"^(?:ngày|by|before|on|trước)\s+", re.IGNORECASE)
 
 
-def parse_date(span: str, received_on: date) -> date | None:
+def parse_date(span: str, received_on: date, notation: Notation = UNSTATED) -> date | None:
     """A date as a customer writes it: ``2026-11-15``, ``15/11/2026``,
     ``15/11``, ``15 Nov 2026``, ``Nov 15``, ``2026年11月15日``, ``11月15日``,
-    ``令和8年11月15日`` or ``R8.11.15`` (Reiwa), ``15 tháng 11``. Day first
-    where the order is not stated (Vietnam's custom, and the customers' own
-    forms); the other order when only it
-    makes a date. Without a year, the one that puts it on or after the day
-    the mail arrived less a month."""
+    ``令和8年11月15日`` or ``R8.11.15`` (Reiwa), ``15 tháng 11``. A numeric
+    date's order is the platform's answer (`notation.day_and_month`): a
+    number over 12 says which is the day, else the document's own dates
+    decide, else it is not read (``05/11/2026`` is 5 November to one writer
+    and 11 May to another). Without a year, the one that puts it on or after
+    the day the mail arrived less a month."""
     text = _DATE_PREFIX.sub("", " ".join(normalised(span).lower().split()))
     found: tuple[int | None, int, int] | None = None
     if match := _ISO.fullmatch(text):
@@ -333,13 +324,13 @@ def parse_date(span: str, received_on: date) -> date | None:
     elif match := _VI.fullmatch(text):
         year = match.group(3)
         found = (int(year) if year else None, int(match.group(2)), int(match.group(1)))
-    elif match := _DAY_FIRST.fullmatch(text):
-        first, second = int(match.group(1)), int(match.group(2))
+    elif match := _NUMERIC.fullmatch(text):
         year_text = match.group(3)
         century = 2000 if year_text is not None and len(year_text) == 2 else 0
         year_given = None if year_text is None else int(year_text) + century
-        day, month = (first, second) if second <= 12 else (second, first)
-        found = (year_given, month, day)
+        settled = day_and_month(int(match.group(1)), int(match.group(2)), notation)
+        if settled is not None:
+            found = (year_given, settled[1], settled[0])
     elif match := _EN_DAY_MONTH.fullmatch(text):
         named = _MONTHS.get(match.group(2))
         if named is not None:
@@ -424,13 +415,27 @@ class VerifiedRfq:
 _Located = tuple[TextPart, int, int]
 
 
+def notations(parts: Sequence[TextPart]) -> dict[str | None, Notation]:
+    """Each document's notation, read whole: the message's newest part (key
+    None) and each attachment, whatever pieces they were split into for the
+    calls. A value is read by the notation of the document it is in."""
+    texts: dict[str | None, list[str]] = {}
+    for part in parts:
+        texts.setdefault(part.attachment_id, []).append(part.text)
+    return {key: notation_of("\n".join(pieces)) for key, pieces in texts.items()}
+
+
 class _Parts:
-    def __init__(self, parts: Sequence[TextPart]) -> None:
+    def __init__(self, parts: Sequence[TextPart], notations: Mapping[str | None, Notation]) -> None:
         self.parts = {part.part_id: part for part in parts}
         self._texts = {part.part_id: FoldedText(part.text) for part in parts}
+        self._notations = notations
 
     def text(self, part_id: str) -> FoldedText:
         return self._texts[part_id]
+
+    def notation(self, part: TextPart) -> Notation:
+        return self._notations.get(part.attachment_id, UNSTATED)
 
     def anywhere(self, span: str) -> _Located | None:
         """The first whole-token occurrence of ``span`` in any part."""
@@ -446,12 +451,16 @@ def verify_rfq(
     answer: ModelRfqReading,
     received_on: date,
     into: VerifiedRfq | None = None,
+    *,
+    documents: Mapping[str | None, Notation] | None = None,
 ) -> VerifiedRfq:
     """What of ``answer`` code accepts (module docstring, checks 1-5), added
     to ``into`` (the verdict of an earlier call of the same request). Never
-    raises on the model's answer."""
+    raises on the model's answer. ``documents`` is each document's notation
+    (`notations`) read from the whole request, where ``parts`` are only the
+    pieces of one call; by default, the notation of ``parts`` themselves."""
     verdict = into if into is not None else VerifiedRfq()
-    held = _Parts(parts)
+    held = _Parts(parts, notations(parts) if documents is None else documents)
     seen_lines = {
         (i.line.anchor.attachment_id, i.line.anchor.quote, _start(i)) for i in verdict.items
     }
@@ -467,13 +476,17 @@ def verify_rfq(
         verdict.items.append(item)
     if verdict.rfq_no is None and answer.rfq_no_span:
         verdict.rfq_no = _header(
-            held, answer.rfq_no_span, parse_document_no, verdict.refused, "rfq_no"
+            held,
+            answer.rfq_no_span,
+            lambda span, _notation: parse_document_no(span),
+            verdict.refused,
+            "rfq_no",
         )
     if verdict.quote_due is None and answer.quote_due_span:
         verdict.quote_due = _header(
             held,
             answer.quote_due_span,
-            lambda span: parse_date(span, received_on),
+            lambda span, notation: parse_date(span, received_on, notation),
             verdict.refused,
             "quote_due",
         )
@@ -492,7 +505,7 @@ def _start(item: VerifiedItem) -> int:
 def _header[T](
     held: _Parts,
     span: str,
-    parse: Callable[[str], T | None],
+    parse: Callable[[str, Notation], T | None],
     refused: Counter[str],
     name: str,
 ) -> Read[T] | None:
@@ -501,7 +514,7 @@ def _header[T](
         refused[f"{name}_not_found"] += 1
         return None
     part, start, end = located
-    value = parse(part.text[start:end])
+    value = parse(part.text[start:end], held.notation(part))
     anchor = part.anchor(start, end)
     if value is None or anchor is None:
         refused[f"{name}_unparsed"] += 1
@@ -517,6 +530,7 @@ def _item(
         refused["part_unknown"] += 1
         return None
     text = held.text(raw.part)
+    notation = held.notation(part)
     line = text.locate(normalised(raw.line_span), bounded=True)
     if isinstance(line, str):
         refused[f"line_{line.removeprefix('span_')}"] += 1
@@ -552,7 +566,7 @@ def _item(
         return None
     quantity_place = within(raw.quantity_span, "quantity")
     quantity_read: Read[tuple[Decimal, bool]] | None = read(
-        quantity_place, parse_quantity, "quantity"
+        quantity_place, lambda span: parse_quantity(span, notation), "quantity"
     )
     uom = read(within(raw.uom_span, "uom"), parse_uom, "uom")
     quantity: Read[Decimal] | None = None
@@ -578,11 +592,13 @@ def _item(
         uom=uom,
         needed_by=read(
             within(raw.required_date_span, "needed_by"),
-            lambda span: parse_date(span, received_on),
+            lambda span: parse_date(span, received_on, notation),
             "needed_by",
         ),
         stated_target_price=read(
-            within(raw.target_price_span, "target_price"), parse_price, "target_price"
+            within(raw.target_price_span, "target_price"),
+            lambda span: parse_price(span, notation),
+            "target_price",
         ),
     )
 

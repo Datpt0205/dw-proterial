@@ -16,8 +16,13 @@ returns what code keeps:
   tenant's, is not there to resolve;
 - each line resolved exactly against that order: by its number, by the
   PRV code or the customer's code the convert list maps to the line's item;
-- each quantity and date parsed from its span; each quote that names no
+- each quantity and date parsed from its span, as the mail's own values
+  settle "2.000" and "05/11", a quantity only in metres: words code does not
+  read are kept, flagged, for Sales to fill from; each quote that names no
   destination (`carries_contact`).
+
+A message that does not fit the model's input whole is not cut: it is an
+``unavailable`` hand-off counted ``too_long``, for Sales, as before.
 
 No usable answer is an ``unavailable`` hand-off, and an answer code keeps
 nothing of is ``nothing_located``: either is an empty form for Sales, the
@@ -46,9 +51,10 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
-    cut_to_tokens,
+    estimated_tokens,
 )
 from dw_platform.domain.mail_parts import MessagePart
+from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
@@ -67,7 +73,7 @@ from dw_sales.domain.handoffs import (
     line_number_of,
     locate,
     locate_identifier,
-    quantity_of,
+    quantity_at,
 )
 from dw_sales.domain.rfq_reading import parse_date, parse_document_no
 
@@ -125,11 +131,13 @@ class HandoffReader:
             "route": self.model.route,
             "rules": rules_version,
         }
-        inputs = {
-            "kind": kind,
-            "subject": part.subject,
-            "body": cut_to_tokens(part.body, self.model.max_input_tokens - PROMPT_TOKENS),
-        }
+        if estimated_tokens(part.text) > self.model.max_input_tokens - PROMPT_TOKENS:
+            # Never a cut: spans are located in the whole text, and a line
+            # past a cut would be left out with no one told. A person reads it.
+            return Handoff.model_validate(
+                {**stamp, "outcome": "unavailable", "refused": {"too_long": 1}}
+            )
+        inputs = {"kind": kind, "subject": part.subject, "body": part.body}
         try:
             answer = await self.model.interpret(
                 REQUEST_HANDOFF,
@@ -143,7 +151,8 @@ class HandoffReader:
         refused: Counter[str] = Counter()
         kept = await self._kept(scope, part.text, customer, answer, received_on, refused)
         located = any(
-            kept.get(name) for name in ("po_no", "lines", "lot", "quotes", "sample_quantity")
+            kept.get(name)
+            for name in ("po_no", "lines", "lot", "quotes", "sample_quantity", "quantity")
         )
         return Handoff.model_validate(
             {
@@ -163,8 +172,9 @@ class HandoffReader:
         received_on: date,
         refused: Counter[str],
     ) -> dict[str, Any]:
+        notation = notation_of(text)
         if isinstance(answer, ModelSampleRequest):
-            quantity = self._quantity(text, answer.quantity_span, refused)
+            quantity = self._quantity(text, answer.quantity_span, notation, refused)
             return {
                 "quotes": _quotes(text, answer.item_spans, MAX_ITEMS, refused, "item"),
                 "sample_quantity": quantity[0] if quantity else None,
@@ -192,7 +202,9 @@ class HandoffReader:
         for asked in answer.lines:
             line = None
             if order is not None:
-                line = await self._line(scope, text, customer, order, asked, received_on)
+                line = await self._line(
+                    scope, text, customer, order, asked, received_on, notation, refused
+                )
             if line is None or line.line_no in lines:
                 refused["line"] += 1
                 continue
@@ -265,6 +277,8 @@ class HandoffReader:
         order: _Order,
         asked: Any,
         received_on: date,
+        notation: Notation,
+        refused: Counter[str],
     ) -> HandoffLine | None:
         reference = locate(text, asked.line_or_item_span, bounded=True)
         if reference is None:
@@ -272,13 +286,17 @@ class HandoffReader:
         found = await self._order_line(scope, customer, order, reference.text)
         if found is None:
             return None
-        throwaway: Counter[str] = Counter()
-        quantity = self._quantity(text, asked.new_quantity_span, throwaway)
+        # Counted only for a line that is kept: a refused line counts once.
+        flags: Counter[str] = Counter()
+        quantity = self._quantity(text, asked.new_quantity_span, notation, flags)
         located_date = locate(text, asked.new_date_span, bounded=True)
-        day = parse_date(located_date.text, received_on) if located_date else None
-        if quantity is None and day is None:
+        day = parse_date(located_date.text, received_on, notation) if located_date else None
+        if located_date is not None and day is None:
+            flags["date_unread"] += 1
+        if quantity is None and located_date is None:
             # A line the customer changes nothing on is no line of the hand-off.
             return None
+        refused.update(flags)
         return HandoffLine(
             reference=reference,
             line_no=found.line_no,
@@ -286,7 +304,7 @@ class HandoffReader:
             new_quantity=quantity[0] if quantity else None,
             quantity=quantity[1] if quantity else None,
             new_date=day,
-            date_span=located_date if day else None,
+            date_span=located_date,
         )
 
     async def _order_line(
@@ -307,15 +325,18 @@ class HandoffReader:
 
     @staticmethod
     def _quantity(
-        text: str, span: str | None, refused: Counter[str]
-    ) -> tuple[Decimal, Located] | None:
+        text: str, span: str | None, notation: Notation, refused: Counter[str]
+    ) -> tuple[Decimal | None, Located] | None:
+        """The quantity in metres and the customer's words for it; the words
+        alone, flagged (``quantity_unread``), when code does not read them as
+        metres (`quantity_at`); None when the span is not there."""
         located = locate(text, span, bounded=True)
-        value = quantity_of(located.text) if located else None
-        if span is not None and value is None:
+        read = quantity_at(text, located, notation) if located else None
+        if span is not None and read is None:
             refused["quantity"] += 1
-        if located is None or value is None:
-            return None
-        return value, located
+        elif read is not None and read[0] is None:
+            refused["quantity_unread"] += 1
+        return read
 
 
 def _quotes(
@@ -439,15 +460,24 @@ def render(
     Sales to fill; nothing is written that the mail did not say."""
     template = copy.templates[handoff.kind]
     unknown = copy.unknown
+
+    def unread(words: Located | None) -> str:
+        """A value code did not read: ``unknown``, and the customer's own
+        words for it beside, quoted, for Sales to fill from."""
+        if words is None:
+            return unknown
+        return f"{unknown} {copy.quote.format(text=words.text).strip()}"
+
     lines = "\n".join(
         copy.line.format(
             line_no=line.line_no,
             item=line.item or unknown,
-            quantity=_number(line.new_quantity) if line.new_quantity else unknown,
-            date=line.new_date.strftime("%d/%m/%Y") if line.new_date else unknown,
+            quantity=_number(line.new_quantity) if line.new_quantity else unread(line.quantity),
+            date=line.new_date.strftime("%d/%m/%Y") if line.new_date else unread(line.date_span),
         )
         for line in handoff.lines
     )
+    sample = handoff.sample_quantity
     quotes = "\n".join(copy.quote.format(text=quote.text) for quote in handoff.quotes)
     values = {
         "customer": customer_code,
@@ -456,7 +486,7 @@ def render(
         "lines": lines or unknown,
         "lot": handoff.lot.text if handoff.lot else unknown,
         "quotes": quotes or unknown,
-        "quantity": _number(handoff.sample_quantity) if handoff.sample_quantity else unknown,
+        "quantity": _number(sample) if sample else unread(handoff.quantity),
     }
     return RenderedHandoff(
         to=template.to,

@@ -78,6 +78,11 @@ dw_sales ADR 0005 as DW2 applies it).
   `no_pr_number`, `no_department`, `span_not_found`, `line_unreadable`,
   `currency_unreadable`, `need_by_unreadable`, `value_malformed`, `no_lines`,
   or a form rule `missing:<field>`, `too_many_lines`, `currency_not_allowed`.
+- **Notation (cách viết số, ngày, tiền)**: how one mail or file writes
+  `1.200`, `05/11/2026` and `$`, fixed only by its own values that read one
+  way (`1.250,50`, `12,5`, `25/11/2026`, `USD`), the same rule Sales reads by
+  (`dw_platform.domain.notation`, audit 11-13). What the text does not
+  settle is not guessed: the line is unreadable and a person reads the mail.
 - **Purchasing rules (quy tắc mua hàng)**: one versioned document per tenant
   (`purchasing_rules@<version>`): what a PR form requires, the company's mail
   domains, the approval tiers, whom to ask for quotes, the Bravo layout, and

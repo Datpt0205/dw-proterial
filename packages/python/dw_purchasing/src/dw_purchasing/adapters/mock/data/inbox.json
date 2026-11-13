@@ -82,7 +82,7 @@
     },
     "subject": "PR-2611-012 văn phòng phẩm",
     "received_at": "2026-11-02T13:20:00+07:00",
-    "body_text": "Phòng Hành chính đề nghị mua theo PR-2611-012:\n1. Giấy A4 Double A 80gsm, 40 ram, cần trước 10/11/2026\n2. Bút bi Thiên Long TL-027, 10 hộp",
+    "body_text": "Phòng Hành chính (họp ngày 30/10/2026) đề nghị mua theo PR-2611-012:\n1. Giấy A4 Double A 80gsm, 40 ram, cần trước 10/11/2026\n2. Bút bi Thiên Long TL-027, 10 hộp",
     "authentication": {
       "spf": "pass",
       "dkim": "pass",
@@ -182,7 +182,7 @@
     },
     "subject": "Re: Yêu cầu báo giá theo PR-2611-004",
     "received_at": "2026-11-03T11:00:00+07:00",
-    "body_text": "Bảo Hộ Sài Gòn báo giá GT-C5 găng tay chống cắt: 98.000 VND/đôi, giao trong 5 ngày.\nNgoài ra chúng tôi có BK-1700 băng keo: 35.000 VND/cuộn, giao 2 ngày.",
+    "body_text": "Bảo Hộ Sài Gòn báo giá GT-C5 găng tay chống cắt: 98.000 VND/đôi, giao trong 5 ngày.\nNgoài ra chúng tôi có BK-1700 băng keo: 35.000 VND/cuộn, giao 2 ngày.\nĐơn tối thiểu 1.000.000 VND.",
     "authentication": {
       "spf": "pass",
       "dkim": "pass",
@@ -197,7 +197,7 @@
     },
     "subject": "Báo giá điều chỉnh PR-2611-004",
     "received_at": "2026-11-03T12:00:00+07:00",
-    "body_text": "Kimura điều chỉnh: DC-200 đơn giá 900.000 VND, giao 1 ngày.",
+    "body_text": "Kimura điều chỉnh: DC-200 đơn giá 900.000 VND, giao 1 ngày (giá cũ 1.200.000 VND).",
     "authentication": {
       "spf": "fail",
       "dkim": "none",
