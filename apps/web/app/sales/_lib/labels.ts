@@ -569,6 +569,8 @@ export const ACTIVITY_REASON: Record<string, string> = {
   part_unknown: "Mô hình chỉ tới phần không có trong thư",
   line_unanchored: "Không xác định được vị trí dòng trong tệp",
   quantity_unit_unknown: "Số lượng không có đơn vị DW1 báo giá",
+  quantity_unread: "Số lượng không ghi rõ đơn vị mét, để Sales điền",
+  date_unread: "Ngày không rõ thứ tự ngày/tháng, để Sales điền",
 };
 
 /** The fields an activity entry or a refusal names that `FIELD` does not. */
