@@ -16,7 +16,7 @@ from dw_platform.domain.messages import (
     MailAuthentication,
 )
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path, read_records
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import InboxPort, SalesScope
 
 
 class _AttachmentFixture(BaseModel):
@@ -148,3 +148,30 @@ class MockInbox:
         return AttachmentContent(
             attachment=attachment, data=self._contents[(message_id, attachment_id)]
         )
+
+
+class WithUploads:
+    """`InboxPort`: the mock mailbox, and beside it the POs people uploaded
+    ("Tải PO lên", ticket 18), which are stored even where the mail is the
+    mock's. A demo deployment then shows and processes an upload as one with
+    the stored mailbox does. The mock's messages come first on an id both
+    hold, which an upload's (``upload-<hash>``) never is."""
+
+    def __init__(self, mock: InboxPort, uploads: InboxPort) -> None:
+        self._mock = mock
+        self._uploads = uploads
+
+    async def list_messages(self, scope: SalesScope) -> Sequence[InboundMessage]:
+        both = [*await self._mock.list_messages(scope), *await self._uploads.list_messages(scope)]
+        return sorted(both, key=lambda m: m.received_at)
+
+    async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
+        found = await self._mock.get_message(scope, message_id)
+        return found or await self._uploads.get_message(scope, message_id)
+
+    async def read_attachment(
+        self, scope: SalesScope, message_id: str, attachment_id: str
+    ) -> AttachmentContent | None:
+        if await self._mock.get_message(scope, message_id) is not None:
+            return await self._mock.read_attachment(scope, message_id, attachment_id)
+        return await self._uploads.read_attachment(scope, message_id, attachment_id)

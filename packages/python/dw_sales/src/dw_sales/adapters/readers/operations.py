@@ -263,7 +263,9 @@ async def _read(request: ReaderRequest, tools: ReaderTools) -> Any:
 
 async def _read_with(request: ReaderRequest, tools: ReaderTools) -> Any:
     args = request.args
-    mapping, caps = args.required(args.mapping, "mapping"), _caps(request)
+    caps, mapping = _caps(request), args.mapping
+    if mapping is None:
+        raise ValueError("the operation needs mapping")
     ref = args.required(args.layout_ref, "layout_ref")
     return await _document(
         request,

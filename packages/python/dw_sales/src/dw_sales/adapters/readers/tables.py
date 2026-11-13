@@ -108,7 +108,9 @@ def read_table(data: bytes, caps: IntakeCaps, sheet: str | None = None) -> Impor
     match sniff(data):
         case "xlsx":
             return _workbook(data, caps, sheet)
-        case None:
+        case None | "csv":
+            # A UTF-16 tab-separated file sniffs ``csv`` (ticket 18): the
+            # same rows as any CSV here.
             return _csv(data, caps)
         case _:
             raise ValueError("tệp không phải bảng tính (.xlsx, .xls) hay CSV")

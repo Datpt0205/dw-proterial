@@ -55,6 +55,10 @@ class RoutingReason(StrEnum):
     # The scanner found malware in an attachment (ticket 25): nothing in the
     # message is read, and its bytes are never served.
     MALWARE_DETECTED = "malware_detected"
+    # A customer's portal saying a PO is waiting there (ticket 18): the mail
+    # carries none, and DW never logs into a portal, so the PIC downloads it
+    # and uploads it ("Tải PO lên"). Only a model reading gives it.
+    PORTAL_NOTICE = "portal_notice"
     OTHER = "other"
 
 

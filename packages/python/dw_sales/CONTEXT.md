@@ -122,7 +122,7 @@ API and the plan use the English terms. The spec is
 - **Message intent** (Mô hình đọc loại thư): the kind a model reads a message
   no reader accepted as (`po`, `quote_request`, `design_reply`,
   `reply_to_case`, `delivery_change`, `complaint`, `sample_request`,
-  `other`), its language and the document numbers it names. Code maps the
+  `portal_notice`, `other`), its language and the document numbers it names. Code maps the
   kind to the route and takes a number only when it is in the newest part
   and resolves to exactly one record of the sender's own customer. Stamped on
   the disposition; a readable attachment decides its message's kind first,
@@ -236,6 +236,26 @@ API and the plan use the English terms. The spec is
   company's own included; DW1's model sorts what each one is (Đạt,
   2026-11-02). "Tên miền không đưa vào DW1" (`ignored_sender_domains`,
   1.7.0–1.8.0) is gone from 1.9.0; a version that holds it still reads.
+- **Uploaded PO** (PO tải lên): a PO file a person downloaded from a
+  customer's portal and uploaded on the inbox ("Tải PO lên", ticket 18),
+  choosing the customer. Stored as one message of the stored mailbox whose
+  sender is that person; the customer they chose, and who they are, are
+  written by the server beside it, never read from the message, so a mail
+  never passes for one. Read like mail (malware scan, reader sandbox,
+  processing job, disposition), its customer the chosen one. The same files
+  uploaded again are stored once. Needs `sales.inbox.process`. DW never logs
+  into a customer's portal (Đạt, 11-13).
+- **Portal export** (Tệp xuất từ cổng khách): what a customer's portal
+  exports, UTF-16 tab-separated text, one PO line per row, each row naming
+  its own PO number and whether it is a firm order or a **forecast** (dự
+  báo). Read with that customer's layout (a PO layout of kind `csv`: which
+  column holds what, which column says firm, which of its values mean firm),
+  firm rows only; forecast rows are counted on the case ("N dòng dự báo,
+  không đặt hàng") and never ordered. What it does not print (price,
+  currency) is flagged `not_printed` (Tệp không in giá trị này, cần xác
+  nhận). Until ticket 19, one export opens one case, each line keeping its
+  own PO number. The notice mail a portal sends carries no PO: a model
+  reads it as `portal_notice` and it goes to the customer's PIC.
 - **Production type** (Mass / Pcs): whether a request is for mass
   production or a piece order. Bravo's SO header carries it; a pcs request
   is priced by JP & HQ, not by Sales (production ticket 05).
@@ -395,7 +415,7 @@ YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác
 được khách hàng), `attachment_unreadable` (Không đọc được file),
 `attachment_locked` (Tệp có mật khẩu, DW không mở được),
 `malware_detected` (Tệp đính kèm có mã độc), `reply_to_case` (Trả lời về hồ
-sơ đang xử lý), `other` (Khác).
+sơ đang xử lý), `portal_notice` (PO trên cổng khách), `other` (Khác).
 
 ## Processing jobs
 

@@ -122,6 +122,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/inbox/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Po */
+        post: operations["upload_po_api_v1_sales_inbox_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox/{message_id}/customer": {
         parameters: {
             query?: never;
@@ -2289,6 +2306,11 @@ export interface components {
             checks_run: number;
             /** Findings */
             findings: number;
+            /**
+             * Forecast Rows
+             * @default 0
+             */
+            forecast_rows: number;
             /** Lines Printed */
             lines_printed: number;
             /** Lines Read */
@@ -2686,6 +2708,65 @@ export interface components {
             target_price: components["schemas"]["Amount"] | null;
         };
         /**
+         * ExportMapping
+         * @description A customer portal's export (ticket 18): the title of each column read,
+         *     the column saying whether a row is a firm order, and the values of it
+         *     that mean firm. Every other row is a forecast, counted and never ordered.
+         *     The export prints no currency, so the person mapping it states the one
+         *     the customer orders in; each PO read with it has that value flagged
+         *     `not_printed`, for Sales to confirm.
+         */
+        ExportMapping: {
+            /**
+             * Currency
+             * @enum {string}
+             */
+            currency: "USD" | "VND" | "JPY";
+            /** Customer Item Code */
+            customer_item_code: string;
+            /**
+             * Date Format
+             * @default %y-%m-%d
+             * @enum {string}
+             */
+            date_format: "%d/%m/%Y" | "%Y-%m-%d" | "%d-%m-%Y" | "%m/%d/%Y" | "%d.%m.%Y" | "%Y/%m/%d" | "%y-%m-%d";
+            /**
+             * Decimal Separator
+             * @default .
+             * @enum {string}
+             */
+            decimal_separator: "." | ",";
+            /** Description */
+            description?: string | null;
+            /** Firm Values */
+            firm_values: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "csv";
+            /** Order Type */
+            order_type: string;
+            /** Po Date */
+            po_date: string;
+            /** Po No */
+            po_no: string;
+            /** Quantity */
+            quantity: string;
+            /** Requested Date */
+            requested_date: string;
+            /**
+             * Thousands Separator
+             * @default ,
+             * @enum {string}
+             */
+            thousands_separator: "," | "." | " " | "none";
+            /** Unit Price */
+            unit_price?: string | null;
+            /** Uom */
+            uom: string;
+        };
+        /**
          * ExportRow
          * @description One surveyed step in one month (giờ Việt Nam): how many times DW1
          *     took a case through it, beside the minutes it takes by hand.
@@ -2939,7 +3020,7 @@ export interface components {
          */
         IntentReading: {
             /** Kind */
-            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "other") | null;
+            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | null;
             /** Language */
             language?: ("vi" | "en" | "ja" | "other") | null;
             /** Model Profile */
@@ -3033,12 +3114,14 @@ export interface components {
         };
         /**
          * LayoutBody
-         * @description A mapping of the form one message's attachment prints (ticket 30).
+         * @description A mapping of the form one message's attachment prints (ticket 30), or
+         *     of a portal's export's columns (ticket 18).
          */
         LayoutBody: {
             /** Attachment Id */
             attachment_id: string;
-            mapping: components["schemas"]["LayoutMapping"];
+            /** Mapping */
+            mapping: components["schemas"]["LayoutMapping"] | components["schemas"]["ExportMapping"];
             /** Message Id */
             message_id: string;
         };
@@ -3060,7 +3143,7 @@ export interface components {
              * @default %d/%m/%Y
              * @enum {string}
              */
-            date_format: "%d/%m/%Y" | "%Y-%m-%d" | "%d-%m-%Y" | "%m/%d/%Y" | "%d.%m.%Y" | "%Y/%m/%d";
+            date_format: "%d/%m/%Y" | "%Y-%m-%d" | "%d-%m-%Y" | "%m/%d/%Y" | "%d.%m.%Y" | "%Y/%m/%d" | "%y-%m-%d";
             /**
              * Decimal Separator
              * @default .
@@ -3070,7 +3153,7 @@ export interface components {
             /** Description */
             description: string;
             /**
-             * Kind
+             * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "excel" | "pdf";
@@ -3143,6 +3226,11 @@ export interface components {
             /** Currency */
             currency?: string | null;
             /**
+             * Forecast Rows
+             * @default 0
+             */
+            forecast_rows: number;
+            /**
              * Lines
              * @default []
              */
@@ -3190,7 +3278,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "excel" | "pdf";
+            kind: "excel" | "pdf" | "csv";
             /** Message Id */
             message_id: string;
             prefill: components["schemas"]["LayoutPrefill"] | null;
@@ -3216,7 +3304,8 @@ export interface components {
              * Format: uuid
              */
             layout_id: string;
-            mapping: components["schemas"]["LayoutMapping"];
+            /** Mapping */
+            mapping: components["schemas"]["LayoutMapping"] | components["schemas"]["ExportMapping"];
             /** Origin */
             origin: string;
             prefill: components["schemas"]["LayoutPrefill"] | null;
@@ -3746,6 +3835,9 @@ export interface components {
             pc_confirmed_at: string | null;
             /** Pc Confirmed By */
             pc_confirmed_by: string | null;
+            /** Po No */
+            po_no?: string | null;
+            po_no_anchor?: components["schemas"]["SourceAnchor"] | null;
             /** Printed Schedules */
             printed_schedules: boolean;
             /** Quantity */
@@ -4107,6 +4199,31 @@ export interface components {
             key: components["schemas"]["RuleKey"];
             /** Ref */
             ref: string;
+        };
+        /**
+         * PoUploadBody
+         * @description "Tải PO lên": the customer a person chose and the files they dropped.
+         *     Who uploads is the caller, never a field here.
+         */
+        PoUploadBody: {
+            /** Customer Code */
+            customer_code: string;
+            /** Files */
+            files: components["schemas"]["UploadFileBody"][];
+        };
+        /**
+         * PoUploadView
+         * @description What one upload did: the message it is, whether it was stored now or
+         *     already, and its processing job when one was queued.
+         */
+        PoUploadView: {
+            /** Already Stored */
+            already_stored: boolean;
+            /** Customer Code */
+            customer_code: string;
+            job: components["schemas"]["ProcessingJobView"] | null;
+            /** Message Id */
+            message_id: string;
         };
         /** PreviewLineView */
         PreviewLineView: {
@@ -4637,7 +4754,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr" | "opened_with_password" | "not_printed";
         /**
          * RejectedRow
          * @description A row that is not applied, and why. ``row`` 0 is the file itself.
@@ -5576,6 +5693,17 @@ export interface components {
             /** Line No */
             line_no?: number | null;
         };
+        /**
+         * UploadFileBody
+         * @description One file of a PO upload (ticket 18): its name and its bytes, base64,
+         *     decoded here and never opened: the worker reads it in the reader sandbox.
+         */
+        UploadFileBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
         /** UsesView */
         UsesView: {
             /** Layouts */
@@ -5902,6 +6030,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingQueuedView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_po_api_v1_sales_inbox_upload_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PoUploadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoUploadView"];
                 };
             };
             /** @description Validation Error */

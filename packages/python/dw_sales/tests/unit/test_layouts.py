@@ -365,6 +365,7 @@ async def test_a_mapping_that_passes_every_check_is_learned_and_reads_the_po() -
         str(LAYOUT_PROPOSAL),
         "sales_order_rules@1.5.2",
     )
+    assert isinstance(layout.mapping, LayoutMapping)
     assert layout.mapping.unit_price == "Price"
     assert layout.mapping.pdf_columns is not None  # found by code on the form
     assert case.document.layout_ref == layout.ref

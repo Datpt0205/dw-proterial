@@ -1,6 +1,16 @@
 import type { SalesSchemas } from "@dw/api-client";
 
 export type Mapping = SalesSchemas["LayoutMapping"];
+export type ExportMapping = SalesSchemas["ExportMapping"];
+export type ExportField = Exclude<
+  keyof ExportMapping,
+  | "kind"
+  | "thousands_separator"
+  | "decimal_separator"
+  | "date_format"
+  | "firm_values"
+  | "currency"
+>;
 export type MappingField = Exclude<
   keyof Mapping,
   | "kind"
@@ -43,6 +53,28 @@ export const LAYOUT_FIELDS: readonly {
   },
 ];
 
+/**
+ * The columns a person maps on a customer portal's export (ticket 18), each
+ * with its words. The owner is `ExportMapping` in `dw_sales.domain.layouts`;
+ * which values of the order-type column mean a firm order, and the currency
+ * the export does not print, are asked beside these.
+ */
+export const EXPORT_FIELDS: readonly {
+  field: ExportField;
+  label: string;
+  optional?: boolean;
+}[] = [
+  { field: "po_no", label: "Cột số PO (mỗi dòng)" },
+  { field: "po_date", label: "Cột ngày phát hành PO" },
+  { field: "customer_item_code", label: "Cột mã hàng của khách" },
+  { field: "description", label: "Cột mô tả", optional: true },
+  { field: "quantity", label: "Cột số lượng" },
+  { field: "uom", label: "Cột đơn vị tính" },
+  { field: "unit_price", label: "Cột đơn giá", optional: true },
+  { field: "requested_date", label: "Cột ngày giao yêu cầu" },
+  { field: "order_type", label: "Cột loại đơn (đặt hàng hay dự báo)" },
+];
+
 /** Why a mapping is refused, by the check's code (`LayoutProblem`). */
 export const LAYOUT_PROBLEM: Record<string, string> = {
   label_not_found: "không thấy nhãn này trên mẫu",
@@ -63,6 +95,8 @@ export const LAYOUT_PROBLEM: Record<string, string> = {
   no_item_known:
     "không mã hàng nào đọc ra có trong bảng quy đổi hay danh mục: kiểm tra cột mã hàng",
   incomplete_proposal: "mô hình gợi ý thiếu nhãn bắt buộc",
+  no_firm_line:
+    "không dòng nào có loại đơn là giá trị đặt hàng đã chọn: kiểm tra cột loại đơn và giá trị",
 };
 
 export const LAYOUT_STATUS: Record<string, string> = {
@@ -75,7 +109,9 @@ export const LAYOUT_STATUS: Record<string, string> = {
 /** A refused check as a sentence: the field's words, then why. */
 export function problemText(problem: string): string {
   const [code, field] = problem.split(":");
-  const named = LAYOUT_FIELDS.find((f) => f.field === field)?.label;
+  const named = [...LAYOUT_FIELDS, ...EXPORT_FIELDS].find(
+    (f) => f.field === field,
+  )?.label;
   const why = LAYOUT_PROBLEM[code ?? ""] ?? code ?? problem;
   return named
     ? `${named}: ${why}`

@@ -209,6 +209,15 @@ async def members_by_address(
     }
 
 
+async def own_address(directory: MemberDirectoryPort, context: AccessContext) -> str | None:
+    """The caller's own sign-in address, lower-cased, as the workspace's
+    directory holds it: the mailbox a mail they send goes from, and the
+    sender of a PO they upload (ticket 18). None when they have none."""
+    members = await directory.list_members(context)
+    me = next((m for m in members if m.user_id == context.principal_id), None)
+    return me.email.lower() if me is not None and me.email else None
+
+
 def _shown(
     context: AccessContext,
     disposition: MessageDisposition,

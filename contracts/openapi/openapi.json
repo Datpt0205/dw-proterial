@@ -3132,6 +3132,11 @@
             "title": "Findings",
             "type": "integer"
           },
+          "forecast_rows": {
+            "default": 0,
+            "title": "Forecast Rows",
+            "type": "integer"
+          },
           "lines_printed": {
             "title": "Lines Printed",
             "type": "integer"
@@ -4871,6 +4876,153 @@
         "title": "EvidenceView",
         "type": "object"
       },
+      "ExportMapping": {
+        "additionalProperties": false,
+        "description": "A customer portal's export (ticket 18): the title of each column read,\nthe column saying whether a row is a firm order, and the values of it\nthat mean firm. Every other row is a forecast, counted and never ordered.\nThe export prints no currency, so the person mapping it states the one\nthe customer orders in; each PO read with it has that value flagged\n`not_printed`, for Sales to confirm.",
+        "properties": {
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "date_format": {
+            "default": "%y-%m-%d",
+            "enum": [
+              "%d/%m/%Y",
+              "%Y-%m-%d",
+              "%d-%m-%Y",
+              "%m/%d/%Y",
+              "%d.%m.%Y",
+              "%Y/%m/%d",
+              "%y-%m-%d"
+            ],
+            "title": "Date Format",
+            "type": "string"
+          },
+          "decimal_separator": {
+            "default": ".",
+            "enum": [
+              ".",
+              ","
+            ],
+            "title": "Decimal Separator",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "firm_values": {
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Firm Values",
+            "type": "array"
+          },
+          "kind": {
+            "const": "csv",
+            "title": "Kind",
+            "type": "string"
+          },
+          "order_type": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Order Type",
+            "type": "string"
+          },
+          "po_date": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Po Date",
+            "type": "string"
+          },
+          "po_no": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Po No",
+            "type": "string"
+          },
+          "quantity": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Quantity",
+            "type": "string"
+          },
+          "requested_date": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Requested Date",
+            "type": "string"
+          },
+          "thousands_separator": {
+            "default": ",",
+            "enum": [
+              ",",
+              ".",
+              " ",
+              "none"
+            ],
+            "title": "Thousands Separator",
+            "type": "string"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          },
+          "uom": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Uom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "po_no",
+          "po_date",
+          "customer_item_code",
+          "quantity",
+          "uom",
+          "requested_date",
+          "order_type",
+          "firm_values",
+          "currency"
+        ],
+        "title": "ExportMapping",
+        "type": "object"
+      },
       "ExportRow": {
         "description": "One surveyed step in one month (giờ Việt Nam): how many times DW1\ntook a case through it, beside the minutes it takes by hand.",
         "properties": {
@@ -6081,6 +6233,7 @@
                   "delivery_change",
                   "complaint",
                   "sample_request",
+                  "portal_notice",
                   "other"
                 ],
                 "type": "string"
@@ -6512,7 +6665,7 @@
       },
       "LayoutBody": {
         "additionalProperties": false,
-        "description": "A mapping of the form one message's attachment prints (ticket 30).",
+        "description": "A mapping of the form one message's attachment prints (ticket 30), or\nof a portal's export's columns (ticket 18).",
         "properties": {
           "attachment_id": {
             "pattern": "^[A-Za-z0-9._-]{1,128}$",
@@ -6520,7 +6673,23 @@
             "type": "string"
           },
           "mapping": {
-            "$ref": "#/components/schemas/LayoutMapping"
+            "discriminator": {
+              "mapping": {
+                "csv": "#/components/schemas/ExportMapping",
+                "excel": "#/components/schemas/LayoutMapping",
+                "pdf": "#/components/schemas/LayoutMapping"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LayoutMapping"
+              },
+              {
+                "$ref": "#/components/schemas/ExportMapping"
+              }
+            ],
+            "title": "Mapping"
           },
           "message_id": {
             "pattern": "^[!-~]{1,512}$",
@@ -6566,7 +6735,8 @@
               "%d-%m-%Y",
               "%m/%d/%Y",
               "%d.%m.%Y",
-              "%Y/%m/%d"
+              "%Y/%m/%d",
+              "%y-%m-%d"
             ],
             "title": "Date Format",
             "type": "string"
@@ -6800,6 +6970,11 @@
             ],
             "title": "Currency"
           },
+          "forecast_rows": {
+            "default": 0,
+            "title": "Forecast Rows",
+            "type": "integer"
+          },
           "lines": {
             "default": [],
             "items": {
@@ -6932,7 +7107,8 @@
           "kind": {
             "enum": [
               "excel",
-              "pdf"
+              "pdf",
+              "csv"
             ],
             "title": "Kind",
             "type": "string"
@@ -7017,7 +7193,23 @@
             "type": "string"
           },
           "mapping": {
-            "$ref": "#/components/schemas/LayoutMapping"
+            "discriminator": {
+              "mapping": {
+                "csv": "#/components/schemas/ExportMapping",
+                "excel": "#/components/schemas/LayoutMapping",
+                "pdf": "#/components/schemas/LayoutMapping"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LayoutMapping"
+              },
+              {
+                "$ref": "#/components/schemas/ExportMapping"
+              }
+            ],
+            "title": "Mapping"
           },
           "origin": {
             "title": "Origin",
@@ -10098,6 +10290,27 @@
             ],
             "title": "Pc Confirmed By"
           },
+          "po_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Po No"
+          },
+          "po_no_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "printed_schedules": {
             "title": "Printed Schedules",
             "type": "boolean"
@@ -11380,6 +11593,67 @@
           "rules_ref"
         ],
         "title": "PoRound",
+        "type": "object"
+      },
+      "PoUploadBody": {
+        "additionalProperties": false,
+        "description": "\"Tải PO lên\": the customer a person chose and the files they dropped.\nWho uploads is the caller, never a field here.",
+        "properties": {
+          "customer_code": {
+            "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/UploadFileBody"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "customer_code",
+          "files"
+        ],
+        "title": "PoUploadBody",
+        "type": "object"
+      },
+      "PoUploadView": {
+        "description": "What one upload did: the message it is, whether it was stored now or\nalready, and its processing job when one was queued.",
+        "properties": {
+          "already_stored": {
+            "title": "Already Stored",
+            "type": "boolean"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingJobView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "customer_code",
+          "already_stored",
+          "job"
+        ],
+        "title": "PoUploadView",
         "type": "object"
       },
       "PrLine-Input": {
@@ -14053,7 +14327,9 @@
           "model_read",
           "new_layout",
           "print_differs",
-          "ocr"
+          "ocr",
+          "opened_with_password",
+          "not_printed"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -18094,6 +18370,30 @@
           }
         },
         "title": "UpdateTenantBody",
+        "type": "object"
+      },
+      "UploadFileBody": {
+        "additionalProperties": false,
+        "description": "One file of a PO upload (ticket 18): its name and its bytes, base64,\ndecoded here and never opened: the worker reads it in the reader sandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 13981016,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "UploadFileBody",
         "type": "object"
       },
       "UserRefView": {
@@ -24463,6 +24763,67 @@
           }
         },
         "summary": "Process All",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/upload": {
+      "post": {
+        "operationId": "upload_po_api_v1_sales_inbox_upload_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoUploadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoUploadView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Po",
         "tags": [
           "sales"
         ]

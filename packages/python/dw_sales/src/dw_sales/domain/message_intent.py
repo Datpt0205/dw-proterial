@@ -44,6 +44,8 @@ IntentKind = Literal[
     "delivery_change",
     "complaint",
     "sample_request",
+    # A customer's portal saying a PO waits there to be downloaded (ticket 18).
+    "portal_notice",
     "other",
 ]
 IntentLanguage = Literal["vi", "en", "ja", "other"]

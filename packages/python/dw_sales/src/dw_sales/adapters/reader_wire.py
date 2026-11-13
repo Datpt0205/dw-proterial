@@ -43,7 +43,7 @@ from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.file_passwords import MAX_PASSWORD_CHARS, MAX_PASSWORDS
-from dw_sales.domain.layouts import LayoutMapping, LayoutSource
+from dw_sales.domain.layouts import LayoutSource, PoMapping
 from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
@@ -90,7 +90,7 @@ class ReaderArgs(BaseModel):
 
     caps: IntakeCaps | None = None
     customer_code: str | None = Field(default=None, max_length=64)
-    mapping: LayoutMapping | None = None
+    mapping: PoMapping | None = None
     layout_ref: str | None = Field(default=None, max_length=200)
     page: int | None = Field(default=None, ge=1)
     sheet: str | None = Field(default=None, max_length=200)

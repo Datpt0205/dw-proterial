@@ -177,6 +177,16 @@ export function LinesTable({
         }}
         columns={[
           { title: "Dòng", dataIndex: "line_no", width: 64, fixed: "left" },
+          // A portal's export prints a PO number on every line (ticket 18).
+          ...(order.lines.some((l) => l.po_no)
+            ? [
+                {
+                  title: "Số PO của dòng",
+                  key: "po_no",
+                  render: (_: unknown, line: Line) => line.po_no ?? "",
+                },
+              ]
+            : []),
           {
             title: "Mã của khách",
             key: "customer_item_code",

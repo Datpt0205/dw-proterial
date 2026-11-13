@@ -222,6 +222,8 @@ def test_every_kind_the_model_may_give_has_one_route_and_revised_po_is_none() ->
         ("complaint", RoutingReason.COMPLAINT),
         ("sample_request", RoutingReason.SAMPLE_REQUEST),
         ("reply_to_case", RoutingReason.REPLY_TO_CASE),
+        # A portal's notice carries no PO: the PIC downloads it (ticket 18).
+        ("portal_notice", RoutingReason.PORTAL_NOTICE),
         ("other", RoutingReason.OTHER),
         # A message about a PO is not a PO: it has to carry one.
         ("po", RoutingReason.OTHER),
@@ -241,7 +243,7 @@ async def test_each_kind_is_routed_to_the_customers_pic_with_its_reason(
     reading = disposition.reading
     assert reading is not None and (reading.kind, reading.outcome) == (kind, "read")
     assert (reading.prompt, reading.model_profile, reading.route, reading.rules) == (
-        "sales.message_intent@1.0.0",
+        "sales.message_intent@1.1.0",
         "onprem",
         "structured_extraction",
         "sales_order_rules@1.5.2",

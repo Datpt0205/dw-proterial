@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
@@ -16,7 +17,7 @@ from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.catalog import ConvertEntry, Customer
-from dw_sales.domain.layouts import LayoutMapping, PoLayout
+from dw_sales.domain.layouts import PoLayout, PoMapping
 from dw_sales.domain.order_checks import IntakeCaps, ModelStep, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 
@@ -25,15 +26,18 @@ from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadab
 # or opened it with a password from its own mail (``encrypted``: an Office
 # file locked as a whole, ticket 17), or a document DW1 does not read
 # (``unsupported``: an image, another legacy Office file, an archive), which
-# is routed to Sales as unreadable. A PDF with a password is ``pdf``.
-FileType = Literal["pdf", "xlsx", "xls", "doc", "encrypted", "unsupported"]
+# is routed to Sales as unreadable. A PDF with a password is ``pdf``. A
+# portal's export (``csv``: UTF-16, tab-separated, ticket 18) is read as rows
+# with the customer's mapped layout only.
+FileType = Literal["pdf", "xlsx", "xls", "doc", "encrypted", "csv", "unsupported"]
 
 # What a file of each type is read as (ticket 27): a legacy workbook converted
 # to .xlsx and a legacy Word file to PDF, then read, mapped and shown like one;
 # a locked Office file as the workbook a PO is (ticket 17), which the reader
-# sandbox holds it to once opened.
-READ_AS: Final[Mapping[str, Literal["pdf", "xlsx"]]] = MappingProxyType(
-    {"pdf": "pdf", "xlsx": "xlsx", "xls": "xlsx", "doc": "pdf", "encrypted": "xlsx"}
+# sandbox holds it to once opened; a portal's export as its rows (ticket 18).
+ReadAs = Literal["pdf", "xlsx", "csv"]
+READ_AS: Final[Mapping[str, ReadAs]] = MappingProxyType(
+    {"pdf": "pdf", "xlsx": "xlsx", "xls": "xlsx", "doc": "pdf", "encrypted": "xlsx", "csv": "csv"}
 )
 
 
@@ -67,7 +71,7 @@ class PoDocumentReaderPort(Protocol):
     async def read_with(
         self,
         document: AttachmentContent,
-        mapping: LayoutMapping,
+        mapping: PoMapping,
         caps: IntakeCaps,
         *,
         layout_ref: str,
@@ -151,6 +155,24 @@ class ConvertLedgerPort(Protocol):
     async def learn_convert(
         self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
     ) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class PoUpload:
+    """A stored message a person uploaded ("Tải PO lên", ticket 18): the
+    customer they chose for it and who they are. Written by the server, from
+    the verified request, beside the message it stored; never read from
+    anything the message carries, so a mail cannot claim to be one."""
+
+    customer_code: str
+    uploaded_by: uuid.UUID
+
+
+class UploadLookupPort(Protocol):
+    """Whether a stored message is a PO a person uploaded, and for whom.
+    Read-only: intake asks one question of the stored mailbox."""
+
+    async def upload_of(self, scope: SalesScope, message_id: str) -> PoUpload | None: ...
 
 
 class LayoutLookupPort(Protocol):

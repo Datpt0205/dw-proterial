@@ -126,7 +126,7 @@ def _row(step: ModelStep = ModelStep.MESSAGE_INTENT, **changes: Any) -> ModelMea
 async def test_a_step_never_measured_is_not_ready() -> None:
     readiness = await _gate().check(ALPHA, ModelStep.MESSAGE_INTENT)
     assert (readiness.ready, readiness.reason, readiness.latest) == (False, "not_measured", None)
-    assert (readiness.model, readiness.prompt) == (MODEL, "sales.message_intent@1.0.0")
+    assert (readiness.model, readiness.prompt) == (MODEL, "sales.message_intent@1.1.0")
 
 
 async def test_a_passing_measurement_on_the_model_and_prompt_it_runs_on_is_ready() -> None:
@@ -267,7 +267,7 @@ async def test_turning_a_step_on_with_no_measurement_is_refused_naming_it() -> N
         "step": "message_intent",
         "bar": 0.90,
         "model": MODEL,
-        "prompt": "sales.message_intent@1.0.0",
+        "prompt": "sales.message_intent@1.1.0",
         "reason": "not_measured",
         "latest": None,
     }

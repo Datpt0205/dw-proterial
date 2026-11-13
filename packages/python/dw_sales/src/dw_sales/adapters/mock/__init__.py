@@ -6,6 +6,6 @@ email is meant to exercise is listed in `README.md` beside this file.
 """
 
 from dw_sales.adapters.mock.catalog import MockSalesCatalog
-from dw_sales.adapters.mock.inbox import MockInbox
+from dw_sales.adapters.mock.inbox import MockInbox, WithUploads
 
-__all__ = ["MockInbox", "MockSalesCatalog"]
+__all__ = ["MockInbox", "MockSalesCatalog", "WithUploads"]

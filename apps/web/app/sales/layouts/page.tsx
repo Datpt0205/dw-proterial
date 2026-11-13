@@ -20,7 +20,7 @@ import { approvalClient } from "../../../lib/approvals/registry";
 import { formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
-import { LAYOUT_FIELDS, LAYOUT_STATUS } from "../_lib/layouts";
+import { EXPORT_FIELDS, LAYOUT_FIELDS, LAYOUT_STATUS } from "../_lib/layouts";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
@@ -275,20 +275,37 @@ function Layouts() {
 
 function MappingDetail({ layout }: { layout: Layout }) {
   const mapping = layout.mapping;
+  // A form's labels, or a portal export's columns (ticket 18).
+  const named = mapping as unknown as Record<string, string | null | undefined>;
+  const fields = mapping.kind === "csv" ? EXPORT_FIELDS : LAYOUT_FIELDS;
   return (
     <Descriptions
       size="small"
       bordered
       column={{ xs: 1, md: 2 }}
       items={[
-        ...LAYOUT_FIELDS.filter((f) => mapping[f.field] !== undefined).map(
-          ({ field, label }) => ({
+        ...fields
+          .filter((f) => named[f.field] !== undefined)
+          .map(({ field, label }) => ({
             key: field,
             label,
-            children: mapping[field] ?? "Mẫu không in",
-          }),
-        ),
-        ...(layout.kind === "pdf"
+            children: named[field] ?? "Mẫu không in",
+          })),
+        ...(mapping.kind === "csv"
+          ? [
+              {
+                key: "firm_values",
+                label: "Giá trị nghĩa là đặt hàng",
+                children: mapping.firm_values.join(", "),
+              },
+              {
+                key: "currency",
+                label: "Tiền tệ (tệp không in)",
+                children: mapping.currency,
+              },
+            ]
+          : []),
+        ...(layout.kind === "pdf" || layout.kind === "csv"
           ? [
               {
                 key: "numbers",

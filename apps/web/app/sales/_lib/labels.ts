@@ -112,6 +112,7 @@ export const ROUTING_REASON = {
   attachment_locked: "Tệp có mật khẩu, DW không mở được",
   malware_detected: "Tệp đính kèm có mã độc",
   reply_to_case: "Trả lời về hồ sơ đang xử lý",
+  portal_notice: "PO trên cổng khách",
   other: "Khác",
 } as const;
 
@@ -136,6 +137,8 @@ export const ROUTING_ADVICE = {
     "Tệp đính kèm có mã độc nên DW1 không mở: đừng mở tệp, báo IT.",
   reply_to_case:
     "Thư trả lời về một hồ sơ đang xử lý: mở hồ sơ để xem và trả lời khách.",
+  portal_notice:
+    "Khách báo PO đã có trên cổng của khách, thư không kèm PO: tải PO từ cổng rồi bấm “Tải PO lên” và chọn khách này.",
   other:
     "Thư không phải PO hay yêu cầu báo giá: đọc thư và xử lý nếu cần, rồi đánh dấu đã xử lý.",
 } as const;
@@ -244,6 +247,7 @@ export const INTENT_KIND = {
   delivery_change: "Đổi lịch giao",
   complaint: "Khiếu nại",
   sample_request: "Yêu cầu hàng mẫu",
+  portal_notice: "Báo PO trên cổng khách",
   other: "Khác",
 } as const;
 
@@ -394,6 +398,7 @@ export const REGION_FLAG = {
   print_differs: "Bản in PDF ghi khác",
   ocr: "Đọc bằng OCR, cần xác nhận",
   opened_with_password: "Tệp có mật khẩu, cần xác nhận",
+  not_printed: "Tệp không in giá trị này, cần xác nhận",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */
@@ -560,6 +565,7 @@ export const ACTIVITY_REASON: Record<string, string> = {
   requested_is_po_date: "Ngày yêu cầu trùng ngày PO",
   requested_date_empty: "Cột ngày giao không có ngày nào",
   no_item_known: "Không mã hàng nào của khách được biết",
+  no_firm_line: "Tệp xuất từ cổng không có dòng đặt hàng nào",
   part_unknown: "Mô hình chỉ tới phần không có trong thư",
   line_unanchored: "Không xác định được vị trí dòng trong tệp",
   quantity_unit_unknown: "Số lượng không có đơn vị DW1 báo giá",

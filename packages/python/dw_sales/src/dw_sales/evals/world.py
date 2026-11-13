@@ -54,12 +54,13 @@ from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.application.malware import MalwareScanPort
 from dw_platform.domain.audit import AuditEntry, AuditEvent
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests, step_model
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
-from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
+from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, rule_book
@@ -101,10 +102,12 @@ from dw_sales.application.layouts import (
     LayoutPrefiller,
     LayoutSettlement,
 )
+from dw_sales.application.mail_drop import MailFile
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_ports import PoUpload
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import ClaimedJob, ProcessingDrain
@@ -951,6 +954,51 @@ class Objects:
         self.held.pop(key, None)
 
 
+@dataclass
+class MemoryUploads:
+    """The stored mailbox as "Tải PO lên" writes it (ticket 18), in memory:
+    `InboxPort` over what was uploaded, `UploadStorePort` and
+    `UploadLookupPort`. One writer at a time, as the store's lock makes it;
+    the audit row lands in the store's audit for the scope, as the store
+    writes it in the message's transaction."""
+
+    store: MemoryStore
+    held: dict[tuple[SalesScope, str], tuple[MailFile, PoUpload]] = field(default_factory=dict)
+
+    async def list_messages(self, scope: SalesScope) -> Sequence[InboundMessage]:
+        return sorted(
+            (mail.message for (s, _), (mail, _) in self.held.items() if s == scope),
+            key=lambda m: m.received_at,
+        )
+
+    async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
+        found = self.held.get((scope, message_id))
+        return None if found is None else found[0].message
+
+    async def read_attachment(
+        self, scope: SalesScope, message_id: str, attachment_id: str
+    ) -> AttachmentContent | None:
+        found = self.held.get((scope, message_id))
+        attachment = None if found is None else found[0].message.attachment(attachment_id)
+        if found is None or attachment is None:
+            return None
+        return AttachmentContent(attachment=attachment, data=found[0].contents[attachment_id])
+
+    async def store_upload(
+        self, scope: SalesScope, mail: MailFile, upload: PoUpload, *, event: AuditEvent
+    ) -> bool:
+        key = (scope, mail.message.message_id)
+        if key in self.held:
+            return False
+        self.held[key] = (mail, upload)
+        self.store.state(scope).audit.append(event)
+        return True
+
+    async def upload_of(self, scope: SalesScope, message_id: str) -> PoUpload | None:
+        found = self.held.get((scope, message_id))
+        return None if found is None else found[1]
+
+
 # ----------------------------------------------------------------- world --
 
 type Between = Callable[[str, MessageDispositionView], Awaitable[None]]
@@ -983,6 +1031,8 @@ class World:
     # Each tenant's live measurements of the model steps (ADR 0005, addendum
     # of 2026-10-23), which the gate in front of every model call reads.
     measurements: MemoryModelMeasurements
+    # What people uploaded ("Tải PO lên", ticket 18), beside the mock mail.
+    uploads: MemoryUploads
 
     async def decide_layout(
         self,
@@ -1303,8 +1353,9 @@ def open_world(
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
     # sample set unless ``scanner`` says so.
     scanning = scanner or NoMalware()
+    uploads = MemoryUploads(store)
     inbox = ScannedInbox(
-        MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir),
+        WithUploads(MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir), uploads),
         scanning,
         readers.po,
     )
@@ -1352,6 +1403,7 @@ def open_world(
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
         body_pos=None if model is None else PoBodyReader(model),
         model_steps=readiness,
+        uploads=uploads,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()
@@ -1397,6 +1449,7 @@ def open_world(
         converts=catalog,
         senders=catalog,
         assistant=MemoryAssistantStores(),
+        uploads=uploads,
         one_call=model,
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
@@ -1443,6 +1496,7 @@ def open_world(
         ),
         draft_store,
         measurements,
+        uploads,
     )
 
 

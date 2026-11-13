@@ -27,7 +27,12 @@ export function coverageStatement(order: Order): string {
       : totalMismatch
         ? `tổng KHÔNG khớp ô TOTAL${totalCell ? ` (${totalCell})` : ""}`
         : `tổng khớp ô TOTAL${totalCell ? ` (${totalCell})` : ""}`;
-  return `Đã đọc ${c.lines_read}/${c.lines_printed} dòng trên ${where}; ${total}; ${c.checks_run} lượt kiểm tra × ${c.lines_read} dòng; ${c.findings} cờ`;
+  // A portal's export mixes forecast rows with firm ones (ticket 18): the
+  // forecast rows are counted, never ordered.
+  const forecast = c.forecast_rows
+    ? `; ${c.forecast_rows} dòng dự báo, không đặt hàng`
+    : "";
+  return `Đã đọc ${c.lines_read}/${c.lines_printed} dòng trên ${where}; ${total}; ${c.checks_run} lượt kiểm tra × ${c.lines_read} dòng; ${c.findings} cờ${forecast}`;
 }
 
 /** "page 2" → "trang 2", "message_text" → "nội dung thư", else a sheet. */

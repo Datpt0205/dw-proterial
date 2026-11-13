@@ -47,6 +47,7 @@ from dw_sales.application.outbound_mail import OutboundMailService
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.pc_dates import PcDateReplies
 from dw_sales.application.pipeline import PipelineService
+from dw_sales.application.po_uploads import PoUploads, UploadStorePort
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     InboxPort,
@@ -83,6 +84,8 @@ class SalesServices:
     inbox: InboxQueries
     # "DW xử lý": the routes queue a message (ticket 25); the worker runs it.
     processing: ProcessingService
+    # "Tải PO lên": a PO file a person downloaded, stored and queued (ticket 18).
+    uploads: PoUploads
     dw1: Dw1Runs
     orders: OrderQueries
     order_commands: OrderCommands
@@ -173,6 +176,8 @@ def assemble(
     senders: SenderLedgerPort,
     # The status assistant's sessions, each bound to its person (ADR 0007).
     assistant: AssistantStoreFactory,
+    # Where an uploaded PO is stored, with whose it is (ticket 18).
+    uploads: UploadStorePort,
     # The one-call door's model, for the steps a person asks for on a page
     # (AI items 5 and 12); None where no model is configured.
     one_call: InterpretationPort | None,
@@ -207,6 +212,7 @@ def assemble(
         pipeline=PipelineService(uow, gate, clock, overview),
         inbox=InboxQueries(uow, gate, inbox, book, directory),
         processing=queue,
+        uploads=PoUploads(uow, gate, clock, ids, catalog, intake.rules, directory, uploads, queue),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=orders,
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts),
@@ -230,7 +236,9 @@ def assemble(
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         routed_mail=RoutedMailService(uow, gate, directory, clock, ids),
-        layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
+        layouts=LayoutService(
+            uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks, intake
+        ),
         rules=SalesRulesService(uow, gate, book, clock, ids, directory, readiness),
         process_settings=ProcessSettingsService(
             gate, intake.rules, readiness, roles, step_activity, clock
