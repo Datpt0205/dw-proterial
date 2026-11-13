@@ -10,6 +10,22 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
 
 ## State
 
+- 2026-11-13, **the BA's two real purchasing flows arrived** (outside git:
+  `Downloads/DW2.drawio` "PURCHASING – NVL" new + mass, `Downloads/DW2-1.drawio`
+  "PURCHASING – CCDC / máy móc / dịch vụ" with + without a quotation; decoded in
+  `D:\dw-tools\dw1flow\dw2.txt`, `dw2-1.txt`). They differ from what DW2 was
+  built on: the requester creates the PR on Bravo with its attachments
+  (quotation, drawing, chemical form, FA form); new materials need sourcing,
+  the AVL, supplier documents (ISO 9001, RoHS/REACH, NDA) and a new-vendor form;
+  tools need ≥2 quotations from 2 suppliers unless the supplier is exclusive,
+  compared on 13 criteria (DW never picks the cheapest); mass materials reuse a
+  still-valid quotation; PO approval stays on paper; budget checks do not
+  appear; RoHS/REACH surveys go from a finished good's BOM. The Bravo API
+  request was redone for DW2 on these flows (R20–R35, writes after a person
+  approves: W11–W18; `docs/proterial/API-Bravo_DW1-DW2_2026-11-13.xlsx`).
+  **Next:** a comparison of both flows with the six built functions, as DW1's
+  `GAP.md`, before changing code; the BA's open points OP-02…OP-25 are the
+  questions for Proterial.
 - 2026-11-01, **ADR 0013 decision 1 done**, one commit each, behaviour unchanged,
   unit suite green after the five (4037 passed), lint-imports kept:
   malware port + clamd → `dw_platform` (`0c75ddb`); figure/amount check →
