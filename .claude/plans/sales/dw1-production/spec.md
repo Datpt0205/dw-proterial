@@ -391,6 +391,13 @@ stamp), 09, 06, the follow-up timings of the diagrams
 head; PC and JP/HQ late), then the RFQ branches (mass skips Design,
 "pending", the customer's answer after a quote, 05, sign before send).
 
+**The Bravo API request, revised 11-13** (`docs/proterial/API-Bravo_DW1-DW2_2026-11-13.xlsx`,
+outside git, sent by Đạt): read only, as ADR 0026 decided; the write APIs (W02–W05,
+W11–W14) are dropped, R02 and R11 merged into R01 and R10; new R17 selling-price
+policy, R18 the price Bravo's quotation module computes, R19 the working calendar;
+R01 adds each customer's contact addresses and Sales PIC (ticket 20); R06, R09,
+R12, R14 move to P1, R15 to P2. The two validate-only APIs (W01, W10) stay optional.
+
 **Owed by Proterial** (short, to the questions workbook): customer contacts
 per customer and their Sales PIC; mail templates for each step that writes
 to a customer, PC or JP/HQ; the LME band table, margins by customer and the
