@@ -14,8 +14,14 @@ import pytest
 
 from dw_kernel.errors import NotFoundError
 from dw_platform.application.access_context import AccessContext
+from dw_sales.application.inbox_service import _shown
 from dw_sales.application.visibility import sees_case
-from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.dispositions import (
+    CaseKind,
+    DispositionKind,
+    MessageDisposition,
+    RoutingReason,
+)
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
@@ -106,3 +112,44 @@ async def test_another_pics_quote_is_not_found_on_any_read() -> None:
     head = _restricted(GIANG, AN, DIEU)
     assert quote.case_id in {s.case_id for s in await services.quotes.summaries(head)}
     assert "M10" in {m.message_id for m in await services.inbox.messages(head)}
+
+
+async def test_a_mail_routed_to_a_named_pic_is_theirs_and_their_heads_alone() -> None:
+    """M11 (a delivery change) is routed to the customer's Sales PIC, whom
+    master data knows by address. Until 2026-11-12 the inbox read that owner
+    as a user id, so in a restricted tenant the mail was shown to nobody:
+    not the PIC it was routed to, not the head (the DW1 walk on CI)."""
+    world = _world()
+    await world.process_each(AN, ["M11"])
+    (logged,) = [
+        m for m in await world.services.inbox.messages(AN.context()) if m.message_id == "M11"
+    ]
+    assert logged.disposition.kind == "routed_to_sales"
+    assert logged.disposition.owner == AN.member().email
+
+    async def sees(context: AccessContext) -> bool:
+        return "M11" in {m.message_id for m in await world.services.inbox.messages(context)}
+
+    assert await sees(_restricted(AN))
+    assert await sees(_restricted(GIANG, AN, DIEU))
+    # Another PIC, and a head the owner does not report to, are not shown it.
+    assert not await sees(_restricted(DIEU))
+    assert not await sees(_restricted(GIANG, DIEU))
+
+
+def test_a_routed_mail_whose_pic_is_no_member_is_every_pics_to_pick_up() -> None:
+    """A customer's Sales PIC who left is an address no member holds. Their
+    case is unassigned (the pool's), and so is their routed mail: hiding it
+    would show it to nobody."""
+    gone = MessageDisposition(
+        message_id="X1",
+        kind=DispositionKind.ROUTED_TO_SALES,
+        reason=RoutingReason.COMPLAINT,
+        owner="nguoi.da.nghi@alpha.local",
+    )
+    members = {AN.member().email.lower(): AN.user_id}  # type: ignore[union-attr]
+    assert _shown(_restricted(DIEU), gone, set(), members)
+    # The same mail for a member the caller does not see stays hidden.
+    theirs = gone.model_copy(update={"owner": AN.member().email})
+    assert not _shown(_restricted(DIEU), theirs, set(), members)
+    assert _shown(_restricted(AN), theirs, set(), members)

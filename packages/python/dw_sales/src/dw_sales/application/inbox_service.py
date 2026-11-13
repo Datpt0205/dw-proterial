@@ -112,6 +112,8 @@ class InboxQueries:
     # The words a routed message's hand-off is written with (ticket 33),
     # the tenant's own where it has a version (ticket 36).
     handoffs: HandoffCopyPort
+    # Whose address a routed message's owner is, in a tenant that narrows reads.
+    directory: MemberDirectoryPort
 
     async def messages(self, context: AccessContext) -> list[InboxMessageView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_message")
@@ -142,10 +144,15 @@ class InboxQueries:
             if any(m.disposition.handoff is not None for m in logged.values())
             else None
         )
+        members = (
+            {}
+            if context.visible_owners is None
+            else await members_by_address(self.directory, context)
+        )
         views = []
         for message in await self.inbox.list_messages(scope):
             seen = logged.get(message.message_id)
-            if seen is not None and not _shown(context, seen.disposition, hidden):
+            if seen is not None and not _shown(context, seen.disposition, hidden, members):
                 continue
             disposition = (
                 message_disposition(seen.disposition, seen.processed_at, seen.handled)
@@ -181,19 +188,41 @@ class InboxQueries:
         )
 
 
-def _shown(context: AccessContext, disposition: MessageDisposition, hidden: set[uuid.UUID]) -> bool:
+async def members_by_address(
+    directory: MemberDirectoryPort, context: AccessContext
+) -> dict[str, uuid.UUID]:
+    """The workspace's members by mail address, lower-cased: how the Sales PIC
+    master data names by address becomes a person, for the case assigned to
+    them and for the routed message that is theirs."""
+    return {
+        member.email.lower(): member.user_id
+        for member in await directory.list_members(context)
+        if member.email is not None
+    }
+
+
+def _shown(
+    context: AccessContext,
+    disposition: MessageDisposition,
+    hidden: set[uuid.UUID],
+    members: dict[str, uuid.UUID],
+) -> bool:
     """A message on a case the caller does not see is not shown, nor one
     routed to a person outside the caller's `visible_owners`; a team's (the
-    pool's, `role:<key>`) is everyone's."""
+    pool's, `role:<key>`) is everyone's.
+
+    A routed message's owner is the customer's Sales PIC as master data holds
+    it, an address (``members`` resolves it). An address no member holds is
+    nobody's, so the message is every PIC's to pick up, as a case with such a
+    PIC is unassigned (`InboxProcessing._assignee`): hiding it would show it
+    to no one."""
     if disposition.case_id is not None:
         return disposition.case_id not in hidden
     owners, owner = context.visible_owners, disposition.owner
     if owners is None or owner is None or owner.startswith("role:"):
         return True
-    try:
-        return uuid.UUID(owner) in owners
-    except ValueError:
-        return False
+    person = members.get(owner.lower())
+    return person is None or person in owners
 
 
 logger = logging.getLogger(__name__)
@@ -610,11 +639,8 @@ class InboxProcessing:
         customer = (await self.catalog.customer_by_code(sales_scope(context), customer_code)).data
         if customer is None or customer.sales_pic is None:
             return None
-        wanted = customer.sales_pic.lower()
-        for member in await self.directory.list_members(context):
-            if member.email is not None and member.email.lower() == wanted:
-                return member.user_id
-        return None
+        members = await members_by_address(self.directory, context)
+        return members.get(customer.sales_pic.lower())
 
 
 def _replied(stored: QuoteCase, outcome: ReplyAttached) -> QuoteCase:
