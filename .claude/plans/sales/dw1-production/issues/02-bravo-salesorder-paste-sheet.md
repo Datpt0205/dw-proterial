@@ -33,6 +33,11 @@ offers no connection, and the file has to paste without retyping.
 - B02 (Bravo's "Customer order information (Form 1)" export, 81 columns) is
   the view, not the paste grid; the paste sheet's columns are the ones Sales
   types (11-09 recording), B41 confirms them.
+- **Per customer, learned by example** (Đạt 11-13, dw_sales ADR 0013,
+  ticket 38): the steps between the customer's PO and this file (columns,
+  colour letters, reel lengths, km/m, the date shift) are a customer's rule
+  version proposed by the model from one worked pair and proven by replay;
+  this ticket ships the common SalesOrder layout they write into.
 
 ## Acceptance
 

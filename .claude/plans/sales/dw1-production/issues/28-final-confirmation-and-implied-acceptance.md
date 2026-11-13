@@ -19,6 +19,12 @@ customer's own PO plus the processed Excel" (spec 11-13).
 - Per-customer days of implied acceptance in the order rules, empty by
   default; the follow-up lane tells the PIC when they pass; the PIC
   records it.
+- Customer 1's PO terms read "5 business days after the P/O date" (Box B01,
+  inventory item 9): the days count from the PO date there, in business
+  days, while Đạt's rule (11-13, via the 24/7 change) is calendar days by
+  default. Each customer's value says which day count and from which date
+  (PO date or confirmation sent); calendar from the confirmation by
+  default; Proterial confirms customer 1's.
 
 ## Acceptance
 
