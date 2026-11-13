@@ -33,6 +33,12 @@ than this one (the e2e run of 2026-10-21 met one built before
 is rebuilt, so nothing is retried and nothing is read: the mismatch is logged
 by where it failed, never by a value.
 
+**A locked file is sent with its mail's candidates** (ticket 17): a
+`LockedContent`, as the scanned mailbox hands one over, goes to the reader
+with the passwords its own mail carries, derived for that one request
+(`ReaderArgs.passwords`) and held by nothing after it. The reader opens it in
+memory, or answers it as unreadable for want of a password.
+
 Only `sniff` (and so `SourceViewPort.kind`) stays in the calling process:
 magic numbers and a zip's table of contents (`dw_sales.adapters.formats`).
 """
@@ -51,7 +57,7 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.domain.messages import AttachmentContent
-from dw_sales.adapters.formats import refusal, sniff
+from dw_sales.adapters.formats import encrypted, refusal, sniff
 from dw_sales.adapters.reader_wire import (
     DocumentText,
     MailRead,
@@ -65,6 +71,7 @@ from dw_sales.application.catalog_imports import TableUnreadableError
 from dw_sales.application.mail_drop import MailFile, MailRefused
 from dw_sales.application.order_ports import READ_AS, FileType, QuoteForm
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
+from dw_sales.application.scanned_inbox import LockedContent
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
@@ -180,6 +187,12 @@ async def _ask(
     data: bytes | None = None,
     args: ReaderArgs | None = None,
 ) -> ReaderReply:
+    """One request. ``content`` as the scanned mailbox handed it over: a
+    `LockedContent` sends the candidates its mail carries with it (module
+    docstring)."""
+    args = args or ReaderArgs()
+    if isinstance(content, LockedContent):
+        args = ReaderArgs.model_validate({**dict(args), "passwords": content.passwords()})
     return await transport.call(ReaderRequest.of(operation, content=content, data=data, args=args))
 
 
@@ -200,6 +213,11 @@ class ClientPoReaders:
         """`FormatCheckPort`: the scanned mailbox's check of a file against
         its name, by its bytes, in this process (`formats.refusal`)."""
         return refusal(name, data)
+
+    def encrypted(self, data: bytes) -> bool:
+        """`FormatCheckPort`: whether the file is locked with a password, by
+        its bytes, in this process (`formats.encrypted`)."""
+        return encrypted(data)
 
     async def buyer(self, document: AttachmentContent, caps: IntakeCaps) -> PrintedBuyer | None:
         # A workbook prints its buyer where every PO does; a legacy one too,
@@ -376,7 +394,12 @@ class ClientSourceView:
         (ticket 27), which the reader makes again to show it."""
         return READ_AS.get(sniff(data) or "")
 
-    async def pdf_page(self, data: bytes, page: int) -> tuple[bytes, int] | None:
+    # A file to open is its bytes, or an attachment as the scanned mailbox
+    # handed it over, which a locked one needs to be opened (ticket 17).
+
+    async def pdf_page(
+        self, data: bytes | AttachmentContent, page: int
+    ) -> tuple[bytes, int] | None:
         opened: PdfPage | None = await self._open(
             ReaderOp.SOURCE_PDF_PAGE, data, ReaderArgs(caps=self.caps, page=page)
         )
@@ -384,20 +407,25 @@ class ClientSourceView:
             return None
         return base64.b64decode(opened.pdf_b64), opened.pages
 
-    async def sheet_names(self, data: bytes) -> list[str]:
+    async def sheet_names(self, data: bytes | AttachmentContent) -> list[str]:
         names: list[str] = await self._open(
             ReaderOp.SOURCE_SHEET_NAMES, data, ReaderArgs(caps=self.caps)
         )
         return names
 
-    async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None:
+    async def sheet_grid(self, data: bytes | AttachmentContent, sheet: str) -> SheetGrid | None:
         grid: SheetGrid | None = await self._open(
             ReaderOp.SOURCE_SHEET_GRID, data, ReaderArgs(caps=self.caps, sheet=sheet)
         )
         return grid
 
-    async def _open(self, operation: ReaderOp, data: bytes, args: ReaderArgs) -> Any:
-        reply = await _ask(self.transport, operation, data=data, args=args)
+    async def _open(
+        self, operation: ReaderOp, data: bytes | AttachmentContent, args: ReaderArgs
+    ) -> Any:
+        if isinstance(data, AttachmentContent):
+            reply = await _ask(self.transport, operation, content=data, args=args)
+        else:
+            reply = await _ask(self.transport, operation, data=data, args=args)
         if _failed(operation, reply):
             raise DomainError(
                 "tệp này không mở được để xem",

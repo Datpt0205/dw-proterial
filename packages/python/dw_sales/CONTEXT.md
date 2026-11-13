@@ -57,7 +57,18 @@ API and the plan use the English terms. The spec is
   one routes its message to Sales (`malware_detected`) with nothing in it
   read or served; a scanner that cannot answer leaves the message not yet
   processed ("chưa quét được, thử lại"); a file that is not what its name
-  says, or an encrypted Office file, is refused unread.
+  says is refused unread. An encrypted file (an Office file or a PDF with a
+  password) is not refused: it is marked "encrypted: contents not scannable
+  by ClamAV" and read only inside the reader sandbox (ticket 17).
+- **File with a password** (Tệp có mật khẩu): a PO file the customer locked
+  with a password and wrote the password in the same mail. DW opens it in the
+  reader sandbox with the candidates that one mail's text carries (each
+  line's text after its last colon, then its words), the file itself telling
+  which is right; no model guesses. The password is never stored, logged,
+  audited or shown; the audit says only that the file was opened with a
+  password from its own mail. Every value read from it is flagged
+  `opened_with_password` ("Tệp có mật khẩu, cần xác nhận") for Sales. One
+  none of the candidates opens routes its message `attachment_locked`.
 - **Date to follow** (Ngày giao báo sau): a PO line printed with its
   requested date blank. It reads with no date and no schedule, and raises
   `requested_date_missing`: Sales asks the customer for the date, or goes
@@ -382,6 +393,7 @@ Routing reasons: `delivery_change` (Đổi lịch giao — PC, DW2), `complaint`
 (Khiếu nại — QA), `design_reply_unmatched` (Phản hồi Design không khớp
 YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác định
 được khách hàng), `attachment_unreadable` (Không đọc được file),
+`attachment_locked` (Tệp có mật khẩu, DW không mở được),
 `malware_detected` (Tệp đính kèm có mã độc), `reply_to_case` (Trả lời về hồ
 sơ đang xử lý), `other` (Khác).
 

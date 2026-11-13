@@ -21,15 +21,19 @@ from dw_sales.domain.order_checks import IntakeCaps, ModelStep, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 
 # What a file is by its bytes: read (``pdf``, ``xlsx``), read once the reader
-# sandbox has converted it (``xls``, ``doc``: a legacy Office file, ticket 27),
-# or a document DW1 does not read (``unsupported``: an image, an encrypted or
-# other legacy Office file, an archive), which is routed to Sales as unreadable.
-FileType = Literal["pdf", "xlsx", "xls", "doc", "unsupported"]
+# sandbox has converted it (``xls``, ``doc``: a legacy Office file, ticket 27)
+# or opened it with a password from its own mail (``encrypted``: an Office
+# file locked as a whole, ticket 17), or a document DW1 does not read
+# (``unsupported``: an image, another legacy Office file, an archive), which
+# is routed to Sales as unreadable. A PDF with a password is ``pdf``.
+FileType = Literal["pdf", "xlsx", "xls", "doc", "encrypted", "unsupported"]
 
 # What a file of each type is read as (ticket 27): a legacy workbook converted
-# to .xlsx and a legacy Word file to PDF, then read, mapped and shown like one.
+# to .xlsx and a legacy Word file to PDF, then read, mapped and shown like one;
+# a locked Office file as the workbook a PO is (ticket 17), which the reader
+# sandbox holds it to once opened.
 READ_AS: Final[Mapping[str, Literal["pdf", "xlsx"]]] = MappingProxyType(
-    {"pdf": "pdf", "xlsx": "xlsx", "xls": "xlsx", "doc": "pdf"}
+    {"pdf": "pdf", "xlsx": "xlsx", "xls": "xlsx", "doc": "pdf", "encrypted": "xlsx"}
 )
 
 

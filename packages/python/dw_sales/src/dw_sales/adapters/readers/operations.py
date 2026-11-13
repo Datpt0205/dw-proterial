@@ -21,6 +21,14 @@ customer's file's and the copy's, and the PO names the converter
 reason, never a failed run. **A scanned PDF page is read by OCR** where the
 tools have an engine (`readers.ocr`, flagged in `readers.pdf`).
 
+**A file locked with a password is opened first** (ticket 17), in memory,
+with the candidates its own mail carries (`ReaderArgs.passwords`,
+`readers.locked`), then read, mapped or shown like any file: every anchor
+names the customer's file, and every value of a PO read from it is flagged
+`opened_with_password`, for a person to confirm. A file none of them opens is
+unreadable for want of a password (`Unreadable.locked`), and refused to be
+shown; which candidate opened it is never in the reply.
+
 The tools are the image's (`ReaderTools.installed`): LibreOffice and
 Tesseract. In process, where neither is installed, a legacy file is
 unreadable ("LibreOffice is not installed where this file was read") and a
@@ -35,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import dataclasses
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -60,6 +69,7 @@ from dw_sales.adapters.readers.legacy import (
     Legacy,
     LibreOfficeConverter,
 )
+from dw_sales.adapters.readers.locked import LockedError, opened
 from dw_sales.adapters.readers.mail import read_mail
 from dw_sales.adapters.readers.ocr import PageOcrPort, TesseractOcr
 from dw_sales.adapters.readers.pdf import PdfPoReader
@@ -68,8 +78,9 @@ from dw_sales.adapters.readers.text_parts import AttachmentTexts, scanned_parts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
+from dw_sales.domain.layouts import flagged_everywhere
 from dw_sales.domain.order_checks import IntakeCaps
-from dw_sales.domain.orders import Derivation, PoDocument, Unreadable
+from dw_sales.domain.orders import Derivation, PoDocument, RegionFlag, Unreadable
 
 logger = logging.getLogger("dw_sales.reader")
 
@@ -95,40 +106,54 @@ class ReaderTools:
 
 @dataclass(frozen=True, slots=True)
 class _Readable:
-    """The file a reader opens: the attachment, or its converted copy, with
-    how the copy was made and what it was made from."""
+    """The file a reader opens: the attachment, its converted copy, with how
+    the copy was made and what it was made from, or the attachment opened
+    with a password from its mail (``unlocked``, ticket 17)."""
 
     content: AttachmentContent
     original_sha256: str
     derivation: Derivation | None
+    unlocked: bool = False
 
     def as_read(self, operation: ReaderOp, value: object) -> object:
         """``value`` read from the copy, as read from the attachment: every
-        anchor names both hashes, and a PO the converter (module docstring)."""
-        if self.derivation is None or value is None:
+        anchor names both hashes, and a PO the converter; read from the
+        opened file, every anchor names the attachment and a PO's every value
+        is flagged (module docstring)."""
+        if value is None or (self.derivation is None and not self.unlocked):
             return value
         adapter = RESULTS[operation]
         dumped = _named_both(
             adapter.dump_python(value, mode="json"),
             original=self.original_sha256,
-            derived=str(self.derivation.derived_sha256),
+            derived=self.content.attachment.sha256,
+            beside=self.derivation is not None,
         )
-        if isinstance(value, PoDocument):
+        if isinstance(value, PoDocument) and self.derivation is not None:
             dumped["derivation"] = self.derivation.model_dump(mode="json")
-        return adapter.validate_python(dumped)
+        read = adapter.validate_python(dumped)
+        if isinstance(read, PoDocument) and self.unlocked:
+            return flagged_everywhere(read, RegionFlag.OPENED_WITH_PASSWORD)
+        return read
 
 
-def _named_both(value: Any, *, original: str, derived: str) -> Any:
+def _named_both(value: Any, *, original: str, derived: str, beside: bool = True) -> Any:
     """``value`` with every hash of the copy put back to the attachment's,
-    and every anchor naming the copy's hash beside it."""
+    and, ``beside``, every anchor naming the copy's hash beside it (a
+    converted copy's; an opened file's bytes are the attachment's own)."""
     if isinstance(value, list):
-        return [_named_both(item, original=original, derived=derived) for item in value]
+        return [
+            _named_both(item, original=original, derived=derived, beside=beside) for item in value
+        ]
     if not isinstance(value, dict):
         return value
-    named = {k: _named_both(v, original=original, derived=derived) for k, v in value.items()}
+    named = {
+        k: _named_both(v, original=original, derived=derived, beside=beside)
+        for k, v in value.items()
+    }
     if named.get("attachment_sha256") == derived:
         named["attachment_sha256"] = original
-        if "derived_sha256" in named:  # an anchor
+        if beside and "derived_sha256" in named:  # an anchor
             named["derived_sha256"] = derived
     return named
 
@@ -145,9 +170,19 @@ def _legacy(data: bytes) -> Legacy | None:
 
 
 def _readable(request: ReaderRequest, tools: ReaderTools) -> _Readable:
-    """The attachment, or its copy when it is a legacy file. Raises
-    `ConversionError` when the copy cannot be made."""
+    """The attachment, opened when it is locked, or its copy when it is a
+    legacy file. Raises `LockedError` when no password its mail carries opens
+    it, `ConversionError` when the copy cannot be made."""
     content = request.content()
+    plain = opened(content.data, request.args.passwords)
+    if plain is not None:
+        copy = AttachmentContent(
+            attachment=content.attachment.model_copy(
+                update={"size": len(plain), "sha256": hashlib.sha256(plain).hexdigest()}
+            ),
+            data=plain,
+        )
+        return _Readable(copy, content.attachment.sha256, None, unlocked=True)
     kind = _legacy(content.data)
     if kind is None:
         return _Readable(content, content.attachment.sha256, None)
@@ -170,9 +205,16 @@ def _readable(request: ReaderRequest, tools: ReaderTools) -> _Readable:
 
 
 def _readable_bytes(request: ReaderRequest, tools: ReaderTools) -> bytes:
-    """A source view's bytes: a legacy file's copy, so it is shown as it was
-    read. A copy that cannot be made is a refusal (ValueError)."""
+    """A source view's bytes: a locked file opened, a legacy file's copy, so
+    it is shown as it was read. A file no password opens, or a copy that
+    cannot be made, is a refusal (ValueError)."""
     data = request.data()
+    try:
+        plain = opened(data, request.args.passwords)
+    except LockedError as locked:
+        raise ValueError(locked.reason) from None
+    if plain is not None:
+        return plain
     kind = _legacy(data)
     if kind is None:
         return data
@@ -193,6 +235,8 @@ async def _document(
 ) -> Any:
     try:
         readable = await asyncio.to_thread(_readable, request, tools)
+    except LockedError as locked:
+        return Unreadable(reason=locked.reason, locked=True)
     except ConversionError as failed:
         kind = sniff(request.content().data)
         return Unreadable(reason=f"the {kind} file could not be converted: {failed}"[:500])
@@ -203,7 +247,7 @@ async def _buyer(request: ReaderRequest, tools: ReaderTools) -> Any:
     caps = request.args.required(request.args.caps, "caps")
     try:
         readable = await asyncio.to_thread(_readable, request, tools)
-    except ConversionError:
+    except (LockedError, ConversionError):
         return None
     found = await tools.po_readers().buyer(readable.content, caps)
     return readable.as_read(ReaderOp.PO_BUYER, found)
@@ -233,7 +277,7 @@ async def _label_source(request: ReaderRequest, tools: ReaderTools) -> Any:
     caps = _caps(request)
     try:
         readable = await asyncio.to_thread(_readable, request, tools)
-    except ConversionError:
+    except (LockedError, ConversionError):
         return None
     return await tools.po_readers().label_source(readable.content, caps)
 
@@ -269,7 +313,7 @@ async def _document_text(request: ReaderRequest, tools: ReaderTools) -> Any:
         return DocumentText(kind="other", parts=[])
     try:
         readable = await asyncio.to_thread(_readable, request, tools)
-    except ConversionError:
+    except (LockedError, ConversionError):
         return DocumentText(kind=kind, parts=[])
     parts = list(await AttachmentTexts().text_parts(readable.content, caps))
     scanned: list[Any] = []

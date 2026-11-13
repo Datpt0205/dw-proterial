@@ -9,6 +9,9 @@ another.
   (its description and its bytes, base64), and the arguments the operation
   takes (`ReaderArgs`). An attachment's description is checked against its
   bytes on the way in (`AttachmentContent`): size and sha256 travel with them.
+  A file locked with a password travels with the candidates its own mail
+  carries (`ReaderArgs.passwords`, ticket 17): in the request only, never in
+  a repr, an error or the reply.
 - **`ReaderReply`**: the operation's result as JSON, validated on arrival
   against the type its operation returns (`RESULTS`), or why there is none.
   A failure names a kind and a code, never a byte of the file:
@@ -31,14 +34,15 @@ import binascii
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, TypeAdapter
 
 from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.file_passwords import MAX_PASSWORD_CHARS, MAX_PASSWORDS
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
 from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.order_checks import IntakeCaps
@@ -46,7 +50,11 @@ from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
 from dw_sales.domain.rfq_reading import TextPart
 
+# `hide_input_in_errors`: a refusal never quotes what was sent, the file's
+# values or a password among them.
 _WIRE = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
+
+_Password = Annotated[str, StringConstraints(min_length=1, max_length=MAX_PASSWORD_CHARS)]
 
 
 class ReaderOp(StrEnum):
@@ -86,6 +94,10 @@ class ReaderArgs(BaseModel):
     layout_ref: str | None = Field(default=None, max_length=200)
     page: int | None = Field(default=None, ge=1)
     sheet: str | None = Field(default=None, max_length=200)
+    # The candidates a locked file's own mail carries, tried in order until
+    # one opens it (ticket 17, `domain.file_passwords`). Sent for a locked
+    # file only, and never shown: not in a repr, not in an error.
+    passwords: tuple[_Password, ...] = Field(default=(), max_length=MAX_PASSWORDS, repr=False)
 
     def required[T](self, value: T | None, name: str) -> T:
         if value is None:

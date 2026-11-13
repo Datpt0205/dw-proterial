@@ -44,6 +44,7 @@ IMPORT_TO_DIST = {
     "reportlab": "reportlab",
     "openpyxl": "openpyxl",
     "pypdf": "pypdf",
+    "msoffcrypto": "msoffcrypto-tool",
     "PIL": "pillow",
     "langchain": "langchain",
     "langchain_core": "langchain-core",
