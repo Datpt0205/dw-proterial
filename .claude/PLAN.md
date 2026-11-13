@@ -9,14 +9,14 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                      |
-| ---------------------------------- | ----------------------------------- | -------------------------- |
-| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + SSE chat, warm 11-06     |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10     |
-| Chat channels (Zalo)               | `.claude/plans/channels.md`         | No Zalo at Proterial 11-11 |
-| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | real flows 11-13; gap next |
+| Area                               | File                                | State                       |
+| ---------------------------------- | ----------------------------------- | --------------------------- |
+| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + SSE chat, warm 11-06      |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps     |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X    |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10      |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | No Zalo at Proterial 11-11  |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | rebuild spec 11-13 (T2–T24) |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
