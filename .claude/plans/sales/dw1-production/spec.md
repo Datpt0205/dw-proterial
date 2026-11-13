@@ -403,6 +403,15 @@ key and the approver; W02, W03, W04, W11 at P2; new W06 bulk line splits, W07
 cancel all or part, W08 Design's result on the YCBG. Until a write API is tried
 on Bravo's test company, the paste sheet stays.
 
+**The standard for entering a PO in Bravo is not in hand (11-13).** Proterial's
+status sheet marks B41 done, but the Box share has no B41, and B41 ("Import
+Sales Order") is one PIC's own tool, not a common standard (Đạt). The Bravo
+guide (SC-QI.012 sheet 5) says sales orders are imported from "file import từ
+Bravo + form SO": Bravo's own import template is the standard ticket 02's
+layout must match. Asked of Proterial: that template with 2–3 imported files;
+the common conversion Excel, if Sales has one; B47 and B48; SC-QI.012 item 12.
+Until then ticket 02's layout is built from the columns Sales types (B02).
+
 **Owed by Proterial** (short, to the questions workbook): customer contacts
 per customer and their Sales PIC; mail templates for each step that writes
 to a customer, PC or JP/HQ; the LME band table, margins by customer and the
