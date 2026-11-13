@@ -89,9 +89,20 @@ def _owed(
 # ------------------------------------------------------------ the policy --
 
 
+def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
+    """Đạt, 2026-11-13: DW runs 24/7 by default; a tenant narrows the hours
+    as a rule version. Sunday 25 October 2026, 03:00 local is open."""
+    policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
+    hours = policy.working_hours
+    assert set(hours.days) == {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    sunday_3am = datetime(2026, 10, 24, 20, 0, tzinfo=UTC)  # 03:00 UTC+7, Sunday
+    assert hours.is_open(sunday_3am)
+    assert all(hours.is_open(MONDAY_8 + day * 24 * HOUR - 8 * HOUR) for day in range(7))
+
+
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.1.0"
+    assert policy.ref == "sales_followups@1.2.0"
     assert policy.order_unconfirmed.remind.after_hours == 4
     assert policy.order_unconfirmed.remind.notify == ("pic",)
     assert policy.order_unconfirmed.escalate.after_hours == 24
@@ -100,7 +111,7 @@ def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     assert policy.waiting_customer.remind.after_hours == 24
     assert policy.morning_brief.at == "07:30"
     assert policy.working_hours.time_zone == "Asia/Ho_Chi_Minh"
-    assert policy.working_hours.days == ("mon", "tue", "wed", "thu", "fri", "sat")
+    assert policy.working_hours.days == ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
 def test_the_key_is_one_a_tenant_may_override() -> None:
