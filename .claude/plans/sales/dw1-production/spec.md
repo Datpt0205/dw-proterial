@@ -332,10 +332,11 @@ inventory only.
 
 **Decided 11-13 (Đạt):**
 
-1. **The decisions stand; the diagrams change.** Eleven boxes have DW write
-   Bravo, send mail to a customer, or log into a customer's portal. They
-   become "DW drafts, a person does it in Bravo / sends it / downloads it,
-   DW reads the result back". The wording per box is in `GAP.md` §2, for
+1. **The decisions stand; the diagrams change**, for mail and portals: DW
+   drafts and a person sends; a person downloads from a customer's portal.
+   **Bravo is written by DW after a person approves** (amended the same day,
+   ADR 0026): the diagram's "DW ghi Bravo" boxes become "DW ghi Bravo sau
+   khi người duyệt 🔒", the paste sheet until the write API exists. The wording per box is in `GAP.md` §2, for
    the BA.
 2. **A password-protected PO (Excel or PDF) is opened with the password its
    own mail carries**, inside the `reader` sandbox (no network). The password is
@@ -392,11 +393,15 @@ head; PC and JP/HQ late), then the RFQ branches (mass skips Design,
 "pending", the customer's answer after a quote, 05, sign before send).
 
 **The Bravo API request, revised 11-13** (`docs/proterial/API-Bravo_DW1-DW2_2026-11-13.xlsx`,
-outside git, sent by Đạt): read only, as ADR 0026 decided; the write APIs (W02–W05,
-W11–W14) are dropped, R02 and R11 merged into R01 and R10; new R17 selling-price
-policy, R18 the price Bravo's quotation module computes, R19 the working calendar;
-R01 adds each customer's contact addresses and Sales PIC (ticket 20); R06, R09,
-R12, R14 move to P1, R15 to P2. The two validate-only APIs (W01, W10) stay optional.
+outside git, sent by Đạt). Reads: R02 and R11 merged into R01 and R10; new R17
+selling-price policy, R18 the price Bravo's quotation module computes, R19 the
+working calendar; R01 adds each customer's contact addresses and Sales PIC
+(ticket 20); R06, R09, R12, R14 move to P1, R15 to P2. **Writes are asked for
+now** (Đạt, 11-13; ADR 0026 amendment): DW writes through the vendor's API only
+after a person approves on DW1/DW2 exactly what is written, with an idempotency
+key and the approver; W02, W03, W04, W11 at P2; new W06 bulk line splits, W07
+cancel all or part, W08 Design's result on the YCBG. Until a write API is tried
+on Bravo's test company, the paste sheet stays.
 
 **Owed by Proterial** (short, to the questions workbook): customer contacts
 per customer and their Sales PIC; mail templates for each step that writes
