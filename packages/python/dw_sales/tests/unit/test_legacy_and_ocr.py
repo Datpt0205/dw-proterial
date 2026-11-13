@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import io
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -86,7 +87,7 @@ class _Blind:
         return "blind"
 
     def page(self, pdf: bytes, number: int, size: tuple[float, float]) -> OcrPage:
-        return OcrPage(width=size[0], height=size[1], lines=())
+        return OcrPage(width=size[0], height=size[1], lines=(), unread_lines=0)
 
 
 # --------------------------------------------------------- what a file is --
@@ -321,6 +322,57 @@ def test_tesseract_words_become_lines_of_cells_in_points() -> None:
     assert [c.text for c in second] == ["Số lượng", "3.050"]
     assert second[0].left == pytest.approx(300 * 72 / 300)
     assert second[0].height == pytest.approx(30 * 72 / 300)
+
+
+def test_a_line_read_by_nobody_is_counted_not_dropped_silently() -> None:
+    """Audit 22: a line whose every word fell under the threshold vanished,
+    and with it, maybe, a PO row. One with a letter or a digit is counted;
+    one of specks and rules ("|", "—") is noise, as before; a line that kept
+    a word is a line read, flagged `ocr` like every other."""
+    rows = [
+        "level page_num block_num par_num line_num word_num left top width height conf text",
+        "5 1 1 1 1 1 300 300 90 30 90 STT",
+        # Every word faint, one a value: read by nobody.
+        "5 1 1 1 2 1 300 400 90 30 21 3",
+        "5 1 1 1 2 2 430 400 200 30 17 PRV-1180",
+        # Every word faint, none a letter or a digit: a ruled line.
+        "5 1 1 1 3 1 300 500 700 5 8 |",
+        "5 1 1 1 3 2 900 500 60 5 3 —",
+        # One faint word beside a clear one: the line was read.
+        "5 1 1 1 4 1 300 600 120 30 91 Số",
+        "5 1 1 1 4 2 430 600 60 30 12 x",
+    ]
+    tsv = "\n".join("\t".join(row.split(" ")) for row in rows)
+
+    page = page_from_tsv(tsv, (841.89, 595.28))
+
+    assert [[c.text for c in line] for line in page.lines] == [["STT"], ["Số"]]
+    assert page.unread_lines == 1
+
+
+class _FaintLine(TruthOcr):
+    """The scan read perfectly, except one line on page 1 OCR could read no
+    word of."""
+
+    def page(self, pdf: bytes, number: int, size: tuple[float, float]) -> OcrPage:
+        read = super().page(pdf, number, size)
+        return replace(read, unread_lines=1) if number == 1 else read
+
+
+def test_a_scanned_page_with_a_line_read_by_nobody_is_named_not_checked() -> None:
+    """The rows it did read still make a PO, but "every row read" is not
+    true of that page: it is named in `unchecked_regions`, which the check
+    turns into `value_uncertain` (`unchecked_region`) and the case page shows
+    as "Chưa kiểm: page 1"."""
+    clean = PdfPoReader(MOCK_PDF_LAYOUTS, ocr=TruthOcr()).read(_content(SCANNED), "BRN", CAPS)
+    faint = PdfPoReader(MOCK_PDF_LAYOUTS, ocr=_FaintLine()).read(_content(SCANNED), "BRN", CAPS)
+
+    assert isinstance(clean, PoDocument) and isinstance(faint, PoDocument)
+    assert clean.unchecked_regions == ()
+    assert faint.unchecked_regions == ("page 1",)
+    [uncertain] = [f for f in check_document(faint, RULES) if f.code is FindingCode.VALUE_UNCERTAIN]
+    assert uncertain.actual is not None
+    assert "unchecked_region" in uncertain.actual.split(",")
 
 
 def test_tesseract_is_asked_for_one_page_in_vietnamese_then_english() -> None:

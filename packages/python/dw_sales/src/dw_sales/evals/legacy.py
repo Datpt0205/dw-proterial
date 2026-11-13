@@ -244,7 +244,7 @@ class _ReadsNothing:
         return "blank engine"
 
     def page(self, pdf: bytes, number: int, size: tuple[float, float]) -> OcrPage:
-        return OcrPage(width=size[0], height=size[1], lines=())
+        return OcrPage(width=size[0], height=size[1], lines=(), unread_lines=0)
 
 
 def grade_missing_evidence(

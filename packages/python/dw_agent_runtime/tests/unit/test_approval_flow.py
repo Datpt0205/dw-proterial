@@ -185,6 +185,11 @@ class FakeRunner:
         self.payloads.append(resume_payload)
 
 
+# A strict request names its makers (`ApprovalRequest.makers` fails closed on
+# a payload without the key); an empty list is the requester alone.
+NO_OTHER_MAKERS: dict[str, Any] = {"makers": []}
+
+
 def make_request(
     approval_type: str,
     run_id: uuid.UUID | None = None,
@@ -258,19 +263,25 @@ async def decide(
 
 
 async def test_strict_type_rejects_self_approval() -> None:
-    service = make_service(make_request("sales_chat.email_send"), frozenset({"sales_chat."}))
+    service = make_service(
+        make_request("sales_chat.email_send", payload=NO_OTHER_MAKERS), frozenset({"sales_chat."})
+    )
     with pytest.raises(ConflictError, match="tách nhiệm"):
         await decide(service, REQUESTER, "ok")
 
 
 async def test_strict_type_requires_a_comment() -> None:
-    service = make_service(make_request("sales_chat.email_send"), frozenset({"sales_chat."}))
+    service = make_service(
+        make_request("sales_chat.email_send", payload=NO_OTHER_MAKERS), frozenset({"sales_chat."})
+    )
     with pytest.raises(ConflictError, match="review comment"):
         await decide(service, APPROVER, "   ")
 
 
 async def test_strict_type_accepts_another_approver_with_a_comment() -> None:
-    service = make_service(make_request("sales_chat.email_send"), frozenset({"sales_chat."}))
+    service = make_service(
+        make_request("sales_chat.email_send", payload=NO_OTHER_MAKERS), frozenset({"sales_chat."})
+    )
     request = await decide(service, APPROVER, "đã kiểm tra nội dung")
     assert request.status.value == "approved"
 
@@ -849,6 +860,19 @@ async def test_unreadable_makers_fail_closed() -> None:
         await _decide_with(service, holding(APPROVER, *_SALES_QUOTE_DECIDER))
 
 
+async def test_a_strict_request_with_no_makers_key_fails_closed() -> None:
+    """A raiser that forgot `makers` is not read as "the requester alone made
+    it": the request is decided by nobody until it names them (audit 16)."""
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    del request.payload["makers"]
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset({"sales."}), runner=runner)
+
+    with pytest.raises(ConflictError, match="makers"):
+        await _decide_with(service, holding(APPROVER, *_SALES_QUOTE_DECIDER))
+    assert request.status is ApprovalStatus.PENDING and runner.resumed == []
+
+
 @dataclass
 class FakeGuard:
     refuse: bool
@@ -1132,7 +1156,7 @@ async def test_an_admission_runs_before_anything_is_written_and_its_refusal_writ
 async def test_an_admission_runs_after_decides_own_checks() -> None:
     """A requester on a strict type is refused by `decide` itself, before the
     admission could consume anything."""
-    request = make_request("sales_chat.email_send")
+    request = make_request("sales_chat.email_send", payload=NO_OTHER_MAKERS)
     service = make_service(request, frozenset({"sales_chat."}))
     admission = FakeAdmission()
 

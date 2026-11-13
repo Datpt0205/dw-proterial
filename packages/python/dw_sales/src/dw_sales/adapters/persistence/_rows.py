@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_sales.adapters.persistence import tables
 from dw_sales.application.case_store import STALE_CASE_VERSION, CaseEvent
 from dw_sales.application.ports import SalesScope
@@ -28,14 +29,6 @@ from dw_sales.domain.orders import MAKER_CHECKER_REFUSAL
 
 def scope_values(scope: SalesScope) -> dict[str, uuid.UUID]:
     return {"tenant_id": scope.tenant_id.value, "workspace_id": scope.workspace_id.value}
-
-
-def constraint_of(error: IntegrityError) -> str | None:
-    """The constraint the database named, or None when the driver gave none."""
-    # asyncpg's own exception carries it; SQLAlchemy wraps it as the cause.
-    cause = getattr(error.orig, "__cause__", None)
-    name = getattr(cause, "constraint_name", None)
-    return name if isinstance(name, str) else None
 
 
 # The separation-of-duties constraints, by the rule a caller reports (spec

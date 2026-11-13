@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError, NotFoundError
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.adapters.persistence.support_grants import grant_from_row, support_staff_conflict
 from dw_platform.application.provisioning import (
@@ -210,12 +211,13 @@ class SqlProvisioningRepository:
                     )
                 )
         except IntegrityError as exc:
-            if _ACTIVE_REQUEST_INDEX in str(exc.orig):
+            constraint = constraint_of(exc)
+            if constraint == _ACTIVE_REQUEST_INDEX:
                 raise ConflictError(
                     "an offboarding request is already in flight for this tenant",
                     details={"tenant_id": str(tenant_id)},
                 ) from exc
-            if _TENANT_FK in str(exc.orig):
+            if constraint == _TENANT_FK:
                 raise NotFoundError(
                     "unknown tenant", details={"tenant_id": str(tenant_id)}
                 ) from exc

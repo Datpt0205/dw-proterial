@@ -7,6 +7,7 @@ import uuid
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -22,7 +23,6 @@ from dw_kernel.ids import WorkspaceId
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.artifact_content import local_time
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
     ONE_OPEN_PROPOSAL,
@@ -705,7 +705,9 @@ async def test_a_second_proposal_waits_until_the_first_is_decided() -> None:
     assert details["proposed_by"] == str(AN.user_id)
     message = refused.value.message
     assert "9.10.0" in message and "Nguyễn Văn An" in message
-    assert local_time(first.proposed_at).strftime("%H:%M %d/%m/%Y") in message
+    # The platform's refusal names the moment in the plant's time.
+    local = first.proposed_at.astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))
+    assert local.strftime("%H:%M %d/%m/%Y") in message
     # The proposer asking again is told it is theirs.
     with pytest.raises(ConflictError) as own:
         await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.10.1"))

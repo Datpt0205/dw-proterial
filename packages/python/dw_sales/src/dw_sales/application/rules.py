@@ -80,6 +80,7 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
@@ -226,7 +227,7 @@ class TenantRuleBook(RuleBook):
 
     Each reader asks through its own port, which a typed method here
     satisfies: `KpiPort`, `QuotePoliciesPort`, `ArtifactCopyPort` and
-    `HandoffCopyPort` and `FollowupPolicyPort`; `OrderRulesPort` through
+    `HandoffCopyPort`, `FollowupPolicyPort` and `LocalZonePort`; `OrderRulesPort` through
     `RuleBookOrderRules`."""
 
     schemas: Mapping[Any, type[BaseModel]] = field(default_factory=_sales_schemas)
@@ -265,6 +266,11 @@ class TenantRuleBook(RuleBook):
         assert isinstance(policy, SalesFollowups)
         return policy
 
+    async def time_zone(self, scope: SalesScope) -> ZoneInfo:
+        """The tenant's own time zone, where its calendar day is counted: the
+        follow-up policy's `working_hours.time_zone`, its one owner (audit 14)."""
+        return (await self.followups(scope)).working_hours.zone
+
     async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:
         """What an artifact is drawn with: each copy at the version ``stamps``
         name (the template refs of the files already drawn at the case's
@@ -295,6 +301,7 @@ class TenantRuleBook(RuleBook):
             documents=documents,
             upload=upload,
             design_mailboxes=(await self.quote_rules(scope)).design_mailboxes,
+            zone=await self.time_zone(scope),
         )
 
 

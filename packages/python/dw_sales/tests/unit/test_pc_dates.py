@@ -15,7 +15,7 @@ from dw_agent_runtime.model.interpretation import (
     estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, PermissionDeniedError
-from dw_sales.application.pc_dates import PC_DATES, PROMPT_TOKENS, reads_as
+from dw_sales.application.pc_dates import MAX_TEXT, PC_DATES, PROMPT_TOKENS, reads_as
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, READER
 from dw_sales.evals.recorded import Recorded
@@ -134,6 +134,22 @@ async def test_without_a_usable_model_dw1_says_it_could_not_read_them() -> None:
     world, case = await _order(Recorded(failure=ModelUnavailableError("down")))
     view = await _read(world, case)
     assert (view.status, view.dates) == ("unavailable", [])
+
+
+async def test_a_text_over_the_limit_is_not_cut_but_left_to_sales() -> None:
+    """Audit 22: cut at the limit, the lines written past it lost their dates
+    with no word; refused, the whole reading is Sales' to do, and says so."""
+    model = Answering(RIGHT)
+    world, case = await _order(model)
+    calls = len(model.calls)
+    text = MAIL + " " * (MAX_TEXT - len(MAIL)) + "\nDòng 3 ngày 12/11."
+    # Within the model's room: the limit refuses it, not the token budget.
+    assert estimated_tokens(text) <= model.max_input_tokens - PROMPT_TOKENS
+
+    view = await _read(world, case, text=text)
+
+    assert (view.status, view.dates) == ("unavailable", [])
+    assert len(model.calls) == calls
 
 
 def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:

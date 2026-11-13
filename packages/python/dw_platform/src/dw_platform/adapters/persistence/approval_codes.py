@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository, _approval_from_row
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
@@ -82,7 +83,7 @@ class SqlApprovalCodeStore:
         except IntegrityError as exc:
             # Two codes issued for one approval and person at once: the
             # one-open-code index keeps the first.
-            if "uq_approval_decision_codes_open" not in str(exc.orig):
+            if constraint_of(exc) != "uq_approval_decision_codes_open":
                 raise
             raise ConflictError(
                 "another code was issued for this approval at the same moment; ask again",

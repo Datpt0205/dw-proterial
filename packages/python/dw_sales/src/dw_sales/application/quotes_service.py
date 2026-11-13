@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -78,14 +77,8 @@ from dw_sales.domain.quotes import (
 )
 
 _QUOTE = "sales_quote_case"
-# The day a quotation is issued and screened on is the seller's calendar day.
-_LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SpecStep = Literal["start", "settle", "ask_design_again"]
-
-
-def local_day(at: datetime) -> date:
-    return at.astimezone(_LOCAL).date()
 
 
 def quote_actor(context: AccessContext, gate: Gate) -> QuoteActor:
@@ -147,8 +140,8 @@ class QuoteQueries:
         matching step row names (the activity page's drill-down), checked
         after the scope."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_QUOTE)
-        today = local_day(self.clock.now())
         scope = sales_scope(context)
+        today = await self.service.today(scope, self.clock.now())
         kept = await activity_cases(self.activity, scope, CaseKind.QUOTE, activity)
         async with self.uow(scope) as work:
             stored = await work.quotes.list_all()
@@ -179,7 +172,7 @@ class QuoteQueries:
                 context.principal_id, CaseKind.QUOTE, case_id, stored.case.case_version
             )
         prices = self.gate.prices(context)
-        today = local_day(self.clock.now())
+        today = await self.service.today(scope, self.clock.now())
         case = stored.case
         evidence = None
         if prices.amounts and case.design_reply is not None:
@@ -208,8 +201,9 @@ class QuoteQueries:
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:
         """WIV-03-023 step 12: codes quoted with no order in the 12 months."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_QUOTE)
-        day = as_of or local_day(self.clock.now())
-        return list(await self.service.screening(sales_scope(context), day))
+        scope = sales_scope(context)
+        day = as_of or await self.service.today(scope, self.clock.now())
+        return list(await self.service.screening(scope, day))
 
 
 @dataclass(frozen=True)

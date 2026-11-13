@@ -13,6 +13,10 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.approval import APPROVALS_DECIDE, ApprovalRequest
 
 PLATFORM_ADMIN_ROLE = "platform_admin"
+# The one scope that role holds (`0001_platform_reference.sql`): a platform act
+# asks `require` for it, so the answer is the scope check's, not a role string
+# a route keeps beside it.
+PLATFORM_ADMIN_SCOPE = "platform.admin"
 
 
 def holds_stamped_scope(context: AccessContext, required_scope: str | None) -> bool:

@@ -25,6 +25,7 @@ from dw_agent_runtime.adapters.runtime_tables import worker_runs
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_kernel.autonomy import AutonomyLevel
 from dw_kernel.errors import ConflictError, NotFoundError
+from dw_platform.adapters.persistence.integrity import constraint_of
 
 # Migration 0015. Matched by name so an unrelated constraint violation stays a
 # bug report rather than being reported to the user as "already in flight".
@@ -192,7 +193,7 @@ class SqlWorkerRunStore:
                 release_manifest_ref=release_manifest_ref,
             )
         except IntegrityError as exc:
-            if ACTIVE_THREAD_INDEX not in str(exc.orig):
+            if constraint_of(exc) != ACTIVE_THREAD_INDEX:
                 raise
             thread_id = run_context.thread_id or run_context.run_id
             # Two unfinished runs cannot share a thread, but the two ways to get

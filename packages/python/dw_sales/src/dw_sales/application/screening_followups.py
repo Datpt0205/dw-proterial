@@ -40,7 +40,6 @@ from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.artifact_content import local_time
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService
 from dw_sales.domain.process import DW_NAMES
@@ -105,7 +104,7 @@ class ScreeningFollowups:
             resource_id=f"{customer_code}:{prv_code}",
         )
         scope = sales_scope(context)
-        day = local_time(self.clock.now()).date()
+        day = await self.quotation.today(scope, self.clock.now())
         row = next(
             (
                 r

@@ -13,6 +13,7 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 
 from dw_kernel.errors import ConflictError
+from dw_platform.adapters.persistence.integrity import constraint_of
 
 _RULE_PREFIX = "sod_"
 
@@ -20,13 +21,12 @@ _RULE_PREFIX = "sod_"
 def refusal(error: IntegrityError) -> tuple[str, str] | None:
     """The constraint a refusal names and its detail, or None when the driver
     reported no constraint."""
-    # asyncpg's own exception carries the trigger's CONSTRAINT and DETAIL;
-    # SQLAlchemy wraps it as the DBAPI error's cause.
-    cause = getattr(error.orig, "__cause__", None)
-    constraint = getattr(cause, "constraint_name", None)
-    if not isinstance(constraint, str):
+    constraint = constraint_of(error)
+    if constraint is None:
         return None
-    return constraint, getattr(cause, "detail", None) or ""
+    # asyncpg's own exception carries the trigger's DETAIL too, as the cause
+    # SQLAlchemy wraps.
+    return constraint, getattr(getattr(error.orig, "__cause__", None), "detail", None) or ""
 
 
 def separation_of_duties_conflict(error: IntegrityError) -> ConflictError | None:

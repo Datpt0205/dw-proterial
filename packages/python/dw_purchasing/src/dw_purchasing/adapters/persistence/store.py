@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.naming import NAMING_CONVENTION
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.access_context import AccessContext
@@ -213,7 +214,7 @@ class _Outcomes:
                     )
                 )
         except IntegrityError as exc:
-            if "pk_mail_outcomes" not in str(exc.orig):
+            if constraint_of(exc) != "pk_mail_outcomes":
                 raise
             raise ConflictError(
                 "thư đã được xử lý", details={"message_id": outcome.message_id}

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.integrity import constraint_of
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.adapters.persistence.separation_of_duties import (
     separation_of_duties_conflict,
@@ -96,7 +97,7 @@ class SqlAdminConsoleRepository:
                     )
                 )
             except IntegrityError as exc:
-                if _WORKSPACE_SLUG_CONSTRAINT in str(exc.orig):
+                if constraint_of(exc) == _WORKSPACE_SLUG_CONSTRAINT:
                     raise ConflictError(
                         "a workspace with that slug already exists in this tenant",
                         details={"slug": slug},

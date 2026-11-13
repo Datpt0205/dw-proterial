@@ -155,6 +155,8 @@ class _Page:
     # Read by OCR: its labels and column titles are matched without their
     # diacritics (`_key`), the marks OCR loses first.
     scanned: bool = False
+    # Lines OCR saw and could read no word of (`OcrPage.unread_lines`).
+    unread_lines: int = 0
 
     @property
     def legacy(self) -> LegacyEncoding | None:
@@ -212,7 +214,7 @@ class PdfPoReader:
             return Unreadable(reason=f"no PDF PO layout for customer {customer_code}")
         try:
             pages, ocr = _pages(document.data, caps, self._ocr)
-            return _ocr_stamped(_Pdf(pages, layout, document.attachment).read(), ocr)
+            return _ocr_stamped(_Pdf(pages, layout, document.attachment).read(), ocr, pages)
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
 
@@ -235,7 +237,7 @@ class PdfPoReader:
             read = _Pdf(pages, layout, document.attachment).read()
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
-        return _ocr_stamped(read, ocr).model_copy(update={"layout_ref": layout_ref})
+        return _ocr_stamped(read, ocr, pages).model_copy(update={"layout_ref": layout_ref})
 
     def label_cells(self, document: AttachmentContent, caps: IntakeCaps) -> list[LabelCell]:
         """The first page's text a label may be (ticket 30): each line split
@@ -285,13 +287,22 @@ class PdfPoReader:
 _LABEL_LENGTH = 80
 
 
-def _ocr_stamped(document: PoDocument, ocr: str | None) -> PoDocument:
+def _ocr_stamped(document: PoDocument, ocr: str | None, pages: Sequence[_Page]) -> PoDocument:
     """``document``, every value flagged `ocr` and the engine named, when a
-    page of it was read by ``ocr``; as it was otherwise."""
+    page of it was read by ``ocr``; as it was otherwise. A page where OCR
+    printed a line it could read no word of is named as not checked
+    (`unchecked_regions`): the line may have been a PO row, so "every row
+    read" would not be true of it (audit 22)."""
     if ocr is None:
         return document
     flagged = flagged_everywhere(document, RegionFlag.OCR)
-    return flagged.model_copy(update={"derivation": Derivation(method="ocr", tool=ocr)})
+    unread = tuple(f"page {page.number}" for page in pages if page.unread_lines)
+    return flagged.model_copy(
+        update={
+            "derivation": Derivation(method="ocr", tool=ocr),
+            "unchecked_regions": (*document.unchecked_regions, *unread),
+        }
+    )
 
 
 def _scanned(number: int, page: OcrPage) -> _Page:
@@ -306,7 +317,9 @@ def _scanned(number: int, page: OcrPage) -> _Page:
         ]
         for line in page.lines
     ]
-    return _Page(number, page.width, page.height, lines, rows, scanned=True)
+    return _Page(
+        number, page.width, page.height, lines, rows, scanned=True, unread_lines=page.unread_lines
+    )
 
 
 def _pages(
