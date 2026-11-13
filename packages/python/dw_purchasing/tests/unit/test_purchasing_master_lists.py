@@ -55,8 +55,8 @@ def test_each_sheet_reads_into_its_list_whatever_the_headers_case_and_accents() 
     assert parsed.lists["items"] == [{"code": "1001", "description": "Ốc", "unit": "cái"}]
     supplier = parsed.lists["suppliers"][0]
     assert supplier["contacts"] == ["sales@anphat.vn", "kd@anphat.vn"]
-    # The mail domains are the contacts' when no column names them.
-    assert supplier["domains"] == ["anphat.vn"]
+    # No domain column, no domain: a contact's address names none.
+    assert supplier["domains"] == []
     quote = parsed.lists["quotes"][0]
     assert Decimal(quote["unit_price"]) == Decimal("1250000")
     assert (quote["currency"], quote["valid_until"], quote["lead_time_days"]) == (
@@ -65,6 +65,30 @@ def test_each_sheet_reads_into_its_list_whatever_the_headers_case_and_accents() 
         7,
     )
     assert set(parsed.lists) == {"items", "suppliers", "quotes"}
+
+
+def test_a_supplier_writes_from_its_contacts_and_the_domains_its_column_states() -> None:
+    """Hardcode audit finding 13: a contact on gmail.com made gmail.com the
+    supplier's domain, and any verified gmail.com sender that supplier."""
+    from dw_purchasing.domain.checks import Supplier
+
+    parsed = parse_workbook(
+        {
+            "Nhà cung cấp": [
+                (1, ["Mã NCC", "Tên NCC", "Email liên hệ", "Tên miền thư"]),
+                (2, ["NCC-G", "Gia Phát", "giaphat.sales@gmail.com", ""]),
+                (3, ["NCC-A", "An Phát", "sales@anphat.vn", "anphat.vn"]),
+            ]
+        }
+    )
+    assert parsed.failure is None, parsed.rejected
+    on_gmail, own_domain = (Supplier.model_validate(r) for r in parsed.lists["suppliers"])
+
+    assert on_gmail.domains == frozenset()
+    assert on_gmail.writes_from("GiaPhat.Sales@gmail.com")
+    assert not on_gmail.writes_from("someone.else@gmail.com")
+    assert own_domain.writes_from("ketoan@anphat.vn")
+    assert not own_domain.writes_from("sales@anphat.vn.example")
 
 
 def test_a_row_that_does_not_read_is_refused_with_its_sheet_row_and_column() -> None:

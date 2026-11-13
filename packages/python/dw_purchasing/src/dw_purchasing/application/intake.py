@@ -20,7 +20,10 @@
   (``attachment_infected``), with more than one document
   (``several_documents``: which is the request is not the model's to say),
   or a document too long to show whole (``document_too_long``: a cut form
-  drops lines nobody knows are missing); none of them is shown to a model.
+  drops lines nobody knows are missing), or a mail whose own words do not fit
+  whole beside it (``mail_too_long``: a value is only checked against what
+  the model was shown, and a cut there reads "1500" as "15"); none of them
+  is shown to a model.
   No request in a mail whose document DW2 could not read is
   ``attachment_unreadable``, not "no PR number".
 - **A request read from a scan** waits for a person to compare it with the
@@ -45,7 +48,6 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
-    cut_to_tokens,
     estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, DomainError, InfrastructureError, NotFoundError
@@ -86,8 +88,8 @@ PR_MAIL_READING: Final = PromptRef("purchasing.pr_mail_reading", "1.1.0")
 _OUTPUT_TOKENS: Final = 80 * MAX_MAIL_LINES + 200
 # What the prompt's own words take, left out of the room for the mail.
 _PROMPT_TOKENS: Final = 1200
-# What a mail's own words keep when a file is shown beside them: its subject
-# and first lines, where a sender names the request.
+# The least room a file leaves the mail's own words beside it: a file that
+# leaves less is too long to show.
 _MAIL_TOKENS: Final = 200
 NOT_READ_NOW: Final = "DW2 chưa đọc được thư lúc này: thử lại sau"
 _RESOURCE: Final = "purchase_case"
@@ -343,7 +345,8 @@ class PurchaseRequests:
                 return None, "document_too_long", None
             room -= estimated_tokens(text)
             file = ShownFile(text, scanned=documents[0][1].scanned)
-        shown = cut_to_tokens(part.text, room)
+        if estimated_tokens(part.text) > room:
+            return None, "mail_too_long", None
         run = caller_run(
             context,
             run_id=self.ids.new_uuid(),
@@ -355,7 +358,7 @@ class PurchaseRequests:
         try:
             answer = await self.model.interpret(
                 PR_MAIL_READING,
-                {"mail": shown, "attachment": file.text if file is not None else ""},
+                {"mail": part.text, "attachment": file.text if file is not None else ""},
                 ModelPrMail,
                 run=run,
                 max_output_tokens=_OUTPUT_TOKENS,
@@ -363,7 +366,7 @@ class PurchaseRequests:
         except ModelUnavailableError as exc:
             raise InfrastructureError(NOT_READ_NOW, details={"reason_code": "model"}) from exc
         verdict = read_pr_mail(
-            shown,
+            part.text,
             answer,
             attachment=file,
             requester=message.sender.display_name or message.sender.address,

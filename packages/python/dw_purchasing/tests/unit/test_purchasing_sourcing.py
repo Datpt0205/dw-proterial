@@ -25,7 +25,7 @@ from dw_purchasing.application.sourcing import RFQ_MAIL, SUPPLIER_QUOTE_READING,
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.offer_reading import parse_lead_time
 from dw_purchasing.domain.sourcing import Choice
-from dw_purchasing.testing.world import ALPHA, BETA, World, caller, open_world
+from dw_purchasing.testing.world import ALPHA, BETA, World, caller, open_world, with_mail
 
 pytestmark = pytest.mark.unit
 
@@ -529,14 +529,14 @@ async def test_a_reply_two_cases_could_answer_goes_to_the_one_its_text_names() -
     )
     master = await world.sourcing.master.for_context(caller())
     assert case.rfq is not None
-    domain = sorted(master.supplier(case.rfq.drafts[0].supplier_code).domains)[0]  # type: ignore[union-attr]
+    sender = master.supplier(case.rfq.drafts[0].supplier_code).contacts[0]  # type: ignore[union-attr]
 
-    assert reply_case([case], master, domain, "Re: báo giá PR-2611-004") is case
-    assert reply_case([case, other], master, domain, "Re: hỏi giá pr-2611-777") is other
+    assert reply_case([case], master, sender, "Re: báo giá PR-2611-004") is case
+    assert reply_case([case, other], master, sender, "Re: hỏi giá pr-2611-777") is other
     # A mail naming no PR, or another one, is a buyer's to place.
-    assert reply_case([case], master, domain, "Báo giá chung") is None
-    assert reply_case([case], master, domain, "PR-2611-010 purchase request") is None
-    assert reply_case([case], master, "elsewhere.example", "PR-2611-004") is None
+    assert reply_case([case], master, sender, "Báo giá chung") is None
+    assert reply_case([case], master, sender, "PR-2611-010 purchase request") is None
+    assert reply_case([case], master, "sales@elsewhere.example", "PR-2611-004") is None
 
 
 async def test_a_mail_naming_two_asking_cases_goes_to_neither() -> None:
@@ -552,9 +552,72 @@ async def test_a_mail_naming_two_asking_cases_goes_to_neither() -> None:
     )
     master = await world.sourcing.master.for_context(caller())
     assert case.rfq is not None
-    domain = sorted(master.supplier(case.rfq.drafts[0].supplier_code).domains)[0]  # type: ignore[union-attr]
+    sender = master.supplier(case.rfq.drafts[0].supplier_code).contacts[0]  # type: ignore[union-attr]
 
-    assert reply_case([case, other], master, domain, "PR-2611-004 và PR-2611-777") is None
+    assert reply_case([case, other], master, sender, "PR-2611-004 và PR-2611-777") is None
+
+
+async def test_a_reply_naming_pr_12_does_not_attach_to_pr_1() -> None:
+    """Hardcode audit finding 2: the PR number is matched as a whole token
+    run, not as a substring, so the one case asking is not PR-12's."""
+    from dw_purchasing.application.sourcing import reply_case
+
+    world = _world()
+    case = await world.service.case(caller(), await _drafted(world))
+    pr_1 = case.model_copy(update={"request": case.request.model_copy(update={"pr_no": "PR-1"})})
+    master = await world.sourcing.master.for_context(caller())
+    assert case.rfq is not None
+    sender = master.supplier(case.rfq.drafts[0].supplier_code).contacts[0]  # type: ignore[union-attr]
+
+    assert reply_case([pr_1], master, sender, "Re: báo giá PR-12") is None
+    assert reply_case([pr_1], master, sender, "Re: báo giá PR-1, như đã hỏi") is pr_1
+
+
+async def test_a_sender_on_a_public_mail_domain_is_not_the_supplier_its_contact_is_on() -> None:
+    """Hardcode audit finding 13: a supplier whose contact writes from
+    gmail.com does not make every verified gmail.com sender that supplier.
+    A domain is only what the record states; a contact is its exact address."""
+    from dw_purchasing.application.sourcing import reply_case
+
+    world = _world()
+    case = await world.service.case(caller(), await _drafted(world))
+    master = await world.sourcing.master.for_context(caller())
+    assert case.rfq is not None
+    asked = master.supplier(case.rfq.drafts[0].supplier_code)
+    assert asked is not None
+    on_gmail = asked.model_copy(
+        update={"domains": frozenset(), "contacts": ("kinhdoanh.ncc@gmail.com",)}
+    )
+    master = master.model_copy(
+        update={"suppliers": tuple(on_gmail if s is asked else s for s in master.suppliers)}
+    )
+    text = f"Re: báo giá {case.request.pr_no}"
+
+    assert reply_case([case], master, "someone.else@gmail.com", text) is None
+    assert reply_case([case], master, "KinhDoanh.NCC@gmail.com", text) is case
+
+
+async def test_a_reply_too_long_to_show_whole_is_not_read_and_a_buyer_types_it() -> None:
+    """Hardcode audit finding 3: a price is checked against what the model
+    was shown, so a reply is shown whole or not at all."""
+    world = _world()
+    case_id = await _drafted(world)
+    q01 = await world.service.inbox.get_message(caller(), "Q01")
+    assert q01 is not None
+    long = q01.model_copy(
+        update={"message_id": "Q99", "body_text": q01.body_text + "\nGhi chú\n" * 4000}
+    )
+    await with_mail(world, long)
+    calls = len(world.model.calls)
+
+    with pytest.raises(ConflictError) as refused:
+        await world.sourcing.read_offer_mail(
+            caller(), case_id, "Q99", case_version=await _version(world, case_id)
+        )
+
+    assert refused.value.details["rule"] == "mail_too_long"
+    assert len(world.model.calls) == calls
+    assert (await world.service.case(caller(), case_id)).offers == ()
 
 
 async def test_a_reply_another_case_answers_is_not_listed_on_this_one() -> None:

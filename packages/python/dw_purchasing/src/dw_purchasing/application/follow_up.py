@@ -37,7 +37,7 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
-    cut_to_tokens,
+    estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
@@ -106,10 +106,11 @@ class ConfirmationMail(BaseModel):
     received_at: datetime
 
 
-def named_order(case: PurchaseCase, master: MasterData, domain: str, text: str) -> PoDraft | None:
+def named_order(case: PurchaseCase, master: MasterData, sender: str, text: str) -> PoDraft | None:
     """The order of ``case`` a supplier's mail is about, decided by code: an
-    order of a supplier this domain is one of, which the mail names by its
-    `po_ref` or Bravo's number. None for anything else, or for two."""
+    order of a supplier ``sender`` writes from (`Supplier.writes_from`), which
+    the mail names by its `po_ref` or Bravo's number. None for anything else,
+    or for two."""
     if case.po is None:
         return None
     folded = fold(text)
@@ -117,7 +118,7 @@ def named_order(case: PurchaseCase, master: MasterData, domain: str, text: str) 
     found = []
     for order in case.po.orders:
         supplier = master.supplier(order.supplier_code)
-        if supplier is None or domain not in supplier.domains:
+        if supplier is None or not supplier.writes_from(sender):
             continue
         names = [order.po_ref, *([numbers[order.po_ref]] if numbers.get(order.po_ref) else [])]
         if any(occurrences(folded, fold(name)) for name in names):  # type: ignore[arg-type]
@@ -180,7 +181,7 @@ class OrderFollowUp:
             )
         master = await self.master.for_context(context)
         text = f"{message.subject}\n{newest_part(message).text}"
-        order = named_order(case, master, message.sender.domain, text)
+        order = named_order(case, master, message.sender.address, text)
         if order is None or not message.authentication.verified:
             raise ConflictError(
                 "thư không phải của nhà cung cấp của một đơn trong hồ sơ, không nêu số đơn,"
@@ -198,10 +199,14 @@ class OrderFollowUp:
             )
         if self.model is None:
             raise InfrastructureError(NOT_READ_NOW, details={"reason_code": "no_model"})
-        shown = cut_to_tokens(
-            newest_part(message).text,
-            self.model.max_input_tokens - _PROMPT_TOKENS - _OUTPUT_TOKENS,
-        )
+        # Whole or not at all: a value is checked against what the model was
+        # shown, and a cut reads "1500" as "15".
+        shown = newest_part(message).text
+        if estimated_tokens(shown) > self.model.max_input_tokens - _PROMPT_TOKENS - _OUTPUT_TOKENS:
+            raise ConflictError(
+                "thư quá dài để DW2 đọc trọn: người mua đọc",
+                details={"message_id": message_id, "rule": "mail_too_long"},
+            )
         try:
             answer = await self.model.interpret(
                 ORDER_CONFIRMATION_READING,
@@ -269,7 +274,7 @@ class OrderFollowUp:
             if message.message_id in read or not message.authentication.verified:
                 continue
             text = f"{message.subject}\n{newest_part(message).text}"
-            order = named_order(case, master, message.sender.domain, text)
+            order = named_order(case, master, message.sender.address, text)
             if order is not None:
                 found.append(
                     ConfirmationMail(

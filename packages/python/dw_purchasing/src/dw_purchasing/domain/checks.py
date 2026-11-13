@@ -80,11 +80,23 @@ class Supplier(BaseModel):
 
     code: Code
     name: str = Field(min_length=1, max_length=200)
-    # The mail domains its replies come from: a reply from any other is not
-    # the supplier's.
-    domains: frozenset[str] = Field(min_length=1)
+    # The mail domains the company's lists state its mail comes from, written
+    # in their own column; none when they state none. Never derived from a
+    # contact's address: a contact on a public provider's (gmail.com) would
+    # make every sender there this supplier.
+    domains: frozenset[str] = frozenset()
     contacts: tuple[Address, ...] = Field(min_length=1)
     items: frozenset[str] = frozenset()
+
+    def writes_from(self, sender: str) -> bool:
+        """Whether a mail from ``sender`` is this supplier's: the address is
+        one of its contacts, or on a domain its record states. The one
+        answer every reader of a supplier's mail uses."""
+        address = sender.lower()
+        return (
+            address in {contact.lower() for contact in self.contacts}
+            or address.rpartition("@")[2] in self.domains
+        )
 
 
 class Budget(BaseModel):

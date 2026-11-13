@@ -48,13 +48,27 @@ def estimated_tokens(text: str) -> int:
 
 
 def cut_to_tokens(text: str, room: int) -> str:
-    """``text`` cut from its end until `estimated_tokens` says it fits in
-    ``room``: what a step reads is in a message's first lines, and the rest is
-    not sent rather than refused by the server."""
-    cut = text
-    while cut and estimated_tokens(cut) > room:
-        cut = cut[: len(cut) * 3 // 4]
-    return cut
+    """``text`` whole when `estimated_tokens` says it fits in ``room``, else
+    its first whole lines that do (empty when not even the first does): for a
+    step that needs only a message's first lines, such as its kind, and sends
+    the rest nowhere rather than have the server refuse it.
+
+    Never inside a line: a cut there makes the end of the cut look like the
+    end of a word, so "1500" would read as "15". What a step verifies a value
+    against is the text it was given whole, never this cut; a step whose
+    values matter refuses a text that does not fit instead."""
+    if estimated_tokens(text) <= room:
+        return text
+    kept: list[str] = []
+    used = 0
+    for line in text.splitlines(keepends=True):
+        # A sum of per-line estimates is never below the estimate of the
+        # joined lines: the cut fits whatever the rounding.
+        used += estimated_tokens(line)
+        if used > room:
+            break
+        kept.append(line)
+    return "".join(kept)
 
 
 class ModelUnavailableError(Exception):
