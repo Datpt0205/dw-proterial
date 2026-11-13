@@ -24,6 +24,15 @@ offers no connection, and the file has to paste without retyping.
   with `mock: false` once B41 confirms the headers and their order.
 - Cell formats as Bravo reads them: price to 5 decimals, quantity to 3,
   dates as Bravo's clipboard expects (checked on the plant PC).
+- **A column change is data, never code** (Đạt, 11-13: "tôi không thể cứ ở
+  đây để maintain nếu họ đổi form"). Besides a field code computes, a
+  column's source may be a fixed value, a field of the customer's record,
+  or left blank for the person: all set in the tenant's version through
+  "Tạo từ tệp mẫu" (the model maps headers, code verifies, the head
+  approves). Only a column computed from the PO by a new rule needs code.
+- B02 (Bravo's "Customer order information (Form 1)" export, 81 columns) is
+  the view, not the paste grid; the paste sheet's columns are the ones Sales
+  types (11-09 recording), B41 confirms them.
 
 ## Acceptance
 
