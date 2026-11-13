@@ -16,7 +16,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10     |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | No Zalo at Proterial 11-11 |
-| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–6 built, measured    |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | real flows 11-13; gap next |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
