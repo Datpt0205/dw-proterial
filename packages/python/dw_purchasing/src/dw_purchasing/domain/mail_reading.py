@@ -31,7 +31,10 @@ date. Never a parsed value, a requester, a supplier or a decision.
 4. Every other span the model gives must be found, or the request is refused
    (``span_not_found``): a value the mail does not hold is an invented one.
 5. The requester is the verified sender (the caller's), never the model's.
-   A currency nobody wrote is the tenant's default, a rule.
+   A currency nobody wrote is the tenant's default, a rule; a bare ``$`` is
+   none until the mail or its file names the ISO code it stands for.
+   ``1.200`` and ``05/11`` are read only as the text they are in settles them
+   (`dw_platform.domain.notation`); else the request goes to a person.
 6. With a file shown, a value may be in the mail or the file, but every line
    comes from one of them, each found once there: a request is not stitched
    from two places. Where both hold every line (a mail that copies its form),
@@ -42,15 +45,25 @@ date. Never a parsed value, a requester, a supplier or a decision.
 
 from __future__ import annotations
 
+import operator
 import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+from functools import reduce
 from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from dw_platform.domain.notation import (
+    UNSTATED,
+    Notation,
+    day_and_month,
+    notation_of,
+    read_currency,
+    read_number,
+)
 from dw_purchasing.domain.requests import (
     MAX_LINES,
     PrLine,
@@ -138,56 +151,40 @@ def occurrences(haystack: str, needle: str) -> list[int]:
 
 _CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,47}")
 _NUMBER = re.compile(r"\d[\d.,]*\d|\d")
-_GROUPED = re.compile(r"\d{1,3}(?:([.,])\d{3})+")
-_DAY_FIRST = re.compile(r"(?<!\d)(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](\d{4}|\d{2}))?(?!\d)")
+_NUMERIC_DATE = re.compile(r"(?<!\d)(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](\d{4}|\d{2}))?(?!\d)")
 _ISO = re.compile(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)")
-_CURRENCIES: Final = {
-    "vnd": "VND",
-    "đ": "VND",
-    "đồng": "VND",
-    "vnđ": "VND",
-    "usd": "USD",
-    "$": "USD",
-    "us$": "USD",
-    "jpy": "JPY",
-    "円": "JPY",
-    "yen": "JPY",
-    "¥": "JPY",
-}
 
 
-def parse_quantity(span: str) -> Decimal | None:
-    """One number as written: ``1.200`` and ``1,200`` are twelve hundred (a
-    group of three after one separator kind), ``2,5`` and ``2.5`` two and a
-    half. Two numbers, or none, is no quantity."""
+def parse_quantity(span: str, notation: Notation = UNSTATED) -> Decimal | None:
+    """One number as written, read by the platform's one rule
+    (`dw_platform.domain.notation.read_number`): ``2,5`` and ``2.5`` are two
+    and a half, ``1.250,50`` reads by its separators, and ``1.200`` or
+    ``1,200`` only where the document's own other numbers fix its decimal
+    mark (``notation``). Two numbers, or none, is no quantity."""
     numbers = _NUMBER.findall(unicodedata.normalize("NFKC", span))
     if len(numbers) != 1:
         return None
-    text = numbers[0]
-    if (grouped := _GROUPED.fullmatch(text)) is not None:
-        text = text.replace(grouped.group(1), "")
-    elif re.fullmatch(r"\d+(?:[.,]\d+)?", text):
-        text = text.replace(",", ".")
-    else:
-        return None
-    try:
-        value = Decimal(text)
-    except InvalidOperation:
-        return None
-    return value if value > 0 else None
+    value = read_number(numbers[0], notation)
+    return value if value is not None and value > 0 else None
 
 
-def parse_date(span: str, *, received_on: date) -> date | None:
-    """A date as written: ``2026-11-20``, or day first (``20/11/2026``,
-    ``20/11``). A year left out is the first such date on or after the day
-    the mail arrived."""
+def parse_date(span: str, *, received_on: date, notation: Notation = UNSTATED) -> date | None:
+    """A date as written: ``2026-11-20``, or numeric (``20/11/2026``,
+    ``20/11``) in the order the platform's one rule settles
+    (`notation.day_and_month`: a number over 12 says which is the day, else
+    the document's other dates decide, else it is not read). A year left out
+    is the first such date on or after the day the mail arrived."""
     text = unicodedata.normalize("NFKC", span)
     try:
         if (iso := _ISO.search(text)) is not None:
             return date(int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
-        if (dmy := _DAY_FIRST.search(text)) is None:
+        if (numeric := _NUMERIC_DATE.search(text)) is None:
             return None
-        day, month, year = int(dmy.group(1)), int(dmy.group(2)), dmy.group(3)
+        settled = day_and_month(int(numeric.group(1)), int(numeric.group(2)), notation)
+        if settled is None:
+            return None
+        day, month = settled
+        year = numeric.group(3)
         if year is not None:
             return date(int(year) + (2000 if len(year) == 2 else 0), month, day)
         guess = date(received_on.year, month, day)
@@ -196,8 +193,11 @@ def parse_date(span: str, *, received_on: date) -> date | None:
         return None
 
 
-def parse_currency(span: str) -> str | None:
-    return _CURRENCIES.get(fold(span).strip(" .:"))
+def parse_currency(span: str, notation: Notation = UNSTATED) -> str | None:
+    """The ISO code a span names, from the platform's one table
+    (`notation.read_currency`): a bare ``$`` or ``¥`` only where the document
+    names the one currency it stands for."""
+    return read_currency(span, notation)
 
 
 class _UnreadError(Exception):
@@ -213,7 +213,19 @@ class _Mail:
     def __init__(self, text: str, file: ShownFile | None = None) -> None:
         shown = [(text, False)] + ([(file.text, file.scanned)] if file is not None else [])
         self.sources = [(fold(t), scanned) for t, scanned in shown]
+        # How each text writes "1.200" and "05/11", by its own other values.
+        self.notations = [notation_of(t) for t, _ in shown]
         self.scanned = False
+
+    def notation_for(self, span: str | None) -> Notation:
+        """The notation of the texts that hold ``span``, together."""
+        needle = fold(span or "")
+        found = [
+            notation
+            for (haystack, _), notation in zip(self.sources, self.notations, strict=True)
+            if occurrences(haystack, needle)
+        ]
+        return reduce(operator.or_, found, UNSTATED)
 
     def holds(self, span: str | None, *, within: str | None = None) -> bool:
         if span is None:
@@ -270,13 +282,19 @@ def read_pr_mail(
             if not mail.holds(span):
                 raise _UnreadError("span_not_found")
         currency = (
-            parse_currency(answer.currency_span) if answer.currency_span else default_currency
+            parse_currency(answer.currency_span, mail.notation_for(answer.currency_span))
+            if answer.currency_span
+            else default_currency
         )
         if currency is None:
             raise _UnreadError("currency_unreadable")
         need_by = None
         if answer.need_by_span is not None:
-            need_by = parse_date(answer.need_by_span, received_on=received_on)
+            need_by = parse_date(
+                answer.need_by_span,
+                received_on=received_on,
+                notation=mail.notation_for(answer.need_by_span),
+            )
             if need_by is None:
                 raise _UnreadError("need_by_unreadable")
         lines, source = _lines(mail, answer, received_on)
@@ -308,6 +326,7 @@ def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[tuple[P
     if len(set(folded_lines)) != len(folded_lines):
         raise _UnreadError("line_unreadable")
     source = mail.lines_source(folded_lines)
+    notation = mail.notations[source]
     lines: list[PrLine] = []
     for number, (line, folded) in enumerate(zip(answer.lines, folded_lines, strict=True), start=1):
         description = mail.require(line.description_span, "line_unreadable", within=folded)
@@ -317,9 +336,11 @@ def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[tuple[P
             line.need_by_span, within=folded
         ):
             raise _UnreadError("line_unreadable")
-        quantity = parse_quantity(quantity_span)
+        quantity = parse_quantity(quantity_span, notation)
         need_by = (
-            parse_date(line.need_by_span, received_on=received_on) if line.need_by_span else None
+            parse_date(line.need_by_span, received_on=received_on, notation=notation)
+            if line.need_by_span
+            else None
         )
         if quantity is None or (line.need_by_span is not None and need_by is None):
             raise _UnreadError("line_unreadable")
@@ -370,13 +391,19 @@ def read_pr_words(
             if not words.holds(span):
                 raise _UnreadError("span_not_found")
         currency = (
-            parse_currency(answer.currency_span) if answer.currency_span else default_currency
+            parse_currency(answer.currency_span, words.notation_for(answer.currency_span))
+            if answer.currency_span
+            else default_currency
         )
         if currency is None:
             raise _UnreadError("currency_unreadable")
         need_by = None
         if answer.need_by_span is not None:
-            need_by = parse_date(answer.need_by_span, received_on=received_on)
+            need_by = parse_date(
+                answer.need_by_span,
+                received_on=received_on,
+                notation=words.notation_for(answer.need_by_span),
+            )
             if need_by is None:
                 raise _UnreadError("need_by_unreadable")
         draft = RequestDraft(

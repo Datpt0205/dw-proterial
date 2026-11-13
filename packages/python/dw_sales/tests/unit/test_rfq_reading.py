@@ -11,9 +11,11 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from dw_platform.domain.notation import notation_of
 from dw_sales.domain.rfq_reading import (
     ModelRfqReading,
     TextPart,
+    notations,
     parse_currency,
     parse_date,
     parse_number,
@@ -27,6 +29,11 @@ pytestmark = pytest.mark.unit
 
 RECEIVED = date(2026, 10, 2)
 SHA = hashlib.sha256(b"part").hexdigest()
+# Documents whose own other values settle "1.200" and "05/12" (audit 11-13,
+# findings 8 and 9): a decimal comma, a decimal point, a date day first.
+COMMA = notation_of("đơn giá 12,5")
+POINT = notation_of("total 1,250.00")
+DAY_FIRST = notation_of("ngày 25/10/2026")
 
 
 # ---------------------------------------------------------------- parsers --
@@ -35,20 +42,29 @@ SHA = hashlib.sha256(b"part").hexdigest()
 @pytest.mark.parametrize(
     ("text", "value"),
     [
-        ("1,200", Decimal(1200)),
-        ("1.200", Decimal(1200)),
         ("1 200", Decimal(1200)),
-        ("12,200", Decimal(12200)),
         ("1200", Decimal(1200)),
         ("0.42", Decimal("0.42")),
         ("0,42", Decimal("0.42")),
+        ("1.200,5", Decimal("1200.5")),
+        ("1,250,000", Decimal(1250000)),
+        # Thousands to one writer, a decimal to another: not by itself.
+        ("1,200", None),
+        ("1.200", None),
+        ("12,200", None),
+        ("-5", None),
         ("1,2,3", None),
-        ("1.200,5", None),
         ("", None),
     ],
 )
 def test_a_number_is_read_as_customers_write_it(text: str, value: Decimal | None) -> None:
     assert parse_number(text) == value
+
+
+def test_an_ambiguous_number_is_read_as_its_document_settles_it() -> None:
+    assert parse_number("1.200", COMMA) == Decimal(1200)
+    assert parse_number("1,200", POINT) == Decimal(1200)
+    assert parse_number("1,200", COMMA) == Decimal("1.2")
 
 
 @pytest.mark.parametrize(
@@ -67,7 +83,11 @@ def test_a_number_is_read_as_customers_write_it(text: str, value: Decimal | None
 def test_a_quantity_is_a_number_and_at_most_metres(
     span: str, read: tuple[Decimal, bool] | None
 ) -> None:
-    assert parse_quantity(span) == read
+    settled = POINT if "," in span else COMMA
+    assert parse_quantity(span, settled) == read
+    if read is not None and any(mark in span for mark in ".,"):
+        # "1,200 m" by itself is unread: Sales types it (`rfq_incomplete`).
+        assert parse_quantity(span) is None
 
 
 @pytest.mark.parametrize(
@@ -92,7 +112,7 @@ def test_only_metres_is_a_unit_dw1_quotes_in(span: str, uom: str | None) -> None
         ("2026-11-15", date(2026, 11, 15)),
         ("15/11/2026", date(2026, 11, 15)),
         ("15/11", date(2026, 11, 15)),
-        ("ngày 05/12", date(2026, 12, 5)),
+        ("ngày 25/12", date(2026, 12, 25)),
         ("15 Nov 2026", date(2026, 11, 15)),
         ("November 30, 2026", date(2026, 11, 30)),
         ("Nov 15", date(2026, 11, 15)),
@@ -106,6 +126,9 @@ def test_only_metres_is_a_unit_dw1_quotes_in(span: str, uom: str | None) -> None
         ("令和元年5月1日", date(2019, 5, 1)),
         # Only the other order makes a date.
         ("11/25/2026", date(2026, 11, 25)),
+        # Either order makes one: not by itself (audit 11-13, finding 9).
+        ("05/11/2026", None),
+        ("ngày 05/12", None),
         # Without a year: the next one that is not long past.
         ("15/01", date(2027, 1, 15)),
         ("12月中旬", None),
@@ -115,6 +138,16 @@ def test_only_metres_is_a_unit_dw1_quotes_in(span: str, uom: str | None) -> None
 )
 def test_a_date_is_read_as_customers_write_it(span: str, day: date | None) -> None:
     assert parse_date(span, RECEIVED) == day
+
+
+def test_a_numeric_date_takes_its_documents_order_and_never_a_swap() -> None:
+    month_first = notation_of("ordered 10/25/2026")
+    assert parse_date("ngày 05/12", RECEIVED, DAY_FIRST) == date(2026, 12, 5)
+    assert parse_date("05/12/2026", RECEIVED, month_first) == date(2026, 5, 12)
+    # A date that contradicts its document is not read, nor any date of a
+    # document whose dates contradict each other.
+    assert parse_date("11/15/2026", RECEIVED, DAY_FIRST) is None
+    assert parse_date("25/11/2026", RECEIVED, DAY_FIRST | month_first) is None
 
 
 @pytest.mark.parametrize(
@@ -127,10 +160,20 @@ def test_a_date_is_read_as_customers_write_it(span: str, day: date | None) -> No
         ("円", "JPY"),
         ("yen", "JPY"),
         ("EUR", None),
+        # SGD, HKD and CNY write these too (audit 11-13, finding 20).
+        ("$", None),
+        ("¥", None),
     ],
 )
 def test_a_currency_is_one_of_the_three_dw1_prices_in(span: str, currency: str | None) -> None:
     assert parse_currency(span) == currency
+
+
+def test_a_bare_symbol_is_the_currency_its_document_names() -> None:
+    assert parse_currency("$", notation_of("All prices in USD")) == "USD"
+    assert parse_currency("¥", notation_of("通貨\uff1aJPY")) == "JPY"
+    # A currency DW1 does not price in stays unread, named or not.
+    assert parse_currency("$", notation_of("prices in SGD")) is None
 
 
 @pytest.mark.parametrize(
@@ -147,7 +190,7 @@ BODY = (
     "Yêu cầu báo giá\n\n"
     "1. Cáp 2C AWG24 BLK, 1.200 m, cần trước 15/11\n"
     "2. Dây điện AWG22 đỏ, 3.000 m, cần trước 30/11\n"
-    "Giá tính bằng USD, hạn báo giá 20/10/2026."
+    "Giá tính bằng USD, hạn báo giá 20/10/2026, giá mục tiêu 0,45."
 )
 LINE_1 = "1. Cáp 2C AWG24 BLK, 1.200 m, cần trước 15/11"
 LINE_2 = "2. Dây điện AWG22 đỏ, 3.000 m, cần trước 30/11"
@@ -232,6 +275,35 @@ def test_a_value_whose_span_does_not_hold_is_dropped_never_repaired(
         assert item.needed_by is None
 
 
+def test_a_quantity_its_document_does_not_settle_is_left_for_sales() -> None:
+    """Without "0,45" nothing in the mail says whether "1.200" is twelve
+    hundred or one point two: the quantity is not read, and Sales types it."""
+    unsettled = TextPart("body", BODY.replace(", giá mục tiêu 0,45", ""), None, SHA)
+
+    verdict = verify_rfq([unsettled], _answer(_item()), RECEIVED)
+
+    assert verdict.items[0].quantity is None
+    assert verdict.refused["quantity_unparsed"] == 1
+
+
+def test_a_call_reads_by_the_notation_of_the_whole_document_not_its_piece() -> None:
+    """A request split into calls is read by each document's notation from all
+    of it: the "0,45" that settles "1.200" may be in another call's piece."""
+    piece = TextPart("body", BODY.split("\nGiá")[0], None, SHA)
+
+    alone = verify_rfq([piece], _answer(_item(), currency_span=None, quote_due_span=None), RECEIVED)
+    whole = verify_rfq(
+        [piece],
+        _answer(_item(), currency_span=None, quote_due_span=None),
+        RECEIVED,
+        documents=notations([PART]),
+    )
+
+    assert alone.items[0].quantity is None
+    assert whole.items[0].quantity is not None
+    assert whole.items[0].quantity.value == Decimal(1200)
+
+
 def test_a_number_without_metres_is_no_quantity() -> None:
     verdict = verify_rfq([PART], _answer(_item(quantity_span="1.200")), RECEIVED)
 
@@ -302,11 +374,12 @@ def test_a_value_in_a_sheet_is_anchored_at_its_cell_and_never_across_cells() -> 
 
 
 def test_a_value_on_a_pdf_page_names_the_page_and_its_words() -> None:
-    page = TextPart("M38-A1#p1", "1. NRV-77-0012 CABLE 4C - 2,000 m", "M38-A1", SHA, page=1)
+    text = "1. NRV-77-0012 CABLE 4C - 2,000 m @ 1,250.00"
+    page = TextPart("M38-A1#p1", text, "M38-A1", SHA, page=1)
     answer = _answer(
         _item(
             part="M38-A1#p1",
-            line_span="1. NRV-77-0012 CABLE 4C - 2,000 m",
+            line_span=text,
             description_span="CABLE 4C",
             quantity_span="2,000 m",
             required_date_span=None,

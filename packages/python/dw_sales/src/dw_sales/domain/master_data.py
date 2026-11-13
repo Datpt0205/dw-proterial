@@ -38,13 +38,14 @@ import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from dw_platform.domain.notation import is_ambiguous_number, read_number
 from dw_sales.domain.catalog import (
     ConvertEntry,
     Customer,
@@ -142,12 +143,6 @@ _DATE_DMY: Final = re.compile(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$")
 _DATE_ISO: Final = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$")
 _MONTH_ISO: Final = re.compile(r"^(\d{4})[-/.](\d{1,2})$")
 _MONTH_MY: Final = re.compile(r"^(\d{1,2})[-/.](\d{4})$")
-# Digits grouped by dots in threes, with no other separator: "1.000" is one
-# thousand to a Vietnamese reader and one to an English one. Refused, never
-# guessed (ui-quality §9: a dot decimal is read correctly or refused).
-# A leading zero is never a thousands group: "0,042" and "0.042" are decimals.
-_AMBIGUOUS_DOTS: Final = re.compile(r"^-?[1-9]\d{0,2}(\.\d{3})+$")
-_AMBIGUOUS_COMMAS: Final = re.compile(r"^-?[1-9]\d{0,2}(,\d{3})+$")
 
 
 def _text(value: CellValue) -> str | None:
@@ -164,9 +159,12 @@ def _text(value: CellValue) -> str | None:
 
 
 def read_decimal(value: CellValue) -> Decimal | None:
-    """A number: a numeric cell as it is, a text cell in either grouping
-    ("1.234,5" or "1,234.5"), a comma alone as the decimal mark; a grouping
-    that could mean either is refused."""
+    """A number: a numeric cell as it is, a text cell as the platform's one
+    rule reads it (`dw_platform.domain.notation.read_number`: "1.234,5" or
+    "1,234.5", a comma alone as the decimal mark). "1.000" is one thousand to
+    a Vietnamese reader and one to an English one: a cell is read alone, with
+    no document to settle it, so it is refused, never guessed (ui-quality §9:
+    a dot decimal is read correctly or refused)."""
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -176,21 +174,12 @@ def read_decimal(value: CellValue) -> Decimal | None:
     text = value.strip().replace(" ", "").replace(chr(0xA0), "")
     if not text:
         return None
-    if "," in text and "." in text:
-        decimal_mark = "," if text.rfind(",") > text.rfind(".") else "."
-        group_mark = "." if decimal_mark == "," else ","
-        text = text.replace(group_mark, "").replace(decimal_mark, ".")
-    elif _AMBIGUOUS_DOTS.match(text) or _AMBIGUOUS_COMMAS.match(text):
+    if is_ambiguous_number(text):
         raise CellError(
             "không rõ dấu thập phân: ghi số không phân cách hàng nghìn (ví dụ 1000 hoặc 1,5)"
         )
-    elif "," in text:
-        text = text.replace(",", ".")
-    try:
-        number = Decimal(text)
-    except InvalidOperation:
-        raise CellError("không phải là số") from None
-    if not number.is_finite():
+    number = read_number(text)
+    if number is None:
         raise CellError("không phải là số")
     return number
 

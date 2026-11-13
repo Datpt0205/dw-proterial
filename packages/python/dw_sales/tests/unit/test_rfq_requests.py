@@ -9,6 +9,7 @@ PDF, M39: the customer's own sheet) with a scripted model (`Recorded`).
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -25,6 +26,7 @@ from dw_agent_runtime.model.interpretation import (
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.adapters.assembly import model_requests
 from dw_sales.adapters.memory_rules import platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
@@ -34,7 +36,7 @@ from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader, ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.case_store import CaseOrigin, Stored
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.quotation import QuotationService, RequestNotExtractedError
 from dw_sales.application.rfq_reading import PROMPT_TOKENS, RFQ_EXTRACTION
 from dw_sales.domain.orders import RegionFlag
@@ -143,8 +145,39 @@ class _Down:
         raise ModelUnavailableError("descriptions are ticket 28's")
 
 
+class _Settled:
+    """The mock mailbox with M37 as a customer who writes a price "0,42" sends
+    it: what tells code its "1.200 m" is twelve hundred metres (audit 11-13,
+    finding 8). The mailbox's own M37 settles nothing, and its quantities are
+    Sales' to type (`test_a_quantity_m37_does_not_settle_is_left_for_sales`)."""
+
+    def __init__(self) -> None:
+        self._inbox = MockInbox.load(SCOPE)
+
+    async def list_messages(self, scope: SalesScope) -> Sequence[InboundMessage]:
+        return [await self._settled(m) for m in await self._inbox.list_messages(scope)]
+
+    async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
+        message = await self._inbox.get_message(scope, message_id)
+        return None if message is None else await self._settled(message)
+
+    async def read_attachment(
+        self, scope: SalesScope, message_id: str, attachment_id: str
+    ) -> AttachmentContent | None:
+        return await self._inbox.read_attachment(scope, message_id, attachment_id)
+
+    @staticmethod
+    async def _settled(message: InboundMessage) -> InboundMessage:
+        if message.message_id != "M37":
+            return message
+        body = message.body_text.replace(
+            "Hạn gửi báo giá", "Đơn giá lần trước của mã 1: 0,42 USD/m.\nHạn gửi báo giá"
+        )
+        return message.model_copy(update={"body_text": body})
+
+
 def _service(
-    model: Any, *, on: bool = True, inbox: MockInbox | None = None, measured: bool = True
+    model: Any, *, on: bool = True, inbox: InboxPort | None = None, measured: bool = True
 ) -> QuotationService:
     """``on``: the tenant's rules turn the step on; ``measured``: its live
     eval met the bar (dw_sales ADR 0005, addendum of 2026-10-23)."""
@@ -168,7 +201,7 @@ def _service(
     )
     return QuotationService(
         catalog=catalog,
-        inbox=inbox or MockInbox.load(SCOPE),
+        inbox=inbox or _Settled(),
         rfq_reader=ClientRfqReader(InProcessReaderTransport()),
         reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=MemoryStore(),
@@ -185,6 +218,19 @@ async def _open(message_id: str, answer: dict[str, Any], **kwargs: Any) -> Quote
 
 
 # ------------------------------------------------------------- reading --
+
+
+async def test_a_quantity_m37_does_not_settle_is_left_for_sales() -> None:
+    """The mailbox's own M37 writes "1.200 m" and "3.000 m" and nothing else
+    that says whether the dot groups thousands: neither is read, and each line
+    asks Sales for its quantity (`rfq_incomplete`), never a guess."""
+    case = await _open("M37", M37, inbox=MockInbox.load(SCOPE))
+
+    first, second = case.request.document.items
+    assert (first.quantity.value, second.quantity.value) == (None, None)
+    assert first.missing() == second.missing() == ("quantity",)
+    assert case.request.reading is not None
+    assert case.request.reading.refused == {"quantity_unparsed": 2}
 
 
 async def test_a_request_in_the_mail_body_opens_a_case_with_every_value_flagged() -> None:

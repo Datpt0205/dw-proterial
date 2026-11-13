@@ -193,6 +193,15 @@ def test_a_number_is_read_in_either_grouping_and_an_ambiguous_one_is_refused() -
     assert str(read_decimal("0,042")) == "0.042"
     with pytest.raises(ValueError, match="không rõ dấu thập phân"):
         read_decimal("1.000")
+    # The same answer as every other reader of numbers (audit 11-13, finding
+    # 8, `dw_platform.domain.notation`): "1.250" either way is refused, a run
+    # of groups is thousands, and a cell has no document to settle it.
+    for ambiguous in ("1.250", "1,250"):
+        with pytest.raises(ValueError, match="không rõ dấu thập phân"):
+            read_decimal(ambiguous)
+    assert read_decimal("1.250.000") == Decimal(1250000)
+    with pytest.raises(ValueError, match="không phải là số"):
+        read_decimal("1.2,3")
 
 
 def test_the_diff_says_what_is_added_changed_old_to_new_and_removed() -> None:

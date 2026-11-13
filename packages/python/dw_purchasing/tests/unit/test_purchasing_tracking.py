@@ -159,7 +159,7 @@ MAIL = (
     "Kimura Tools xác nhận đơn hàng PR-2611-004-01:\n"
     "- DC-200 Dao cắt cáp: 4 cái, đơn giá 350.000, giao ngày 18/11/2026\n"
     "- BK-1700 Băng keo: 100 cuộn, giao ngày 25/11/2026\n"
-    "Ghi chú: giá chưa gồm VAT 8%."
+    "Ghi chú: giá chưa gồm VAT 8%, tổng 1.400.000 đ."
 )
 ORDERED = {"DC-200": 1, "BK-1700": 3}
 
@@ -240,6 +240,27 @@ def test_a_confirmation_is_read_line_by_line_by_the_order_s_codes() -> None:
 def test_a_line_code_cannot_find_refuses_the_mail(line: dict[str, str | None], why: str) -> None:
     verdict = _read(line, SECOND)
     assert (verdict.lines, verdict.not_read) == ((), why)
+
+
+def test_a_price_or_date_the_mail_does_not_settle_refuses_the_mail() -> None:
+    """Audit 11-13, findings 8 and 9: without "1.400.000", nothing in the mail
+    says "350.000" is thousands; with no date past the 12th, "05/12/2026"
+    is the fifth of December or the twelfth of May. Neither is guessed."""
+    bare = MAIL.replace(", tổng 1.400.000 đ", "")
+    assert _read(FIRST, SECOND, text=bare).not_read == "line_unreadable"
+    undated = MAIL.replace("18/11/2026", "05/12/2026").replace("25/11/2026", "06/12/2026")
+    dated = _line(
+        "DC-200 Dao cắt cáp: 4 cái, đơn giá 350.000, giao ngày 05/12/2026",
+        "DC-200",
+        quantity="4 cái",
+        price="350.000",
+        on="05/12/2026",
+    )
+    assert _read(dated, text=undated).not_read == "line_unreadable"
+    # With its other dates past the 12th, the same mail reads the fifth of December.
+    settled = undated.replace("06/12/2026", "16/12/2026")
+    (first,) = _read(dated, text=settled).lines
+    assert first.delivery_on == date(2026, 12, 5)
 
 
 def test_an_item_the_order_does_not_hold_is_not_read() -> None:

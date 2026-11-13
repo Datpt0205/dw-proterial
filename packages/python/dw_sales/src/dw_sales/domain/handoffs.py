@@ -21,7 +21,10 @@ the hand-off:
   only has to be there, as a whole token (`locate_identifier`): a subject
   and its body often both name it, and the order it resolves to, not where
   it is written, is what is used (as ticket 31's numbers); **parses** each
-  number and date from its span (`quantity_of`, `rfq_reading.parse_date`);
+  number and date from its span (`quantity_at`, `rfq_reading.parse_date`),
+  as the mail's own other values settle "2.000" and "05/11"; a quantity is
+  taken only in metres, and any other unit keeps the customer's words for
+  Sales instead of a value;
   and **resolves** the PO against the sender's own customer's orders only and
   each line exactly against that order (`application.handoffs`).
 - **A quote carries no destination**: a sentence naming an email address, a
@@ -46,9 +49,10 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from dw_platform.domain.notation import Notation
 from dw_sales.domain.catalog import DocumentNo
-from dw_sales.domain.rfq_reading import parse_number
-from dw_sales.domain.spans import FoldedText
+from dw_sales.domain.rfq_reading import METRE_UNIT, parse_number
+from dw_sales.domain.spans import FoldedText, word_char
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -131,8 +135,11 @@ class HandoffLine(BaseModel):
     # The order line's item as the order holds it (PRV code), from the order.
     item: str | None = Field(default=None, max_length=64)
     new_quantity: Decimal | None = Field(default=None, gt=0)
+    # The customer's words for the quantity; with no `new_quantity`, words
+    # code did not read (another unit, an ambiguous grouping) for Sales.
     quantity: Located | None = None
     new_date: date | None = None
+    # Likewise the date's words, with no `new_date` when its order is unsettled.
     date_span: Located | None = None
 
 
@@ -166,6 +173,7 @@ class Handoff(BaseModel):
     # customer's words, located.
     quotes: tuple[Located, ...] = Field(default=(), max_length=MAX_ITEMS)
     sample_quantity: Decimal | None = Field(default=None, gt=0)
+    # The customer's words for it; alone, words code did not read (`HandoffLine`).
     quantity: Located | None = None
     # How many spans the model gave that code refused, by field: a count for
     # the evals and the screen, never the text.
@@ -173,7 +181,14 @@ class Handoff(BaseModel):
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
-        located = bool(self.po_no or self.lines or self.lot or self.quotes or self.sample_quantity)
+        located = bool(
+            self.po_no
+            or self.lines
+            or self.lot
+            or self.quotes
+            or self.sample_quantity
+            or self.quantity
+        )
         if (self.outcome == "read") != located:
             raise ValueError("a hand-off is read exactly when code kept a value of it")
         if self.po_no is None and (self.lines or self.so_no or self.order_case_id):
@@ -218,67 +233,56 @@ def locate_identifier(part: str, span: str | None) -> Located | None:
 
 
 _NUMBER = re.compile(r"\d[\d.,  ]*\d|\d")
+# The word after a quantity's number, kept with it when it is no metre spelling.
+_UNIT_AFTER = re.compile(r"\s*[^\W\d_]+")
+# Metres right after the number (`rfq_reading.METRE_UNIT`, the one list of
+# their spellings), as the whole word: not `mm`, not `m2`.
+_METRES_AFTER = re.compile(rf"\s*{METRE_UNIT}", re.IGNORECASE)
 
 
-# The word right after a quantity's number, its unit when it has one.
-_UNIT_AFTER = re.compile(r"\s*([^\W\d_]+)")
-# Units a customer writes that are not metres, the unit a hand-off line's
-# quantity is read in (the line says "số lượng mới {quantity}", no unit of its
-# own). A quantity in one of them is not copied: "3 km" would reach PC as 3
-# (found 2026-10-27 by the edge-case sets), and turning reels or feet into
-# metres is not copying.
-_OTHER_UNITS: Final = frozenset(
-    {
-        "km",
-        "ft",
-        "feet",
-        "foot",
-        "kg",
-        "cuộn",
-        "cuon",
-        "reel",
-        "reels",
-        "drum",
-        "drums",
-        "roll",
-        "rolls",
-        "coil",
-        "coils",
-        "bobbin",
-        "bobbins",
-        "pcs",
-        "pc",
-        "cái",
-        "cai",
-        "chiếc",
-        "chiec",
-        "bộ",
-        "bo",
-        "巻",
-        "本",
-        "個",
-        "ドラム",
-        "リール",
-        "キロ",
-    }
-)
+def _metres_end(text: str, at: int) -> int | None:
+    """Where a metre unit that starts right after ``at`` ends, as a whole
+    word (not ``mm``, not ``m2``), else None. A rate (``m/cuộn``) is no
+    quantity in metres."""
+    match = _METRES_AFTER.match(text, at)
+    if match is None:
+        return None
+    end = match.end()
+    if (end < len(text) and word_char(text[end])) or text[end:].lstrip().startswith("/"):
+        return None
+    return end
 
 
-def quantity_of(span: str) -> Decimal | None:
-    """The one number a quantity span holds, as a customer groups it
-    (`rfq_reading.parse_number`), whatever words stand around it ("2.000 m",
-    "thêm 500", "各50m"); None for a span with no number or with two, which
-    says more than one quantity, and None for a number in another unit than
-    metres ("3 km", "4 cuộn", "2巻"), which Sales fills instead."""
-    text = unicodedata.normalize("NFKC", span)
-    numbers = list(_NUMBER.finditer(text))
+def quantity_at(
+    part: str, located: Located, notation: Notation
+) -> tuple[Decimal | None, Located] | None:
+    """The quantity a located span states, and the customer's words for it.
+
+    The span holds exactly one number (else None: no quantity, or more than
+    one). The unit is the word right after that number in the whole text,
+    inside the span or after it, so a span the model ended at the number
+    ("3" of "3 km") is read with its unit. The value is taken only in metres,
+    the one unit a hand-off line is read in, and only as the mail's notation
+    reads the number (`notation`: "2.000" with nothing else settling it is
+    not read). Any other unit or none ("3 km", "4 cuộn", "2巻", "thêm 500")
+    is never converted or assumed: the value is None and the words, unit
+    included, are kept for Sales to fill from."""
+    text = unicodedata.normalize("NFKC", part)
+    numbers = list(_NUMBER.finditer(located.text))
     if len(numbers) != 1:
         return None
-    unit = _UNIT_AFTER.match(text, numbers[0].end())
-    if unit is not None and unit.group(1).lower() in _OTHER_UNITS:
-        return None
-    value = parse_number(numbers[0].group(0))
-    return value if value is not None and value > 0 else None
+    number_end = located.start + numbers[0].end()
+    metres = _metres_end(text, number_end)
+    value = None
+    if metres is not None:
+        value = parse_number(numbers[0].group(0), notation)
+        end = metres
+    else:
+        unit = _UNIT_AFTER.match(text, number_end)
+        end = unit.end() if unit is not None else number_end
+    end = min(max(located.end, end), located.start + 400)
+    words = Located(text=text[located.start : end], start=located.start, end=end)
+    return (value if value is not None and value > 0 else None), words
 
 
 _LINE_NUMBER = re.compile(

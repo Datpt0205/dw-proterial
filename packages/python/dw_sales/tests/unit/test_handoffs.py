@@ -31,6 +31,7 @@ from dw_agent_runtime.model.interpretation import (
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
+from dw_platform.domain.notation import notation_of
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.policy_files import load_sales_policies
@@ -51,7 +52,7 @@ from dw_sales.domain.handoffs import (
     carries_contact,
     line_number_of,
     locate,
-    quantity_of,
+    quantity_at,
 )
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN as _AN
@@ -82,10 +83,15 @@ RUN = RunContext(
     scopes=frozenset(),
     trace_id="t33",
 )
+# "0,42" and "25/11/2026" are what tell code that this mail's "2.000 m" is two
+# thousand metres and its "05/12/2026" the fifth of December (audit 11-13,
+# findings 8 and 9); `UNSETTLED` is the same mail without them.
 CHANGE = (
     "Chào chị Vy,\n\nĐơn VLX-PO-2608-0102 bên em xin điều chỉnh:\n"
-    "- Dòng 2: giảm còn 2.000 m.\n- Mã VX-C4B22: lùi ngày giao sang 05/12/2026.\n\nCảm ơn chị"
+    "- Dòng 2: giảm còn 2.000 m, đơn giá giữ 0,42 USD/m.\n"
+    "- Mã VX-C4B22: lùi ngày giao từ 25/11/2026 sang 05/12/2026.\n\nCảm ơn chị"
 )
+UNSETTLED = CHANGE.replace(", đơn giá giữ 0,42 USD/m", "").replace("từ 25/11/2026 ", "")
 
 
 class _NoCases:
@@ -169,6 +175,69 @@ async def test_a_delivery_change_resolves_the_senders_order_and_each_line_agains
     assert (by_line[2].new_quantity, by_line[2].item) == (Decimal("2000"), "HW-1001")
     assert (by_line[1].new_date, by_line[1].item) == (date(2026, 12, 5), "CB-2007")
     assert handoff.refused == {}
+
+
+async def test_a_value_the_mail_does_not_settle_keeps_the_customers_words_for_sales() -> None:
+    """Nothing else in the mail says whether "2.000" is two thousand or two,
+    or whether "05/12/2026" is the fifth of December or the twelfth of May:
+    neither is read, and the customer's words go into the hand-off instead."""
+    handoff = await _read(
+        {
+            "po_no_span": "VLX-PO-2608-0102",
+            "lines": [
+                {"line_or_item_span": "2", "new_quantity_span": "2.000 m", "new_date_span": None},
+                {
+                    "line_or_item_span": "VX-C4B22",
+                    "new_quantity_span": None,
+                    "new_date_span": "05/12/2026",
+                },
+            ],
+        },
+        UNSETTLED,
+    )
+
+    by_line = {line.line_no: line for line in handoff.lines}
+    assert by_line[2].new_quantity is None and by_line[1].new_date is None
+    assert by_line[2].quantity is not None and by_line[2].quantity.text == "2.000 m"
+    assert by_line[1].date_span is not None and by_line[1].date_span.text == "05/12/2026"
+    assert handoff.refused == {"quantity_unread": 1, "date_unread": 1}
+    written = render(handoff, COPY, customer_code="VLX", message_id="H1")
+    assert f"số lượng mới {COPY.unknown} «2.000 m»" in written.body
+    assert f"ngày giao mới {COPY.unknown} «05/12/2026»" in written.body
+
+
+async def test_a_quantity_in_another_unit_keeps_the_unit_even_when_the_span_omits_it() -> None:
+    """Audit 11-13, finding 4: the model's span "3" of "3 km" reached PC as
+    3 m. The unit is read from the whole text right after the number."""
+    body = "PO VLX-PO-2608-0102: dòng 2 xin đổi còn 3 km thôi."
+
+    handoff = await _read(
+        {
+            "po_no_span": "VLX-PO-2608-0102",
+            "lines": [{"line_or_item_span": "2", "new_quantity_span": "3", "new_date_span": None}],
+        },
+        body,
+    )
+
+    (line,) = handoff.lines
+    assert line.new_quantity is None
+    assert line.quantity is not None and line.quantity.text == "3 km"
+    assert handoff.refused == {"quantity_unread": 1}
+    written = render(handoff, COPY, customer_code="VLX", message_id="H1")
+    assert f"số lượng mới {COPY.unknown} «3 km»" in written.body
+
+
+async def test_a_sample_quantity_in_another_unit_is_kept_as_words_and_read_for_sales() -> None:
+    body = "Brennic xin 2 cuộn mẫu cáp hai lõi."
+
+    handoff = await _read(
+        {"item_spans": [], "quantity_span": "2"}, body, "sample_request", customer="BRN"
+    )
+
+    assert handoff.outcome == "read" and handoff.sample_quantity is None
+    assert handoff.quantity is not None and handoff.quantity.text == "2 cuộn"
+    written = render(handoff, COPY, customer_code="BRN", message_id="M17")
+    assert f"Số lượng khách nêu: {COPY.unknown} «2 cuộn»." in written.body
 
 
 async def test_another_customers_po_resolves_nothing_and_its_lines_are_dropped() -> None:
@@ -418,10 +487,6 @@ def test_spans_quantities_lines_and_contacts_are_read_by_code() -> None:
     assert locate(part, "VLX-PO-2608-0102", bounded=True) is not None
     assert locate(part, "2.000", bounded=True) is not None
     assert locate(part, "000", bounded=True) is None
-    assert quantity_of("2.000 m") == Decimal("2000")
-    assert quantity_of("1,200 meters") == Decimal("1200")
-    assert quantity_of("各50m") == Decimal("50")
-    assert quantity_of("3 cuộn x 500 m") is None
     named = ("2", "Dòng 1 (VX-C4B22)", "Line 12", "2行目", "VX-C4B22", "12 cuộn")
     assert [line_number_of(s) for s in named] == [2, 1, 12, 2, None, None]
     assert carries_contact("send it to qa@velatrix.example")
@@ -459,38 +524,67 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS
 
 
-async def test_a_long_body_is_cut_to_the_routes_room_before_it_is_sent() -> None:
+async def test_a_body_too_long_for_the_route_is_never_cut_but_left_to_sales() -> None:
+    """The finding batch B left: a cut text loses its later lines with no one
+    told, and a value is verified against less than the mail says."""
     model = Recorded(raw={"po_no_span": None, "lot_no_span": None, "problem_quote_spans": []})
 
-    await _read(None, "Dây bị trầy vỏ. " * 3000, "complaint", model=model)
+    handoff = await _read(None, "Dây bị trầy vỏ. " * 3000, "complaint", model=model)
+
+    assert model.calls == []
+    assert (handoff.outcome, handoff.refused) == ("unavailable", {"too_long": 1})
+
+
+async def test_a_body_that_fits_is_sent_whole() -> None:
+    model = Recorded(raw={"po_no_span": None, "lot_no_span": None, "problem_quote_spans": []})
+
+    await _read(None, CHANGE, "complaint", model=model)
 
     ((_, _, inputs),) = model.calls
-    assert estimated_tokens(inputs["body"]) <= model.max_input_tokens - PROMPT_TOKENS
+    assert inputs["body"] == newest_part(_message(CHANGE)).body
 
 
 @pytest.mark.parametrize(
-    ("span", "value"),
+    ("text", "span", "value", "words"),
     [
-        ("2.000 m", Decimal("2000")),
-        ("thêm 500", Decimal("500")),
-        ("500 mét", Decimal("500")),
-        ("1,200 metres", Decimal("1200")),
-        ("各50m", Decimal("50")),
-        # Another unit than the line's metres: the hand-off says "số lượng mới"
-        # with no unit, so "3 km" would reach PC as 3 (found 2026-10-27 by the
-        # edge-case sets). Sales fills it instead.
-        ("3 km", None),
-        ("3km", None),
-        ("4 cuộn", None),
-        ("4 cuon", None),
-        ("2 reels", None),
-        ("1 drum", None),
-        ("1000 ft", None),
-        ("２巻", None),
-        ("5 cái", None),
+        ("giảm còn 2.000 m, giá 0,42", "2.000 m", Decimal("2000"), "2.000 m"),
+        ("thêm 500 m nữa", "500", Decimal("500"), "500 m"),
+        ("500 mét", "500 mét", Decimal("500"), "500 mét"),
+        ("1,200 metres @ 1,250.00", "1,200", Decimal("1200"), "1,200 metres"),
+        ("各50m", "50m", Decimal("50"), "50m"),
+        # Another unit than the line's metres, or none: never converted,
+        # never assumed. The words, unit included, are kept for Sales.
+        ("đổi còn 3 km", "3", None, "3 km"),
+        ("3km", "3km", None, "3km"),
+        ("4 cuộn", "4", None, "4 cuộn"),
+        ("4 cuon", "4 cuon", None, "4 cuon"),
+        ("2 reels", "2", None, "2 reels"),
+        ("1000 ft", "1000", None, "1000 ft"),
+        ("200 yards", "200", None, "200 yards"),
+        ("50 kgs", "50", None, "50 kgs"),
+        ("3 spools", "3", None, "3 spools"),
+        ("2 tấn", "2", None, "2 tấn"),
+        ("5 thùng", "5", None, "5 thùng"),
+        ("50 mm", "50", None, "50 mm"),
+        ("\uff12巻", "\uff12", None, "2巻"),
+        ("thêm 500", "500", None, "500"),
+        ("500 m/cuộn", "500", None, "500 m"),
+        # "2.000" alone in the mail: two thousand or two.
+        ("giảm còn 2.000 m", "2.000 m", None, "2.000 m"),
     ],
 )
-def test_a_quantity_in_another_unit_than_metres_is_not_copied(
-    span: str, value: Decimal | None
+def test_a_quantity_is_read_only_in_metres_from_the_word_after_its_number(
+    text: str, span: str, value: Decimal | None, words: str
 ) -> None:
-    assert quantity_of(span) == value
+    located = locate(text, span, bounded=True)
+    assert located is not None
+
+    read = quantity_at(text, located, notation_of(text))
+
+    assert read is not None and read[0] == value and read[1].text == words
+
+
+def test_a_quantity_span_with_no_number_or_two_is_no_quantity() -> None:
+    for text in ("3 cuộn x 500 m", "giảm bớt"):
+        located = locate(text, text, bounded=True)
+        assert located is not None and quantity_at(text, located, notation_of(text)) is None

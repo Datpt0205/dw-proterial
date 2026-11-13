@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from dw_platform.domain.notation import notation_of
 from dw_purchasing.adapters.policy_files import PolicyFiles, load_rules
 from dw_purchasing.application.intake import PR_MAIL_READING
 from dw_purchasing.domain.mail_reading import (
@@ -33,8 +34,11 @@ ARRIVED = date(2026, 11, 2)
     ("span", "value"),
     [
         ("4", Decimal(4)),
-        ("1.200", Decimal(1200)),
-        ("1,200 m", Decimal(1200)),
+        ("1.250.000", Decimal(1250000)),
+        ("1.200,5", Decimal("1200.5")),
+        # Twelve hundred or one point two: only as its document settles it.
+        ("1.200", None),
+        ("1,200 m", None),
         ("2,5", Decimal("2.5")),
         ("2.5 kg", Decimal("2.5")),
         ("0", None),
@@ -47,6 +51,13 @@ def test_a_quantity_is_one_number_as_people_group_it(span: str, value: Decimal |
     assert parse_quantity(span) == value
 
 
+def test_an_ambiguous_quantity_reads_as_its_document_settles_it() -> None:
+    """Audit 11-13, finding 8: one rule with Sales (`dw_platform.domain.notation`)."""
+    assert parse_quantity("1.200", notation_of("đơn giá 12,5")) == Decimal(1200)
+    assert parse_quantity("1,200 m", notation_of("total 1,250.00")) == Decimal(1200)
+    assert parse_quantity("1.200", notation_of("cáp 0.75 mm2")) is None
+
+
 @pytest.mark.parametrize(
     ("span", "value"),
     [
@@ -54,8 +65,9 @@ def test_a_quantity_is_one_number_as_people_group_it(span: str, value: Decimal |
         ("cần trước 2026-11-20", date(2026, 11, 20)),
         ("20.11.26", date(2026, 11, 20)),
         ("20/11", date(2026, 11, 20)),
-        # Before the day the mail arrived: next year's.
-        ("01/02", date(2027, 2, 1)),
+        # Both numbers at most 12: not by itself (audit 11-13, finding 9).
+        ("01/02", None),
+        ("05/11/2026", None),
         ("31/02/2026", None),
         ("tuần sau", None),
     ],
@@ -64,11 +76,35 @@ def test_a_date_is_read_day_first(span: str, value: date | None) -> None:
     assert parse_date(span, received_on=ARRIVED) == value
 
 
+def test_a_numeric_date_takes_its_documents_order_and_never_a_swap() -> None:
+    day_first, month_first = notation_of("gửi 25/10/2026"), notation_of("sent 10/25/2026")
+    # Before the day the mail arrived: next year's.
+    assert parse_date("01/02", received_on=ARRIVED, notation=day_first) == date(2027, 2, 1)
+    assert parse_date("05/11/2026", received_on=ARRIVED, notation=month_first) == date(2026, 5, 11)
+    assert parse_date("11/15/2026", received_on=ARRIVED) == date(2026, 11, 15)
+    assert parse_date("11/15/2026", received_on=ARRIVED, notation=day_first) is None
+
+
 @pytest.mark.parametrize(
-    ("span", "value"), [("VND", "VND"), ("đồng", "VND"), ("US$", "USD"), ("円", "JPY"), ("€", None)]
+    ("span", "value"),
+    [
+        ("VND", "VND"),
+        ("đồng", "VND"),
+        ("US$", "USD"),
+        ("円", "JPY"),
+        ("€", "EUR"),
+        # SGD, HKD and CNY write these too (audit 11-13, finding 20).
+        ("$", None),
+        ("¥", None),
+    ],
 )
 def test_a_currency_is_one_of_the_words_for_it(span: str, value: str | None) -> None:
     assert parse_currency(span) == value
+
+
+def test_a_bare_dollar_is_the_currency_its_mail_names() -> None:
+    assert parse_currency("$", notation_of("Giá tính bằng USD")) == "USD"
+    assert parse_currency("$", notation_of("USD hoặc SGD")) is None
 
 
 def _answer(**changes: object) -> ModelPrMail:

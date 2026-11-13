@@ -1,4 +1,4 @@
 {
-  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.946 of the 204 VI/EN values the golden requests state into the right field (0.949 of all 254; JA 0.960). The replay is deterministic, so a lower score means the verification changed; re-record with --live onprem --record when the prompt or the model changes.",
-  "min_right_field_vi_en": 0.94
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.946 of the 204 VI/EN values the golden requests state into the right field. Lowered to the replay's 0.828 on 2026-11-13 by the hardcode audit's batch C, on purpose: a number or date whose notation the request itself does not settle (`1.200 m`, `05/12/2026`) now goes to a person instead of being read one way (dw_platform.domain.notation). No value is read wrong; the misses are values left to Sales. The live bar (0.85, model_readiness) is unchanged, so the step cannot be turned on until ticket 37 recovers coverage. The replay is deterministic, so a lower score means the verification changed.",
+  "min_right_field_vi_en": 0.82
 }

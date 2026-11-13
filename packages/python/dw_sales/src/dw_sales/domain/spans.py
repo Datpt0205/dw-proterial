@@ -85,7 +85,9 @@ class FoldedText:
         )
 
 
-def _word(char: str) -> bool:
+def word_char(char: str) -> bool:
+    """A character that joins a token: a letter or a digit, not a wide one
+    (CJK and kana stand alone, module docstring)."""
     return char.isalnum() and unicodedata.east_asian_width(char) not in ("W", "F")
 
 
@@ -102,4 +104,4 @@ def _joined(text: str, at: int, left: str, right: str) -> bool:
         return at + 2 < len(text) and text[at + 2].isdigit()
     # A letter run, or a letter run into its digits (`AWG24`); a number may be
     # followed by its unit (`1200m`).
-    return _word(left) and _word(right) and not (left.isdigit() and not right.isdigit())
+    return word_char(left) and word_char(right) and not (left.isdigit() and not right.isdigit())
