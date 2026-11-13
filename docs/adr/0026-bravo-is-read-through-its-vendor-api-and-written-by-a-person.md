@@ -52,6 +52,19 @@ Both DW1 and DW2 need Bravo's data:
 5. **No answer from Bravo means no answer.** When Bravo is unreachable, a
    check says it could not run. It never passes.
 
+## Amendment 2026-11-13 (Đạt): the write API is asked for now
+
+Decision 2's "later, only if Proterial asks" is brought forward: the API
+request sent on 11-13 asks the vendor for the writes DW1 and DW2 need
+(sales order, its changes, line splits and cancellations, YCBG and its
+Design result, quotation; PO and goods receipt for DW2). The conditions do
+not change: DW never touches Bravo's database; a write happens only after a
+person approves, on DW1/DW2, exactly what will be written (the version
+shown is the version sent); it carries an idempotency key and the approver,
+and its result is read back and compared. Until a write API exists and is
+tried on Bravo's test company, a person keeps entering from DW's paste
+sheet, as today.
+
 ## Consequences
 
 - The vendor's endpoints are the contract; the list FPT asked for is in
