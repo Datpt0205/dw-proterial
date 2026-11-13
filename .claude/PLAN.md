@@ -49,7 +49,7 @@ own file and a row here.
   the plant keeps internet (M365, Exchange Online) or none; Bravo is on its
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
   `ops-hardening.md`); host: Windows Server + Hyper-V VM (11-11), its version and DDA; mail via Teams (11-12), customers writing only to the shared box?; api/worker off `dw-edge`; iPhone push.
-- **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33; new flow 11-13 (`dw1-production` 17–22): Proterial owes contacts, mail templates, LME bands, PC stock, NOC records.
+- **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33; new flow 11-13 (`dw1-production` 17–22, conversation design first): Proterial owes contacts, mail templates, LME bands, PC stock, NOC records; sent-mail export.
 - **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement; scans by its vision, else PaddleOCR-VL/small CPU model + Tesseract boxes (11-12; Giang: Strata vision, WAF).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
