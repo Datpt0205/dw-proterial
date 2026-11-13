@@ -1,10 +1,13 @@
 {
-  "_comment": "M37-M40 in a DW1 run on the recorded model (tickets 29, 31).",
+  "_comment": "M37-M40 in a DW1 run on the recorded model (tickets 29, 31). M37's quantities (\"1.200 m\") are ambiguous since the hardcode audit's batch C (2026-11-13): the request settles no number notation, so both lines are incomplete until Sales types them, which the flow then does.",
   "cases": {
     "M37": {
       "lines": 2,
       "value_uncertain": 3,
-      "rfq_incomplete": [],
+      "rfq_incomplete": [
+        1,
+        2
+      ],
       "stated_targets": 0,
       "reading": "sales.rfq_extraction@1.0.0"
     },

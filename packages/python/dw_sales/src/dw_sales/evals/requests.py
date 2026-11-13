@@ -850,14 +850,21 @@ async def _flow(ctx: GraderContext, expected: dict[str, Any]) -> GradeResult:
         f for f in m37.findings if f.code is QuoteFindingCode.VALUE_UNCERTAIN and f.line_no == 1
     )
 
+    # The first value the model read on line 1, typed as it reads. Its
+    # quantity is not among them since the hardcode audit's batch C
+    # (2026-11-13): "1.200 m" settles no notation, so it waits for Sales as
+    # rfq_incomplete instead of as a value to confirm.
+    field = finding.flagged[0]
+    typed = m37.request.document.read_text(finding.line_no, field)
+
     async def confirm() -> None:
         await world.services.quote_commands.answer_finding(
             AN.context(),
             m37.case_id,
             f"value_uncertain:{finding.line_no}",
             case_version=m37.case_version,
-            field="quantity",
-            value="1200",
+            field=field,
+            value=typed,
         )
 
     # Not before An was served the mail the value was read from (ticket 29).
@@ -872,9 +879,9 @@ async def _flow(ctx: GraderContext, expected: dict[str, Any]) -> GradeResult:
     await confirm()
     after = world.quote(m37.case_id)
     confirmed = next(f for f in after.findings if f.key == finding.key).confirmed
-    if [c.field for c in confirmed] != ["quantity"]:
+    if [c.field for c in confirmed] != [field]:
         return GradeResult.fail("Sales could not confirm a value", got=got)
-    return GradeResult.ok(got=got, confirmed="M37 line 1 quantity")
+    return GradeResult.ok(got=got, confirmed=f"M37 line 1 {field}")
 
 
 GRADERS = {
