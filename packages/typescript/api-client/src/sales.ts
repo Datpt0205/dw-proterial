@@ -60,6 +60,7 @@ export type Words = SalesSchemas["Words"];
 /** Every currency the Sales API names (one enum in OpenAPI). */
 export type SalesCurrency = SalesSchemas["OrderCaseView"]["currency"];
 export type Artifact = SalesSchemas["ArtifactView"];
+export type SalesOrderExample = SalesSchemas["SalesOrderExampleView"];
 /**
  * The platform approval a case waits on. The decision is made there
  * (`ApiClient.decideApproval`), never on a Sales route.
@@ -1036,6 +1037,66 @@ export class SalesApi {
   ruleDraft(draftId: string) {
     return this.get<"/api/v1/sales/rules/drafts/{draft_id}">(
       `/api/v1/sales/rules/drafts/${enc(draftId)}`,
+    );
+  }
+
+  /**
+   * Uploads a customer's worked example (202, ticket 38): its PO and the
+   * SalesOrder file the PIC made from it. The worker reads both in the
+   * reader sandbox, asks the model for the customer's rules and replays them
+   * on the PO cell by cell.
+   */
+  requestSalesOrderExample(
+    customerCode: string,
+    body: Body<"/api/v1/sales/customers/{customer_code}/salesorder-examples">,
+    key: string,
+  ): Promise<
+    Accepted<"/api/v1/sales/customers/{customer_code}/salesorder-examples">
+  > {
+    return this.client.request(
+      "POST",
+      `/api/v1/sales/customers/${enc(customerCode)}/salesorder-examples`,
+      shaped<
+        Accepted<"/api/v1/sales/customers/{customer_code}/salesorder-examples">
+      >(),
+      { body, idempotencyKey: key },
+    );
+  }
+
+  /** The customer's worked examples, newest first. */
+  salesOrderExamples(customerCode: string) {
+    return this.get<"/api/v1/sales/customers/{customer_code}/salesorder-examples">(
+      `/api/v1/sales/customers/${enc(customerCode)}/salesorder-examples`,
+    );
+  }
+
+  salesOrderExample(exampleId: string) {
+    return this.get<"/api/v1/sales/salesorder-examples/{example_id}">(
+      `/api/v1/sales/salesorder-examples/${enc(exampleId)}`,
+    );
+  }
+
+  /** The example a rule version was sent from: what its approval shows. */
+  salesOrderExampleOfVersion(versionId: string) {
+    return this.get<"/api/v1/sales/salesorder-examples/by-version/{version_id}">(
+      `/api/v1/sales/salesorder-examples/by-version/${enc(versionId)}`,
+    );
+  }
+
+  /**
+   * "Gửi duyệt": proposes the example's rules as the tenant's next version,
+   * refused (409) unless the replay matched. The head decides it on
+   * `/approvals`, never the person who sent it.
+   */
+  submitSalesOrderExample(
+    exampleId: string,
+    body: Body<"/api/v1/sales/salesorder-examples/{example_id}/submissions">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/salesorder-examples/{example_id}/submissions">(
+      `/api/v1/sales/salesorder-examples/${enc(exampleId)}/submissions`,
+      body,
+      key,
     );
   }
 }

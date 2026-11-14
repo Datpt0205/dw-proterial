@@ -194,6 +194,8 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "lme_band_mismatch",
                     "moq_violation",
                     "pack_multiple",
+                    "reel_length_mismatch",
+                    "spec_mismatch",
                 ),
             ),
             _step(StepId.O7),
@@ -580,6 +582,10 @@ LOCKED: Final[Mapping[Placement, LockReason]] = MappingProxyType(
 
 _VERSION = "the version's own fields: the editor asks for them with every proposal"
 _COPY = "copy and templates: placed on steps in slice 2, edited on /sales/rules"
+_LEARNED = (
+    "each customer's own rules: learned from a worked example on the customer's row of"
+    " the master data and approved there, never edited on a page (ticket 38)"
+)
 
 # Fields of an overridable key this page leaves out on purpose, with why.
 NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
@@ -612,6 +618,11 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         Placement(RuleKey.HANDOFFS, "line"): _COPY,
         Placement(RuleKey.HANDOFFS, "quote"): _COPY,
         Placement(RuleKey.HANDOFFS, "templates"): _COPY,
+        **{
+            Placement(RuleKey.SALESORDER_RULES, path): _VERSION
+            for path in ("schema_version", "policy_id", "policy_version", "mock", "description")
+        },
+        Placement(RuleKey.SALESORDER_RULES, "customers"): _LEARNED,
     }
 )
 

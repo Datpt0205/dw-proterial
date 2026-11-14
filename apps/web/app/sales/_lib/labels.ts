@@ -183,6 +183,8 @@ export const FINDING_CODE = {
   lme_band_mismatch: "Sai mức LME",
   moq_violation: "Dưới MOQ",
   pack_multiple: "Không chẵn quy cách đóng gói",
+  reel_length_mismatch: "Sai chiều dài mỗi cuộn",
+  spec_mismatch: "Sai số spec",
   line_total_mismatch: "Tổng dòng không khớp hoặc thiếu dòng",
   value_uncertain: "Giá trị đọc chưa chắc chắn",
   customer_unknown: "Chưa xác định được khách hàng",

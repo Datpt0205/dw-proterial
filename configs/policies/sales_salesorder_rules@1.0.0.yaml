@@ -1,0 +1,17 @@
+schema_version: "1.0"
+policy_id: sales_salesorder_rules
+policy_version: "1.0.0"
+
+# Each customer's own SalesOrder rules (ticket 38, dw_sales ADR 0013): per
+# column of the Bravo upload file, where its value starts and the steps it
+# goes through, from a closed set code applies. A customer's rules are
+# learned from one worked example (the PO and the PIC's SalesOrder file),
+# proven by replaying them on that PO cell by cell, and approved by the head,
+# never by the person who proposed them; they arrive as the tenant's own
+# version of this file, never as an edit to it.
+#
+# The platform knows no customer: every customer's file follows the tenant's
+# upload layout (sales_bravo_upload) until its own rules are approved.
+mock: false
+description: "Không có quy tắc riêng của khách nào: tệp SalesOrder theo mẫu tệp nhập Bravo."
+customers: {}

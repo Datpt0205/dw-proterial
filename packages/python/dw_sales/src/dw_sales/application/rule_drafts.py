@@ -92,7 +92,15 @@ from dw_sales.application.rule_words import (
     leaf_paths,
 )
 from dw_sales.application.rule_words import PROMPT_TOKENS as WORDS_PROMPT_TOKENS
-from dw_sales.application.rules import DRAFTABLE, PRICE_BEARING, Resolved, RuleKey, readable
+from dw_sales.application.rules import (
+    DRAFTABLE,
+    LEARNED_FROM_EXAMPLE,
+    LEARNED_ONLY,
+    PRICE_BEARING,
+    Resolved,
+    RuleKey,
+    readable,
+)
 from dw_sales.application.source import SheetGrid
 from dw_sales.application.template_reading import (
     MAX_SHEETS,
@@ -373,6 +381,13 @@ class RuleDraftService:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         if not readable(self.gate, context, key):
             await self.gate.require(context, SalesScopes.PRICE_READ, resource_type=_RESOURCE)
+        if key in LEARNED_ONLY:
+            # Learned from a worked example and proven by replay (ticket 38):
+            # a draft in words would be a proposal the rules refuse anyway.
+            raise DomainError(
+                "quy tắc SalesOrder của khách chỉ học từ một ví dụ",
+                details={"rule": LEARNED_FROM_EXAMPLE, "key": key.value},
+            )
         words = request.strip()
         if not words:
             raise DomainError("hãy viết điều cần đổi", details={"rule": "request_empty"})

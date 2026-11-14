@@ -55,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.6.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.11.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -75,6 +75,10 @@ NOT_RAISED_BY_A_MESSAGE = {
     "price_floor_unknown",
     "price_basis_mismatch",
     "above_target_price",
+    # Ticket 38's "hk & cable" checks: no mock PO line states a reel or a
+    # spec its item does not hold; `test_order_checks.py` raises both.
+    "reel_length_mismatch",
+    "spec_mismatch",
 }
 # A message no document, thread or model classified: a person reads it
 # (`other`). No keyword table routes one as a complaint, a sample request or a

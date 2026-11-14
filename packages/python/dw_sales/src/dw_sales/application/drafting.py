@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Final, Protocol
 from zoneinfo import ZoneInfo
@@ -37,6 +37,11 @@ from dw_sales.application.artifact_content import (
     time_text,
 )
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.salesorder_rules import (
+    CustomerSalesOrderRules,
+    Lookups,
+    SalesOrderRules,
+)
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Customer, Language
 
@@ -54,13 +59,15 @@ class ArtifactCopy:
     release manifest: the drafts' words, the sheets' words, the upload
     layout, Design's mailboxes (`sales_quote_rules`, their owner), and the
     time zone a document's times are printed in (`working_hours.time_zone`
-    of `sales_followups`, its owner)."""
+    of `sales_followups`, its owner), and the customers' own SalesOrder
+    rules the upload file applies (ticket 38)."""
 
     emails: SalesEmailCopy
     documents: SalesDocumentCopy
     upload: BravoUploadLayout
     design_mailboxes: tuple[str, ...]
     zone: ZoneInfo
+    salesorder: SalesOrderRules
 
 
 class ArtifactCopyPort(Protocol):
@@ -141,6 +148,9 @@ class Drafting[CaseT]:
     # The signed paper copy of a quote, scanned and uploaded, when it has one.
     signed_copy: bytes | None = None
     deployed: bool = False
+    # The master data the customer's SalesOrder rules look up (ticket 38):
+    # read for a customer whose rules name a lookup, empty otherwise.
+    lookups: Lookups = field(default_factory=Lookups)
 
     def _real[C: (SalesEmailCopy, SalesDocumentCopy, BravoUploadLayout)](self, copy: C) -> C:
         if self.deployed and copy.mock:
@@ -160,6 +170,11 @@ class Drafting[CaseT]:
     @property
     def upload(self) -> BravoUploadLayout:
         return self._real(self.copy.upload)
+
+    @property
+    def customer_rules(self) -> CustomerSalesOrderRules | None:
+        """The customer's own SalesOrder rules, where the tenant approved some."""
+        return self.copy.salesorder.of(self.customer.code)
 
     @property
     def language(self) -> Language:

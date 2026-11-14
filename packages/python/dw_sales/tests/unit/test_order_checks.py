@@ -65,7 +65,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 POLICY = Path(__file__).resolve().parents[5] / "configs" / "policies"
-SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.6.0.yaml")
+SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.11.0.yaml")
 PO_DATE = date(2026, 9, 24)
 # 2026-09-24 20:00 UTC is already 25 September in Hanoi.
 RECEIVED = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
@@ -212,7 +212,10 @@ def _codes(check: Any) -> list[tuple[str, str | None, str | None]]:
 def test_the_shipped_rules_stamp_their_version_and_severity_on_a_finding() -> None:
     finding = SHIPPED.finding(FindingCode.REVISED_PO)
 
-    assert (finding.rule_version, finding.severity) == ("sales_order_rules@1.6.0", Severity.WARNING)
+    assert (finding.rule_version, finding.severity) == (
+        "sales_order_rules@1.11.0",
+        Severity.WARNING,
+    )
     assert SHIPPED.cross_check_required is True
     assert SHIPPED.export_control_mode == "warn"
 
@@ -998,3 +1001,56 @@ def test_a_known_pack_is_still_checked_beside_an_unknown_moq() -> None:
     assert ("pack_multiple", "300", "301") in _codes(check)
     assert "pack" in check.line.basis.checks_run
     assert "moq" not in check.line.basis.checks_run
+
+
+# ------------------------------------ the "hk & cable" checks (ticket 38) --
+
+
+def _stated(check: Any, code: str) -> list[tuple[str, str | None, str | None]]:
+    return [found for found in _codes(check) if found[0] == code]
+
+
+def test_a_reel_length_other_than_the_items_raises_reel_length_mismatch() -> None:
+    """ "610X12" is twelve reels of 610 m: the length per reel is the item's
+    standard length or the factory winds another reel. The quantity is a
+    whole number of packs, so `pack_multiple` alone would not see it."""
+    item = _item(pack_multiple="305")
+    broken = _run(_po_line(quantity=Decimal(7320), description="610X12"), mapped=_exact(item))
+    kept = _run(_po_line(quantity=Decimal(7320), description="305X24"), mapped=_exact(item))
+
+    assert _stated(broken, "reel_length_mismatch") == [("reel_length_mismatch", "305", "610")]
+    assert not _stated(broken, "pack_multiple")
+    assert _stated(kept, "reel_length_mismatch") == []
+    assert "reel_length" in broken.line.basis.checks_run
+    assert "reel_length" in kept.line.basis.checks_run
+
+
+def test_a_spec_number_other_than_the_items_raises_spec_mismatch() -> None:
+    """The spec the PO prints against the item master's: DW1's own attribute
+    or one of the numbers Bravo's specification column lists."""
+    item = _item(specification="DS26-137, DS26-140")
+    broken = _run(_po_line(description="SPEC SP-9999"), mapped=_exact(item))
+    by_attribute = _run(_po_line(description="SPEC SP-5406"), mapped=_exact(item))
+    by_bravo = _run(_po_line(description="SPEC ds26-140"), mapped=_exact(item))
+
+    assert _stated(broken, "spec_mismatch") == [
+        ("spec_mismatch", "SP-5406, DS26-137, DS26-140", "SP-9999")
+    ]
+    assert _stated(by_attribute, "spec_mismatch") == []
+    assert _stated(by_bravo, "spec_mismatch") == []
+    assert "spec" in broken.line.basis.checks_run
+
+
+def test_what_a_line_does_not_state_or_the_item_does_not_hold_is_not_checked() -> None:
+    """No statement, an unread description, or an item with no standard
+    length or spec: the check does not run and the coverage says so."""
+    item = _item(
+        pack_multiple=None, attributes={**_item().attributes.model_dump(), "spec_no": None}
+    )
+    unread = _run(_po_line(description="610X12 PLEASE HURRY"), mapped=_exact())
+    unknown = _run(_po_line(description="610X12 SPEC SP-9999"), mapped=_exact(item))
+    silent = _run(_po_line(description=""), mapped=_exact())
+
+    for check in (unread, unknown, silent):
+        assert not {"reel_length_mismatch", "spec_mismatch"} & {c for c, _, _ in _codes(check)}
+        assert not {"reel_length", "spec"} & set(check.line.basis.checks_run)

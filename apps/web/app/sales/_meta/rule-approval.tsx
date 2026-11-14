@@ -7,6 +7,7 @@ import { LoadError } from "../../../components/load-error";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { salesApi } from "../_lib/api";
 import {
+  LEARNED_RULES,
   RULE_KEY,
   RULE_STATUS,
   startOptions,
@@ -15,6 +16,8 @@ import {
 import { readSchema, type JsonSchema } from "../_lib/rule-schema";
 import { useResource } from "../_lib/use-resource";
 import { RuleDiffView } from "../_components/rule-diff-view";
+import { SalesOrderReplay } from "../_components/salesorder-replay";
+import { changedCustomers } from "../_lib/salesorder-examples";
 import { SCOPE } from "../_components/sales-frame";
 
 function isRuleKey(value: unknown): value is RuleKey {
@@ -84,14 +87,54 @@ export function RuleApprovalChanges({ approval }: { approval: Approval }) {
       <Typography.Text strong>
         {RULE_KEY[key]}: thay đổi so với bản đang áp dụng
       </Typography.Text>
-      <RuleDiffView
-        ruleKey={key}
-        root={readSchema(schema.json_schema as unknown as JsonSchema)}
-        before={inForce.document}
-        after={version.document}
-        beforeRef={inForce.ref}
-        afterRef={version.ref}
-      />
+      {key in LEARNED_RULES ? (
+        // Learned rules are never edited in a form (ticket 38): what changes
+        // is a customer's rules, said in words, and the replay it was sent
+        // from is what the head decides on.
+        <>
+          <Typography.Text>
+            Khách có quy tắc mới hoặc đổi:{" "}
+            {changedCustomers(inForce.document, version.document).join(", ") ||
+              "không"}
+          </Typography.Text>
+          <LearnedFrom versionId={versionId} />
+        </>
+      ) : (
+        <RuleDiffView
+          ruleKey={key}
+          root={readSchema(schema.json_schema as unknown as JsonSchema)}
+          before={inForce.document}
+          after={version.document}
+          beforeRef={inForce.ref}
+          afterRef={version.ref}
+        />
+      )}
+    </Flex>
+  );
+}
+
+/**
+ * The worked example a learned version was sent from, and its replay
+ * (ticket 38): what the head decides on, beside the rules themselves.
+ */
+function LearnedFrom({ versionId }: { versionId: string }) {
+  const example = useResource(
+    `sales/salesorder-examples/by-version/${versionId}`,
+    useCallback(
+      () => salesApi().salesOrderExampleOfVersion(versionId),
+      [versionId],
+    ),
+  );
+  if (example.error)
+    return <LoadError error={example.error} onRetry={example.reload} compact />;
+  if (!example.data) return <Skeleton active paragraph={{ rows: 3 }} />;
+  return (
+    <Flex vertical gap="small">
+      <Typography.Text strong>
+        Chạy lại trên ví dụ của khách {example.data.customer_code} (
+        {example.data.po_file_name})
+      </Typography.Text>
+      <SalesOrderReplay example={example.data} />
     </Flex>
   );
 }

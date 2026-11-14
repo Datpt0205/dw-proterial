@@ -68,6 +68,10 @@ from dw_sales.application.runs import (
     Dw1RunsPort,
     PendingDecisionsPort,
 )
+from dw_sales.application.salesorder_learning import (
+    ExampleUnitOfWorkFactory,
+    SalesOrderExamples,
+)
 from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
@@ -105,6 +109,8 @@ class SalesServices:
     process_settings: ProcessSettingsService
     # A rule version drafted from the company's own file ("Tạo từ tệp mẫu").
     rule_drafts: RuleDraftService
+    # A customer's SalesOrder rules learned from a worked example (ticket 38).
+    salesorder_examples: SalesOrderExamples
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
     # A finding explained in words by the model, on request (AI item 12).
@@ -166,6 +172,8 @@ def assemble(
     catalog_uow: CatalogUnitOfWorkFactory,
     templates: CatalogTemplatePort,
     draft_uow: RuleDraftUnitOfWorkFactory,
+    # Where a worked example's pair is kept until learned (ticket 38).
+    example_uow: ExampleUnitOfWorkFactory,
     readiness: ModelReadiness,
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
@@ -191,6 +199,7 @@ def assemble(
     gate = Gate(authorization)
     queue = ProcessingService(uow, gate, clock, ids, inbox)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
+    rules = SalesRulesService(uow, gate, book, clock, ids, directory, readiness)
     processing = InboxProcessing(
         uow,
         gate,
@@ -242,11 +251,12 @@ def assemble(
         layouts=LayoutService(
             uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks, intake
         ),
-        rules=SalesRulesService(uow, gate, book, clock, ids, directory, readiness),
+        rules=rules,
         process_settings=ProcessSettingsService(
             gate, intake.rules, readiness, roles, step_activity, clock
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
+        salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         finding_explanations=FindingExplanations(
             uow, gate, catalog, one_call, clock, ids, worker_id, worker_version

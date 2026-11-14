@@ -50,7 +50,7 @@ from dw_sales.application.process_settings import (
     model_steps,
     within,
 )
-from dw_sales.application.rules import OVERRIDABLE, PRICE_BEARING, RuleKey
+from dw_sales.application.rules import LEARNED_ONLY, OVERRIDABLE, PRICE_BEARING, RuleKey
 from dw_sales.domain import orders, quotes
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind
@@ -413,7 +413,9 @@ async def test_a_caller_without_price_read_is_served_no_price_bearing_key() -> N
     assert [s.step_id for s in hidden.steps] == [s.value for s in StepId]
     # The search can fail: a PIC, who reads prices, is served all three.
     shown = (await _view(GIANG)).model_dump_json()
-    assert all(key.value in shown for key in PRICE_BEARING)
+    # A key learned from a worked example (ticket 38) is on no step of the
+    # page: it is learned on the customer's row of the master data.
+    assert all(key.value in shown for key in PRICE_BEARING - LEARNED_ONLY)
     assert "price.relative_tolerance" in shown
 
 

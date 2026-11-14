@@ -2587,6 +2587,117 @@
         "title": "CellChange",
         "type": "object"
       },
+      "CellDifference": {
+        "additionalProperties": false,
+        "description": "One cell the replay did not reproduce: where (the PIC's file's cell),\nwhat was expected and what came out, and what produced it (the\ncustomer's rule for the column, its step that could not apply, or the\nlayout). Carries the cells' values: price-bearing, as the key is.",
+        "properties": {
+          "cell": {
+            "maxLength": 16,
+            "title": "Cell",
+            "type": "string"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{1,3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "got": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Got"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "enum": [
+                  "value_differs",
+                  "row_missing",
+                  "row_extra",
+                  "row_refused"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "value_missing",
+                  "not_text",
+                  "not_a_number",
+                  "not_a_date",
+                  "lookup_missing"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Problem"
+          },
+          "source": {
+            "enum": [
+              "layout",
+              "rule",
+              "row"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "cell",
+          "source",
+          "problem"
+        ],
+        "title": "CellDifference",
+        "type": "object"
+      },
       "ChangedRow": {
         "additionalProperties": false,
         "properties": {
@@ -2715,6 +2826,122 @@
         ],
         "title": "CodeUnavailable",
         "type": "string"
+      },
+      "ColumnRule": {
+        "additionalProperties": false,
+        "description": "One column of the upload file, by its letter in the tenant's layout:\nwhere its value starts (a field of the normal reading, or the customer's\nrecord; none only where the first step is a constant) and the steps it\nthen goes through, in order.",
+        "properties": {
+          "column": {
+            "pattern": "^[A-Z]{1,3}$",
+            "title": "Column",
+            "type": "string"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "order_type",
+                  "delivery_term",
+                  "delivery_mode",
+                  "destination",
+                  "shipment_type"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "enum": [
+                  "row_no",
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "received_date",
+                  "currency",
+                  "usd_rate",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "concat": "#/components/schemas/Concat",
+                  "constant": "#/components/schemas/Constant",
+                  "copy": "#/components/schemas/Copy",
+                  "cut": "#/components/schemas/Cut",
+                  "lookup": "#/components/schemas/Lookup",
+                  "multiply": "#/components/schemas/Multiply",
+                  "round": "#/components/schemas/Round",
+                  "shift_days": "#/components/schemas/ShiftDays",
+                  "unit_factor": "#/components/schemas/UnitFactor"
+                },
+                "propertyName": "step"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Copy"
+                },
+                {
+                  "$ref": "#/components/schemas/Constant"
+                },
+                {
+                  "$ref": "#/components/schemas/Lookup"
+                },
+                {
+                  "$ref": "#/components/schemas/UnitFactor"
+                },
+                {
+                  "$ref": "#/components/schemas/ShiftDays"
+                },
+                {
+                  "$ref": "#/components/schemas/Round"
+                },
+                {
+                  "$ref": "#/components/schemas/Cut"
+                },
+                {
+                  "$ref": "#/components/schemas/Concat"
+                },
+                {
+                  "$ref": "#/components/schemas/Multiply"
+                }
+              ]
+            },
+            "maxItems": 8,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "column"
+        ],
+        "title": "ColumnRule",
+        "type": "object"
       },
       "ComparedLine": {
         "additionalProperties": false,
@@ -2846,6 +3073,66 @@
           "approved_limit"
         ],
         "title": "ComparisonView",
+        "type": "object"
+      },
+      "Concat": {
+        "additionalProperties": false,
+        "description": "Appends the values of other fields, each after the separator.",
+        "properties": {
+          "separator": {
+            "default": "",
+            "enum": [
+              "",
+              " ",
+              "-",
+              "/",
+              "_",
+              ".",
+              ", "
+            ],
+            "title": "Separator",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "enum": [
+                "row_no",
+                "customer_code",
+                "po_no",
+                "revision",
+                "po_date",
+                "received_date",
+                "currency",
+                "usd_rate",
+                "line_no",
+                "customer_item_code",
+                "prv_code",
+                "description",
+                "quantity",
+                "uom",
+                "unit_price",
+                "amount",
+                "requested_date",
+                "suggested_delivery_date"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "step": {
+            "const": "concat",
+            "default": "concat",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "Concat",
         "type": "object"
       },
       "ConfirmBody": {
@@ -3029,6 +3316,30 @@
         "title": "ConfirmedLine",
         "type": "object"
       },
+      "Constant": {
+        "additionalProperties": false,
+        "description": "The value is this fixed text.",
+        "properties": {
+          "step": {
+            "const": "constant",
+            "default": "constant",
+            "title": "Step",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "Constant",
+        "type": "object"
+      },
       "ConvertEntryView": {
         "properties": {
           "customer_code": {
@@ -3088,6 +3399,20 @@
           "kind"
         ],
         "title": "CopperBasisView",
+        "type": "object"
+      },
+      "Copy": {
+        "additionalProperties": false,
+        "description": "Keeps the value as it is.",
+        "properties": {
+          "step": {
+            "const": "copy",
+            "default": "copy",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "title": "Copy",
         "type": "object"
       },
       "CorrectionBody": {
@@ -3444,6 +3769,26 @@
         "title": "CustomerReminderView",
         "type": "object"
       },
+      "CustomerSalesOrderRules": {
+        "additionalProperties": false,
+        "description": "One customer's columns: each named once.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnRule"
+            },
+            "maxItems": 120,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "CustomerSalesOrderRules",
+        "type": "object"
+      },
       "CustomerView": {
         "properties": {
           "code": {
@@ -3530,6 +3875,46 @@
           "denial_list_checked_on"
         ],
         "title": "CustomerView",
+        "type": "object"
+      },
+      "Cut": {
+        "additionalProperties": false,
+        "description": "Keeps the characters from ``start`` to before ``end`` (from 0; a\nnegative number counts from the end; none: the start or the end).",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": -200.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": -200.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "step": {
+            "const": "cut",
+            "default": "cut",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "title": "Cut",
         "type": "object"
       },
       "DayStepView": {
@@ -4897,6 +5282,46 @@
         "title": "EvidenceView",
         "type": "object"
       },
+      "ExampleFileBody": {
+        "additionalProperties": false,
+        "description": "One file of a worked example (ticket 38): its name and its bytes,\nbase64, decoded here and never opened: the worker reads it in the reader\nsandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 6990508,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "ExampleFileBody",
+        "type": "object"
+      },
+      "ExampleSubmissionBody": {
+        "additionalProperties": false,
+        "description": "\"Gửi duyệt\": the number the new version of the customers' rules takes.",
+        "properties": {
+          "version": {
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "ExampleSubmissionBody",
+        "type": "object"
+      },
       "ExportMapping": {
         "additionalProperties": false,
         "description": "A customer portal's export (ticket 18): the title of each column read,\nthe column saying whether a row is a firm order, and the values of it\nthat mean firm. Every other row is a forecast, counted and never ordered.\nThe export prints no currency, so the person mapping it states the one\nthe customer orders in; each PO read with it has that value flagged\n`not_printed`, for Sales to confirm.",
@@ -5218,7 +5643,9 @@
           "customer_temporary",
           "sender_unverified",
           "legacy_encoding",
-          "requested_date_missing"
+          "requested_date_missing",
+          "reel_length_mismatch",
+          "spec_mismatch"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -7375,6 +7802,84 @@
         "title": "LayoutView",
         "type": "object"
       },
+      "LearnProblem": {
+        "additionalProperties": false,
+        "description": "Why a proposal was refused: a code, the column, a path. Never a word\nof the model's, never a cell's value.",
+        "properties": {
+          "code": {
+            "enum": [
+              "header_differs",
+              "column_outside_layout",
+              "rule_invalid",
+              "constant_not_alone",
+              "constant_not_in_file",
+              "constant_from_po",
+              "model_unavailable",
+              "model_not_configured",
+              "model_quota"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{1,3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "LearnProblem",
+        "type": "object"
+      },
+      "LeftBlank": {
+        "additionalProperties": false,
+        "description": "A column neither the layout nor the rules fill: left for the person\nwho pastes, as in the file a case draws. Not compared; how many rows of\nthe PIC's file fill it is shown.",
+        "properties": {
+          "column": {
+            "pattern": "^[A-Z]{1,3}$",
+            "title": "Column",
+            "type": "string"
+          },
+          "filled_rows": {
+            "minimum": 0.0,
+            "title": "Filled Rows",
+            "type": "integer"
+          },
+          "header": {
+            "maxLength": 200,
+            "title": "Header",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "header",
+          "filled_rows"
+        ],
+        "title": "LeftBlank",
+        "type": "object"
+      },
       "LineBasisView": {
         "properties": {
           "candidates": {
@@ -7900,6 +8405,67 @@
           "enabled"
         ],
         "title": "LoginAccountView",
+        "type": "object"
+      },
+      "Lookup": {
+        "additionalProperties": false,
+        "description": "The value is what the master data's table holds for it, or for the\nfield ``key`` where one is named.",
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "enum": [
+                  "row_no",
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "received_date",
+                  "currency",
+                  "usd_rate",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "step": {
+            "const": "lookup",
+            "default": "lookup",
+            "title": "Step",
+            "type": "string"
+          },
+          "table": {
+            "enum": [
+              "convert_list",
+              "item_name",
+              "item_specification",
+              "item_standard_length",
+              "item_unit",
+              "item_category",
+              "item_colour"
+            ],
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "Lookup",
         "type": "object"
       },
       "MappingBody": {
@@ -9036,6 +9602,47 @@
         ],
         "title": "ModelStep",
         "type": "string"
+      },
+      "Multiply": {
+        "additionalProperties": false,
+        "description": "Multiplies the value by another field's.",
+        "properties": {
+          "source": {
+            "enum": [
+              "row_no",
+              "customer_code",
+              "po_no",
+              "revision",
+              "po_date",
+              "received_date",
+              "currency",
+              "usd_rate",
+              "line_no",
+              "customer_item_code",
+              "prv_code",
+              "description",
+              "quantity",
+              "uom",
+              "unit_price",
+              "amount",
+              "requested_date",
+              "suggested_delivery_date"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "step": {
+            "const": "multiply",
+            "default": "multiply",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "Multiply",
+        "type": "object"
       },
       "MyRequest": {
         "additionalProperties": false,
@@ -14623,6 +15230,62 @@
         "title": "RenderedView",
         "type": "object"
       },
+      "Replay": {
+        "additionalProperties": false,
+        "description": "The rules applied to the example's PO and compared with the PIC's file.",
+        "properties": {
+          "cells_compared": {
+            "minimum": 0.0,
+            "title": "Cells Compared",
+            "type": "integer"
+          },
+          "differences": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CellDifference"
+            },
+            "maxItems": 200,
+            "title": "Differences",
+            "type": "array"
+          },
+          "differences_total": {
+            "minimum": 0.0,
+            "title": "Differences Total",
+            "type": "integer"
+          },
+          "layout_ref": {
+            "title": "Layout Ref",
+            "type": "string"
+          },
+          "left_blank": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LeftBlank"
+            },
+            "title": "Left Blank",
+            "type": "array"
+          },
+          "rows_expected": {
+            "minimum": 0.0,
+            "title": "Rows Expected",
+            "type": "integer"
+          },
+          "rows_got": {
+            "minimum": 0.0,
+            "title": "Rows Got",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "layout_ref",
+          "rows_expected",
+          "rows_got",
+          "cells_compared",
+          "differences_total"
+        ],
+        "title": "Replay",
+        "type": "object"
+      },
       "ReplyItem": {
         "description": "A mail that answers one of the case's RFQs, as the offer card lists it.",
         "properties": {
@@ -15298,6 +15961,39 @@
         "title": "RoleView",
         "type": "object"
       },
+      "Round": {
+        "additionalProperties": false,
+        "description": "Rounds a number to ``places`` decimals.",
+        "properties": {
+          "mode": {
+            "default": "half_up",
+            "enum": [
+              "half_up",
+              "down",
+              "up"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "places": {
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Places",
+            "type": "integer"
+          },
+          "step": {
+            "const": "round",
+            "default": "round",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "places"
+        ],
+        "title": "Round",
+        "type": "object"
+      },
       "RuleChange": {
         "description": "What a proposal answers, and what the idempotency store keeps: ids and\nthe status, never the document (it holds the company's limits).",
         "properties": {
@@ -15537,7 +16233,8 @@
           "sales_documents",
           "sales_bravo_upload",
           "sales_handoffs",
-          "sales_followups"
+          "sales_followups",
+          "sales_salesorder_rules"
         ],
         "title": "RuleKey",
         "type": "string"
@@ -15888,6 +16585,175 @@
           "release_manifest_ref"
         ],
         "title": "RunView",
+        "type": "object"
+      },
+      "SalesOrderExampleBody": {
+        "additionalProperties": false,
+        "description": "A customer's worked example: its PO, the SalesOrder file the PIC made\nfrom it, and the day the PO came in. The customer is the path's, looked\nup in the caller's own tenant; who uploads is the caller.",
+        "properties": {
+          "po": {
+            "$ref": "#/components/schemas/ExampleFileBody"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "salesorder": {
+            "$ref": "#/components/schemas/ExampleFileBody"
+          }
+        },
+        "required": [
+          "received_on",
+          "po",
+          "salesorder"
+        ],
+        "title": "SalesOrderExampleBody",
+        "type": "object"
+      },
+      "SalesOrderExampleView": {
+        "description": "An example as the customer's screen and the approval read it.",
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "example_id": {
+            "format": "uuid",
+            "title": "Example Id",
+            "type": "string"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "po_file_name": {
+            "title": "Po File Name",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/LearnProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "replay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Replay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "format": "uuid",
+            "title": "Requested By",
+            "type": "string"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomerSalesOrderRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salesorder_file_name": {
+            "title": "Salesorder File Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "replayed",
+              "refused",
+              "unavailable",
+              "failed",
+              "submitted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submittable": {
+            "title": "Submittable",
+            "type": "boolean"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "example_id",
+          "customer_code",
+          "status",
+          "requested_by",
+          "requested_at",
+          "received_on",
+          "po_file_name",
+          "salesorder_file_name",
+          "rules",
+          "replay",
+          "submittable",
+          "problems",
+          "error",
+          "prompt_ref",
+          "model_profile",
+          "version_id"
+        ],
+        "title": "SalesOrderExampleView",
         "type": "object"
       },
       "ScreeningRow": {
@@ -16369,6 +17235,29 @@
           "sheets"
         ],
         "title": "SheetGrid",
+        "type": "object"
+      },
+      "ShiftDays": {
+        "additionalProperties": false,
+        "description": "Moves a date by whole calendar days.",
+        "properties": {
+          "days": {
+            "maximum": 366.0,
+            "minimum": -366.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "step": {
+            "const": "shift_days",
+            "default": "shift_days",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "ShiftDays",
         "type": "object"
       },
       "SignedCopyBody": {
@@ -18429,6 +19318,44 @@
           "at"
         ],
         "title": "UnappliedDecisionView",
+        "type": "object"
+      },
+      "UnitFactor": {
+        "additionalProperties": false,
+        "description": "Multiplies the value by how many ``to`` make one ``from``.",
+        "properties": {
+          "from": {
+            "enum": [
+              "mm",
+              "cm",
+              "m",
+              "km"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "step": {
+            "const": "unit_factor",
+            "default": "unit_factor",
+            "title": "Step",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "mm",
+              "cm",
+              "m",
+              "km"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "UnitFactor",
         "type": "object"
       },
       "UnopenedValue": {
@@ -24849,6 +25776,122 @@
         ]
       }
     },
+    "/api/v1/sales/customers/{customer_code}/salesorder-examples": {
+      "get": {
+        "operationId": "salesorder_examples_api_v1_sales_customers__customer_code__salesorder_examples_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SalesOrderExampleView"
+                  },
+                  "title": "Response Salesorder Examples Api V1 Sales Customers  Customer Code  Salesorder Examples Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Salesorder Examples",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "request_salesorder_example_api_v1_sales_customers__customer_code__salesorder_examples_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrderExampleBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderExampleView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Salesorder Example",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/inbox": {
       "get": {
         "operationId": "inbox_api_v1_sales_inbox_get",
@@ -30223,6 +31266,163 @@
           }
         },
         "summary": "Propose Rules",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/salesorder-examples/by-version/{version_id}": {
+      "get": {
+        "operationId": "salesorder_example_of_version_api_v1_sales_salesorder_examples_by_version__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderExampleView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Salesorder Example Of Version",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/salesorder-examples/{example_id}": {
+      "get": {
+        "operationId": "salesorder_example_api_v1_sales_salesorder_examples__example_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Example Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderExampleView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Salesorder Example",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/salesorder-examples/{example_id}/submissions": {
+      "post": {
+        "operationId": "submit_salesorder_example_api_v1_sales_salesorder_examples__example_id__submissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Example Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExampleSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleVersionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Salesorder Example",
         "tags": [
           "sales"
         ]

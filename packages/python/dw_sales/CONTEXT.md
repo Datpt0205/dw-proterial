@@ -283,6 +283,23 @@ API and the plan use the English terms. The spec is
   source: a value code computes from the case, a value of the customer's
   record, a fixed text, or none (left blank for the person). DW1 makes it;
   a person pastes it. Was "Bravo upload file" while the layout was a mock.
+- **Customer's SalesOrder rules** (Quy tắc SalesOrder của khách,
+  `sales_salesorder_rules`): per customer, the columns of the paste sheet
+  that differ from the tenant's layout, each a source (a field of the
+  normal reading or a value of the customer's record) and steps from a
+  closed set (copy, constant, lookup, unit factor, shift days, round, cut,
+  concat, multiply). A tenant rule version, learned only from a worked
+  example whose replay matched, approved by the head, never the proposer;
+  then applied by code to every PO of that customer (dw_sales ADR 0013).
+- **Worked example** (Ví dụ mẫu): one customer's PO and the paste sheet the
+  PIC made from it, with the day the PO came in, uploaded on the customer's
+  row of the master data to learn its rules from.
+- **Replay** (Chạy lại): the rules applied to the worked example's PO and
+  compared with the PIC's file cell by cell (numbers by value, dates by
+  day, text trimmed); each difference names the cell, what was expected,
+  what came out and the rule. Only a replay with no difference may be sent
+  for approval. A column nothing fills is left for the person who pastes,
+  shown with how many rows the PIC filled, not compared.
 - **SO number** (SO order): Bravo's number for a sales order, `SO` + yymm +
   sequence (`SO2611-000161`); one per customer PO as far as seen. Kept on
   the order case as `bravo_so_no`.
@@ -479,6 +496,8 @@ sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử
 | `lme_band_mismatch`        | Sai mức LME                          |
 | `moq_violation`            | Dưới MOQ                             |
 | `pack_multiple`            | Không chẵn quy cách đóng gói         |
+| `reel_length_mismatch`     | Sai chiều dài mỗi cuộn               |
+| `spec_mismatch`            | Sai số spec                          |
 | `line_total_mismatch`      | Tổng dòng không khớp hoặc thiếu dòng |
 | `value_uncertain`          | Giá trị đọc chưa chắc chắn           |
 | `customer_unknown`         | Chưa xác định được khách hàng        |

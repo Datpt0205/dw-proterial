@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
@@ -24,7 +24,6 @@ from dw_sales.application.artifact_content import (
     DocumentTemplate,
     EmailTemplate,
     Sheet,
-    UploadColumn,
     UploadField,
     Value,
     Workbook,
@@ -35,18 +34,22 @@ from dw_sales.application.artifact_content import (
 )
 from dw_sales.application.drafting import Drafting, Rendered, anchor_text, filled, line_template
 from dw_sales.application.local_time import local_day
+from dw_sales.application.salesorder_rules import StepRefusedError, filled_row
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.catalog import Customer, Language
+from dw_sales.domain.catalog import Language
 from dw_sales.domain.orders import (
     TOTAL_FIELD,
     Accepted,
     AskCustomer,
     CorrectedBySales,
+    DeliverySchedule,
     Finding,
     FindingCode,
     MappingStatus,
     OrderCase,
     OrderLine,
+    PoHeader,
+    PoLine,
 )
 
 type OrderDrafting = Drafting[OrderCase]
@@ -60,6 +63,10 @@ _FIELD_OF: Final[Mapping[FindingCode, str]] = {
     FindingCode.QUOTATION_MISSING: "unit_price",
     FindingCode.MOQ_VIOLATION: "quantity",
     FindingCode.PACK_MULTIPLE: "quantity",
+    # What the description states (ticket 38): the reel and the spec are
+    # read from it.
+    FindingCode.REEL_LENGTH_MISMATCH: "description",
+    FindingCode.SPEC_MISMATCH: "description",
     FindingCode.UOM_MISMATCH: "uom",
     FindingCode.CODE_UNMAPPED: "prv_code",
     FindingCode.CODE_AMBIGUOUS: "prv_code",
@@ -89,7 +96,13 @@ _QUOTATION_BASIS: Final = frozenset(
     }
 )
 _ITEM_BASIS: Final = frozenset(
-    {FindingCode.MOQ_VIOLATION, FindingCode.PACK_MULTIPLE, FindingCode.UOM_MISMATCH}
+    {
+        FindingCode.MOQ_VIOLATION,
+        FindingCode.PACK_MULTIPLE,
+        FindingCode.REEL_LENGTH_MISMATCH,
+        FindingCode.SPEC_MISMATCH,
+        FindingCode.UOM_MISMATCH,
+    }
 )
 _CONVERT_BASIS: Final = frozenset({FindingCode.CODE_UNMAPPED, FindingCode.CODE_AMBIGUOUS})
 
@@ -107,23 +120,43 @@ def upload_values(case: OrderCase, line: OrderLine) -> dict[UploadField, Value]:
             "dòng chưa có mã PRV",
             details={"case_id": str(case.case_id), "line": line.line_no},
         )
-    header, po = case.effective_header, line.effective
+    return line_values(
+        case.customer_code,
+        case.effective_header,
+        line.effective,
+        prv_code=line.mapping.prv_code,
+        suggested=line.suggested_delivery_date,
+    )
+
+
+def line_values(
+    customer_code: str,
+    header: PoHeader,
+    po: PoLine,
+    *,
+    prv_code: str | None,
+    suggested: date | None,
+) -> dict[UploadField, Value]:
+    """A PO line's values as the upload file names them: the normal reading's
+    header and line, the PRV code and the suggested date. Shared by a case's
+    file and the replay of a worked example (ticket 38), which has no case.
+    A line printing its own PO number (ticket 18) carries that one."""
     return {
-        "customer_code": case.customer_code,
-        "po_no": header.po_no,
+        "customer_code": customer_code,
+        "po_no": po.line_po.po_no if po.line_po is not None else header.po_no,
         "revision": header.revision,
         "po_date": header.po_date,
         "currency": header.currency,
         "line_no": po.line_no,
         "customer_item_code": po.customer_item_code,
-        "prv_code": line.mapping.prv_code,
+        "prv_code": prv_code,
         "description": po.description,
         "quantity": po.quantity,
         "uom": po.uom,
         "unit_price": po.unit_price,
         "amount": po.amount,
         "requested_date": po.requested_date,
-        "suggested_delivery_date": line.suggested_delivery_date,
+        "suggested_delivery_date": suggested,
     }
 
 
@@ -134,8 +167,16 @@ def upload_rows(case: OrderCase, line: OrderLine) -> tuple[dict[UploadField, Val
     schedule, each with the schedule's quantity and date, DW1's suggestion for
     that date, and its amount as the quantity times the unit price: the PO
     prints no amount per schedule."""
-    values = upload_values(case, line)
-    po = line.effective
+    return delivery_rows(upload_values(case, line), line.effective, line.suggested_date)
+
+
+def delivery_rows(
+    values: dict[UploadField, Value],
+    po: PoLine,
+    suggested: Callable[[DeliverySchedule], date | None],
+) -> tuple[dict[UploadField, Value], ...]:
+    """``values`` as a row per delivery schedule the line prints apart from
+    itself (`upload_rows`), else as its one row."""
     if not po.prints_schedules:
         return (values,)
     return tuple(
@@ -144,10 +185,27 @@ def upload_rows(case: OrderCase, line: OrderLine) -> tuple[dict[UploadField, Val
             "quantity": schedule.quantity,
             "amount": schedule.quantity * po.unit_price,
             "requested_date": schedule.requested_date,
-            "suggested_delivery_date": line.suggested_date(schedule),
+            "suggested_delivery_date": suggested(schedule),
         }
         for schedule in po.schedules
     )
+
+
+def file_rows(
+    deliveries: Iterable[Mapping[UploadField, Value]], received: date
+) -> list[dict[UploadField, Value]]:
+    """Each delivery with the file's own values: its number from 1, the day
+    the PO came in, and the USD rate (1 for USD, blank otherwise: no rate is
+    guessed)."""
+    return [
+        {
+            **delivery,
+            "row_no": number,
+            "received_date": received,
+            "usd_rate": 1 if delivery["currency"] == "USD" else None,
+        }
+        for number, delivery in enumerate(deliveries, start=1)
+    ]
 
 
 def _po_value(line: OrderLine, field: str) -> Value:
@@ -253,22 +311,32 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     A row per delivery (`upload_rows`): a line the PO splits over several
     dates is a row per date, each its own number, the line's PO line, its
     quantity and its date. Each column holds what its source says
-    (`_cell`); a blank column holds nothing. Before the file is made, every
-    row is checked (`_checked_row`)."""
+    (`salesorder_rules.filled_row`): the customer's own SalesOrder rules
+    where it has them (ticket 38, applied by code, no model), the layout
+    for every column they do not name; a blank column holds nothing. Before
+    the file is made, every row is checked (`checked_row`)."""
     case, layout = d.case, d.upload
     doc = d.internal("bravo_upload")
     received = local_day(case.received_at, d.copy.zone)
     deliveries = (row for line in case.lines for row in upload_rows(case, line))
+    rules = d.customer_rules
     rows = []
-    for number, delivery in enumerate(deliveries, start=1):
-        values: dict[UploadField, Value] = {
-            **delivery,
-            "row_no": number,
-            "received_date": received,
-            "usd_rate": 1 if delivery["currency"] == "USD" else None,
-        }
-        row = tuple(_cell(column, values, d.customer) for column in layout.columns)
-        rows.append(_checked_row(layout, values, row))
+    for values in file_rows(deliveries, received):
+        try:
+            row = filled_row(layout, rules, values, d.customer, d.lookups)
+        except StepRefusedError as refused:
+            raise ConflictError(
+                "quy tắc SalesOrder của khách không áp được cho dòng này: kiểm lại quy tắc"
+                " hoặc dữ liệu gốc",
+                details={
+                    "line": values["line_no"],
+                    "column": refused.column,
+                    "step": refused.step,
+                    "problem": refused.problem,
+                    "reason": "salesorder_rule_refused",
+                },
+            ) from None
+        rows.append(checked_row(layout, values, row))
     upload = Sheet(
         name=layout.sheet_name,
         columns=tuple(c.header for c in layout.columns),
@@ -279,7 +347,9 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     about = Sheet(
         name=label(doc, "sheet"),
         title=doc.template.title,
-        heading=d.stamp(layout.version),
+        heading=d.stamp(
+            layout.version if rules is None else f"{layout.version} · {d.copy.salesorder.ref}"
+        ),
         columns=(),
         rows=(),
         notes=(doc.word("mock", layout=layout.version),) if layout.mock else (),
@@ -287,18 +357,7 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     return (d.xlsx(layout.version, Workbook((upload, about), INTERNAL, d.at)),)
 
 
-def _cell(column: UploadColumn, values: Mapping[UploadField, Value], customer: Customer) -> Value:
-    """What one column holds in one row: the field's value, the customer's
-    own value, the fixed text, or nothing in a blank column."""
-    if column.field is not None:
-        return values[column.field]
-    if column.customer is not None:
-        value: Value = getattr(customer, column.customer)
-        return value
-    return column.constant
-
-
-def _checked_row(
+def checked_row(
     layout: BravoUploadLayout, values: Mapping[UploadField, Value], row: tuple[Value, ...]
 ) -> tuple[Value, ...]:
     """``row``, once it passes what is checked before the file is made

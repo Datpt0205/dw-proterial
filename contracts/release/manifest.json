@@ -732,6 +732,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "c0f5c15bd3f0c7c996013c112d9904e6e0379689d4b3423d07e2bf5407adcf22",
+      "dataset_id": "sales_salesorder_rules",
+      "files": [
+        {
+          "checksum": "a22aff6d824ed5f7820c7e4a52b1052cdb37541ad670682b396b5930b9e95c3d",
+          "path": "evals/expected/sales_salesorder_rules.json"
+        },
+        {
+          "checksum": "8ef7f7faa16f2a1d16644ffe148980cdf34a492896c52ef24b3bbe2d7f6ce668",
+          "path": "evals/fixtures/cases/sales_salesorder_rules.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "37bb8ede7c1ef26fca66d4aa147357d76f7de2fd9916942302018cb57a04b7a2",
       "dataset_id": "sales_screening_followups",
       "files": [
@@ -781,7 +796,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "8ada7753f57ff80d8c6ed1c837f6da6fd0c4656e",
+  "git_sha": "c47cc196deda8f381de774d5670189246cbcbd28",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -959,6 +974,11 @@
       "version": "1.10.0"
     },
     {
+      "checksum": "c3b0c6fd91aa54cca6e2e9e16b0fbaf8cf3a2d1b5113adbbc0d89a7934a19937",
+      "policy_id": "sales_order_rules",
+      "version": "1.11.0"
+    },
+    {
       "checksum": "24444d00e5f67716d9ba336b39fd6f6293db1ee19f8446715317b74f59ba2b00",
       "policy_id": "sales_order_rules",
       "version": "1.2.0"
@@ -1012,6 +1032,11 @@
       "checksum": "2cfb95e54ff95e5f4e2ab3fa726f56a7e857d72a6c43f5ed7291bd6b377af4c5",
       "policy_id": "sales_quote_rules",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "ce80ffac95ad648b5a0204a294fe9d839fb13fcfc976c22cd1f1f2af6c0679a7",
+      "policy_id": "sales_salesorder_rules",
+      "version": "1.0.0"
     },
     {
       "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
@@ -1173,6 +1198,11 @@
     {
       "checksum": "28d50775bfa893a192629e51fdbd26877c9489d52de3e1d504ede4529a487b67",
       "prompt_id": "sales.rule_change_in_words",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "dc472ac8e7e5004816e07462dbb749724b4f4b8b62adefeb48d03ca0841fbdae",
+      "prompt_id": "sales.salesorder_rules_proposal",
       "version": "1.0.0"
     },
     {

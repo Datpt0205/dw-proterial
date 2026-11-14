@@ -97,7 +97,7 @@ from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader
-from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_intake import CustomerPoReading, OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.outbound_mail import OutboundLane
 from dw_sales.application.po_body_reading import PoBodyReader
@@ -120,6 +120,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
+from dw_sales.application.salesorder_learning import SalesOrderLearning
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -164,6 +165,10 @@ class Dw1Mount:
     rule_drafting: RuleDrafting | None = None
     # What fails a draft its event lost and drops old ones, with no request.
     rule_draft_sweep: RuleDraftSweep | None = None
+    # What learns a customer's SalesOrder rules from an uploaded worked
+    # example in the worker (ticket 38); built with the drain, which
+    # resolves who asked.
+    salesorder_learning: SalesOrderLearning | None = None
     # What DW1's model steps did, per case and over time (slice 3), for the
     # activity routes (`dw_sales.presentation.activity_routes`).
     activity: ActivityService | None = None
@@ -396,6 +401,7 @@ def build_dw1(
         catalog_uow=catalog_uow,
         templates=XlsxCatalogTemplates(),
         draft_uow=catalog_uow,
+        example_uow=catalog_uow,
         readiness=readiness,
         roles=roles,
         step_activity=step_activity,
@@ -479,6 +485,24 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
+    salesorder_learning = SalesOrderLearning(
+        uow=catalog_uow,
+        po_reading=CustomerPoReading(intake.reader, intake.layouts),
+        sheets=readers.source,
+        scanner=scanner,
+        catalog=catalog,
+        rules=book,
+        access=requester_access,
+        model=(
+            None
+            if one_call_model is None
+            else interpretation_for(one_call_model, configs, worker.default_model_profile)
+        ),
+        clock=clock,
+        ids=ids,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
+    )
     return Dw1Mount(
         services=assembly.services,
         lane=lane,
@@ -486,6 +510,7 @@ def build_dw1(
         queue=queue,
         catalog_parsing=catalog_parsing,
         rule_drafting=rule_drafting,
+        salesorder_learning=salesorder_learning,
         rule_draft_sweep=RuleDraftSweep(
             catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
         ),

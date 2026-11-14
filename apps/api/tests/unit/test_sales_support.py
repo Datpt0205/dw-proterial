@@ -69,6 +69,8 @@ _PARAMS = {
     "step": "noc",
     # A Q12 screening row's question to the customer (AI item 11).
     "prv_code": "CB-2006",
+    # A customer's worked example, learned from (ticket 38).
+    "example_id": str(uuid.uuid4()),
 }
 
 

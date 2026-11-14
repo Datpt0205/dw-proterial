@@ -31,6 +31,7 @@ from dw_sales.application.mail_drop import (
     MailRefused,
 )
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.rules import read_over
 from dw_sales.domain.order_checks import OrderRules
 
 NOW = datetime(2026, 10, 27, 9, 0, tzinfo=UTC)
@@ -267,9 +268,11 @@ def test_a_version_naming_ignored_sender_domains_still_reads() -> None:
         (REPO / "configs/policies/sales_order_rules@1.8.0.yaml").read_text(encoding="utf-8")
     )
     document["ignored_sender_domains"] = ["proterial.example"]
-    rules = OrderRules.model_validate(document)
+    # Read as any version written before a later field is (`read_over`):
+    # 1.11.0's finding codes are the platform's (ticket 38).
+    current = load_order_rules(REPO / "configs/policies/sales_order_rules@1.11.0.yaml")
+    rules = read_over(OrderRules, document, current)
     assert "ignored_sender_domains" not in rules.model_dump()
-    current = load_order_rules(REPO / "configs/policies/sales_order_rules@1.9.0.yaml")
     assert "ignored_sender_domains" not in current.model_dump()
 
 

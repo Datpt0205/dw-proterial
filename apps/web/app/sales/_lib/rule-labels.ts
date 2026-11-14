@@ -415,6 +415,12 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "templates.*.subject": { label: "Tiêu đề" },
     "templates.*.body": { label: "Nội dung" },
   },
+  sales_salesorder_rules: {
+    customers: {
+      label: "Quy tắc theo khách",
+      help: "Mỗi khách: cột nào lấy từ đâu và qua các bước nào; học từ ví dụ, đã chạy lại khớp.",
+    },
+  },
   sales_followups: {
     order_unconfirmed: {
       label: "PO chưa xác nhận",

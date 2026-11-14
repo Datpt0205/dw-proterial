@@ -409,6 +409,46 @@ rule_draft_files = sa.Table(
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# Worked examples a customer's SalesOrder rules are learned from (ticket 38,
+# migration d94bf01066d2), and their two files until read.
+salesorder_examples = sa.Table(
+    "salesorder_examples",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("customer_code", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("requested_at", _TS, nullable=False),
+    sa.Column("received_on", sa.Date, nullable=False),
+    sa.Column("po_file_name", sa.Text, nullable=False),
+    sa.Column("po_sha256", sa.Text, nullable=False),
+    sa.Column("po_size", sa.Integer, nullable=False),
+    sa.Column("salesorder_file_name", sa.Text, nullable=False),
+    sa.Column("salesorder_sha256", sa.Text, nullable=False),
+    sa.Column("salesorder_size", sa.Integer, nullable=False),
+    # SQL NULL for None, not JSON `null`, which the CHECKs would refuse.
+    sa.Column("rules", JSONB(none_as_null=True)),
+    sa.Column("replay", JSONB(none_as_null=True)),
+    sa.Column("problems", JSONB, nullable=False),
+    sa.Column("error", sa.Text),
+    sa.Column("prompt_ref", sa.Text),
+    sa.Column("model_profile", sa.Text),
+    sa.Column("version_id", UUID(as_uuid=True)),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+salesorder_example_files = sa.Table(
+    "salesorder_example_files",
+    metadata,
+    *_scope(),
+    sa.Column("example_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("content", sa.LargeBinary, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # The stored mailbox (ticket 43, migration e544ff20fad6): each message whole in
 # `message`, the keys the queries need beside it, and each attachment's bytes.
 # Both append-only and partitioned by month on `received_at`.

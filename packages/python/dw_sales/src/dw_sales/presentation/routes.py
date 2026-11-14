@@ -85,6 +85,7 @@ from dw_sales.application.rules import (
     RulesInForceView,
     RuleVersionView,
 )
+from dw_sales.application.salesorder_learning import SalesOrderExampleView
 from dw_sales.application.screening_followups import FollowupDraftView
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
@@ -234,6 +235,41 @@ class RuleDraftBody(BaseModel):
 
     def data(self) -> bytes:
         return _file_bytes(self.content_b64)
+
+
+class ExampleFileBody(BaseModel):
+    """One file of a worked example (ticket 38): its name and its bytes,
+    base64, decoded here and never opened: the worker reads it in the reader
+    sandbox."""
+
+    model_config = _BODY
+
+    file_name: Annotated[str, Field(min_length=1, max_length=200)]
+    # 5 MiB of bytes, as base64 (`MAX_EXAMPLE_BYTES`; the service refuses more).
+    content_b64: Annotated[str, Field(min_length=1, max_length=6_990_508)]
+
+    def data(self) -> tuple[str, bytes]:
+        return self.file_name, _file_bytes(self.content_b64)
+
+
+class SalesOrderExampleBody(BaseModel):
+    """A customer's worked example: its PO, the SalesOrder file the PIC made
+    from it, and the day the PO came in. The customer is the path's, looked
+    up in the caller's own tenant; who uploads is the caller."""
+
+    model_config = _BODY
+
+    received_on: date
+    po: ExampleFileBody
+    salesorder: ExampleFileBody
+
+
+class ExampleSubmissionBody(BaseModel):
+    """ "Gửi duyệt": the number the new version of the customers' rules takes."""
+
+    model_config = _BODY
+
+    version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+$")]
 
 
 def _file_bytes(content_b64: str) -> bytes:
@@ -1588,6 +1624,76 @@ def build_router(
     )
     async def rule_draft(draft_id: uuid.UUID, context: Ctx, svc: Svc) -> RuleDraftView:
         return await svc.rule_drafts.get(context, draft_id)
+
+    # ------------- a customer's SalesOrder rules learned by example (38) --
+    # The pair is kept for the worker (202): the API reads no customer file.
+    # Every route asks for the proposer's scope and `sales.price.read` (the
+    # files and the replay carry prices), as the service does too. "Gửi
+    # duyệt" proposes a version only where the replay matched, enforced by
+    # the service; the head decides it on the platform's approvals, never
+    # the person who sent it (no Sales route decides).
+    learner_scope = [scopes(SalesScopes.RULES_PROPOSE, SalesScopes.PRICE_READ)]
+
+    @router.post(
+        "/customers/{customer_code}/salesorder-examples",
+        response_model=SalesOrderExampleView,
+        status_code=202,
+        dependencies=learner_scope,
+    )
+    async def request_salesorder_example(
+        customer_code: CustomerCode,
+        body: SalesOrderExampleBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> SalesOrderExampleView:
+        view = await svc.salesorder_examples.request(
+            context, customer_code, body.received_on, body.po.data(), body.salesorder.data()
+        )
+        return await idem.record(view, status_code=202)
+
+    @router.get(
+        "/customers/{customer_code}/salesorder-examples",
+        response_model=list[SalesOrderExampleView],
+        dependencies=learner_scope,
+    )
+    async def salesorder_examples(
+        customer_code: CustomerCode, context: Ctx, svc: Svc
+    ) -> list[SalesOrderExampleView]:
+        return await svc.salesorder_examples.for_customer(context, customer_code)
+
+    @router.get(
+        "/salesorder-examples/{example_id}",
+        response_model=SalesOrderExampleView,
+        dependencies=learner_scope,
+    )
+    async def salesorder_example(
+        example_id: uuid.UUID, context: Ctx, svc: Svc
+    ) -> SalesOrderExampleView:
+        return await svc.salesorder_examples.get(context, example_id)
+
+    # What a rule version's approval shows: the example it was sent from.
+    @router.get(
+        "/salesorder-examples/by-version/{version_id}",
+        response_model=SalesOrderExampleView,
+        dependencies=learner_scope,
+    )
+    async def salesorder_example_of_version(
+        version_id: uuid.UUID, context: Ctx, svc: Svc
+    ) -> SalesOrderExampleView:
+        return await svc.salesorder_examples.for_version(context, version_id)
+
+    @router.post(
+        "/salesorder-examples/{example_id}/submissions",
+        response_model=RuleVersionView,
+        dependencies=learner_scope,
+    )
+    async def submit_salesorder_example(
+        example_id: uuid.UUID, body: ExampleSubmissionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RuleVersionView:
+        return await idem.record(
+            await svc.salesorder_examples.submit(context, example_id, body.version)
+        )
 
     return router
 
