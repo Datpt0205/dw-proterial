@@ -303,8 +303,9 @@ class ProcessingDrain:
         except Exception:
             logger.exception("sales_processing: processing a message failed")
             return Settlement.failed("error"), None
-        if view.kind == DispositionKind.NOT_YET_PROCESSED.value:
-            # A model gave no usable answer and the message may be read again.
+        if view.kind == DispositionKind.NOT_YET_PROCESSED.value and not view.outgoing:
+            # A model gave no usable answer and the message may be read again;
+            # a message Sales sent was taken up with no disposition (ticket 25).
             return Settlement.failed("model_retry"), view
         return Settlement.done(), view
 

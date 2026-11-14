@@ -22,7 +22,8 @@ are the screen's (CONTEXT.md): a code goes out as its code.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -38,6 +39,7 @@ from dw_sales.application.case_store import (
     LoggedMessage,
     MessageHandled,
     ProcessingJob,
+    SentRead,
     ServedSource,
     SourceRegion,
     WorkerState,
@@ -49,6 +51,7 @@ from dw_sales.application.source import (
     unopened_values,
     value_unserved,
 )
+from dw_sales.application.threads import CaseThread
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -98,7 +101,14 @@ from dw_sales.domain.quotes import (
     RequestReading,
     suggest_price,
 )
-from dw_sales.domain.reply_intent import CaseReply, ProposedStep, ReplyKind, proposed_step
+from dw_sales.domain.reply_intent import (
+    Author,
+    CaseReply,
+    ProposedStep,
+    ReplyReading,
+    ThreadIntent,
+    proposed_step,
+)
 
 _VIEW = ConfigDict(frozen=True)
 
@@ -805,6 +815,8 @@ class OrderCaseView(BaseModel):
     replies: list[CaseReplyView] = []
     # The messages of its thread(s) received before it opened (ticket 24).
     thread_before: list[ThreadMessageView] = []
+    # The messages Sales sent on its thread(s) (ticket 25).
+    thread_sent: list[SentMessageView] = []
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
@@ -834,15 +846,33 @@ def thread_message(message: InboundMessage) -> ThreadMessageView:
     )
 
 
+class IntentView(BaseModel):
+    """One thread intent a model read and code kept (ticket 26), with the
+    sentences it stands on."""
+
+    model_config = _VIEW
+
+    intent: ThreadIntent
+    quotes: list[str]
+
+
+def _intents(reading: ReplyReading | None) -> list[IntentView]:
+    if reading is None:
+        return []
+    return [IntentView(intent=i.intent, quotes=[q.text for q in i.quotes]) for i in reading.intents]
+
+
 class CaseReplyView(BaseModel):
     """A customer's reply attached to the case by its thread (ticket 32), with
-    what a model read of it and the step code proposes from that, now.
+    the thread intents a model read in it (ticket 26) and the step code
+    proposes from that, now.
 
     ``proposal`` is computed from the case's status as it is now, and only for
-    the newest reply: an older reply's reading does not pre-select anything.
-    It is a suggestion: the step is the existing one, which Sales confirms and
-    the server checks as for any other caller. The quotes are the customer's
-    sentences, shown to a case reader as the inbox shows the whole mail.
+    the newest message of the case's thread, a reply or one Sales sent: an
+    older one's reading does not pre-select anything. It is a suggestion: the
+    step is the existing one, which Sales confirms and the server checks as
+    for any other caller. The quotes are the customer's sentences, shown to a
+    case reader as the inbox shows the whole mail.
     """
 
     model_config = _VIEW
@@ -852,8 +882,7 @@ class CaseReplyView(BaseModel):
     linked_to: str
     # None: no model was asked (the tenant's rules leave it off).
     outcome: Literal["read", "unavailable"] | None
-    kind: ReplyKind | None
-    quotes: list[str]
+    intents: list[IntentView]
     prompt: str | None
     proposal: ProposedStep | None
     # Who picked the case among those the reply's thread holds (ticket 24);
@@ -861,10 +890,46 @@ class CaseReplyView(BaseModel):
     picked_by: uuid.UUID | None = None
 
 
-def case_replies(
-    case_kind: CaseKind, case_id: uuid.UUID, status: str, logged: Sequence[LoggedMessage]
-) -> list[CaseReplyView]:
-    """The replies on one case, oldest first, the newest with its proposal."""
+class SentMessageView(BaseModel):
+    """A message Sales sent on the case's thread (ticket 25: "Sales gửi"),
+    with the thread intents a model read in it where the tenant's rules turn
+    the step on (ticket 26), and the step that proposes when it is the
+    thread's newest: Sales asking the customer proposes that the case waits
+    on them. Its subject is Sales' own words."""
+
+    model_config = _VIEW
+
+    message_id: str
+    received_at: datetime
+    subject: str
+    # None: DW1 has not read it (the step is off, or its turn has not come).
+    outcome: Literal["read", "unavailable"] | None
+    intents: list[IntentView]
+    prompt: str | None
+    proposal: ProposedStep | None
+
+
+@dataclass(frozen=True, slots=True)
+class CaseTalk:
+    """The case's replies and the messages Sales sent on its thread, each
+    oldest first, the newest of all of them with its proposal."""
+
+    replies: list[CaseReplyView]
+    sent: list[SentMessageView]
+
+
+def case_talk(
+    case_kind: CaseKind,
+    case_id: uuid.UUID,
+    status: str,
+    logged: Sequence[LoggedMessage],
+    thread: CaseThread | None = None,
+    read: Mapping[str, SentRead] | None = None,
+) -> CaseTalk:
+    """The replies on one case and Sales' messages on its thread
+    (``thread``), with what DW1 read of each (``read``: the sent messages it
+    took up, by id). The newest message of the two, by when it was
+    received, proposes a step: by who wrote it (`proposed_step`)."""
     replies: list[tuple[LoggedMessage, CaseReply]] = [
         (entry, entry.disposition.reply)
         for entry in sorted(logged, key=lambda e: (e.processed_at, e.disposition.message_id))
@@ -872,24 +937,68 @@ def case_replies(
         and entry.disposition.case_kind is case_kind
         and entry.disposition.case_id == case_id
     ]
-    views: list[CaseReplyView] = []
-    for index, (entry, reply) in enumerate(replies):
-        reading = reply.reading
-        newest = index == len(replies) - 1
-        views.append(
+    sent = [] if thread is None else thread.sent
+    sent_readings = {m: r.reading for m, r in (read or {}).items()}
+    received = {} if thread is None else thread.received
+    # Every message with who wrote it, its time and its reading; the newest
+    # of them proposes.
+    talk: list[tuple[datetime, str, Author, ReplyReading | None]] = [
+        (
+            received.get(entry.disposition.message_id, entry.processed_at),
+            entry.disposition.message_id,
+            "customer",
+            reply.reading,
+        )
+        for entry, reply in replies
+    ]
+    talk += [
+        (message.received_at, message.message_id, "sales", sent_readings.get(message.message_id))
+        for message in sent
+    ]
+    newest = max(talk, key=lambda t: (t[0], t[1]), default=None)
+    proposal = (
+        None
+        if newest is None
+        else (newest[1], proposed_step(newest[2], case_kind.value, status, newest[3]))
+    )
+
+    def proposed(message_id: str) -> ProposedStep | None:
+        return proposal[1] if proposal is not None and proposal[0] == message_id else None
+
+    return CaseTalk(
+        replies=[
             CaseReplyView(
                 message_id=entry.disposition.message_id,
                 processed_at=entry.processed_at,
                 linked_to=reply.linked_to,
-                outcome=reading.outcome if reading else None,
-                kind=reading.kind if reading else None,
-                quotes=[quote.text for quote in reading.quotes] if reading else [],
-                prompt=reading.prompt if reading else None,
-                proposal=proposed_step(case_kind.value, status, reading) if newest else None,
+                outcome=reply.reading.outcome if reply.reading else None,
+                intents=_intents(reply.reading),
+                prompt=reply.reading.prompt if reply.reading else None,
+                proposal=proposed(entry.disposition.message_id),
                 picked_by=reply.picked_by,
             )
-        )
-    return views
+            for entry, reply in replies
+        ],
+        sent=[
+            _sent_view(message, sent_readings.get(message.message_id), proposed) for message in sent
+        ],
+    )
+
+
+def _sent_view(
+    message: InboundMessage,
+    reading: ReplyReading | None,
+    proposed: Callable[[str], ProposedStep | None],
+) -> SentMessageView:
+    return SentMessageView(
+        message_id=message.message_id,
+        received_at=message.received_at,
+        subject=message.subject,
+        outcome=reading.outcome if reading else None,
+        intents=_intents(reading),
+        prompt=reading.prompt if reading else None,
+        proposal=proposed(message.message_id),
+    )
 
 
 def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummaryView:
@@ -980,13 +1089,15 @@ def order_case(
     replies: Sequence[LoggedMessage] = (),
     servings: Sequence[ServedSource] = (),
     cross_checker: bool = False,
-    thread_before: Sequence[InboundMessage] = (),
+    thread: CaseThread | None = None,
+    sent: Mapping[str, SentRead] | None = None,
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
     reads as checked. ``cross_checker``: the caller holds the cross-check
     scope, and is told which values nobody opened."""
     document = case.document
+    talk = case_talk(CaseKind.ORDER, case.case_id, case.status.value, replies, thread, sent)
     checked = preparer_checked(case, servings)
     unapplied = case.unapplied_decision
     total = document.total
@@ -1079,8 +1190,9 @@ def order_case(
             if unapplied
             else None
         ),
-        replies=case_replies(CaseKind.ORDER, case.case_id, case.status.value, replies),
-        thread_before=[thread_message(m) for m in thread_before],
+        replies=talk.replies,
+        thread_before=[thread_message(m) for m in thread.before] if thread else [],
+        thread_sent=talk.sent,
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker
@@ -1558,6 +1670,8 @@ class QuoteCaseView(BaseModel):
     replies: list[CaseReplyView] = []
     # The messages of its thread(s) received before it opened (ticket 24).
     thread_before: list[ThreadMessageView] = []
+    # The messages Sales sent on its thread(s) (ticket 25).
+    thread_sent: list[SentMessageView] = []
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -1602,12 +1716,14 @@ def quote_case(
     decision: PendingDecisionView | None = None,
     replies: Sequence[LoggedMessage] = (),
     served: frozenset[SourceRegion] = frozenset(),
-    thread_before: Sequence[InboundMessage] = (),
+    thread: CaseThread | None = None,
+    sent: Mapping[str, SentRead] | None = None,
 ) -> QuoteCaseView:
     """The case for one caller. ``served``: the regions of this case version
     the caller was served (`SourceServedPort.served`); none by default, so
     every value still to confirm reads as needing its source opened."""
     request = case.request
+    talk = case_talk(CaseKind.QUOTE, case.case_id, case.status.value, replies, thread, sent)
     coverage = case.coverage()
     document = request.document
     reply = case.design_reply
@@ -1794,8 +1910,9 @@ def quote_case(
         ),
         evidence=evidence(evidence_rows, prices) if evidence_rows is not None else None,
         decision=decision,
-        replies=case_replies(CaseKind.QUOTE, case.case_id, case.status.value, replies),
-        thread_before=[thread_message(m) for m in thread_before],
+        replies=talk.replies,
+        thread_before=[thread_message(m) for m in thread.before] if thread else [],
+        thread_sent=talk.sent,
     )
 
 
@@ -1836,6 +1953,11 @@ class MessageDispositionView(BaseModel):
     # the mail's order (ticket 19), those the caller may see; empty for a
     # message on one case, whose ``case_id`` says it.
     order_cases: list[ThreadCaseView] = []
+    # A message Sales sent ("Sales gửi", ticket 25): its sender is a member's
+    # own sign-in address, as the server resolved it. It has no disposition
+    # of its own (``kind`` stays `not_yet_processed`) and is never processed
+    # into a case: it shows under its thread, on the case.
+    outgoing: bool = False
 
 
 class ThreadCaseView(BaseModel):
@@ -1855,6 +1977,8 @@ def message_disposition(
     processed_at: datetime | None,
     handled: MessageHandled | None = None,
     numbers: Mapping[uuid.UUID, str] | None = None,
+    *,
+    outgoing: bool = False,
 ) -> MessageDispositionView:
     """The disposition as the inbox shows it. ``numbers``: what each case a
     reply is offered, or a mail with several POs is on, goes by, for those the
@@ -1886,6 +2010,7 @@ def message_disposition(
             for case_id in (disposition.case_ids if disposition.more_cases else ())
             if case_id in shown
         ],
+        outgoing=outgoing,
     )
 
 

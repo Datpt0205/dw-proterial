@@ -255,22 +255,30 @@ export const INTENT_KIND = {
 } as const;
 
 /** What a model read a customer's reply in a case's thread as (ticket 32). */
-export const REPLY_KIND = {
-  accepts_spec: "Đồng ý thông số",
-  rejects_spec: "Không đồng ý thông số",
-  counter_proposal: "Đề nghị khác / đồng ý có điều kiện",
-  sends_corrected_po: "Gửi PO đã sửa",
-  keeps_po_as_is: "Giữ nguyên PO",
-  question: "Hỏi lại",
-  unclear: "Không rõ",
+/**
+ * What a message in a case's thread does (ticket 26, CONTEXT.md "Thread
+ * intent"): one closed set, several per message.
+ */
+export const THREAD_INTENT = {
+  sends_po: "Gửi PO",
+  requests_change: "Xin điều chỉnh",
+  cancels: "Huỷ",
+  accepts: "Đồng ý",
+  rejects: "Không đồng ý",
+  asks: "Hỏi",
+  adds_info: "Bổ sung thông tin",
+  sends_rfq: "Gửi RFQ",
+  unclear: "Chưa rõ",
 } as const;
 
-/** The existing step a reply proposes; Sales confirms it (ticket 32). */
+/** The existing step a thread message proposes; Sales confirms it (tickets 32, 26). */
 export const REPLY_STEP = {
   settle_spec: "Ghi khách đã đồng ý spec",
   decline_customer_rejected_spec: "Từ chối báo giá vì khách không đồng ý spec",
   resume_review: "Xem xét lại đơn, quyết lại từng cờ đã gửi khách",
   await_revised_po: "Chờ PO đã sửa: DW1 đọc khi PO đến",
+  request_correction: "Ghi hồ sơ đang chờ khách trả lời",
+  discuss_spec: "Ghi hồ sơ đang chờ khách thống nhất spec",
 } as const;
 
 /** Who read a value of a model reading of a description (ticket 28). */

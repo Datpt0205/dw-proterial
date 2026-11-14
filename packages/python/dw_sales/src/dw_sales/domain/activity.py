@@ -44,6 +44,7 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import MappingStatus, OrderCase
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.reply_intent import ReplyReading
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -398,6 +399,43 @@ def outcomes_of(
                 case_id=disposition.case_id,
             )
         )
+    return _rows(disposition.message_id, stamped, timings, at, new_id)
+
+
+def sent_outcomes(
+    message_id: str,
+    reading: ReplyReading | None,
+    calls: Sequence[ModelCall],
+    *,
+    at: AwareDatetime,
+    new_id: Callable[[], uuid.UUID],
+) -> tuple[StepOutcome, ...]:
+    """The row for a message Sales sent (ticket 25): its thread intents'
+    reading, the one model step such a message takes, or none when it was not
+    read. It names no case: the cases a sent message is on are read where
+    its thread is (`threads.case_thread`), never stamped."""
+    if reading is None:
+        return ()
+    read = reading.outcome == "read"
+    stamped = [
+        _Stamped(
+            ModelStep.REPLY_INTENT,
+            reading.prompt,
+            reading.model_profile,
+            "accepted" if read else "unavailable",
+            automatic=read,
+        )
+    ]
+    return _rows(message_id, stamped, _timings(calls), at, new_id)
+
+
+def _rows(
+    message_id: str,
+    stamped: Sequence[_Stamped],
+    timings: Mapping[str, _Timing],
+    at: AwareDatetime,
+    new_id: Callable[[], uuid.UUID],
+) -> tuple[StepOutcome, ...]:
     rows: list[StepOutcome] = []
     timed_once: set[str] = set()
     for item in stamped:
@@ -409,7 +447,7 @@ def outcomes_of(
             StepOutcome(
                 outcome_id=new_id(),
                 occurred_at=at,
-                message_id=disposition.message_id,
+                message_id=message_id,
                 lane=item.lane,
                 case_id=item.case_id,
                 line_no=item.line_no,

@@ -171,6 +171,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     unapplied_decision: null,
     replies: [],
     thread_before: [],
+    thread_sent: [],
     lines: [line],
     ...overrides,
   };
@@ -275,5 +276,6 @@ export function pendingQuote(): Quote {
     },
     replies: [],
     thread_before: [],
+    thread_sent: [],
   };
 }

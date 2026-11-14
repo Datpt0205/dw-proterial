@@ -324,10 +324,15 @@ class Dw1Runs:
             channel=channel,
         )
         logged = await self._logged(context)
-        # Absent: the model gave no usable answer and the message is young
-        # enough to be tried again (ticket 31), so it is still not processed.
-        pending = message_disposition(MessageDisposition.pending(message_id), None)
-        return logged.get(message_id, pending)
+        if message_id in logged:
+            return logged[message_id]
+        # Absent: a message Sales sent, taken up with no disposition of its
+        # own (ticket 25); else the model gave no usable answer and the
+        # message is young enough to be tried again (ticket 31), so it is
+        # still not processed.
+        async with self.uow(sales_scope(context)) as work:
+            sent = await work.sent.get(message_id) is not None
+        return message_disposition(MessageDisposition.pending(message_id), None, outgoing=sent)
 
     async def process_all(self, context: AccessContext) -> list[MessageDispositionView]:
         """Every message still without a disposition, oldest first, in one run."""

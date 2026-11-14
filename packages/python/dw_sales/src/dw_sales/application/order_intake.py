@@ -19,8 +19,9 @@ them and code resolves them against the sender's customer (`named_cases`,
 where the tenant's rules turn the intent step on); naming none of them, or with
 no model, it is routed `reply_to_case` with those cases for Sales to pick
 (`thread_cases`), never a guess. Where the tenant's rules turn it on, a local
-model reads the reply into a typed intent (`ReplyReader`); the case and the
-step are code's.
+model reads the reply's thread intents (`ReplyReader`, ticket 26); the case
+and the step are code's. A message Sales sent never reaches this intake
+(`outgoing.py`, ticket 25).
 **A tenant's own PO layouts read first.** A customer's form a person mapped and
 another approved (ticket 30) is read with that layout, the tenant's data;
 otherwise with the platform's. The first POs a new layout reads keep every
@@ -176,7 +177,7 @@ from dw_sales.domain.orders import (
     ValueCorrection,
 )
 from dw_sales.domain.po_groups import ReadFile, one_per_po
-from dw_sales.domain.reply_intent import CaseReply
+from dw_sales.domain.reply_intent import CaseReply, ReplyReading
 from dw_sales.domain.revision_hints import name_revision
 
 
@@ -405,6 +406,37 @@ class OrderIntake:
         still young enough to try again; without it, it is not."""
         return await self._classified(
             scope, message, await self._attachments(scope, message), run, now
+        )
+
+    async def reads_thread_intents(self, scope: SalesScope) -> bool:
+        """Whether a thread message's intents are read for this tenant now:
+        a model and a thread log wired, the step on in its rules and measured
+        at its bar (ticket 26). The mailbox lane asks it before taking up a
+        message Sales sent, which costs a run."""
+        if self.threads is None or self.replies is None:
+            return False
+        return await self._model_step(scope, await self.rules.rules(scope), ModelStep.REPLY_INTENT)
+
+    async def read_sent(
+        self, scope: SalesScope, message: InboundMessage, *, run: RunContext
+    ) -> ReplyReading | None:
+        """What a message Sales sent does (tickets 25 and 26), read where
+        `reads_thread_intents` says so and its thread holds a case it is
+        addressed to (`ThreadLinkPort.sent_cases`); None otherwise. Nothing
+        else of it is read: no customer, no document, no value."""
+        if not await self.reads_thread_intents(scope):
+            return None
+        assert self.threads is not None and self.replies is not None  # said above
+        cases = await self.threads.sent_cases(scope, message)
+        if not cases:
+            return None
+        rules = await self.rules.rules(scope)
+        return await self.replies.read(
+            newest_part(message),
+            author="sales",
+            about=" ".join(case.question for case in cases),
+            rules_version=rules.version,
+            run=run,
         )
 
     async def process(
@@ -686,7 +718,11 @@ class OrderIntake:
             and await self._model_step(scope, rules, ModelStep.REPLY_INTENT)
         ):
             reading = await self.replies.read(
-                newest_part(message), thread, rules_version=rules.version, run=run
+                newest_part(message),
+                author="customer",
+                about=thread.question,
+                rules_version=rules.version,
+                run=run,
             )
         disposition = MessageDisposition(
             message_id=message.message_id,

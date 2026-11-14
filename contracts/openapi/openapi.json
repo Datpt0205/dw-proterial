@@ -2026,27 +2026,14 @@
         "type": "object"
       },
       "CaseReplyView": {
-        "description": "A customer's reply attached to the case by its thread (ticket 32), with\nwhat a model read of it and the step code proposes from that, now.\n\n``proposal`` is computed from the case's status as it is now, and only for\nthe newest reply: an older reply's reading does not pre-select anything.\nIt is a suggestion: the step is the existing one, which Sales confirms and\nthe server checks as for any other caller. The quotes are the customer's\nsentences, shown to a case reader as the inbox shows the whole mail.",
+        "description": "A customer's reply attached to the case by its thread (ticket 32), with\nthe thread intents a model read in it (ticket 26) and the step code\nproposes from that, now.\n\n``proposal`` is computed from the case's status as it is now, and only for\nthe newest message of the case's thread, a reply or one Sales sent: an\nolder one's reading does not pre-select anything. It is a suggestion: the\nstep is the existing one, which Sales confirms and the server checks as\nfor any other caller. The quotes are the customer's sentences, shown to a\ncase reader as the inbox shows the whole mail.",
         "properties": {
-          "kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "accepts_spec",
-                  "rejects_spec",
-                  "counter_proposal",
-                  "sends_corrected_po",
-                  "keeps_po_as_is",
-                  "question",
-                  "unclear"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
+          "intents": {
+            "items": {
+              "$ref": "#/components/schemas/IntentView"
+            },
+            "title": "Intents",
+            "type": "array"
           },
           "linked_to": {
             "title": "Linked To",
@@ -2106,7 +2093,9 @@
                   "settle_spec",
                   "decline_customer_rejected_spec",
                   "resume_review",
-                  "await_revised_po"
+                  "await_revised_po",
+                  "request_correction",
+                  "discuss_spec"
                 ],
                 "type": "string"
               },
@@ -2115,13 +2104,6 @@
               }
             ],
             "title": "Proposal"
-          },
-          "quotes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Quotes",
-            "type": "array"
           }
         },
         "required": [
@@ -2129,8 +2111,7 @@
           "processed_at",
           "linked_to",
           "outcome",
-          "kind",
-          "quotes",
+          "intents",
           "prompt",
           "proposal"
         ],
@@ -6784,6 +6765,39 @@
         "title": "IntentReading",
         "type": "object"
       },
+      "IntentView": {
+        "description": "One thread intent a model read and code kept (ticket 26), with the\nsentences it stands on.",
+        "properties": {
+          "intent": {
+            "enum": [
+              "sends_po",
+              "requests_change",
+              "cancels",
+              "accepts",
+              "rejects",
+              "asks",
+              "adds_info",
+              "sends_rfq",
+              "unclear"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "quotes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "intent",
+          "quotes"
+        ],
+        "title": "IntentView",
+        "type": "object"
+      },
       "InviteMemberRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9404,6 +9418,11 @@
             "title": "Order Cases",
             "type": "array"
           },
+          "outgoing": {
+            "default": false,
+            "title": "Outgoing",
+            "type": "boolean"
+          },
           "owner": {
             "anyOf": [
               {
@@ -10792,6 +10811,14 @@
               "$ref": "#/components/schemas/ThreadMessageView"
             },
             "title": "Thread Before",
+            "type": "array"
+          },
+          "thread_sent": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SentMessageView"
+            },
+            "title": "Thread Sent",
             "type": "array"
           },
           "total": {
@@ -14412,6 +14439,14 @@
             "title": "Thread Before",
             "type": "array"
           },
+          "thread_sent": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SentMessageView"
+            },
+            "title": "Thread Sent",
+            "type": "array"
+          },
           "ycbg_no": {
             "anyOf": [
               {
@@ -14977,6 +15012,41 @@
         "title": "ReadFrom",
         "type": "object"
       },
+      "ReadIntent": {
+        "additionalProperties": false,
+        "description": "One intent code kept, standing on the quotes it located.",
+        "properties": {
+          "intent": {
+            "enum": [
+              "sends_po",
+              "requests_change",
+              "cancels",
+              "accepts",
+              "rejects",
+              "asks",
+              "adds_info",
+              "sends_rfq",
+              "unclear"
+            ],
+            "title": "Intent",
+            "type": "string"
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReplyQuote"
+            },
+            "maxItems": 3,
+            "title": "Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "intent"
+        ],
+        "title": "ReadIntent",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "checks": {
@@ -15413,7 +15483,7 @@
       },
       "ReplyQuote": {
         "additionalProperties": false,
-        "description": "A sentence of the reply that code found, once, in its newest part:\nthe text as the customer wrote it and where it is (offsets into the NFKC\nform of `MessagePart.text`).",
+        "description": "A sentence of the message that code found, once, in its newest part:\nthe text as written and where it is (offsets into the NFKC form of\n`MessagePart.text`).",
         "properties": {
           "end": {
             "minimum": 1.0,
@@ -15442,27 +15512,16 @@
       },
       "ReplyReading": {
         "additionalProperties": false,
-        "description": "What the model reading of a reply did, stamped on its disposition: the\nprompt, profile and route of the call, the rules whose switch asked for\nit, and the outcome. ``unavailable``: no usable answer, so the reply is on\nits case with no proposal and Sales reads it.",
+        "description": "What the model reading of a thread message did, stamped where the\nmessage is kept (a reply's disposition, a sent message's record): the\nprompt, profile and route of the call, the rules whose switch asked for\nit, the outcome and the intents code kept. ``unavailable``: no usable\nanswer, so the message proposes nothing and Sales reads it.",
         "properties": {
-          "kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "accepts_spec",
-                  "rejects_spec",
-                  "counter_proposal",
-                  "sends_corrected_po",
-                  "keeps_po_as_is",
-                  "question",
-                  "unclear"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
+          "intents": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReadIntent"
+            },
+            "maxItems": 4,
+            "title": "Intents",
+            "type": "array"
           },
           "model_profile": {
             "maxLength": 64,
@@ -15482,15 +15541,6 @@
             "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
             "title": "Prompt",
             "type": "string"
-          },
-          "quotes": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ReplyQuote"
-            },
-            "maxItems": 3,
-            "title": "Quotes",
-            "type": "array"
           },
           "route": {
             "maxLength": 64,
@@ -17041,6 +17091,87 @@
           "status"
         ],
         "title": "SenderCustomerView",
+        "type": "object"
+      },
+      "SentMessageView": {
+        "description": "A message Sales sent on the case's thread (ticket 25: \"Sales gửi\"),\nwith the thread intents a model read in it where the tenant's rules turn\nthe step on (ticket 26), and the step that proposes when it is the\nthread's newest: Sales asking the customer proposes that the case waits\non them. Its subject is Sales' own words.",
+        "properties": {
+          "intents": {
+            "items": {
+              "$ref": "#/components/schemas/IntentView"
+            },
+            "title": "Intents",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "settle_spec",
+                  "decline_customer_rejected_spec",
+                  "resume_review",
+                  "await_revised_po",
+                  "request_correction",
+                  "discuss_spec"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "received_at",
+          "subject",
+          "outcome",
+          "intents",
+          "prompt",
+          "proposal"
+        ],
+        "title": "SentMessageView",
         "type": "object"
       },
       "SessionDetailView": {

@@ -1,12 +1,12 @@
 """A customer's reply in a case's thread: linked by its headers, read by a
-model where the tenant turns it on, and never applied without Sales
-(ticket 32, dw_sales ADR 0005).
+model into thread intents where the tenant turns it on, and never applied
+without Sales (tickets 32 and 26, dw_sales ADRs 0005 and 0010).
 
 Over the in-memory world (`dw_sales.evals.world`), the services the API
 serves, with a scripted model (`Recorded`): which case a reply joins and which
 it never joins, what code keeps of a reading, the step it proposes and where,
 and that keeping the PO as it is disposes no finding. The live model's
-accuracy is the eval lane's (`sales_reply@1.0.0`).
+accuracy is the eval lane's (`sales_reply@2.0.0`).
 """
 
 from __future__ import annotations
@@ -32,20 +32,26 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.reply_intent import PROMPT_TOKENS, REPLY_INTENT, ReplyReader
-from dw_sales.application.threads import ThreadedCase, ThreadIndex, ThreadLinks
+from dw_sales.application.reply_intent import (
+    PROMPT_TOKENS,
+    REPLY_INTENT,
+    ReplyReader,
+    reading_context,
+)
+from dw_sales.application.threads import ThreadIndex, ThreadLinks
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteStatus
 from dw_sales.domain.reply_intent import (
-    REPLY_STEPS,
-    ReplyKind,
+    INTENT_STEPS,
+    ModelThreadIntents,
     ReplyReading,
+    ThreadIntent,
     located_quotes,
     proposed_step,
-    verified_kind,
+    verified_intents,
 )
 from dw_sales.evals.graders import AN, CALLERS
 from dw_sales.evals.recorded import Recorded
@@ -71,8 +77,14 @@ RUN = RunContext(
 )
 
 
-def _says(kind: ReplyKind, *quotes: str) -> Recorded:
-    return Recorded(raw={"quote_spans": list(quotes), "kind": kind})
+def _says(intent: ThreadIntent, *quotes: str) -> Recorded:
+    return _saying((intent, quotes))
+
+
+def _saying(*intents: tuple[ThreadIntent, tuple[str, ...]]) -> Recorded:
+    """A scripted model answering every call with ``intents``, each with the
+    sentences it copied."""
+    return Recorded(raw={"intents": [{"quote_spans": list(q), "intent": i} for i, q in intents]})
 
 
 def _world(model: Any = None, sample: SampleSet | None = None) -> World:
@@ -203,7 +215,7 @@ async def test_another_tenants_log_is_never_read_for_a_thread() -> None:
 
 
 async def test_the_model_reads_the_reply_and_code_keeps_only_what_it_located() -> None:
-    model = _says("accepts_spec", ACCEPT, "We accept everything you said earlier.")
+    model = _says("accepts", ACCEPT, "We accept everything you said earlier.")
     world = _world(model)
     case_id = await _spec_discussion(world)
 
@@ -211,35 +223,60 @@ async def test_the_model_reads_the_reply_and_code_keeps_only_what_it_located() -
 
     assert disposition.reply is not None
     reading = disposition.reply.reading
-    assert reading is not None and reading.kind == "accepts_spec"
-    assert [q.text for q in reading.quotes] == [ACCEPT]
+    assert reading is not None and reading.kinds == ("accepts",)
+    assert [q.text for q in reading.intents[0].quotes] == [ACCEPT]
     assert (reading.prompt, reading.rules) == (str(REPLY_INTENT), "sales_order_rules@1.5.2")
     ((_, run, inputs),) = [c for c in model.calls if c[0] == REPLY_INTENT]
     assert run.tenant_id == ALPHA.tenant_id.value and run.worker_id == "sales-dw1"
-    # The quoted older message was cut before the call, and the case's
-    # question is code's words.
+    # The quoted older message was cut before the call, and the context is
+    # code's words: who wrote it, and what Sales last asked.
     assert "infusion pump" not in inputs["body"]
-    assert "QRL-RFQ-2609-03" in inputs["question"] and "accept" in inputs["question"]
+    assert inputs["context"].startswith("The customer wrote this message")
+    assert "QRL-RFQ-2609-03" in inputs["context"] and "accept" in inputs["context"]
     view = await world.services.quotes.get(AN.context(), case_id)
     (reply,) = view.replies
-    assert (reply.message_id, reply.kind, reply.proposal) == ("M41", "accepts_spec", "settle_spec")
-    assert reply.quotes == [ACCEPT]
+    assert (reply.message_id, reply.proposal) == ("M41", "settle_spec")
+    assert [(i.intent, i.quotes) for i in reply.intents] == [("accepts", [ACCEPT])]
 
 
 async def test_a_reading_with_no_located_quote_is_unclear_and_proposes_nothing() -> None:
-    world = _world(_says("accepts_spec", "We accept the price of 0 USD."))
+    world = _world(_says("accepts", "We accept the price of 0 USD."))
     case_id = await _spec_discussion(world)
 
     ((disposition, _),) = (await world.process_each(AN, ["M41"])).values()
 
     assert disposition.reply is not None and disposition.reply.reading is not None
-    assert (disposition.reply.reading.kind, disposition.reply.reading.quotes) == ("unclear", ())
+    (unclear,) = disposition.reply.reading.intents
+    assert (unclear.intent, unclear.quotes) == ("unclear", ())
     (reply,) = (await world.services.quotes.get(AN.context(), case_id)).replies
     assert reply.proposal is None
 
 
+async def test_one_message_reads_as_several_intents_each_on_its_own_quote() -> None:
+    """Ticket 26 acceptance 1: "We accept line 1, please push line 3 to
+    25/11" is an acceptance and a change, each standing on its sentence."""
+    body = "We accept line 1, please push line 3 to 25/11."
+    model = _saying(
+        ("accepts", ("We accept line 1",)), ("requests_change", ("please push line 3 to 25/11",))
+    )
+    message = _reply("hana.westbrook@norvanta.example", (), body=body)
+
+    reading = await ReplyReader(model).read(
+        newest_part(message),
+        author="customer",
+        about="Sales is handling the customer's purchase order X.",
+        rules_version="sales_order_rules@1.5.2",
+        run=RUN,
+    )
+
+    assert [(i.intent, [q.text for q in i.quotes]) for i in reading.intents] == [
+        ("accepts", ["We accept line 1"]),
+        ("requests_change", ["please push line 3 to 25/11"]),
+    ]
+
+
 async def test_the_proposal_is_the_newest_replys_and_only_where_the_status_allows() -> None:
-    world = _world(_says("accepts_spec", ACCEPT))
+    world = _world(_says("accepts", ACCEPT))
     await world.process_each(AN, ["M09"])
     ((disposition, _),) = (await world.process_each(AN, ["M41"])).values()
     case_id = disposition.case_id
@@ -248,7 +285,7 @@ async def test_the_proposal_is_the_newest_replys_and_only_where_the_status_allow
     (reply,) = (await world.services.quotes.get(AN.context(), case_id)).replies
 
     # The request is still `received`: settling a spec is no step from there.
-    assert (reply.kind, reply.proposal) == ("accepts_spec", None)
+    assert ([i.intent for i in reply.intents], reply.proposal) == (["accepts"], None)
 
 
 async def test_with_the_switch_off_the_reply_is_attached_and_no_model_is_asked(
@@ -291,12 +328,12 @@ async def test_a_spent_budget_stops_the_run_rather_than_reading_as_unavailable()
 
 
 async def test_keeping_the_po_as_it_is_resumes_review_and_disposes_no_finding() -> None:
-    world = _world(_says("keeps_po_as_is", KEEP))
+    world = _world(_says("rejects", KEEP))
     case_id = await _correction_requested(world)
 
     await world.process_each(AN, ["M42"])
     (reply,) = (await world.services.orders.get(AN.context(), case_id)).replies
-    assert (reply.kind, reply.proposal) == ("keeps_po_as_is", "resume_review")
+    assert ([i.intent for i in reply.intents], reply.proposal) == (["rejects"], "resume_review")
     await world.services.order_commands.resume_review(
         AN.context(), case_id, case_version=world.order(case_id).case_version
     )
@@ -339,31 +376,78 @@ def test_a_quote_is_kept_only_once_in_the_newest_part() -> None:
     found = located_quotes(part, ("We accept the spec.", "We accept", "From the older mail"))
 
     assert [q.text for q in found] == ["We accept the spec."]
-    assert verified_kind("accepts_spec", ()) == "unclear"
-    assert verified_kind("accepts_spec", found) == "accepts_spec"
 
 
-def test_a_reading_that_names_a_kind_without_a_quote_is_refused() -> None:
+def test_an_intent_without_a_located_quote_becomes_unclear() -> None:
+    """Ticket 26 acceptance 2, and the guard's edges: an intent given twice
+    is kept once, two unlocated ones are one ``unclear``, none is
+    ``unclear``."""
+    part = "Re: order\n\nWe accept line 1. Thanks."
+
+    def kept(*given: tuple[str, list[str]]) -> list[tuple[str, int]]:
+        answer = ModelThreadIntents.model_validate(
+            {"intents": [{"intent": i, "quote_spans": q} for i, q in given]}
+        )
+        return [(i.intent, len(i.quotes)) for i in verified_intents(part, answer)]
+
+    assert kept(("accepts", ["We accept line 1."])) == [("accepts", 1)]
+    assert kept(("requests_change", ["Push line 3."])) == [("unclear", 0)]
+    assert kept(("accepts", ["We accept line 1."]), ("cancels", ["Cancel it."])) == [
+        ("accepts", 1),
+        ("unclear", 0),
+    ]
+    assert kept(("asks", ["Why?"]), ("cancels", ["Cancel it."])) == [("unclear", 0)]
+    assert kept(("accepts", ["We accept line 1."]), ("accepts", ["Thanks."])) == [("accepts", 2)]
+    assert kept() == [("unclear", 0)]
+
+
+def test_a_reading_that_names_an_intent_without_a_quote_is_refused() -> None:
     stamp = {
-        "prompt": "sales.reply_intent@1.0.0",
+        "prompt": "sales.reply_intent@2.0.0",
         "model_profile": "onprem",
         "route": "structured_extraction",
         "rules": "sales_order_rules@1.5.2",
     }
-    ReplyReading.model_validate({**stamp, "outcome": "read", "kind": "unclear"})
+    ReplyReading.model_validate({**stamp, "outcome": "read", "intents": [{"intent": "unclear"}]})
     with pytest.raises(ValidationError):
-        ReplyReading.model_validate({**stamp, "outcome": "read", "kind": "accepts_spec"})
+        ReplyReading.model_validate(
+            {**stamp, "outcome": "read", "intents": [{"intent": "accepts"}]}
+        )
+    with pytest.raises(ValidationError):
+        ReplyReading.model_validate({**stamp, "outcome": "read", "intents": []})
+    with pytest.raises(ValidationError):
+        ReplyReading.model_validate(
+            {**stamp, "outcome": "unavailable", "intents": [{"intent": "unclear"}]}
+        )
 
 
 def test_every_proposal_is_an_existing_step_from_the_status_it_starts_in() -> None:
-    assert proposed_step("quote", "design_replied", _read("accepts_spec")) is None
-    assert proposed_step("quote", "spec_discussion", _read("counter_proposal")) is None
-    assert proposed_step("quote", "spec_discussion", _read("unclear")) is None
-    assert proposed_step("order", "in_review", _read("keeps_po_as_is")) is None
-    assert proposed_step("order", "correction_requested", None) is None
+    assert proposed_step("customer", "quote", "design_replied", _read("accepts")) is None
+    assert proposed_step("customer", "quote", "spec_discussion", _read("requests_change")) is None
+    assert proposed_step("customer", "quote", "spec_discussion", _read("unclear")) is None
+    assert proposed_step("customer", "order", "in_review", _read("rejects")) is None
+    assert proposed_step("customer", "order", "correction_requested", None) is None
+    # The same words from Sales propose nothing a customer's would, and the
+    # other way round.
+    assert proposed_step("sales", "quote", "spec_discussion", _read("accepts")) is None
+    assert proposed_step("customer", "order", "in_review", _read("asks")) is None
+    assert proposed_step("sales", "order", "in_review", _read("asks")) == "request_correction"
     statuses = {"quote": {s.value for s in QuoteStatus}, "order": {s.value for s in OrderStatus}}
-    for (kind, status, _), step in REPLY_STEPS.items():
+    for (_, kind, status, _), step in INTENT_STEPS.items():
         assert status in statuses[kind], step
+
+
+def test_intents_pointing_at_two_steps_propose_neither() -> None:
+    """Only one step can be taken from a status; which one is a person's."""
+    both = _read("accepts", "rejects")
+
+    assert proposed_step("customer", "quote", "spec_discussion", both) is None
+    # Two intents pointing at the same step propose it once.
+    same = _read("accepts", "rejects")
+    assert proposed_step("customer", "order", "correction_requested", same) == "resume_review"
+    # An intent with no row beside one with a row: the row's step.
+    mixed = _read("accepts", "requests_change")
+    assert proposed_step("customer", "quote", "spec_discussion", mixed) == "settle_spec"
 
 
 def test_a_reply_is_a_disposition_on_a_case_only() -> None:
@@ -389,7 +473,7 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     rendered = prompts.render(
         REPLY_INTENT.prompt_id,
         REPLY_INTENT.version,
-        {"subject": "", "body": "", "question": long_question},
+        {"subject": "", "body": "", "context": reading_context("customer", long_question)},
         tenant_id=RUN.tenant_id,
     )
 
@@ -397,12 +481,15 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
 
 
 async def test_a_long_body_is_cut_to_the_routes_room_before_it_is_sent() -> None:
-    model = _says("question", "Can you check?")
+    model = _says("asks", "Can you check?")
     message = _reply("hana.westbrook@norvanta.example", (), body="Can you check? " * 3000)
-    thread = ThreadedCase(CaseKind.ORDER, uuid.UUID(int=1), "NRV", "in_review", "M04", "Q")
 
     await ReplyReader(model).read(
-        newest_part(message), thread, rules_version="sales_order_rules@1.5.2", run=RUN
+        newest_part(message),
+        author="customer",
+        about="Q",
+        rules_version="sales_order_rules@1.5.2",
+        run=RUN,
     )
 
     ((_, _, inputs),) = model.calls
@@ -412,17 +499,21 @@ async def test_a_long_body_is_cut_to_the_routes_room_before_it_is_sent() -> None
 # ------------------------------------------------------------- helpers --
 
 
-def _read(kind: ReplyKind) -> ReplyReading:
-    quotes = () if kind == "unclear" else ({"text": "x", "start": 0, "end": 1},)
+def _read(*intents: ThreadIntent) -> ReplyReading:
     return ReplyReading.model_validate(
         {
-            "prompt": "sales.reply_intent@1.0.0",
+            "prompt": "sales.reply_intent@2.0.0",
             "model_profile": "onprem",
             "route": "structured_extraction",
             "rules": "sales_order_rules@1.5.2",
             "outcome": "read",
-            "kind": kind,
-            "quotes": quotes,
+            "intents": [
+                {
+                    "intent": i,
+                    "quotes": [] if i == "unclear" else [{"text": "x", "start": 0, "end": 1}],
+                }
+                for i in intents
+            ],
         }
     )
 

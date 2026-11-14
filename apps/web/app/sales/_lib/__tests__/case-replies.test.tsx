@@ -12,6 +12,7 @@ import { AN, finding, order } from "./fixtures";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Reply = SalesSchemas["CaseReplyView"];
+type Sent = SalesSchemas["SentMessageView"];
 
 const SCOPES = ["sales.case.read", "sales.price.read", "sales.order.prepare"];
 vi.mock("../../../../lib/auth/auth-context", () => ({
@@ -34,18 +35,33 @@ function reply(overrides: Partial<Reply> = {}): Reply {
     processed_at: "2026-10-02T10:50:00Z",
     linked_to: "M04",
     outcome: "read",
-    kind: "keeps_po_as_is",
-    quotes: [KEEP],
-    prompt: "sales.reply_intent@1.0.0",
+    intents: [{ intent: "rejects", quotes: [KEEP] }],
+    prompt: "sales.reply_intent@2.0.0",
     proposal: "resume_review",
     ...overrides,
   };
 }
 
+const ASK = "Could you confirm the unit price on line 2?";
+
+/** A mail An sent the customer from Outlook (ticket 25), read as asking. */
+function sent(overrides: Partial<Sent> = {}): Sent {
+  return {
+    message_id: "S1",
+    received_at: "2026-10-01T03:00:00Z",
+    subject: "RE: PO NRV-PO-26-0457",
+    outcome: "read",
+    intents: [{ intent: "asks", quotes: [ASK] }],
+    prompt: "sales.reply_intent@2.0.0",
+    proposal: "request_correction",
+    ...overrides,
+  };
+}
+
 /** M04 sent back to the customer, and M42's reply in its thread. */
-function waiting(replies: Reply[]): Order {
+function waiting(replies: Reply[], status = "correction_requested"): Order {
   return order({
-    status: "correction_requested",
+    status,
     findings: [
       finding({
         key: "price_mismatch:2",
@@ -75,6 +91,7 @@ const api = {
     available: [],
     artifacts: [],
   })),
+  requestCorrection: vi.fn(),
   resumeReview: vi.fn(async () => ({
     case_kind: "order",
     case_id: shown.case_id,
@@ -115,8 +132,8 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
       page();
 
       expect(await screen.findByText(`“${KEEP}”`)).toBeTruthy();
-      expect(screen.getByText("Mô hình đọc: Giữ nguyên PO")).toBeTruthy();
-      expect(screen.getByText("Đề xuất từ thư khách")).toBeTruthy();
+      expect(screen.getByText("Mô hình đọc: Không đồng ý")).toBeTruthy();
+      expect(screen.getByText("Đề xuất từ luồng thư")).toBeTruthy();
       expect(api.resumeReview).not.toHaveBeenCalled();
 
       fireEvent.click(
@@ -138,8 +155,7 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
       shown = waiting([
         reply({
           outcome: null,
-          kind: null,
-          quotes: [],
+          intents: [],
           prompt: null,
           proposal: null,
         }),
@@ -149,7 +165,7 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
       expect(
         await screen.findByText("Chưa đọc: bước mô hình đang tắt"),
       ).toBeTruthy();
-      expect(screen.queryByText("Đề xuất từ thư khách")).toBeNull();
+      expect(screen.queryByText("Đề xuất từ luồng thư")).toBeNull();
       expect(
         screen.getByRole("button", { name: "Khách giữ PO: xem xét lại" }),
       ).toBeTruthy();
@@ -164,8 +180,7 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
         ...waiting([
           reply({
             outcome: null,
-            kind: null,
-            quotes: [],
+            intents: [],
             prompt: null,
             proposal: null,
             picked_by: AN,
@@ -190,6 +205,44 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
         screen.getByRole("link", { name: "Thư T0" }).getAttribute("href"),
       ).toBe("/sales/inbox?message=T0");
       expect(screen.getByText("Sales chọn hồ sơ: chưa đọc")).toBeTruthy();
+    },
+    SLOW,
+  );
+});
+
+describe("a mail Sales sent in the case's thread (tickets 25 and 26)", () => {
+  it(
+    "is marked as Sales', shows what it asked and marks, never presses, the wait on the customer",
+    async () => {
+      shown = { ...waiting([], "in_review"), thread_sent: [sent()] };
+      page();
+
+      expect(await screen.findByText("Sales gửi")).toBeTruthy();
+      expect(screen.getByText(`“${ASK}”`)).toBeTruthy();
+      expect(screen.getByText("Mô hình đọc: Hỏi")).toBeTruthy();
+      expect(screen.getByText("Đề xuất từ luồng thư")).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Gửi yêu cầu khách sửa" }),
+      ).toBeTruthy();
+      expect(api.requestCorrection).not.toHaveBeenCalled();
+    },
+    SLOW,
+  );
+
+  it(
+    "a mail nobody read shows under the thread with no proposal",
+    async () => {
+      shown = {
+        ...waiting([], "in_review"),
+        thread_sent: [
+          sent({ outcome: null, intents: [], prompt: null, proposal: null }),
+        ],
+      };
+      page();
+
+      expect(await screen.findByText("Sales gửi")).toBeTruthy();
+      expect(screen.queryByText(/Mô hình đọc/)).toBeNull();
+      expect(screen.queryByText("Đề xuất từ luồng thư")).toBeNull();
     },
     SLOW,
   );

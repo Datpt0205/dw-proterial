@@ -1,5 +1,5 @@
 {
-  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.957 of the 46 golden replies as their kind (0.943 of the 35 outside the conditional and non-answer ones, the proposed bar's set) and read none of the 11 conditional acceptances and polite non-answers as accepts_spec. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
-  "min_kind_accuracy": 0.95,
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, prompt sales.reply_intent@2.0.0, 2026-11-15) read 0.8 of the 60 golden thread messages as exactly their intents (0.816 of the 49 outside the conditional and non-answer ones, the bar's set; the bar is 0.85, so the step stays gated until a measurement passes) and read none of the 11 conditional acceptances and polite non-answers as accepts. The misses add an intent the gold does not hold (mostly 'asks' beside a decision). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_intent_accuracy": 0.8,
   "max_false_accepts": 0
 }

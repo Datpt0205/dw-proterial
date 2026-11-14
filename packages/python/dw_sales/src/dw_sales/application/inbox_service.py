@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Protocol
@@ -46,6 +46,7 @@ from dw_sales.application.case_store import (
     LoggedMessage,
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
+    SentRead,
 )
 from dw_sales.application.handoffs import HandoffCopy, HandoffCopyPort, render
 from dw_sales.application.layouts import keep_learned
@@ -56,6 +57,7 @@ from dw_sales.application.order_intake import (
     MessageKind,
     OrderIntake,
 )
+from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesCatalogPort, SalesScope
 from dw_sales.application.quotation import (
     NotADesignReplyError,
@@ -86,7 +88,7 @@ from dw_sales.application.views import (
     message_disposition,
 )
 from dw_sales.application.worker_service import require_running
-from dw_sales.domain.activity import outcomes_of
+from dw_sales.domain.activity import outcomes_of, sent_outcomes
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -162,15 +164,22 @@ class InboxQueries:
             if context.visible_owners is None
             else await members_by_address(self.directory, context)
         )
+        outgoing = await outgoing_in(self.directory, context)
         views = []
         for message in await self.inbox.list_messages(scope):
             seen = logged.get(message.message_id)
             if seen is not None and not _shown(context, seen.disposition, hidden, members):
                 continue
+            # Only a message no flow processed is one Sales sent: one
+            # processed before the rule keeps what it became.
             disposition = (
                 message_disposition(seen.disposition, seen.processed_at, seen.handled, numbers)
                 if seen is not None
-                else message_disposition(MessageDisposition.pending(message.message_id), None)
+                else message_disposition(
+                    MessageDisposition.pending(message.message_id),
+                    None,
+                    outgoing=outgoing(message),
+                )
             )
             views.append(
                 inbox_message(
@@ -324,9 +333,10 @@ class InboxProcessing:
                 "the message is already on a case",
                 details={"message_id": message_id, "disposition": existing.kind.value},
             )
+        outgoing = await outgoing_in(self.directory, context)
         # The message's model calls, timed for its step rows (slice 3).
         with recording_model_calls():
-            return await self._process(context, scope, message_id, run)
+            return await self._process(context, scope, message_id, run, outgoing)
 
     async def process_all(
         self, context: AccessContext, *, run: RunContext
@@ -337,11 +347,16 @@ class InboxProcessing:
         async with self.uow(scope) as work:
             await require_running(work)
             done = {m.disposition.message_id for m in await work.messages.list_all()}
+        outgoing = await outgoing_in(self.directory, context)
         results = []
         for message in await self.inbox.list_messages(scope):
-            if message.message_id not in done:
+            # A message Sales sent is the mailbox lane's to take up, and only
+            # where its thread intents are read (`InboxLane`).
+            if message.message_id not in done and not outgoing(message):
                 with recording_model_calls():
-                    results.append(await self._process(context, scope, message.message_id, run))
+                    results.append(
+                        await self._process(context, scope, message.message_id, run, outgoing)
+                    )
         return results
 
     # ------------------------------------------------------------- helpers --
@@ -355,13 +370,24 @@ class InboxProcessing:
         )
 
     async def _process(
-        self, context: AccessContext, scope: SalesScope, message_id: str, run: RunContext
+        self,
+        context: AccessContext,
+        scope: SalesScope,
+        message_id: str,
+        run: RunContext,
+        outgoing: Callable[[InboundMessage], bool],
     ) -> MessageDispositionView:
         started = time.perf_counter()
         message = await self.inbox.get_message(scope, message_id)
         if message is None:
             raise NotFoundError("no such message", details={"message_id": message_id})
         ingest = self.clock.now()
+        async with self.uow(scope) as work:
+            processed = await work.messages.get(message_id) is not None
+        if not processed and outgoing(message):
+            # Sales' own mail (ticket 25): never a case, a route or a value.
+            await self._sent(context, scope, message, ingest, run)
+            return message_disposition(MessageDisposition.pending(message_id), None, outgoing=True)
         classified = await self.intake.classify(scope, message, run=run, now=ingest)
         if classified.retry:
             # The model gave no usable answer and the message is young enough
@@ -395,6 +421,59 @@ class InboxProcessing:
         for case in cases:
             await self._warm(scope, case)
         return message_disposition(disposition, ingest)
+
+    async def _sent(
+        self,
+        context: AccessContext,
+        scope: SalesScope,
+        message: InboundMessage,
+        ingest: datetime,
+        run: RunContext,
+    ) -> None:
+        """A message Sales sent, taken up once (`outgoing.py`): what a model
+        reads it does where the tenant's rules ask (`OrderIntake.read_sent`),
+        kept beside it with its step row and audit row. It has no
+        disposition: nothing is opened, routed or changed."""
+        async with self.uow(scope) as work:
+            if await work.sent.get(message.message_id) is not None:
+                raise ConflictError(
+                    "DW1 already processed this message Sales sent",
+                    details={"message_id": message.message_id, "rule": "sent_message_already_read"},
+                )
+        reading = await self.intake.read_sent(scope, message, run=run)
+        async with self.uow(scope) as work:
+            await require_running(work)
+            await work.sent.record(SentRead(message.message_id, ingest, reading))
+            await work.step_activity.append(
+                sent_outcomes(
+                    message.message_id,
+                    reading,
+                    model_calls(),
+                    at=self.clock.now(),
+                    new_id=self.ids.new_uuid,
+                )
+            )
+            await work.audit.append(
+                AuditEvent(
+                    id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    actor_id=UserId(context.principal_id),
+                    action="sales.message.processed",
+                    resource_type="sales_message",
+                    resource_id=message.message_id,
+                    run_id=run.run_id,
+                    occurred_at=self.clock.now(),
+                    details={
+                        "outgoing": True,
+                        "reading": "not_read" if reading is None else reading.outcome,
+                        "actor_kind": "worker",
+                        "worker_id": DW1_WORKER_ID,
+                        "worker_version": DW1_WORKER_VERSION,
+                    },
+                )
+            )
+            await work.commit()
 
     async def _warm(self, scope: SalesScope, case: OrderCase | QuoteCase) -> None:
         # A speed-up, never a step: the case is stored and its disposition

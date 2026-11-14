@@ -155,6 +155,13 @@ class ThreadLinkPort(Protocol):
         self, scope: SalesScope, message: InboundMessage, sender: Customer | None
     ) -> tuple[ThreadedCase, ...]: ...
 
+    async def sent_cases(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> tuple[ThreadedCase, ...]:
+        """The cases a message Sales sent is on (ticket 25): those its thread
+        holds that it is addressed to."""
+        ...
+
 
 class ConvertLedgerPort(Protocol):
     """Where an item code Sales confirmed for a customer's own code is kept,
@@ -163,6 +170,11 @@ class ConvertLedgerPort(Protocol):
     async def learn_convert(
         self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
     ) -> bool: ...
+
+
+# What an uploaded message's id starts with; the rest is its files' hash. A
+# stored row is an upload exactly when its id does (`ck_mailbox_messages_upload`).
+UPLOAD_PREFIX: Final = "upload-"
 
 
 @dataclass(frozen=True, slots=True)

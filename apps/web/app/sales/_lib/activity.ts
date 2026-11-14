@@ -12,7 +12,7 @@ import {
   LANGUAGE,
   READ_ATTRIBUTE,
   READING_REASON,
-  REPLY_KIND,
+  THREAD_INTENT,
   ROUTING_REASON,
 } from "./labels";
 import { humanise, knownFieldWords } from "./rule-labels";
@@ -131,8 +131,8 @@ export function producedValue(
   field: string,
   value: string,
 ): string {
-  if (field === "kind")
-    return label(step === "reply_intent" ? REPLY_KIND : INTENT_KIND, value);
+  if (field === "kind") return label(INTENT_KIND, value);
+  if (field === "intent") return label(THREAD_INTENT, value);
   if (field === "language") return label(LANGUAGE, value);
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
   return value;

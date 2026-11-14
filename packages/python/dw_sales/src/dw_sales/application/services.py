@@ -219,8 +219,10 @@ def assemble(
         sources,
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
-    orders = OrderQueries(uow, gate, pending, step_activity, book, threads)
-    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity, book, threads)
+    orders = OrderQueries(uow, gate, pending, step_activity, book, threads, directory)
+    quotes = QuoteQueries(
+        uow, gate, clock, quotation, pending, step_activity, book, threads, directory
+    )
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),

@@ -110,6 +110,8 @@ _SALES_TABLES = (
     "sales.assistant_turns",
     # Migration 3fcedec4e4f1 (ticket 19): a message's further order cases.
     "sales.message_cases",
+    # Migration 7f3def432f82 (ticket 25): the messages Sales sent DW1 took up.
+    "sales.sent_messages",
 )
 
 
@@ -173,6 +175,8 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     }
     # A message's further cases are how it was processed (3fcedec4e4f1).
     assert {verb for tbl, verb in held if tbl == "message_cases"} == {"SELECT", "INSERT"}
+    # A sent message's record is how it was processed (7f3def432f82).
+    assert {verb for tbl, verb in held if tbl == "sent_messages"} == {"SELECT", "INSERT"}
     # A mail Sales asked DW1 to send moves on, and is never removed (c42ed45c73a2).
     assert {verb for tbl, verb in held if tbl == "outbound_mails"} == {
         "SELECT",

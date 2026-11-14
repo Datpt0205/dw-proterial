@@ -458,7 +458,9 @@ def build_dw1(
     lane = (
         None
         if lane_access is None
-        else InboxLane(uow, inbox, assembly.services.processing, lane_access, clock)
+        else InboxLane(
+            uow, inbox, assembly.services.processing, lane_access, clock, directory, intake
+        )
     )
     if requester_access is None:
         return Dw1Mount(

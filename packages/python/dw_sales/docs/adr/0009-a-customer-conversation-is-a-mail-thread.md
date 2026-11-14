@@ -74,6 +74,33 @@ thread" was proposed.
    value; it is context (what Sales asked, when a confirmation left). Before
    building it, measure whether the export of a sent item keeps its thread
    headers (ticket 23). The "Gửi cho khách" button stays.
+
+   *Built 2026-11-14 (ticket 25), by the agent, before ticket 23's
+   measurement (a fake flow: the mock mailbox and the drop lane, which
+   stored every file already):* `outgoing.is_outgoing` reads the sender
+   against the workspace's people's sign-in addresses
+   (`sales_addresses`, the platform's user record, service accounts left
+   out). Two exceptions the ADR did not name: an upload ("Tải PO lên"
+   stores the uploader as its sender) is never outgoing, and a member's
+   address with an SPF, DKIM or DMARC `fail` (or SPF `softfail`) is
+   processed as incoming, so a forged one reaches a person instead of
+   being hidden as context; a copy saved from Sent Items carries no such
+   result. A message is on a case when it is on the case's thread and
+   addressed (To/Cc) to someone who wrote one of that customer's mails
+   there (`threads.addressed_to`): Sales' headers say which thread, its
+   recipients say which customer, so a chain another customer forged into
+   the thread never puts Sales' mail on their case. It has no
+   disposition; the mailbox lane takes it up only while the tenant reads
+   thread intents (ADR 0010), once, as a DW1 run, and keeps what it read in
+   `sales.sent_messages` (`SentRead`, migration `7f3def432f82`), which is
+   also what tells the lane it is done. With the step off it costs no run.
+   A message processed before this rule keeps the disposition it had. The
+   inbox marks it "Sales gửi" with nothing to press; the case shows it in
+   its thread card. Consequence to watch: a PIC forwarding a customer's PO
+   to a colleague is now Sales' mail and opens nothing; the customer's own
+   mail opens the case. Owed: ticket 23 (whether the export keeps
+   `In-Reply-To`; without it a sent copy has its own thread key and reaches
+   a case only through the customer's next reply naming it).
 4. **Power Automate transports and decides nothing.** No flow tags a mail as
    an existing or new thread: that would be a second decider beside the
    thread key, written as subject keywords, blind to DW's cases (the host

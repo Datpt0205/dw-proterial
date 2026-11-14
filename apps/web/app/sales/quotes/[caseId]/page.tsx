@@ -725,6 +725,7 @@ function QuoteDetail() {
 
       <CaseReplies
         replies={data.replies}
+        sent={data.thread_sent}
         before={data.thread_before}
         beforeTitle="Trao đổi trước yêu cầu"
       />

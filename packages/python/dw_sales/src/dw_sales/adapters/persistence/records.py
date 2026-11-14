@@ -1,5 +1,6 @@
-"""The sales records that are not cases: message dispositions, the case event
-log, served sources, artifacts and the pause switch. Each implements its port
+"""The sales records that are not cases: message dispositions, the messages
+Sales sent that DW1 took up, the case event log, served sources, artifacts and
+the pause switch. Each implements its port
 inside a unit of work's transaction."""
 
 from __future__ import annotations
@@ -22,15 +23,18 @@ from dw_sales.application.case_store import (
     LoggedMessage,
     MessageHandled,
     MessageOnCase,
+    SentRead,
     ServedSource,
     SourceRegion,
     WorkerState,
 )
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
+from dw_sales.domain.reply_intent import ReplyReading
 
 _M = tables.messages
 _MC = tables.message_cases
+_SM = tables.sent_messages
 _S = tables.source_served
 _A = tables.artifacts
 _W = tables.worker_state
@@ -51,6 +55,59 @@ def _case_of(row: RowMapping) -> tuple[CaseKind, uuid.UUID] | None:
     if row["quote_case_id"] is not None:
         return CaseKind.QUOTE, row["quote_case_id"]
     return None
+
+
+@dataclass(frozen=True)
+class SqlSentReadLog:
+    """Implements `SentReadLogPort`."""
+
+    session: AsyncSession
+    scope: SalesScope
+
+    async def record(self, sent: SentRead) -> None:
+        statement = (
+            pg_insert(_SM)
+            .values(
+                **scope_values(self.scope),
+                message_id=sent.message_id,
+                processed_at=sent.processed_at,
+                reading=None if sent.reading is None else sent.reading.model_dump(mode="json"),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[_SM.c.tenant_id, _SM.c.workspace_id, _SM.c.message_id]
+            )
+            .returning(_SM.c.message_id)
+        )
+        if (await self.session.execute(statement)).first() is None:
+            raise ConflictError(
+                "DW1 already processed this message Sales sent",
+                details={"message_id": sent.message_id, "rule": "sent_message_already_read"},
+            )
+
+    async def get(self, message_id: str) -> SentRead | None:
+        row = (
+            await self.session.execute(self._select().where(_SM.c.message_id == message_id))
+        ).first()
+        return None if row is None else _sent(row)
+
+    async def list_all(self) -> Sequence[SentRead]:
+        rows = await self.session.execute(
+            self._select().order_by(_SM.c.processed_at.desc(), _SM.c.message_id)
+        )
+        return [_sent(row) for row in rows]
+
+    def _select(self) -> sa.Select[tuple[str, datetime, object]]:
+        return sa.select(_SM.c.message_id, _SM.c.processed_at, _SM.c.reading).where(
+            _SM.c.workspace_id == self.scope.workspace_id.value
+        )
+
+
+def _sent(row: sa.Row[tuple[str, datetime, object]]) -> SentRead:
+    return SentRead(
+        message_id=row.message_id,
+        processed_at=row.processed_at,
+        reading=None if row.reading is None else ReplyReading.model_validate(row.reading),
+    )
 
 
 @dataclass(frozen=True)

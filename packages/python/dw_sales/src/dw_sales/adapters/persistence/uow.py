@@ -34,6 +34,7 @@ from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
 from dw_sales.adapters.persistence.records import (
     SqlArtifactLog,
     SqlMessageLog,
+    SqlSentReadLog,
     SqlSourceServed,
     SqlWorkerSwitch,
 )
@@ -57,6 +58,7 @@ class SqlSalesUnitOfWork:
     worker: SqlWorkerSwitch
     layouts: SqlLayoutStore
     jobs: SqlProcessingJobs
+    sent: SqlSentReadLog
     approvals: RunLessApprovalsPort
     followups: SqlFollowupStore
     # What DW1's model steps did (slice 3): `StepActivityLogPort`.
@@ -102,6 +104,7 @@ class SqlSalesUnitOfWork:
         self.worker = SqlWorkerSwitch(session, scope)
         self.layouts = SqlLayoutStore(session, scope)
         self.jobs = SqlProcessingJobs(session, scope)
+        self.sent = SqlSentReadLog(session, scope)
         self.approvals = self._approvals(session)
         self.followups = SqlFollowupStore(session, scope)
         self.step_activity = SqlStepActivityLog(session, scope)

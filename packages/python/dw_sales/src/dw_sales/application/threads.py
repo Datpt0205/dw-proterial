@@ -29,14 +29,21 @@ then is it known who the sender is (Bravo's contacts, the sender ledger).
 One case: the reply is attached to it. Several: the numbers it names choose
 (`named_cases`), else Sales picks among them (`order_intake`).
 
+**A message Sales sent** (ticket 25, `outgoing.py`) is keyed like any. It is
+on a case when it is on the case's thread and addressed to someone who wrote
+one of the case customer's mails there (`addressed_to`): the case's page
+shows it (`case_thread`), and its reading proposes for that case
+(`ThreadLinks.sent_cases`), by the one rule. Sales' own headers say which
+thread; who it was written to says which customer's case.
+
 What Sales last asked of the customer on that case (`question`) is built
-here from the case, by code, for the model reading of the reply.
+here from the case, by code, for the model reading of a thread message.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
@@ -184,6 +191,27 @@ class ThreadLinks:
         their messages came; none without a sender or thread headers."""
         if sender is None or not message.references:
             return ()
+        code = sender.code
+        return await self._held(scope, message, lambda case, _: case.customer_code == code)
+
+    async def sent_cases(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> tuple[ThreadedCase, ...]:
+        """The cases a message Sales sent is on (ticket 25): every case its
+        thread holds that it is addressed to (`addressed_to`), in the order
+        their messages came. Sales' own headers say which thread; who it was
+        written to says which of the thread's cases, so a chain another
+        customer forged into the thread never puts this mail on their case."""
+        return await self._held(scope, message, lambda _, on: addressed_to(message, on))
+
+    async def _held(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        keep: Callable[[ThreadedCase, Sequence[InboundMessage]], bool],
+    ) -> tuple[ThreadedCase, ...]:
+        """The cases ``message``'s thread holds that ``keep`` keeps, given
+        the case and the thread's messages on it."""
         thread = [
             m
             for m in await self.mailbox.thread_messages(scope, message)
@@ -200,11 +228,22 @@ class ThreadLinks:
             for entries in sorted(
                 by_case.values(), key=lambda on: min(place[e.message_id] for e in on)
             ):
-                linked = _linked_to(message, thread, {e.message_id for e in entries})
+                on_case = {e.message_id for e in entries}
+                linked = _linked_to(message, thread, on_case)
                 threaded = await _case_of(work, entries[0].case_kind, entries[0].case_id, linked)
-                if threaded is not None and threaded.customer_code == sender.code:
+                if threaded is not None and keep(
+                    threaded, [m for m in thread if m.message_id in on_case]
+                ):
                     found.append(threaded)
         return tuple(found)
+
+
+def addressed_to(message: InboundMessage, writers: Iterable[InboundMessage]) -> bool:
+    """Whether a message Sales sent is addressed (To or Cc) to someone who
+    wrote one of ``writers``: the mails of a case's customer on the thread.
+    Recipients are the sender's to write, and Sales is the sender here."""
+    wrote = {m.sender.address.lower() for m in writers}
+    return any(r.address.lower() in wrote for r in message.recipients)
 
 
 def _linked_to(message: InboundMessage, thread: Sequence[InboundMessage], on_case: set[str]) -> str:
@@ -235,7 +274,21 @@ def named_cases(
     )
 
 
-async def talk_before(
+@dataclass(frozen=True, slots=True)
+class CaseThread:
+    """A case's mail thread(s) as its page shows them (tickets 24 and 25)."""
+
+    # The customer's messages received before the case opened, oldest first:
+    # the talk before the PO (ADR 0009 decision 2).
+    before: list[InboundMessage]
+    # The messages Sales sent on the thread, at any time, oldest first.
+    sent: list[InboundMessage]
+    # When each of the case's own messages was received, by message id: a
+    # reply's place beside a sent message.
+    received: dict[str, datetime]
+
+
+async def case_thread(
     mailbox: ThreadMembersPort,
     scope: SalesScope,
     logged: Mapping[str, LoggedMessage],
@@ -243,12 +296,17 @@ async def talk_before(
     case_kind: CaseKind,
     case_id: uuid.UUID,
     customer_code: str,
-) -> list[InboundMessage]:
-    """The messages of the case's thread(s) received before it opened, oldest
-    first: the talk before the PO (ADR 0009 decision 2). Only those DW1 read
-    as the case's own customer's: a thread is the workspace's, and a chain
-    naming this customer's mail from another sender shows nothing here.
-    ``logged`` is the workspace's log by message id."""
+    outgoing: Callable[[InboundMessage], bool],
+) -> CaseThread:
+    """The case's thread(s), read from each of its own messages. ``logged``
+    is the workspace's log by message id; ``outgoing`` says which message
+    Sales sent (`outgoing.is_outgoing`, the members' addresses bound).
+
+    The talk before shows only mails DW1 read as the case's own customer's:
+    a thread is the workspace's, and a chain naming this customer's mail from
+    another sender shows nothing here. A message Sales sent shows when it is
+    addressed to someone who wrote one of those or one of the case's own
+    (`addressed_to`), as `ThreadLinks.sent_cases` decides it for a reading."""
     own: list[InboundMessage] = []
     opened: list[datetime] = []
     for entry in logged.values():
@@ -262,21 +320,33 @@ async def talk_before(
         if disposition.kind is DispositionKind.CASE_CREATED:
             opened.append(message.received_at)
     if not own:
-        return []
+        return CaseThread([], [], {})
     since = min(opened or [m.received_at for m in own])
     mine = {m.message_id for m in own}
-    before: dict[str, InboundMessage] = {}
+    others: dict[str, InboundMessage] = {}
     for message in own:
         for other in await mailbox.thread_messages(scope, message):
-            seen = logged.get(other.message_id)
-            if (
-                other.message_id not in mine
-                and other.received_at < since
-                and seen is not None
-                and seen.disposition.customer_code == customer_code
-            ):
-                before[other.message_id] = other
-    return sorted(before.values(), key=lambda m: (m.received_at, m.message_id))
+            if other.message_id not in mine:
+                others[other.message_id] = other
+    before: list[InboundMessage] = []
+    unlogged: list[InboundMessage] = []
+    for other in others.values():
+        seen = logged.get(other.message_id)
+        if seen is None:
+            unlogged.append(other)
+        elif other.received_at < since and seen.disposition.customer_code == customer_code:
+            before.append(other)
+    writers = [*own, *before]
+    sent = [m for m in unlogged if outgoing(m) and addressed_to(m, writers)]
+    return CaseThread(
+        sorted(before, key=_received),
+        sorted(sent, key=_received),
+        {m.message_id: m.received_at for m in own},
+    )
+
+
+def _received(message: InboundMessage) -> tuple[datetime, str]:
+    return (message.received_at, message.message_id)
 
 
 async def _case_of(

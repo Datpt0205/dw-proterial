@@ -101,11 +101,11 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         ModelStep.RFQ_EXTRACTION: StepBar(
             0.85, "vi_en.right_field", RFQ_EXTRACTION, "sales_rfq", "sales.rfq_golden"
         ),
-        # Ticket 32: the golden replies other than conditional ones and
-        # non-answers read as their kind, and none of those two read as
-        # `accepts_spec` (the grader's own condition).
+        # Tickets 32 and 26: the golden thread messages other than
+        # conditional ones and non-answers read as exactly their intents, and
+        # none of those two read as `accepts` (the grader's own condition).
         ModelStep.REPLY_INTENT: StepBar(
-            0.85, "bar_set.kind_accuracy", REPLY_INTENT, "sales_reply", "sales.reply_golden"
+            0.85, "bar_set.intent_accuracy", REPLY_INTENT, "sales_reply", "sales.reply_golden"
         ),
         # Ticket 33: the golden fields carried right.
         ModelStep.REQUEST_HANDOFF: StepBar(

@@ -560,7 +560,11 @@ function OrderDetail() {
         onOpenSource={openSource}
       />
 
-      <CaseReplies replies={data.replies} before={data.thread_before} />
+      <CaseReplies
+        replies={data.replies}
+        sent={data.thread_sent}
+        before={data.thread_before}
+      />
 
       <Collapse
         items={[

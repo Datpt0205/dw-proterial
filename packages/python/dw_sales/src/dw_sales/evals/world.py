@@ -82,6 +82,7 @@ from dw_sales.application.case_store import (
     OutboundStatus,
     ProcessingJob,
     SalesUnitOfWork,
+    SentRead,
     ServedSource,
     Settlement,
     SourceRegion,
@@ -182,7 +183,8 @@ class SampleWith:
     temporary copy (a context manager). A message names its ``message_id``,
     ``sender``, ``subject``, ``received_at``, ``body`` and ``authentication``,
     and may name ``internet_message_id`` and ``references`` (a reply in a
-    thread, ticket 32) and ``attachments``, each its ``attachment_id``,
+    thread, ticket 32), ``recipients`` (a message Sales sent, ticket 25) and
+    ``attachments``, each its ``attachment_id``,
     ``name``, ``media_type`` and the ``file`` (a path) its bytes are copied
     from (ticket 27's legacy and scanned POs)."""
 
@@ -207,6 +209,10 @@ class SampleWith:
                 {
                     "message_id": spec["message_id"],
                     "sender": {"address": spec["sender"], "display_name": ""},
+                    "recipients": [
+                        {"address": address, "display_name": ""}
+                        for address in spec.get("recipients", ())
+                    ],
                     "subject": spec["subject"],
                     "received_at": spec["received_at"],
                     "body_text": spec["body"],
@@ -280,6 +286,8 @@ class _ScopeState:
     step_outcomes: list[StepOutcome] = field(default_factory=list)
     # The mails Sales asked DW1 to send ("Gửi cho khách").
     outbound: dict[uuid.UUID, OutboundMail] = field(default_factory=dict)
+    # The messages Sales sent that DW1 took up (ticket 25).
+    sent: dict[str, SentRead] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -297,6 +305,7 @@ class _ScopeState:
             followups=dict(self.followups),
             step_outcomes=list(self.step_outcomes),
             outbound=dict(self.outbound),
+            sent=dict(self.sent),
         )
 
 
@@ -419,6 +428,29 @@ class _Messages:
             return False
         self._held[message_id] = dataclasses.replace(logged, handled=handled)
         return True
+
+
+class _Sent:
+    """`SentReadLogPort` in memory, refusing what the SQL one refuses."""
+
+    def __init__(self, held: dict[str, SentRead]) -> None:
+        self._held = held
+
+    async def record(self, sent: SentRead) -> None:
+        if sent.message_id in self._held:
+            raise ConflictError(
+                "DW1 already processed this message Sales sent",
+                details={"message_id": sent.message_id, "rule": "sent_message_already_read"},
+            )
+        self._held[sent.message_id] = sent
+
+    async def get(self, message_id: str) -> SentRead | None:
+        return self._held.get(message_id)
+
+    async def list_all(self) -> Sequence[SentRead]:
+        return sorted(
+            self._held.values(), key=lambda s: (s.processed_at, s.message_id), reverse=True
+        )
 
 
 class _Jobs:
@@ -741,6 +773,7 @@ class _Work:
         self.audit = _Audit(state.audit)
         self.layouts = _Layouts(state.layouts)
         self.jobs = _Jobs(state.jobs)
+        self.sent = _Sent(state.sent)
         self.followups = _Followups(state)
         self.step_activity = _StepActivity(state.step_outcomes)
         self.outbound = _Outbound(state.outbound)
@@ -1060,6 +1093,10 @@ class World:
     measurements: MemoryModelMeasurements
     # What people uploaded ("Tải PO lên", ticket 18), beside the mock mail.
     uploads: MemoryUploads
+    # The intake and the people, as the mailbox lane is built over them
+    # (ticket 25: whose mail is Sales', and whether its intents are read).
+    intake: OrderIntake
+    directory: Directory
 
     async def decide_layout(
         self,
@@ -1532,6 +1569,8 @@ def open_world(
         example_store,
         measurements,
         uploads,
+        intake,
+        directory,
     )
 
 

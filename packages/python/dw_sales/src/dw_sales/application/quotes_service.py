@@ -36,8 +36,9 @@ from dw_sales.application.activity_ports import (
     activity_cases,
 )
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
+from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.overview_ports import FollowupPolicyPort
-from dw_sales.application.ports import SalesCatalogPort
+from dw_sales.application.ports import MemberDirectoryPort, SalesCatalogPort
 from dw_sales.application.quotation import QuotationService, ScreeningRow
 from dw_sales.application.runs import (
     PendingDecisionsPort,
@@ -54,7 +55,7 @@ from dw_sales.application.support import (
     seen_by,
     stored_quote,
 )
-from dw_sales.application.threads import ThreadMembersPort, talk_before
+from dw_sales.application.threads import ThreadMembersPort, case_thread
 from dw_sales.application.views import (
     CaseChangeView,
     PendingDecisionView,
@@ -136,8 +137,11 @@ class QuoteQueries:
     activity: StepActivityReadPort
     # What "due soon" means for the tenant (`morning_brief.due_within_days`).
     followups: FollowupPolicyPort
-    # The mailbox's threads, for the talk before the request (ticket 24).
+    # The mailbox's threads, for the talk before the request (ticket 24) and
+    # the messages Sales sent on them (ticket 25).
     threads: ThreadMembersPort
+    # Whose sign-in address a message Sales sent is from (ticket 25).
+    directory: MemberDirectoryPort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -180,6 +184,7 @@ class QuoteQueries:
             served = await work.served.served(
                 context.principal_id, CaseKind.QUOTE, case_id, stored.case.case_version
             )
+            sent = {s.message_id: s for s in await work.sent.list_all()}
         prices = self.gate.prices(context)
         today = await self.service.today(scope, self.clock.now())
         case = stored.case
@@ -206,14 +211,16 @@ class QuoteQueries:
             decision=decision,
             replies=logged,
             served=served,
-            thread_before=await talk_before(
+            thread=await case_thread(
                 self.threads,
                 scope,
                 {m.disposition.message_id: m for m in logged},
                 case_kind=CaseKind.QUOTE,
                 case_id=case_id,
                 customer_code=case.customer_code,
+                outgoing=await outgoing_in(self.directory, context),
             ),
+            sent=sent,
         )
 
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:
