@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
@@ -17,6 +18,11 @@ from dw_platform.domain.messages import (
 )
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path, read_records
 from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.threads import ThreadIndex, ThreadMembersPort
+
+
+class _Mailbox(InboxPort, ThreadMembersPort, Protocol):
+    """A mailbox that also answers a message's thread (ticket 24)."""
 
 
 class _AttachmentFixture(BaseModel):
@@ -54,12 +60,13 @@ class _MessageFixture(BaseModel):
 
 
 class MockInbox:
-    """Implements `InboxPort` for a demo deployment.
+    """Implements `InboxPort` and `ThreadMembersPort` for a demo deployment.
 
     Bound to the one scope whose mailbox it stands in for: any other scope
     sees an empty mailbox. A real adapter reads the mailbox configured for the
     scope's tenant and workspace. Attachment bytes are held in memory: the
-    fixture set is a few hundred kilobytes.
+    fixture set is a few hundred kilobytes. Its messages are threaded as if
+    stored oldest first (`ThreadIndex`, ticket 24).
     """
 
     def __init__(
@@ -88,6 +95,7 @@ class MockInbox:
         self._scope = scope
         self._messages = tuple(sorted(by_id.values(), key=lambda m: m.received_at))
         self._by_id = by_id
+        self._threads = ThreadIndex(self._messages)
         self._contents = dict(contents)
 
     @classmethod
@@ -138,6 +146,11 @@ class MockInbox:
     async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
         return self._by_id.get(message_id) if scope == self._scope else None
 
+    async def thread_messages(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> Sequence[InboundMessage]:
+        return self._threads.thread_of(message) if scope == self._scope else ()
+
     async def read_attachment(
         self, scope: SalesScope, message_id: str, attachment_id: str
     ) -> AttachmentContent | None:
@@ -151,13 +164,13 @@ class MockInbox:
 
 
 class WithUploads:
-    """`InboxPort`: the mock mailbox, and beside it the POs people uploaded
-    ("Tải PO lên", ticket 18), which are stored even where the mail is the
-    mock's. A demo deployment then shows and processes an upload as one with
-    the stored mailbox does. The mock's messages come first on an id both
-    hold, which an upload's (``upload-<hash>``) never is."""
+    """`InboxPort` and `ThreadMembersPort`: the mock mailbox, and beside it
+    the POs people uploaded ("Tải PO lên", ticket 18), which are stored even
+    where the mail is the mock's. A demo deployment then shows and processes
+    an upload as one with the stored mailbox does. The mock's messages come
+    first on an id both hold, which an upload's (``upload-<hash>``) never is."""
 
-    def __init__(self, mock: InboxPort, uploads: InboxPort) -> None:
+    def __init__(self, mock: _Mailbox, uploads: _Mailbox) -> None:
         self._mock = mock
         self._uploads = uploads
 
@@ -168,6 +181,18 @@ class WithUploads:
     async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
         found = await self._mock.get_message(scope, message_id)
         return found or await self._uploads.get_message(scope, message_id)
+
+    async def thread_messages(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> Sequence[InboundMessage]:
+        both = {
+            m.message_id: m
+            for m in (
+                *await self._uploads.thread_messages(scope, message),
+                *await self._mock.thread_messages(scope, message),
+            )
+        }
+        return sorted(both.values(), key=lambda m: (m.received_at, m.message_id))
 
     async def read_attachment(
         self, scope: SalesScope, message_id: str, attachment_id: str

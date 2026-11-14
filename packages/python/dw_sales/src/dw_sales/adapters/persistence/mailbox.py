@@ -11,6 +11,11 @@ A message is stored whole, as its model dumps it, and read back through the
 same model: no field is named here twice. An attachment's bytes are held to
 the description the message carries (`AttachmentContent`) every time they
 are read.
+
+Each message is stored with its thread key (ticket 24), by
+`threads.thread_key` over the messages already stored that its headers name,
+in the transaction that stores it; a thread is read by `threads.thread_keys`
+through `ix_mailbox_messages_thread_key`, never by listing the mailbox.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from dw_sales.adapters.persistence.uow import AuditFactory
 from dw_sales.application.mail_drop import MailFile
 from dw_sales.application.order_ports import PoUpload
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.threads import KeyedMessage, thread_key, thread_keys
 
 _M = tables.mailbox_messages
 _A = tables.mailbox_attachments
@@ -61,6 +67,26 @@ class SqlMailbox:
     async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
         async with tenant_session(self.session_factory, _bound(scope)) as session:
             return await _message(session, message_id)
+
+    # ---------------------------------------------------- ThreadMembersPort --
+
+    async def thread_messages(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> Sequence[InboundMessage]:
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            own = await session.scalar(
+                sa.select(_M.c.thread_key).where(_M.c.message_id == message.message_id).limit(1)
+            )
+            named = [m.thread_key for m in await _named(session, message)]
+            keys = thread_keys(own, named)
+            if not keys:
+                return []
+            documents = await session.scalars(
+                sa.select(_M.c.message)
+                .where(_M.c.thread_key.in_(sorted(keys)))
+                .order_by(_M.c.received_at, _M.c.message_id)
+            )
+            return [InboundMessage.model_validate(document) for document in documents]
 
     async def read_attachment(
         self, scope: SalesScope, message_id: str, attachment_id: str
@@ -129,6 +155,7 @@ class SqlMailbox:
                         internet_message_id=message.internet_message_id,
                         source_name=source,
                         message=message.model_dump(mode="json"),
+                        thread_key=thread_key(message, await _named(session, message)),
                     )
                     .on_conflict_do_nothing()
                     .returning(_M.c.message_id)
@@ -184,6 +211,8 @@ class SqlMailbox:
                     internet_message_id=None,
                     source_name=message.attachments[0].name,
                     message=message.model_dump(mode="json"),
+                    # Its own: an upload names no message it answers.
+                    thread_key=thread_key(message, ()),
                     uploaded_by=upload.uploaded_by,
                     uploaded_for=upload.customer_code,
                 )
@@ -223,6 +252,20 @@ async def _store_attachments(session: AsyncSession, scope: SalesScope, mail: Mai
             for attachment in message.attachments
         ],
     )
+
+
+async def _named(session: AsyncSession, message: InboundMessage) -> list[KeyedMessage]:
+    """The stored messages ``message``'s `In-Reply-To`/`References` name, in
+    the scope the session is bound to (RLS), by the Message-ID index."""
+    if not message.references:
+        return []
+    rows = await session.execute(
+        sa.select(_M.c.message_id, _M.c.received_at, _M.c.thread_key).where(
+            _M.c.internet_message_id.in_(list(message.references)),
+            _M.c.message_id != message.message_id,
+        )
+    )
+    return [KeyedMessage(row.message_id, row.received_at, row.thread_key) for row in rows]
 
 
 async def _message(session: AsyncSession, message_id: str) -> InboundMessage | None:

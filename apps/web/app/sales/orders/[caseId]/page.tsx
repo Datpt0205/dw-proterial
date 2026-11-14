@@ -553,7 +553,7 @@ function OrderDetail() {
         onOpenSource={openSource}
       />
 
-      <CaseReplies replies={data.replies} />
+      <CaseReplies replies={data.replies} before={data.thread_before} />
 
       <Collapse
         items={[

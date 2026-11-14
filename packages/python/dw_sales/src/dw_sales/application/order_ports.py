@@ -147,13 +147,13 @@ class OrderCaseLookupPort(Protocol):
 
 
 class ThreadLinkPort(Protocol):
-    """The case a reply's thread headers name (ticket 32): one case of the
-    sender's own customer whose message the reply answers, or None. Satisfied
-    by `ThreadLinks`; deterministic, no model."""
+    """The cases a reply's mail thread holds (tickets 32, 24): every case of
+    the sender's own customer a message of its thread is on, none without a
+    sender. Satisfied by `ThreadLinks`; deterministic, no model."""
 
-    async def linked_case(
+    async def cases(
         self, scope: SalesScope, message: InboundMessage, sender: Customer | None
-    ) -> ThreadedCase | None: ...
+    ) -> tuple[ThreadedCase, ...]: ...
 
 
 class ConvertLedgerPort(Protocol):

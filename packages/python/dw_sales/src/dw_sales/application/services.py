@@ -77,6 +77,7 @@ from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerP
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.thread_summaries import ThreadSummaries
+from dw_sales.application.threads import ThreadMembersPort
 from dw_sales.application.worker_service import WorkerService
 
 
@@ -154,6 +155,8 @@ def assemble(
     ids: IdGenerator,
     catalog: SalesCatalogPort,
     inbox: InboxPort,
+    # The same mailbox's threads (ticket 24): a case's talk before it opened.
+    threads: ThreadMembersPort,
     intake: OrderIntake,
     quotation: QuotationService,
     files: SourceViewPort,
@@ -216,8 +219,8 @@ def assemble(
         sources,
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
-    orders = OrderQueries(uow, gate, pending, step_activity, book)
-    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity, book)
+    orders = OrderQueries(uow, gate, pending, step_activity, book, threads)
+    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity, book, threads)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),

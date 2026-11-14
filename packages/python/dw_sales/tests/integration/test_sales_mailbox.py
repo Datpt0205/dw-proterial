@@ -54,6 +54,7 @@ def _eml(
     received: datetime | None = None,
     message_id: str | None = None,
     sender: str = "buyer@velatrix.example",
+    replies_to: tuple[str, ...] = (),
 ) -> bytes:
     mail = EmailMessage()
     when = received or datetime.now(UTC).replace(microsecond=0)
@@ -63,6 +64,10 @@ def _eml(
     mail["To"] = "pic@proterial.example"
     mail["Subject"] = subject
     mail["Message-ID"] = message_id or f"<{uuid.uuid4().hex}@velatrix.example>"
+    if replies_to:
+        # As a mail client writes them: the chain oldest first, the nearest last.
+        mail["References"] = " ".join(replies_to)
+        mail["In-Reply-To"] = replies_to[-1]
     mail.set_content("Kính gửi Proterial, PO đính kèm.")
     mail.add_attachment(_PDF, maintype="application", subtype="pdf", filename="PO.pdf")
     return mail.as_bytes(policy=SMTP)
@@ -218,6 +223,8 @@ async def test_a_mail_written_for_another_tenant_is_refused_by_the_policy(
     "statement",
     [
         "UPDATE sales.mailbox_messages SET source_name = 'x.eml'",
+        # A thread key never changes once stored (ticket 24).
+        "UPDATE sales.mailbox_messages SET thread_key = 'x'",
         "DELETE FROM sales.mailbox_messages",
         "UPDATE sales.mailbox_attachments SET content = '\\x00'",
         "DELETE FROM sales.mailbox_attachments",
@@ -243,8 +250,10 @@ async def test_a_document_that_disagrees_with_its_keys_is_refused(
             await session.execute(
                 sa.text(
                     "INSERT INTO sales.mailbox_messages (tenant_id, workspace_id, message_id,"
-                    " received_at, sender_address, internet_message_id, source_name, message)"
-                    " VALUES (:t, :w, 'eml-other', now(), :s, :i, 'x.eml', CAST(:m AS jsonb))"
+                    " received_at, sender_address, internet_message_id, source_name, message,"
+                    " thread_key)"
+                    " VALUES (:t, :w, 'eml-other', now(), :s, :i, 'x.eml', CAST(:m AS jsonb),"
+                    " 'eml-other')"
                 ),
                 {
                     "t": world.alpha.tenant_id.value,
@@ -254,6 +263,87 @@ async def test_a_document_that_disagrees_with_its_keys_is_refused(
                     "m": json.dumps(document),
                 },
             )
+
+
+# ----------------------------------------------------------------- threads --
+
+
+async def _keys(migrator: AsyncEngine, *messages: MailFile) -> list[str]:
+    async with migrator.connect() as conn:
+        rows = await conn.execute(
+            sa.text(
+                "SELECT message_id, thread_key FROM sales.mailbox_messages"
+                " WHERE message_id = ANY(:ids)"
+            ),
+            {"ids": [m.message.message_id for m in messages]},
+        )
+        keys = {row.message_id: row.thread_key for row in rows}
+    return [keys[m.message.message_id] for m in messages]
+
+
+def _thread_mail(name: str, hour: int, *replies_to: str) -> MailFile:
+    return _file(
+        _eml(
+            message_id=f"<{name}.{uuid.uuid4().hex}@velatrix.example>",
+            received=datetime(2026, 11, 3, hour, 0, tzinfo=UTC),
+            replies_to=replies_to,
+        )
+    )
+
+
+def _mid(mail: MailFile) -> str:
+    assert mail.message.internet_message_id is not None
+    return mail.message.internet_message_id
+
+
+async def test_a_message_naming_two_threads_joins_the_earliest_and_no_key_changes(
+    mailbox: SqlMailbox, migrator: AsyncEngine, world: World
+) -> None:
+    """Ticket 24, acceptance 4: A and B start two threads; C names both and
+    joins A's, the earlier received. A's and B's keys are as stored."""
+    a, b = _thread_mail("a", 8), _thread_mail("b", 9)
+    for mail in (a, b):
+        assert await _store(mailbox, world.alpha, mail, f"{mail.message.message_id}.eml")
+    before = await _keys(migrator, a, b)
+    c = _thread_mail("c", 10, _mid(a), _mid(b))
+    assert await _store(mailbox, world.alpha, c, "c.eml")
+
+    assert await _keys(migrator, a, b, c) == [*before, before[0]] == [_mid(a), _mid(b), _mid(a)]
+    thread = await mailbox.thread_messages(world.alpha, c.message)
+    assert [m.message_id for m in thread] == [m.message.message_id for m in (a, b, c)]
+    of_a = await mailbox.thread_messages(world.alpha, a.message)
+    assert [m.message_id for m in of_a] == [a.message.message_id, c.message.message_id]
+
+
+async def test_a_reply_stored_before_what_it_answers_still_reaches_it(
+    mailbox: SqlMailbox, migrator: AsyncEngine, world: World
+) -> None:
+    """Out of order: C, answering A, is stored first. A keeps its own key,
+    and C's thread is read by its key and the keys of what it names."""
+    a = _thread_mail("a", 8)
+    c = _thread_mail("c", 10, _mid(a))
+    assert await _store(mailbox, world.alpha, c, "c-first.eml")
+    assert await _store(mailbox, world.alpha, a, "a-later.eml")
+
+    assert await _keys(migrator, a, c) == [_mid(a), _mid(c)]
+    thread = await mailbox.thread_messages(world.alpha, c.message)
+    assert [m.message_id for m in thread] == [a.message.message_id, c.message.message_id]
+
+
+async def test_a_thread_never_reaches_another_workspaces_mail(
+    mailbox: SqlMailbox, migrator: AsyncEngine, world: World
+) -> None:
+    """A mail in another workspace naming this one's message starts its own
+    thread there, and neither side reads the other's."""
+    a = _thread_mail("a", 8)
+    assert await _store(mailbox, world.alpha, a, "a-alpha.eml")
+    for scope in (world.alpha_other, world.beta):
+        reply = _thread_mail("r", 9, _mid(a))
+        assert await _store(mailbox, scope, reply, f"r-{scope.workspace_id.value}.eml")
+
+        assert await _keys(migrator, reply) == [_mid(reply)]
+        thread = await mailbox.thread_messages(scope, reply.message)
+        assert [m.message_id for m in thread] == [reply.message.message_id]
 
 
 # -------------------------------------------------------------- partitions --

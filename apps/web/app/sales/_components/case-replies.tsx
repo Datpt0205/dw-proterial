@@ -10,16 +10,26 @@ import { label, REPLY_KIND, REPLY_STEP } from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 
 type Reply = SalesSchemas["CaseReplyView"];
+type Earlier = SalesSchemas["ThreadMessageView"];
 
 /**
- * The customer's replies the mail thread attached to this case (ticket 32):
- * each with what a model read it as and the sentences code found in it, and
- * the newest one's proposed step. A proposal is a suggestion: the step is the
- * case's ordinary one, marked in "Bước tiếp theo", and nothing happens until
- * Sales presses it.
+ * The case's mail thread (tickets 32 and 24): the customer's mails before the
+ * case opened ("Trao đổi trước PO", each opening in the inbox), then the
+ * replies the thread attached to it, each with what a model read it as and
+ * the sentences code found in it, and the newest one's proposed step. A
+ * proposal is a suggestion: the step is the case's ordinary one, marked in
+ * "Bước tiếp theo", and nothing happens until Sales presses it.
  */
-export function CaseReplies({ replies }: { replies: readonly Reply[] }) {
-  if (!replies.length) return null;
+export function CaseReplies({
+  replies,
+  before = [],
+  beforeTitle = "Trao đổi trước PO",
+}: {
+  replies: readonly Reply[];
+  before?: readonly Earlier[];
+  beforeTitle?: string;
+}) {
+  if (!replies.length && !before.length) return null;
   return (
     <Card
       size="small"
@@ -30,11 +40,40 @@ export function CaseReplies({ replies }: { replies: readonly Reply[] }) {
       }
     >
       <Space orientation="vertical" className="w-full" size="middle">
+        {before.length ? (
+          <section aria-label={beforeTitle} className="space-y-1">
+            <Typography.Text strong>{beforeTitle}</Typography.Text>
+            {before.map((mail) => (
+              <EarlierRow key={mail.message_id} mail={mail} />
+            ))}
+          </section>
+        ) : null}
         {replies.map((reply) => (
           <ReplyRow key={reply.message_id} reply={reply} />
         ))}
       </Space>
     </Card>
+  );
+}
+
+function EarlierRow({ mail }: { mail: Earlier }) {
+  return (
+    <Space wrap size="small" className="w-full">
+      <Link
+        href={`/sales/inbox?message=${encodeURIComponent(mail.message_id)}`}
+      >
+        Thư {messageRef(mail.message_id)}
+      </Link>
+      <Typography.Text type="secondary">
+        {formatDateTime(mail.received_at)} · {mail.sender}
+      </Typography.Text>
+      <Typography.Text
+        ellipsis={{ tooltip: mail.subject }}
+        className="max-w-md"
+      >
+        {mail.subject}
+      </Typography.Text>
+    </Space>
   );
 }
 
@@ -75,6 +114,8 @@ function ReplyRow({ reply }: { reply: Reply }) {
 }
 
 function ReadingTag({ reply }: { reply: Reply }) {
+  if (reply.outcome === null && reply.picked_by)
+    return <StatusTag tone="unk">Sales chọn hồ sơ: chưa đọc</StatusTag>;
   if (reply.outcome === null)
     return <StatusTag tone="unk">Chưa đọc: bước mô hình đang tắt</StatusTag>;
   if (reply.outcome !== "read" || !reply.kind)

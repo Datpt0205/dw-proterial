@@ -53,6 +53,7 @@ from dw_sales.application.support import (
     seen_by,
     stored_order,
 )
+from dw_sales.application.threads import ThreadMembersPort, talk_before
 from dw_sales.application.views import (
     CaseChangeView,
     OrderCaseView,
@@ -90,6 +91,8 @@ class OrderQueries:
     activity: StepActivityReadPort
     # Where the activity filter's days are counted (audit 14).
     zones: LocalZonePort
+    # The mailbox's threads, for the talk before the PO (ticket 24).
+    threads: ThreadMembersPort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -112,10 +115,19 @@ class OrderQueries:
         await self.gate.require(
             context, SalesScopes.CASE_READ, resource_type=_ORDER, resource_id=str(case_id)
         )
-        async with self.uow(sales_scope(context)) as work:
+        scope = sales_scope(context)
+        async with self.uow(scope) as work:
             stored = await stored_order(work, case_id, viewer=context)
             logged = await work.messages.list_all()
             servings = await work.served.servings(CaseKind.ORDER, case_id)
+        before = await talk_before(
+            self.threads,
+            scope,
+            {m.disposition.message_id: m for m in logged},
+            case_kind=CaseKind.ORDER,
+            case_id=case_id,
+            customer_code=stored.case.customer_code,
+        )
         wait = await awaited(self.decisions, context, stored.case)
         waits_on = awaiting(stored.case)
         decision = None
@@ -131,6 +143,7 @@ class OrderQueries:
             replies=logged,
             servings=servings,
             cross_checker=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK),
+            thread_before=before,
         )
 
 

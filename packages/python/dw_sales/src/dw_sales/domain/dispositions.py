@@ -62,6 +62,23 @@ class RoutingReason(StrEnum):
     OTHER = "other"
 
 
+# The most cases a routed reply offers: a thread holds a few POs, not fifty.
+MAX_THREAD_CASES = 50
+
+
+class ThreadCase(BaseModel):
+    """A case of the sender's own customer that a reply's thread holds,
+    offered to Sales when the reply names none of them (ticket 24, dw_sales
+    ADR 0009): ids only. ``linked_to`` is the message on the case the thread
+    holds, which the reply is linked to once Sales picks the case."""
+
+    model_config = _FROZEN
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    linked_to: str = Field(pattern=r"^[!-~]{1,512}$")
+
+
 # The owner of a routed message nobody's Sales PIC is known for: every holder
 # of the role picks it up, which is an owner, not none.
 SALES_PIC_POOL = "role:sales_pic"
@@ -97,6 +114,9 @@ class MessageDisposition(BaseModel):
     # The layout a model pre-filled for a PO no layout of the customer reads
     # (ticket 30), for the onboarding screen to open with.
     layout_prefill: LayoutPrefill | None = None
+    # The cases a reply's thread holds when it names none of them (ticket
+    # 24): Sales picks one ("Chọn hồ sơ"), and only one of these.
+    thread_cases: tuple[ThreadCase, ...] = Field(default=(), max_length=MAX_THREAD_CASES)
 
     @model_validator(mode="after")
     def _kind_says_what_is_there(self) -> Self:
@@ -120,7 +140,17 @@ class MessageDisposition(BaseModel):
             and self.reason is not RoutingReason.ATTACHMENT_UNREADABLE
         ):
             raise ValueError("a layout is pre-filled only for a PO nothing could read")
+        if self.thread_cases and (
+            self.reason is not RoutingReason.REPLY_TO_CASE
+            or len(self.thread_cases) < 2
+            or len({c.case_id for c in self.thread_cases}) != len(self.thread_cases)
+        ):
+            raise ValueError("only a reply routed for its thread's several cases offers them")
         return self
+
+    def thread_case(self, case_id: uuid.UUID) -> ThreadCase | None:
+        """The offered case with this id, or None when it is not one of them."""
+        return next((c for c in self.thread_cases if c.case_id == case_id), None)
 
     @classmethod
     def pending(cls, message_id: str) -> MessageDisposition:

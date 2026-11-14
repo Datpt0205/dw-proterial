@@ -10,12 +10,17 @@ the outcome says so.
 **A readable document decides first.** An attachment the seller's request
 form or Design's reply form recognises, or one that reads as a PO, decides the
 message's kind whatever its subject says, and no model is asked (ticket 31).
-**Then the thread.** A message whose `In-Reply-To`/`References` name a message
-already on one case of the sender's own customer is a reply on that case, and
-is attached to it (ticket 32, `ThreadLinkPort`): a "Re:" to a spec discussion
-is no new request, whatever its subject repeats. Where the tenant's rules turn
-it on, a local model reads the reply into a typed intent (`ReplyReader`); the
-case and the step are code's.
+**Then the thread.** A message whose mail thread (`In-Reply-To`/`References`,
+`threads.py`) holds a case of the sender's own customer is a reply on it, and
+is attached to it (tickets 32 and 24, `ThreadLinkPort`): a "Re:" to a spec
+discussion is no new request, whatever its subject repeats. A thread holding
+several cases: the numbers the message names choose, as a local model reads
+them and code resolves them against the sender's customer (`named_cases`,
+where the tenant's rules turn the intent step on); naming none of them, or with
+no model, it is routed `reply_to_case` with those cases for Sales to pick
+(`thread_cases`), never a guess. Where the tenant's rules turn it on, a local
+model reads the reply into a typed intent (`ReplyReader`); the case and the
+step are code's.
 **A tenant's own PO layouts read first.** A customer's form a person mapped and
 another approved (ticket 30) is read with that layout, the tenant's data;
 otherwise with the platform's. The first POs a new layout reads keep every
@@ -108,7 +113,7 @@ from dw_sales.application.ports import (
 )
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
-from dw_sales.application.threads import ThreadedCase
+from dw_sales.application.threads import ThreadedCase, named_cases
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
@@ -116,6 +121,7 @@ from dw_sales.domain.dispositions import (
     DispositionKind,
     MessageDisposition,
     RoutingReason,
+    ThreadCase,
 )
 from dw_sales.domain.handoffs import HandoffKind
 from dw_sales.domain.layouts import (
@@ -207,6 +213,8 @@ NO_DOCUMENT: Final = "it names an order but carries no document"
 UNREAD_DOCUMENT: Final = "a document no reader accepted, and no model read the mail"
 NOT_CLASSIFIED: Final = "no model read the mail"
 UNKNOWN_SENDER: Final = "a document from a sender who is no customer, so no layout reads it"
+# Why a reply goes to Sales when its thread holds several cases (ticket 24).
+THREAD_CASES_UNNAMED: Final = "its mail thread holds several cases and it names none of them"
 
 
 @dataclass(frozen=True)
@@ -219,7 +227,8 @@ class Classification:
     stamp, for the disposition. ``retry``: the model gave no usable answer
     and the message is young enough to try again, so it stays not yet
     processed (`ModelAssist.unread_retry_hours`). ``thread``: the case a
-    `case_reply`'s thread headers name.
+    `case_reply` is attached to. ``candidates``: the cases a reply's thread
+    holds when it names none of them, offered to Sales (ticket 24).
     """
 
     kind: MessageKind
@@ -228,6 +237,7 @@ class Classification:
     reading: IntentReading | None = None
     retry: bool = False
     thread: ThreadedCase | None = None
+    candidates: tuple[ThreadedCase, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -402,7 +412,8 @@ class OrderIntake:
         if kind in QUOTATION_KINDS:
             return IntakeOutcome(message.message_id, kind, None)
         if classification.thread is not None:
-            return await self._reply(scope, message, classification.thread, run)
+            reply = await self._reply(scope, message, classification.thread, run)
+            return _stamped(reply, classification.reading)
         sender = await self._customer(scope, message, await self._upload(scope, message))
         if kind is MessageKind.OTHER and classification.detail == UNREAD_DOCUMENT:
             # Which file was not read, and why, as a PO's files are told
@@ -410,7 +421,9 @@ class OrderIntake:
             outcome = await self._order(scope, message, kind, sender, attached, run)
         elif kind is MessageKind.OTHER:
             reason = classification.reason or RoutingReason.OTHER
-            outcome = self._routed(message, kind, reason, sender, classification.detail)
+            outcome = self._routed(
+                message, kind, reason, sender, classification.detail, classification.candidates
+            )
             outcome = await self._with_handoff(scope, message, outcome, sender, run)
         else:
             outcome = await self._order(scope, message, kind, sender, attached, run)
@@ -452,9 +465,11 @@ class OrderIntake:
             # way a PO no layout reads goes (module docstring).
             return Classification(MessageKind.PO)
         if self.threads is not None and message.references:
-            thread = await self.threads.linked_case(scope, message, sender)
-            if thread is not None:
-                return Classification(MessageKind.CASE_REPLY, thread=thread)
+            cases = await self.threads.cases(scope, message, sender)
+            if len(cases) == 1:
+                return Classification(MessageKind.CASE_REPLY, thread=cases[0])
+            if cases:
+                return await self._among(scope, message, sender, rules, cases, run, now)
         if (
             self.intents is not None
             and run is not None
@@ -589,6 +604,49 @@ class OrderIntake:
             # a model reads it, be written in the mail.
             return Classification(MessageKind.OTHER, RoutingReason.OTHER, NO_DOCUMENT, read.reading)
         return Classification(route, reading=read.reading)
+
+    async def _among(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        sender: Customer | None,
+        rules: OrderRules,
+        cases: tuple[ThreadedCase, ...],
+        run: RunContext | None,
+        now: datetime | None,
+    ) -> Classification:
+        """A reply whose thread holds several cases (ticket 24): the one its
+        numbers name, as a model reads them and code resolves them against
+        the sender's customer (`IntentReader.resolve`), where the tenant's
+        rules turn the intent step on; else routed `reply_to_case` with the
+        cases for Sales to pick. No usable answer from the model: tried
+        again while the message is young, then Sales picks."""
+        reading = None
+        if (
+            self.intents is not None
+            and run is not None
+            and await self._model_step(scope, rules, ModelStep.MESSAGE_INTENT)
+        ):
+            read = await self.intents.read(
+                scope, newest_part(message), sender, rules_version=rules.version, run=run
+            )
+            if read is None:
+                window = timedelta(hours=rules.model_assist.unread_retry_hours)
+                if now is not None and now - message.received_at < window:
+                    return Classification(MessageKind.OTHER, retry=True)
+                reading = self.intents.unavailable(rules.version)
+            else:
+                reading = read.reading
+                named = named_cases(cases, reading.references)
+                if len(named) == 1:
+                    return Classification(MessageKind.CASE_REPLY, thread=named[0], reading=reading)
+        return Classification(
+            MessageKind.OTHER,
+            RoutingReason.REPLY_TO_CASE,
+            THREAD_CASES_UNNAMED,
+            reading,
+            candidates=cases,
+        )
 
     async def _reply(
         self,
@@ -1346,6 +1404,7 @@ class OrderIntake:
         reason: RoutingReason,
         customer: Customer | None,
         detail: str | None = None,
+        candidates: Sequence[ThreadedCase] = (),
     ) -> IntakeOutcome:
         owner = customer.sales_pic if customer is not None else None
         disposition = MessageDisposition(
@@ -1359,6 +1418,10 @@ class OrderIntake:
                 customer.compliance
                 if customer is not None and reason is RoutingReason.SAMPLE_REQUEST
                 else None
+            ),
+            thread_cases=tuple(
+                ThreadCase(case_kind=c.case_kind, case_id=c.case_id, linked_to=c.linked_to)
+                for c in candidates
             ),
         )
         return IntakeOutcome(message.message_id, kind, disposition)

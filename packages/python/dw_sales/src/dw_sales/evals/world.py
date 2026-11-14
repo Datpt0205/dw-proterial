@@ -32,7 +32,7 @@ import json
 import shutil
 import tempfile
 import uuid
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -76,6 +76,7 @@ from dw_sales.application.case_store import (
     LoggedEvent,
     LoggedMessage,
     MessageHandled,
+    MessageOnCase,
     OutboundError,
     OutboundMail,
     OutboundStatus,
@@ -119,7 +120,7 @@ from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
-from dw_sales.application.threads import ThreadLinks
+from dw_sales.application.threads import ThreadIndex, ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
@@ -393,6 +394,18 @@ class _Messages:
 
     async def list_all(self) -> Sequence[LoggedMessage]:
         return list(reversed(self._held.values()))
+
+    async def cases_of(self, message_ids: Collection[str]) -> Sequence[MessageOnCase]:
+        on_cases = (
+            logged.disposition
+            for message_id in message_ids
+            if (logged := self._held.get(message_id)) is not None
+        )
+        return [
+            MessageOnCase(d.message_id, d.case_kind, d.case_id)
+            for d in on_cases
+            if d.case_kind is not None and d.case_id is not None
+        ]
 
     async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
         logged = self._held.get(message_id)
@@ -976,6 +989,11 @@ class MemoryUploads:
         found = self.held.get((scope, message_id))
         return None if found is None else found[0].message
 
+    async def thread_messages(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> Sequence[InboundMessage]:
+        return ThreadIndex(await self.list_messages(scope)).thread_of(message)
+
     async def read_attachment(
         self, scope: SalesScope, message_id: str, attachment_id: str
     ) -> AttachmentContent | None:
@@ -1358,11 +1376,10 @@ def open_world(
     # sample set unless ``scanner`` says so.
     scanning = scanner or NoMalware()
     uploads = MemoryUploads(store)
-    inbox = ScannedInbox(
-        WithUploads(MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir), uploads),
-        scanning,
-        readers.po,
+    mailbox = WithUploads(
+        MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir), uploads
     )
+    inbox = ScannedInbox(mailbox, scanning, readers.po)
     # The bound tenant's own order rules, where the sample set holds them, as
     # a version two people approved (the API stores it through `/sales/rules`).
     own = load_tenant_order_rules(sample.data_dir / "policies")
@@ -1401,7 +1418,7 @@ def open_world(
         new_case_id=ids.new_uuid,
         descriptions=None if model is None else DescriptionReader(model),
         intents=None if model is None else IntentReader(model, catalog, store),
-        threads=ThreadLinks(store, inbox),
+        threads=ThreadLinks(store, mailbox),
         replies=None if model is None else ReplyReader(model),
         handoffs=None if model is None else HandoffReader(model, catalog, store),
         layouts=store,
@@ -1429,6 +1446,7 @@ def open_world(
         ids=ids,
         catalog=catalog,
         inbox=inbox,
+        threads=mailbox,
         intake=intake,
         quotation=quotation,
         files=readers.source,

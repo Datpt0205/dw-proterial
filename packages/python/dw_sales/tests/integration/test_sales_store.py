@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 from sales_harness import DW1, T0, OrderRun, QuoteRun, World, user
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
@@ -35,7 +36,14 @@ from dw_sales.application.case_store import (
     WorkerState,
 )
 from dw_sales.application.order_intake import OrderIntake
-from dw_sales.domain.dispositions import CaseKind, DispositionKind
+from dw_sales.domain.dispositions import (
+    SALES_PIC_POOL,
+    CaseKind,
+    DispositionKind,
+    MessageDisposition,
+    RoutingReason,
+    ThreadCase,
+)
 from dw_sales.domain.orders import Accepted, Actor, OrderCase, OrderStatus
 from dw_sales.testing.followups import platform_zone
 
@@ -89,6 +97,73 @@ async def test_every_message_disposition_reads_back(
             if outcome.disposition is None:
                 continue  # handed to the quotation flow
             assert await work.messages.get(message_id) == outcome.disposition, message_id
+
+
+async def test_a_reply_offered_its_threads_cases_reads_back_and_the_log_finds_them(
+    order_run: OrderRun, uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    """Ticket 24: the cases a routed reply is offered read back as written,
+    and the log answers every case a set of messages is on, in its scope
+    only."""
+    on_cases = {
+        message_id: outcome.disposition
+        for message_id, outcome in order_run.outcomes.items()
+        if message_id in ("M01", "M08") and outcome.disposition is not None
+    }
+    offered = tuple(
+        ThreadCase(case_kind=CaseKind.ORDER, case_id=d.case_id, linked_to=m)
+        for m, d in on_cases.items()
+        if d.case_id is not None
+    )
+    assert len(offered) == 2
+    routed = MessageDisposition(
+        message_id="R-THREAD",
+        kind=DispositionKind.ROUTED_TO_SALES,
+        reason=RoutingReason.REPLY_TO_CASE,
+        owner=SALES_PIC_POOL,
+        customer_code="VLX",
+        thread_cases=offered,
+    )
+    async with uow(order_run.scope) as work:
+        await work.messages.record(routed, T0)
+        await work.commit()
+    async with uow(order_run.scope) as work:
+        assert await work.messages.get("R-THREAD") == routed
+        found = await work.messages.cases_of(["M01", "M08", "R-THREAD", "M99"])
+    assert {(f.message_id, f.case_id) for f in found} == {(c.linked_to, c.case_id) for c in offered}
+    async with uow(world.alpha_other) as work:
+        assert await work.messages.cases_of(["M01", "M08"]) == []
+
+
+async def test_only_a_reply_routed_for_its_thread_offers_cases(
+    order_run: OrderRun, app_sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """`ck_messages_thread_cases`: never on another routing, never `[]`."""
+    scope = order_run.scope
+    for reason, offered in (("other", '[{"a": 1}, {"b": 2}]'), ("reply_to_case", "[]")):
+        async with app_sessions() as session, session.begin():
+            for key, value in (
+                ("app.tenant_id", scope.tenant_id.value),
+                ("app.workspace_id", scope.workspace_id.value),
+            ):
+                await session.execute(
+                    sa.text("SELECT set_config(:k, :v, true)"), {"k": key, "v": str(value)}
+                )
+            with pytest.raises(DBAPIError, match="ck_messages_thread_cases"):
+                await session.execute(
+                    sa.text(
+                        "INSERT INTO sales.messages (id, tenant_id, workspace_id, message_id,"
+                        " disposition, routing_reason, owner, processed_at, thread_cases)"
+                        " VALUES (gen_random_uuid(), :t, :w, 'R-BAD', 'routed_to_sales', :r,"
+                        " 'role:sales_pic', now(), CAST(:c AS jsonb))"
+                    ),
+                    {
+                        "t": scope.tenant_id.value,
+                        "w": scope.workspace_id.value,
+                        "r": reason,
+                        "c": offered,
+                    },
+                )
 
 
 async def test_each_quote_step_reads_back_and_events_name_the_moves(

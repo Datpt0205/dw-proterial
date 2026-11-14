@@ -1996,6 +1996,18 @@
             "title": "Linked To",
             "type": "string"
           },
+          "picked_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked By"
+          },
           "reading": {
             "anyOf": [
               {
@@ -2058,6 +2070,18 @@
               }
             ],
             "title": "Outcome"
+          },
+          "picked_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked By"
           },
           "processed_at": {
             "format": "date-time",
@@ -9424,6 +9448,14 @@
                 "type": "null"
               }
             ]
+          },
+          "thread_cases": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThreadCaseView"
+            },
+            "title": "Thread Cases",
+            "type": "array"
           }
         },
         "required": [
@@ -10733,6 +10765,14 @@
               }
             ],
             "title": "Superseded By Case"
+          },
+          "thread_before": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThreadMessageView"
+            },
+            "title": "Thread Before",
+            "type": "array"
           },
           "total": {
             "anyOf": [
@@ -14321,6 +14361,14 @@
                 "type": "null"
               }
             ]
+          },
+          "thread_before": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThreadMessageView"
+            },
+            "title": "Thread Before",
+            "type": "array"
           },
           "ycbg_no": {
             "anyOf": [
@@ -19025,6 +19073,76 @@
           "end"
         ],
         "title": "TextRange",
+        "type": "object"
+      },
+      "ThreadCaseBody": {
+        "additionalProperties": false,
+        "description": "The case Sales picks for a reply its thread offered several of\n(ticket 24): one of those, which the server checks.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id"
+        ],
+        "title": "ThreadCaseBody",
+        "type": "object"
+      },
+      "ThreadCaseView": {
+        "description": "A case offered for a reply: its kind, id and the number it goes by\n(the PO's, or the request's).",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_kind": {
+            "$ref": "#/components/schemas/CaseKind"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_kind",
+          "case_id",
+          "number"
+        ],
+        "title": "ThreadCaseView",
+        "type": "object"
+      },
+      "ThreadMessageView": {
+        "description": "A message of a case's mail thread received before the case opened:\nthe talk before the PO (ticket 24, dw_sales ADR 0009). The mail itself\nopens in the inbox.",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "received_at",
+          "sender",
+          "subject"
+        ],
+        "title": "ThreadMessageView",
         "type": "object"
       },
       "ThreadSummaryView": {
@@ -26024,6 +26142,77 @@
           }
         },
         "summary": "Upload Po",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/case": {
+      "post": {
+        "operationId": "pick_thread_case_api_v1_sales_inbox__message_id__case_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadCaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDispositionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pick Thread Case",
         "tags": [
           "sales"
         ]

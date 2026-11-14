@@ -100,6 +100,7 @@ from dw_sales.application.views import (
     ItemView,
     LmeView,
     MasterDataView,
+    MessageDispositionView,
     OpenYcbgView,
     OrderCaseView,
     OrderSummaryView,
@@ -211,6 +212,15 @@ class SenderCustomerBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_code: CustomerCode
+
+
+class ThreadCaseBody(BaseModel):
+    """The case Sales picks for a reply its thread offered several of
+    (ticket 24): one of those, which the server checks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: uuid.UUID
 
 
 class RuleWordsBody(BaseModel):
@@ -839,6 +849,19 @@ def build_router(
     ) -> CaseChangeView:
         change = await svc.design_text_replies.confirm(context, message_id, body)
         return await idem.record(change)
+
+    # "Chọn hồ sơ" (ticket 24): a reply whose thread holds several cases and
+    # names none of them, attached to the one Sales picks among those offered.
+    @router.post(
+        "/inbox/{message_id}/case",
+        response_model=MessageDispositionView,
+        dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
+    )
+    async def pick_thread_case(
+        message_id: _MessageId, body: ThreadCaseBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> MessageDispositionView:
+        view = await svc.routed_mail.pick_case(context, message_id, body.case_id)
+        return await idem.record(view)
 
     @router.post(
         "/inbox/{message_id}/reopen",

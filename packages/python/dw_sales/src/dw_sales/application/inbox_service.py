@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Protocol
@@ -147,6 +148,7 @@ class InboxQueries:
                     ),
                 }
             )
+            numbers = await _offered_numbers(work, logged.values(), hidden)
         copy = (
             await self.handoffs.handoff_copy(scope)
             if any(m.disposition.handoff is not None for m in logged.values())
@@ -163,7 +165,7 @@ class InboxQueries:
             if seen is not None and not _shown(context, seen.disposition, hidden, members):
                 continue
             disposition = (
-                message_disposition(seen.disposition, seen.processed_at, seen.handled)
+                message_disposition(seen.disposition, seen.processed_at, seen.handled, numbers)
                 if seen is not None
                 else message_disposition(MessageDisposition.pending(message.message_id), None)
             )
@@ -194,6 +196,30 @@ class InboxQueries:
             body=written.body,
             template_ref=written.template_ref,
         )
+
+
+async def _offered_numbers(
+    work: SalesUnitOfWork, logged: Iterable[LoggedMessage], hidden: set[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """What each case a routed reply still open is offered goes by (ticket
+    24): the PO's number, or the request's; none for a case the caller does
+    not see."""
+    numbers: dict[uuid.UUID, str] = {}
+    for entry in logged:
+        if entry.handled is not None:
+            continue
+        for offered in entry.disposition.thread_cases:
+            if offered.case_id in hidden or offered.case_id in numbers:
+                continue
+            if offered.case_kind is CaseKind.ORDER:
+                order = await work.orders.get(offered.case_id)
+                if order is not None:
+                    numbers[offered.case_id] = order.case.header.po_no
+            else:
+                quote = await work.quotes.get(offered.case_id)
+                if quote is not None:
+                    numbers[offered.case_id] = quote.case.request.reference
+    return numbers
 
 
 async def members_by_address(

@@ -69,6 +69,7 @@ import { HandledPanel } from "./handled-panel";
 import { PoUpload } from "./po-upload";
 import { HandoffDraft } from "./handoff-draft";
 import { SenderCustomerPanel } from "./sender-customer";
+import { ThreadCasesPanel } from "./thread-cases";
 import { DesignTextPanel } from "./design-text";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
@@ -495,6 +496,17 @@ function Inbox() {
                     <SenderCustomerPanel
                       messageId={m.message_id}
                       onConfirmed={() => {
+                        inbox.reload();
+                        overview.reload();
+                      }}
+                    />
+                  ) : null}
+                  {m.disposition.thread_cases.length > 0 &&
+                  !m.disposition.handled_at ? (
+                    <ThreadCasesPanel
+                      messageId={m.message_id}
+                      offered={m.disposition.thread_cases}
+                      onPicked={() => {
                         inbox.reload();
                         overview.reload();
                       }}

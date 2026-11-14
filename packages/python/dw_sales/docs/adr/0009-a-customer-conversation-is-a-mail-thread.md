@@ -45,6 +45,20 @@ thread" was proposed.
    thread with several open cases belongs to the ones whose numbers it names
    (read by a model, resolved by code against the sender's customer); naming
    none, Sales picks the case. Nothing is guessed.
+
+   *Built 2026-11-14 (ticket 24), by the agent; what the ticket left open:*
+   the key (`threads.thread_key`) is the earliest stored named message's,
+   computed within the workspace only; the customer is applied where a
+   thread is read (`ThreadLinks.cases`, the case's talk before it), since
+   the store cannot know who a sender is and Bravo's contacts or the ledger
+   may change that later. A message stored before what it answers keeps its
+   own key, and a thread is read as the union of its own key and those of
+   the stored messages its headers name; two replies sharing only an
+   ancestor stored after both stay apart. The talk before a case shows only
+   mails DW1 processed as that case's customer's. Several cases and the
+   model off or unanswering (after the intent step's retry window): routed
+   `reply_to_case` with the cases offered; Sales picks with
+   `sales.inbox.process`, as "DW xử lý" asks, and only an offered case.
 3. **Sales' sent mail joins the thread.** Each person's flow also exports
    Sent Items to the same folder. A message is outgoing when its sender is
    the member's own address, resolved by the server, never by the folder the

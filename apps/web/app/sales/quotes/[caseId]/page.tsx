@@ -723,7 +723,11 @@ function QuoteDetail() {
         onOpenSource={openField}
       />
 
-      <CaseReplies replies={data.replies} />
+      <CaseReplies
+        replies={data.replies}
+        before={data.thread_before}
+        beforeTitle="Trao đổi trước yêu cầu"
+      />
 
       <Collapse
         items={[

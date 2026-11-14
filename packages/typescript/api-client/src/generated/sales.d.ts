@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/inbox/{message_id}/case": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pick Thread Case */
+        post: operations["pick_thread_case_api_v1_sales_inbox__message_id__case_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox/{message_id}/customer": {
         parameters: {
             query?: never;
@@ -2097,6 +2114,8 @@ export interface components {
         CaseReply: {
             /** Linked To */
             linked_to: string;
+            /** Picked By */
+            picked_by?: string | null;
             reading?: components["schemas"]["ReplyReading"] | null;
         };
         /**
@@ -2119,6 +2138,8 @@ export interface components {
             message_id: string;
             /** Outcome */
             outcome: ("read" | "unavailable") | null;
+            /** Picked By */
+            picked_by?: string | null;
             /**
              * Processed At
              * Format: date-time
@@ -3834,6 +3855,11 @@ export interface components {
             /** Reason */
             reason?: string | null;
             reply?: components["schemas"]["CaseReply"] | null;
+            /**
+             * Thread Cases
+             * @default []
+             */
+            thread_cases: components["schemas"]["ThreadCaseView"][];
         };
         /**
          * MessageTextView
@@ -4060,6 +4086,11 @@ export interface components {
             superseded: components["schemas"]["SupersededView"][];
             /** Superseded By Case */
             superseded_by_case: string | null;
+            /**
+             * Thread Before
+             * @default []
+             */
+            thread_before: components["schemas"]["ThreadMessageView"][];
             total: components["schemas"]["Amount"] | null;
             total_anchor: components["schemas"]["SourceAnchor"] | null;
             unapplied_decision: components["schemas"]["UnappliedDecisionView"] | null;
@@ -4895,6 +4926,11 @@ export interface components {
             /** Status */
             status: string;
             submission: components["schemas"]["SubmissionView"] | null;
+            /**
+             * Thread Before
+             * @default []
+             */
+            thread_before: components["schemas"]["ThreadMessageView"][];
             /** Ycbg No */
             ycbg_no: string | null;
             /** Ycbg Recorded At */
@@ -6009,6 +6045,52 @@ export interface components {
             start: number;
         };
         /**
+         * ThreadCaseBody
+         * @description The case Sales picks for a reply its thread offered several of
+         *     (ticket 24): one of those, which the server checks.
+         */
+        ThreadCaseBody: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+        };
+        /**
+         * ThreadCaseView
+         * @description A case offered for a reply: its kind, id and the number it goes by
+         *     (the PO's, or the request's).
+         */
+        ThreadCaseView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            case_kind: components["schemas"]["CaseKind"];
+            /** Number */
+            number: string;
+        };
+        /**
+         * ThreadMessageView
+         * @description A message of a case's mail thread received before the case opened:
+         *     the talk before the PO (ticket 24, dw_sales ADR 0009). The mail itself
+         *     opens in the inbox.
+         */
+        ThreadMessageView: {
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+        };
+        /**
          * ThreadSummaryView
          * @description A summary, or why there is none; always marked as the model's.
          */
@@ -6587,6 +6669,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoUploadView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pick_thread_case_api_v1_sales_inbox__message_id__case_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCaseBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageDispositionView"];
                 };
             };
             /** @description Validation Error */

@@ -54,6 +54,7 @@ from dw_sales.application.support import (
     seen_by,
     stored_quote,
 )
+from dw_sales.application.threads import ThreadMembersPort, talk_before
 from dw_sales.application.views import (
     CaseChangeView,
     PendingDecisionView,
@@ -135,6 +136,8 @@ class QuoteQueries:
     activity: StepActivityReadPort
     # What "due soon" means for the tenant (`morning_brief.due_within_days`).
     followups: FollowupPolicyPort
+    # The mailbox's threads, for the talk before the request (ticket 24).
+    threads: ThreadMembersPort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -203,6 +206,14 @@ class QuoteQueries:
             decision=decision,
             replies=logged,
             served=served,
+            thread_before=await talk_before(
+                self.threads,
+                scope,
+                {m.disposition.message_id: m for m in logged},
+                case_kind=CaseKind.QUOTE,
+                case_id=case_id,
+                customer_code=case.customer_code,
+            ),
         )
 
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:

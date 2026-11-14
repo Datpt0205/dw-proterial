@@ -30,6 +30,7 @@ from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import NoSourceCache, SourceService
 from dw_sales.application.worker_service import WorkerService
@@ -69,9 +70,9 @@ STORE: Any = _Untouchable()
 CLOCK = FixedClock(datetime(2026, 10, 2, tzinfo=UTC))
 IDS = Uuid4Generator()
 
-order_queries = OrderQueries(STORE, GATE, STORE, STORE, STORE)
+order_queries = OrderQueries(STORE, GATE, STORE, STORE, STORE, STORE)
 order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
-quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
+quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE)
 quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 # The routes' way to start DW1, and the steps the run takes: both check.
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
@@ -87,6 +88,7 @@ master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 assignment = AssignmentService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+routed_mail = RoutedMailService(STORE, GATE, STORE, CLOCK, IDS)
 
 type Call = Callable[[AccessContext], Awaitable[object]]
 
@@ -127,6 +129,11 @@ CALLS: dict[str, tuple[str, Call]] = {
     "dw1.process_all": ("sales.inbox.process", dw1.process_all),
     "processing.enqueue": ("sales.inbox.process", lambda c: processing.enqueue(c, "M01")),
     "processing.enqueue_waiting": ("sales.inbox.process", processing.enqueue_waiting),
+    # "Chọn hồ sơ" (ticket 24): attaching a reply is processing the mailbox.
+    "routed_mail.pick_case": (
+        "sales.inbox.process",
+        lambda c: routed_mail.pick_case(c, "M01", CASE),
+    ),
     "dw1.record_bravo_entry": (
         "sales.order.prepare",
         lambda c: dw1.record_bravo_entry(
