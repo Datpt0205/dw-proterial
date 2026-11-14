@@ -115,6 +115,9 @@ order_lines = sa.Table(
     sa.Column("pc_confirmed_by", UUID(as_uuid=True)),
     sa.Column("pc_confirmed_at", _TS),
     sa.Column("corrections", JSONB, nullable=False, server_default="[]"),
+    # The changes a person confirmed from a customer's mail (ticket 27,
+    # migration c7d0730fcccd), one per field.
+    sa.Column("changes", JSONB, nullable=False, server_default="[]"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
@@ -215,6 +218,25 @@ sent_messages = sa.Table(
     sa.Column("processed_at", _TS, nullable=False),
     sa.Column("reading", JSONB(none_as_null=True)),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# What customers asked to change on their orders by mail (ticket 27,
+# migration c7d0730fcccd): the request as the domain holds it, in `record`.
+change_requests = sa.Table(
+    "change_requests",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("number", sa.Integer, nullable=False),
+    sa.Column("message_id", sa.Text, nullable=False),
+    sa.Column("state", sa.Text, nullable=False),
+    sa.Column("version", sa.Integer, nullable=False),
+    sa.Column("opened_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("opened_at", _TS, nullable=False),
+    sa.Column("record", JSONB, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
 artifacts = sa.Table(

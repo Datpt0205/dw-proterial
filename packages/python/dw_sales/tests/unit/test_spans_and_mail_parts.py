@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.mail_parts import newest_part, newest_tables
 from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.domain.spans import FoldedText
 
@@ -142,3 +142,27 @@ def test_the_part_is_normalised_and_its_digest_is_of_what_a_model_reads() -> Non
 
     assert part.text == "Hỏi giá\n\nLine one with spaces\n\nLine two"
     assert len(part.sha256) == 64
+
+
+def test_a_table_of_the_newest_part_keeps_its_cells_and_quoted_ones_are_cut() -> None:
+    """Ticket 27: a table is split by its markup, an empty cell kept in its
+    place, a line break inside a cell kept as the part's text keeps it, an
+    unclosed cell closed by the next; a table in quoted history is not one
+    of the newest part's."""
+    html = (
+        "<p>Pull in:</p><table><tr><th>PO</th><th>Old</th><th>New</th><th>Note</th></tr>"
+        "<tr><td>A-1</td><td>06-11-26</td><td>30-10-26<br>pls</td><td></td></tr>"
+        "<tr><td>A-2<td>04-12-26<td>20-11-26</table>"
+        "<blockquote><table><tr><td>old ask</td></tr></table></blockquote>"
+    )
+    message = _message("", html=html)
+
+    assert newest_tables(message) == (
+        (
+            ("PO", "Old", "New", "Note"),
+            ("A-1", "06-11-26", "30-10-26\npls", ""),
+            ("A-2", "04-12-26", "20-11-26"),
+        ),
+    )
+    assert "30-10-26\npls" in newest_part(message).text
+    assert newest_tables(_message("PO | Old | New")) == ()

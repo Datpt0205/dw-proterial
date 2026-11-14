@@ -688,6 +688,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/change-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Change Request */
+        post: operations["open_change_request_api_v1_sales_orders__case_id__change_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Change Line */
+        post: operations["add_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Change Line */
+        post: operations["confirm_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Change Line */
+        post: operations["reject_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/close": {
         parameters: {
             query?: never;
@@ -1893,6 +1961,36 @@ export interface components {
             session_id: string;
             turn: components["schemas"]["TurnView"];
         };
+        /**
+         * AppliedChangeView
+         * @description A value of the line the customer asked to change by mail, which a
+         *     person confirmed (ticket 27): it replaces the value above where the line
+         *     is entered. Never an amount.
+         */
+        AppliedChangeView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "quantity" | "requested_date";
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Value */
+            value: string;
+        };
         /** ArtifactListView */
         ArtifactListView: {
             /** Artifacts */
@@ -2333,6 +2431,144 @@ export interface components {
             source: "layout" | "rule" | "row";
             /** Step */
             step?: number | null;
+        };
+        /**
+         * ChangeLineBody
+         * @description One change line a person types, on the case version they saw.
+         */
+        ChangeLineBody: {
+            /** Case Version */
+            case_version: number;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "quantity" | "requested_date";
+            /** Line No */
+            line_no: number;
+            /** Value */
+            value: string;
+        };
+        /**
+         * ChangeLineView
+         * @description One value a customer's mail asks to change (`ChangeLine`).
+         */
+        ChangeLineView: {
+            anchor: components["schemas"]["TextRange"] | null;
+            /** Asked */
+            asked: string;
+            /** Blocked */
+            blocked: ("no_such_line" | "unit_differs" | "printed_schedules") | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "quantity" | "requested_date";
+            /** Held */
+            held: string | null;
+            /** Line No */
+            line_no: number;
+            /**
+             * Read By
+             * @enum {string}
+             */
+            read_by: "table" | "model" | "person";
+            /** Reason */
+            reason: string | null;
+            /** Seq */
+            seq: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "confirmed" | "rejected";
+            /** Unit */
+            unit: string | null;
+            /** Written */
+            written: string;
+        };
+        /**
+         * ChangeRejectBody
+         * @description Why one change line is rejected, in the person's words.
+         */
+        ChangeRejectBody: {
+            /** Case Version */
+            case_version: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ChangeRequestBody
+         * @description A change request from one of the order's replies (ticket 27): the
+         *     mail, and any line the person types besides what DW1 reads, on the
+         *     case version the person saw.
+         */
+        ChangeRequestBody: {
+            /** Case Version */
+            case_version: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["TypedChange"][];
+            /** Message Id */
+            message_id: string;
+        };
+        /**
+         * ChangeRequestResult
+         * @description What a change-request decision returns: the request as it now stands
+         *     and the case's version after it (the next decision names it).
+         */
+        ChangeRequestResult: {
+            /** Case Version */
+            case_version: number;
+            request: components["schemas"]["ChangeRequestView"];
+        };
+        /**
+         * ChangeRequestView
+         * @description A change request on the order (ticket 27, dw_sales ADR 0010), with
+         *     the mail's newest part its anchors index into: the customer's own words.
+         *     The mail may state a price, so its text is served only to a holder of
+         *     `sales.price.read`, as the mail text of a PO read from the body is; for
+         *     anyone else it is absent, and the lines' own words stand.
+         */
+        ChangeRequestView: {
+            /** Lines */
+            lines: components["schemas"]["ChangeLineView"][];
+            /** Message Id */
+            message_id: string;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /**
+             * Opened By
+             * Format: uuid
+             */
+            opened_by: string;
+            /** Prompt */
+            prompt: string | null;
+            /** Reading */
+            reading: ("read" | "unavailable") | null;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "queued" | "closed";
+            /** Text */
+            text: string | null;
+            /** Unread */
+            unread: number;
         };
         /** ChangedRow */
         ChangedRow: {
@@ -3954,7 +4190,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction";
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -4015,6 +4251,11 @@ export interface components {
             case_version: number;
             /** Catalog As Of */
             catalog_as_of: string | null;
+            /**
+             * Change Requests
+             * @default []
+             */
+            change_requests: components["schemas"]["ChangeRequestView"][];
             /** Changes */
             changes: components["schemas"]["LineChangeView"][];
             /** Close Reason */
@@ -4157,6 +4398,11 @@ export interface components {
                 [key: string]: components["schemas"]["SourceAnchor"];
             };
             basis: components["schemas"]["LineBasisView"];
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["AppliedChangeView"][];
             /** Confirmed Delivery Date */
             confirmed_delivery_date: string | null;
             /** Corrections */
@@ -6249,6 +6495,22 @@ export interface components {
             seq: number;
         };
         /**
+         * TypedChange
+         * @description A line a person types: the line, the field, the value in its one form
+         *     (an ISO date from the date picker, a number from the number box).
+         */
+        TypedChange: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "quantity" | "requested_date";
+            /** Line No */
+            line_no: number;
+            /** Value */
+            value: string;
+        };
+        /**
          * UnappliedDecisionView
          * @description A cross-check decision the platform recorded and DW1's run could not
          *     apply to the order (ticket 14): who decided which way, on which version,
@@ -7829,6 +8091,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_change_request_api_v1_sales_orders__case_id__change_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeRequestResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeLineBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeRequestResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                request_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeRequestResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                request_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRejectBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeRequestResult"];
                 };
             };
             /** @description Validation Error */

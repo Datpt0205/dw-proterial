@@ -507,6 +507,47 @@
         "title": "AnswerView",
         "type": "object"
       },
+      "AppliedChangeView": {
+        "description": "A value of the line the customer asked to change by mail, which a\nperson confirmed (ticket 27): it replaces the value above where the line\nis entered. Never an amount.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "quantity",
+              "requested_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "request_id",
+          "by",
+          "at"
+        ],
+        "title": "AppliedChangeView",
+        "type": "object"
+      },
       "ApprovalAsked": {
         "additionalProperties": false,
         "description": "Who the case was sent to, stamped when it was sent: the approval, the\nscope its decider must hold and who that is, the version of the case the\napprover is shown, and who sent it. A later reader takes this stamp, never\nthe rules in force today.",
@@ -2701,6 +2742,361 @@
           "problem"
         ],
         "title": "CellDifference",
+        "type": "object"
+      },
+      "ChangeLineBody": {
+        "additionalProperties": false,
+        "description": "One change line a person types, on the case version they saw.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "field": {
+            "enum": [
+              "quantity",
+              "requested_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "maximum": 99999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "value": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "field",
+          "value",
+          "case_version"
+        ],
+        "title": "ChangeLineBody",
+        "type": "object"
+      },
+      "ChangeLineView": {
+        "description": "One value a customer's mail asks to change (`ChangeLine`).",
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asked": {
+            "title": "Asked",
+            "type": "string"
+          },
+          "blocked": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_such_line",
+                  "unit_differs",
+                  "printed_schedules"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "field": {
+            "enum": [
+              "quantity",
+              "requested_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "held": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "read_by": {
+            "enum": [
+              "table",
+              "model",
+              "person"
+            ],
+            "title": "Read By",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "confirmed",
+              "rejected"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "written": {
+            "title": "Written",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "line_no",
+          "field",
+          "held",
+          "asked",
+          "written",
+          "unit",
+          "anchor",
+          "read_by",
+          "blocked",
+          "state",
+          "decided_by",
+          "decided_at",
+          "reason"
+        ],
+        "title": "ChangeLineView",
+        "type": "object"
+      },
+      "ChangeRejectBody": {
+        "additionalProperties": false,
+        "description": "Why one change line is rejected, in the person's words.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "reason"
+        ],
+        "title": "ChangeRejectBody",
+        "type": "object"
+      },
+      "ChangeRequestBody": {
+        "additionalProperties": false,
+        "description": "A change request from one of the order's replies (ticket 27): the\nmail, and any line the person types besides what DW1 reads, on the\ncase version the person saw.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TypedChange"
+            },
+            "maxItems": 50,
+            "title": "Lines",
+            "type": "array"
+          },
+          "message_id": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "message_id"
+        ],
+        "title": "ChangeRequestBody",
+        "type": "object"
+      },
+      "ChangeRequestResult": {
+        "description": "What a change-request decision returns: the request as it now stands\nand the case's version after it (the next decision names it).",
+        "properties": {
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ChangeRequestView"
+          }
+        },
+        "required": [
+          "case_version",
+          "request"
+        ],
+        "title": "ChangeRequestResult",
+        "type": "object"
+      },
+      "ChangeRequestView": {
+        "description": "A change request on the order (ticket 27, dw_sales ADR 0010), with\nthe mail's newest part its anchors index into: the customer's own words.\nThe mail may state a price, so its text is served only to a holder of\n`sales.price.read`, as the mail text of a PO read from the body is; for\nanyone else it is absent, and the lines' own words stand.",
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "title": "Opened At",
+            "type": "string"
+          },
+          "opened_by": {
+            "format": "uuid",
+            "title": "Opened By",
+            "type": "string"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "queued",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "message_id",
+          "opened_by",
+          "opened_at",
+          "state",
+          "lines",
+          "unread",
+          "text",
+          "reading",
+          "prompt"
+        ],
+        "title": "ChangeRequestView",
         "type": "object"
       },
       "ChangedRow": {
@@ -9658,7 +10054,8 @@
           "reply_intent",
           "request_handoff",
           "layout_proposal",
-          "po_body_extraction"
+          "po_body_extraction",
+          "change_request"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -10418,6 +10815,14 @@
             ],
             "title": "Catalog As Of"
           },
+          "change_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChangeRequestView"
+            },
+            "title": "Change Requests",
+            "type": "array"
+          },
           "changes": {
             "items": {
               "$ref": "#/components/schemas/LineChangeView"
@@ -11027,6 +11432,14 @@
           },
           "basis": {
             "$ref": "#/components/schemas/LineBasisView"
+          },
+          "changes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedChangeView"
+            },
+            "title": "Changes",
+            "type": "array"
           },
           "confirmed_delivery_date": {
             "anyOf": [
@@ -19547,6 +19960,39 @@
           "answered_by"
         ],
         "title": "TurnView",
+        "type": "object"
+      },
+      "TypedChange": {
+        "additionalProperties": false,
+        "description": "A line a person types: the line, the field, the value in its one form\n(an ISO date from the date picker, a number from the number box).",
+        "properties": {
+          "field": {
+            "enum": [
+              "quantity",
+              "requested_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "maximum": 99999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "value": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "field",
+          "value"
+        ],
+        "title": "TypedChange",
         "type": "object"
       },
       "UnappliedDecisionView": {
@@ -28114,6 +28560,342 @@
           }
         },
         "summary": "Bravo Entry",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/change-requests": {
+      "post": {
+        "operationId": "open_change_request_api_v1_sales_orders__case_id__change_requests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Change Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines": {
+      "post": {
+        "operationId": "add_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeLineBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Change Line",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/confirm": {
+      "post": {
+        "operationId": "confirm_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Change Line",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/reject": {
+      "post": {
+        "operationId": "reject_change_line_api_v1_sales_orders__case_id__change_requests__request_id__lines__seq__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRejectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Change Line",
         "tags": [
           "sales"
         ]

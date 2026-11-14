@@ -32,6 +32,8 @@ from dw_sales.application.catalog_imports import (
     CatalogTemplatePort,
     CatalogUnitOfWorkFactory,
 )
+from dw_sales.application.change_reading import ChangeReader
+from dw_sales.application.change_requests import ChangeRequests
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.design_text_reading import DesignTextReplies
@@ -132,6 +134,8 @@ class SalesServices:
     design_text_replies: DesignTextReplies
     # PC's delivery dates read from the mail Sales pastes (AI item 7).
     pc_dates: PcDateReplies
+    # What a customer asked to change by mail, confirmed line by line (ticket 27).
+    change_requests: ChangeRequests
     gate: Gate
 
 
@@ -284,6 +288,20 @@ def assemble(
         ),
         pc_dates=PcDateReplies(
             uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
+        ),
+        change_requests=ChangeRequests(
+            uow,
+            gate,
+            clock,
+            ids,
+            intake,
+            inbox,
+            intake.rules,
+            intake.zones,
+            intake.model_steps,
+            None if one_call is None else ChangeReader(one_call),
+            worker_id,
+            worker_version,
         ),
         design_text_replies=DesignTextReplies(
             uow, gate, inbox, quotation, one_call, clock, ids, worker_id, worker_version

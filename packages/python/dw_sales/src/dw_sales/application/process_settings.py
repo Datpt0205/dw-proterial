@@ -148,6 +148,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.unread_retry_hours",
                     "model_assist.reply_intent",
                     "model_assist.request_handoff",
+                    "model_assist.change_request",
                 ),
                 _severities(
                     "duplicate_po",

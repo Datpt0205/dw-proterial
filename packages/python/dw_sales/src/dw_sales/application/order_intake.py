@@ -162,7 +162,9 @@ from dw_sales.domain.order_checks import (
 )
 from dw_sales.domain.orders import (
     Actor,
+    AppliedChange,
     BravoHistory,
+    Corrected,
     Finding,
     FindingCode,
     LineCheck,
@@ -1260,6 +1262,31 @@ class OrderIntake:
             lambda: ValueCorrection(field=field, value=value, by=actor.user_id, at=at)
         )
         corrected = decided(lambda: case.corrected(finding_key, correction, actor))
+        recheck = await self._recheck(scope, case, corrected, details)
+        return decided(lambda: case.correct_value(finding_key, correction, actor, recheck))
+
+    async def take_change(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        line_no: int,
+        change: AppliedChange,
+        actor: Actor,
+    ) -> OrderCase:
+        """A change the customer asked by mail, confirmed by a person, applied
+        to the case with its checks run again on the changed values, as for a
+        value Sales typed (`correct_value`; ticket 27). Which statuses and lines
+        take a change is the case's to decide (`OrderCase.changed`)."""
+        details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
+        corrected = decided(lambda: case.changed(line_no, change, actor))
+        recheck = await self._recheck(scope, case, corrected, details)
+        return decided(lambda: case.take_change(line_no, change, actor, recheck))
+
+    async def _recheck(
+        self, scope: SalesScope, case: OrderCase, corrected: Corrected, details: dict[str, object]
+    ) -> Recheck:
+        """The checks run again on ``corrected``'s values under the rules
+        stamped on the case (`correct_value`'s docstring says which)."""
         rules = await self._case_rules(scope, case, details)
         header = corrected.document.header
         # No LME price list: the band is unchecked, a finding (`check_line`).
@@ -1315,8 +1342,7 @@ class OrderIntake:
                 po_findings += [] if history.finding is None else [history.finding]
                 po_codes |= HISTORY_CHECK_CODES
                 bravo = BravoHistory(history.duplicate_of_so, history.base_so_no)
-        recheck = Recheck(tuple(checks), tuple(po_findings), po_codes, bravo)
-        return decided(lambda: case.correct_value(finding_key, correction, actor, recheck))
+        return Recheck(tuple(checks), tuple(po_findings), po_codes, bravo)
 
     async def _read(
         self,

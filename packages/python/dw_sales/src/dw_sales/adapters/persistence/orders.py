@@ -41,6 +41,7 @@ from dw_sales.application.case_store import CaseEvent, CaseOrigin, Stored
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
+    AppliedChange,
     Finding,
     LineBasis,
     LineMapping,
@@ -120,6 +121,7 @@ def _line_columns(line: OrderLine) -> dict[str, Any]:
         "pc_confirmed_by": line.pc_confirmed_by,
         "pc_confirmed_at": line.pc_confirmed_at,
         "corrections": _corrections(line.corrections),
+        "changes": [c.model_dump(mode="json") for c in line.changes],
     }
 
 
@@ -250,6 +252,7 @@ def _order_line(row: RowMapping) -> OrderLine:
         pc_confirmed_by=row["pc_confirmed_by"],
         pc_confirmed_at=row["pc_confirmed_at"],
         corrections=tuple(ValueCorrection.model_validate(c) for c in row["corrections"]),
+        changes=tuple(AppliedChange.model_validate(c) for c in row["changes"]),
     )
 
 

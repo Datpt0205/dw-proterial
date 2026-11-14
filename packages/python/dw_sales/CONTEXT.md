@@ -192,7 +192,11 @@ API and the plan use the English terms. The spec is
   on an order, in a mail's words or table: per line, the field, the value
   the case holds and the value asked, each with where the mail says it.
   Nothing of it reaches the case until the PIC confirms each line. One is
-  open per case at a time; a later one waits behind it.
+  open per case at a time; a later one waits behind it. A line changes a
+  delivery date or a quantity; one asked in another unit than the line's,
+  of a line the order does not have, or of a line printing several
+  schedules cannot be confirmed as read and is rejected with a reason
+  (ticket 27).
 - **Implied acceptance** (Đồng ý ngầm): a customer's silence after a
   confirmation, taken as agreement once that customer's number of days has
   passed, recorded by a person. A customer with no number never has it

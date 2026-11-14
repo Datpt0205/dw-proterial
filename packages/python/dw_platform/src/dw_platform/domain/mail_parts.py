@@ -24,6 +24,12 @@ the history starts:
 The text is normalised the way the case stores it: runs of spaces become one,
 lines are stripped, and blank lines collapse. Offsets a reading stores (a
 body anchor) index into exactly this text, with the subject as its first line.
+
+**Tables** (`newest_tables`): the same parse keeps each HTML table of the
+newest part as rows of cells, every cell's text normalised as the part's
+lines are, so a reader splits a table by its markup (a customer's change
+asked as a table, dw_sales ADR 0010) and finds each cell in the part's text.
+A table in quoted history is cut with it; a plain-text body has none.
 """
 
 from __future__ import annotations
@@ -64,6 +70,10 @@ _HEADER_NEXT = re.compile(
 _SPACES = re.compile(r"[ \t\u00a0\u2000-\u200b\u3000]+")
 
 
+# A table of the newest part: its rows, each the texts of its cells in order.
+MailTable = tuple[tuple[str, ...], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class MessagePart:
     """The subject and the newest body text, normalised; ``cut`` when history
@@ -90,6 +100,19 @@ def newest_part(message: InboundMessage) -> MessagePart:
     else:
         body, cut = _from_plain(message.body_text)
     return MessagePart(subject=_line(message.subject), body=_normalised(body), cut=cut)
+
+
+def newest_tables(message: InboundMessage) -> tuple[MailTable, ...]:
+    """The tables of the message's newest part, in the order written (module
+    docstring). A table inside another is its own; the outer cell keeps the
+    text around it. Empty for a message with no HTML part."""
+    if message.body_html is None or not message.body_html.strip():
+        return ()
+    parser = _Newest()
+    parser.feed(message.body_html)
+    parser.close()
+    parser.finish_tables()
+    return tuple(parser.tables)
 
 
 def _from_plain(text: str) -> tuple[str, bool]:
@@ -122,6 +145,10 @@ class _Newest(HTMLParser):
         self.stopped = False
         # Depth inside a skipped element: >0 means its text is not kept.
         self._skip: list[str] = []
+        # Tables finished, and those open (innermost last), each with its
+        # rows, the row being read and the cell being read.
+        self.tables: list[MailTable] = []
+        self._open: list[_Table] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if self.stopped:
@@ -147,6 +174,10 @@ class _Newest(HTMLParser):
             self.parts.append("\n")
         elif tag in _CELLS:
             self.parts.append(" | ")
+        if tag == "table":
+            self._open.append(_Table())
+        elif self._open:
+            self._open[-1].start(tag)
 
     def handle_endtag(self, tag: str) -> None:
         if self.stopped:
@@ -160,10 +191,79 @@ class _Newest(HTMLParser):
             return
         if tag in _BLOCKS:
             self.parts.append("\n")
+        if tag == "table" and self._open:
+            self._finish(self._open.pop())
+        elif self._open:
+            self._open[-1].end(tag)
 
     def handle_data(self, data: str) -> None:
         if not self.stopped and not self._skip:
             self.parts.append(data.replace("\n", " "))
+            if self._open:
+                self._open[-1].text(data.replace("\n", " "))
+
+    def finish_tables(self) -> None:
+        """Every table still open when the newest part ends (an unclosed
+        ``table``, or the history starting inside one), innermost first."""
+        while self._open:
+            self._finish(self._open.pop())
+
+    def _finish(self, table: _Table) -> None:
+        rows = table.finished()
+        if rows:
+            self.tables.append(rows)
+
+
+class _Table:
+    """One HTML table being read: rows of cells, a cell's lines cut where the
+    part's lines are (a block or a ``br`` inside it starts one). Mail HTML
+    often leaves a cell or a row unclosed: the next one closes it."""
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, ...]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def start(self, tag: str) -> None:
+        if tag == "tr":
+            self._end_row()
+            self._row = []
+        elif tag in _CELLS:
+            self._end_cell()
+            if self._row is None:
+                self._row = []
+            self._cell = []
+        elif tag in _BLOCKS and self._cell is not None:
+            self._cell.append("\n")
+
+    def end(self, tag: str) -> None:
+        if tag == "tr":
+            self._end_row()
+        elif tag in _CELLS:
+            self._end_cell()
+        elif tag in _BLOCKS and self._cell is not None:
+            self._cell.append("\n")
+
+    def text(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def finished(self) -> MailTable:
+        self._end_row()
+        return tuple(self.rows)
+
+    def _end_cell(self) -> None:
+        if self._cell is not None and self._row is not None:
+            lines = "".join(self._cell).split("\n")
+            kept = (_SPACES.sub(" ", line).strip(" |").strip() for line in lines)
+            self._row.append("\n".join(line for line in kept if line))
+        self._cell = None
+
+    def _end_row(self) -> None:
+        self._end_cell()
+        if self._row:
+            self.rows.append(tuple(self._row))
+        self._row = None
 
 
 def _from_html(html: str) -> tuple[str, bool]:

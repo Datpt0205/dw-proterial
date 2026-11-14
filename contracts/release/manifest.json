@@ -403,6 +403,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "1294f0f5912ac983201269b1b526dac86d93541d36b6c39f27a82eaadb66ef80",
+      "dataset_id": "sales_change_request",
+      "files": [
+        {
+          "checksum": "68099b7ec4bc7ea348bbae90dfc41c674a6d3e4dfe5e894d166a79a6ac634a14",
+          "path": "evals/expected/sales_change_request.json"
+        },
+        {
+          "checksum": "172b2c5c42adc5ee925cded175947c4c287a889d3da80a70541c5dd465a152a8",
+          "path": "evals/fixtures/cases/sales_change_request.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "ee58fe3f206b47b8c0eb7e5d05b17284ba1af6b93a8660019f78ec66281e4ffb",
       "dataset_id": "sales_customer_reminders",
       "files": [
@@ -796,7 +811,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "6c9c6b58ca05dca285c178f84979dba0d529cb57",
+  "git_sha": "e59c3237323640237e7b9b51fe7326647e226045",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1133,6 +1148,11 @@
     {
       "checksum": "87ecad72b6bea2e5474d1127148fae49483059c599f82495a1d0158a8df0d555",
       "prompt_id": "sales.catalog_columns",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "96366da03b134bd4dd4812d63f811498a06b57c24994a7cf95d7effe7afb2e4a",
+      "prompt_id": "sales.change_request",
       "version": "1.0.0"
     },
     {

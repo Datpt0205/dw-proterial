@@ -112,6 +112,8 @@ _SALES_TABLES = (
     "sales.message_cases",
     # Migration 7f3def432f82 (ticket 25): the messages Sales sent DW1 took up.
     "sales.sent_messages",
+    # Migration c7d0730fcccd (ticket 27): a customer's change requests.
+    "sales.change_requests",
 )
 
 
@@ -177,6 +179,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {verb for tbl, verb in held if tbl == "message_cases"} == {"SELECT", "INSERT"}
     # A sent message's record is how it was processed (7f3def432f82).
     assert {verb for tbl, verb in held if tbl == "sent_messages"} == {"SELECT", "INSERT"}
+    # A change request moves on line by line, and is never removed (c7d0730fcccd).
+    assert {verb for tbl, verb in held if tbl == "change_requests"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+    }
     # A mail Sales asked DW1 to send moves on, and is never removed (c42ed45c73a2).
     assert {verb for tbl, verb in held if tbl == "outbound_mails"} == {
         "SELECT",

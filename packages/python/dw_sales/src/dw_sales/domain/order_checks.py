@@ -130,6 +130,7 @@ class ModelStep(StrEnum):
     REQUEST_HANDOFF = "request_handoff"
     LAYOUT_PROPOSAL = "layout_proposal"
     PO_BODY_EXTRACTION = "po_body_extraction"
+    CHANGE_REQUEST = "change_request"
 
 
 class ModelAssist(BaseModel):
@@ -169,6 +170,11 @@ class ModelAssist(BaseModel):
     # item 4); every value it read is flagged for Sales to confirm. Off when
     # a version written before 1.8.0 does not say.
     po_body_extraction: bool = False
+    # A local model reads the changes a customer asks for in a reply's own
+    # words (ticket 27): each a line, a field and the value's words, which
+    # code finds and parses; Sales confirms each line. Off where a version
+    # does not say: the platform's versions do not, so it ships off.
+    change_request: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

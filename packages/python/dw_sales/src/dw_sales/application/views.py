@@ -52,7 +52,7 @@ from dw_sales.application.source import (
     value_unserved,
 )
 from dw_sales.application.threads import CaseThread
-from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.anchors import SourceAnchor, TextRange
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -65,6 +65,15 @@ from dw_sales.domain.catalog import (
     OpenYcbg,
     Quotation,
 )
+from dw_sales.domain.change_requests import (
+    Blocked,
+    ChangeField,
+    ChangeLineState,
+    ChangeOutcome,
+    ChangeRequest,
+    ChangeRequestState,
+    ReadBy,
+)
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
@@ -76,6 +85,7 @@ from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     AMOUNT_FIELDS,
     AskCustomer,
+    ChangedField,
     CorrectedBySales,
     Derivation,
     DispositionKind,
@@ -304,6 +314,84 @@ class ValueCorrectionView(BaseModel):
     at: datetime
 
 
+class AppliedChangeView(BaseModel):
+    """A value of the line the customer asked to change by mail, which a
+    person confirmed (ticket 27): it replaces the value above where the line
+    is entered. Never an amount."""
+
+    model_config = _VIEW
+
+    field: ChangedField
+    value: str
+    request_id: uuid.UUID
+    by: uuid.UUID
+    at: datetime
+
+
+class ChangeLineView(BaseModel):
+    """One value a customer's mail asks to change (`ChangeLine`)."""
+
+    model_config = _VIEW
+
+    seq: int
+    line_no: int
+    field: ChangeField
+    # In the field's one form: an ISO date, a number. None: the case holds
+    # no value there (no such line, or a line printed with no date).
+    held: str | None
+    asked: str
+    written: str
+    unit: str | None
+    # Characters of the request's `text`; None for a line a person typed.
+    anchor: TextRange | None
+    read_by: ReadBy
+    # Why it cannot be confirmed as read; the screen disables the button
+    # with this reason, and the server refuses anyway.
+    blocked: Blocked | None
+    state: ChangeLineState
+    decided_by: uuid.UUID | None
+    decided_at: datetime | None
+    reason: str | None
+
+
+class ChangeRequestView(BaseModel):
+    """A change request on the order (ticket 27, dw_sales ADR 0010), with
+    the mail's newest part its anchors index into: the customer's own words.
+    The mail may state a price, so its text is served only to a holder of
+    `sales.price.read`, as the mail text of a PO read from the body is; for
+    anyone else it is absent, and the lines' own words stand."""
+
+    model_config = _VIEW
+
+    request_id: uuid.UUID
+    message_id: str
+    opened_by: uuid.UUID
+    opened_at: datetime
+    state: ChangeRequestState
+    lines: list[ChangeLineView]
+    unread: int
+    # None: the caller may not read prices (above).
+    text: str | None
+    # The model call that read the free text, where one was made.
+    reading: ChangeOutcome | None
+    prompt: str | None
+
+
+def change_request_view(request: ChangeRequest, *, prices: PriceView) -> ChangeRequestView:
+    return ChangeRequestView(
+        request_id=request.request_id,
+        message_id=request.message_id,
+        opened_by=request.opened_by,
+        opened_at=request.opened_at,
+        state=request.state,
+        lines=[ChangeLineView.model_validate(line.model_dump()) for line in request.lines],
+        unread=request.unread,
+        text=request.text.text if prices.amounts else None,
+        reading=request.reading.outcome if request.reading else None,
+        prompt=request.reading.prompt if request.reading else None,
+    )
+
+
 def _corrections(
     corrections: Iterable[ValueCorrection], prices: PriceView
 ) -> list[ValueCorrectionView]:
@@ -505,6 +593,8 @@ class OrderLineView(BaseModel):
     flags: list[FlaggedValue]
     # What Sales typed for flagged values; the values above stay as read.
     corrections: list[ValueCorrectionView]
+    # What a person confirmed of the customer's change requests (ticket 27).
+    changes: list[AppliedChangeView] = []
     value_states: dict[str, ValueState]
     mapping: MappingView
     basis: LineBasisView
@@ -645,6 +735,7 @@ def order_line(
         anchors=_seen_anchors(po.anchors, prices),
         flags=list(po.flags),
         corrections=_corrections(line.corrections, prices),
+        changes=[AppliedChangeView.model_validate(c.model_dump()) for c in line.changes],
         value_states=_line_states(case, line, checked),
         mapping=MappingView(
             status=mapping.status.value,
@@ -817,6 +908,8 @@ class OrderCaseView(BaseModel):
     thread_before: list[ThreadMessageView] = []
     # The messages Sales sent on its thread(s) (ticket 25).
     thread_sent: list[SentMessageView] = []
+    # What the customer asked to change by mail, oldest first (ticket 27).
+    change_requests: list[ChangeRequestView] = []
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
@@ -1091,6 +1184,7 @@ def order_case(
     cross_checker: bool = False,
     thread: CaseThread | None = None,
     sent: Mapping[str, SentRead] | None = None,
+    change_requests: Sequence[ChangeRequest] = (),
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1193,6 +1287,7 @@ def order_case(
         replies=talk.replies,
         thread_before=[thread_message(m) for m in thread.before] if thread else [],
         thread_sent=talk.sent,
+        change_requests=[change_request_view(r, prices=prices) for r in change_requests],
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker

@@ -174,6 +174,27 @@ class ValueCorrection(BaseModel):
     at: AwareDatetime
 
 
+# What a customer's change request may change on a line (ticket 27): the
+# fields `domain.change_requests.ChangeField` names.
+ChangedField = Literal["quantity", "requested_date"]
+
+
+class AppliedChange(BaseModel):
+    """A value of a line the customer asked to change by mail, which a person
+    confirmed (dw_sales ADR 0010 decision 2, ticket 27). It replaces the
+    value as read, or as corrected, where the line is entered; the request it
+    came from keeps where the mail asks it. Whoever confirmed it is a maker of
+    the case, as one who types a value is (spec decision 7)."""
+
+    model_config = _FROZEN
+
+    field: ChangedField
+    value: PrintedText
+    request_id: uuid.UUID
+    by: ActorId
+    at: AwareDatetime
+
+
 def _require_corrections(
     corrections: Sequence[ValueCorrection], flagged: frozenset[str], owner: str
 ) -> None:
@@ -184,7 +205,9 @@ def _require_corrections(
         raise ValueError(f"{owner} corrects fields nothing flagged: {unflagged}")
 
 
-def _with_values[M: BaseModel](model: M, corrections: Iterable[ValueCorrection]) -> M:
+def _with_values[M: BaseModel](
+    model: M, corrections: Iterable[ValueCorrection | AppliedChange]
+) -> M:
     """``model`` holding each correction's value, validated as its field's type."""
     typed = {c.field: c.value for c in corrections}
     if not typed:
@@ -1070,6 +1093,9 @@ class OrderLine(BaseModel):
     # What Sales typed for the values its `value_uncertain` flagged, one per
     # field; `po_line` keeps the values as read.
     corrections: tuple[ValueCorrection, ...] = ()
+    # The changes the customer asked by mail that a person confirmed, one per
+    # field, the latest (ticket 27); they win over a correction of the field.
+    changes: tuple[AppliedChange, ...] = ()
 
     @model_validator(mode="after")
     def _pc_confirmation_names_who_and_when(self) -> Self:
@@ -1101,6 +1127,12 @@ class OrderLine(BaseModel):
     def _corrections_are_the_flagged_values(self) -> Self:
         owner = f"line {self.line_no}"
         _require_corrections(self.corrections, self.po_line.flagged, owner)
+        fields = [c.field for c in self.changes]
+        if len(fields) != len(set(fields)):
+            raise ValueError(f"{owner} holds two changes of one field")
+        if self.changes and self.po_line.prints_schedules:
+            # One value cannot say which of the printed schedules it changes.
+            raise ValueError(f"{owner} prints its schedules, and takes no change by mail")
         _keeps_identity(self.po_line, self.effective, owner)
         return self
 
@@ -1111,9 +1143,10 @@ class OrderLine(BaseModel):
     @property
     def effective(self) -> PoLine:
         """The line as it is entered: the values as read, each corrected one
-        replaced by what Sales typed. What the checks, the upload file and
+        replaced by what Sales typed, and each changed one by the change a
+        person confirmed (ticket 27). What the checks, the upload file and
         every draft read."""
-        return _with_values(self.po_line, self.corrections)
+        return _with_values(_with_values(self.po_line, self.corrections), self.changes)
 
     def correction(self, field: str) -> ValueCorrection | None:
         return next((c for c in self.corrections if c.field == field), None)
@@ -1203,6 +1236,28 @@ class Recheck(NamedTuple):
     # Set when the history check ran again (its codes are then in
     # ``po_codes``): what the case names in Bravo, replaced.
     bravo: BravoHistory | None = None
+
+
+class _Rechecked(NamedTuple):
+    """A case's values once its checks ran again (`OrderCase._rechecked`):
+    the fields of the case they replace."""
+
+    lines: tuple[OrderLine, ...]
+    findings: tuple[Finding, ...]
+    header_corrections: tuple[ValueCorrection, ...]
+    history: dict[str, object]
+    revision_changes: tuple[LineChange, ...]
+
+    def changes(self) -> dict[str, object]:
+        """As `OrderCase._edited` takes them."""
+        return {
+            "lines": self.lines,
+            # Validated again: model_copy alone skips the invariants.
+            "findings": tuple(Finding.model_validate(dict(f)) for f in self.findings),
+            "header_corrections": self.header_corrections,
+            **self.history,
+            "changes": self.revision_changes,
+        }
 
 
 # ---------------------------------------------------------------- revisions --
@@ -1417,6 +1472,10 @@ IN_BRAVO: Final = frozenset(
 )
 # Where lines, mappings and dispositions are decided.
 _EDITABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED, _S.CHANGE_REVIEW})
+# Where a change the customer asked by mail is taken (ticket 27): the PIC
+# decides the values and the order is not in Bravo yet. In Bravo it is the
+# update loop's (dw_sales ADR 0010 decision 3).
+_CHANGEABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED})
 # Where the export-control PIC may acknowledge `missing_noc_esf` without
 # moving the case: it blocks only `confirmed` (spec decision 9).
 _ACKNOWLEDGEABLE: Final = frozenset(
@@ -1788,6 +1847,7 @@ class OrderCase(BaseModel):
         }
         names |= {line.mapping.confirmed_by for line in self.lines if line.mapping.hand_entered}
         names |= {c.by for line in self.lines for c in line.corrections}
+        names |= {c.by for line in self.lines for c in line.changes}
         names |= {c.by for c in self.header_corrections}
         return frozenset(name for name in names if name is not None)
 
@@ -1962,6 +2022,7 @@ class OrderCase(BaseModel):
                 "mapping": confirmed,
                 "po_line": line.po_line,
                 "corrections": line.corrections,
+                "changes": line.changes,
             }
         )
         source = "candidate" if mapping.candidates else "PRV code typed by Sales (item master)"
@@ -2054,6 +2115,87 @@ class OrderCase(BaseModel):
         """
         corrected = self.corrected(key, correction, actor)
         details: dict[str, object] = {"case_id": str(self.case_id), "finding": key}
+        taken = self._rechecked(corrected, recheck, details)
+        findings = taken.findings
+        target = next(f for f in findings if f.key == key)
+        typed = (
+            corrected.header_corrections
+            if target.line_no is None
+            else next(x for x in taken.lines if x.line_no == target.line_no).corrections
+        )
+        if self.flagged_fields(target) <= {c.field for c in typed} and not (
+            self._names_unchecked_region(target)
+        ):
+            resolved = CorrectedBySales(
+                value=",".join(sorted(c.field for c in typed)),
+                source=_TYPED_PER_FIELD,
+                by=actor.user_id,
+                at=correction.at,
+            )
+            findings = tuple(
+                f.model_copy(update={"disposition": resolved}) if f.key == key else f
+                for f in findings
+            )
+        return self._edited(**taken._replace(findings=findings).changes())
+
+    def changed(self, line_no: int, change: AppliedChange, actor: Actor) -> Corrected:
+        """The case's values with a change the customer asked by mail too, for
+        its checks to run on (ticket 27; dw_sales ADR 0010 decision 2).
+
+        Taken only where the PIC decides the order's values before it is in
+        Bravo (`in_review`, or `prepared`, which it reopens): once the order
+        is in Bravo a change is the update loop's (ADR 0010 decision 3).
+        Refused for a line that prints its schedules apart from it (one value
+        cannot say which), and unless the change is the actor's. A quantity or
+        a date is no input of the line's PRV code, so its mapping stands.
+        """
+        details: dict[str, object] = {
+            "case_id": str(self.case_id),
+            "line": line_no,
+            "field": change.field,
+        }
+        if self.status not in _CHANGEABLE:
+            raise ConflictError(
+                f"a change asked by mail is not taken in {self.status}",
+                details={**details, "status": self.status.value, "rule": "change_status"},
+            )
+        if change.by != actor.user_id:
+            raise DomainError("a decision is recorded as its actor's", details=details)
+        line = self.line(line_no)
+        if line.po_line.prints_schedules:
+            raise ConflictError(
+                "the line prints its schedules: which one changes is asked of the customer",
+                details={**details, "rule": "printed_schedules"},
+            )
+        new_line = OrderLine.model_validate(
+            {**dict(line), "changes": (*_without(line.changes, change.field), change)}
+        )
+        lines = tuple(new_line if x.line_no == line_no else x for x in self.lines)
+        entered = _entered(self.document, lines, self.header_corrections)
+        return Corrected(
+            line_no, lines, self.header_corrections, entered, frozenset({line_no}), False
+        )
+
+    def take_change(
+        self, line_no: int, change: AppliedChange, actor: Actor, recheck: Recheck
+    ) -> OrderCase:
+        """A change the customer asked, confirmed by a person, applied with the
+        checks run again on the changed values (`changed`), as for a value
+        Sales typed: a finding whose compared values did not change keeps its
+        decision, one that changed or is new is open (a pulled-in date may
+        now be short of the lead time; a quantity no longer the printed
+        amount's). The case takes its next version."""
+        corrected = self.changed(line_no, change, actor)
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        return self._edited(**self._rechecked(corrected, recheck, details).changes())
+
+    def _rechecked(
+        self, corrected: Corrected, recheck: Recheck, details: dict[str, object]
+    ) -> _Rechecked:
+        """``corrected``'s values with ``recheck``'s results taken: the lines
+        checked again, the findings raised again (each keeping its decision
+        while its compared values are the same), the history against Bravo
+        where it ran again, and a revision's change list rebased."""
         checks = {check.line.line_no: check for check in recheck.lines}
         if checks.keys() != corrected.rechecked:
             raise DomainError("the case was checked again on other lines", details=details)
@@ -2101,36 +2243,15 @@ class OrderCase(BaseModel):
 
         old = {f.key: f for f in self.findings}
         new = [f if f.code in MAPPING_FINDINGS else _carried(f, old.get(f.key)) for f in raised]
-        findings = _in_line_order((*(f for f in self.findings if not replaced(f)), *new))
-        target = next(f for f in findings if f.key == key)
-        typed = (
-            corrected.header_corrections
-            if target.line_no is None
-            else next(x for x in lines if x.line_no == target.line_no).corrections
-        )
-        if self.flagged_fields(target) <= {c.field for c in typed} and not (
-            self._names_unchecked_region(target)
-        ):
-            resolved = CorrectedBySales(
-                value=",".join(sorted(c.field for c in typed)),
-                source=_TYPED_PER_FIELD,
-                by=actor.user_id,
-                at=correction.at,
-            )
-            findings = tuple(
-                f.model_copy(update={"disposition": resolved}) if f.key == key else f
-                for f in findings
-            )
-        return self._edited(
+        return _Rechecked(
             lines=tuple(lines),
-            # Validated again: model_copy alone skips the invariants.
-            findings=tuple(Finding.model_validate(dict(f)) for f in findings),
+            findings=_in_line_order((*(f for f in self.findings if not replaced(f)), *new)),
             header_corrections=corrected.header_corrections,
-            **history,
+            history=history,
             # A revision's change list is what the PIC applies in Bravo: its
             # after is the value as entered, as the upload file's is. A case
             # never revised lists none.
-            changes=rebase_changes(
+            revision_changes=rebase_changes(
                 self.changes,
                 [line.effective for line in self.lines],
                 [line.effective for line in lines],
@@ -2541,8 +2662,8 @@ _CLEARED_FROM_PREPARED: Final[Mapping[str, object]] = MappingProxyType(
 _TYPED_PER_FIELD: Final = "Sales nhập lại từng giá trị bị gắn cờ"
 
 
-def _without(corrections: Iterable[ValueCorrection], field: str) -> tuple[ValueCorrection, ...]:
-    return tuple(c for c in corrections if c.field != field)
+def _without[V: (ValueCorrection, AppliedChange)](values: Iterable[V], field: str) -> tuple[V, ...]:
+    return tuple(c for c in values if c.field != field)
 
 
 def _entered(
@@ -2597,6 +2718,7 @@ def _rechecked_line(line: OrderLine, check: LineCheck, findings: Iterable[Findin
             **dict(check.line),
             "po_line": line.po_line,
             "corrections": line.corrections,
+            "changes": line.changes,
             "confirmed_delivery_dates": line.confirmed_delivery_dates,
             "pc_confirmed_by": line.pc_confirmed_by if same else None,
             "pc_confirmed_at": line.pc_confirmed_at if same else None,

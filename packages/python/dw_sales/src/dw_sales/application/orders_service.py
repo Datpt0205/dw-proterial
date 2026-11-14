@@ -126,6 +126,7 @@ class OrderQueries:
             logged = await work.messages.list_all()
             servings = await work.served.servings(CaseKind.ORDER, case_id)
             sent = {s.message_id: s for s in await work.sent.list_all()}
+            requests = await work.change_requests.for_case(case_id)
         thread = await case_thread(
             self.threads,
             scope,
@@ -152,6 +153,7 @@ class OrderQueries:
             cross_checker=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK),
             thread=thread,
             sent=sent,
+            change_requests=requests,
         )
 
 

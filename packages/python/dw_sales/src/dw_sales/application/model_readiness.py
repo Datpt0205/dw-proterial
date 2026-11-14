@@ -49,6 +49,7 @@ from dw_agent_runtime.model.readiness import (
     refusal,
 )
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_sales.application.change_reading import CHANGE_REQUEST
 from dw_sales.application.handoffs import REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.message_intent import MESSAGE_INTENT
@@ -120,6 +121,16 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         # every value the golden POs state. A PO refused goes to a person.
         ModelStep.PO_BODY_EXTRACTION: StepBar(
             0.85, "all.right_field", PO_BODY_EXTRACTION, "sales_po_body", "sales.po_body_golden"
+        ),
+        # Ticket 27: the golden mails' changes read as exactly their line,
+        # field and value, over every change the golden mails ask. A change
+        # missed or dropped goes to a person, who types it.
+        ModelStep.CHANGE_REQUEST: StepBar(
+            0.85,
+            "all.right_change",
+            CHANGE_REQUEST,
+            "sales_change_request",
+            "sales.change_request_golden",
         ),
     }
 )

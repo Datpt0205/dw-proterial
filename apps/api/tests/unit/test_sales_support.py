@@ -53,6 +53,9 @@ _PARAMS = {
     "attachment_id": "M01-A1",
     "finding_key": "price_mismatch:2",
     "line_no": "1",
+    # A customer's change request and one of its lines (ticket 27).
+    "request_id": str(uuid.uuid4()),
+    "seq": "1",
     "message_id": "M01",
     # A tenant's own rule versions (ticket 19).
     "key": "sales_order_rules",
