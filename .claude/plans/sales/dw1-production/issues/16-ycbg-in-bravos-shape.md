@@ -1,7 +1,7 @@
 # 16 — The YCBG in Bravo's real shape: RFQ number, Design Check, status
 
-Status: needs-info (Q-B11: who writes Design Check and the status)
-Blocked by: Q-B11; the Bravo API's R13 for the read-back
+Status: ready-for-agent (Q-B11 answered by Box B16, 11-14: Design writes its result on the YCBG line in Bravo, QUOTE or DECLINE with a reason and the BP code, and the line's status goes CLOSE)
+Blocked by: the Bravo API's R13 for the read-back (until then, Bravo's YCBG export as a file)
 Category: enhancement
 
 ## Why
