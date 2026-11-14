@@ -605,6 +605,37 @@ export class SalesApi {
     );
   }
 
+  /** The request to PC drafted from the order, and the wait on PC (ticket
+   * 07); nothing is sent or stored. */
+  pcRequest(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/pc-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-request`,
+    );
+  }
+
+  /** "Ghi đã hỏi PC": the order waits on PC from now. */
+  recordPcAsked(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/pc-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-request`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
+  /** PC's answer for one line: each delivery's quantity and PC's date. */
+  recordPcAnswer(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-answer">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-answer">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/pc-answer`,
+      body,
+      key,
+    );
+  }
+
   /** The verified mails naming the order, PC's answer among them. */
   pcMails(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}/pc-mails">(

@@ -49,6 +49,25 @@ API and the plan use the English terms. The spec is
   (ticket 21). A split line's dates are asked of the customer, never typed.
   Sales confirms a split line per schedule, one date each, and the
   confirmation lists each schedule's quantity with its date (ticket 35).
+  Once PC answered, a line's deliveries are PC's (below).
+- **Request to PC** (Hỏi PC): the request Sales sends PC for an order's
+  delivery dates, written by code from the case (each line asked: number,
+  PRV code, the customer's code, quantity, requested date) in the hand-off
+  copy (`sales_handoffs`, `pc_request`); the person copies it into Teams or a
+  mail. DW1 sends nothing. "Ghi đã hỏi PC" puts the case **waiting on PC**
+  (`pc_request`) until PC's answer is recorded for every line asked; the
+  follow-up `waiting_pc` reminds the PIC meanwhile (ticket 07). Only before
+  the order is in Bravo; in Bravo, PC's dates are the update loop's (ticket
+  29).
+- **PC's answer** (Ngày PC trả lời): per line, recorded by a person one line
+  at a time, the line's deliveries with PC's dates: one for a line delivered
+  at once; several for a line PC splits, whose quantities add up to the
+  line's (a split that does not is refused, never adjusted); one per printed
+  schedule for a line the PO splits. Each delivery is a row of the paste
+  sheet and is confirmed with its own date. A re-confirmation by PC keeps the
+  **first confirmed date** of each delivery (split anew: the line's earliest)
+  and records the current one. A customer's change or a correction of the
+  line's quantity or date drops it: PC is asked again (ticket 07).
 - **Tenant version** (Phiên bản riêng): a customer's own version of a Sales
   rule or copy file (order and quote rules, pricing, KPI, e-mail and document
   copy, the Bravo upload template, the hand-off copy), proposed by a PIC or
@@ -236,7 +255,8 @@ API and the plan use the English terms. The spec is
   lane sends a member when a case has waited past a threshold: a PO not
   confirmed (`order_unconfirmed`: the PIC, then the head), a quote request
   waiting on Design (`quote_waiting_design`), a quote due date near
-  (`quote_deadline`), a case waiting on the customer (`waiting_customer`).
+  (`quote_deadline`), a case waiting on the customer (`waiting_customer`),
+  an order waiting on PC's dates (`waiting_pc`, ticket 07).
   Each stage goes once per wait; outside working hours it waits for them.
   It informs and decides nothing: DW1 never mails the customer or Design.
   Every timing and switch is the tenant-overridable policy

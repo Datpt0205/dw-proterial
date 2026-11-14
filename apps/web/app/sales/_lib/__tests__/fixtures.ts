@@ -103,6 +103,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     },
     suggested_delivery_date: "2026-10-14",
     confirmed_delivery_date: null,
+    confirmed_delivery_dates: [],
     pc_confirmed_by: null,
     pc_confirmed_at: null,
   } as Order["lines"][number];
@@ -279,5 +280,17 @@ export function pendingQuote(): Quote {
     replies: [],
     thread_before: [],
     thread_sent: [],
+  };
+}
+
+/** The request to PC the order page draws (ticket 07): no wait yet. */
+export function pcRequest(): SalesSchemas["PcRequestView"] {
+  return {
+    case_version: 3,
+    lines: [1],
+    subject: "[Hỏi PC] Ngày giao cho PO BRN-PO-2609-031",
+    body: "Chào anh/chị PC,\n- Dòng 1",
+    template_ref: "sales_handoffs@1.1.0#pc_request",
+    reminder_at: null,
   };
 }

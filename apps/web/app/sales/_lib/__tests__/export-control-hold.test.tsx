@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
-import { AN, DIEU, finding, order } from "./fixtures";
+import { AN, DIEU, finding, order, pcRequest } from "./fixtures";
 
 type Order = SalesSchemas["OrderCaseView"];
 
@@ -60,6 +60,7 @@ function crossChecked(
 
 let shown: Order = crossChecked();
 const api = {
+  pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),

@@ -103,7 +103,7 @@ async def test_a_routed_complaint_carries_a_hand_off_code_wrote_and_kept(
     # A case reader sees the hand-off as they see the mail it was copied from.
     listed = {m["message_id"]: m for m in (await an.get("/inbox")).json()}
     draft = listed["M31"]["handoff_draft"]
-    assert (draft["to"], draft["template_ref"]) == ("qa", "sales_handoffs@1.0.0#complaint")
+    assert (draft["to"], draft["template_ref"]) == ("qa", "sales_handoffs@1.1.0#complaint")
     assert "VLX-PO-2608-0102" in draft["subject"] and "LOT-2609-118" in draft["subject"]
     assert f"«{PROBLEM}»" in draft["body"]
     # Leadership reads aggregates only, and another tenant's mailbox is its own.
@@ -111,14 +111,16 @@ async def test_a_routed_complaint_carries_a_hand_off_code_wrote_and_kept(
     assert all(m["message_id"] != "M31" for m in (await bao.get("/inbox")).json())
 
 
-async def test_without_a_model_the_complaint_is_routed_as_before_with_no_hand_off(
+async def test_without_a_model_the_complaint_goes_to_a_person_with_no_hand_off(
     api: Api, migrator: AsyncEngine
 ) -> None:
     an = api.as_(AN)
 
     m31 = await process(an, "M31")
 
-    assert (m31["reason"], m31["handoff"]) == ("complaint", None)
+    # No keyword decides what a mail is (401643b8): unread by a model, the
+    # complaint reaches a person as "other", and no hand-off is drafted.
+    assert (m31["reason"], m31["handoff"]) == ("other", None)
     listed = {m["message_id"]: m for m in (await an.get("/inbox")).json()}
     assert listed["M31"]["handoff_draft"] is None
     async with migrator.connect() as conn:

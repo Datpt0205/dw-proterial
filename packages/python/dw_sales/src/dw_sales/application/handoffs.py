@@ -378,6 +378,11 @@ _TEMPLATE_NAMES: Final = frozenset(
 )
 _LINE_NAMES: Final = frozenset({"line_no", "item", "quantity", "date"})
 _QUOTE_NAMES: Final = frozenset({"text"})
+# The request to PC for an order's delivery dates (ticket 07).
+_PC_NAMES: Final = frozenset({"customer", "po", "lines"})
+_PC_LINE_NAMES: Final = frozenset(
+    {"line_no", "item", "customer_item", "quantity", "uom", "requested_date"}
+)
 
 
 def _named(names: frozenset[str]) -> dict[str, Any]:
@@ -414,6 +419,30 @@ class HandoffTemplate(BaseModel):
         return _plain_placeholders(value, _TEMPLATE_NAMES)
 
 
+class PcRequestTemplate(BaseModel):
+    """The words of the request Sales sends PC for an order's delivery dates
+    (ticket 07), from the order case: ``{customer}``, ``{po}``, ``{lines}``
+    in the subject and body, one ``line`` per line asked with ``{line_no}``,
+    ``{item}`` (the PRV code), ``{customer_item}``, ``{quantity}``,
+    ``{uom}`` and ``{requested_date}``."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_PC_NAMES))
+    line: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_PC_LINE_NAMES))
+    body: str = Field(min_length=1, max_length=4000, json_schema_extra=_named(_PC_NAMES))
+
+    @field_validator("subject", "body")
+    @classmethod
+    def _placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _PC_NAMES)
+
+    @field_validator("line")
+    @classmethod
+    def _line_placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _PC_LINE_NAMES)
+
+
 class HandoffCopy(BaseModel):
     """`configs/copy/sales_handoffs@<version>.yaml`: the hand-off's words."""
 
@@ -427,6 +456,8 @@ class HandoffCopy(BaseModel):
     line: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_LINE_NAMES))
     quote: str = Field(min_length=1, max_length=60, json_schema_extra=_named(_QUOTE_NAMES))
     templates: Mapping[HandoffKind, HandoffTemplate]
+    # The request to PC for an order's delivery dates (ticket 07, 1.1.0).
+    pc_request: PcRequestTemplate
 
     @field_validator("line")
     @classmethod
@@ -498,6 +529,54 @@ def render(
         subject=template.subject.format(**values),
         body=template.body.format(**values),
         template_ref=f"{copy.ref}#{handoff.kind}",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PcAskedLine:
+    """One line of the request to PC, as the order case enters it."""
+
+    line_no: int
+    prv_code: str | None
+    customer_item_code: str
+    quantity: Decimal
+    uom: str
+    # None: the PO prints it blank (date to follow).
+    requested_date: date | None
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedPcRequest:
+    subject: str
+    body: str
+    template_ref: str
+
+
+def render_pc_request(
+    copy: HandoffCopy, *, customer_code: str, po_no: str, lines: Sequence[PcAskedLine]
+) -> RenderedPcRequest:
+    """The request to PC: the template's words around the case's own values,
+    one line per line asked. A value the case does not have (no PRV code yet,
+    a date to follow) is written as the copy's ``unknown``."""
+    template, unknown = copy.pc_request, copy.unknown
+    listed = "\n".join(
+        template.line.format(
+            line_no=line.line_no,
+            item=line.prv_code or unknown,
+            customer_item=line.customer_item_code,
+            quantity=_number(line.quantity),
+            uom=line.uom,
+            requested_date=(
+                line.requested_date.strftime("%d/%m/%Y") if line.requested_date else unknown
+            ),
+        )
+        for line in lines
+    )
+    values = {"customer": customer_code, "po": po_no, "lines": listed}
+    return RenderedPcRequest(
+        subject=template.subject.format(**values),
+        body=template.body.format(**values),
+        template_ref=f"{copy.ref}#pc_request",
     )
 
 

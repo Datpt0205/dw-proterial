@@ -28,7 +28,12 @@ from dw_platform.application.malware import ScanVerdict
 from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.artifact_content import BravoUploadLayout, CustomerAttribute, UploadField
+from dw_sales.application.artifact_content import (
+    CASE_ONLY_FIELDS,
+    BravoUploadLayout,
+    CustomerAttribute,
+    UploadField,
+)
 from dw_sales.application.rule_drafts import (
     BRAVO_TEMPLATE_MAPPING,
     KEPT_FOR,
@@ -392,8 +397,10 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
         tenant_id=uuid.uuid4(),
     )
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS
-    # Every field and customer value the model may answer is described to it.
-    for name in (*get_args(UploadField), *get_args(CustomerAttribute)):
+    # Every field and customer value the model may answer is described to it;
+    # PC's dates are a case's only, never a template's (ticket 07).
+    fields = [f for f in get_args(UploadField) if f not in CASE_ONLY_FIELDS]
+    for name in (*fields, *get_args(CustomerAttribute)):
         assert f"- {name}:" in rendered.system
 
 

@@ -140,11 +140,9 @@ def written_in(words: str, text: str) -> bool:
 
 
 def deliveries(case: OrderCase) -> dict[int, int]:
-    """Per line, how many deliveries it is confirmed in."""
-    return {
-        line.line_no: len(line.effective.schedules) if line.effective.prints_schedules else 1
-        for line in case.lines
-    }
+    """Per line, how many deliveries it is confirmed in (`OrderLine.deliveries`:
+    PC's split once recorded, ticket 07)."""
+    return {line.line_no: line.deliveries for line in case.lines}
 
 
 def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDateView], int]:

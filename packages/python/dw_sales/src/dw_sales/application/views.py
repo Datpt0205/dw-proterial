@@ -568,6 +568,38 @@ class DeliveryScheduleView(BaseModel):
     confirmed_delivery_date: date | None
 
 
+class PcDeliveryView(BaseModel):
+    """One delivery of a line as PC confirmed it (ticket 07)."""
+
+    model_config = _VIEW
+
+    quantity: Decimal
+    # Bravo's "Ngày XN giao hàng lần đầu", kept when PC confirms again.
+    first_date: date
+    # Bravo's "Ngày XN giao hàng": PC's date now.
+    date: date
+
+
+class PcAnswerView(BaseModel):
+    """PC's answer for a line and who recorded it (ticket 07)."""
+
+    model_config = _VIEW
+
+    deliveries: list[PcDeliveryView]
+    by: uuid.UUID
+    at: datetime
+
+
+class PcRequestStateView(BaseModel):
+    """Sales asked PC for these lines' dates, and waits (ticket 07)."""
+
+    model_config = _VIEW
+
+    lines: list[int]
+    by: uuid.UUID
+    at: datetime
+
+
 class OrderLineView(BaseModel):
     model_config = _VIEW
 
@@ -603,6 +635,12 @@ class OrderLineView(BaseModel):
     confirmed_delivery_date: date | None
     pc_confirmed_by: uuid.UUID | None
     pc_confirmed_at: datetime | None
+    # PC's answer: the line's deliveries with PC's first and current dates
+    # (ticket 07); once given, the line is confirmed one date per delivery.
+    pc_answer: PcAnswerView | None = None
+    # Every date Sales confirmed, one per delivery (`OrderLine.deliveries`):
+    # a line PC split is confirmed per PC delivery (ticket 07).
+    confirmed_delivery_dates: list[date] = []
 
 
 def _line_states(case: OrderCase, line: OrderLine, checked: OpenedSources) -> dict[str, ValueState]:
@@ -750,6 +788,10 @@ def order_line(
         confirmed_delivery_date=line.confirmed_delivery_date,
         pc_confirmed_by=line.pc_confirmed_by,
         pc_confirmed_at=line.pc_confirmed_at,
+        pc_answer=(
+            PcAnswerView.model_validate(line.pc_answer.model_dump()) if line.pc_answer else None
+        ),
+        confirmed_delivery_dates=list(line.confirmed_delivery_dates),
     )
 
 
@@ -910,6 +952,8 @@ class OrderCaseView(BaseModel):
     thread_sent: list[SentMessageView] = []
     # What the customer asked to change by mail, oldest first (ticket 27).
     change_requests: list[ChangeRequestView] = []
+    # Sales asked PC for delivery dates and waits on the answer (ticket 07).
+    pc_request: PcRequestStateView | None = None
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
@@ -1288,6 +1332,11 @@ def order_case(
         thread_before=[thread_message(m) for m in thread.before] if thread else [],
         thread_sent=talk.sent,
         change_requests=[change_request_view(r, prices=prices) for r in change_requests],
+        pc_request=(
+            PcRequestStateView.model_validate(case.pc_request.model_dump())
+            if case.pc_request
+            else None
+        ),
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker

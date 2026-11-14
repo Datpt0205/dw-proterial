@@ -115,7 +115,11 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
 
     from dw_agent_runtime.model.interpretation import estimated_tokens
     from dw_agent_runtime.model.prompts import PromptRegistry
-    from dw_sales.application.artifact_content import CustomerAttribute, UploadField
+    from dw_sales.application.artifact_content import (
+        CASE_ONLY_FIELDS,
+        CustomerAttribute,
+        UploadField,
+    )
     from dw_sales.application.salesorder_rules import LookupTable, Step
 
     prompts = PromptRegistry()
@@ -130,7 +134,9 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     union = get_args(get_args(Step)[0])
     for step in union:
         assert f'"step": "{step.model_fields["step"].default}"' in rendered.system
-    for name in (*get_args(UploadField), *get_args(CustomerAttribute), *get_args(LookupTable)):
+    # PC's dates are a case's only, never an example's (ticket 07): not offered.
+    fields = [f for f in get_args(UploadField) if f not in CASE_ONLY_FIELDS]
+    for name in (*fields, *get_args(CustomerAttribute), *get_args(LookupTable)):
         assert name in rendered.system
 
 

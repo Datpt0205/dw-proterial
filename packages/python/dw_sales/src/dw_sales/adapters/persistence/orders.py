@@ -47,6 +47,7 @@ from dw_sales.domain.orders import (
     LineMapping,
     OrderCase,
     OrderLine,
+    PcAnswer,
     PoDocument,
     PoLine,
     SupersededRevision,
@@ -102,6 +103,7 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
         "unapplied_decision": (
             case.unapplied_decision.model_dump(mode="json") if case.unapplied_decision else None
         ),
+        "pc_request": case.pc_request.model_dump(mode="json") if case.pc_request else None,
     }
 
 
@@ -122,6 +124,7 @@ def _line_columns(line: OrderLine) -> dict[str, Any]:
         "pc_confirmed_at": line.pc_confirmed_at,
         "corrections": _corrections(line.corrections),
         "changes": [c.model_dump(mode="json") for c in line.changes],
+        "pc_answer": line.pc_answer.model_dump(mode="json") if line.pc_answer else None,
     }
 
 
@@ -253,6 +256,7 @@ def _order_line(row: RowMapping) -> OrderLine:
         pc_confirmed_at=row["pc_confirmed_at"],
         corrections=tuple(ValueCorrection.model_validate(c) for c in row["corrections"]),
         changes=tuple(AppliedChange.model_validate(c) for c in row["changes"]),
+        pc_answer=PcAnswer.model_validate(row["pc_answer"]) if row["pc_answer"] else None,
     )
 
 
@@ -410,6 +414,7 @@ _CASE_FIELDS = (
     "closed_at",
     "superseded_by_case",
     "unapplied_decision",
+    "pc_request",
 )
 
 

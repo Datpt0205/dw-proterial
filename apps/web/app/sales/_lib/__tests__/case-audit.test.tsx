@@ -8,7 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
-import { AN, finding, orderInBravo, pendingQuote } from "./fixtures";
+import { AN, finding, orderInBravo, pendingQuote, pcRequest } from "./fixtures";
 
 /**
  * The audit's UI gaps (2026-10-21), on the case pages: a prepared value
@@ -45,6 +45,7 @@ vi.mock("next/navigation", () => ({
 let order: Order = orderInBravo();
 let quote: Quote = pendingQuote();
 const api = {
+  pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => order),
   quote: vi.fn(async () => quote),
   myWork: vi.fn(async () => []),

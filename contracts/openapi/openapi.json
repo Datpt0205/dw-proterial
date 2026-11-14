@@ -3276,7 +3276,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -3514,7 +3516,9 @@
                 "unit_price",
                 "amount",
                 "requested_date",
-                "suggested_delivery_date"
+                "suggested_delivery_date",
+                "first_confirmed_date",
+                "confirmed_date"
               ],
               "type": "string"
             },
@@ -5382,7 +5386,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -8867,7 +8873,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -10083,7 +10091,9 @@
               "unit_price",
               "amount",
               "requested_date",
-              "suggested_delivery_date"
+              "suggested_delivery_date",
+              "first_confirmed_date",
+              "confirmed_date"
             ],
             "title": "Source",
             "type": "string"
@@ -11070,6 +11080,16 @@
             "title": "Parser Version",
             "type": "string"
           },
+          "pc_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PcRequestStateView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "po_date": {
             "format": "date",
             "title": "Po Date",
@@ -11453,6 +11473,15 @@
             ],
             "title": "Confirmed Delivery Date"
           },
+          "confirmed_delivery_dates": {
+            "default": [],
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Confirmed Delivery Dates",
+            "type": "array"
+          },
           "corrections": {
             "items": {
               "$ref": "#/components/schemas/ValueCorrectionView"
@@ -11481,6 +11510,16 @@
           },
           "mapping": {
             "$ref": "#/components/schemas/MappingView"
+          },
+          "pc_answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PcAnswerView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "pc_confirmed_at": {
             "anyOf": [
@@ -12218,6 +12257,61 @@
         "title": "PauseBody",
         "type": "object"
       },
+      "PcAnswerBody": {
+        "additionalProperties": false,
+        "description": "PC's answer for one line (ticket 07): its deliveries in PC's order, one\nfor a line PC delivers at once, several for a line PC splits.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/PcDeliveryBody"
+            },
+            "maxItems": 99,
+            "minItems": 1,
+            "title": "Deliveries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version",
+          "deliveries"
+        ],
+        "title": "PcAnswerBody",
+        "type": "object"
+      },
+      "PcAnswerView": {
+        "description": "PC's answer for a line and who recorded it (ticket 07).",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/PcDeliveryView"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "deliveries",
+          "by",
+          "at"
+        ],
+        "title": "PcAnswerView",
+        "type": "object"
+      },
       "PcDateView": {
         "properties": {
           "date": {
@@ -12324,6 +12418,63 @@
         "title": "PcDatesView",
         "type": "object"
       },
+      "PcDeliveryBody": {
+        "additionalProperties": false,
+        "description": "One delivery of PC's answer: how much, on which date PC gives.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,16}0*$)\\d{0,12}\\.\\d{0,3}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "quantity",
+          "date"
+        ],
+        "title": "PcDeliveryBody",
+        "type": "object"
+      },
+      "PcDeliveryView": {
+        "description": "One delivery of a line as PC confirmed it (ticket 07).",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "first_date": {
+            "format": "date",
+            "title": "First Date",
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "first_date",
+          "date"
+        ],
+        "title": "PcDeliveryView",
+        "type": "object"
+      },
       "PcMailView": {
         "description": "A verified mail that names the order: what Sales may have DW1 read.",
         "properties": {
@@ -12374,6 +12525,84 @@
           "mails"
         ],
         "title": "PcMailsView",
+        "type": "object"
+      },
+      "PcRequestStateView": {
+        "description": "Sales asked PC for these lines' dates, and waits (ticket 07).",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines",
+          "by",
+          "at"
+        ],
+        "title": "PcRequestStateView",
+        "type": "object"
+      },
+      "PcRequestView": {
+        "description": "The request to PC, drafted from the case for a person to copy, and\nwhen DW1 reminds while the case waits on PC (who asked, and when, is the\norder's own `pc_request`).",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "reminder_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder At"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "template_ref": {
+            "title": "Template Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "lines",
+          "subject",
+          "body",
+          "template_ref"
+        ],
+        "title": "PcRequestView",
         "type": "object"
       },
       "PendingDecisionView": {
@@ -29585,6 +29814,88 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-answer": {
+      "post": {
+        "operationId": "pc_answer_api_v1_sales_orders__case_id__lines__line_no__pc_answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PcAnswerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Answer",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/message-text": {
       "get": {
         "operationId": "order_message_text_api_v1_sales_orders__case_id__message_text_get",
@@ -29861,6 +30172,118 @@
           }
         },
         "summary": "Pc Mails",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/pc-request": {
+      "get": {
+        "operationId": "pc_request_api_v1_sales_orders__case_id__pc_request_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PcRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Request",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "pc_asked_api_v1_sales_orders__case_id__pc_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Asked",
         "tags": [
           "sales"
         ]

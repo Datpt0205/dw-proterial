@@ -929,6 +929,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pc Answer */
+        post: operations["pc_answer_api_v1_sales_orders__case_id__lines__line_no__pc_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/message-text": {
         parameters: {
             query?: never;
@@ -1008,6 +1025,24 @@ export interface paths {
         get: operations["pc_mails_api_v1_sales_orders__case_id__pc_mails_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/pc-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pc Request */
+        get: operations["pc_request_api_v1_sales_orders__case_id__pc_request_get"];
+        put?: never;
+        /** Pc Asked */
+        post: operations["pc_asked_api_v1_sales_orders__case_id__pc_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2617,7 +2652,7 @@ export interface components {
             /** Customer */
             customer?: ("order_type" | "delivery_term" | "delivery_mode" | "destination" | "shipment_type") | null;
             /** Field */
-            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date" | "first_confirmed_date" | "confirmed_date") | null;
             /**
              * Steps
              * @default []
@@ -2636,7 +2671,7 @@ export interface components {
              */
             separator: "" | " " | "-" | "/" | "_" | "." | ", ";
             /** Sources */
-            sources: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date")[];
+            sources: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date" | "first_confirmed_date" | "confirmed_date")[];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3094,7 +3129,7 @@ export interface components {
              */
             code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "field_twice" | "source_invalid" | "constant_not_in_template" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota" | "nothing_understood" | "path_unknown" | "type_changed" | "placeholder_changed" | "digit_invented" | "document_invalid";
             /** Field */
-            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date" | "first_confirmed_date" | "confirmed_date") | null;
             /** Header */
             header?: string | null;
             /** Ref */
@@ -3949,7 +3984,7 @@ export interface components {
          */
         Lookup: {
             /** Key */
-            key?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            key?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date" | "first_confirmed_date" | "confirmed_date") | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -4200,7 +4235,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date";
+            source: "row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date" | "first_confirmed_date" | "confirmed_date";
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -4313,6 +4348,7 @@ export interface components {
             name_revision?: string | null;
             /** Parser Version */
             parser_version: string;
+            pc_request?: components["schemas"]["PcRequestStateView"] | null;
             /**
              * Po Date
              * Format: date
@@ -4405,6 +4441,11 @@ export interface components {
             changes: components["schemas"]["AppliedChangeView"][];
             /** Confirmed Delivery Date */
             confirmed_delivery_date: string | null;
+            /**
+             * Confirmed Delivery Dates
+             * @default []
+             */
+            confirmed_delivery_dates: string[];
             /** Corrections */
             corrections: components["schemas"]["ValueCorrectionView"][];
             /** Customer Item Code */
@@ -4416,6 +4457,7 @@ export interface components {
             /** Line No */
             line_no: number;
             mapping: components["schemas"]["MappingView"];
+            pc_answer?: components["schemas"]["PcAnswerView"] | null;
             /** Pc Confirmed At */
             pc_confirmed_at: string | null;
             /** Pc Confirmed By */
@@ -4607,6 +4649,35 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /**
+         * PcAnswerBody
+         * @description PC's answer for one line (ticket 07): its deliveries in PC's order, one
+         *     for a line PC delivers at once, several for a line PC splits.
+         */
+        PcAnswerBody: {
+            /** Case Version */
+            case_version: number;
+            /** Deliveries */
+            deliveries: components["schemas"]["PcDeliveryBody"][];
+        };
+        /**
+         * PcAnswerView
+         * @description PC's answer for a line and who recorded it (ticket 07).
+         */
+        PcAnswerView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Deliveries */
+            deliveries: components["schemas"]["PcDeliveryView"][];
+        };
         /** PcDateView */
         PcDateView: {
             /**
@@ -4658,6 +4729,37 @@ export interface components {
             status: "read" | "nothing" | "unavailable";
         };
         /**
+         * PcDeliveryBody
+         * @description One delivery of PC's answer: how much, on which date PC gives.
+         */
+        PcDeliveryBody: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Quantity */
+            quantity: number | string;
+        };
+        /**
+         * PcDeliveryView
+         * @description One delivery of a line as PC confirmed it (ticket 07).
+         */
+        PcDeliveryView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * First Date
+             * Format: date
+             */
+            first_date: string;
+            /** Quantity */
+            quantity: string;
+        };
+        /**
          * PcMailView
          * @description A verified mail that names the order: what Sales may have DW1 read.
          */
@@ -4688,6 +4790,44 @@ export interface components {
              * @default 8000
              */
             text_max: number;
+        };
+        /**
+         * PcRequestStateView
+         * @description Sales asked PC for these lines' dates, and waits (ticket 07).
+         */
+        PcRequestStateView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Lines */
+            lines: number[];
+        };
+        /**
+         * PcRequestView
+         * @description The request to PC, drafted from the case for a person to copy, and
+         *     when DW1 reminds while the case waits on PC (who asked, and when, is the
+         *     order's own `pc_request`).
+         */
+        PcRequestView: {
+            /** Body */
+            body: string;
+            /** Case Version */
+            case_version: number;
+            /** Lines */
+            lines: number[];
+            /** Reminder At */
+            reminder_at?: string | null;
+            /** Subject */
+            subject: string;
+            /** Template Ref */
+            template_ref: string;
         };
         /**
          * PendingDecisionView
@@ -8625,6 +8765,45 @@ export interface operations {
             };
         };
     };
+    pc_answer_api_v1_sales_orders__case_id__lines__line_no__pc_answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PcAnswerBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_message_text_api_v1_sales_orders__case_id__message_text_get: {
         parameters: {
             query?: never;
@@ -8782,6 +8961,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PcMailsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pc_request_api_v1_sales_orders__case_id__pc_request_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcRequestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pc_asked_api_v1_sales_orders__case_id__pc_request_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
                 };
             };
             /** @description Validation Error */

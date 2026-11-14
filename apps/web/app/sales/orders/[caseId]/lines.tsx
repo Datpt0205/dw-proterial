@@ -325,14 +325,21 @@ export function LinesTable({
                   >
                     Đã xác nhận {formatDate(line.confirmed_delivery_date)}
                   </StatusTag>
-                ) : line.schedules.some((s) => s.confirmed_delivery_date) ? (
-                  // A split line is confirmed per schedule (ticket 35): each
-                  // date is on its schedule, under "Ngày yêu cầu".
+                ) : (line.confirmed_delivery_dates ?? []).length > 1 ||
+                  line.schedules.some((s) => s.confirmed_delivery_date) ? (
+                  // A split line is confirmed per delivery: the PO's
+                  // schedules (ticket 35, each date under "Ngày yêu cầu") or
+                  // PC's (ticket 07, each in "Hỏi PC ngày giao").
                   <StatusTag
                     tone="ok"
                     icon={<CheckCircleOutlined aria-hidden />}
                   >
-                    Đã xác nhận theo {line.schedules.length} đợt
+                    Đã xác nhận theo{" "}
+                    {Math.max(
+                      (line.confirmed_delivery_dates ?? []).length,
+                      line.schedules.length,
+                    )}{" "}
+                    đợt
                   </StatusTag>
                 ) : null}
                 {line.suggested_delivery_date ? (

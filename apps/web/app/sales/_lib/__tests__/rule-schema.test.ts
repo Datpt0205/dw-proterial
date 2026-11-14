@@ -77,6 +77,11 @@ const HANDOFFS = {
   templates: {
     complaint: { to: "qa", subject: "Khách {customer}", body: "PO {po}" },
   },
+  pc_request: {
+    subject: "Hỏi PC: PO {po}",
+    line: "- Dòng {line_no}: {quantity} {uom}",
+    body: "{lines}",
+  },
 };
 
 describe("a key's schema, read into what the editor draws (ticket 40)", () => {

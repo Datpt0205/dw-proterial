@@ -67,6 +67,7 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         status_since=row["since"],
         assigned_to=row["assigned_to"],
         due=_day(row["due"]),
+        pc_asked_at=row["pc_asked_at"],
     )
 
 
@@ -89,6 +90,8 @@ class SqlFollowupStore:
             _O.c.assigned_to,
             _O.c.due,
             sa.func.coalesce(_entered(CaseKind.ORDER, _O), _O.c.received_at).label("since"),
+            # The start of the wait on PC (ticket 07); NULL while none.
+            sa.cast(_O.c.pc_request["at"].astext, sa.DateTime(timezone=True)).label("pc_asked_at"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),
@@ -108,6 +111,7 @@ class SqlFollowupStore:
             _Q.c.assigned_to,
             _Q.c.quote_due.label("due"),
             sa.func.coalesce(_entered(CaseKind.QUOTE, _Q), _Q.c.received_at).label("since"),
+            sa.null().label("pc_asked_at"),
         ).where(
             sa.or_(
                 _Q.c.status.in_(sorted(statuses.get(CaseKind.QUOTE, frozenset()))),

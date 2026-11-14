@@ -373,7 +373,18 @@ UploadField = Literal[
     "amount",
     "requested_date",
     "suggested_delivery_date",
+    # PC's dates for the row's delivery (ticket 07): the one PC confirmed
+    # first and the one it confirms now; blank until PC's answer is recorded.
+    "first_confirmed_date",
+    "confirmed_date",
 ]
+# What only a case holds, never a PO: PC's dates (ticket 07). No worked
+# example (ticket 38) or template sample can bear one out, so the prompts that
+# learn a layout or a customer's rules do not offer them (their measured
+# versions stand), and a replay leaves a layout column reading one uncompared.
+CASE_ONLY_FIELDS: Final[frozenset[UploadField]] = frozenset(
+    {"first_confirmed_date", "confirmed_date"}
+)
 # What a column may read from the customer's master record (`Customer`, the
 # fields of the same names): what every sales order of the customer carries.
 CustomerAttribute = Literal[
