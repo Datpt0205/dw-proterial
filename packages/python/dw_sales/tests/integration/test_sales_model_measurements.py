@@ -32,6 +32,7 @@ from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog, SqlM
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.domain.audit import system_actor
+from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.application.model_readiness import ATTEST_LANE, ModelAttestation, ModelReadiness
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.order_checks import ModelStep
@@ -42,7 +43,9 @@ pytestmark = pytest.mark.integration
 _MODEL = "qwen3.5-9b-dw"
 _AT = datetime(2026, 10, 23, 9, 0, tzinfo=UTC)
 _STEP = ModelStep.MESSAGE_INTENT
-_PROMPT = "sales.message_intent@1.0.0"
+# The prompt the step pins now: the attestation stamps it (17c31d9e moved it
+# to 1.1.0, which a literal here missed).
+_PROMPT = str(MESSAGE_INTENT)
 
 
 def _attestation(
