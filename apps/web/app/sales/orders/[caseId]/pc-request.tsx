@@ -237,7 +237,27 @@ export function PcRequestPanel({
       {answering ? (
         <PcAnswerDialog
           order={order}
-          line={answering}
+          lineNo={answering.line_no}
+          quantity={answering.quantity}
+          uom={answering.uom}
+          initial={
+            answering.pc_answer
+              ? answering.pc_answer.deliveries
+              : [
+                  {
+                    quantity: answering.quantity,
+                    date: answering.suggested_delivery_date ?? null,
+                  },
+                ]
+          }
+          send={(body, key) =>
+            salesApi().recordPcAnswer(
+              order.case_id,
+              answering.line_no,
+              body,
+              key,
+            )
+          }
           onClose={() => setAnswering(null)}
           onDone={() => {
             setAnswering(null);
@@ -251,21 +271,36 @@ export function PcRequestPanel({
 }
 
 type DeliveryForm = { quantity?: number | null; date?: PickerDay };
+/** PC's answer as the API takes it (`PcAnswerBody`). */
+export type PcAnswerBody = {
+  case_version: number;
+  deliveries: { quantity: string; date: string }[];
+};
 
 /**
  * PC's answer for one line: one date, or several splitting the line, whose
- * quantities add up to the line's. The server refuses a split that does not
- * add up; it is never adjusted. Confirmed again, the date PC gave first is
- * kept beside the new one.
+ * quantities add up to ``quantity`` (the line's, or in the update loop the
+ * quantity the customer asks, ticket 29). The server refuses a split that
+ * does not add up; it is never adjusted. Confirmed again, the date PC gave
+ * first is kept beside the new one.
  */
-function PcAnswerDialog({
+export function PcAnswerDialog({
   order,
-  line,
+  lineNo,
+  quantity,
+  uom,
+  initial: given,
+  send,
   onClose,
   onDone,
 }: {
   order: Order;
-  line: Line;
+  lineNo: number;
+  quantity: string;
+  uom: string;
+  /** What the form opens with: PC's answer so far, or one delivery. */
+  initial: { quantity: string; date: string | null }[];
+  send: (body: PcAnswerBody, key: string) => Promise<unknown>;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -275,14 +310,12 @@ function PcAnswerDialog({
   const [failed, setFailed] = useState(0);
   const typed = Form.useWatch("deliveries", form) ?? [];
   const total = typed.reduce((sum, d) => sum + Number(d?.quantity ?? 0), 0);
-  const whole = Number(line.quantity);
-  const id = `pc/answer/${line.line_no}`;
-  const initial: DeliveryForm[] = line.pc_answer
-    ? line.pc_answer.deliveries.map((d) => ({
-        quantity: Number(d.quantity),
-        date: toPickerDay(d.date),
-      }))
-    : [{ quantity: whole, date: toPickerDay(line.suggested_delivery_date) }];
+  const whole = Number(quantity);
+  const id = `pc/answer/${lineNo}`;
+  const initial: DeliveryForm[] = given.map((d) => ({
+    quantity: Number(d.quantity),
+    date: toPickerDay(d.date),
+  }));
 
   const submit = async (values: { deliveries: DeliveryForm[] }) => {
     const body = {
@@ -295,9 +328,8 @@ function PcAnswerDialog({
     const result = await run(
       id,
       body,
-      (key) =>
-        salesApi().recordPcAnswer(order.case_id, line.line_no, body, key),
-      `Đã ghi ngày PC cho dòng ${line.line_no}`,
+      (key) => send(body, key),
+      `Đã ghi ngày PC cho dòng ${lineNo}`,
     );
     if (result.ok) onDone();
     else setError(result.error);
@@ -307,7 +339,7 @@ function PcAnswerDialog({
     <Modal
       open
       width={640}
-      title={`Ngày PC trả lời cho dòng ${line.line_no}`}
+      title={`Ngày PC trả lời cho dòng ${lineNo}`}
       okText="Ghi ngày PC"
       cancelText="Huỷ"
       confirmLoading={pending === id}
@@ -315,9 +347,8 @@ function PcAnswerDialog({
       onCancel={onClose}
     >
       <Typography.Paragraph>
-        Dòng {line.line_no}: <Quantity value={line.quantity} uom={line.uom} />.
-        PC chia dòng thành nhiều đợt thì nhập từng đợt; tổng các đợt phải bằng
-        số lượng của dòng.
+        Dòng {lineNo}: <Quantity value={quantity} uom={uom} />. PC chia dòng
+        thành nhiều đợt thì nhập từng đợt; tổng các đợt phải bằng số lượng này.
       </Typography.Paragraph>
       {failed ? (
         <Alert type="error" showIcon title={`Còn ${failed} trường cần sửa`} />
@@ -371,8 +402,8 @@ function PcAnswerDialog({
         </Form.List>
       </Form>
       <Typography.Paragraph className="mt-3" role="status">
-        Tổng các đợt: <Quantity value={total} uom={line.uom} /> /{" "}
-        <Quantity value={line.quantity} uom={line.uom} />
+        Tổng các đợt: <Quantity value={total} uom={uom} /> /{" "}
+        <Quantity value={quantity} uom={uom} />
         {total !== whole ? " (chưa bằng số lượng của dòng)" : ""}
       </Typography.Paragraph>
       <ActionError error={error} />

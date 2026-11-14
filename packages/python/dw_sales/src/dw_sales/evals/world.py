@@ -690,7 +690,12 @@ class _Followups:
             case = stored.case
             status = case.status.value
             received = case.received_at if isinstance(case, OrderCase) else case.request.received_at
-            if status not in statuses.get(kind, frozenset()) and received < received_since:
+            looping = isinstance(case, OrderCase) and case.update_loop is not None
+            if (
+                status not in statuses.get(kind, frozenset())
+                and received < received_since
+                and not looping
+            ):
                 continue
             entered = [
                 e.occurred_at
@@ -700,10 +705,15 @@ class _Followups:
                 and e.to_status == status
                 and e.from_status != e.to_status
             ]
-            pc_asked_at = None
+            pc_asked_at = customer_asked_at = None
             if isinstance(case, OrderCase):
                 reference, customer, due = case.header.po_no, case.customer_code, case.due
                 pc_asked_at = case.pc_request.at if case.pc_request else None
+                loop = case.update_loop
+                if loop is not None and loop.step == "waiting_pc":
+                    pc_asked_at = loop.since
+                if loop is not None and loop.step == "waiting_customer":
+                    customer_asked_at = loop.since
             else:
                 quote_due = case.request.document.quote_due
                 reference = case.request.reference
@@ -721,6 +731,7 @@ class _Followups:
                     assigned_to=stored.origin.assigned_to,
                     due=due,
                     pc_asked_at=pc_asked_at,
+                    customer_asked_at=customer_asked_at,
                 )
             )
         return found

@@ -216,6 +216,24 @@ API and the plan use the English terms. The spec is
   of a line the order does not have, or of a line printing several
   schedules cannot be confirmed as read and is rejected with a reason
   (ticket 27).
+- **Update loop** (Vòng cập nhật): a change request on an order Sales has
+  already confirmed (in Bravo), the BA's step 6: each line the PIC confirms
+  joins the loop and the order does not change; once every line of the
+  request is decided Sales asks PC (the **request to PC** with the values
+  asked) and the order waits on PC; PC's answer is recorded per changed line;
+  code compares PC's dates with the dates asked and drafts the answer to the
+  customer, 6-DW4 (PC can, "Thư báo khách đáp ứng được thay đổi") or 6-DW3
+  (PC proposes otherwise, "Thư báo khách phương án của PC"); Sales sends it
+  and the order waits on the customer; a person records what the customer
+  decided: **keep the PO** (the loop ends, the order exactly as it was),
+  **ask PC again**, or **accept** (the change and PC's answer are applied, the
+  first confirmed dates kept, and the order goes to `change_review`). The
+  PIC then approves the exact **Bravo update file** ("Tệp cập nhật Bravo":
+  the changed lines' paste-sheet rows), by its id and hash; a person enters
+  it, it is cross-checked as the case's rules say by someone who made none
+  of it (whoever approved the file is a maker), and the order is confirmed
+  again, which ends the loop. `confirmed` stands for ADR 0011's
+  `confirmation_sent` until ticket 28 splits it (ticket 29).
 - **Implied acceptance** (Đồng ý ngầm): a customer's silence after a
   confirmation, taken as agreement once that customer's number of days has
   passed, recorded by a person. A customer with no number never has it

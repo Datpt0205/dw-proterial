@@ -20,7 +20,10 @@ The rules of what a line is and what blocks it are the domain's
   it); the change is applied with the checks run again
   (`OrderIntake.take_change`), the case takes its next version, and the
   request line, the case, its event and the audit row are written in one
-  transaction. There is no confirming in bulk (`ui-quality.md` §7).
+  transaction. There is no confirming in bulk (`ui-quality.md` §7). On an
+  order already in Bravo the change is not applied: it joins the update
+  loop (`OrderCase.loop_change`, `update_loop.py`, ticket 29), and the order
+  changes only once the customer accepts PC's answer.
 - **Reject** one line, with the person's reason, kept on the request.
 
 Every decision needs `sales.order.prepare`, as the PIC's other decisions on
@@ -72,7 +75,7 @@ from dw_sales.domain.change_requests import (
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import AppliedChange, OrderCase, OrderStatus
+from dw_sales.domain.orders import IN_BRAVO, AppliedChange, OrderCase, OrderStatus
 from dw_sales.domain.rfq_reading import normalised, text_digest
 
 _ORDER: Final = "sales_order_case"
@@ -281,8 +284,15 @@ class ChangeRequests:
                 by=actor.user_id,
                 at=now,
             )
-            changed = await self.intake.take_change(scope, case, line.line_no, change, actor)
-            event = person_event("order.change_confirmed", context, now, field=line.field)
+            if case.status in IN_BRAVO:
+                # In Bravo the change joins the update loop and the order
+                # waits on PC and the customer before it changes (ticket 29).
+                changed = decided(lambda: case.loop_change(line.line_no, change, actor))
+                action = "order.update_change_confirmed"
+            else:
+                changed = await self.intake.take_change(scope, case, line.line_no, change, actor)
+                action = "order.change_confirmed"
+            event = person_event(action, context, now, field=line.field)
             await save_order(work, context, self.ids, case, changed, event)
             await self._settle(work, requests, request, after)
             await work.audit.append(

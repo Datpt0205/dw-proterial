@@ -71,8 +71,11 @@ from dw_sales.application.drafting import (
 )
 from dw_sales.application.order_artifacts import (
     OrderDrafting,
+    bravo_update,
     bravo_upload,
     cannot_supply_draft,
+    change_can_do_draft,
+    change_options_draft,
     change_summary,
     confirmation_draft,
     convert_list_proposal,
@@ -174,6 +177,27 @@ def _unmapped_without_code(case: OrderCase, *_: object) -> bool:
 # Bravo is a change applied there (`change_summary`), never a new upload file.
 _UPLOADABLE: Final = frozenset({_O.PREPARED, _O.UPLOADED_TO_BRAVO, _O.CROSS_CHECKED, _O.CONFIRMED})
 
+
+def _answers(case: OrderCase, verdict: str) -> bool:
+    """The update loop drafts the answer to the customer (ticket 29) on this
+    verdict, from PC's answer until the customer answers."""
+    loop = case.update_loop
+    return (
+        loop is not None
+        and loop.step in ("answer_customer", "waiting_customer")
+        and loop.verdict == verdict
+    )
+
+
+def _approved_update(case: OrderCase, record: ArtifactRecord) -> bool:
+    """The Bravo update file is the case's while drawn at its version and not
+    yet approved; once approved, the one the approval names, by id."""
+    loop = case.update_loop
+    if loop is None or loop.approval is None:
+        return record.case_version == case.case_version
+    return loop.approval.artifact_id == record.artifact_id
+
+
 # Ticket 06's "Download allowed when", one row per kind. The confirmation is
 # drafted once Sales confirmed a date for every line (`confirmed`): the dates
 # are entered with the confirmation, so a draft at `cross_checked` could not
@@ -193,7 +217,24 @@ ORDER_GATES: Final[Mapping[str, ArtifactGate[OrderCase]]] = {
         True, lambda c, *_: c.status is _O.CORRECTION_REQUESTED, _order(correction_request)
     ),
     "change_summary": ArtifactGate(
-        True, lambda c, *_: c.status is _O.CHANGE_REVIEW, _order(change_summary)
+        True,
+        lambda c, *_: c.status is _O.CHANGE_REVIEW and c.update_loop is None,
+        _order(change_summary),
+    ),
+    # A customer's change of an order in Bravo (ticket 29): the answer once PC
+    # answered, by code's verdict, and the Bravo update file once the
+    # customer accepted, kept by id once the PIC approved it.
+    "change_can_do_draft": ArtifactGate(
+        False, lambda c, *_: _answers(c, "can_do"), _order(change_can_do_draft)
+    ),
+    "change_options_draft": ArtifactGate(
+        False, lambda c, *_: _answers(c, "proposes"), _order(change_options_draft)
+    ),
+    "bravo_update": ArtifactGate(
+        True,
+        lambda c, *_: c.status is _O.CHANGE_REVIEW and c.update_loop is not None,
+        _order(bravo_update),
+        kept=lambda c, r: _approved_update(c, r),
     ),
     "convert_list_proposal": ArtifactGate(
         False,

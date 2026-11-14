@@ -81,6 +81,7 @@ from dw_sales.application.source import SourceCachePort, SourceService, SourceVi
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.thread_summaries import ThreadSummaries
 from dw_sales.application.threads import ThreadMembersPort
+from dw_sales.application.update_loop import UpdateLoops
 from dw_sales.application.worker_service import WorkerService
 
 
@@ -139,6 +140,8 @@ class SalesServices:
     pc_requests: PcRequests
     # What a customer asked to change by mail, confirmed line by line (ticket 27).
     change_requests: ChangeRequests
+    # A customer's change on an order in Bravo, through PC and back (ticket 29).
+    update_loops: UpdateLoops
     gate: Gate
 
 
@@ -293,6 +296,7 @@ def assemble(
             uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
         ),
         pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
+        update_loops=UpdateLoops(uow, gate, clock, ids, intake, book, book),
         change_requests=ChangeRequests(
             uow,
             gate,

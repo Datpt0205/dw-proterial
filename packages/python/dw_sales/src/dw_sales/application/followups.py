@@ -496,6 +496,14 @@ def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str,
                 f"{hours} giờ chưa ghi được ngày PC trả lời. DW1 không gửi thư cho PC: "
                 "bạn quyết định có nhắc PC hay không.",
             )
+        case Followup.WAITING_CUSTOMER, _ if case.customer_asked_at is not None:
+            hours = policy.waiting_customer.remind.after_hours
+            return (
+                f"Nhắc: PO {ref} đang chờ khách trả lời về thay đổi",
+                f"Đã gửi khách {customer} trả lời về thay đổi PO {ref} từ {since}, hơn "
+                f"{hours} giờ chưa ghi được khách quyết định. DW1 không gửi thư cho khách: "
+                "bạn quyết định có nhắc khách hay không.",
+            )
         case Followup.WAITING_CUSTOMER, _ if case.kind is CaseKind.ORDER:
             hours = policy.waiting_customer.remind.after_hours
             return (

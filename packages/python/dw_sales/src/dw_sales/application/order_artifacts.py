@@ -336,10 +336,25 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     where it has them (ticket 38, applied by code, no model), the layout
     for every column they do not name; a blank column holds nothing. Before
     the file is made, every row is checked (`checked_row`)."""
+    return _paste_sheet(d, d.case.lines)
+
+
+def bravo_update(d: OrderDrafting) -> tuple[Rendered, ...]:
+    """6.2-SP: the Bravo update of a customer's change the customer accepted
+    (ticket 29), in the paste sheet's layout and rules, a row per delivery of
+    each changed line only, with PC's first and current confirmed dates
+    (`upload_rows`). The PIC approves this exact file before it is entered."""
+    loop = d.case.update_loop
+    changed = set() if loop is None else {x.line_no for x in loop.lines}
+    return _paste_sheet(d, [line for line in d.case.lines if line.line_no in changed])
+
+
+def _paste_sheet(d: OrderDrafting, lines: Iterable[OrderLine]) -> tuple[Rendered, ...]:
+    """The paste sheet of ``lines`` (`bravo_upload`'s docstring)."""
     case, layout = d.case, d.upload
     doc = d.internal("bravo_upload")
     received = local_day(case.received_at, d.copy.zone)
-    deliveries = (row for line in case.lines for row in upload_rows(case, line))
+    deliveries = (row for line in lines for row in upload_rows(case, line))
     rules = d.customer_rules
     rows = []
     for values in file_rows(deliveries, received):
@@ -633,6 +648,56 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
         ),
     }
     return (d.eml(bound.ref, filled(bound, draft, values)),)
+
+
+def change_can_do_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
+    """6-DW4: PC can deliver a customer's change as asked (ticket 29): each
+    changed line with PC's deliveries."""
+    return _change_answer(d, "change_can_do_draft", with_asked=False)
+
+
+def change_options_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
+    """6-DW3: PC proposes otherwise than the customer asked (ticket 29): each
+    changed line with what was asked and what PC can do, for the customer to
+    accept or keep the order as it was."""
+    return _change_answer(d, "change_options_draft", with_asked=True)
+
+
+def _change_answer(d: OrderDrafting, kind: str, *, with_asked: bool) -> tuple[Rendered, ...]:
+    """The answer to a customer's change: each changed line with PC's
+    deliveries, and what was asked where the draft says it (6-DW3)."""
+    case, language = d.case, d.language
+    loop = case.update_loop
+    assert loop is not None  # the gate opens on the loop only
+    bound, draft = d.customer_email(kind)
+    lines = []
+    for held in loop.lines:
+        line, asked = case.line(held.line_no), case.loop_target(held)
+        assert held.pc_answer is not None  # drafted once PC answered every line
+        deliveries = "; ".join(
+            bound.word(
+                "delivery",
+                quantity=delivery.quantity,
+                uom=asked.uom,
+                date=day_text(delivery.date, language),
+            )
+            for delivery in held.pc_answer.deliveries
+        )
+        values: dict[str, object] = {
+            "line_no": line.line_no,
+            "customer_item_code": asked.customer_item_code,
+            "deliveries": deliveries,
+        }
+        if with_asked:
+            values["asked"] = bound.word(
+                "asked",
+                quantity=asked.quantity,
+                uom=asked.uom,
+                date=day_text(asked.requested_date, language) if asked.requested_date else "",
+            )
+        lines.append(bound.fill(line_template(bound), values))
+    body = {**_order_values(d, language), "lines": "\n".join(lines)}
+    return (d.eml(bound.ref, filled(bound, draft, body)),)
 
 
 def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:

@@ -636,6 +636,75 @@ export class SalesApi {
     );
   }
 
+  // ---- the update loop (ticket 29) -------------------------------------------
+
+  /** 6-DW2: the request to PC with the values the customer asks, and when
+   * DW1 reminds while the order waits on PC; nothing is sent or stored. */
+  updatePcRequest(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/update/pc-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/pc-request`,
+    );
+  }
+
+  /** "Ghi đã hỏi PC" on a customer's change: the order waits on PC. */
+  recordUpdatePcAsked(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/update/pc-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/pc-request`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
+  /** PC's answer for one changed line: each delivery's quantity and date. */
+  recordUpdatePcAnswer(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/update/lines/{line_no}/pc-answer">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/update/lines/{line_no}/pc-answer">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/lines/${lineNo}/pc-answer`,
+      body,
+      key,
+    );
+  }
+
+  /** "Ghi đã gửi khách": the answer to the change left; the order waits on
+   * the customer. */
+  recordUpdateAnswerSent(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/update/answer-sent">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/answer-sent`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
+  /** What the customer answered: keep the PO, accept, or ask PC again. */
+  recordUpdateCustomerAnswer(
+    caseId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/update/customer-answer">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/update/customer-answer">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/customer-answer`,
+      body,
+      key,
+    );
+  }
+
+  /** 6.2-SP: the PIC approves the Bravo update file drawn at this version. */
+  approveBravoUpdate(
+    caseId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/update/bravo-file">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/update/bravo-file">(
+      `/api/v1/sales/orders/${enc(caseId)}/update/bravo-file`,
+      body,
+      key,
+    );
+  }
+
   /** The verified mails naming the order, PC's answer among them. */
   pcMails(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}/pc-mails">(

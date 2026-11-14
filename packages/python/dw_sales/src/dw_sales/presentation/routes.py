@@ -120,7 +120,7 @@ from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import PC_DELIVERIES_MAX, CloseReason, Note
+from dw_sales.domain.orders import PC_DELIVERIES_MAX, CloseReason, CustomerAnswer, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
 
@@ -322,6 +322,19 @@ class PcAnswerBody(VersionBody):
     for a line PC delivers at once, several for a line PC splits."""
 
     deliveries: list[PcDeliveryBody] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
+
+
+class UpdateAnswerBody(VersionBody):
+    """What the customer answered to a change's answer (ticket 29), as the
+    person recorded it: keep the PO, accept, or ask PC again."""
+
+    answer: CustomerAnswer
+
+
+class UpdateApprovalBody(VersionBody):
+    """The Bravo update file the PIC approves, drawn at ``case_version``."""
+
+    artifact_id: uuid.UUID
 
 
 class AskBody(BaseModel):
@@ -780,6 +793,94 @@ def build_router(
             line_no,
             case_version=body.case_version,
             deliveries=[(d.quantity, d.date) for d in body.deliveries],
+        )
+        return await idem.record(change)
+
+    # A customer's change on an order in Bravo (ticket 29, dw_sales ADR 0010
+    # decision 3): the request to PC with the values asked, PC's answer line
+    # by line, the answer to the customer recorded sent (its draft is an
+    # artifact), the customer's answer, and the Bravo update file approved.
+    # DW1 sends nothing and writes nothing to Bravo. The file's approval is
+    # the PIC's own sign-off on what is entered (a maker's step, as "Tự kiểm
+    # xong" is); the checker's decision stays the cross-check, on the
+    # platform approval DW1's run pauses on (dw_sales ADR 0004).
+    @router.get(
+        "/orders/{case_id}/update/pc-request",
+        response_model=PcRequestView,
+        dependencies=prepare_scope,
+    )
+    async def update_pc_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PcRequestView:
+        return await svc.update_loops.pc_request(context, case_id)
+
+    @router.post(
+        "/orders/{case_id}/update/pc-request",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def update_pc_asked(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.update_loops.ask_pc(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/update/lines/{line_no}/pc-answer",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def update_pc_answer(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: PcAnswerBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.update_loops.pc_answer(
+            context,
+            case_id,
+            line_no,
+            case_version=body.case_version,
+            deliveries=[(d.quantity, d.date) for d in body.deliveries],
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/update/answer-sent",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def update_answer_sent(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.update_loops.answer_sent(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/update/customer-answer",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def update_customer_answer(
+        case_id: uuid.UUID, body: UpdateAnswerBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.update_loops.customer_answer(
+            context, case_id, case_version=body.case_version, answer=body.answer
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/update/bravo-file",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def update_bravo_file(
+        case_id: uuid.UUID, body: UpdateApprovalBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.update_loops.approve(
+            context, case_id, case_version=body.case_version, artifact_id=body.artifact_id
         )
         return await idem.record(change)
 
