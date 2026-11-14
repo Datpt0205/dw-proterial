@@ -54,7 +54,7 @@ async def _case(message_id: str) -> OrderCase:
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.11.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.12.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
     )

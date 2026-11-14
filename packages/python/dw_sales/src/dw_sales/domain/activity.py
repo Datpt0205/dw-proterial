@@ -363,7 +363,7 @@ def _timings(calls: Iterable[ModelCall]) -> dict[str, _Timing]:
 
 def outcomes_of(
     disposition: MessageDisposition,
-    case: OrderCase | QuoteCase | None,
+    cases: Sequence[OrderCase | QuoteCase],
     calls: Sequence[ModelCall],
     *,
     steps_by_prompt: Mapping[str, ModelStep],
@@ -371,11 +371,14 @@ def outcomes_of(
     new_id: Callable[[], uuid.UUID],
 ) -> tuple[StepOutcome, ...]:
     """The rows for one processed message: one per item each model step
-    handled, from the stamps on ``disposition`` and ``case``, timed by
+    handled, from the stamps on ``disposition`` and each of ``cases`` (one per
+    PO of a mail with several, ticket 19), timed by
     ``calls`` (matched to a step by prompt). A step whose calls ran and that
     stamped nothing is a row of its own (``steps_by_prompt`` names it): not
     used, or not answered."""
-    stamped = _from_disposition(disposition) + _from_case(disposition, case)
+    stamped = _from_disposition(disposition)
+    for case in cases:
+        stamped += _from_case(disposition, case)
     timings = _timings(calls)
     claimed = {s.prompt for s in stamped}
     for prompt, unclaimed in timings.items():

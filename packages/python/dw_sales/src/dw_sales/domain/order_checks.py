@@ -25,6 +25,7 @@ from typing import Final, Literal, NamedTuple, Self, assert_never
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_platform.domain.messages import MailAuthentication
+from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -40,6 +41,8 @@ from dw_sales.domain.catalog import (
 from dw_sales.domain.description_reading import DescriptionReading, Verified
 from dw_sales.domain.descriptions import StatedAttributes, candidates, read_description
 from dw_sales.domain.orders import (
+    AMOUNT_FIELDS,
+    TOTAL_FIELD,
     CheckName,
     ExportControlMode,
     Finding,
@@ -55,6 +58,7 @@ from dw_sales.domain.orders import (
     OrderLine,
     PoDocument,
     PoLine,
+    PrintDifference,
     QuotationBasis,
     Severity,
     diff_lines,
@@ -706,7 +710,12 @@ def _quotation_basis(quotation: Quotation | None) -> QuotationBasis | None:
 # The codes each PO-level check raises: what running it again replaces on a
 # case (`OrderCase.correct_value`), which refuses a finding outside them.
 DOCUMENT_CHECK_CODES: Final = frozenset(
-    {FindingCode.LINE_TOTAL_MISMATCH, FindingCode.VALUE_UNCERTAIN, FindingCode.LEGACY_ENCODING}
+    {
+        FindingCode.LINE_TOTAL_MISMATCH,
+        FindingCode.VALUE_UNCERTAIN,
+        FindingCode.LEGACY_ENCODING,
+        FindingCode.FILES_DISAGREE,
+    }
 )
 # What `check_history` can raise.
 HISTORY_CHECK_CODES: Final = frozenset(
@@ -732,7 +741,11 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
     flagged region, or a sheet nothing reads. A line's own flags are its
     line's finding (`check_line`). `legacy_encoding`: a value was read from
     text typed in a TCVN3 or VNI font; the document says where the first one
-    is (`PoDocument.first_legacy_text`).
+    is (`PoDocument.first_legacy_text`). `files_disagree`: the PO's second
+    file (`PoDocument.print_copy`, ticket 22) prints values differently; it
+    names both files and, per value, where each prints it and what (an
+    amount by its field and place only: this finding is shown to a reader
+    who may not see prices).
     """
     found: list[Finding] = []
     numbers = [line.line_no for line in document.lines]
@@ -772,7 +785,45 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
                 FindingCode.LEGACY_ENCODING, expected="Unicode", actual=encoding.value.upper()
             )
         )
+    copy = document.print_copy
+    if copy is not None and copy.differences:
+        ours = [(d, _read_at(document, d), d.ours) for d in copy.differences]
+        theirs = [(d, d.anchor, d.theirs) for d in copy.differences]
+        found.append(
+            rules.finding(
+                FindingCode.FILES_DISAGREE,
+                expected=_cited(document.attachment_id or "", ours),
+                actual=_cited(copy.attachment_id, theirs),
+            )
+        )
     return tuple(found)
+
+
+def _read_at(document: PoDocument, difference: PrintDifference) -> SourceAnchor:
+    """Where the case's own file prints the value ``difference`` names."""
+    if difference.line_no is None:
+        if difference.field == TOTAL_FIELD and document.total is not None:
+            return document.total.anchor
+        anchor: SourceAnchor = getattr(document.header.anchors, difference.field)
+        return anchor
+    line = next(x for x in document.lines if x.line_no == difference.line_no)
+    at: SourceAnchor = getattr(line.anchors, difference.field)
+    return at
+
+
+def _cited(
+    attachment_id: str, values: Sequence[tuple[PrintDifference, SourceAnchor, str | None]]
+) -> str:
+    """``PO123.xlsx: line 2 requested_date 2026-12-01 [Sheet1!F12]; …``, cut
+    to what a finding holds. An amount is named by its field and place."""
+    cited = []
+    for difference, anchor, value in values:
+        where = f"line {difference.line_no} " if difference.line_no else ""
+        shown = "" if difference.field in AMOUNT_FIELDS or value is None else f" {value}"
+        place = anchor.cell_ref or (f"p{anchor.page}" if anchor.page else "")
+        cited.append(f"{where}{difference.field}{shown}" + (f" [{place}]" if place else ""))
+    text = f"{attachment_id}: {'; '.join(cited)}"
+    return text if len(text) <= 200 else text[:199] + "…"
 
 
 def _ranges(numbers: Iterable[int]) -> str:

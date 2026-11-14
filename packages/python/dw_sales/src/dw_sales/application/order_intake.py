@@ -51,6 +51,16 @@ anything the message carries. It is a PO by that person's word: when no
 reader accepts its file it goes the way of a PO no layout reads, and no
 model classifies it.
 
+**One case per PO number** (tickets 19 and 22, `po_groups`): the files'
+lines are grouped by PO number after reading, a line's own or its file's,
+and each PO number opens or joins its own case, every one on the same stored
+message, which is recorded once (`MessageDisposition.more_cases`). The same
+PO number in two files is one case, the files compared value by value and
+neither winning. A mail is processed whole: when one of its POs is routed to
+Sales (a late revision, a revision of a closed case, two files that are not
+one PO), the mail is, and no case of it opens; reprocessing it opens no
+second set, since the message's disposition is its idempotency key.
+
 **The body never changes a value.** Customer, items, quantities, prices and
 dates come from the sender's domain (or, for a forwarded PO, the buyer the
 document names, which Sales then confirms; for an uploaded PO, the customer
@@ -116,6 +126,7 @@ from dw_sales.application.support import decided
 from dw_sales.application.threads import ThreadedCase, named_cases
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
+    MAX_MESSAGE_CASES,
     SALES_PIC_POOL,
     CaseKind,
     DispositionKind,
@@ -164,8 +175,9 @@ from dw_sales.domain.orders import (
     Unreadable,
     ValueCorrection,
 )
-from dw_sales.domain.print_pairs import one_po
+from dw_sales.domain.po_groups import ReadFile, one_per_po
 from dw_sales.domain.reply_intent import CaseReply
+from dw_sales.domain.revision_hints import name_revision
 
 
 class MessageKind(StrEnum):
@@ -253,9 +265,17 @@ class IntakeOutcome:
     kind: MessageKind
     disposition: MessageDisposition | None
     case: OrderCase | None = None
+    # The further cases the message's other POs opened or joined (ticket 19),
+    # in the disposition's order (`MessageDisposition.more_cases`).
+    more_cases: tuple[OrderCase, ...] = ()
     # The layout DW1 learned to read the PO with (dw_sales ADR 0006), stored
     # by the caller with the case, in its transaction.
     learned: LearnedLayout | None = None
+
+    @property
+    def cases(self) -> tuple[OrderCase, ...]:
+        """Every case to store, the disposition's first first."""
+        return () if self.case is None else (self.case, *self.more_cases)
 
 
 @dataclass(frozen=True)
@@ -788,26 +808,68 @@ class OrderIntake:
                 )
                 return replace(outcome, learned=layout)
             return _with_prefill(routed, learned)
-        if sorted(kinds) == ["pdf", "xlsx"]:
-            # A workbook and its PDF print are one PO, read from the workbook
-            # (ticket 34); `one_po` says None when they are two.
-            workbook, printed = documents if kinds[0] == "xlsx" else documents[::-1]
-            if (paired := one_po(workbook, printed)) is not None:
-                documents = [paired]
-        if len(documents) > 1:
-            # Two orders, or a workbook and a print that are not the same PO:
-            # either way Sales decides which is entered.
-            ids = ", ".join(d.attachment_id or "" for d in documents)
+        # One document per PO number (tickets 19 and 22): a file's several
+        # POs apart, the same PO's two files together.
+        grouped = one_per_po([ReadFile(d, k) for d, k in zip(documents, kinds, strict=True)])
+        if isinstance(grouped, str):
+            return self._routed(message, kind, RoutingReason.OTHER, customer, grouped)
+        if len(grouped) > MAX_MESSAGE_CASES:
             return self._routed(
                 message,
                 kind,
                 RoutingReason.OTHER,
                 customer,
-                f"more than one attachment reads as a PO: {ids}",
+                f"{len(grouped)} PO numbers, more than one message opens cases for",
             )
-        return await self._case(
-            scope, message, kind, customer, attributed, documents[0], rules, run
+        if len(grouped) == 1:
+            return await self._case(
+                scope, message, kind, customer, attributed, grouped[0], rules, run
+            )
+        return await self._several(scope, message, kind, customer, attributed, grouped, rules, run)
+
+    async def _several(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        kind: MessageKind,
+        customer: Customer,
+        attributed: bool,
+        documents: Sequence[PoDocument],
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """A mail's POs, one case each (ticket 19), all on the one message;
+        routed whole, opening none, when any of them would be routed (module
+        docstring). The disposition names a case the mail opened first, so
+        the case's ingest is the message's, and lists the rest in the mail's
+        order."""
+        outcomes: list[IntakeOutcome] = []
+        for document in documents:
+            outcome = await self._case(
+                scope, message, kind, customer, attributed, document, rules, run
+            )
+            if outcome.case is None:
+                assert outcome.disposition is not None  # routed by `_case`
+                detail = f"PO {document.header.po_no}: {outcome.disposition.detail or ''}"
+                return self._routed(message, kind, RoutingReason.OTHER, customer, detail)
+            outcomes.append(outcome)
+        created = [
+            o
+            for o in outcomes
+            if o.disposition is not None and o.disposition.kind is DispositionKind.CASE_CREATED
+        ]
+        first = (created or outcomes)[0]
+        assert first.case is not None and first.disposition is not None
+        more = tuple(o.case for o in outcomes if o is not first and o.case is not None)
+        disposition = MessageDisposition(
+            message_id=message.message_id,
+            kind=first.disposition.kind,
+            case_kind=CaseKind.ORDER,
+            case_id=first.case.case_id,
+            customer_code=customer.code,
+            more_cases=tuple(case.case_id for case in more),
         )
+        return IntakeOutcome(message.message_id, kind, disposition, first.case, more)
 
     async def _body_order(
         self,
@@ -945,6 +1007,7 @@ class OrderIntake:
         rules: OrderRules,
         run: RunContext | None,
     ) -> IntakeOutcome:
+        document = _named_revision(message, document)
         header = document.header
         earlier = await self.cases.cases_for_po(scope, customer.code, header.po_no)
         seen = {
@@ -1465,6 +1528,19 @@ async def _unless_unconnected[T](
         if missing.statement not in unchecked:
             unchecked.append(missing.statement)
         return None
+
+
+def _named_revision(message: InboundMessage, document: PoDocument) -> PoDocument:
+    """The PO with the revision its file's name suggests (ticket 22), a hint
+    shown beside what decides; as it was when the name suggests none."""
+    name = next(
+        (a.name for a in message.attachments if a.attachment_id == document.attachment_id),
+        None,
+    )
+    hint = None if name is None else name_revision(name, document.header.po_no)
+    if hint is None or hint == document.name_revision:
+        return document
+    return document.model_copy(update={"name_revision": hint})
 
 
 def _stamped(outcome: IntakeOutcome, reading: IntentReading | None) -> IntakeOutcome:

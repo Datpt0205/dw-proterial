@@ -8,7 +8,9 @@ is DW1's event (`actor_kind = worker`) with the person as `initiated_by`.
 Every message ends in exactly one disposition (spec decision 10):
 
 - a PO opens an order case, or joins the case of the PO it revises
-  (`OrderIntake`), and DW1 hands the case to the PIC's self-check;
+  (`OrderIntake`), and DW1 hands the case to the PIC's self-check; a mail
+  with several POs does so per PO number, every case stored in the one
+  transaction that records the message (ticket 19);
 - a request for quotation opens a quote case (`QuotationService`);
 - Design's reply is attached to the one case awaiting it, by YCBG number;
 - anything else, or a file nothing can read, is routed to Sales with the
@@ -25,7 +27,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Protocol
@@ -107,8 +109,9 @@ OPENED_WITH_MAIL_PASSWORD: Final = (
     " with a password from its own mail"
 )
 
-# A message's disposition, and the case it left as stored, if it is on one.
-type _Processed = tuple[MessageDisposition, OrderCase | QuoteCase | None]
+# A message's disposition, and the cases it left as stored: none, one, or one
+# per PO of a mail with several (ticket 19), the disposition's first first.
+type _Processed = tuple[MessageDisposition, tuple[OrderCase | QuoteCase, ...]]
 
 
 @dataclass(frozen=True)
@@ -202,23 +205,27 @@ async def _offered_numbers(
     work: SalesUnitOfWork, logged: Iterable[LoggedMessage], hidden: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
     """What each case a routed reply still open is offered goes by (ticket
-    24): the PO's number, or the request's; none for a case the caller does
-    not see."""
-    numbers: dict[uuid.UUID, str] = {}
+    24), and each case of a mail with several POs (ticket 19): the PO's
+    number, or the request's; none for a case the caller does not see."""
+    named: list[tuple[CaseKind, uuid.UUID]] = []
     for entry in logged:
-        if entry.handled is not None:
+        disposition = entry.disposition
+        if disposition.more_cases:
+            named += [(CaseKind.ORDER, case_id) for case_id in disposition.case_ids]
+        if entry.handled is None:
+            named += [(c.case_kind, c.case_id) for c in disposition.thread_cases]
+    numbers: dict[uuid.UUID, str] = {}
+    for kind, case_id in named:
+        if case_id in hidden or case_id in numbers:
             continue
-        for offered in entry.disposition.thread_cases:
-            if offered.case_id in hidden or offered.case_id in numbers:
-                continue
-            if offered.case_kind is CaseKind.ORDER:
-                order = await work.orders.get(offered.case_id)
-                if order is not None:
-                    numbers[offered.case_id] = order.case.header.po_no
-            else:
-                quote = await work.quotes.get(offered.case_id)
-                if quote is not None:
-                    numbers[offered.case_id] = quote.case.request.reference
+        if kind is CaseKind.ORDER:
+            order = await work.orders.get(case_id)
+            if order is not None:
+                numbers[case_id] = order.case.header.po_no
+        else:
+            quote = await work.quotes.get(case_id)
+            if quote is not None:
+                numbers[case_id] = quote.case.request.reference
     return numbers
 
 
@@ -260,7 +267,8 @@ def _shown(
     PIC is unassigned (`InboxProcessing._assignee`): hiding it would show it
     to no one."""
     if disposition.case_id is not None:
-        return disposition.case_id not in hidden
+        # A mail on several cases (ticket 19) is shown to whoever sees one.
+        return any(case_id not in hidden for case_id in disposition.case_ids)
     owners, owner = context.visible_owners, disposition.owner
     if owners is None or owner is None or owner.startswith("role:"):
         return True
@@ -361,16 +369,16 @@ class InboxProcessing:
             return message_disposition(MessageDisposition.pending(message_id), None)
         kind, reading = classified.kind, classified.reading
         if kind is MessageKind.QUOTE_REQUEST:
-            disposition, case = await self._quote_request(
+            disposition, cases = await self._quote_request(
                 context, scope, message_id, ingest, run, reading
             )
         elif kind is MessageKind.DESIGN_REPLY:
-            disposition, case = await self._design_reply(
+            disposition, cases = await self._design_reply(
                 context, scope, message_id, ingest, run, reading
             )
         else:
             assert kind not in QUOTATION_KINDS
-            disposition, case = await self._order(context, scope, message, ingest, run, classified)
+            disposition, cases = await self._order(context, scope, message, ingest, run, classified)
         # Ids, codes and counts only (`dw_sales.application.telemetry`).
         self.spans.emit(
             SalesSpan.MESSAGE_PROCESSED,
@@ -379,11 +387,12 @@ class InboxProcessing:
                 "dw.workspace_id": context.workspace_id,
                 "sales.disposition": disposition.kind,
                 "sales.routing_reason": disposition.reason,
-                **({} if case is None else case_attributes(case)),
+                **({} if not cases else case_attributes(cases[0])),
+                "sales.cases": len(cases),
                 "sales.duration_ms": (time.perf_counter() - started) * 1000,
             },
         )
-        if case is not None:
+        for case in cases:
             await self._warm(scope, case)
         return message_disposition(disposition, ingest)
 
@@ -410,33 +419,37 @@ class InboxProcessing:
         outcome = await self.intake.process(scope, message, run=run, classified=classified)
         disposition = outcome.disposition
         assert disposition is not None  # quotation kinds are handled above
-        case = outcome.case
-        before: OrderCase | None = None
+        stored_cases: list[OrderCase] = []
+        revised_from: list[tuple[OrderCase, OrderCase]] = []
         async with self.uow(scope) as work:
             await require_running(work)
-            if case is not None:
+            # Every case of the message in this one transaction, with the
+            # disposition that is the message's idempotency key: a mail
+            # processed twice opens no second set (ticket 19).
+            for case in outcome.cases:
                 stored = await work.orders.get(case.case_id)
                 if stored is None:
                     case = await self._open_order(work, context, case, run)
                 else:
-                    before = stored.case
                     revised = worker_event("order.revised", context, self.clock.now())
                     await save_order(
                         work, context, self.ids, stored.case, case, revised, run_id=run.run_id
                     )
                     case = await self._start_review(work, context, case, run)
+                    revised_from.append((stored.case, case))
+                stored_cases.append(case)
             if outcome.learned is not None:
                 # The layout the case was read through, in force with it.
                 await keep_learned(
                     work, self.ids, self.clock, context, outcome.learned, run_id=run.run_id
                 )
-            await self._record(work, context, disposition, ingest, run, case=case)
+            await self._record(work, context, disposition, ingest, run, cases=stored_cases)
             await work.commit()
-        if before is not None and case is not None:
+        for before, case in revised_from:
             # A revision of an order awaiting its cross-check: that check
             # was of the revision it replaced.
             await withdraw_if_left(self.decisions, context, before, case)
-        return disposition, case
+        return disposition, tuple(stored_cases)
 
     async def _open_order(
         self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase, run: RunContext
@@ -493,7 +506,7 @@ class InboxProcessing:
             routed = await self._routed(
                 context, scope, message_id, reason, refused.reason, ingest, run, reading
             )
-            return routed, None
+            return routed, ()
         except QuoteFileUnreadableError as refused:
             detail = str(refused.details.get("problem", "unreadable"))
             routed = await self._routed(
@@ -506,7 +519,7 @@ class InboxProcessing:
                 run,
                 reading,
             )
-            return routed, None
+            return routed, ()
         disposition = MessageDisposition(
             message_id=message_id,
             kind=DispositionKind.CASE_CREATED,
@@ -543,9 +556,9 @@ class InboxProcessing:
                 event = worker_event("quote.ycbg_drafted", context, self.clock.now())
                 await save_quote(work, context, self.ids, case, drafted, event, run_id=run.run_id)
                 case = drafted
-            await self._record(work, context, disposition, ingest, run, case=case)
+            await self._record(work, context, disposition, ingest, run, cases=(case,))
             await work.commit()
-        return disposition, case
+        return disposition, (case,)
 
     async def _design_reply(
         self,
@@ -569,7 +582,7 @@ class InboxProcessing:
                 run,
                 reading,
             )
-            return routed, None
+            return routed, ()
         disposition = outcome.disposition
         if reading is not None:
             disposition = MessageDisposition.model_validate(
@@ -589,9 +602,9 @@ class InboxProcessing:
                 await save_quote(
                     work, context, self.ids, stored.case, replied, event, run_id=run.run_id
                 )
-            await self._record(work, context, disposition, ingest, run, case=replied)
+            await self._record(work, context, disposition, ingest, run, cases=_given(replied))
             await work.commit()
-        return disposition, replied
+        return disposition, _given(replied)
 
     async def _routed(
         self,
@@ -626,18 +639,18 @@ class InboxProcessing:
         ingest: datetime,
         run: RunContext,
         *,
-        case: OrderCase | QuoteCase | None = None,
+        cases: Sequence[OrderCase | QuoteCase] = (),
     ) -> None:
         """The disposition and its audit row, which names the DW1 run that
         processed the message, as a decision's row names the run it resumed;
-        and what each model step did for the message (``case``: the case as
-        stored, which holds the stamps of the steps that read into it), so
+        and what each model step did for the message (``cases``: the cases as
+        stored, which hold the stamps of the steps that read into them), so
         the rows commit or roll back with what they describe."""
         await work.messages.record(disposition, ingest)
         await work.step_activity.append(
             outcomes_of(
                 disposition,
-                case,
+                cases,
                 model_calls(),
                 steps_by_prompt=STEPS_BY_PROMPT,
                 at=self.clock.now(),
@@ -656,11 +669,15 @@ class InboxProcessing:
             # Which attachment and which signature (ticket 25); the detail is
             # built by the intake from ids and signature names, never bytes.
             details["malware"] = disposition.detail
-        if isinstance(case, OrderCase) and case.document.opened_with_password:
+        opened = next(
+            (c for c in cases if isinstance(c, OrderCase) and c.document.opened_with_password),
+            None,
+        )
+        if opened is not None:
             # That it was opened, and with what kind of password: never which
             # one (ticket 17). The detail is code's sentence.
             details["encrypted_file"] = (
-                f"{case.document.attachment_id}: {OPENED_WITH_MAIL_PASSWORD}"
+                f"{opened.document.attachment_id}: {OPENED_WITH_MAIL_PASSWORD}"
             )
         elif disposition.reason is RoutingReason.ATTACHMENT_LOCKED:
             details["encrypted_file"] = disposition.detail
@@ -669,6 +686,9 @@ class InboxProcessing:
                 "case_kind": disposition.case_kind.value,
                 "case_id": str(disposition.case_id),
             }
+            if disposition.more_cases:
+                # The mail's other POs' cases (ticket 19): ids only.
+                details["more_case_ids"] = [str(c) for c in disposition.more_cases]
         await work.audit.append(
             AuditEvent(
                 id=self.ids.new_uuid(),
@@ -692,6 +712,10 @@ class InboxProcessing:
             return None
         members = await members_by_address(self.directory, context)
         return members.get(customer.sales_pic.lower())
+
+
+def _given[T](case: T | None) -> tuple[T, ...]:
+    return () if case is None else (case,)
 
 
 def _replied(stored: QuoteCase, outcome: ReplyAttached) -> QuoteCase:

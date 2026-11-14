@@ -10,7 +10,10 @@ API and the plan use the English terms. The spec is
 
 - **Order case** (Hồ sơ đơn hàng): one customer PO number, from its first
   revision to confirmation. A later revision of the same PO joins the same
-  case and supersedes the previous revision; it never opens a new case.
+  case and supersedes the previous revision; it never opens a new case. A
+  mail or a file with several PO numbers opens one case per PO number, every
+  one on the same message; the inbox shows the mail once, with its cases
+  (ticket 19).
 - **Quote case** (Hồ sơ báo giá): one request for quotation, through to a
   sent quotation or a decline.
 - **Maker / checker** (Người làm / người kiểm): on an order, the makers are
@@ -74,6 +77,20 @@ API and the plan use the English terms. The spec is
   `requested_date_missing`: Sales asks the customer for the date, or goes
   ahead with it to follow, DW1 suggesting the first day the lead time allows
   (ticket 34).
+- **Second file of a PO** (Tệp thứ hai của PO): two files of one mail naming
+  the same PO number (a signed PDF and its Excel, ticket 22) are one PO and
+  one case, compared value by value, lines matched by line number. The case
+  holds its lines on the first file (the workbook beside a PDF, else the
+  first attached), but **neither file wins**: each value they print
+  differently is flagged `print_differs` (`value_uncertain`), typed by Sales
+  or asked of the customer, and `files_disagree` names both values and both
+  files. Which file should win is Proterial's to say (owed). Two files of
+  one PO number that print other revisions or other line numbers, or three,
+  route the mail to Sales.
+- **File-name revision hint** (Tên tệp gợi ý PO sửa): the suffix a file's
+  name carries after the PO number (`R`, `R1`, `-2`, `-RE11`, `RV`), shown
+  beside the PO number and the printed revision. Only a hint: the printed
+  revision and the line comparison decide "PO sửa" (ticket 22).
 - **PDF print** (Bản in PDF): a PDF print of a PO attached beside its
   workbook in the same mail. The two are one PO, read from the workbook; the
   print is kept as a second source, and a value it prints differently is
@@ -277,7 +294,7 @@ API and the plan use the English terms. The spec is
   firm rows only; forecast rows are counted on the case ("N dòng dự báo,
   không đặt hàng") and never ordered. What it does not print (price,
   currency) is flagged `not_printed` (Tệp không in giá trị này, cần xác
-  nhận). Until ticket 19, one export opens one case, each line keeping its
+  nhận). One export opens one case per PO number (ticket 19), each line keeping its
   own PO number. The notice mail a portal sends carries no PO: a model
   reads it as `portal_notice` and it goes to the customer's PIC.
 - **Production type** (Mass / Pcs): whether a request is for mass
@@ -517,6 +534,7 @@ sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử
 | `sender_unverified`        | Chưa xác thực người gửi              |
 | `legacy_encoding`          | Font tiếng Việt cũ (TCVN3/VNI)       |
 | `requested_date_missing`   | Dòng chưa có ngày yêu cầu            |
+| `files_disagree`           | Hai tệp của cùng PO ghi khác nhau    |
 | `rfq_incomplete`           | Yêu cầu báo giá thiếu thông tin      |
 | `price_below_policy_floor` | Giá dưới mức sàn                     |
 | `price_floor_unknown`      | Không tính được giá sàn              |

@@ -114,8 +114,8 @@ class OrderRun:
         """Each case as the last outcome that touched it left it."""
         cases: dict[uuid.UUID, OrderCase] = {}
         for outcome in self.outcomes.values():
-            if outcome.case is not None:
-                cases[outcome.case.case_id] = outcome.case
+            for case in outcome.cases:
+                cases[case.case_id] = case
         return cases
 
 
@@ -123,8 +123,8 @@ async def persist_outcome(
     uow: SqlSalesUnitOfWorkFactory, scope: SalesScope, outcome: IntakeOutcome, at: datetime
 ) -> None:
     async with uow(scope) as work:
-        case = outcome.case
-        if case is not None:
+        # Every case of the message, with its disposition, in one transaction.
+        for case in outcome.cases:
             stored = await work.orders.get(case.case_id)
             if stored is None:
                 event = CaseEvent(action="order.checked", actor=DW1, occurred_at=at)
@@ -152,7 +152,7 @@ async def run_mailbox(
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.11.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.12.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),
         new_case_id=uuid.uuid4,

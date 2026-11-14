@@ -729,6 +729,9 @@ class OrderCaseView(BaseModel):
     assigned_to: uuid.UUID | None
     po_no: str
     revision: int
+    # The revision the file's name suggests ("R1"; ticket 22): a hint shown
+    # beside ``revision``, which with the lines still decides. None: none.
+    name_revision: str | None = None
     po_date: date
     currency: Currency
     # None: the PO was written in the mail (AI item 4); its values' anchors
@@ -748,7 +751,8 @@ class OrderCaseView(BaseModel):
     # The first value read from text typed in a TCVN3 or VNI font, which
     # `legacy_encoding` opens the source at; None when there is none.
     legacy_text_anchor: SourceAnchor | None
-    # The PDF print attached beside the workbook (ticket 34); None: none was.
+    # The second file of the same PO in the mail: the PDF print beside its
+    # workbook (ticket 34), or any other (ticket 22); None: none was.
     print_copy: PrintCopyView | None
     coverage: CoverageView
     lines: list[OrderLineView]
@@ -907,13 +911,17 @@ def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummar
 
 
 class PrintDifferenceView(BaseModel):
-    """A value the PDF print shows differently, and where it shows it."""
+    """A value the PO's second file shows differently, where it shows it, and
+    both values as each file prints them (ticket 22; None for a difference
+    stored before they were kept)."""
 
     model_config = _VIEW
 
     line_no: int | None
     field: str
     anchor: SourceAnchor
+    ours: str | None = None
+    theirs: str | None = None
 
 
 class PrintCopyView(BaseModel):
@@ -952,7 +960,9 @@ def _print_copy(copy: PrintCopy | None, prices: PriceView) -> PrintCopyView | No
     return PrintCopyView(
         attachment_id=copy.attachment_id,
         differences=[
-            PrintDifferenceView(line_no=d.line_no, field=d.field, anchor=d.anchor)
+            PrintDifferenceView(
+                line_no=d.line_no, field=d.field, anchor=d.anchor, ours=d.ours, theirs=d.theirs
+            )
             for d in copy.differences
             if prices.amounts or d.field not in AMOUNT_FIELDS
         ],
@@ -991,6 +1001,7 @@ def order_case(
         assigned_to=assigned_to,
         po_no=case.header.po_no,
         revision=case.header.revision,
+        name_revision=document.name_revision,
         po_date=case.header.po_date,
         currency=case.header.currency,
         attachment_id=document.attachment_id,
@@ -1821,11 +1832,16 @@ class MessageDispositionView(BaseModel):
     # The cases a reply's thread holds when it names none of them, for Sales
     # to pick one ("Chọn hồ sơ", ticket 24).
     thread_cases: list[ThreadCaseView] = []
+    # Every order case a mail with several POs is on, one per PO number, in
+    # the mail's order (ticket 19), those the caller may see; empty for a
+    # message on one case, whose ``case_id`` says it.
+    order_cases: list[ThreadCaseView] = []
 
 
 class ThreadCaseView(BaseModel):
-    """A case offered for a reply: its kind, id and the number it goes by
-    (the PO's, or the request's)."""
+    """A case a message names: one offered for a reply, or one of a mail's
+    several POs; its kind, id and the number it goes by (the PO's, or the
+    request's)."""
 
     model_config = _VIEW
 
@@ -1841,8 +1857,8 @@ def message_disposition(
     numbers: Mapping[uuid.UUID, str] | None = None,
 ) -> MessageDispositionView:
     """The disposition as the inbox shows it. ``numbers``: what each case a
-    reply is offered goes by, for those the caller may see; an offered case
-    not in it is left out."""
+    reply is offered, or a mail with several POs is on, goes by, for those the
+    caller may see; a case not in it is left out."""
     shown = numbers or {}
     return MessageDispositionView(
         kind=disposition.kind.value,
@@ -1864,6 +1880,11 @@ def message_disposition(
             ThreadCaseView(case_kind=c.case_kind, case_id=c.case_id, number=shown[c.case_id])
             for c in disposition.thread_cases
             if c.case_id in shown
+        ],
+        order_cases=[
+            ThreadCaseView(case_kind=CaseKind.ORDER, case_id=case_id, number=shown[case_id])
+            for case_id in (disposition.case_ids if disposition.more_cases else ())
+            if case_id in shown
         ],
     )
 

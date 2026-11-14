@@ -137,9 +137,7 @@ class ThreadSummaries:
             else:
                 await stored_quote(work, case_id, viewer=context)
             logged = [
-                m
-                for m in await work.messages.list_all()
-                if m.disposition.case_id == case_id and m.disposition.case_kind is kind
+                m for m in await work.messages.list_all() if m.disposition.is_on(kind, case_id)
             ]
         logged.sort(key=lambda m: (m.processed_at, m.disposition.message_id))
         mails: dict[str, str] = {}

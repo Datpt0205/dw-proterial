@@ -3010,7 +3010,7 @@ export interface components {
          * @description The order checks of the spec's findings table, one code each.
          * @enum {string}
          */
-        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing" | "reel_length_mismatch" | "spec_mismatch";
+        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing" | "reel_length_mismatch" | "spec_mismatch" | "files_disagree";
         /**
          * FindingExplanationView
          * @description An explanation, or why there is none; always marked as the model's.
@@ -3847,6 +3847,11 @@ export interface components {
             /** Kind */
             kind: string;
             layout_prefill?: components["schemas"]["LayoutPrefill"] | null;
+            /**
+             * Order Cases
+             * @default []
+             */
+            order_cases: components["schemas"]["ThreadCaseView"][];
             /** Owner */
             owner?: string | null;
             /** Processed At */
@@ -4044,6 +4049,8 @@ export interface components {
             makers: string[];
             /** Message Id */
             message_id: string;
+            /** Name Revision */
+            name_revision?: string | null;
             /** Parser Version */
             parser_version: string;
             /**
@@ -4629,7 +4636,9 @@ export interface components {
         };
         /**
          * PrintDifferenceView
-         * @description A value the PDF print shows differently, and where it shows it.
+         * @description A value the PO's second file shows differently, where it shows it, and
+         *     both values as each file prints them (ticket 22; None for a difference
+         *     stored before they were kept).
          */
         PrintDifferenceView: {
             anchor: components["schemas"]["SourceAnchor"];
@@ -4637,6 +4646,10 @@ export interface components {
             field: string;
             /** Line No */
             line_no: number | null;
+            /** Ours */
+            ours?: string | null;
+            /** Theirs */
+            theirs?: string | null;
         };
         /** ProcessEdgeView */
         ProcessEdgeView: {
@@ -6058,8 +6071,9 @@ export interface components {
         };
         /**
          * ThreadCaseView
-         * @description A case offered for a reply: its kind, id and the number it goes by
-         *     (the PO's, or the request's).
+         * @description A case a message names: one offered for a reply, or one of a mail's
+         *     several POs; its kind, id and the number it goes by (the PO's, or the
+         *     request's).
          */
         ThreadCaseView: {
             /**

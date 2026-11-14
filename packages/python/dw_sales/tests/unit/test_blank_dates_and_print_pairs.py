@@ -60,7 +60,7 @@ from dw_sales.testing.followups import platform_zone
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.11.0.yaml")
+RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.12.0.yaml")
 T0 = datetime(2026, 10, 2, 19, 0, tzinfo=UTC)
 ACTOR = Actor(user_id=AN.user_id)
 MISSING = "requested_date_missing:2"
@@ -269,9 +269,11 @@ async def test_m45s_workbook_and_print_are_one_case_with_the_differing_date_unce
         FlaggedValue(field="requested_date", flag=RegionFlag.PRINT_DIFFERS),
     )
     assert case.finding("value_uncertain:1").actual == "print_differs"
+    # And the PO's two files disagree, naming both (ticket 22).
     assert {f.code for f in case.findings} == {
         FindingCode.MISSING_NOC_ESF,
         FindingCode.VALUE_UNCERTAIN,
+        FindingCode.FILES_DISAGREE,
     }
 
 

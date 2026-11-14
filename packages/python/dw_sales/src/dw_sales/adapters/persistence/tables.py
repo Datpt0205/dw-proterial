@@ -86,6 +86,9 @@ order_revisions = sa.Table(
     sa.Column("message_id", sa.Text, nullable=False),
     sa.Column("received_at", _TS, nullable=False),
     sa.Column("document", JSONB, nullable=False),
+    # The PO number the revision is of, generated from its document: a
+    # message is one revision per PO number (ticket 19, 3fcedec4e4f1).
+    sa.Column("po_no", sa.Text, sa.Computed("document #>> '{header,po_no}'")),
     sa.Column("header_corrections", JSONB, nullable=False, server_default="[]"),
     sa.Column("superseded_at", _TS),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
@@ -188,6 +191,18 @@ messages = sa.Table(
     sa.Column("handled_note", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# The further order cases a message is on (ticket 19, migration 3fcedec4e4f1),
+# after the one `messages.order_case_id` names, in the mail's order.
+message_cases = sa.Table(
+    "message_cases",
+    metadata,
+    *_scope(),
+    sa.Column("message_id", sa.Text, primary_key=True),
+    sa.Column("position", sa.Integer, primary_key=True),
+    sa.Column("order_case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
 artifacts = sa.Table(

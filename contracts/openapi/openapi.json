@@ -5669,7 +5669,8 @@
           "legacy_encoding",
           "requested_date_missing",
           "reel_length_mismatch",
-          "spec_mismatch"
+          "spec_mismatch",
+          "files_disagree"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -9395,6 +9396,14 @@
               }
             ]
           },
+          "order_cases": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThreadCaseView"
+            },
+            "title": "Order Cases",
+            "type": "array"
+          },
           "owner": {
             "anyOf": [
               {
@@ -10621,6 +10630,17 @@
           "message_id": {
             "title": "Message Id",
             "type": "string"
+          },
+          "name_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Revision"
           },
           "parser_version": {
             "title": "Parser Version",
@@ -12886,7 +12906,7 @@
         "type": "object"
       },
       "PrintDifferenceView": {
-        "description": "A value the PDF print shows differently, and where it shows it.",
+        "description": "A value the PO's second file shows differently, where it shows it, and\nboth values as each file prints them (ticket 22; None for a difference\nstored before they were kept).",
         "properties": {
           "anchor": {
             "$ref": "#/components/schemas/SourceAnchor"
@@ -12905,6 +12925,28 @@
               }
             ],
             "title": "Line No"
+          },
+          "ours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ours"
+          },
+          "theirs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theirs"
           }
         },
         "required": [
@@ -19092,7 +19134,7 @@
         "type": "object"
       },
       "ThreadCaseView": {
-        "description": "A case offered for a reply: its kind, id and the number it goes by\n(the PO's, or the request's).",
+        "description": "A case a message names: one offered for a reply, or one of a mail's\nseveral POs; its kind, id and the number it goes by (the PO's, or the\nrequest's).",
         "properties": {
           "case_id": {
             "format": "uuid",

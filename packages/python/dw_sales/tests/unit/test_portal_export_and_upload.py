@@ -43,7 +43,7 @@ from dw_sales.domain.layouts import (
     check_titles,
 )
 from dw_sales.domain.order_checks import IntakeCaps
-from dw_sales.domain.orders import OrderCase, PoDocument, RegionFlag, Unreadable
+from dw_sales.domain.orders import PoDocument, RegionFlag, Unreadable
 from dw_sales.evals.graders import AN, CALLERS, GIANG, KHOA, OUTSIDER, READER
 from dw_sales.evals.world import ALPHA, BETA, NOW, SampleSet, SampleWith, World, open_world
 
@@ -286,21 +286,24 @@ async def test_an_upload_opens_the_case_from_firm_lines_only_and_shows_the_forec
         "case_created",
         CUSTOMER,
     )
-    case_id = logged.disposition.case_id
-    assert case_id is not None
-    case = world.order(case_id)
-    assert isinstance(case, OrderCase)
-    assert [line.effective.customer_item_code for line in case.lines] == ["CVG-0001", "CVG-0003"]
-    assert case.document.layout_ref == layout.ref
-    assert case.coverage().forecast_rows == 3
-    view_of_case = await world.services.orders.get(AN.context(), case_id)
-    assert view_of_case.coverage.forecast_rows == 3
-    assert [line.po_no for line in view_of_case.lines] == [
-        "CVG-PO-2611-0001",
-        "CVG-PO-2611-0002",
+    # Each firm row names its own PO number: one case per PO (ticket 19).
+    case_ids = logged.disposition.case_ids
+    assert len(case_ids) == 2
+    cases = [world.order(case_id) for case_id in case_ids]
+    assert [c.header.po_no for c in cases] == ["CVG-PO-2611-0001", "CVG-PO-2611-0002"]
+    assert [[line.effective.customer_item_code for line in c.lines] for c in cases] == [
+        ["CVG-0001"],
+        ["CVG-0003"],
     ]
+    assert {c.document.layout_ref for c in cases} == {layout.ref}
+    # The file's forecast rows are counted once, on its first PO's case.
+    assert [c.coverage().forecast_rows for c in cases] == [3, 0]
+    view_of_case = await world.services.orders.get(AN.context(), case_ids[0])
+    assert view_of_case.coverage.forecast_rows == 3
+    assert [line.po_no for line in view_of_case.lines] == ["CVG-PO-2611-0001"]
     # The source is the export, shown as a sheet a person opens.
-    await world.open_sources(AN, case_id)
+    for case_id in case_ids:
+        await world.open_sources(AN, case_id)
 
 
 async def test_the_same_file_uploaded_twice_is_stored_once(world: World) -> None:

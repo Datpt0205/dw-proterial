@@ -55,7 +55,11 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
     body_text: "Kính gửi Sales",
     attachments: [],
     sender_verified: true,
-    disposition: { kind: "not_yet_processed", thread_cases: [] },
+    disposition: {
+      kind: "not_yet_processed",
+      thread_cases: [],
+      order_cases: [],
+    },
     handoff_draft: null,
     processing: null,
     ...overrides,
@@ -157,6 +161,7 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
             case_id: "c-1",
             processed_at: "2026-10-14T03:00:05Z",
             thread_cases: [],
+            order_cases: [],
           },
         }),
       ];
@@ -269,6 +274,7 @@ describe("what a model read is shown with the case code resolved it to (ticket 3
             reason: "reply_to_case",
             processed_at: "2026-10-01T03:05:00Z",
             thread_cases: [],
+            order_cases: [],
             reading: {
               prompt: "sales.message_intent@1.0.0",
               model_profile: "local-small",

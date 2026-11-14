@@ -173,7 +173,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.layout_proposal",
                     "model_assist.po_body_extraction",
                 ),
-                _severities("value_uncertain", "line_total_mismatch"),
+                _severities("value_uncertain", "line_total_mismatch", "files_disagree"),
             ),
             # The delivery date DW1 suggests.
             _step(

@@ -26,7 +26,7 @@ from dw_sales.testing.reading_tools import SCAN, ScriptedConverter, TruthOcr, co
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.11.0.yaml").intake
+CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.12.0.yaml").intake
 
 
 def _content(data: bytes) -> AttachmentContent:
