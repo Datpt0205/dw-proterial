@@ -1326,6 +1326,15 @@
         "title": "Schema Version",
         "type": "string"
       },
+      "shared_mail_domains": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 200,
+        "title": "Shared Mail Domains",
+        "type": "array"
+      },
       "short_lead_time": {
         "$ref": "#/$defs/ShortLeadTimeRule"
       }

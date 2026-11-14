@@ -193,6 +193,13 @@ API and the plan use the English terms. The spec is
   contacts list, which Sales confirmed as one customer's, with who and on
   which mail. Bravo's contacts come first; a confirmed sender never
   overrides them (dw_sales ADR 0009).
+- **Shared mail domain** (Tên miền email dùng chung): a mail domain several
+  companies write from, such as the one a company and its group companies
+  share, listed by the tenant in its order rules (`shared_mail_domains`,
+  1.13.0). Nobody is known by it: a sender there is a customer's only by
+  address (Bravo's contacts, then a confirmed sender); any other address is
+  "customer not known", for a person (ticket 20). A domain several customers
+  of one imported list claim is dropped from each of them on import as well.
 - **Triage card** (Thẻ phân loại thư): for a mail nothing else read, what
   DW1 thinks it is, which case it seems to concern and one step from the
   closed set, for Sales to take or not (dw_sales ADR 0012).

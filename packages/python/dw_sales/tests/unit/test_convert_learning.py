@@ -23,6 +23,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedConverts,
     MemoryRecordedQuotations,
     MemoryRecordedSenders,
+    platform_rules,
 )
 
 pytestmark = pytest.mark.unit
@@ -52,6 +53,7 @@ def _catalog(converts: MemoryRecordedConverts, lists: Lists | None = None) -> Sn
         MemoryRecordedQuotations(clock),
         converts,
         MemoryRecordedSenders(clock),
+        platform_rules(),
     )
 
 

@@ -60,7 +60,7 @@ from dw_sales.testing.followups import platform_zone
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.12.0.yaml")
+RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.13.0.yaml")
 T0 = datetime(2026, 10, 2, 19, 0, tzinfo=UTC)
 ACTOR = Actor(user_id=AN.user_id)
 MISSING = "requested_date_missing:2"

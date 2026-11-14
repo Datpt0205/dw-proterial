@@ -1369,13 +1369,6 @@ def open_world(
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
     draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
     example_store = MemoryExampleStore(outbox=runtime.outbox)
-    catalog = SnapshotSalesCatalog(
-        MemoryApprovedLists(catalog_store),
-        mock,
-        MemoryRecordedQuotations(clock),
-        MemoryRecordedConverts(clock),
-        MemoryRecordedSenders(clock),
-    )
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
@@ -1393,6 +1386,14 @@ def open_world(
         store.rule_versions.seed_approved(bound_to.tenant_id.value, own)
     book = rule_book(policies, store.rule_versions)
     order_rules = RuleBookOrderRules(book)
+    catalog = SnapshotSalesCatalog(
+        MemoryApprovedLists(catalog_store),
+        mock,
+        MemoryRecordedQuotations(clock),
+        MemoryRecordedConverts(clock),
+        MemoryRecordedSenders(clock),
+        order_rules,
+    )
     worker_file = repo_root / "configs" / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     readiness, measurements = measured_gate(

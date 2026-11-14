@@ -7,6 +7,7 @@ its SUBTOTAL before the data."""
 from __future__ import annotations
 
 import io
+import uuid
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
@@ -19,6 +20,7 @@ from openpyxl import Workbook
 from dw_sales.adapters.reader_client import ClientTableReader
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.order_intake import _convert_entry
+from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.descriptions import StatedAttributes, candidates
@@ -30,6 +32,7 @@ from dw_sales.domain.master_data import (
     header_row,
     parse_rows,
 )
+from dw_sales.domain.order_checks import map_line
 from dw_sales.domain.orders import PoLine, PoLineAnchors
 from dw_sales.evals.graders import AN, CALLERS, GIANG, OUTSIDER
 from dw_sales.evals.world import ALPHA, SampleSet, World, open_world
@@ -614,6 +617,68 @@ async def test_one_customers_words_never_take_another_customers_mapping() -> Non
     worded = _po_line("L-0001", "UL2464 3x17AWG BK CABLE (SPV2)")
     assert await mapped("FG00000001", worded) == "05-01-0002"
     assert await mapped("FG00000002", worded) is None
+
+
+async def test_two_group_companies_on_one_domain_are_told_apart_by_their_contacts() -> None:
+    """Ticket 20 on Bravo's own list: both claim the group's domain, so it
+    recognises neither (`_unshared`); each is known by its contacts'
+    addresses, and an address neither lists is a person's to place."""
+    world = _world()
+    await _approved(world, CatalogList.CUSTOMERS, _b05())
+    catalog = world.services.catalog_imports.catalog
+
+    async def code(address: str) -> str | None:
+        found = (await catalog.customer_by_sender(ALPHA, address)).data
+        return None if found is None else found.code
+
+    assert await code("c.east@group.example") == "FG00000002"
+    assert await code("D.West@group.example") == "FG00000003"
+    assert await code("someone@group.example") is None
+    assert await code("backup@alpha.example") == "FG00000001"
+
+
+async def test_a_customer_with_no_rows_gets_candidates_and_keeps_what_the_pic_confirms() -> None:
+    """Ticket 21: Group Cable West has no row in the convert list. Its line is
+    never mapped through another customer's row for the same words: it is
+    unmapped, with the item master's candidates by description, never exact.
+    The code the PIC confirms (`OrderCommands.confirm_mapping`'s hook,
+    `test_convert_learning.py`) is kept for that customer alone, and its next
+    PO maps through it."""
+    world = _world()
+    await _approved(world, CatalogList.CUSTOMERS, _b05())
+    await _approved(world, CatalogList.ITEMS, _b06())
+    await _approved(world, CatalogList.CONVERT_LIST, _b04())
+    catalog = world.services.catalog_imports.catalog
+    assert isinstance(catalog, SnapshotSalesCatalog)
+    items = (await catalog.items(ALPHA)).data
+
+    async def mapping(customer: str, line: PoLine) -> tuple[str, str | None, tuple[str, ...]]:
+        entry = (await _convert_entry(catalog, ALPHA, customer, line)).data
+        mapped = map_line(line, entry=entry, items=items)
+        return mapped.mapping.status, mapped.convert_prv_code, mapped.mapping.candidates
+
+    # Customer 1's code, and customer 1's own words for an item, as customer 3 prints them.
+    by_code = _po_line("WIRE-24-WH", "UL1007 AWG24 WHITE")
+    worded = _po_line("UL2464 3x17AWG BK CABLE (SPV2)", "UL2464 3x17AWG BK CABLE (SPV2)")
+    for line in (by_code, worded):
+        status, listed, _ = await mapping("FG00000003", line)
+        assert status != "exact" and listed is None
+    assert await mapping("FG00000003", by_code) == ("candidate", None, ("05-01-0001",))
+
+    await catalog.learn_convert(
+        ALPHA,
+        ConvertEntry(
+            customer_code="FG00000003", customer_item_code="WIRE-24-WH", prv_code="05-01-0002"
+        ),
+        by=AN.user_id,
+        case_id=uuid.UUID(int=21),
+    )
+
+    assert await mapping("FG00000003", by_code) == ("exact", "05-01-0002", ())
+    # Every other customer's line reads as before.
+    assert (await mapping("FG00000001", by_code))[:2] == ("exact", "05-01-0001")
+    assert (await mapping("FG00000002", by_code))[:2] == ("exact", "05-01-0002")
+    assert (await mapping("TDC0001", by_code))[:2] == ("candidate", None)
 
 
 # ------------------------------------------------------ the name's grammar --

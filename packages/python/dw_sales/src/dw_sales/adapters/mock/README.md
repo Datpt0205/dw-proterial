@@ -49,7 +49,7 @@ name a message already on a case of the sender's customer) and `other`. Every me
 disposition, with its routing reason when it is routed to Sales; dispositions,
 reasons and finding codes are the glossary's
 (`packages/python/dw_sales/CONTEXT.md`). _Customer_ is the customer the message
-is attributed to, by the sender's domain, else by the buyer the document names,
+is attributed to, by the sender's address or domain, else by the buyer the document names,
 else by the YCBG a Design reply quotes.
 
 | Message | Customer | Scenario                                                                                                                                                        | Attachment                                    | Classification  | Disposition                                  | Findings                                                                                                       |
