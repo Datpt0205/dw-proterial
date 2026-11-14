@@ -47,6 +47,7 @@ MODEL_STEPS = [
     "sales_customer_reminders@1.0.0",
     "sales_assistant@1.0.0",
     "sales_salesorder_rules@1.0.0",
+    "sales_change_request@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

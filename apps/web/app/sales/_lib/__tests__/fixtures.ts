@@ -73,6 +73,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     },
     flags: [],
     corrections: [],
+    changes: [],
     value_states: { line_no: "dw", description: "dw", unit_price: "dw" },
     mapping: {
       status: "exact",
@@ -172,6 +173,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     replies: [],
     thread_before: [],
     thread_sent: [],
+    change_requests: [],
     lines: [line],
     ...overrides,
   };

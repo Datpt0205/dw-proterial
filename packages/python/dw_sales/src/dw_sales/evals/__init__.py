@@ -6,10 +6,12 @@ and `descriptions`, `intents`, `requests`, `replies`, `handoffs` and
 ticket 15's header path, and `rule_drafts` for a layout drafted from a
 company's template, `rule_words` for one changed in words, and
 `salesorder_rules` for a customer's SalesOrder rules learned from a worked
-example and proven by replay)."""
+example and proven by replay, and `change_requests` for ticket 27's change
+asked in a reply's words)."""
 
 from dw_sales.evals.assistant import GRADERS as ASSISTANT_GRADERS
 from dw_sales.evals.catalog_columns import GRADERS as COLUMN_GRADERS
+from dw_sales.evals.change_requests import GRADERS as CHANGE_REQUEST_GRADERS
 from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.customer_reminders import GRADERS as REMINDER_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
@@ -60,6 +62,7 @@ GRADERS = {
         **BRIEF_GRADERS,
         **THREAD_GRADERS,
         **PO_BODY_GRADERS,
+        **CHANGE_REQUEST_GRADERS,
         **REMINDER_GRADERS,
         **ASSISTANT_GRADERS,
     }.items()

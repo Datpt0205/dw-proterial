@@ -281,6 +281,36 @@ export const REPLY_STEP = {
   discuss_spec: "Ghi hồ sơ đang chờ khách thống nhất spec",
 } as const;
 
+/** A change request's state (ticket 27, CONTEXT.md "Change request"). */
+export const CHANGE_REQUEST_STATE: Record<
+  SalesSchemas["ChangeRequestView"]["state"],
+  string
+> = {
+  open: "Đang mở",
+  queued: "Chờ yêu cầu trước",
+  closed: "Đã xong",
+};
+
+/** One change line's state. */
+export const CHANGE_LINE_STATE: Record<
+  SalesSchemas["ChangeLineView"]["state"],
+  string
+> = {
+  open: "Chờ quyết định",
+  confirmed: "Đã xác nhận",
+  rejected: "Đã từ chối",
+};
+
+/** Where a change line was read: code, a model, or a person. */
+export const CHANGE_READ_BY: Record<
+  SalesSchemas["ChangeLineView"]["read_by"],
+  string
+> = {
+  table: "Bảng trong thư",
+  model: "Máy đọc, cần kiểm",
+  person: "Người nhập",
+};
+
 /** Who read a value of a model reading of a description (ticket 28). */
 export const READ_BY = {
   code: "DW1 tính từ chữ",
@@ -357,6 +387,7 @@ export const CASE_EVENT = {
   "order.confirmed": "Gửi xác nhận cho khách",
   "order.closed": "Đóng hồ sơ",
   "order.reassigned": "Giao cho người khác",
+  "order.change_confirmed": "Xác nhận thay đổi khách xin",
   "quote.received": "Nhận yêu cầu báo giá",
   "quote.ycbg_drafted": "Soạn YCBG",
   "quote.ycbg_recorded": "Ghi số YCBG trên Bravo",

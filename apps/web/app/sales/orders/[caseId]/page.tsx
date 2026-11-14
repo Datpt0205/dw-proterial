@@ -71,6 +71,7 @@ import {
 } from "../../_components/mail-text-drawer";
 import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
+import { ChangeRequestsPanel } from "./change-requests";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
@@ -478,6 +479,8 @@ function OrderDetail() {
         onOpenSource={openSource}
         onPickCode={setPicking}
       />
+
+      <ChangeRequestsPanel order={data} viewer={viewer} onChanged={reload} />
 
       <Card
         size="small"

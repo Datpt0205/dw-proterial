@@ -64,6 +64,7 @@ from dw_sales.application.catalog_imports import (
     CatalogPreviewView,
     CatalogStateView,
 )
+from dw_sales.application.change_requests import ChangeRequestResult, TypedChange
 from dw_sales.application.customer_reminders import CustomerReminderView
 from dw_sales.application.design_text_reading import DesignTextReadingView, ModelDesignReply
 from dw_sales.application.finding_explanations import FindingExplanationView
@@ -113,6 +114,7 @@ from dw_sales.application.views import (
 from dw_sales.domain.activity import StepResult
 from dw_sales.domain.assistant import QUESTION_CHARS
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
+from dw_sales.domain.change_requests import MAX_LINES
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
@@ -350,6 +352,25 @@ class CorrectionBody(VersionBody):
 
     field: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")]
     value: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class ChangeRequestBody(VersionBody):
+    """A change request from one of the order's replies (ticket 27): the
+    mail, and any line the person types besides what DW1 reads, on the
+    case version the person saw."""
+
+    message_id: _MessageId
+    lines: Annotated[list[TypedChange], Field(max_length=MAX_LINES)] = []
+
+
+class ChangeLineBody(VersionBody, TypedChange):
+    """One change line a person types, on the case version they saw."""
+
+
+class ChangeRejectBody(VersionBody):
+    """Why one change line is rejected, in the person's words."""
+
+    reason: Note
 
 
 class BravoEntryBody(VersionBody):
@@ -612,6 +633,83 @@ def build_router(
             context, CaseKind.QUOTE, case_id, artifact_id, case_version=body.case_version
         )
         return await idem.record(mail, status_code=202)
+
+    # A change a customer asks for by mail, recorded from one of the order's
+    # replies and confirmed line by line (ticket 27, dw_sales ADR 0010). No
+    # route confirms more than one line.
+    @router.post(
+        "/orders/{case_id}/change-requests",
+        response_model=ChangeRequestResult,
+        dependencies=prepare_scope,
+    )
+    async def open_change_request(
+        case_id: uuid.UUID, body: ChangeRequestBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ChangeRequestResult:
+        result = await svc.change_requests.open(
+            context,
+            case_id,
+            case_version=body.case_version,
+            message_id=body.message_id,
+            typed=body.lines,
+        )
+        return await idem.record(result)
+
+    @router.post(
+        "/orders/{case_id}/change-requests/{request_id}/lines",
+        response_model=ChangeRequestResult,
+        dependencies=prepare_scope,
+    )
+    async def add_change_line(
+        case_id: uuid.UUID,
+        request_id: uuid.UUID,
+        body: ChangeLineBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> ChangeRequestResult:
+        typed = TypedChange(line_no=body.line_no, field=body.field, value=body.value)
+        result = await svc.change_requests.add_line(
+            context, case_id, request_id, typed, case_version=body.case_version
+        )
+        return await idem.record(result)
+
+    @router.post(
+        "/orders/{case_id}/change-requests/{request_id}/lines/{seq}/confirm",
+        response_model=ChangeRequestResult,
+        dependencies=prepare_scope,
+    )
+    async def confirm_change_line(
+        case_id: uuid.UUID,
+        request_id: uuid.UUID,
+        seq: Annotated[int, PathParam(ge=1, le=MAX_LINES)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> ChangeRequestResult:
+        result = await svc.change_requests.confirm(
+            context, case_id, request_id, seq, case_version=body.case_version
+        )
+        return await idem.record(result)
+
+    @router.post(
+        "/orders/{case_id}/change-requests/{request_id}/lines/{seq}/reject",
+        response_model=ChangeRequestResult,
+        dependencies=prepare_scope,
+    )
+    async def reject_change_line(
+        case_id: uuid.UUID,
+        request_id: uuid.UUID,
+        seq: Annotated[int, PathParam(ge=1, le=MAX_LINES)],
+        body: ChangeRejectBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> ChangeRequestResult:
+        result = await svc.change_requests.reject(
+            context, case_id, request_id, seq, case_version=body.case_version, reason=body.reason
+        )
+        return await idem.record(result)
 
     # PC's delivery dates read from the mail Sales pastes (AI item 7): the
     # dates fill the confirmation's fields; "Ghi đã gửi xác nhận" records them.

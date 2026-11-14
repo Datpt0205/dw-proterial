@@ -1147,6 +1147,11 @@
         "additionalProperties": false,
         "description": "Which DW1 steps a model takes part in for the tenant (dw_sales ADR 0005).\n\nEach is a switch the platform ships off; a tenant turns one on in its own\nversion of these rules. The case stamps the version it was checked under,\nso what a case was read with never changes after.",
         "properties": {
+          "change_request": {
+            "default": false,
+            "title": "Change Request",
+            "type": "boolean"
+          },
           "description_attributes": {
             "title": "Description Attributes",
             "type": "boolean"

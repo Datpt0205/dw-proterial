@@ -376,6 +376,7 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.unread_retry_hours"): model,
         (RuleKey.ORDER_RULES, "model_assist.reply_intent"): model,
         (RuleKey.ORDER_RULES, "model_assist.request_handoff"): model,
+        (RuleKey.ORDER_RULES, "model_assist.change_request"): model,
         (RuleKey.ORDER_RULES, "model_assist.description_attributes"): model,
         (RuleKey.ORDER_RULES, "model_assist.layout_proposal"): model,
         (RuleKey.ORDER_RULES, "model_assist.rfq_extraction"): model,
@@ -475,6 +476,7 @@ async def test_a_switched_on_step_with_no_measurement_is_served_not_in_effect() 
         ModelStep.MESSAGE_INTENT,
         ModelStep.REPLY_INTENT,
         ModelStep.REQUEST_HANDOFF,
+        ModelStep.CHANGE_REQUEST,
     ]
     for model in steps["O1"].models:
         assert model.enabled and not model.effective and model.latest is None

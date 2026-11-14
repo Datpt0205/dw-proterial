@@ -222,6 +222,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Đọc PO khách viết trong thân thư",
       help: "Thư nêu đơn hàng mà không đính kèm tệp: mô hình đọc PO từ nội dung thư; mọi giá trị cần Sales xác nhận với thư.",
     },
+    "model_assist.change_request": {
+      label: "Đọc thay đổi khách xin bằng lời",
+      help: "Thư trả lời xin đổi ngày giao hoặc số lượng: mô hình chỉ ra dòng và giá trị trong thư; Sales xác nhận từng dòng trước khi đơn đổi.",
+    },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
       label: "Số PO đầu cần xác nhận từng giá trị",

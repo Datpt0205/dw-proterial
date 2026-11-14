@@ -68,3 +68,58 @@ a value", and a reply's reading (ticket 32) had kinds fixed to two waits.
    open queues behind it and the PIC is told; they are never merged.
 5. **The PIC approves every 🔒 step**, as in the BA's flow; a cross-check
    applies as the tenant's rules stamped on the case say. No new role.
+
+## Built 2026-11-15 (ticket 27), by the agent: decisions 2 and 4
+
+What the decision did not settle, settled here; each can be reversed by a
+new version of this note.
+
+- **What a line may change**: a line's delivery date (`requested_date`) and
+  its quantity, the BA's 6.1A pull-in, push-out, raise and cut. A price,
+  the place or the transport are no value of a line DW1 holds; a mail
+  asking one is read by a person.
+- **Where a request comes from**: a customer's reply the thread headers
+  attached to the order (ticket 32), and nothing else, so the sender is the
+  order's own customer by code's link. A person records it ("Ghi yêu cầu
+  thay đổi"); the reply's `requests_change` intent does not open one by
+  itself, and no lane does (the intents step is off, and a request is the
+  PIC's to record). One mail opens one request per order.
+- **A table is read by code, by its values**: a row is the order's when one
+  of its cells is the order's PO number; its line is the one whose customer
+  item code (or PRV code) is a cell, a line number telling apart lines that
+  share a code; the date columns are those whose cells all read as dates
+  (and not as numbers), the held one is the column of the dates the order
+  holds, the asked one is the one other. No header word is read. A quantity
+  is never taken from a table: an id, a line number and a price column read
+  as numbers too, and nothing in the values tells the asked one apart. Two
+  candidate date columns, a row naming no line of the order: counted as
+  unread, for a person.
+- **Free text is a model step**, `model_assist.change_request`
+  (`sales.change_request@1.0.0`, bar 0.85 on `all.right_change`, dataset
+  `sales_change_request@1.0.0`): the model copies the words naming the line,
+  the field and the words of the value; code finds both once, takes the
+  line from an item code of the order inside the words or the one number in
+  them, and parses the value through the mail's notation. Shown the mail
+  only (no line of the order). Off for every tenant: the platform's rules
+  versions do not name it, and it is not measured. A person types what DW1
+  did not read, with the date picker and the number box. Measured live on
+  2026-11-15 (local `qwen3.5-9b-dw`): 1.0 on 12 changes in 8 synthetic
+  mails, the injected value not given; not attested for any tenant.
+- **What blocks a confirmation**, stamped when read: no such line, a unit
+  other than the line's (`km` against `m`, never converted), a line that
+  prints several schedules. Such a line is rejected with a reason. A value
+  the order no longer holds when confirmed (another change, a correction or
+  a revision since) is refused (`held_changed`).
+- **Where a confirmed line is applied**: only in `in_review`, or `prepared`,
+  which it reopens; the checks run again on the changed values as for a
+  value Sales typed (a pulled-in date may now be short of the lead time).
+  Once the order is in Bravo the change is ticket 29's update loop, and is
+  refused here. The confirmer is a maker of the case. The case keeps the
+  value as read and the change beside it (`OrderLine.changes`), and a
+  revision of the PO reads afresh.
+- **The queue**: requests are numbered per order; the next queued one opens
+  in the transaction that closes the one before. The PIC is told on the
+  order's page ("Chờ yêu cầu trước"); no notification is sent.
+- **What is audited**: ids, the line, the field and counts; never a value
+  or the reason a person wrote, which stays on the request. The mail's text
+  reaches only a reader of prices, as a PO read from a mail does.

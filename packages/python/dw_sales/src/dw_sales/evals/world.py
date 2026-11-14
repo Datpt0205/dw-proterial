@@ -124,6 +124,7 @@ from dw_sales.application.source import NoSourceCache, required_regions
 from dw_sales.application.threads import ThreadIndex, ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.activity import StepOutcome
+from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
@@ -183,7 +184,8 @@ class SampleWith:
     temporary copy (a context manager). A message names its ``message_id``,
     ``sender``, ``subject``, ``received_at``, ``body`` and ``authentication``,
     and may name ``internet_message_id`` and ``references`` (a reply in a
-    thread, ticket 32), ``recipients`` (a message Sales sent, ticket 25) and
+    thread, ticket 32), ``recipients`` (a message Sales sent, ticket 25),
+    ``body_html`` (a table in the body, ticket 27) and
     ``attachments``, each its ``attachment_id``,
     ``name``, ``media_type`` and the ``file`` (a path) its bytes are copied
     from (ticket 27's legacy and scanned POs)."""
@@ -216,6 +218,7 @@ class SampleWith:
                     "subject": spec["subject"],
                     "received_at": spec["received_at"],
                     "body_text": spec["body"],
+                    "body_html": spec.get("body_html"),
                     "attachments": [
                         {k: a[k] for k in ("attachment_id", "name", "media_type")}
                         for a in spec.get("attachments", ())
@@ -288,6 +291,8 @@ class _ScopeState:
     outbound: dict[uuid.UUID, OutboundMail] = field(default_factory=dict)
     # The messages Sales sent that DW1 took up (ticket 25).
     sent: dict[str, SentRead] = field(default_factory=dict)
+    # What customers asked to change on their orders by mail (ticket 27).
+    change_requests: dict[uuid.UUID, ChangeRequest] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -306,6 +311,7 @@ class _ScopeState:
             step_outcomes=list(self.step_outcomes),
             outbound=dict(self.outbound),
             sent=dict(self.sent),
+            change_requests=dict(self.change_requests),
         )
 
 
@@ -451,6 +457,47 @@ class _Sent:
         return sorted(
             self._held.values(), key=lambda s: (s.processed_at, s.message_id), reverse=True
         )
+
+
+class _ChangeRequests:
+    """`ChangeRequestStorePort` in memory, refusing what the SQL one refuses:
+    one request per mail and case, one open per case, a stale version."""
+
+    def __init__(self, held: dict[uuid.UUID, ChangeRequest]) -> None:
+        self._held = held
+
+    async def for_case(self, case_id: uuid.UUID) -> Sequence[ChangeRequest]:
+        mine = [r for r in self._held.values() if r.case_id == case_id]
+        return sorted(mine, key=lambda r: r.number)
+
+    async def add(self, request: ChangeRequest) -> None:
+        others = await self.for_case(request.case_id)
+        if any(r.message_id == request.message_id or r.number == request.number for r in others):
+            raise ConflictError(
+                "thư này đã có yêu cầu thay đổi trên đơn này",
+                details={"rule": "change_request_exists"},
+            )
+        self._one_open(request, others)
+        self._held[request.request_id] = request
+
+    async def save(self, request: ChangeRequest, *, expected_version: int) -> None:
+        held = self._held.get(request.request_id)
+        if held is None or held.case_id != request.case_id or held.version != expected_version:
+            raise ConflictError(
+                "yêu cầu thay đổi đã đổi từ khi bạn mở: tải lại để xem",
+                details={"rule": "stale_change_request"},
+            )
+        self._one_open(request, await self.for_case(request.case_id))
+        self._held[request.request_id] = request
+
+    @staticmethod
+    def _one_open(request: ChangeRequest, others: Sequence[ChangeRequest]) -> None:
+        if request.state == "open" and any(
+            r.state == "open" and r.request_id != request.request_id for r in others
+        ):
+            raise ConflictError(
+                "đơn này đang có một yêu cầu thay đổi mở", details={"rule": "change_request_open"}
+            )
 
 
 class _Jobs:
@@ -777,6 +824,7 @@ class _Work:
         self.followups = _Followups(state)
         self.step_activity = _StepActivity(state.step_outcomes)
         self.outbound = _Outbound(state.outbound)
+        self.change_requests = _ChangeRequests(state.change_requests)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)

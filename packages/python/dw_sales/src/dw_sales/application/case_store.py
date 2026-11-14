@@ -34,6 +34,7 @@ from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
@@ -485,6 +486,25 @@ class MessageLogPort(Protocol):
         ...
 
 
+class ChangeRequestStorePort(Protocol):
+    """The change requests on order cases (ticket 27, dw_sales ADR 0010)."""
+
+    async def for_case(self, case_id: uuid.UUID) -> Sequence[ChangeRequest]:
+        """Every request on the case, oldest opened first."""
+        ...
+
+    async def add(self, request: ChangeRequest) -> None:
+        """Raises `ConflictError` when the case already has a request from
+        this mail (`change_request_exists`), or an open one while this one is
+        open too (`change_request_open`)."""
+        ...
+
+    async def save(self, request: ChangeRequest, *, expected_version: int) -> None:
+        """Raises `ConflictError` (`stale_change_request`) when the stored
+        request moved on from ``expected_version`` since it was read."""
+        ...
+
+
 class SentReadLogPort(Protocol):
     """The messages Sales sent that DW1 processed (`SentRead`)."""
 
@@ -684,6 +704,10 @@ class SalesUnitOfWork(Protocol):
     # The mails Sales asked DW1 to send (the outbox folder).
     @property
     def outbound(self) -> OutboundMailStorePort: ...
+
+    # What customers asked to change on their orders by mail (ticket 27).
+    @property
+    def change_requests(self) -> ChangeRequestStorePort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

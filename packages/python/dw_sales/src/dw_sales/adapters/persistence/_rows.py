@@ -40,6 +40,19 @@ _RULES = {
         "approver_not_pricer",
         "tách nhiệm: người định giá báo giá này không tự duyệt được",
     ),
+    # Ticket 27: one request per mail and case, one open per case.
+    "uq_change_requests_message": (
+        "change_request_exists",
+        "thư này đã có yêu cầu thay đổi trên đơn này",
+    ),
+    "uq_change_requests_number": (
+        "change_request_exists",
+        "yêu cầu thay đổi này đã được ghi: tải lại để xem",
+    ),
+    "uq_change_requests_one_open": (
+        "change_request_open",
+        "đơn này đang có một yêu cầu thay đổi mở",
+    ),
 }
 
 

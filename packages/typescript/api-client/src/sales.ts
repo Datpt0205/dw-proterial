@@ -437,6 +437,66 @@ export class SalesApi {
     );
   }
 
+  /** A change request from one of the order's replies (ticket 27): DW1 reads
+   * what it can; ``lines`` are what the person types besides. A mail DW1
+   * read nothing in is refused (409 `nothing_read`) until a line is typed. */
+  openChangeRequest(
+    caseId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/change-requests">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/change-requests">(
+      `/api/v1/sales/orders/${enc(caseId)}/change-requests`,
+      body,
+      key,
+    );
+  }
+
+  /** One line typed by a person on a change request not yet closed. */
+  addChangeLine(
+    caseId: string,
+    requestId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines">(
+      `/api/v1/sales/orders/${enc(caseId)}/change-requests/${enc(requestId)}/lines`,
+      body,
+      key,
+    );
+  }
+
+  /** One change line confirmed and applied to the order; one at a time. */
+  confirmChangeLine(
+    caseId: string,
+    requestId: string,
+    seq: number,
+    caseVersion: number,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/confirm">(
+      `/api/v1/sales/orders/${enc(caseId)}/change-requests/${enc(requestId)}/lines/${seq}/confirm`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
+  /** One change line rejected, with the person's reason. */
+  rejectChangeLine(
+    caseId: string,
+    requestId: string,
+    seq: number,
+    caseVersion: number,
+    reason: string,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/change-requests/{request_id}/lines/{seq}/reject">(
+      `/api/v1/sales/orders/${enc(caseId)}/change-requests/${enc(requestId)}/lines/${seq}/reject`,
+      { case_version: caseVersion, reason },
+      key,
+    );
+  }
+
   prepare(caseId: string, caseVersion: number, key: string) {
     return this.post<"/api/v1/sales/orders/{case_id}/prepare">(
       `/api/v1/sales/orders/${enc(caseId)}/prepare`,
