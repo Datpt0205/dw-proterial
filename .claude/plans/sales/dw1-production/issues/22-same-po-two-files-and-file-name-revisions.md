@@ -8,7 +8,7 @@ Category: enhancement
 
 Customer 3 sends a signed PDF and an Excel of the same PO, and their
 delivery dates differ. Revisions are marked only by a suffix on the file
-name (R, R1, -2, -RE11).
+name (R, R1, -2, -RE11; "RV" in Box B10's correction thread, 11-14).
 
 ## Shape
 

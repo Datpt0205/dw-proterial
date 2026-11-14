@@ -445,3 +445,37 @@ replay: dw_sales ADR 0013), 24 → 19 → 22; 20 → 21;
 26 → 27 → 07 → 29; 23 (measure) → 25 → 28; 30 (eval gate) → 31 → 32,
 33 → 34; 35 (process map, simple configuration) redrawn as they land;
 then 10, 09, 06, follow-ups 1.2.0, the RFQ branches.
+
+## 11-14: 32 new files in Box (inventoried outside git, `Box-1114/_INVENTORY-1114.md`)
+
+What they unblock (shapes and rules only; no customer data here):
+
+- **B05** (Bravo's customer list): ticket 36/14's customers; 132 customers
+  share the group's mail domain (ticket 20); its "PIC" column is the
+  customer's own contact, so PRV's Sales PIC per customer is still owed.
+- **B07** (quotation master lists, Excel 2,521 rows and Bravo 161, one
+  quote number in common): ticket 12; which one is the owner is owed.
+- **B09** (LME rule and monthly LME): ADR 0008 evidence, recommendation A.
+- **B10** (a real correction request): the template's slots (reasons and a
+  seven-column table), a revision suffix "RV" (ticket 22).
+- **B12** (cross-check): no form of its own: ticks on the printed PO and the
+  maker's and checker's stamps; DW1's cross-check sheet stands.
+- **B16** (YCBG): Design writes QUOTE/DECLINE, reason and BP code on the
+  YCBG line in Bravo, status CLOSE: Q-B11 answered, ticket 16 unblocked.
+- **B18** (quotations as sent, Bravo's print templates): the quote document
+  (2.1.4–2.1.6); three PDFs are encrypted; one quote carries two numbers
+  (Bravo's and Excel's).
+- **B19** (approval): no amount matrix; WIV-03-023 §4's two levels and
+  Bravo's three outcomes (ticket 39, needs Đạt).
+- **B43/B50** (PO Data Collector): the macro only flattens customer 1's form
+  (no de-duplication; an eighth line on a page is lost silently); the real
+  transformation is the "hk & cable" sheet: ticket 38 gains `concat` and
+  `multiply`.
+- **B46** (pre-sales): ticket 15's forms; who may create a customer code
+  depends on the customer type; the PRGM code rule (SC-QI.013).
+- **B49** (internal mail samples): the slots of the mails for tickets 10
+  (internal schedule change, continues in the PO's own thread), 05 (pcs
+  price from JP: GM/BC Manager decides on a cost sheet), 08 (NOC through
+  the group), 07 (PC changes the delivery date in Bravo; "Original
+  confirmed date" empty) and 06 (one mail asks Design for a code and PC for
+  a date).

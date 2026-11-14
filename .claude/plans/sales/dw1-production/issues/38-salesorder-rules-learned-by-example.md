@@ -17,7 +17,9 @@ by code to every PO of that customer.
 - **Rule version per customer** (`sales_salesorder_rules`, tenant data):
   per SalesOrder column a source and an ordered list of steps from a closed
   set: `copy`, `constant`, `lookup(table, key)`, `unit_factor(from, to)`,
-  `shift_days(n)` (calendar days), `round(places, mode)`, `cut(start, end)`.
+  `shift_days(n)` (calendar days), `round(places, mode)`, `cut(start, end)`,
+  `concat(sources, separator)` and `multiply(source)` (Box B43's "hk & cable"
+  sheet joins and multiplies columns, 11-14 inventory).
   A step outside the set is refused at validation. Few settings, each one
   sentence (Đạt: config simple).
 - **Learning:** the person uploads the pair on the customer's screen; the
