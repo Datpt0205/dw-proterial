@@ -195,6 +195,64 @@ class AppliedChange(BaseModel):
     at: AwareDatetime
 
 
+# The values of a line PC's answer is given for (ticket 07): a person who
+# changes one (a correction, a change the customer asked) drops the answer,
+# and PC is asked again.
+_PC_INPUTS: Final = frozenset({"quantity", "requested_date"})
+# How many deliveries PC may split one line into.
+PC_DELIVERIES_MAX: Final = 99
+
+
+class PcDelivery(BaseModel):
+    """One delivery of a line as PC confirmed it (ticket 07): how much, the
+    date PC confirmed first for it (Bravo's "Ngày XN giao hàng lần đầu") and
+    the date PC confirms now ("Ngày XN giao hàng"). A re-confirmation by PC
+    changes ``date`` and keeps ``first_date``."""
+
+    model_config = _FROZEN
+
+    quantity: Decimal = Field(gt=0)
+    first_date: date
+    date: date
+
+
+class PcAnswer(BaseModel):
+    """PC's answer for one line, recorded by the person who read it: the
+    line's deliveries, which add up to the line's quantity. A line delivered
+    once that PC splits over several dates is several deliveries, each a row
+    of the paste sheet; a line the PO prints split is confirmed schedule by
+    schedule, one delivery per printed schedule, in their order."""
+
+    model_config = _FROZEN
+
+    deliveries: tuple[PcDelivery, ...] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
+    by: ActorId
+    at: AwareDatetime
+
+    @property
+    def quantities(self) -> tuple[Decimal, ...]:
+        return tuple(d.quantity for d in self.deliveries)
+
+
+class PcRequest(BaseModel):
+    """Sales asked PC for the delivery dates of ``lines`` (ticket 07): who
+    recorded it, and when, the moment the case's wait on PC begins. Open until
+    each of those lines has PC's answer recorded at or after ``at``."""
+
+    model_config = _FROZEN
+
+    lines: tuple[int, ...] = Field(min_length=1)
+    by: ActorId
+    at: AwareDatetime
+
+    def answered(self, lines: Iterable[OrderLine]) -> bool:
+        """Whether every line asked has PC's answer since the request."""
+        found = {line.line_no: line.pc_answer for line in lines}
+        return all(
+            (answer := found.get(no)) is not None and answer.at >= self.at for no in self.lines
+        )
+
+
 def _require_corrections(
     corrections: Sequence[ValueCorrection], flagged: frozenset[str], owner: str
 ) -> None:
@@ -1096,11 +1154,27 @@ class OrderLine(BaseModel):
     # The changes the customer asked by mail that a person confirmed, one per
     # field, the latest (ticket 27); they win over a correction of the field.
     changes: tuple[AppliedChange, ...] = ()
+    # PC's answer: the line's deliveries with PC's dates (ticket 07). None
+    # until a person records it.
+    pc_answer: PcAnswer | None = None
 
     @model_validator(mode="after")
     def _pc_confirmation_names_who_and_when(self) -> Self:
         if (self.pc_confirmed_by is None) != (self.pc_confirmed_at is None):
             raise ValueError("a PC confirmation names who and when")
+        return self
+
+    @model_validator(mode="after")
+    def _pc_answer_delivers_the_line(self) -> Self:
+        answer = self.pc_answer
+        if answer is None:
+            return self
+        po = self.effective
+        if po.prints_schedules:
+            if answer.quantities != tuple(s.quantity for s in po.schedules):
+                raise ValueError(f"line {self.line_no}: PC's deliveries are not its schedules")
+        elif sum(answer.quantities, Decimal(0)) != po.quantity:
+            raise ValueError(f"line {self.line_no}: PC's deliveries do not add up to the line")
         return self
 
     @model_validator(mode="after")
@@ -1153,10 +1227,24 @@ class OrderLine(BaseModel):
 
     @property
     def deliveries(self) -> int:
-        """How many dates the line is confirmed with: one per schedule the PO
-        prints apart from the line, else one (a line printed with no date is
-        still delivered once, on the date Sales confirms)."""
-        return len(self.effective.schedules) if self.effective.prints_schedules else 1
+        """How many dates the line is confirmed with: one per delivery PC's
+        answer gives it (ticket 07), else one per schedule the PO prints apart
+        from the line, else one (a line printed with no date is still
+        delivered once, on the date Sales confirms)."""
+        return len(self.delivery_quantities)
+
+    @property
+    def delivery_quantities(self) -> tuple[Decimal, ...]:
+        """How much each delivery of the line holds, in their order: PC's
+        deliveries once PC answered, else the schedules the PO prints apart
+        from the line, else the line's quantity at once. The one owner of what
+        a delivery of the line is, for the confirmation and the paste sheet."""
+        if self.pc_answer is not None:
+            return self.pc_answer.quantities
+        po = self.effective
+        if po.prints_schedules:
+            return tuple(s.quantity for s in po.schedules)
+        return (po.quantity,)
 
     @property
     def confirmed_delivery_date(self) -> date | None:
@@ -1165,6 +1253,13 @@ class OrderLine(BaseModel):
         (`confirmed_schedules`)."""
         dates = self.confirmed_delivery_dates
         return dates[0] if len(dates) == 1 and not self.effective.prints_schedules else None
+
+    def confirmed_deliveries(self) -> tuple[tuple[Decimal, date], ...]:
+        """Each delivery's quantity with the date Sales confirmed for it
+        (`delivery_quantities`); empty before confirmation."""
+        if not self.confirmed_delivery_dates:
+            return ()
+        return tuple(zip(self.delivery_quantities, self.confirmed_delivery_dates, strict=True))
 
     def confirmed_schedules(self) -> tuple[tuple[DeliverySchedule, date], ...]:
         """A split line's schedules, each with the date Sales confirmed for
@@ -1638,6 +1733,9 @@ class OrderCase(BaseModel):
     # `value_uncertain` flagged, one per field (`TOTAL_FIELD` for the total);
     # the document keeps the values as read.
     header_corrections: tuple[ValueCorrection, ...] = ()
+    # Sales asked PC for the delivery dates and waits (ticket 07): only where
+    # PC's answer is recorded, and cleared once every line asked has it.
+    pc_request: PcRequest | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1686,6 +1784,11 @@ class OrderCase(BaseModel):
             raise ValueError("a case closed as superseded names its successor, and only it does")
         if self.unapplied_decision is not None and self.status is not _S.UPLOADED_TO_BRAVO:
             raise ValueError("only an order awaiting its cross-check names a decision not applied")
+        if self.pc_request is not None:
+            if self.status not in _CHANGEABLE:
+                raise ValueError(f"a {self.status} case does not wait on PC")
+            if not set(self.pc_request.lines) <= line_numbers:
+                raise ValueError("PC is asked about a line the case lacks")
         _require_corrections(self.header_corrections, self._header_flagged, "the PO header")
         _keeps_identity(self.header, self.effective_header, "the PO header")
         if self.header_corrections:
@@ -1849,6 +1952,8 @@ class OrderCase(BaseModel):
         names |= {c.by for line in self.lines for c in line.corrections}
         names |= {c.by for line in self.lines for c in line.changes}
         names |= {c.by for c in self.header_corrections}
+        # PC's dates a person typed are values of the paste sheet (ticket 07).
+        names |= {line.pc_answer.by for line in self.lines if line.pc_answer is not None}
         return frozenset(name for name in names if name is not None)
 
     def finding(self, key: str) -> Finding:
@@ -2083,7 +2188,9 @@ class OrderCase(BaseModel):
         rechecked: frozenset[int] = frozenset()
         remapped = False
         if finding.line_no is not None:
-            new_line = OrderLine.model_validate({**dict(line), "corrections": corrections})
+            new_line = OrderLine.model_validate(
+                {**dict(line), "corrections": corrections, **_pc_dropped(line, field)}
+            )
             lines = tuple(new_line if x.line_no == line.line_no else x for x in lines)
             rechecked = frozenset({line.line_no})
             was, now = line.effective, new_line.effective
@@ -2168,7 +2275,11 @@ class OrderCase(BaseModel):
                 details={**details, "rule": "printed_schedules"},
             )
         new_line = OrderLine.model_validate(
-            {**dict(line), "changes": (*_without(line.changes, change.field), change)}
+            {
+                **dict(line),
+                "changes": (*_without(line.changes, change.field), change),
+                **_pc_dropped(line, change.field),
+            }
         )
         lines = tuple(new_line if x.line_no == line_no else x for x in self.lines)
         entered = _entered(self.document, lines, self.header_corrections)
@@ -2432,6 +2543,130 @@ class OrderCase(BaseModel):
             self.status, lines=tuple(OrderLine.model_validate(dict(x)) for x in lines)
         )
 
+    # ------------------------------------------------------- PC (ticket 07) --
+
+    def pc_lines(self) -> tuple[int, ...]:
+        """The lines a request to PC asks about: those PC has not answered,
+        or every line once PC answered them all (Sales asks PC to confirm
+        again)."""
+        waiting = tuple(line.line_no for line in self.lines if line.pc_answer is None)
+        return waiting or tuple(line.line_no for line in self.lines)
+
+    def ask_pc(self, actor: Actor, at: datetime) -> OrderCase:
+        """Sales asked PC for the delivery dates of `pc_lines` (by mail or
+        Teams, from their own account: DW1 sends nothing). The case waits on
+        PC from ``at``; asked again, the wait starts again. Only where PC's
+        answer can be taken (`_CHANGEABLE`): once the order is in Bravo, PC's
+        dates are the update loop's (ticket 29). No value of the case
+        changes, so a self-check stands."""
+        if self.status not in _CHANGEABLE:
+            raise ConflictError(
+                f"PC is not asked from DW1 in {self.status}",
+                details={
+                    "case_id": str(self.case_id),
+                    "status": self.status.value,
+                    "rule": "pc_status",
+                },
+            )
+        request = PcRequest(lines=self.pc_lines(), by=actor.user_id, at=at)
+        return self._next(self.status, pc_request=request)
+
+    def pc_answered(
+        self,
+        line_no: int,
+        deliveries: Sequence[tuple[Decimal, date]],
+        actor: Actor,
+        at: datetime,
+    ) -> Corrected:
+        """The case's values with PC's answer for one line too, for its checks
+        to run on as a change the customer asked is (`changed`, ticket 27).
+
+        ``deliveries``: each quantity with PC's date, in PC's order. Refused
+        where PC's answer is not taken (`_CHANGEABLE`), for a line the case
+        lacks, for a line the PO prints split that PC would split otherwise
+        (one date per printed schedule; another split is the customer's to
+        agree), and for quantities that do not add up to the line's: a split
+        that does not add up is a person's to settle with PC, never adjusted
+        here.
+
+        A re-confirmation keeps the date PC confirmed first: delivery by
+        delivery while PC keeps the line's quantities as they were; split
+        anew, every delivery keeps the line's earliest first date, the one PC
+        gave the line first. The answer is recorded as PC's agreement on a
+        short lead time as well (`record_pc_confirmation`).
+        """
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        if self.status not in _CHANGEABLE:
+            raise ConflictError(
+                f"PC's dates are not recorded from DW1 in {self.status}",
+                details={**details, "status": self.status.value, "rule": "pc_status"},
+            )
+        line = self.line(line_no)
+        if not deliveries:
+            raise DomainError("PC's answer gives the line a date", details=details)
+        quantities = tuple(quantity for quantity, _ in deliveries)
+        po = line.effective
+        if po.prints_schedules:
+            if quantities != tuple(s.quantity for s in po.schedules):
+                raise ConflictError(
+                    "the PO prints the line's schedules: PC confirms one date per schedule",
+                    details={**details, "rule": "printed_schedules"},
+                )
+        elif sum(quantities, Decimal(0)) != po.quantity:
+            raise ConflictError(
+                "PC's quantities do not add up to the line's: settle it with PC",
+                details={**details, "deliveries": len(quantities), "rule": "split_not_summing"},
+            )
+        before = line.pc_answer
+        if before is None:
+            firsts = [day for _, day in deliveries]
+        elif before.quantities == quantities:
+            firsts = [d.first_date for d in before.deliveries]
+        else:
+            firsts = [min(d.first_date for d in before.deliveries)] * len(deliveries)
+        answer = PcAnswer(
+            deliveries=tuple(
+                PcDelivery(quantity=quantity, first_date=first, date=day)
+                for (quantity, day), first in zip(deliveries, firsts, strict=True)
+            ),
+            by=actor.user_id,
+            at=at,
+        )
+        new_line = OrderLine.model_validate(
+            {
+                **dict(line),
+                "pc_answer": answer,
+                "pc_confirmed_by": actor.user_id,
+                "pc_confirmed_at": at,
+            }
+        )
+        lines = tuple(new_line if x.line_no == line_no else x for x in self.lines)
+        entered = _entered(self.document, lines, self.header_corrections)
+        return Corrected(
+            line_no, lines, self.header_corrections, entered, frozenset({line_no}), False
+        )
+
+    def take_pc_answer(
+        self,
+        line_no: int,
+        deliveries: Sequence[tuple[Decimal, date]],
+        actor: Actor,
+        at: datetime,
+        recheck: Recheck,
+    ) -> OrderCase:
+        """PC's answer for one line, taken with the checks run again on the
+        line (`pc_answered`), as a change the customer asked is taken
+        (`take_change`): a prepared order reopens its self-check, since its
+        paste sheet changes. The wait on PC ends once every line asked has
+        its answer (`PcRequest.answered`)."""
+        corrected = self.pc_answered(line_no, deliveries, actor, at)
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        taken = self._rechecked(corrected, recheck, details)
+        request = self.pc_request
+        if request is not None and request.answered(taken.lines):
+            request = None
+        return self._edited(**taken.changes(), pc_request=request)
+
     def confirm(
         self, actor: Actor, at: datetime, delivery_dates: Mapping[int, Sequence[date]]
     ) -> OrderCase:
@@ -2639,6 +2874,10 @@ class OrderCase(BaseModel):
         if status is not self.status:
             # A case that moves on no longer waits on the decision not applied.
             changes.setdefault("unapplied_decision", None)
+        if status not in _CHANGEABLE:
+            # Nor on PC, once its answer can no longer be taken here (ticket
+            # 07): in Bravo, PC's dates are the update loop's (ticket 29).
+            changes.setdefault("pc_request", None)
         # Validated again: `model_copy(update=...)` would skip the invariants.
         return OrderCase.model_validate(
             {**dict(self), **changes, "status": status, "case_version": self.case_version + 1}
@@ -2664,6 +2903,13 @@ _TYPED_PER_FIELD: Final = "Sales nhập lại từng giá trị bị gắn cờ"
 
 def _without[V: (ValueCorrection, AppliedChange)](values: Iterable[V], field: str) -> tuple[V, ...]:
     return tuple(c for c in values if c.field != field)
+
+
+def _pc_dropped(line: OrderLine, field: str) -> dict[str, object]:
+    """PC's answer dropped from ``line`` when ``field`` is one it was given
+    for (`_PC_INPUTS`): PC answered for a quantity or a date that is no
+    longer the line's, and is asked again (ticket 07)."""
+    return {"pc_answer": None} if field in _PC_INPUTS else {}
 
 
 def _entered(
@@ -2720,6 +2966,7 @@ def _rechecked_line(line: OrderLine, check: LineCheck, findings: Iterable[Findin
             "corrections": line.corrections,
             "changes": line.changes,
             "confirmed_delivery_dates": line.confirmed_delivery_dates,
+            "pc_answer": line.pc_answer,
             "pc_confirmed_by": line.pc_confirmed_by if same else None,
             "pc_confirmed_at": line.pc_confirmed_at if same else None,
         }

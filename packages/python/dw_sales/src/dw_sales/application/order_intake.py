@@ -85,6 +85,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
@@ -1281,6 +1282,24 @@ class OrderIntake:
         corrected = decided(lambda: case.changed(line_no, change, actor))
         recheck = await self._recheck(scope, case, corrected, details)
         return decided(lambda: case.take_change(line_no, change, actor, recheck))
+
+    async def take_pc_answer(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        line_no: int,
+        deliveries: Sequence[tuple[Decimal, date]],
+        actor: Actor,
+        at: datetime,
+    ) -> OrderCase:
+        """PC's answer for one line, recorded by a person, applied with the
+        line's checks run again through the path a change the customer asked
+        takes (`take_change`; ticket 07). What a line may take, and what a
+        re-confirmation keeps, is the case's (`OrderCase.pc_answered`)."""
+        details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
+        corrected = decided(lambda: case.pc_answered(line_no, deliveries, actor, at))
+        recheck = await self._recheck(scope, case, corrected, details)
+        return decided(lambda: case.take_pc_answer(line_no, deliveries, actor, at, recheck))
 
     async def _recheck(
         self, scope: SalesScope, case: OrderCase, corrected: Corrected, details: dict[str, object]

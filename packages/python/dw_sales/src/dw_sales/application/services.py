@@ -48,6 +48,7 @@ from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.outbound_mail import OutboundMailService
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.pc_dates import PcDateReplies
+from dw_sales.application.pc_requests import PcRequests
 from dw_sales.application.pipeline import PipelineService
 from dw_sales.application.po_uploads import PoUploads, UploadStorePort
 from dw_sales.application.ports import (
@@ -134,6 +135,8 @@ class SalesServices:
     design_text_replies: DesignTextReplies
     # PC's delivery dates read from the mail Sales pastes (AI item 7).
     pc_dates: PcDateReplies
+    # The request to PC drafted, the wait recorded, PC's answer per line (ticket 07).
+    pc_requests: PcRequests
     # What a customer asked to change by mail, confirmed line by line (ticket 27).
     change_requests: ChangeRequests
     gate: Gate
@@ -289,6 +292,7 @@ def assemble(
         pc_dates=PcDateReplies(
             uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
         ),
+        pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
         change_requests=ChangeRequests(
             uow,
             gate,

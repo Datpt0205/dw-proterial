@@ -386,7 +386,7 @@ async def test_a_routed_complaint_carries_its_hand_off_and_the_inbox_writes_it()
     listed = {m.message_id: m for m in await world.services.inbox.messages(AN.context())}
     draft = listed["M31"].handoff_draft
     assert draft is not None and draft.to == "qa"
-    assert draft.template_ref == "sales_handoffs@1.0.0#complaint"
+    assert draft.template_ref == "sales_handoffs@1.1.0#complaint"
     assert "VLX-PO-2608-0102" in draft.subject and "LOT-2609-118" in draft.subject
 
 

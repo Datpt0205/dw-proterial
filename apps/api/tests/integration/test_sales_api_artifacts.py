@@ -153,7 +153,7 @@ async def test_an_renders_the_upload_file_and_downloads_exactly_what_was_recorde
     (record,) = body["artifacts"]
     assert record == rendered
     assert (record["template_ref"], record["case_version"]) == (
-        "sales_bravo_upload@2.0.0",
+        "sales_bravo_upload@2.1.0",
         ready["case_version"],
     )
     assert served.status_code == 200

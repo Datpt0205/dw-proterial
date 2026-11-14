@@ -157,17 +157,41 @@ def line_values(
         "amount": po.amount,
         "requested_date": po.requested_date,
         "suggested_delivery_date": suggested,
+        # PC's, per delivery (`upload_rows`): none before PC answered.
+        "first_confirmed_date": None,
+        "confirmed_date": None,
     }
 
 
 def upload_rows(case: OrderCase, line: OrderLine) -> tuple[dict[UploadField, Value], ...]:
-    """The upload file's rows for ``line``: one per delivery schedule (ticket
-    21). A line printing one quantity and one date is one row, its values
+    """The upload file's rows for ``line``: one per delivery (ticket 21). A
+    line printing one quantity and one date is one row, its values
     `upload_values`'. A line whose PO prints its schedules is a row per
     schedule, each with the schedule's quantity and date, DW1's suggestion for
     that date, and its amount as the quantity times the unit price: the PO
-    prints no amount per schedule."""
-    return delivery_rows(upload_values(case, line), line.effective, line.suggested_date)
+    prints no amount per schedule.
+
+    Once PC answered (ticket 07), each row carries PC's first and current
+    date for its delivery, and a line delivered once that PC split over
+    several dates is a row per PC delivery: its quantity and amount, the
+    line's requested date and DW1's suggestion."""
+    rows = delivery_rows(upload_values(case, line), line.effective, line.suggested_date)
+    answer = line.pc_answer
+    if answer is None:
+        return rows
+    if len(rows) == 1 and len(answer.deliveries) > 1:
+        rows = tuple(
+            {
+                **rows[0],
+                "quantity": delivery.quantity,
+                "amount": delivery.quantity * line.effective.unit_price,
+            }
+            for delivery in answer.deliveries
+        )
+    return tuple(
+        {**row, "first_confirmed_date": delivery.first_date, "confirmed_date": delivery.date}
+        for row, delivery in zip(rows, answer.deliveries, strict=True)
+    )
 
 
 def delivery_rows(
@@ -248,8 +272,8 @@ def _line_findings(case: OrderCase, line: OrderLine, field: str) -> list[Finding
 
 def _confirmed(case: OrderCase, line: OrderLine) -> tuple[tuple[Decimal, date], ...]:
     """Each delivery of the line with the date Sales confirmed for it: a
-    split line's schedules, each its quantity (ticket 35), or the line's
-    quantity on its one date. A draft without them is refused."""
+    split line's deliveries, each its quantity (tickets 35 and 07), or the
+    line's quantity on its one date. A draft without them is refused."""
     if not line.confirmed_delivery_dates:
         raise ConflictError(
             "chưa có ngày giao xác nhận cho mọi dòng",
@@ -259,10 +283,7 @@ def _confirmed(case: OrderCase, line: OrderLine) -> tuple[tuple[Decimal, date], 
                 "reason": "confirmed_date_missing",
             },
         )
-    if schedules := line.confirmed_schedules():
-        return tuple((schedule.quantity, day) for schedule, day in schedules)
-    (day,) = line.confirmed_delivery_dates
-    return ((line.effective.quantity, day),)
+    return line.confirmed_deliveries()
 
 
 def _confirmed_text(
@@ -270,7 +291,7 @@ def _confirmed_text(
 ) -> str:
     """The line's confirmed date, or a split line's schedules one by one."""
     deliveries = _confirmed(case, line)
-    if not line.confirmed_schedules():
+    if len(deliveries) == 1 and not line.confirmed_schedules():
         return day_text(deliveries[0][1], language)
     listed = "; ".join(
         bound.word(

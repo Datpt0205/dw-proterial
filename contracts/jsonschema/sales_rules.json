@@ -92,7 +92,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -678,6 +680,27 @@
         "title": "WaitingCustomerRule",
         "type": "object"
       },
+      "WaitingPcRule": {
+        "additionalProperties": false,
+        "description": "An order whose delivery dates Sales asked PC for, with no answer yet.\nDW1 never mails PC: it reminds the person, who chases PC.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc hồ sơ đang chờ PC trả ngày giao.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi đã hỏi PC mà chưa ghi được ngày PC trả lời sau số giờ này."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "WaitingPcRule",
+        "type": "object"
+      },
       "WorkingHours": {
         "additionalProperties": false,
         "description": "When a reminder may be delivered; outside them it waits.",
@@ -786,6 +809,10 @@
         "$ref": "#/$defs/WaitingCustomerRule",
         "description": "Hồ sơ đang chờ khách hàng."
       },
+      "waiting_pc": {
+        "$ref": "#/$defs/WaitingPcRule",
+        "description": "Hồ sơ đang chờ PC trả ngày giao."
+      },
       "working_hours": {
         "$ref": "#/$defs/WorkingHours",
         "description": "Giờ làm việc: ngoài giờ này không gửi nhắc, nhắc được hoãn chứ không bỏ."
@@ -805,6 +832,7 @@
       "quote_waiting_design",
       "quote_deadline",
       "waiting_customer",
+      "waiting_pc",
       "your_turn"
     ],
     "title": "SalesFollowups",
@@ -862,6 +890,55 @@
         ],
         "title": "HandoffTemplate",
         "type": "object"
+      },
+      "PcRequestTemplate": {
+        "additionalProperties": false,
+        "description": "The words of the request Sales sends PC for an order's delivery dates\n(ticket 07), from the order case: ``{customer}``, ``{po}``, ``{lines}``\nin the subject and body, one ``line`` per line asked with ``{line_no}``,\n``{item}`` (the PRV code), ``{customer_item}``, ``{quantity}``,\n``{uom}`` and ``{requested_date}``.",
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{lines}",
+              "{po}"
+            ]
+          },
+          "line": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Line",
+            "type": "string",
+            "x-placeholders": [
+              "{customer_item}",
+              "{item}",
+              "{line_no}",
+              "{quantity}",
+              "{requested_date}",
+              "{uom}"
+            ]
+          },
+          "subject": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{lines}",
+              "{po}"
+            ]
+          }
+        },
+        "required": [
+          "subject",
+          "line",
+          "body"
+        ],
+        "title": "PcRequestTemplate",
+        "type": "object"
       }
     },
     "additionalProperties": false,
@@ -883,6 +960,9 @@
           "{line_no}",
           "{quantity}"
         ]
+      },
+      "pc_request": {
+        "$ref": "#/$defs/PcRequestTemplate"
       },
       "quote": {
         "maxLength": 60,
@@ -931,7 +1011,8 @@
       "unknown",
       "line",
       "quote",
-      "templates"
+      "templates",
+      "pc_request"
     ],
     "title": "HandoffCopy",
     "type": "object"
@@ -1696,7 +1777,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -1803,7 +1886,9 @@
                 "unit_price",
                 "amount",
                 "requested_date",
-                "suggested_delivery_date"
+                "suggested_delivery_date",
+                "first_confirmed_date",
+                "confirmed_date"
               ],
               "type": "string"
             },
@@ -1950,7 +2035,9 @@
                   "unit_price",
                   "amount",
                   "requested_date",
-                  "suggested_delivery_date"
+                  "suggested_delivery_date",
+                  "first_confirmed_date",
+                  "confirmed_date"
                 ],
                 "type": "string"
               },
@@ -2010,7 +2097,9 @@
               "unit_price",
               "amount",
               "requested_date",
-              "suggested_delivery_date"
+              "suggested_delivery_date",
+              "first_confirmed_date",
+              "confirmed_date"
             ],
             "title": "Source",
             "type": "string"

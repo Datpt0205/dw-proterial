@@ -98,7 +98,12 @@ from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.artifact_content import BravoUploadLayout, UploadField, Value
+from dw_sales.application.artifact_content import (
+    CASE_ONLY_FIELDS,
+    BravoUploadLayout,
+    UploadField,
+    Value,
+)
 from dw_sales.application.catalog_imports import OutboxPort
 from dw_sales.application.order_artifacts import (
     checked_row,
@@ -468,7 +473,13 @@ def shown(value: Value) -> str | None:
 
 def _filled(layout: BravoUploadLayout, rules: CustomerSalesOrderRules | None) -> set[int]:
     named = set(rules.by_index()) if rules is not None else set()
-    return {i for i, column in enumerate(layout.columns) if not column.blank} | named
+    return {
+        i
+        for i, column in enumerate(layout.columns)
+        # A column reading what only a case holds (PC's dates) is left for
+        # the person, as a blank one is: the worked example has none.
+        if not column.blank and column.field not in CASE_ONLY_FIELDS
+    } | named
 
 
 def replay(

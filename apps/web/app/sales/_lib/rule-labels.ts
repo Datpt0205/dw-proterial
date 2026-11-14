@@ -423,6 +423,13 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "templates.*.to": { label: "Chuyển cho" },
     "templates.*.subject": { label: "Tiêu đề" },
     "templates.*.body": { label: "Nội dung" },
+    pc_request: {
+      label: "Mẫu hỏi PC ngày giao",
+      help: "Bản Sales chép gửi PC khi bấm “Hỏi PC” trên đơn hàng.",
+    },
+    "pc_request.subject": { label: "Tiêu đề" },
+    "pc_request.line": { label: "Mẫu một dòng hỏi PC" },
+    "pc_request.body": { label: "Nội dung" },
   },
   sales_salesorder_rules: {
     customers: {
@@ -486,6 +493,18 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_customer.remind.notify": { label: "Nhắc ai" },
+    waiting_pc: {
+      label: "Hồ sơ chờ PC trả ngày giao",
+      help: "Sales đã hỏi PC mà chưa ghi được ngày PC trả lời. DW1 chỉ nhắc người phụ trách, không tự gửi cho PC.",
+    },
+    "waiting_pc.enabled": { label: "Bật nhắc chờ PC" },
+    "waiting_pc.remind": { label: "Lời nhắc" },
+    "waiting_pc.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc ghi đã hỏi PC, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "waiting_pc.remind.notify": { label: "Nhắc ai" },
     morning_brief: {
       label: "Bản tin buổi sáng",
       help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
@@ -599,6 +618,8 @@ const VALUES: Record<string, string> = {
   qa: "QA (chất lượng)",
   customer_code: "Mã khách hàng",
   suggested_delivery_date: "Ngày giao DW1 đề xuất",
+  first_confirmed_date: "Ngày PC xác nhận giao lần đầu",
+  confirmed_date: "Ngày PC xác nhận giao hiện tại",
   // The schema a Bravo upload layout is written in (system-set, not edited).
   "1.0": "Lược đồ 1.0 (chỉ hàng tiêu đề)",
   "2.0": "Lược đồ 2.0 (có các dòng trên hàng tiêu đề)",

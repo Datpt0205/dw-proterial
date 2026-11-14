@@ -8,7 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
-import { AN, finding, order } from "./fixtures";
+import { AN, finding, order, pcRequest } from "./fixtures";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Reply = SalesSchemas["CaseReplyView"];
@@ -81,6 +81,7 @@ function waiting(replies: Reply[], status = "correction_requested"): Order {
 
 let shown: Order = waiting([reply()]);
 const api = {
+  pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),

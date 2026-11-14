@@ -72,6 +72,7 @@ import {
 import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
 import { ChangeRequestsPanel } from "./change-requests";
+import { PcRequestPanel } from "./pc-request";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
@@ -481,6 +482,8 @@ function OrderDetail() {
       />
 
       <ChangeRequestsPanel order={data} viewer={viewer} onChanged={reload} />
+
+      <PcRequestPanel order={data} viewer={viewer} onChanged={reload} />
 
       <Card
         size="small"

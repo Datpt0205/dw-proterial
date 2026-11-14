@@ -72,6 +72,7 @@ from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, La
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pc_dates import MAX_TEXT, PcDatesView, PcMailsView
+from dw_sales.application.pc_requests import PcRequestView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
@@ -119,7 +120,7 @@ from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import CloseReason, Note
+from dw_sales.domain.orders import PC_DELIVERIES_MAX, CloseReason, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
 
@@ -305,6 +306,22 @@ class PcDatesBody(VersionBody):
     limit is DW1's reading limit (`pc_dates.MAX_TEXT`, its one owner)."""
 
     text: Annotated[str, Field(min_length=1, max_length=MAX_TEXT)]
+
+
+class PcDeliveryBody(BaseModel):
+    """One delivery of PC's answer: how much, on which date PC gives."""
+
+    model_config = _BODY
+
+    quantity: Decimal = Field(gt=0, max_digits=15, decimal_places=3)
+    date: date
+
+
+class PcAnswerBody(VersionBody):
+    """PC's answer for one line (ticket 07): its deliveries in PC's order, one
+    for a line PC delivers at once, several for a line PC splits."""
+
+    deliveries: list[PcDeliveryBody] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
 
 
 class AskBody(BaseModel):
@@ -725,6 +742,46 @@ def build_router(
             context, case_id, case_version=body.case_version, text=body.text
         )
         return await idem.record(view)
+
+    # The request to PC (ticket 07): drafted from the case for a person to
+    # copy and send from their own account; "Ghi đã hỏi PC" starts the wait
+    # the follow-up lane reminds on; PC's answer is recorded line by line.
+    @router.get(
+        "/orders/{case_id}/pc-request", response_model=PcRequestView, dependencies=prepare_scope
+    )
+    async def pc_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PcRequestView:
+        return await svc.pc_requests.draft(context, case_id)
+
+    @router.post(
+        "/orders/{case_id}/pc-request", response_model=CaseChangeView, dependencies=prepare_scope
+    )
+    async def pc_asked(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.pc_requests.ask(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/pc-answer",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def pc_answer(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: PcAnswerBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.pc_requests.answer(
+            context,
+            case_id,
+            line_no,
+            case_version=body.case_version,
+            deliveries=[(d.quantity, d.date) for d in body.deliveries],
+        )
+        return await idem.record(change)
 
     # The verified mails naming the order (PC's answer, since every mail is
     # stored), and one of them read as a paste is.

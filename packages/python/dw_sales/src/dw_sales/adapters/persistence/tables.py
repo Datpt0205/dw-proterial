@@ -70,6 +70,9 @@ order_cases = sa.Table(
     # A cross-check decision recorded and not applied (ticket 14), while the
     # order awaits its cross-check: ids, an outcome and a reason code.
     sa.Column("unapplied_decision", JSONB(none_as_null=True)),
+    # Sales asked PC for the delivery dates and waits (ticket 07, migration
+    # 91f83937dbf1): the lines asked, who and when; NULL otherwise.
+    sa.Column("pc_request", JSONB(none_as_null=True)),
     # Written by the `accumulate_makers` trigger only.
     sa.Column("makers", ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
@@ -118,6 +121,9 @@ order_lines = sa.Table(
     # The changes a person confirmed from a customer's mail (ticket 27,
     # migration c7d0730fcccd), one per field.
     sa.Column("changes", JSONB, nullable=False, server_default="[]"),
+    # PC's answer for the line (ticket 07, migration 91f83937dbf1): its
+    # deliveries with PC's first and current dates; NULL until recorded.
+    sa.Column("pc_answer", JSONB(none_as_null=True)),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

@@ -700,8 +700,10 @@ class _Followups:
                 and e.to_status == status
                 and e.from_status != e.to_status
             ]
+            pc_asked_at = None
             if isinstance(case, OrderCase):
                 reference, customer, due = case.header.po_no, case.customer_code, case.due
+                pc_asked_at = case.pc_request.at if case.pc_request else None
             else:
                 quote_due = case.request.document.quote_due
                 reference = case.request.reference
@@ -718,6 +720,7 @@ class _Followups:
                     status_since=max(entered, default=received),
                     assigned_to=stored.origin.assigned_to,
                     due=due,
+                    pc_asked_at=pc_asked_at,
                 )
             )
         return found

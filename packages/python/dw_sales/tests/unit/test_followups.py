@@ -31,12 +31,16 @@ from dw_sales.domain.followups import (
     brief_slot,
     due_soon,
     owed,
+    pc_reminder_at,
 )
 
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 POLICY_FILE = REPO / "configs" / "policies" / "sales_followups@1.1.0.yaml"
+# 1.1.0 predates the wait on PC (ticket 07): its section is 1.3.0's, as a
+# tenant's version written before it reads it (`read_over`).
+PC_FILE = REPO / "configs" / "policies" / "sales_followups@1.3.0.yaml"
 # Monday 19 October 2026, 08:00 in Ho Chi Minh City (UTC+7).
 MONDAY_8 = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -46,6 +50,7 @@ MINUTE = timedelta(minutes=1)
 def _document() -> dict[str, Any]:
     loaded = yaml.safe_load(POLICY_FILE.read_bytes())
     assert isinstance(loaded, dict)
+    loaded.setdefault("waiting_pc", yaml.safe_load(PC_FILE.read_bytes())["waiting_pc"])
     return loaded
 
 
@@ -103,7 +108,10 @@ def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.2.0"
+    assert policy.ref == "sales_followups@1.3.0"
+    assert policy.waiting_pc.enabled
+    assert policy.waiting_pc.remind.after_hours == 24
+    assert policy.waiting_pc.remind.notify == ("pic",)
     assert policy.order_unconfirmed.remind.after_hours == 4
     assert policy.order_unconfirmed.remind.notify == ("pic",)
     assert policy.order_unconfirmed.escalate.after_hours == 24
@@ -334,8 +342,45 @@ def test_followups_name_the_stage_they_are_owed_at() -> None:
         "quote_waiting_design",
         "quote_deadline",
         "waiting_customer",
+        "waiting_pc",
         "your_turn",
     }
+
+
+# ------------------------------------------------ waiting on PC (ticket 07) --
+
+
+def _asked_pc(at: datetime | None, status: str = "in_review") -> WaitingCase:
+    return replace(_case(status=status), pc_asked_at=at)
+
+
+def test_an_order_waiting_on_pc_reminds_the_pic_a_day_after_pc_was_asked() -> None:
+    asked = MONDAY_8 + 2 * HOUR
+    case = _asked_pc(asked)
+    assert ("waiting_pc", "remind") not in _owed(case, asked + 24 * HOUR - MINUTE)
+    found = [
+        d for d in owed(PLATFORM, [case], asked + 24 * HOUR) if d.followup.value == "waiting_pc"
+    ]
+    assert [(d.since, d.notify) for d in found] == [(asked, ("pic",))]
+    title, body = reminder_text(PLATFORM, found[0], asked + 24 * HOUR)
+    assert "PC" in title and "VLX" in body
+
+
+def test_an_order_whose_pc_answer_is_recorded_is_owed_no_pc_reminder() -> None:
+    """The case names no request once PC answered every line asked: nothing
+    keeps firing after the answer (failure-modes #6)."""
+    assert ("waiting_pc", "remind") not in _owed(_asked_pc(None), MONDAY_8 + 72 * HOUR)
+
+
+def test_the_pc_reminder_is_the_tenants_number_and_switch() -> None:
+    later = _policy(waiting_pc={"remind": {"after_hours": 48, "notify": ["pic", "head"]}})
+    case = _asked_pc(MONDAY_8)
+    assert ("waiting_pc", "remind") not in _owed(case, MONDAY_8 + 47 * HOUR, later)
+    assert ("waiting_pc", "remind") in _owed(case, MONDAY_8 + 48 * HOUR, later)
+    assert pc_reminder_at(later, MONDAY_8) == MONDAY_8 + 48 * HOUR
+    off = _policy(waiting_pc={"enabled": False})
+    assert ("waiting_pc", "remind") not in _owed(case, MONDAY_8 + 72 * HOUR, off)
+    assert pc_reminder_at(off, MONDAY_8) is None
 
 
 # ------------------------------------------- your turn (2026-10-28) --

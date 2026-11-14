@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
-import { AN, DIEU, orderInBravo } from "./fixtures";
+import { AN, DIEU, orderInBravo, pcRequest } from "./fixtures";
 
 type Order = SalesSchemas["OrderCaseView"];
 
@@ -30,6 +30,7 @@ vi.mock("next/navigation", () => ({
 
 let shown: Order = orderInBravo();
 const api = {
+  pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),

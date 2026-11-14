@@ -515,16 +515,55 @@ function linesWithout(names: (string | number)[][]): number {
   return new Set(names.map((name) => String(name[0]).split("_")[0])).size;
 }
 
-/** One cell per line, or a value per schedule of a split line. */
+/** One delivery of a line as the confirmation takes it. */
+type Delivery = {
+  quantity: string;
+  requested_date: string | null;
+  suggested_delivery_date: string | null;
+  // What the date field starts with: the date confirmed, else PC's, else
+  // DW1's suggestion.
+  initial: string | null;
+};
+
+/**
+ * A split line's deliveries, each confirmed with its own date: PC's once PC
+ * answered (ticket 07), else the schedules the PO prints apart (ticket 35).
+ * Null for a line confirmed with one date.
+ */
+function deliveriesOf(line: OrderLine): Delivery[] | null {
+  const pc = line.pc_answer?.deliveries ?? null;
+  if (pc && (pc.length > 1 || line.printed_schedules))
+    return pc.map((d, index) => {
+      const s = line.printed_schedules ? line.schedules[index] : undefined;
+      return {
+        quantity: d.quantity,
+        requested_date: s ? s.requested_date : line.requested_date,
+        suggested_delivery_date: s
+          ? s.suggested_delivery_date
+          : line.suggested_delivery_date,
+        initial: s?.confirmed_delivery_date ?? d.date,
+      };
+    });
+  if (!line.printed_schedules) return null;
+  return line.schedules.map((s) => ({
+    quantity: s.quantity,
+    requested_date: s.requested_date,
+    suggested_delivery_date: s.suggested_delivery_date,
+    initial: s.confirmed_delivery_date ?? s.suggested_delivery_date,
+  }));
+}
+
+/** One cell per line, or a value per delivery of a split line. */
 function perSchedule(
   line: OrderLine,
-  each: (s: OrderLine["schedules"][number], index: number) => ReactNode,
+  each: (s: Delivery, index: number) => ReactNode,
   whole: () => ReactNode,
 ): ReactNode {
-  if (!line.printed_schedules) return whole();
+  const split = deliveriesOf(line);
+  if (!split) return whole();
   return (
     <Space orientation="vertical" size={4}>
-      {line.schedules.map((s, index) => (
+      {split.map((s, index) => (
         <span key={`${index}:${s.requested_date}`}>{each(s, index)}</span>
       ))}
     </Space>
@@ -543,15 +582,16 @@ function ConfirmDrawer({
   const [failed, setFailed] = useState(0);
   const initial: Record<string, unknown> = {};
   for (const l of order.lines) {
-    if (l.printed_schedules) {
-      l.schedules.forEach((s, index) => {
-        initial[dateField(l, index)] = toPickerDay(
-          s.confirmed_delivery_date ?? s.suggested_delivery_date,
-        );
+    const split = deliveriesOf(l);
+    if (split) {
+      split.forEach((s, index) => {
+        initial[dateField(l, index)] = toPickerDay(s.initial);
       });
     } else {
       initial[dateField(l)] = toPickerDay(
-        l.confirmed_delivery_date ?? l.suggested_delivery_date,
+        l.confirmed_delivery_date ??
+          l.pc_answer?.deliveries[0]?.date ??
+          l.suggested_delivery_date,
       );
     }
   }
@@ -598,7 +638,7 @@ function ConfirmDrawer({
               dates.flatMap((d) => {
                 const line = order.lines.find((l) => l.line_no === d.line_no);
                 if (!line) return [];
-                const name = line.printed_schedules
+                const name = deliveriesOf(line)
                   ? dateField(line, d.delivery - 1)
                   : dateField(line);
                 return [[name, toPickerDay(d.date)]];
@@ -628,16 +668,17 @@ function ConfirmDrawer({
             fromPickerDay(values[name] as PickerDay) ?? "";
           const body = {
             case_version: order.case_version,
-            delivery_dates: order.lines.map((l) =>
-              l.printed_schedules
+            delivery_dates: order.lines.map((l) => {
+              const split = deliveriesOf(l);
+              return split
                 ? {
                     line_no: l.line_no,
-                    schedule_dates: l.schedules.map((_, index) =>
+                    schedule_dates: split.map((_, index) =>
                       day(dateField(l, index)),
                     ),
                   }
-                : { line_no: l.line_no, confirmed_date: day(dateField(l)) },
-            ),
+                : { line_no: l.line_no, confirmed_date: day(dateField(l)) };
+            }),
           };
           done(
             await run(

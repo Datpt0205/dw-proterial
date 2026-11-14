@@ -22,6 +22,9 @@ on a case changes because a reminder went out. The person decides.
 - ``waiting_customer``: an order whose correction was asked of the customer,
   or a quote whose spec is being discussed with them, from the moment it
   entered that status.
+- ``waiting_pc``: an order whose delivery dates Sales asked PC for (ticket
+  07), from the moment Sales recorded asking, until PC's answer is recorded
+  for every line asked (the case then names no request, and nothing is owed).
 
 **One wait, one reminder per stage.** A stage is due when its threshold has
 passed; it is sent once per (case, follow-up, stage, wait), the wait being
@@ -73,6 +76,8 @@ class Followup(StrEnum):
     QUOTE_WAITING_DESIGN = "quote_waiting_design"
     QUOTE_DEADLINE = "quote_deadline"
     WAITING_CUSTOMER = "waiting_customer"
+    # Sales asked PC for delivery dates and waits (ticket 07).
+    WAITING_PC = "waiting_pc"
     # The case has come to a person's turn: told at once, not after a wait
     # (2026-10-28: "nếu dừng thì có noti cho họ thấy chưa").
     YOUR_TURN = "your_turn"
@@ -204,6 +209,18 @@ class WaitingCustomerRule(BaseModel):
     enabled: bool = Field(description="Bật hoặc tắt nhắc hồ sơ đang chờ khách hàng.")
     remind: AfterStage = Field(
         description="Nhắc khi hồ sơ chờ khách (sửa PO, thống nhất spec) quá số giờ này."
+    )
+
+
+class WaitingPcRule(BaseModel):
+    """An order whose delivery dates Sales asked PC for, with no answer yet.
+    DW1 never mails PC: it reminds the person, who chases PC."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(description="Bật hoặc tắt nhắc hồ sơ đang chờ PC trả ngày giao.")
+    remind: AfterStage = Field(
+        description="Nhắc khi đã hỏi PC mà chưa ghi được ngày PC trả lời sau số giờ này."
     )
 
 
@@ -340,6 +357,7 @@ class SalesFollowups(BaseModel):
     )
     quote_deadline: QuoteDeadlineRule = Field(description="Hạn báo giá sắp đến.")
     waiting_customer: WaitingCustomerRule = Field(description="Hồ sơ đang chờ khách hàng.")
+    waiting_pc: WaitingPcRule = Field(description="Hồ sơ đang chờ PC trả ngày giao.")
     your_turn: YourTurnRule = Field(description="Hồ sơ đến lượt người xử lý.")
 
     @property
@@ -372,6 +390,9 @@ class WaitingCase:
     status_since: datetime
     assigned_to: uuid.UUID | None
     due: date | None
+    # When Sales recorded asking PC for the dates, while the order waits on
+    # PC (`OrderCase.pc_request`); None otherwise (ticket 07).
+    pc_asked_at: datetime | None = None
 
 
 # The statuses each follow-up watches.
@@ -454,6 +475,14 @@ def _after(
     ]
 
 
+def pc_reminder_at(policy: SalesFollowups, asked_at: datetime) -> datetime | None:
+    """When the reminder of a wait on PC begun at ``asked_at`` falls due, or
+    None while the tenant has it off: what the order page shows beside the
+    wait, from the same rule `owed` reads (quiet hours may defer it)."""
+    pc = policy.waiting_pc
+    return asked_at + timedelta(hours=pc.remind.after_hours) if pc.enabled else None
+
+
 def owed(
     policy: SalesFollowups,
     cases: Sequence[WaitingCase],
@@ -502,6 +531,11 @@ def owed(
                 found.append(
                     Due(case, Followup.QUOTE_DEADLINE, Stage.WARN, late, deadline.warn.notify)
                 )
+        pc = policy.waiting_pc
+        if pc.enabled and order and case.pc_asked_at is not None:
+            found += _after(
+                case, Followup.WAITING_PC, ((Stage.REMIND, pc.remind),), case.pc_asked_at, now
+            )
         waits = _ORDER_WAITING_CUSTOMER if order else _QUOTE_WAITING_CUSTOMER
         if customer.enabled and case.status in waits:
             found += _after(
