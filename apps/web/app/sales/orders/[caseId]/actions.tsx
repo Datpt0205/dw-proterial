@@ -71,6 +71,14 @@ const BUTTON: Record<OrderAction, string> = {
   close: "Đóng hồ sơ",
 };
 
+/** The case's own step a thread message's proposal pre-selects. */
+const SUGGESTED: Partial<
+  Record<NonNullable<SalesSchemas["CaseReplyView"]["proposal"]>, OrderAction>
+> = {
+  resume_review: "resumeReview",
+  request_correction: "correction",
+};
+
 /**
  * The order's steps for its state, each disabled with its reason in words
  * where it cannot be taken now (the reason is also written beside the
@@ -103,10 +111,10 @@ export function OrderActions({
     return result.ok;
   };
 
-  // The step the newest reply in the case's thread proposes (ticket 32):
-  // marked, never pressed for Sales.
-  const suggested =
-    suggestedStep(order.replies) === "resume_review" ? "resumeReview" : null;
+  // The step the newest message in the case's thread proposes (tickets 32,
+  // 26): marked, never pressed for Sales.
+  const proposal = suggestedStep(order.replies, order.thread_sent);
+  const suggested = proposal ? (SUGGESTED[proposal] ?? null) : null;
 
   const resumeReview = async () =>
     done(
@@ -174,7 +182,7 @@ export function OrderActions({
               {BUTTON[action]}
             </GuardedButton>
             {suggested === action ? (
-              <StatusTag tone="warn">Đề xuất từ thư khách</StatusTag>
+              <StatusTag tone="warn">Đề xuất từ luồng thư</StatusTag>
             ) : null}
           </Space>
         ))}

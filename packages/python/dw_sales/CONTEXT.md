@@ -163,8 +163,13 @@ API and the plan use the English terms. The spec is
   cases, and one case may be talked about in several threads (dw_sales ADR
   0009). Avoid: "conversation case".
 - **Outgoing message** (Thư Sales gửi): a message in a thread whose sender
-  is the member's own address. It never opens a case and never changes a
-  value; it tells what Sales asked and when a confirmation left.
+  is a member's own sign-in address, as the platform's user record holds it
+  (never the folder it was exported into); an upload and a mail whose
+  sender the receiving system failed (SPF/DKIM/DMARC `fail`) are not. It
+  never opens a case, is never routed and never changes a value, and it has
+  no disposition; it tells what Sales asked and when a confirmation left. It
+  shows on a case whose thread it is on when it is addressed to someone who
+  wrote that case's mails there (ticket 25).
 - **Reply in a case's thread** (Khách trả lời trong luồng thư): a message
   whose mail thread holds a case of the sender's own customer; it is
   attached to that case (`attached_to_case`) with no model. Where the thread
@@ -179,7 +184,10 @@ API and the plan use the English terms. The spec is
   `cancels` (huỷ), `accepts` (đồng ý), `rejects` (không đồng ý), `asks`
   (hỏi), `adds_info` (bổ sung thông tin), `sends_rfq` (gửi RFQ), `unclear`
   (chưa rõ). A message may carry several, each standing on sentences of it
-  that code located (dw_sales ADR 0010).
+  that code located; one whose sentences were not located is `unclear`. One
+  table from who wrote it, the case's kind and status and an intent gives
+  the step it proposes, for a person to take; Sales asking the customer
+  proposes that the case waits on them (dw_sales ADR 0010, ticket 26).
 - **Change request** (Yêu cầu điều chỉnh): what a customer asked to change
   on an order, in a mail's words or table: per line, the field, the value
   the case holds and the value asked, each with where the mail says it.

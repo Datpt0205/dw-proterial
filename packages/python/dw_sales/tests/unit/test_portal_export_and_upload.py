@@ -392,8 +392,9 @@ async def test_an_upload_no_layout_reads_goes_to_sales_as_a_po(world: World) -> 
 async def test_a_mail_never_passes_for_an_upload(tmp_path: Path) -> None:
     """The same export mailed from the PIC's own address, its subject
     claiming an upload and naming the customer: a mail's customer is its
-    sender's, and the PIC's address is no customer's, so no case opens for
-    Corvane. Only the server's stamp beside a stored upload makes one."""
+    sender's, and a mail from the PIC's own address is one Sales sent
+    (ticket 25), which opens no case at all. Only the server's stamp beside
+    a stored upload makes one."""
     export_file = tmp_path / "ORD.csv"
     export_file.write_bytes(EXPORT)
     mail = {
@@ -419,5 +420,6 @@ async def test_a_mail_never_passes_for_an_upload(tmp_path: Path) -> None:
 
     disposition, case = processed["M-FORGED"]
     assert case is None
-    assert (disposition.kind, disposition.customer_code) == ("routed_to_sales", None)
+    assert (disposition.kind, disposition.outgoing) == ("not_yet_processed", True)
+    assert world.store.state(ALPHA).orders == {}
     assert await world.uploads.upload_of(ALPHA, "M-FORGED") is None

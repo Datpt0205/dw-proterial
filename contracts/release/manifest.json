@@ -362,7 +362,7 @@
           "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
         },
         {
-          "checksum": "0f63fbc6fd9edd183f098a54ada66d0e1630d1d3c5ce895717e8c253a5ed3dad",
+          "checksum": "7caa22b57fc9198841bcbb539d0b0045a5394f4a6008a7ef12001532ff57c7ea",
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
         },
         {
@@ -644,7 +644,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
+      "checksum": "45b61f04d9b76d0196b7f06d0dc599f5bc0ce142c99cdcc5eb5f19f56fbcd7ec",
       "dataset_id": "sales_reply",
       "files": [
         {
@@ -652,7 +652,7 @@
           "path": "evals/expected/sales_reply.json"
         },
         {
-          "checksum": "3ec1389573adf750b7fe78d900ef940012c9a219ba8e63422636baf53a56351b",
+          "checksum": "2b10ed7293e489f8e4d8e9c7e9ec42e04843467a92d293c819cb3a6cc12f6d0b",
           "path": "evals/expected/sales_reply_golden.json"
         },
         {
@@ -660,15 +660,15 @@
           "path": "evals/fixtures/cases/sales_reply.json"
         },
         {
-          "checksum": "7d081da7b31fa52580d02eac84e8ccc4432a98c0fff9a7c7c5871afeecbc8b6c",
+          "checksum": "6aeaac77c7f39fe3426ad54ab0ca5d51cd8e0f28f552900aa558530d5d871857",
           "path": "evals/fixtures/cases/sales_reply_golden.json"
         },
         {
-          "checksum": "f79bc2317e6d98c2a7969799b2e8ac8d2510c08ee9f719c5cf6ac2fe24403aae",
+          "checksum": "1cc05610fbbb582a45940f02a14f11235876382948fe1d66ff8fc642fc4b1409",
           "path": "evals/fixtures/cases/sales_reply_security.json"
         }
       ],
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "checksum": "11d9045b7f626ef62ab1cd626e40f94c06d9bc0c42fdd2df78ce557cc6a9ac2a",
@@ -796,7 +796,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "d7db7b9c72ad0d2c03016ff517689977b40b7452",
+  "git_sha": "6c9c6b58ca05dca285c178f84979dba0d529cb57",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1194,6 +1194,11 @@
       "checksum": "bf2bae5ec7698fa474e690214153b0e75f7040f3e748103577652f5ae7e7b8e9",
       "prompt_id": "sales.reply_intent",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "8b7b9d2223ac5a82213e3dbd14af568cf7f6cab2e4fb8397c04c872265334970",
+      "prompt_id": "sales.reply_intent",
+      "version": "2.0.0"
     },
     {
       "checksum": "5f033a5e6738e6892fda8ea499a90475ce2858f03063432808f804a1d9533138",

@@ -30,7 +30,7 @@ MODEL_STEPS = [
     "sales_descriptions@1.0.0",
     "sales_rfq@1.0.0",
     "sales_intent@1.0.0",
-    "sales_reply@1.0.0",
+    "sales_reply@2.0.0",
     "sales_handoff@1.0.0",
     "sales_layout@1.0.0",
     "sales_rule_drafts@1.0.0",

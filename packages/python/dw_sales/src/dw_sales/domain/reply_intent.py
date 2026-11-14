@@ -1,25 +1,30 @@
-"""What a customer's reply in a case's thread says, as a model reads it, and
-what code makes of it.
+"""What a message in a case's thread does, as a model reads it, and what code
+makes of it: thread intents (ticket 26, dw_sales ADR 0010 decision 1).
 
-Ticket 32, dw_sales ADR 0005, Đạt's rule §6. A reply to a spec discussion, a
-decline or a correction request is linked to its case by the mail's thread
-headers (`application.threads`), never by a model. Where a tenant turns it on
-(`sales_order_rules.model_assist.reply_intent`), a local model then reads the
-newest part of the reply into a typed intent, and code decides what of it is
-used:
+Ticket 32 read a customer's reply into one kind of two waits (a spec
+discussion, a correction request). One closed set now serves every message
+in a thread, the customer's and Sales' own (ticket 25): `ThreadIntent`. A
+message may carry several. A reply is linked to its case by the mail's thread
+headers (`application.threads`), never by a model; where a tenant turns the
+step on (`sales_order_rules.model_assist.reply_intent`), a local model reads
+the newest part of the message, and code decides what of it is used:
 
-- **The model gives** (`ModelReplyIntent`) one kind from a closed set and up
-  to three sentences of the reply, copied, that say it. No case, no step, no
-  status: those are code's.
+- **The model gives** (`ModelThreadIntents`) up to `MAX_INTENTS` intents
+  from the closed set, each with up to three sentences of the message,
+  copied, that say it. No case, no step, no status: those are code's.
 - **A quote is used** only when code locates it exactly once in the newest
-  part (`located_quotes`); an intent with no located quote is ``unclear``
-  (`verified_kind`): a reading nobody can point at is no reading.
-- **A step is proposed** only by `proposed_step`, one table from the case's
-  kind and status and the reply's kind to an existing step, and only where
-  that status allows the step. Sales confirms it on the case: nothing here
-  applies anything. A conditional acceptance ("we accept if the colour is
-  grey") read as ``accepts_spec`` would pass every check above, which is why
-  the case shows the quoted sentences beside the proposal.
+  part (`located_quotes`); an intent with no located quote becomes
+  ``unclear`` (`verified_intents`): a reading nobody can point at is no
+  reading.
+- **A step is proposed** only by `proposed_step`, one table from who wrote
+  the message, the case's kind and status and an intent to an existing step
+  (`INTENT_STEPS`); anything not in it proposes nothing, and intents that
+  point at two different steps propose nothing either: a person reads it.
+  Sales confirms the step on the case: nothing here applies anything (Đạt,
+  11-04: no HITL relaxed before the plant). A conditional acceptance ("we
+  accept if the colour is grey") read as ``accepts`` would pass every check
+  above, which is why the case shows the quoted sentences beside the
+  proposal.
 - **No finding is disposed**: a customer keeping their PO as it is proposes
   that review resumes, and each finding sent back to them is still disposed
   one by one by Sales (spec decision 9).
@@ -39,34 +44,52 @@ from dw_sales.domain.spans import FoldedText
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
-ReplyKind = Literal[
-    "accepts_spec",
-    "rejects_spec",
-    "counter_proposal",
-    "sends_corrected_po",
-    "keeps_po_as_is",
-    "question",
+# dw_sales ADR 0010 decision 1, the one set for every message in a thread;
+# labels in CONTEXT.md ("Thread intent").
+ThreadIntent = Literal[
+    "sends_po",
+    "requests_change",
+    "cancels",
+    "accepts",
+    "rejects",
+    "asks",
+    "adds_info",
+    "sends_rfq",
     "unclear",
 ]
-# A reply says what it says in a sentence or two; three is the most kept.
+# Who wrote the message: the customer, or Sales (an outgoing message, ticket
+# 25). The same words propose different steps from each.
+Author = Literal["customer", "sales"]
+# A message says what it says in a sentence or two; three is the most kept.
 MAX_QUOTES: Final = 3
+# A message does a few things at once ("we accept line 1, push line 3"), not
+# the whole set.
+MAX_INTENTS: Final = 4
 _QuoteSpan = Annotated[str, Field(min_length=1, max_length=400)]
 
 
-class ModelReplyIntent(BaseModel):
-    """What one call returns: flat and closed, every key required. The quotes
-    come before the kind, so the model reads before it labels."""
+class ModelIntent(BaseModel):
+    """One intent as the model gives it. The quotes come before the intent,
+    so the model reads before it labels."""
 
     model_config = _FROZEN
 
     quote_spans: tuple[_QuoteSpan, ...] = Field(max_length=MAX_QUOTES)
-    kind: ReplyKind
+    intent: ThreadIntent
+
+
+class ModelThreadIntents(BaseModel):
+    """What one call returns: flat and closed, every key required."""
+
+    model_config = _FROZEN
+
+    intents: tuple[ModelIntent, ...] = Field(max_length=MAX_INTENTS)
 
 
 class ReplyQuote(BaseModel):
-    """A sentence of the reply that code found, once, in its newest part:
-    the text as the customer wrote it and where it is (offsets into the NFKC
-    form of `MessagePart.text`)."""
+    """A sentence of the message that code found, once, in its newest part:
+    the text as written and where it is (offsets into the NFKC form of
+    `MessagePart.text`)."""
 
     model_config = _FROZEN
 
@@ -81,14 +104,30 @@ class ReplyQuote(BaseModel):
         return self
 
 
+class ReadIntent(BaseModel):
+    """One intent code kept, standing on the quotes it located."""
+
+    model_config = _FROZEN
+
+    intent: ThreadIntent
+    quotes: tuple[ReplyQuote, ...] = Field(default=(), max_length=MAX_QUOTES)
+
+    @model_validator(mode="after")
+    def _stands_on_a_quote(self) -> Self:
+        if self.intent != "unclear" and not self.quotes:
+            raise ValueError("an intent other than unclear stands on a located quote")
+        return self
+
+
 ReplyOutcome = Literal["read", "unavailable"]
 
 
 class ReplyReading(BaseModel):
-    """What the model reading of a reply did, stamped on its disposition: the
+    """What the model reading of a thread message did, stamped where the
+    message is kept (a reply's disposition, a sent message's record): the
     prompt, profile and route of the call, the rules whose switch asked for
-    it, and the outcome. ``unavailable``: no usable answer, so the reply is on
-    its case with no proposal and Sales reads it."""
+    it, the outcome and the intents code kept. ``unavailable``: no usable
+    answer, so the message proposes nothing and Sales reads it."""
 
     model_config = _FROZEN
 
@@ -97,19 +136,20 @@ class ReplyReading(BaseModel):
     route: str = Field(min_length=1, max_length=64)
     rules: str = Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")
     outcome: ReplyOutcome
-    kind: ReplyKind | None = None
-    quotes: tuple[ReplyQuote, ...] = Field(default=(), max_length=MAX_QUOTES)
+    intents: tuple[ReadIntent, ...] = Field(default=(), max_length=MAX_INTENTS)
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
-        read = self.outcome == "read"
-        if read != (self.kind is not None):
-            raise ValueError("a reading names a kind exactly when it was read")
-        if self.quotes and not read:
-            raise ValueError("only a reading quotes the reply")
-        if read and self.kind != "unclear" and not self.quotes:
-            raise ValueError("a kind other than unclear stands on a located quote")
+        if (self.outcome == "read") != bool(self.intents):
+            raise ValueError("a reading names its intents exactly when it was read")
+        if len({i.intent for i in self.intents}) != len(self.intents):
+            raise ValueError("a reading names each intent once")
         return self
+
+    @property
+    def kinds(self) -> tuple[ThreadIntent, ...]:
+        """The intents read, in the order the model gave them."""
+        return tuple(i.intent for i in self.intents)
 
 
 class CaseReply(BaseModel):
@@ -146,9 +186,22 @@ def located_quotes(part: str, spans: tuple[str, ...]) -> tuple[ReplyQuote, ...]:
     return tuple(found)
 
 
-def verified_kind(kind: ReplyKind, quotes: tuple[ReplyQuote, ...]) -> ReplyKind:
-    """The kind code accepts: ``unclear`` when no quote of it was located."""
-    return kind if quotes else "unclear"
+def verified_intents(part: str, answer: ModelThreadIntents) -> tuple[ReadIntent, ...]:
+    """The intents code accepts from ``answer``, read against ``part`` (the
+    newest part): each with the quotes located in it, ``unclear`` where none
+    was; an intent the model gave twice is kept once with the quotes of both
+    (at most three); an answer naming none is ``unclear``. Never empty."""
+    kept: dict[ThreadIntent, list[ReplyQuote]] = {}
+    for given in answer.intents:
+        quotes = located_quotes(part, given.quote_spans)
+        intent: ThreadIntent = given.intent if quotes else "unclear"
+        held = kept.setdefault(intent, [])
+        for quote in quotes:
+            if len(held) < MAX_QUOTES and quote not in held:
+                held.append(quote)
+    if not kept:
+        kept["unclear"] = []
+    return tuple(ReadIntent(intent=k, quotes=tuple(q)) for k, q in kept.items())
 
 
 ProposedStep = Literal[
@@ -162,25 +215,49 @@ ProposedStep = Literal[
     # No move: the corrected PO arrives as a revision of the case and is read
     # by the reader, as any revision is.
     "await_revised_po",
+    # OrderCase.request_correction: in_review -> correction_requested, the
+    # case waits on the customer (Sales asked them, from Outlook too).
+    "request_correction",
+    # QuoteCase.discuss_spec: design_replied -> spec_discussion, the case
+    # waits on the customer.
+    "discuss_spec",
 ]
 
-# Where a reply's kind may lead, by the case's kind and status: one table, a
-# row per move, never a branch. Anything else proposes nothing, and Sales
-# reads the reply.
-REPLY_STEPS: Final[Mapping[tuple[str, str, ReplyKind], ProposedStep]] = MappingProxyType(
-    {
-        ("quote", "spec_discussion", "accepts_spec"): "settle_spec",
-        ("quote", "spec_discussion", "rejects_spec"): "decline_customer_rejected_spec",
-        ("order", "correction_requested", "keeps_po_as_is"): "resume_review",
-        ("order", "correction_requested", "sends_corrected_po"): "await_revised_po",
-    }
+# Where an intent may lead, by who wrote the message and the case's kind and
+# status: one table, a row per move, never a branch. Anything else proposes
+# nothing, and Sales reads the message. A customer keeping their PO as it is
+# does not accept the correction asked (`rejects`); one agreeing to it
+# (`accepts`) leaves Sales to correct it: both resume the review, which
+# disposes no finding.
+INTENT_STEPS: Final[Mapping[tuple[Author, str, str, ThreadIntent], ProposedStep]] = (
+    MappingProxyType(
+        {
+            ("customer", "quote", "spec_discussion", "accepts"): "settle_spec",
+            ("customer", "quote", "spec_discussion", "rejects"): ("decline_customer_rejected_spec"),
+            ("customer", "order", "correction_requested", "rejects"): "resume_review",
+            ("customer", "order", "correction_requested", "accepts"): "resume_review",
+            ("customer", "order", "correction_requested", "sends_po"): "await_revised_po",
+            # Sales asked the customer, by mail: the case waits on them, the
+            # wait the `waiting_customer` follow-up watches.
+            ("sales", "order", "in_review", "asks"): "request_correction",
+            ("sales", "quote", "design_replied", "asks"): "discuss_spec",
+        }
+    )
 )
 
 
-def proposed_step(case_kind: str, status: str, reading: ReplyReading | None) -> ProposedStep | None:
-    """The step the reply proposes for a ``case_kind`` case in ``status``, or
-    None: no reading, an unread or unclear one, or a status the step does not
-    start from."""
-    if reading is None or reading.kind is None:
+def proposed_step(
+    author: Author, case_kind: str, status: str, reading: ReplyReading | None
+) -> ProposedStep | None:
+    """The step a message ``author`` wrote proposes for a ``case_kind`` case
+    in ``status``, or None: no reading, an unread one, no row for any of its
+    intents, or intents pointing at two different steps (only one can be
+    taken, and which is a person's to say)."""
+    if reading is None:
         return None
-    return REPLY_STEPS.get((case_kind, status, reading.kind))
+    steps = {
+        step
+        for intent in reading.kinds
+        if (step := INTENT_STEPS.get((author, case_kind, status, intent))) is not None
+    }
+    return steps.pop() if len(steps) == 1 else None

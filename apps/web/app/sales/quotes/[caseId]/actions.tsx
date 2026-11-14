@@ -55,12 +55,13 @@ const BUTTON: Partial<Record<QuoteAction, string>> = {
 
 type Dialog = "recordYcbg" | "submit" | "decline" | null;
 
-/** The case's own step a reply's proposal pre-selects (ticket 32). */
+/** The case's own step a thread message's proposal pre-selects (tickets 32, 26). */
 const SUGGESTED: Partial<
   Record<NonNullable<SalesSchemas["CaseReplyView"]["proposal"]>, QuoteAction>
 > = {
   settle_spec: "specSettle",
   decline_customer_rejected_spec: "decline",
+  discuss_spec: "specStart",
 };
 
 export function QuoteActions({
@@ -83,8 +84,8 @@ export function QuoteActions({
     ([action]) => BUTTON[action],
   );
   const v = quote.case_version;
-  // Marked, never pressed for Sales: the newest reply's proposal.
-  const proposal = suggestedStep(quote.replies);
+  // Marked, never pressed for Sales: the thread's newest message's proposal.
+  const proposal = suggestedStep(quote.replies, quote.thread_sent);
   const suggested = proposal ? (SUGGESTED[proposal] ?? null) : null;
 
   const finish = (result: { ok: boolean; error?: unknown }) => {
@@ -202,7 +203,7 @@ export function QuoteActions({
                 {BUTTON[action]}
               </GuardedButton>
               {suggested === action ? (
-                <StatusTag tone="warn">Đề xuất từ thư khách</StatusTag>
+                <StatusTag tone="warn">Đề xuất từ luồng thư</StatusTag>
               ) : null}
             </Space>
           ))}

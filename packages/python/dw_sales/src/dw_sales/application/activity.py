@@ -321,7 +321,7 @@ def _disposition_produced(
         ]
     if row.step is ModelStep.REPLY_INTENT and disposition.reply is not None:
         reply = disposition.reply.reading
-        return [] if reply is None or reply.kind is None else [plain("kind", reply.kind)]
+        return [] if reply is None else [plain("intent", kind) for kind in reply.kinds]
     if row.step is ModelStep.REQUEST_HANDOFF and disposition.handoff is not None:
         handoff = disposition.handoff
         produced = [

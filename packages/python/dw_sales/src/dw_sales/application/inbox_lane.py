@@ -29,6 +29,11 @@ again when it runs it.
    failures in a row (`RETRY_FIRST`, at most `RETRY_LONGEST`), and it is the
    job's row that remembers them, not this process. A person can still press
    "DW xử lý" on it.
+   A message Sales sent (`outgoing.is_outgoing`, ticket 25) is never
+   processed into anything: it is queued once, and only while the tenant's
+   thread intents are read (`ThreadIntentsPort`, ticket 26), so a run is
+   spent on it only for what a model may read in it. Once taken up it has
+   its record (`SentRead`) and is not queued again.
 4. The plan's runs for the day are counted where each run begins, by the
    drain: a job over them fails (``quota``) and waits out its delay here.
 
@@ -72,7 +77,8 @@ from dw_platform.application.identity import (
 from dw_platform.application.provisioning import ServiceAccount
 from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
-from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.outgoing import outgoing_in
+from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesScope
 from dw_sales.application.processing import PROCESSING_CEILING
 from dw_sales.application.support import DW1_WORKER_ID
 from dw_sales.application.views import ProcessingJobView
@@ -134,6 +140,13 @@ class ServiceAccessPort(Protocol):
     ) -> MembershipAccess | None: ...
 
 
+class ThreadIntentsPort(Protocol):
+    """Whether a thread message's intents are read for the tenant now
+    (`OrderIntake.reads_thread_intents`)."""
+
+    async def reads_thread_intents(self, scope: SalesScope) -> bool: ...
+
+
 class EnqueuePort(Protocol):
     """Queueing one message, through the door "DW xử lý" uses:
     `ProcessingService.enqueue`, naming the lane, whose audit row it writes
@@ -161,6 +174,9 @@ class InboxLane:
     processing: EnqueuePort
     access: ServiceAccessPort
     clock: UtcClock
+    # Whose address a message Sales sent is from, and whether one is read.
+    directory: MemberDirectoryPort
+    intents: ThreadIntentsPort
 
     async def tick(self, scope: SalesScope) -> LaneTick:
         context = await self._context(scope)
@@ -175,13 +191,21 @@ class InboxLane:
             if (await work.worker.state()).paused:
                 return LaneTick(stopped="paused")
             done = {logged.disposition.message_id for logged in await work.messages.list_all()}
+            taken = {sent.message_id for sent in await work.sent.list_all()}
             jobs = {job.message_id: job for job in await work.jobs.list_all()}
+        outgoing = await outgoing_in(self.directory, context)
+        reads: bool | None = None
         now = self.clock.now()
         queued: list[str] = []
         for message in await self.inbox.list_messages(scope):
             message_id = message.message_id
             if message_id in done or not _due(jobs.get(message_id), now):
                 continue
+            if outgoing(message):
+                if reads is None:
+                    reads = await self.intents.reads_thread_intents(scope)
+                if message_id in taken or not reads:
+                    continue
             try:
                 await self.processing.enqueue(context, message_id, lane=SALES_INBOX_LANE)
             except (PermissionDeniedError, EntitlementDeniedError):

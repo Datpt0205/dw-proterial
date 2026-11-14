@@ -7,7 +7,7 @@ renders the versioned prompt for the run's tenant, as the real one does) and
 the case proposes a step. What PostgreSQL keeps, what the case view shows,
 that the step is Sales' to take, that keeping the PO disposes no finding, and
 that another tenant reaches none of it, are this file's. Accuracy on the local
-model is the eval lane's (`sales_reply@1.0.0`).
+model is the eval lane's (`sales_reply@2.0.0`).
 """
 
 from __future__ import annotations
@@ -51,9 +51,10 @@ class ScriptedReplies:
         self.calls.append((request, run_context))
         if request.prompt_id != "sales.reply_intent":
             raise AssertionError(f"not scripted: {request.prompt_id}")
-        if "RFQ" in variables["subject"]:
-            return output_type.model_validate({"quote_spans": [ACCEPT], "kind": "accepts_spec"})
-        return output_type.model_validate({"quote_spans": [KEEP], "kind": "keeps_po_as_is"})
+        said = ("accepts", ACCEPT) if "RFQ" in variables["subject"] else ("rejects", KEEP)
+        return output_type.model_validate(
+            {"intents": [{"quote_spans": [said[1]], "intent": said[0]}]}
+        )
 
 
 @pytest.fixture
@@ -106,7 +107,7 @@ async def test_a_reply_joins_its_order_and_keeping_the_po_decides_no_finding(
         "order",
         case["case_id"],
     )
-    assert m42["reply"] == {"linked_to": "M04", "reading": None}
+    assert m42["reply"] == {"linked_to": "M04", "reading": None, "picked_by": None}
     async with migrator.connect() as conn:
         kept = await conn.scalar(
             sa.text(
@@ -140,12 +141,12 @@ async def test_the_model_reads_the_reply_and_the_case_proposes_what_sales_confir
     m41 = await process(an, "M41")
 
     reading = m41["reply"]["reading"]
-    assert (reading["kind"], reading["prompt"], reading["rules"]) == (
-        "accepts_spec",
-        "sales.reply_intent@1.0.0",
+    assert (reading["prompt"], reading["rules"]) == (
+        "sales.reply_intent@2.0.0",
         "sales_order_rules@1.5.2",
     )
-    assert [q["text"] for q in reading["quotes"]] == [ACCEPT]
+    ((intent),) = reading["intents"]
+    assert (intent["intent"], [q["text"] for q in intent["quotes"]]) == ("accepts", [ACCEPT])
     ((request, run),) = gateway.calls
     assert (request.prompt_id, run.worker_id) == ("sales.reply_intent", "sales-dw1")
     # The quoted older message never reached the model.
@@ -153,19 +154,18 @@ async def test_the_model_reads_the_reply_and_the_case_proposes_what_sales_confir
     shown = await quote(an, case["case_id"])
     assert shown["status"] == "spec_discussion"
     (reply,) = shown["replies"]
-    assert (reply["kind"], reply["proposal"], reply["quotes"]) == (
-        "accepts_spec",
+    assert (reply["proposal"], reply["intents"]) == (
         "settle_spec",
-        [ACCEPT],
+        [{"intent": "accepts", "quotes": [ACCEPT]}],
     )
     async with migrator.connect() as conn:
         kept = await conn.scalar(
             sa.text(
-                "SELECT case_reply #>> '{reading,kind}' FROM sales.messages"
+                "SELECT case_reply #>> '{reading,intents,0,intent}' FROM sales.messages"
                 " WHERE message_id = 'M41'"
             )
         )
-    assert kept == "accepts_spec"
+    assert kept == "accepts"
     # Sales confirms the step, through the case's own route.
     settled = await _spec(an, shown, "settle")
     assert settled["status"] == "design_replied"

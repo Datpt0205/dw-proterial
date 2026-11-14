@@ -54,15 +54,17 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import own_address
 from dw_sales.application.mail_drop import MAX_MAIL_BYTES, MailFile
-from dw_sales.application.order_ports import OrderRulesPort, PoUpload, UploadLookupPort
+from dw_sales.application.order_ports import (
+    UPLOAD_PREFIX,
+    OrderRulesPort,
+    PoUpload,
+    UploadLookupPort,
+)
 from dw_sales.application.ports import MemberDirectoryPort, SalesCatalogPort, SalesScope
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.views import ProcessingJobView
 from dw_sales.application.worker_service import require_running
 
-# What an uploaded message's id starts with; the rest is its files' hash. A
-# stored row is an upload exactly when its id does (`ck_mailbox_messages_upload`).
-UPLOAD_PREFIX: Final = "upload-"
 # How many files one upload holds: a portal's export and its print, a few POs.
 MAX_UPLOAD_FILES: Final = 10
 PO_UPLOADED: Final = "sales.po.uploaded"

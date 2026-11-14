@@ -38,6 +38,8 @@ from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
+from dw_sales.application.outgoing import outgoing_in
+from dw_sales.application.ports import MemberDirectoryPort
 from dw_sales.application.runs import (
     PendingDecisionsPort,
     awaited,
@@ -53,7 +55,7 @@ from dw_sales.application.support import (
     seen_by,
     stored_order,
 )
-from dw_sales.application.threads import ThreadMembersPort, talk_before
+from dw_sales.application.threads import ThreadMembersPort, case_thread
 from dw_sales.application.views import (
     CaseChangeView,
     OrderCaseView,
@@ -91,8 +93,11 @@ class OrderQueries:
     activity: StepActivityReadPort
     # Where the activity filter's days are counted (audit 14).
     zones: LocalZonePort
-    # The mailbox's threads, for the talk before the PO (ticket 24).
+    # The mailbox's threads, for the talk before the PO (ticket 24) and the
+    # messages Sales sent on them (ticket 25).
     threads: ThreadMembersPort
+    # Whose sign-in address a message Sales sent is from (ticket 25).
+    directory: MemberDirectoryPort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -120,13 +125,15 @@ class OrderQueries:
             stored = await stored_order(work, case_id, viewer=context)
             logged = await work.messages.list_all()
             servings = await work.served.servings(CaseKind.ORDER, case_id)
-        before = await talk_before(
+            sent = {s.message_id: s for s in await work.sent.list_all()}
+        thread = await case_thread(
             self.threads,
             scope,
             {m.disposition.message_id: m for m in logged},
             case_kind=CaseKind.ORDER,
             case_id=case_id,
             customer_code=stored.case.customer_code,
+            outgoing=await outgoing_in(self.directory, context),
         )
         wait = await awaited(self.decisions, context, stored.case)
         waits_on = awaiting(stored.case)
@@ -143,7 +150,8 @@ class OrderQueries:
             replies=logged,
             servings=servings,
             cross_checker=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK),
-            thread_before=before,
+            thread=thread,
+            sent=sent,
         )
 
 

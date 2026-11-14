@@ -42,6 +42,7 @@ function routed(id: string, owner: string, extra = {}): Message {
       owner,
       processed_at: "2026-10-01T03:05:00Z",
       thread_cases: [],
+      outgoing: false,
       order_cases: [],
       ...extra,
     },

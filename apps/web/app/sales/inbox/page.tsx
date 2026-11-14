@@ -37,9 +37,9 @@ import {
   INTENT_KIND,
   label,
   PROCESSING_ERROR,
-  REPLY_KIND,
   ROUTING_ADVICE,
   ROUTING_REASON,
+  THREAD_INTENT,
 } from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 import { usePeople } from "../_lib/people";
@@ -87,9 +87,15 @@ const TABS = ["all", "waiting", "routed", "handled", "cased"] as const;
 type Tab = (typeof TABS)[number];
 const SORTS = ["newest", "oldest", "sender"] as const;
 
+/** Waiting on DW1: no disposition yet, and not a message Sales sent
+ * (ticket 25), which is never processed. */
+const unprocessed = (m: Message) =>
+  m.disposition.kind === "not_yet_processed" && !m.disposition.outgoing;
+
 const inTab = (tab: Tab, m: Message) =>
   tab === "all" ||
   (GROUP[tab]!.includes(m.disposition.kind) &&
+    !(tab === "waiting" && m.disposition.outgoing) &&
     (tab === "routed"
       ? !m.disposition.handled_at
       : tab === "handled"
@@ -150,13 +156,11 @@ function Inbox() {
   }, [focus]);
 
   const messages = useMemo(() => inbox.data ?? [], [inbox.data]);
-  const waiting = messages.filter(
-    (m) => m.disposition.kind === "not_yet_processed",
-  ).length;
+  const waiting = messages.filter(unprocessed).length;
   const busy = messages.filter(working).length;
   // What "DW xử lý tất cả" would queue: waiting, and not with DW1 already.
   const pressable = messages.filter(
-    (m) => m.disposition.kind === "not_yet_processed" && !working(m),
+    (m) => unprocessed(m) && !working(m),
   ).length;
 
   // While DW1 has work, read the inbox again; once it has none, the overview
@@ -250,7 +254,7 @@ function Inbox() {
       <span role="status">
         <ProcessingTag status={m.processing.status} />
       </span>
-    ) : m.disposition.kind === "not_yet_processed" ? (
+    ) : unprocessed(m) ? (
       <span className="flex flex-col items-start gap-1">
         {m.processing?.status === "failed" ? (
           <>
@@ -578,7 +582,10 @@ function Inbox() {
                     }
                     phone={
                       <>
-                        <MessageDispositionTag kind={m.disposition.kind} />
+                        <MessageDispositionTag
+                          kind={m.disposition.kind}
+                          outgoing={m.disposition.outgoing}
+                        />
                         {m.disposition.handled_at ? (
                           <StatusTag tone="ok">Sales đã xử lý</StatusTag>
                         ) : null}
@@ -593,7 +600,7 @@ function Inbox() {
                         <Typography.Text type="secondary">
                           {formatAge(m.received_at, now)} trước
                         </Typography.Text>
-                        {m.disposition.kind === "not_yet_processed" ||
+                        {unprocessed(m) ||
                         working(m) ||
                         m.disposition.reason === "design_reply_unmatched"
                           ? processCell(m)
@@ -631,7 +638,10 @@ function Inbox() {
                 key: "disposition",
                 render: (_, m) => (
                   <span className="flex flex-col items-start gap-1">
-                    <MessageDispositionTag kind={m.disposition.kind} />
+                    <MessageDispositionTag
+                      kind={m.disposition.kind}
+                      outgoing={m.disposition.outgoing}
+                    />
                     {m.disposition.handled_at ? (
                       <StatusTag tone="ok">Sales đã xử lý</StatusTag>
                     ) : null}
@@ -764,9 +774,12 @@ function ReplyTag({
         Trả lời thư {reply.linked_to} trong luồng
       </Typography.Text>
       {reading ? (
-        reading.outcome === "read" && reading.kind ? (
+        reading.outcome === "read" && reading.intents.length ? (
           <StatusTag tone="warn">
-            Mô hình đọc: {label(REPLY_KIND, reading.kind)}
+            Mô hình đọc:{" "}
+            {reading.intents
+              .map((i) => label(THREAD_INTENT, i.intent))
+              .join(", ")}
           </StatusTag>
         ) : (
           <StatusTag tone="unk">

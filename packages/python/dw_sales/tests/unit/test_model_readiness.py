@@ -84,19 +84,19 @@ def test_no_eval_keeps_a_bar_of_its_own(module: str) -> None:
 
 
 def test_a_verdict_reads_the_metric_at_its_path_and_the_graders_own_condition() -> None:
-    details = {"bar_set": {"kind_accuracy": 0.9}}
+    details = {"bar_set": {"intent_accuracy": 0.9}}
     verdict = bar_verdict(ModelStep.REPLY_INTENT, details)
     assert verdict == {
         "step": "reply_intent",
-        "metric": "bar_set.kind_accuracy",
+        "metric": "bar_set.intent_accuracy",
         "value": 0.9,
         "bar": 0.85,
         "passed": True,
     }
     assert not bar_verdict(ModelStep.REPLY_INTENT, details, holds=False)["passed"]
-    assert not bar_verdict(ModelStep.REPLY_INTENT, {"bar_set": {"kind_accuracy": 0.84}})["passed"]
+    assert not bar_verdict(ModelStep.REPLY_INTENT, {"bar_set": {"intent_accuracy": 0.84}})["passed"]
     with pytest.raises(KeyError):
-        bar_verdict(ModelStep.REPLY_INTENT, {"all": {"kind_accuracy": 0.9}})
+        bar_verdict(ModelStep.REPLY_INTENT, {"all": {"intent_accuracy": 0.9}})
 
 
 def test_a_passing_measurement_is_at_or_above_its_bar() -> None:

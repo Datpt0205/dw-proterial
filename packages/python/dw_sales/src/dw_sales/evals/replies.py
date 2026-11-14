@@ -1,4 +1,5 @@
-"""Ticket 32's graders: a customer's reply in a case's thread, read by a model,
+"""Tickets 32, 25 and 26's graders: a message in a case's thread, a
+customer's reply or one Sales sent, read by a model into thread intents,
 checked and proposed by code, confirmed by Sales.
 
 The model under test is the local model in the live lane
@@ -7,11 +8,12 @@ answers that lane recorded (`recorded.Recorded`). A grader that attacks a
 guard scripts the model's answer instead: a guard holds whatever a model says.
 Reports name reply ids, kinds, steps and counts, never the fixture text.
 
-- `sales.reply_golden`: the golden replies, per language: kind accuracy, the
-  share with a located quote, the share that proposes no step (Sales reads
-  it from nothing), latency.
+- `sales.reply_golden`: the golden messages, per language: the share read
+  as exactly their intents (several per message, ticket 26), the share with
+  a located quote, the share that proposes no step (Sales reads it from
+  nothing), the multi-intent and Sales-written ones on their own, latency.
 - `sales.reply_no_false_accept`: a conditional acceptance or a polite
-  non-answer is never read as `accepts_spec` (the proposed bar: zero).
+  non-answer is never read as `accepts` (the proposed bar: zero).
 - `sales.reply_injection`: instructions in a reply, newest part or quoted
   history, change no case and decide no finding; quoted history is never sent.
 - `sales.reply_keeps_po`: keeping the PO as it is resumes the review and
@@ -24,6 +26,12 @@ Reports name reply ids, kinds, steps and counts, never the fixture text.
   the demo tenant's switch is its own.
 - `sales.reply_degrade`: the model down leaves the reply on its case with no
   proposal; a spent budget stops the run.
+- `sales.reply_sales_asks`: a message Sales sent asking the customer is no
+  case, no route and no disposition; read as `asks`, it proposes that the
+  case waits on the customer, and the case moves only when Sales takes it.
+- `sales.reply_sent_cross_customer`: a message from a member's address on a
+  case's thread is on that case only when it is written to that case's
+  customer; one whose sender the receiving system failed is incoming.
 """
 
 from __future__ import annotations
@@ -31,7 +39,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from collections.abc import Coroutine, Mapping, Sequence
+from collections.abc import Coroutine, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -43,14 +51,12 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import ConflictError
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
-from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.reply_intent import REPLY_INTENT, ReplyReader
 from dw_sales.application.runs import subject_of
 from dw_sales.application.threads import (
     AskedAbout,
-    ThreadedCase,
     ThreadIndex,
     ThreadLinks,
     question,
@@ -61,7 +67,7 @@ from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteStatus
-from dw_sales.domain.reply_intent import ReplyReading, proposed_step
+from dw_sales.domain.reply_intent import Author, ReplyReading, proposed_step
 from dw_sales.evals.intents import _demo_rules
 from dw_sales.evals.recorded import Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, SampleWith, World, open_world
@@ -81,13 +87,18 @@ _RUN = RunContext(
     scopes=frozenset(),
     trace_id="eval-ticket-32",
 )
-# What a golden reply answers, by the step Sales last took on its case.
+# What a golden message is about, by the step Sales last took on its case.
 _CASES: Mapping[str, tuple[CaseKind, str, AskedAbout]] = {
     "spec": (CaseKind.QUOTE, QuoteStatus.SPEC_DISCUSSION.value, "spec"),
     "decline": (CaseKind.QUOTE, QuoteStatus.DECLINED.value, "decline"),
     "correction": (CaseKind.ORDER, OrderStatus.CORRECTION_REQUESTED.value, "correction"),
+    "order": (CaseKind.ORDER, OrderStatus.IN_REVIEW.value, "order"),
+    # A message Sales sent (ticket 25), on a case Sales is still working.
+    "sales_order": (CaseKind.ORDER, OrderStatus.IN_REVIEW.value, "order"),
+    "sales_spec": (CaseKind.QUOTE, QuoteStatus.DESIGN_REPLIED.value, "quote"),
 }
 _SCOPED = ("conditional", "non_answer")
+_SALES: Author = "sales"
 
 
 def _run[T](coroutine: Coroutine[Any, Any, T]) -> T:
@@ -122,52 +133,50 @@ def _message(spec: Mapping[str, Any], message_id: str = "R-GOLDEN") -> InboundMe
 
 @dataclass(frozen=True, slots=True)
 class Read:
-    """One golden reply as the model read it and code kept it."""
+    """One golden message as the model read it and code kept it."""
 
     reply_id: str
     lang: str
-    gold: str
+    gold: frozenset[str]
     tags: frozenset[str]
     reading: ReplyReading
     proposal: str | None
 
     @property
-    def kind(self) -> str | None:
-        return self.reading.kind
+    def kinds(self) -> frozenset[str]:
+        return frozenset(self.reading.kinds)
 
     @property
     def right(self) -> bool:
-        return self.kind == self.gold
+        return self.kinds == self.gold
 
 
 async def read_replies(model: Any, replies: Sequence[Mapping[str, Any]]) -> list[Read]:
-    """Each reply as `ReplyReader` reads it on a case at the step it answers,
-    one run per reply as DW1 processes one message per step."""
-    catalog = MockSalesCatalog.load(ALPHA)
+    """Each message as `ReplyReader` reads it on a case at the step it
+    answers, by who wrote it, one run per message as DW1 processes one
+    message per step."""
     reader = ReplyReader(model)
     result: list[Read] = []
     for spec in replies:
         message = _message(spec)
-        customer = (await catalog.customer_by_email_domain(ALPHA, message.sender.domain)).data
         case_kind, status, asked_about = _CASES[spec["case"]]
-        thread = ThreadedCase(
-            case_kind=case_kind,
-            case_id=uuid.UUID(int=0x320),
-            customer_code=customer.code if customer else "UNKNOWN",
-            status=status,
-            linked_to="M-THREAD",
-            question=question(asked_about, spec["number"], spec.get("asked")),
-        )
+        author: Author = _SALES if spec.get("author") == _SALES else "customer"
         run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
-        reading = await reader.read(newest_part(message), thread, rules_version=RULES, run=run)
+        reading = await reader.read(
+            newest_part(message),
+            author=author,
+            about=question(asked_about, spec["number"], spec.get("asked")),
+            rules_version=RULES,
+            run=run,
+        )
         result.append(
             Read(
                 reply_id=str(spec["id"]),
                 lang=str(spec["lang"]),
-                gold=str(spec["gold"]),
+                gold=frozenset(spec["gold"]),
                 tags=frozenset(spec.get("tags", ())),
                 reading=reading,
-                proposal=proposed_step(case_kind.value, status, reading),
+                proposal=proposed_step(author, case_kind.value, status, reading),
             )
         )
     return result
@@ -179,13 +188,14 @@ def _share(part: int, whole: int) -> float:
 
 def scores(reads: Sequence[Read]) -> dict[str, Any]:
     total = len(reads)
-    answered = [r for r in reads if r.kind not in (None, "unclear")]
+    named = [i for r in reads for i in r.reading.intents if i.intent != "unclear"]
     return {
         "replies": total,
-        "kind_accuracy": _share(sum(1 for r in reads if r.right), total),
-        # Of the readings naming a kind other than unclear, the share standing
-        # on a located quote (by construction 1.0: the domain refuses less).
-        "quoted": _share(sum(1 for r in answered if r.reading.quotes), len(answered)),
+        # Read as exactly the gold intents, no more and no fewer.
+        "intent_accuracy": _share(sum(1 for r in reads if r.right), total),
+        # Of the intents read other than unclear, the share standing on a
+        # located quote (by construction 1.0: the domain refuses less).
+        "quoted": _share(sum(1 for i in named if i.quotes), len(named)),
         # A step pre-selected for Sales to confirm; otherwise Sales reads it.
         "proposed": _share(sum(1 for r in reads if r.proposal is not None), total),
         "to_a_person": _share(sum(1 for r in reads if r.proposal is None), total),
@@ -194,7 +204,15 @@ def scores(reads: Sequence[Read]) -> dict[str, Any]:
 
 
 def _false_accepts(reads: Sequence[Read]) -> list[str]:
-    return sorted(r.reply_id for r in reads if r.tags & set(_SCOPED) and r.kind == "accepts_spec")
+    return sorted(r.reply_id for r in reads if r.tags & set(_SCOPED) and "accepts" in r.kinds)
+
+
+def _said(reads: Iterable[Read]) -> list[str]:
+    return sorted(
+        f"{r.reply_id}:{'+'.join(sorted(r.gold))}->{'+'.join(sorted(r.kinds))}"
+        for r in reads
+        if not r.right
+    )
 
 
 # -------------------------------------------------------------- graders --
@@ -216,15 +234,17 @@ def grade_golden(
             lang: scores([r for r in reads if r.lang == lang]) for lang in ("vi", "en", "ja")
         },
         "conditional_or_non_answer": scores([r for r in reads if r.tags & set(_SCOPED)]),
+        "multi_intent": scores([r for r in reads if "multi" in r.tags]),
+        "written_by_sales": scores([r for r in reads if "sales" in r.tags]),
         "false_accepts": _false_accepts(reads),
         "latency": latency(model, REPLY_INTENT.prompt_id),
-        "missed": sorted(f"{r.reply_id}:{r.gold}->{r.kind}" for r in reads if not r.right),
+        "missed": _said(reads),
     }
     # The bar the step must meet before a tenant's switch does anything
     # (`model_readiness.BARS`): reported here, enforced from a live run.
     details["bar"] = bar_verdict(ModelStep.REPLY_INTENT, details, holds=not _false_accepts(reads))
-    floor = float(expected.get("min_kind_accuracy", 0.0))
-    if ctx.live_model is None and overall["kind_accuracy"] < floor:
+    floor = float(expected.get("min_intent_accuracy", 0.0))
+    if ctx.live_model is None and overall["intent_accuracy"] < floor:
         # The replay is deterministic: below the recorded score means the
         # code changed, not the model.
         return GradeResult.fail("the recorded readings score lower than recorded", **details)
@@ -235,7 +255,7 @@ def grade_no_false_accept(
     ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
 ) -> GradeResult:
     """Conditional acceptances and polite non-answers, read by the model under
-    test: none may come back as `accepts_spec`. Enforced on the replay as
+    test: none may come back as `accepts`. Enforced on the replay as
     recorded; reported on a live run, where the model is what is measured."""
     golden = _fixture(ctx, input_data["golden_ref"])["replies"]
     scoped = [r for r in golden if set(r.get("tags", ())) & set(_SCOPED)]
@@ -245,7 +265,7 @@ def grade_no_false_accept(
     details = {
         "replies": len(scoped),
         "false_accepts": false,
-        "read_as": {r.reply_id: r.kind for r in reads},
+        "read_as": {r.reply_id: "+".join(sorted(r.kinds)) for r in reads},
     }
     allowed = int(expected.get("max_false_accepts", 0))
     if ctx.live_model is None and len(false) > allowed:
@@ -343,7 +363,7 @@ async def _injection(ctx: GraderContext, input_data: dict[str, Any]) -> GradeRes
         reading = reply.reading if reply is not None else None
         seen[spec["message_id"]] = {
             "disposition": disposition.kind,
-            "kind": reading.kind if reading else None,
+            "intents": list(reading.kinds) if reading else None,
         }
         if reply is None or disposition.kind != "attached_to_case":
             problems.append(f"{spec['message_id']}: not attached to its case")
@@ -379,7 +399,7 @@ async def _keeps_po(ctx: GraderContext) -> GradeResult:
     from dw_sales.evals.graders import AN, CALLERS
 
     scripted = Recorded(
-        raw={"quote_spans": ["Please keep the PO as it is."], "kind": "keeps_po_as_is"},
+        raw={"intents": [{"quote_spans": ["Please keep the PO as it is."], "intent": "rejects"}]},
         prompts=ctx.prompt_registry,
     )
     world = open_world(ctx.repo_root, SampleSet.of(ctx.repo_root, None), CALLERS, model=scripted)
@@ -417,23 +437,26 @@ def grade_missing_evidence(
     seen: dict[str, Any] = {}
     problems: list[str] = []
     for case in cases:
-        scripted = Recorded(raw={"quote_spans": case["quotes"], "kind": case["kind"]})
+        scripted = Recorded(raw={"intents": case["intents"]})
         spec = {"sender": "ivy.tran@quorilo.example", "subject": "Re: RFQ", "body": case["body"]}
-        thread = ThreadedCase(
-            CaseKind.QUOTE,
-            uuid.UUID(int=0x32),
-            "QRL",
-            QuoteStatus.SPEC_DISCUSSION.value,
-            "M09",
-            question("spec", "QRL-RFQ-2609-03"),
-        )
         reading = _run(
             ReplyReader(scripted).read(
-                newest_part(_message(spec)), thread, rules_version=RULES, run=_RUN
+                newest_part(_message(spec)),
+                author="customer",
+                about=question("spec", "QRL-RFQ-2609-03"),
+                rules_version=RULES,
+                run=_RUN,
             )
         )
-        step = proposed_step("quote", QuoteStatus.SPEC_DISCUSSION.value, reading)
-        seen[case["id"]] = {"kind": reading.kind, "quotes": len(reading.quotes), "step": step}
+        step = proposed_step("customer", "quote", QuoteStatus.SPEC_DISCUSSION.value, reading)
+        kept = [i.intent for i in reading.intents]
+        seen[case["id"]] = {
+            "intents": kept,
+            "quotes": sum(len(i.quotes) for i in reading.intents),
+            "step": step,
+        }
+        if kept != case["kept"]:
+            problems.append(f"{case['id']}: kept {kept}")
         if step != case.get("proposes"):
             problems.append(f"{case['id']}: proposed {step}")
     if problems:
@@ -524,7 +547,7 @@ async def _master_data_in_prompt(
     ctx: GraderContext, replies: Sequence[Mapping[str, Any]]
 ) -> list[str]:
     """Master data a rendered prompt holds besides the reply and the question."""
-    model = Recorded(raw={"quote_spans": [], "kind": "unclear"}, prompts=ctx.prompt_registry)
+    model = Recorded(raw={"intents": []}, prompts=ctx.prompt_registry)
     await read_replies(model, replies)
     customers = read_records(DATA_DIR / "customers.json", Customer)
     items = read_records(DATA_DIR / "items.json", Item)
@@ -575,6 +598,109 @@ async def _degrade(ctx: GraderContext) -> GradeResult:
     return GradeResult.fail("a spent budget read as a reply not understood", **details)
 
 
+async def in_review_case(world: World) -> uuid.UUID:
+    """M04 with both findings marked to send back to the customer, not yet
+    asked: the case Sales' own mail asks the customer about."""
+    from dw_sales.evals.graders import AN
+
+    seen = await world.process_each(AN, ["M04"])
+    case_id = seen["M04"][0].case_id
+    assert case_id is not None
+    commands, context = world.services.order_commands, AN.context()
+    for key in ("price_mismatch:2", "code_unmapped:3"):
+        await commands.dispose(
+            context,
+            case_id,
+            key,
+            case_version=world.order(case_id).case_version,
+            disposition="ask_customer",
+        )
+    return case_id
+
+
+def grade_sales_asks(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    return _run(_sales_asks(ctx, input_data))
+
+
+async def _sales_asks(ctx: GraderContext, input_data: dict[str, Any]) -> GradeResult:
+    """Sales asks Norvanta about M04's line 2 from Outlook: the sent copy is
+    no case and no disposition; read as `asks`, it proposes that the case
+    waits on the customer; nothing moves until Sales takes the step, and
+    then the case waits where the `waiting_customer` follow-up watches."""
+    from dw_sales.evals.graders import AN, CALLERS
+
+    listed = _fixture(ctx, input_data["security_ref"])["sent"]
+    (sent,) = [s for s in listed if s["expect"] == "on_case"]
+    asks = {"quote_spans": ["Could you confirm the unit price on line 2?"], "intent": "asks"}
+    scripted = Recorded(raw={"intents": [asks]}, prompts=ctx.prompt_registry)
+    ids = await _internet_ids(SampleSet.of(ctx.repo_root, None))
+    with SampleWith([_threaded(sent, ids)]) as sample:
+        world = open_world(ctx.repo_root, sample, CALLERS, model=scripted)
+        case_id = await in_review_case(world)
+        before = world.order(case_id).model_dump(mode="json")
+        seen = await world.process_each(AN, [sent["message_id"]])
+        disposition, _ = seen[sent["message_id"]]
+        view = await world.services.orders.get(AN.context(), case_id)
+        after = world.order(case_id).model_dump(mode="json")
+        logged = world.store.state(ALPHA).messages.get(sent["message_id"])
+        details: dict[str, Any] = {
+            "outgoing": disposition.outgoing,
+            "disposition": disposition.kind,
+            "sent": [(m.message_id, m.proposal) for m in view.thread_sent],
+        }
+        if logged is not None or not disposition.outgoing:
+            return GradeResult.fail("a message Sales sent took a disposition", **details)
+        if after != before:
+            return GradeResult.fail("a message Sales sent changed the case", **details)
+        if details["sent"] != [(sent["message_id"], "request_correction")]:
+            return GradeResult.fail("Sales asking proposed no wait on the customer", **details)
+        await world.services.order_commands.request_correction(
+            AN.context(), case_id, case_version=world.order(case_id).case_version
+        )
+        details["status"] = world.order(case_id).status.value
+    if details["status"] != OrderStatus.CORRECTION_REQUESTED.value:
+        return GradeResult.fail("the step did not leave the case waiting", **details)
+    return GradeResult.ok(**details)
+
+
+def grade_sent_cross_customer(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    return _run(_sent_cross_customer(ctx, input_data))
+
+
+async def _sent_cross_customer(ctx: GraderContext, input_data: dict[str, Any]) -> GradeResult:
+    """Three messages from a member's address on M04's thread: to M04's
+    customer (on the case), to another customer (not on it), and one whose
+    sender the receiving system failed (incoming, so a person reads it, and
+    never on the case as Sales' own)."""
+    from dw_sales.evals.graders import AN, CALLERS
+
+    cases = _fixture(ctx, input_data["security_ref"])["sent"]
+    scripted = Recorded(raw={"intents": []}, prompts=ctx.prompt_registry)
+    ids = await _internet_ids(SampleSet.of(ctx.repo_root, None))
+    with SampleWith([_threaded(c, ids) for c in cases]) as sample:
+        world = open_world(ctx.repo_root, sample, CALLERS, model=scripted)
+        case_id = await in_review_case(world)
+        inbox = {m.message_id: m for m in await world.services.inbox.messages(AN.context())}
+        view = await world.services.orders.get(AN.context(), case_id)
+        on_case = {m.message_id for m in view.thread_sent}
+        seen: dict[str, str] = {}
+        for spec in cases:
+            message_id = spec["message_id"]
+            outgoing = inbox[message_id].disposition.outgoing
+            if not outgoing:
+                seen[message_id] = "incoming"
+            else:
+                seen[message_id] = "on_case" if message_id in on_case else "not_on_case"
+    wanted = {c["message_id"]: c["expect"] for c in cases}
+    if seen != wanted:
+        return GradeResult.fail("a message Sales sent reached a case it may not", seen=seen)
+    return GradeResult.ok(seen=seen)
+
+
 GRADERS = {
     "sales.reply_golden": grade_golden,
     "sales.reply_no_false_accept": grade_no_false_accept,
@@ -583,4 +709,6 @@ GRADERS = {
     "sales.reply_missing_evidence": grade_missing_evidence,
     "sales.reply_cross_tenant": grade_cross_tenant,
     "sales.reply_degrade": grade_degrade,
+    "sales.reply_sales_asks": grade_sales_asks,
+    "sales.reply_sent_cross_customer": grade_sent_cross_customer,
 }

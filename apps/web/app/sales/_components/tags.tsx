@@ -176,7 +176,18 @@ const MESSAGE_LOOK: Record<string, Look> = {
   not_yet_processed: ["gray", i.minus],
 };
 
-export function MessageDispositionTag({ kind }: { kind: string }) {
+/**
+ * What became of a message; "Sales gửi" for one Sales sent (ticket 25),
+ * which has no disposition of its own and is never processed.
+ */
+export function MessageDispositionTag({
+  kind,
+  outgoing = false,
+}: {
+  kind: string;
+  outgoing?: boolean;
+}) {
+  if (outgoing) return <Chip look={["pri", i.edit]}>Sales gửi</Chip>;
   return (
     <Chip look={MESSAGE_LOOK[kind]}>{label(MESSAGE_DISPOSITION, kind)}</Chip>
   );

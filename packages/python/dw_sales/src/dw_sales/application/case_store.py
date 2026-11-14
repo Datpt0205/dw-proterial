@@ -38,6 +38,7 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.reply_intent import ReplyReading
 
 if TYPE_CHECKING:
     from dw_sales.application.activity_ports import StepActivityLogPort
@@ -262,6 +263,18 @@ class MessageOnCase:
     case_id: uuid.UUID
 
 
+@dataclass(frozen=True, slots=True)
+class SentRead:
+    """A message Sales sent, as DW1 processed it (ticket 25): never a
+    disposition, since it opens no case and nothing is routed; only when DW1
+    took it up and what a model read its thread intents as (ticket 26), None
+    where its thread held no case to read it for, or the step was off."""
+
+    message_id: str
+    processed_at: datetime
+    reading: ReplyReading | None = None
+
+
 # Where a message's processing stands (ticket 25): `sales.processing_jobs`.
 JobStatus = Literal["queued", "running", "done", "failed"]
 # Why a job failed, from a fixed set the table's CHECK holds too:
@@ -472,6 +485,22 @@ class MessageLogPort(Protocol):
         ...
 
 
+class SentReadLogPort(Protocol):
+    """The messages Sales sent that DW1 processed (`SentRead`)."""
+
+    async def record(self, sent: SentRead) -> None:
+        """Raises `ConflictError` (`sent_message_already_read`) when the
+        message already has its record: the (workspace, message_id) pair is
+        its idempotency key, as a disposition's is."""
+        ...
+
+    async def get(self, message_id: str) -> SentRead | None: ...
+
+    async def list_all(self) -> Sequence[SentRead]:
+        """Every record of the workspace, newest processed first."""
+        ...
+
+
 class ProcessingJobsPort(Protocol):
     """Each message's processing job in one workspace (ticket 25)."""
 
@@ -636,6 +665,10 @@ class SalesUnitOfWork(Protocol):
 
     @property
     def jobs(self) -> ProcessingJobsPort: ...
+
+    # The messages Sales sent that DW1 processed (ticket 25).
+    @property
+    def sent(self) -> SentReadLogPort: ...
 
     @property
     def approvals(self) -> RunLessApprovalsPort: ...

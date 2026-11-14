@@ -58,6 +58,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
     disposition: {
       kind: "not_yet_processed",
       thread_cases: [],
+      outgoing: false,
       order_cases: [],
     },
     handoff_draft: null,
@@ -161,6 +162,7 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
             case_id: "c-1",
             processed_at: "2026-10-14T03:00:05Z",
             thread_cases: [],
+            outgoing: false,
             order_cases: [],
           },
         }),
@@ -274,6 +276,7 @@ describe("what a model read is shown with the case code resolved it to (ticket 3
             reason: "reply_to_case",
             processed_at: "2026-10-01T03:05:00Z",
             thread_cases: [],
+            outgoing: false,
             order_cases: [],
             reading: {
               prompt: "sales.message_intent@1.0.0",
@@ -323,6 +326,34 @@ describe("what a model read is shown with the case code resolved it to (ticket 3
         screen.queryByRole("link", { name: "YCBG/RFQ YCBG-2609-030" }),
       ).toBeNull();
       expect(screen.getByText(/YCBG\/RFQ YCBG-2609-030/)).toBeTruthy();
+    },
+    SLOW,
+  );
+});
+
+describe("a mail Sales sent (ticket 25)", () => {
+  it(
+    'is marked as Sales\', has nothing to press and is not queued by "DW xử lý tất cả"',
+    async () => {
+      const outgoing = message("S1", {
+        sender: "an.nguyen@alpha.local",
+        disposition: {
+          kind: "not_yet_processed",
+          thread_cases: [],
+          outgoing: true,
+          order_cases: [],
+        },
+      });
+      inbox = [outgoing, message("M02")];
+      page();
+
+      await screen.findByText("PO S1");
+      const sent = within(row("S1"));
+      expect(sent.getAllByText("Sales gửi").length).toBeGreaterThan(0);
+      expect(sent.queryByRole("button", { name: /DW xử lý/ })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: /DW xử lý tất cả \(1\)/ }),
+      ).toBeTruthy();
     },
     SLOW,
   );

@@ -2121,17 +2121,19 @@ export interface components {
         /**
          * CaseReplyView
          * @description A customer's reply attached to the case by its thread (ticket 32), with
-         *     what a model read of it and the step code proposes from that, now.
+         *     the thread intents a model read in it (ticket 26) and the step code
+         *     proposes from that, now.
          *
          *     ``proposal`` is computed from the case's status as it is now, and only for
-         *     the newest reply: an older reply's reading does not pre-select anything.
-         *     It is a suggestion: the step is the existing one, which Sales confirms and
-         *     the server checks as for any other caller. The quotes are the customer's
-         *     sentences, shown to a case reader as the inbox shows the whole mail.
+         *     the newest message of the case's thread, a reply or one Sales sent: an
+         *     older one's reading does not pre-select anything. It is a suggestion: the
+         *     step is the existing one, which Sales confirms and the server checks as
+         *     for any other caller. The quotes are the customer's sentences, shown to a
+         *     case reader as the inbox shows the whole mail.
          */
         CaseReplyView: {
-            /** Kind */
-            kind: ("accepts_spec" | "rejects_spec" | "counter_proposal" | "sends_corrected_po" | "keeps_po_as_is" | "question" | "unclear") | null;
+            /** Intents */
+            intents: components["schemas"]["IntentView"][];
             /** Linked To */
             linked_to: string;
             /** Message Id */
@@ -2148,9 +2150,7 @@ export interface components {
             /** Prompt */
             prompt: string | null;
             /** Proposal */
-            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po") | null;
-            /** Quotes */
-            quotes: string[];
+            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec") | null;
         };
         /**
          * CatalogImportView
@@ -3266,6 +3266,20 @@ export interface components {
             /** Rules */
             rules: string;
         };
+        /**
+         * IntentView
+         * @description One thread intent a model read and code kept (ticket 26), with the
+         *     sentences it stands on.
+         */
+        IntentView: {
+            /**
+             * Intent
+             * @enum {string}
+             */
+            intent: "sends_po" | "requests_change" | "cancels" | "accepts" | "rejects" | "asks" | "adds_info" | "sends_rfq" | "unclear";
+            /** Quotes */
+            quotes: string[];
+        };
         /** ItemBasisView */
         ItemBasisView: {
             /** Moq */
@@ -3852,6 +3866,11 @@ export interface components {
              * @default []
              */
             order_cases: components["schemas"]["ThreadCaseView"][];
+            /**
+             * Outgoing
+             * @default false
+             */
+            outgoing: boolean;
             /** Owner */
             owner?: string | null;
             /** Processed At */
@@ -4098,6 +4117,11 @@ export interface components {
              * @default []
              */
             thread_before: components["schemas"]["ThreadMessageView"][];
+            /**
+             * Thread Sent
+             * @default []
+             */
+            thread_sent: components["schemas"]["SentMessageView"][];
             total: components["schemas"]["Amount"] | null;
             total_anchor: components["schemas"]["SourceAnchor"] | null;
             unapplied_decision: components["schemas"]["UnappliedDecisionView"] | null;
@@ -4944,6 +4968,11 @@ export interface components {
              * @default []
              */
             thread_before: components["schemas"]["ThreadMessageView"][];
+            /**
+             * Thread Sent
+             * @default []
+             */
+            thread_sent: components["schemas"]["SentMessageView"][];
             /** Ycbg No */
             ycbg_no: string | null;
             /** Ycbg Recorded At */
@@ -5084,6 +5113,22 @@ export interface components {
             /** Ycbg No */
             ycbg_no: string | null;
         };
+        /**
+         * ReadIntent
+         * @description One intent code kept, standing on the quotes it located.
+         */
+        ReadIntent: {
+            /**
+             * Intent
+             * @enum {string}
+             */
+            intent: "sends_po" | "requests_change" | "cancels" | "accepts" | "rejects" | "asks" | "adds_info" | "sends_rfq" | "unclear";
+            /**
+             * Quotes
+             * @default []
+             */
+            quotes: components["schemas"]["ReplyQuote"][];
+        };
         /** ReasonCount */
         ReasonCount: {
             /** Count */
@@ -5160,9 +5205,9 @@ export interface components {
         };
         /**
          * ReplyQuote
-         * @description A sentence of the reply that code found, once, in its newest part:
-         *     the text as the customer wrote it and where it is (offsets into the NFKC
-         *     form of `MessagePart.text`).
+         * @description A sentence of the message that code found, once, in its newest part:
+         *     the text as written and where it is (offsets into the NFKC form of
+         *     `MessagePart.text`).
          */
         ReplyQuote: {
             /** End */
@@ -5174,14 +5219,18 @@ export interface components {
         };
         /**
          * ReplyReading
-         * @description What the model reading of a reply did, stamped on its disposition: the
+         * @description What the model reading of a thread message did, stamped where the
+         *     message is kept (a reply's disposition, a sent message's record): the
          *     prompt, profile and route of the call, the rules whose switch asked for
-         *     it, and the outcome. ``unavailable``: no usable answer, so the reply is on
-         *     its case with no proposal and Sales reads it.
+         *     it, the outcome and the intents code kept. ``unavailable``: no usable
+         *     answer, so the message proposes nothing and Sales reads it.
          */
         ReplyReading: {
-            /** Kind */
-            kind?: ("accepts_spec" | "rejects_spec" | "counter_proposal" | "sends_corrected_po" | "keeps_po_as_is" | "question" | "unclear") | null;
+            /**
+             * Intents
+             * @default []
+             */
+            intents: components["schemas"]["ReadIntent"][];
             /** Model Profile */
             model_profile: string;
             /**
@@ -5191,11 +5240,6 @@ export interface components {
             outcome: "read" | "unavailable";
             /** Prompt */
             prompt: string;
-            /**
-             * Quotes
-             * @default []
-             */
-            quotes: components["schemas"]["ReplyQuote"][];
             /** Route */
             route: string;
             /** Rules */
@@ -5570,6 +5614,33 @@ export interface components {
              * @enum {string}
              */
             status: "suggested" | "no_match" | "unavailable";
+        };
+        /**
+         * SentMessageView
+         * @description A message Sales sent on the case's thread (ticket 25: "Sales gửi"),
+         *     with the thread intents a model read in it where the tenant's rules turn
+         *     the step on (ticket 26), and the step that proposes when it is the
+         *     thread's newest: Sales asking the customer proposes that the case waits
+         *     on them. Its subject is Sales' own words.
+         */
+        SentMessageView: {
+            /** Intents */
+            intents: components["schemas"]["IntentView"][];
+            /** Message Id */
+            message_id: string;
+            /** Outcome */
+            outcome: ("read" | "unavailable") | null;
+            /** Prompt */
+            prompt: string | null;
+            /** Proposal */
+            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec") | null;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Subject */
+            subject: string;
         };
         /** SessionDetailView */
         SessionDetailView: {

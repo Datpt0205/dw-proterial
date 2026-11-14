@@ -12,6 +12,7 @@ nobody outside the account's own workspace).
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -43,6 +44,7 @@ from dw_sales.application.processing import (
 )
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.evals.graders import AN, CALLERS, GIANG
+from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import (
     ALPHA,
     BETA,
@@ -50,6 +52,7 @@ from dw_sales.evals.world import (
     Directory,
     MemoryStore,
     SampleSet,
+    SampleWith,
     World,
     open_world,
 )
@@ -156,6 +159,8 @@ class Setup:
             self.processing or world.services.processing,
             self.accounts,
             self.clock,
+            world.directory,
+            world.intake,
         )
 
     @property
@@ -299,6 +304,62 @@ async def test_the_lane_meeting_a_job_a_person_queued_writes_no_lane_row() -> No
 
     assert met.job_id == queued.job_id
     assert not [e for e in world.audit() if e.action == QUEUED_BY_LANE]
+
+
+# ------------------------------------------- a message Sales sent (25) --
+
+
+def _sent_by_an() -> dict[str, object]:
+    """A copy of a mail An sent, as his flow exports Sent Items."""
+    return {
+        "message_id": "S1",
+        "sender": AN.email,
+        "recipients": ["hana.westbrook@norvanta.example"],
+        "subject": "RE: PO NRV-PO-26-0457",
+        "received_at": "2026-10-03T10:00:00+07:00",
+        "body": "Dear Hana,\n\nCould you confirm the unit price on line 2?\n\nAn",
+        "authentication": {"spf": "none", "dkim": "none", "dmarc": "none"},
+        "references": ["<nrv-po-26-0457.20260924@mail.norvanta.example>"],
+    }
+
+
+async def test_a_message_sales_sent_is_never_queued_while_its_intents_are_not_read(
+    tmp_path: Path,
+) -> None:
+    """The platform's rules leave the intents step off: Sales' mail has
+    nothing to be read for, and a run spent on it would be spent for
+    nothing. Every other message is queued as before."""
+    with SampleWith([_sent_by_an()]) as sample:
+        shutil.copytree(
+            sample.data_dir, tmp_path / "data", ignore=shutil.ignore_patterns("policies")
+        )
+        world = open_world(REPO, SampleSet(tmp_path / "data", sample.attachments_dir), CALLERS)
+        setup = Setup(world)
+
+        tick = await setup.tick()
+        again = await setup.tick()
+
+    assert "S1" not in tick.queued and tick.queued and again.queued == ()
+    state = world.store.state(ALPHA)
+    assert "S1" not in state.jobs and "S1" not in state.messages and state.sent == {}
+
+
+async def test_a_message_sales_sent_is_taken_up_once_where_its_intents_are_read() -> None:
+    """The demo tenant reads them, with a model wired: queued once, run
+    once, kept with no disposition; the next tick leaves it alone."""
+    model = Recorded(raw={"intents": []})
+    with SampleWith([_sent_by_an()]) as sample:
+        world = open_world(REPO, sample, CALLERS, model=model)
+        setup = Setup(world)
+
+        tick = await setup.tick()
+        again = await setup.tick()
+
+    assert "S1" in tick.queued and "S1" not in again.queued
+    state = world.store.state(ALPHA)
+    assert "S1" not in state.messages and "S1" in state.sent
+    assert state.jobs["S1"].status == "done" and state.jobs["S1"].error is None
+    assert [m for _, m in _runs(world)].count("S1") == 1
 
 
 @dataclass

@@ -205,6 +205,18 @@ message_cases = sa.Table(
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# The messages Sales sent that DW1 took up (ticket 25, migration
+# 7f3def432f82): never a disposition; the reading of their thread intents.
+sent_messages = sa.Table(
+    "sent_messages",
+    metadata,
+    *_scope(),
+    sa.Column("message_id", sa.Text, primary_key=True),
+    sa.Column("processed_at", _TS, nullable=False),
+    sa.Column("reading", JSONB(none_as_null=True)),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 artifacts = sa.Table(
     "artifacts",
     metadata,

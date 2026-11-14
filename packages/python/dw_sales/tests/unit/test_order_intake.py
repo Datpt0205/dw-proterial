@@ -381,6 +381,11 @@ class _Threads:
         found = await self._first(scope, message, sender)
         return () if found is None else (found,)
 
+    async def sent_cases(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> tuple[ThreadedCase, ...]:
+        raise NotImplementedError("not exercised by the intake's tests: no message Sales sent")
+
     async def _first(
         self, scope: SalesScope, message: InboundMessage, sender: Customer | None
     ) -> ThreadedCase | None:
