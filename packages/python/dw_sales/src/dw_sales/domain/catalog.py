@@ -100,6 +100,14 @@ class Compliance(BaseModel):
 CustomerStatus = Literal["official", "temporary"]
 # How a confirmed order goes back: an email draft, or the customer's own portal.
 ConfirmationChannel = Literal["email", "portal"]
+# The kind of sales order Bravo files a customer's orders as: the set its
+# "Import Sales Order" template prints in its own header (B41, dw_sales
+# ticket 02), spelled as Bravo spells them.
+OrderType = Literal["Mass", "Returned", "Sample", "SampleFee"]
+# A delivery value as the customer's sales orders carry it (delivery term,
+# mode, destination, shipment type): free text, since no list of Bravo's own
+# values has been seen, only the few the filled files use.
+OrderTerm = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[^\x00-\x1f\x7f]+$")]
 
 
 class Customer(BaseModel):
@@ -124,6 +132,15 @@ class Customer(BaseModel):
     # the customer has none: the case is then every PIC's to pick up. Required
     # all the same, so a record that forgets it is refused, not unassigned.
     sales_pic: str | None = Field(max_length=254)
+    # What every sales order of this customer carries in Bravo, the same on
+    # every order seen (B41): a column of the Bravo upload file may read them
+    # (`sales_bravo_upload`, a `customer` column). None where the list does
+    # not say, and the column is then left blank for the person who pastes.
+    order_type: OrderType | None = None
+    delivery_term: OrderTerm | None = None
+    delivery_mode: OrderTerm | None = None
+    destination: OrderTerm | None = None
+    shipment_type: OrderTerm | None = None
 
     @field_validator("email_domains")
     @classmethod

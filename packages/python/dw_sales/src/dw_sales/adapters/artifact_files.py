@@ -35,6 +35,7 @@ from typing import Final
 from xml.sax.saxutils import escape
 
 from openpyxl import Workbook as OpenpyxlWorkbook
+from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -175,6 +176,15 @@ def _naive_utc(at: datetime) -> datetime:
 
 def _fill(target: Worksheet, sheet: Sheet) -> None:
     row = 1
+    for cells in sheet.banner:
+        for cell in cells:
+            put(target, row, cell.first, cell.text, bold=True)
+            target.cell(row=row, column=cell.first).alignment = Alignment(horizontal="center")
+            if cell.last > cell.first:
+                target.merge_cells(
+                    start_row=row, start_column=cell.first, end_row=row, end_column=cell.last
+                )
+        row += 1
     if sheet.title:
         put(target, row, 1, sheet.title, bold=True)
         row += 2
@@ -188,9 +198,12 @@ def _fill(target: Worksheet, sheet: Sheet) -> None:
         for col, header in enumerate(sheet.columns, start=1):
             put(target, row, col, header, bold=True)
         row += 1
+        formats = sheet.formats or (None,) * len(sheet.columns)
         for values in sheet.rows:
-            for col, value in enumerate(values, start=1):
+            for col, (value, number_format) in enumerate(zip(values, formats, strict=True), 1):
                 put(target, row, col, value)
+                if value is not None and number_format is not None:
+                    target.cell(row=row, column=col).number_format = number_format
             row += 1
     if sheet.notes:
         row += 1

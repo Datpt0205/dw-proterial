@@ -4556,6 +4556,9 @@
               "header_too_long",
               "header_ambiguous",
               "header_twice",
+              "field_twice",
+              "source_invalid",
+              "constant_not_in_template",
               "required_missing",
               "layout_invalid",
               "sheet_name_invalid",
@@ -4576,11 +4579,14 @@
             "anyOf": [
               {
                 "enum": [
+                  "row_no",
                   "customer_code",
                   "po_no",
                   "revision",
                   "po_date",
+                  "received_date",
                   "currency",
+                  "usd_rate",
                   "line_no",
                   "customer_item_code",
                   "prv_code",
@@ -17755,7 +17761,7 @@
       },
       "TemplateHeader": {
         "additionalProperties": false,
-        "description": "One visible cell of the header row, as the workbook holds it.",
+        "description": "One visible cell of the header row (or a row above it), as the\nworkbook holds it.",
         "properties": {
           "column": {
             "minimum": 1.0,
@@ -17784,8 +17790,19 @@
       },
       "TemplateRow": {
         "additionalProperties": false,
-        "description": "The template's header row: its sheet, its row number, its cells.",
+        "description": "The template's header row: its sheet, its row number, its cells, and\nthe visible cells of each row above it, from row 1 (an empty tuple for a\nrow with none).",
         "properties": {
+          "above": {
+            "default": [],
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/TemplateHeader"
+              },
+              "type": "array"
+            },
+            "title": "Above",
+            "type": "array"
+          },
           "headers": {
             "items": {
               "$ref": "#/components/schemas/TemplateHeader"

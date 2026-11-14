@@ -1,0 +1,106 @@
+schema_version: "2.0"
+policy_id: sales_bravo_upload
+policy_version: "2.0.0"
+
+# The Bravo upload file DW1 prepares once an order is prepared (WIV-03-012
+# step 3), in the layout of Bravo's own "Import Sales Order" template (B41,
+# measured 2026-11-13, dw_sales ticket 02): Sales copies its rows and pastes
+# them into Bravo's "Cập nhật đơn đặt hàng bán". The title and group rows,
+# the 39 headers on row 3 and their spellings ("Other infomation1",
+# "Seperation", the line-level Delivery mode/term/Destination repeated at
+# AJ-AL) are the template's own, so the rows land where Bravo expects them.
+#
+# One row per delivery from row 4 (1.1.0's rule): a PO line split over
+# several dates is a row per date, each with its own row number, the line's
+# "PO line", its quantity and its date.
+#
+# Each column reads one source, or none and is left blank for the person who
+# pastes (`dw_sales.application.artifact_content.UploadColumn`):
+# - `field`: a value code computes from the case (`order_artifacts`);
+# - `customer`: a value of the customer's master record (the customer list);
+# - `constant`: a fixed text.
+# A company's own choices (another column filled, "Mã hàng" as the PRV code,
+# a constant per customer) are a tenant version of this file, made in "Quy
+# tắc của công ty" or "Tạo từ tệp mẫu", never an edit here.
+#
+# What is blank and why: "Ngày" and "Số" are Bravo's voucher; "Mã hàng" is
+# blank because Bravo converts "Mã của KH" itself on import (all three filled
+# files leave it blank; owed by Proterial: a tenant switches it to
+# `field: prv_code` if not); "người lập" is the PIC's Bravo staff code, which
+# DW1 does not hold yet; the rest are filled per customer (ticket 38) or by
+# Bravo. Formats are the template's: quantity #,##0, price to five places,
+# dates dd/mm/yyyy written as dates. A value with more places than its
+# column shows is refused before the file is made, since a paste copies what
+# the cell shows.
+mock: false
+sheet_name: "Sheet1"
+banner:
+  - - text: "File import Sales order"
+      first: 1
+      last: 39
+  - - text: "ĐẦU PHIẾU"
+      first: 1
+      last: 18
+    - text: "CHI TIẾT"
+      first: 19
+      last: 39
+columns:
+  - header: "Stt"
+    field: row_no
+  - header: "Ngày"
+  - header: "Số"
+  - header: "Tiền tệ (VND/USD,..)"
+    field: currency
+  - header: "Tỷ giá (Nếu USD thì là 1)"
+    field: usd_rate
+  - header: "Type (Loại đơn hàng: Mass/Returned/Sample/SampleFee)"
+    customer: order_type
+  - header: "Mã KH trực tiếp"
+    field: customer_code
+  - header: "Người đại diện"
+  - header: "Mã khách hàng gián tiếp"
+  - header: "người lập"
+  - header: "LME center"
+  - header: "Số PO của KH"
+    field: po_no
+  - header: "Receipt date"
+    field: received_date
+    number_format: "dd/mm/yyyy"
+  - header: "Delivery term"
+    customer: delivery_term
+  - header: "Delivery mode"
+    customer: delivery_mode
+  - header: "Destination"
+    customer: destination
+  - header: "End user"
+  - header: "Shipment type"
+    customer: shipment_type
+  - header: "PO line"
+    field: line_no
+  - header: "Mã hàng"
+  - header: "Mã của KH"
+    field: customer_item_code
+  - header: "Other infomation1"
+  - header: "Other Infomation2"
+  - header: "Other Infomation3"
+  - header: "Other Infomation4"
+  - header: "đvt"
+  - header: "Số lượng"
+    field: quantity
+    number_format: "#,##0"
+  - header: "Unit length"
+  - header: "MOQ"
+  - header: "lead time"
+  - header: "Đơn giá nguyên tệ"
+    field: unit_price
+    number_format: "#,##0.00000"
+  - header: "Ngày KH yêu cầu"
+    field: requested_date
+    number_format: "dd/mm/yyyy"
+  - header: "Ngày XN giao hàng lần đầu"
+  - header: "Ngày XN giao hàng"
+  - header: "Sales accounting"
+  - header: "Delivery mode"
+  - header: "Delivery term"
+  - header: "Destination"
+  - header: "Invoice Seperation"

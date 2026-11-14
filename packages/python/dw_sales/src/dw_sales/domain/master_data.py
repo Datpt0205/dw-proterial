@@ -41,7 +41,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -51,6 +51,7 @@ from dw_sales.domain.catalog import (
     Customer,
     Item,
     LmeMonth,
+    OrderType,
     Quotation,
     month_key,
 )
@@ -450,6 +451,7 @@ _PACKAGING: Final = {"reel": "Cuộn (reel)", "coil": "Cuộn tròn (coil)", "dr
 _UOMS: Final = {"m": "m"}
 _CURRENCIES: Final = {"USD": "USD", "VND": "VND", "JPY": "JPY"}
 _BASES: Final = {"fixed": "Cố định", "lme_band": "Theo LME"}
+_ORDER_TYPES: Final = {v: v for v in get_args(OrderType)}
 
 
 def _no_spellings(values: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
@@ -540,6 +542,50 @@ _CUSTOMERS = ListSpec(
             "Email đăng nhập của Sales phụ trách, để trống nếu chưa giao",
             required=False,
             aliases=("Sales phụ trách", "PIC"),
+        ),
+        # What the customer's sales orders carry in Bravo (B41, ticket 02),
+        # read into the upload file's columns; each also recognised by the
+        # header Bravo's own "Import Sales Order" template prints.
+        _choice(
+            "order_type",
+            "Loại đơn hàng",
+            "Mass / Returned / Sample / SampleFee, để trống nếu chưa rõ",
+            _no_spellings(_ORDER_TYPES),
+            labels=_ORDER_TYPES,
+            aliases=("Type", "Loại đơn"),
+            required=False,
+        ),
+        Column(
+            "delivery_term",
+            "Điều kiện giao hàng",
+            "text",
+            "Như trên đơn bán của khách ở Bravo, ví dụ DAP; để trống nếu chưa rõ",
+            required=False,
+            aliases=("Delivery term",),
+        ),
+        Column(
+            "delivery_mode",
+            "Phương thức giao hàng",
+            "text",
+            "Như trên đơn bán của khách ở Bravo, ví dụ ROAD; để trống nếu chưa rõ",
+            required=False,
+            aliases=("Delivery mode",),
+        ),
+        Column(
+            "destination",
+            "Nơi giao",
+            "text",
+            "Như trên đơn bán của khách ở Bravo; để trống nếu chưa rõ",
+            required=False,
+            aliases=("Destination",),
+        ),
+        Column(
+            "shipment_type",
+            "Loại lô hàng",
+            "text",
+            "Như trên đơn bán của khách ở Bravo; để trống nếu chưa rõ",
+            required=False,
+            aliases=("Shipment type",),
         ),
     ),
 )

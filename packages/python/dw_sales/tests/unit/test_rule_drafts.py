@@ -28,7 +28,7 @@ from dw_platform.application.malware import ScanVerdict
 from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.artifact_content import BravoUploadLayout, UploadField
+from dw_sales.application.artifact_content import BravoUploadLayout, CustomerAttribute, UploadField
 from dw_sales.application.rule_drafts import (
     BRAVO_TEMPLATE_MAPPING,
     KEPT_FOR,
@@ -49,6 +49,7 @@ from dw_sales.application.template_reading import (
     header_row,
     mapping_inputs,
     offered,
+    repeated_values,
     verify,
 )
 from dw_sales.evals.graders import AN as _AN
@@ -58,10 +59,13 @@ from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.rule_drafts import (
     ALPHA_OTHER,
     Bench,
+    answer_with,
     gold,
     hidden_texts,
+    letter_of,
     platform_layout,
     template_xlsx,
+    unseen_letters,
 )
 from dw_sales.evals.world import ALPHA, BETA, Caller
 
@@ -111,7 +115,27 @@ def _row(*headers: str) -> TemplateRow:
 
 
 ROW = _row("Số PO", "Dòng", "Mã hàng", "Số lượng", "Ghi chú")
-ANSWER = {"po_no": "Số PO", "line_no": "Dòng", "prv_code": "Mã hàng", "quantity": "Số lượng"}
+
+
+def _answer(**sources: str | dict[str, str]) -> ModelBravoMapping:
+    """The model's answer: each column letter with its source, a field by
+    its bare name."""
+    return ModelBravoMapping.model_validate(
+        {
+            "columns": [
+                {"column": letter, **({"field": s} if isinstance(s, str) else s)}
+                for letter, s in sources.items()
+            ]
+        }
+    )
+
+
+ANSWER = {"A": "po_no", "B": "line_no", "C": "prv_code", "D": "quantity"}
+
+
+def _drafted(document: dict[str, Any]) -> list[tuple[str, str | None, str | None, str | None]]:
+    layout = BravoUploadLayout.model_validate(document)
+    return [(c.header, c.field, c.customer, c.constant) for c in layout.columns]
 
 
 # ------------------------------------------------------- the header row --
@@ -127,6 +151,8 @@ def test_the_header_row_is_the_first_with_four_visible_text_cells() -> None:
     row = header_row(_grid(cells))
     assert row is not None
     assert (row.row, [h.text for h in row.headers]) == (3, ["w", "x", "y", "z"])
+    # What is above it is kept, row by row, for the layout's banner.
+    assert [[h.ref for h in above] for above in row.above] == [["A1"], []]
 
 
 def test_hidden_cells_are_dropped_before_the_header_row_is_read() -> None:
@@ -144,6 +170,8 @@ def test_hidden_cells_are_dropped_before_the_header_row_is_read() -> None:
     row = header_row(_grid(cells))
     assert row is not None and row.row == 2
     assert [h.ref for h in row.headers] == ["A2", "C2", "E2", "F2"]
+    # The hidden row above is kept as an empty one: nothing of it is read.
+    assert row.above == ((),)
     assert header_row(_grid(cells, hidden_sheet=True)) is None
 
 
@@ -152,106 +180,194 @@ def test_no_row_with_four_visible_headers_reads_no_template() -> None:
     assert header_row(_grid(cells)) is None
 
 
-def test_the_model_is_asked_one_header_per_upload_field() -> None:
-    assert set(ModelBravoMapping.model_fields) == set(get_args(UploadField))
-    assert ModelBravoMapping.model_validate({}).model_dump() == dict.fromkeys(get_args(UploadField))
+def test_a_value_every_filled_row_repeats_is_read_and_nothing_else() -> None:
+    cells = [
+        *(_cell(f"{c}1", 1, i, t) for i, (c, t) in enumerate(zip("ABCD", "wxyz", strict=True), 1)),
+        _cell("A2", 2, 1, "Mass"),
+        _cell("A3", 3, 1, " Mass "),
+        _cell("B2", 2, 2, "PO-1"),
+        _cell("B3", 3, 2, "PO-2"),
+        _cell("C2", 2, 3, "X"),
+        _cell("C3", 3, 3, "SYSTEM", hidden_row=True),
+        _cell("D2", 2, 4, "white", font_matches_fill=True),
+        _cell("D3", 3, 4, "white", font_matches_fill=True),
+    ]
+    grid = _grid(cells)
+    row = header_row(grid)
+    assert row is not None
+    repeated = repeated_values(grid, row)
+    # A: one value on every row; B: two; C: the hidden row is not a row
+    # anyone sees; D: nothing seen at all.
+    assert {column: cell.ref for column, cell in repeated.items()} == {1: "A2", 3: "C2"}
+
+
+def test_the_model_answers_each_column_by_its_letter_from_the_closed_sets() -> None:
+    with pytest.raises(ValueError, match="field"):
+        _answer(A={"field": "po_number"})
+    with pytest.raises(ValueError, match="customer"):
+        _answer(A={"customer": "credit_limit"})
+    with pytest.raises(ValueError, match="column"):
+        _answer(**{"Số PO": "po_no"})
 
 
 def test_what_the_model_is_sent_is_the_header_row_as_code_built_json() -> None:
     row = _row("Số PO", "Dòng", 'Mã "hàng"', "x" * 100)
-    sent = json.loads(mapping_inputs(row, room=4000)["headers"])
+    repeated = {2: TemplateHeader(ref="B2", column=2, text="y" * 100)}
+    sent = json.loads(mapping_inputs(row, repeated, room=4000)["headers"])
     assert sent[0] == {"column": "A", "header": "Số PO"}
+    assert sent[1] == {"column": "B", "header": "Dòng", "every_row": "y" * 64}
     assert sent[2]["header"] == 'Mã "hàng"'
-    # Never longer than a layout's header can be.
     assert len(sent[3]["header"]) == 64
-    assert len(json.loads(mapping_inputs(row, room=10)["headers"])[3]["header"]) == 16
+    assert len(json.loads(mapping_inputs(row, {}, room=10)["headers"])[3]["header"]) == 16
 
 
 # --------------------------------------------------------- verification --
 
 
-def test_a_mapping_of_visible_headers_drafts_the_template_in_its_own_order() -> None:
-    answer = {"quantity": "Số lượng", "po_no": "Số PO", "prv_code": "Mã hàng", "line_no": "Dòng"}
-    drafted = verify(answer, ROW, BASE)
+def test_a_mapping_drafts_every_template_column_at_its_place() -> None:
+    answer = _answer(D="quantity", A="po_no", C="prv_code", B="line_no")
+    drafted = verify(answer, ROW, BASE, {})
     assert isinstance(drafted, Proposal)
-    layout = BravoUploadLayout.model_validate(drafted.document)
-    assert [(c.field, c.header) for c in layout.columns] == [
-        ("po_no", "Số PO"),
-        ("line_no", "Dòng"),
-        ("prv_code", "Mã hàng"),
-        ("quantity", "Số lượng"),
+    assert _drafted(drafted.document) == [
+        ("Số PO", "po_no", None, None),
+        ("Dòng", "line_no", None, None),
+        ("Mã hàng", "prv_code", None, None),
+        ("Số lượng", "quantity", None, None),
+        # A column no source names is still the template's, left blank.
+        ("Ghi chú", None, None, None),
     ]
-    assert (layout.sheet_name, layout.mock) == ("Mau", False)
+    layout = BravoUploadLayout.model_validate(drafted.document)
+    assert (layout.sheet_name, layout.mock, layout.schema_version) == ("Mau", False, "2.0")
     assert drafted.evidence["columns.3.header"] == "Mau!D1"
+    assert drafted.evidence["columns.3.field"] == "Mau!D1"
     assert drafted.evidence["sheet_name"] == "Mau!A1:E1"
     assert set(drafted.machine_read) == set(drafted.evidence)
     assert [(p.code, p.ref, p.header) for p in drafted.problems] == [
         ("column_unmapped", "E1", "Ghi chú")
     ]
+    # The version in force's format for the same field is kept.
+    assert drafted.document["columns"][3]["number_format"] == "#,##0"
 
 
-def test_a_header_the_template_does_not_hold_verbatim_is_refused() -> None:
-    for invented in ("so luong", "Số Lượng", "Số lượng đặt"):
-        refused = verify({**ANSWER, "quantity": invented}, ROW, BASE)
+def test_a_header_printed_twice_is_two_columns_each_by_its_letter() -> None:
+    """Bravo's template prints "Delivery term" at N and again at AK: a
+    column is its letter, so each takes its own source, or none."""
+    row = _row("Số PO", "Dòng", "Mã hàng", "Số lượng", "Delivery term", "Delivery term")
+    answer = _answer(**ANSWER, E={"customer": "delivery_term"})
+    drafted = verify(answer, row, BASE, {})
+    assert isinstance(drafted, Proposal)
+    assert _drafted(drafted.document)[4:] == [
+        ("Delivery term", None, "delivery_term", None),
+        ("Delivery term", None, None, None),
+    ]
+    assert [p.ref for p in drafted.problems] == ["F1"]
+
+
+def test_a_column_the_header_row_does_not_have_is_refused() -> None:
+    for letter in ("F", "Z", "AA"):
+        refused = verify(_answer(**{**ANSWER, letter: "unit_price"}), ROW, BASE, {})
         assert isinstance(refused, Refused)
-        assert [(p.code, p.field) for p in refused.problems] == [
-            ("header_not_in_template", "quantity")
+        assert [(p.code, p.field, p.ref) for p in refused.problems] == [
+            ("header_not_in_template", "unit_price", letter)
         ]
 
 
-def test_one_column_for_two_fields_is_refused() -> None:
-    refused = verify({**ANSWER, "unit_price": "Số lượng"}, ROW, BASE)
+def test_a_column_answered_twice_or_with_two_sources_is_refused() -> None:
+    twice = ModelBravoMapping.model_validate(
+        {
+            "columns": [
+                *_answer(**ANSWER).model_dump()["columns"],
+                {"column": "D", "field": "unit_price"},
+            ]
+        }
+    )
+    refused = verify(twice, ROW, BASE, {})
     assert isinstance(refused, Refused)
     assert {(p.code, p.field, p.ref) for p in refused.problems} == {
         ("header_twice", "quantity", "D1"),
         ("header_twice", "unit_price", "D1"),
+        ("required_missing", "quantity", None),
     }
-
-
-def test_a_header_printed_twice_cannot_say_which_column() -> None:
-    row = _row("Số PO", "Dòng", "Mã hàng", "Số lượng", "Số lượng")
-    refused = verify(ANSWER, row, BASE)
+    both = _answer(**ANSWER, E={"field": "uom", "customer": "destination"})
+    refused = verify(both, ROW, BASE, {})
     assert isinstance(refused, Refused)
-    assert [(p.code, p.field) for p in refused.problems] == [("header_ambiguous", "quantity")]
+    assert [(p.code, p.ref) for p in refused.problems] == [("source_invalid", "E1")]
+
+
+def test_one_field_on_two_columns_is_refused() -> None:
+    refused = verify(_answer(**ANSWER, E="quantity"), ROW, BASE, {})
+    assert isinstance(refused, Refused)
+    assert [(p.code, p.field) for p in refused.problems] == [("field_twice", "quantity")]
 
 
 def test_a_required_field_left_out_is_refused_by_name() -> None:
-    refused = verify({"po_no": "Số PO", "line_no": "Dòng", "description": ""}, ROW, BASE)
+    refused = verify(_answer(A="po_no", B="line_no"), ROW, BASE, {})
     assert isinstance(refused, Refused)
     assert [(p.code, p.field) for p in refused.problems] == [
-        ("required_missing", "prv_code"),
         ("required_missing", "quantity"),
+        ("required_missing", "customer_item_code"),
     ]
 
 
-def test_a_header_is_compared_and_written_nfc_without_surrounding_spaces() -> None:
+def test_the_item_is_named_by_either_of_its_codes() -> None:
+    drafted = verify(_answer(**{**ANSWER, "C": "customer_item_code"}), ROW, BASE, {})
+    assert isinstance(drafted, Proposal)
+
+
+def test_a_fixed_value_is_only_the_value_every_row_of_its_column_holds() -> None:
+    repeated = {5: TemplateHeader(ref="E7", column=5, text="XA")}
+    drafted = verify(_answer(**ANSWER, E={"constant": " XA "}), ROW, BASE, repeated)
+    assert isinstance(drafted, Proposal)
+    assert _drafted(drafted.document)[4] == ("Ghi chú", None, None, "XA")
+    # Cited where it was read: the row below the header.
+    assert drafted.evidence["columns.4.constant"] == "Mau!E7"
+    for constant, at in (("XB", repeated), ("XA", {})):
+        refused = verify(_answer(**ANSWER, E={"constant": constant}), ROW, BASE, at)
+        assert isinstance(refused, Refused)
+        assert [(p.code, p.ref) for p in refused.problems] == [("constant_not_in_template", "E1")]
+
+
+def test_a_header_is_written_nfc_without_surrounding_spaces() -> None:
     decomposed = unicodedata.normalize("NFD", "Số lượng")
     row = _row("Số PO", "Dòng", "Mã hàng", f"  {decomposed} ")
-    for asked in ("Số lượng", f"{decomposed}  ", " Số lượng"):
-        drafted = verify({**ANSWER, "quantity": asked}, row, BASE)
-        assert isinstance(drafted, Proposal), asked
-        assert drafted.document["columns"][3] == {"field": "quantity", "header": "Số lượng"}
-        assert drafted.evidence["columns.3.header"] == "Mau!D1"
+    drafted = verify(_answer(**ANSWER), row, BASE, {})
+    assert isinstance(drafted, Proposal)
+    assert drafted.document["columns"][3]["header"] == "Số lượng"
 
 
-def test_a_header_longer_than_a_layout_holds_is_refused_by_name_and_cell() -> None:
-    long = "Số lượng đặt hàng theo đơn vị tính của khách hàng (bao gồm hàng tặng kèm)"
-    assert len(long) > 64
+def test_a_header_longer_than_a_layout_holds_is_refused_by_its_cell() -> None:
+    long = "Số lượng " * 30
+    assert len(long.strip()) > 200
     row = _row("Số PO", "Dòng", "Mã hàng", long)
-    # The model saw the header cut to what a layout holds (`mapping_inputs`),
-    # and may answer that or the whole text: either way, the cell is named.
-    shown = json.loads(mapping_inputs(row, room=4000)["headers"])[3]["header"]
-    for asked in (long, shown):
-        refused = verify({**ANSWER, "quantity": asked}, row, BASE)
-        assert isinstance(refused, Refused)
-        assert [(p.code, p.field, p.ref) for p in refused.problems] == [
-            ("header_too_long", "quantity", "D1")
-        ]
+    refused = verify(_answer(**ANSWER), row, BASE, {})
+    assert isinstance(refused, Refused)
+    assert [(p.code, p.ref) for p in refused.problems] == [("header_too_long", "D1")]
+
+
+def test_the_rows_above_the_header_row_are_drafted_as_the_banner() -> None:
+    above = (
+        (TemplateHeader(ref="A1", column=1, text="File import"),),
+        (),
+        (
+            TemplateHeader(ref="A3", column=1, text="ĐẦU"),
+            TemplateHeader(ref="C3", column=3, text="CHI TIẾT"),
+        ),
+    )
+    row = ROW.model_copy(update={"row": 4, "above": above})
+    drafted = verify(_answer(**ANSWER), row, BASE, {})
+    assert isinstance(drafted, Proposal)
+    layout = BravoUploadLayout.model_validate(drafted.document)
+    assert [[(c.text, c.first, c.last) for c in cells] for cells in layout.banner] == [
+        [("File import", 1, 5)],
+        [],
+        [("ĐẦU", 1, 2), ("CHI TIẾT", 3, 5)],
+    ]
+    assert drafted.evidence["banner.2.1.text"] == "Mau!C3"
 
 
 def test_a_mapping_that_is_no_valid_layout_is_refused_with_where() -> None:
     row = TemplateRow(sheet="Mẫu: nhập", row=1, headers=ROW.headers)
-    refused = verify(ANSWER, row, BASE)
+    refused = verify(_answer(**ANSWER), row, BASE, {})
     assert isinstance(refused, Refused)
     assert [(p.code, p.where) for p in refused.problems] == [("layout_invalid", "sheet_name")]
 
@@ -276,8 +392,8 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
         tenant_id=uuid.uuid4(),
     )
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS
-    # Every field the model is asked is described to it.
-    for name in get_args(UploadField):
+    # Every field and customer value the model may answer is described to it.
+    for name in (*get_args(UploadField), *get_args(CustomerAttribute)):
         assert f"- {name}:" in rendered.system
 
 
@@ -333,8 +449,11 @@ def test_the_right_mapping_is_drafted_ready_and_the_file_dropped() -> None:
     view = asyncio.run(bench.draft(GOLDEN))
     assert view.status == "ready", view.problems
     layout = BravoUploadLayout.model_validate(view.document)
-    assert [c.header for c in layout.columns] == [h for h, f in GOLDEN["columns"] if f]
+    assert [c.header for c in layout.columns] == [h for h, _ in GOLDEN["columns"]]
+    assert [c.field for c in layout.columns] == [f for _, f in GOLDEN["columns"]]
     assert layout.sheet_name == GOLDEN["sheet"]
+    # The title above the header row, and the blank row under it.
+    assert [[c.text for c in cells] for cells in layout.banner] == [[GOLDEN["title"]], []]
     assert view.template is not None and view.template.sheet == GOLDEN["sheet"]
     assert "columns.0.header" in view.machine_read
     assert view.evidence["columns.0.header"] == f"{GOLDEN['sheet']}!A3"
@@ -378,14 +497,21 @@ def test_white_text_on_no_fill_and_1pt_text_never_reach_the_model() -> None:
 
 @pytest.mark.parametrize("key", ["white_unfilled", "tiny_text"])
 def test_a_header_only_an_unseen_cell_holds_is_refused(key: str) -> None:
-    answer = {**gold(UNSEEN), "quantity": UNSEEN[key]}
+    unseen = unseen_letters(UNSEEN)[key]
+    answer = answer_with(
+        UNSEEN, **{letter_of(UNSEEN, "quantity"): None, unseen: {"field": "quantity"}}
+    )
     view = asyncio.run(Bench.of(REPO, Recorded(raw=answer), (AN,)).draft(UNSEEN))
     assert view.status == "refused"
     assert ("header_not_in_template", "quantity") in [(p.code, p.field) for p in view.problems]
 
 
 def test_a_header_only_a_hidden_cell_holds_is_refused() -> None:
-    answer = {**gold(INJECTION), "quantity": INJECTION["hidden_columns"][0]["header"]}
+    hidden = "D"  # `hidden_columns` puts it at index 3
+    assert INJECTION["hidden_columns"][0]["at"] == 3
+    answer = answer_with(
+        INJECTION, **{letter_of(INJECTION, "quantity"): None, hidden: {"field": "quantity"}}
+    )
     view = asyncio.run(Bench.of(REPO, Recorded(raw=answer), (AN,)).draft(INJECTION))
     assert view.status == "refused"
     assert ("header_not_in_template", "quantity") in [(p.code, p.field) for p in view.problems]
@@ -403,12 +529,49 @@ def test_a_template_with_no_quantity_is_refused_by_name() -> None:
     assert [(p.code, p.field) for p in view.problems] == [("required_missing", "quantity")]
 
 
+B41: dict[str, Any] = next(g for g in _CASES["golden"] if g["id"] == "T-VI-B41")
+
+
+def test_a_template_shaped_as_bravos_import_sales_order_is_drafted_whole() -> None:
+    """Ticket 02: the title and group rows above row 3, 39 columns with
+    "Delivery term", "Delivery mode" and "Destination" printed twice, a
+    customer value and a fixed text: drafted at their places, ready."""
+    view = asyncio.run(Bench.of(REPO, Recorded(raw=gold(B41)), (AN,)).draft(B41))
+    assert view.status == "ready", view.problems
+    layout = BravoUploadLayout.model_validate(view.document)
+    assert [[(c.text, c.first, c.last) for c in cells] for cells in layout.banner] == [
+        [("File import Sales order", 1, 39)],
+        [("ĐẦU PHIẾU", 1, 18), ("CHI TIẾT", 19, 39)],
+    ]
+    assert [c.header for c in layout.columns] == [h for h, _ in B41["columns"]]
+    by_place = [(c.field, c.customer, c.constant) for c in layout.columns]
+    assert by_place[13] == (None, "delivery_term", None)
+    assert by_place[36] == (None, None, None)  # the line-level "Delivery term" stays blank
+    assert by_place[38] == (None, None, "XA")
+    # The format the version in force has for the same field.
+    assert layout.columns[26].number_format == "#,##0"
+    # Every column left blank is named for the person to check.
+    blank = sum(1 for _, s in B41["columns"] if s is None)
+    assert [p.code for p in view.problems] == ["column_unmapped"] * blank
+
+
+def test_a_value_the_rows_do_not_all_repeat_is_no_fixed_value() -> None:
+    """Column J ("người lập") holds a different staff code on each row: a
+    model taking one as the column's fixed value is refused."""
+    answer = answer_with(B41, J={"constant": "NV-A"})
+    view = asyncio.run(Bench.of(REPO, Recorded(raw=answer), (AN,)).draft(B41))
+    assert view.status == "refused"
+    assert [(p.code, p.ref) for p in view.problems if p.code != "column_unmapped"] == [
+        ("constant_not_in_template", "J3")
+    ]
+
+
 @pytest.mark.parametrize(
     ("model", "why"),
     [
         (None, "model_not_configured"),
         (Recorded(failure=ModelUnavailableError("down")), "model_unavailable"),
-        (Recorded(raw={"po_no": 7}), "model_unavailable"),
+        (Recorded(raw={"po_no": "Số PO"}), "model_unavailable"),
     ],
 )
 def test_without_a_usable_answer_the_draft_offers_the_headers(model: Any, why: str) -> None:

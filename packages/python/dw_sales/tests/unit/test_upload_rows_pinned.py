@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from dw_sales.adapters.policy_files import load_sales_policies
-from dw_sales.application.artifact_content import Value
+from dw_sales.application.artifact_content import BravoUploadLayout, Value
 from dw_sales.application.order_artifacts import upload_rows
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS
@@ -31,7 +31,12 @@ GOLDEN = json.loads(
     (Path(__file__).parent / "golden" / "bravo_upload_rows@1.0.0.json").read_text(encoding="utf-8")
 )
 SHIPPED = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy")
-LAYOUT = SHIPPED.upload
+# The mock layout the golden rows were captured in, still shipped as a
+# released version: the rows are `upload_rows`', whatever layout prints them
+# (the platform's own is Bravo's 2.0.0 since ticket 02).
+_RELEASED = SHIPPED.released["sales_bravo_upload@1.1.0"]
+assert isinstance(_RELEASED, BravoUploadLayout)
+LAYOUT = _RELEASED
 
 
 def _text(value: Value) -> object:
@@ -50,7 +55,7 @@ async def _cases() -> dict[str, OrderCase]:
 
 def _rows(case: OrderCase) -> list[list[object]]:
     return [
-        [_text(row[c.field]) for c in LAYOUT.columns]
+        [_text(row[c.field]) for c in LAYOUT.columns if c.field is not None]
         for line in case.lines
         if line.mapping.prv_code is not None
         for row in upload_rows(case, line)

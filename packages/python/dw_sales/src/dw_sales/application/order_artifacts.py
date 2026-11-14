@@ -9,19 +9,22 @@ confirmed. A value Sales typed is named with who typed it.
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Mapping
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
 
 from dw_kernel.errors import ConflictError
 from dw_sales.application.artifact_content import (
     INTERNAL,
     Bound,
+    BravoUploadLayout,
     DocumentTemplate,
     EmailTemplate,
     Sheet,
+    UploadColumn,
     UploadField,
     Value,
     Workbook,
@@ -33,7 +36,7 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.drafting import Drafting, Rendered, anchor_text, filled, line_template
 from dw_sales.application.local_time import local_day
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.catalog import Language
+from dw_sales.domain.catalog import Customer, Language
 from dw_sales.domain.orders import (
     TOTAL_FIELD,
     Accepted,
@@ -243,17 +246,35 @@ def _people_line(d: OrderDrafting, user_id: uuid.UUID | None) -> str | None:
 
 
 def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
-    """O3: the file the PIC imports into Bravo, in the MOCK template's layout,
-    and a second sheet that says it is a MOCK."""
+    """O3: the file the PIC pastes into Bravo, in the tenant's layout, and a
+    second sheet naming the case version and the layout (and saying so where
+    the layout is a MOCK).
+
+    A row per delivery (`upload_rows`): a line the PO splits over several
+    dates is a row per date, each its own number, the line's PO line, its
+    quantity and its date. Each column holds what its source says
+    (`_cell`); a blank column holds nothing. Before the file is made, every
+    row is checked (`_checked_row`)."""
     case, layout = d.case, d.upload
     doc = d.internal("bravo_upload")
-    rows = tuple(
-        tuple(row[c.field] for c in layout.columns)
-        for line in case.lines
-        for row in upload_rows(case, line)
-    )
+    received = local_day(case.received_at, d.copy.zone)
+    deliveries = (row for line in case.lines for row in upload_rows(case, line))
+    rows = []
+    for number, delivery in enumerate(deliveries, start=1):
+        values: dict[UploadField, Value] = {
+            **delivery,
+            "row_no": number,
+            "received_date": received,
+            "usd_rate": 1 if delivery["currency"] == "USD" else None,
+        }
+        row = tuple(_cell(column, values, d.customer) for column in layout.columns)
+        rows.append(_checked_row(layout, values, row))
     upload = Sheet(
-        name=layout.sheet_name, columns=tuple(c.header for c in layout.columns), rows=rows
+        name=layout.sheet_name,
+        columns=tuple(c.header for c in layout.columns),
+        rows=tuple(rows),
+        banner=layout.banner,
+        formats=tuple(c.number_format for c in layout.columns),
     )
     about = Sheet(
         name=label(doc, "sheet"),
@@ -264,6 +285,76 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
         notes=(doc.word("mock", layout=layout.version),) if layout.mock else (),
     )
     return (d.xlsx(layout.version, Workbook((upload, about), INTERNAL, d.at)),)
+
+
+def _cell(column: UploadColumn, values: Mapping[UploadField, Value], customer: Customer) -> Value:
+    """What one column holds in one row: the field's value, the customer's
+    own value, the fixed text, or nothing in a blank column."""
+    if column.field is not None:
+        return values[column.field]
+    if column.customer is not None:
+        value: Value = getattr(customer, column.customer)
+        return value
+    return column.constant
+
+
+def _checked_row(
+    layout: BravoUploadLayout, values: Mapping[UploadField, Value], row: tuple[Value, ...]
+) -> tuple[Value, ...]:
+    """``row``, once it passes what is checked before the file is made
+    (ticket 02): an amount the file carries is the quantity times the unit
+    price, at the places the amount is written with; and no number holds more
+    decimal places than its column's format shows, since a paste copies what
+    the cell shows and a hidden place would reach Bravo rounded."""
+    line = values["line_no"]
+    if "amount" in layout.fields and not _amount_holds(values):
+        raise ConflictError(
+            "thành tiền của dòng khác số lượng nhân đơn giá: kiểm lại dòng trước khi tạo tệp",
+            details={"line": line, "reason": "upload_amount_mismatch"},
+        )
+    for at, value in zip(layout.columns, row, strict=True):
+        shown = _places_shown(at.number_format)
+        if shown is not None and isinstance(value, int | Decimal) and _places(value) > shown:
+            raise ConflictError(
+                "một số có nhiều số lẻ hơn định dạng cột hiển thị: dán vào Bravo sẽ bị làm tròn",
+                details={"line": line, "column": at.header, "reason": "upload_value_rounded"},
+            )
+    return row
+
+
+def _amount_holds(values: Mapping[UploadField, Value]) -> bool:
+    quantity, price, amount = values["quantity"], values["unit_price"], values["amount"]
+    assert isinstance(quantity, Decimal) and isinstance(price, Decimal)  # a line's, typed so
+    assert isinstance(amount, Decimal)
+    places = Decimal(1).scaleb(min(_exponent(amount), 0))
+    return (quantity * price).quantize(places, rounding=ROUND_HALF_UP) == amount
+
+
+def _exponent(value: Decimal) -> int:
+    exponent = value.as_tuple().exponent
+    assert isinstance(exponent, int)  # a finite amount
+    return exponent
+
+
+def _places(value: int | Decimal) -> int:
+    return 0 if isinstance(value, int) else max(0, -_exponent(value.normalize()))
+
+
+# What an Excel number format prints literally: quoted text, a bracketed
+# colour or locale, an escaped character.
+_FORMAT_LITERAL: Final = re.compile(r'"[^"]*"|\[[^\]]*\]|\\.')
+
+
+def _places_shown(number_format: str | None) -> int | None:
+    """How many decimal places a number format shows a positive number with;
+    None for a format that shows no number (text, a date) or for none."""
+    if number_format is None:
+        return None
+    positive = _FORMAT_LITERAL.sub("", number_format.split(";")[0])
+    if not re.search(r"[0#]", positive):
+        return None
+    _, dot, decimals = positive.partition(".")
+    return len(re.match(r"[0#]*", decimals).group()) if dot else 0  # type: ignore[union-attr]
 
 
 def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:

@@ -145,6 +145,42 @@ def test_headers_are_matched_tolerantly_and_an_unknown_one_is_reported() -> None
     assert parsed.unknown_headers == ("Ghi chú",)
 
 
+def test_a_customers_order_values_are_read_under_bravos_own_headers() -> None:
+    """Ticket 02: the values every sales order of a customer carries in
+    Bravo, under the headers Bravo's "Import Sales Order" prints; optional,
+    and an order type outside Bravo's four is refused with its column."""
+    ours = ("Loại đơn hàng", "Điều kiện giao hàng", "Phương thức giao hàng", "Nơi giao")
+    bravos = ["Type", "Delivery term", "Delivery mode", "Destination", "Shipment type"]
+    good, other = (
+        {h: v for h, v in cells.items() if h not in (*ours, "Loại lô hàng")}
+        for cells in _cells(CatalogList.CUSTOMERS, _customers()[:2])
+    )
+    values = ["sample fee", "DAP", "ROAD", "Kho Bắc Ninh", "Commercial"]
+    table = ImportedTable(
+        sheet="x",
+        rows=[
+            TableRow(row=1, cells=[*good, *bravos]),
+            TableRow(row=2, cells=[*good.values(), *values]),
+            TableRow(row=3, cells=[*other.values(), "Mass order", *values[1:]]),
+        ],
+    )
+    parsed = parse_rows(CatalogList.CUSTOMERS, table)
+    (read,) = (p.record for p in parsed.records)
+    assert isinstance(read, Customer)
+    assert (
+        read.order_type,
+        read.delivery_term,
+        read.delivery_mode,
+        read.destination,
+        read.shipment_type,
+    ) == ("SampleFee", "DAP", "ROAD", "Kho Bắc Ninh", "Commercial")
+    assert [(r.row, r.column) for r in parsed.rejected] == [(3, "Loại đơn hàng")]
+    # A list without them reads as before: each value none.
+    plain = parse_rows(CatalogList.CUSTOMERS, _table(CatalogList.CUSTOMERS, [good]))
+    (record,) = (p.record for p in plain.records)
+    assert isinstance(record, Customer) and record.order_type is None
+
+
 def test_a_file_without_a_required_column_is_refused_whole() -> None:
     table = ImportedTable(sheet="x", rows=[TableRow(row=1, cells=["Tháng"])])
     with pytest.raises(ValueError, match="thiếu cột: Giá đồng LME"):

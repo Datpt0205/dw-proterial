@@ -362,7 +362,7 @@
           "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
         },
         {
-          "checksum": "d597fe47fb6c15cdbeb14e3f900075f87ec3cef662c5fa7d24268b4893d02075",
+          "checksum": "ffcc59aad49f0d2e5fe9db2cc433e7a852a98762a38ba8248823ed5e89013834",
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
         },
         {
@@ -538,7 +538,7 @@
           "path": "evals/expected/sales_intent.json"
         },
         {
-          "checksum": "025c8b9d2ffdc48dc2230d91206d708c8050661436d8ee21964f5cfcda0d08de",
+          "checksum": "fa672b8593883dee060311a9423f39a286d989456c478295ce92621bcc87c2c3",
           "path": "evals/expected/sales_intent_golden.json"
         },
         {
@@ -546,7 +546,7 @@
           "path": "evals/fixtures/cases/sales_intent.json"
         },
         {
-          "checksum": "d7d06e682a366afa0b8c425074a709545b416f2c8963fbaf28832c0c7a3c340d",
+          "checksum": "0060c67d52d401167d3ac7f402960846122b355c824e7c6112c47287f24afa6b",
           "path": "evals/fixtures/cases/sales_intent_golden.json"
         },
         {
@@ -702,7 +702,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "6ac0fafc455d80e588ccd77d28f89235b7ab1238b697260562b2ad0906059f50",
+      "checksum": "8e722564f1f13de53f19c116bcf1844199f994cd2793641ff52b1b1e52449b93",
       "dataset_id": "sales_rule_drafts",
       "files": [
         {
@@ -710,7 +710,7 @@
           "path": "evals/expected/sales_rule_drafts.json"
         },
         {
-          "checksum": "097b77b8a2f1fd2bb002600c3f69c6d159851f066b728df68c2240fb00195776",
+          "checksum": "61b8541096554f40711b8ff98b72a7874cf3946f11593935f514c9a8c3ab292e",
           "path": "evals/fixtures/cases/sales_rule_drafts.json"
         }
       ],
@@ -781,7 +781,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "3808dc122423928ebe6d13a3e759f974034bd9a1",
+  "git_sha": "8ada7753f57ff80d8c6ed1c837f6da6fd0c4656e",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -917,6 +917,11 @@
       "checksum": "ac58b074437b025af24f2be7ee5b93d789004f53d42a07883c6844793f2bd689",
       "policy_id": "sales_bravo_upload",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "2587ec3d1f9e234a018ce44d85a3f0965005f5e8d956ef39e25022b1c238fa05",
+      "policy_id": "sales_bravo_upload",
+      "version": "2.0.0"
     },
     {
       "checksum": "1d68b28dfd6a1347aee6fc97f29f128e8d2f9758c187cfc4971e1d91817735d6",
@@ -1084,6 +1089,11 @@
       "checksum": "f9c6a4ea7e0524ff5f74d36a5c03ace1457dc2cbc190e200cdd45b3627aee173",
       "prompt_id": "sales.bravo_template_mapping",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "f80bbb786c624d964aa8961b4d5dd4745f0cacc272e315f214376bc966e8de0a",
+      "prompt_id": "sales.bravo_template_mapping",
+      "version": "2.0.0"
     },
     {
       "checksum": "87ecad72b6bea2e5474d1127148fae49483059c599f82495a1d0158a8df0d555",
