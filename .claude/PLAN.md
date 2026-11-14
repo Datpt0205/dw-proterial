@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + SSE chat, warm 11-06      |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps     |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X    |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | built; prod spec 11-10      |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 17,18 + audit done 11-14    |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | No Zalo at Proterial 11-11  |
 | Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | rebuild spec 11-13 (T2–T24) |
 
@@ -49,7 +49,7 @@ own file and a row here.
   the plant keeps internet (M365, Exchange Online) or none; Bravo is on its
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
   `ops-hardening.md`); host: Windows Server + Hyper-V VM (11-11), its version and DDA; mail via Teams (11-12), customers writing only to the shared box?; api/worker off `dw-edge`; iPhone push.
-- **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33; new flow 11-13 (`dw1-production` 17–35, conversation designed: dw_sales ADRs 0009–0012): Proterial owes contacts, mail templates, LME bands, PC stock, NOC records, which customers take silence as agreement and after how many days; Đạt owes an M365 mailbox to measure the sent-mail export (ticket 23), Strata access for the tool-calling eval (30), the BA's two `.drawio` originals (gone from Downloads), and confirming ADR 0009's sender-ledger amendment; two calls from the hardcode audit (`plans/hardcode-audit-2026-11-13.md`): ambiguous numbers/dates now go to a person, so RFQ and hand-off reading sit under their live bar until ticket 37 (keep, or settle by language), and every value of a locked PO is flagged (ticket 17; 225 lines to confirm).
+- **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33; new flow 11-13 (`dw1-production` 17–35, conversation designed: dw_sales ADRs 0009–0012): Proterial owes contacts, mail templates, LME bands, PC stock, NOC records, which customers take silence as agreement and after how many days; Đạt owes an M365 mailbox to measure the sent-mail export (ticket 23), Strata access for the tool-calling eval (30), the BA's two `.drawio` originals (gone from Downloads), and confirming ADR 0009's sender-ledger amendment; two calls from the hardcode audit (`plans/hardcode-audit-2026-11-13.md`): ambiguous numbers/dates now go to a person, so RFQ and hand-off reading sit under their live bar until ticket 37 (keep, or settle by language), and every value of a locked PO is flagged (ticket 17; 225 lines to confirm); from the 11-14 Box files: dw_sales ADR 0008 (A recommended), ticket 39 (quote approval levels), which quotation master list owns, each customer's PRV Sales PIC; from B41: does Bravo convert the customer code on import, is "người lập" the PIC's Bravo code.
 - **Model:** Qwen3.8 only (11-10); Strata's packaging, licence, plant measurement; scans by its vision, else PaddleOCR-VL/small CPU model + Tesseract boxes (11-12; Giang: Strata vision, WAF).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
