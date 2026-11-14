@@ -39,6 +39,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedConverts,
     MemoryRecordedQuotations,
     MemoryRecordedSenders,
+    platform_rules,
 )
 from dw_sales.testing.followups import platform_zone
 
@@ -46,7 +47,7 @@ pytestmark = pytest.mark.unit
 
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.12.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.13.0.yaml"
 )
 
 MOCK = MockSalesCatalog.load(SCOPE)
@@ -96,6 +97,7 @@ def _deployed(approved: frozenset[CatalogList] = frozenset(CatalogList)) -> Snap
         MemoryRecordedQuotations(clock),
         MemoryRecordedConverts(clock),
         MemoryRecordedSenders(clock),
+        platform_rules(),
     )
 
 

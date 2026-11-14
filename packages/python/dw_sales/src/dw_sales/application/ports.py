@@ -121,8 +121,11 @@ class SalesCatalogPort(Protocol):
     async def customer_by_sender(
         self, scope: SalesScope, address: str
     ) -> Snapshot[Customer | None]:
-        """The customer a sender belongs to: its domain's, else the customer
-        Sales confirmed this exact address as (the AI list, item 5)."""
+        """The customer a sender belongs to (dw_sales ADR 0009 decision 5):
+        the one whose contacts list this exact address; else the one Sales
+        confirmed the address as (the AI list, item 5), never against those
+        contacts; else its domain's, where the tenant does not mark the domain
+        shared by several companies (ticket 20). None: a person decides."""
         ...
 
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]: ...

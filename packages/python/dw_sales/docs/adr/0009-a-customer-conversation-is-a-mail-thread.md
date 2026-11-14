@@ -98,6 +98,19 @@ thread" was proposed.
    mail re-processed. So it stays, below Bravo, and no provisional case or
    per-thread choice is built. Owed: Đạt's confirmation (`.claude/PLAN.md`).
 
+   *Built 2026-11-14 (ticket 20), by the agent:* `customer_by_sender` reads
+   in this order: the one customer whose contacts in the master data list
+   the address; else the sender ledger, never against those contacts (an
+   address several customers list is chosen by the ledger among them only);
+   else the customer whose own domain it is, unless the tenant lists the
+   domain in its order rules' `shared_mail_domains` (1.13.0, empty on the
+   platform; Proterial's group list, Box B37, is theirs to enter). A shared
+   domain with no matching address is routed `customer_unknown` as before;
+   Sales' confirmation keeps that address, and the next mail from it is that
+   customer's. The ledger refuses an address one customer's contacts list,
+   or one whose unshared domain already answers. A ledger entry naming a
+   customer no longer in the list decides nothing: the mail goes to a person.
+
 ## Considered options
 
 - **A conversation entity with its own states** (open, negotiating,

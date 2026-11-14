@@ -21,6 +21,7 @@ from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.domain.catalog import ConvertEntry
+from dw_sales.testing.catalog_store import platform_rules
 
 pytestmark = pytest.mark.integration
 
@@ -45,6 +46,7 @@ def _catalog(sessions: async_sessionmaker[AsyncSession], scope: SalesScope) -> S
         SqlRecordedQuotations(sessions),
         SqlRecordedConverts(sessions),
         SqlRecordedSenders(sessions),
+        platform_rules(),
     )
 
 

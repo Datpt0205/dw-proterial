@@ -33,7 +33,7 @@ from dw_sales.adapters.reader_wire import ReaderArgs, ReaderOp, ReaderRequest
 from dw_sales.testing.reading_tools import xls_made_in_reader
 
 REPO = Path(__file__).resolve().parent.parent
-CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.12.0.yaml").intake
+CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.13.0.yaml").intake
 COMPOSE = [
     "docker",
     "compose",

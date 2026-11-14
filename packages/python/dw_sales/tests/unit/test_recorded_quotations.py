@@ -23,6 +23,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedConverts,
     MemoryRecordedQuotations,
     MemoryRecordedSenders,
+    platform_rules,
 )
 
 LISTED_AT = datetime(2026, 10, 1, tzinfo=UTC)
@@ -52,6 +53,7 @@ def _catalog(
         recorded,
         MemoryRecordedConverts(FixedClock(RECORDED_AT)),
         MemoryRecordedSenders(FixedClock(RECORDED_AT)),
+        platform_rules(),
     )
 
 

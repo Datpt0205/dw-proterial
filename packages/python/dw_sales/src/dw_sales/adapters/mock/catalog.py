@@ -177,7 +177,16 @@ class MockSalesCatalog:
     async def customer_by_sender(
         self, scope: SalesScope, address: str
     ) -> Snapshot[Customer | None]:
-        """By the address's domain: the mock keeps no confirmed sender."""
+        """By the one customer whose contacts list the address, else by its
+        domain: the mock keeps no confirmed sender and marks no domain shared."""
+        address = address.lower()
+        listing = [
+            c
+            for c in self._customers.values()
+            if any(contact.address.lower() == address for contact in c.contacts)
+        ]
+        if listing:
+            return self._one(scope, listing[0] if len(listing) == 1 else None)
         return await self.customer_by_email_domain(scope, address.rpartition("@")[2])
 
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:

@@ -181,6 +181,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "intake.max_sheets": { label: "Số sheet tối đa", unit: "sheet" },
     "intake.max_pages": { label: "Số trang tối đa", unit: "trang" },
     "intake.max_cells": { label: "Số ô tối đa", unit: "ô" },
+    shared_mail_domains: {
+      label: "Tên miền email dùng chung",
+      help: "Tên miền nhiều công ty cùng dùng, như của công ty và các công ty trong tập đoàn. Thư từ đây chỉ nhận ra khách theo địa chỉ người gửi (liên hệ của khách, hoặc địa chỉ Sales đã xác nhận); địa chỉ khác chuyển Sales là chưa xác định được khách hàng.",
+      item: "Tên miền",
+    },
     fiscal_year_start_month: {
       label: "Tháng bắt đầu năm tài chính",
       help: "4: năm tài chính 2026 từ tháng 4/2026 đến tháng 3/2027. ESF được đối chiếu theo năm tài chính của ngày PO.",

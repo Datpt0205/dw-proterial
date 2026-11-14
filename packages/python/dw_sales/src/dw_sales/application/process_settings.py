@@ -135,13 +135,15 @@ def _step(step: StepId, *placed: tuple[Placement, ...]) -> tuple[StepId, tuple[P
 STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
     dict(
         (
-            # Receive the PO: intake caps, the model steps reading a message,
-            # and what the intake raises.
+            # Receive the PO: intake caps, the mail domains no customer is
+            # known by, the model steps reading a message, and what the
+            # intake raises.
             _step(
                 StepId.O1,
                 _in(
                     _ORDER,
                     "intake",
+                    "shared_mail_domains",
                     "model_assist.message_intent",
                     "model_assist.unread_retry_hours",
                     "model_assist.reply_intent",

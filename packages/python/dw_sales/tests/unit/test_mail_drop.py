@@ -269,8 +269,8 @@ def test_a_version_naming_ignored_sender_domains_still_reads() -> None:
     )
     document["ignored_sender_domains"] = ["proterial.example"]
     # Read as any version written before a later field is (`read_over`):
-    # 1.12.0's finding codes are the platform's (tickets 38, 22).
-    current = load_order_rules(REPO / "configs/policies/sales_order_rules@1.12.0.yaml")
+    # 1.13.0's finding codes are the platform's (tickets 38, 22).
+    current = load_order_rules(REPO / "configs/policies/sales_order_rules@1.13.0.yaml")
     rules = read_over(OrderRules, document, current)
     assert "ignored_sender_domains" not in rules.model_dump()
     assert "ignored_sender_domains" not in current.model_dump()

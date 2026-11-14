@@ -255,20 +255,27 @@ def build_dw1(
     a file drawn from copy marked mock is refused."""
     if deployed and mailbox == "mock":
         raise ValueError("the mock mailbox is refused where deployed")
+    policies = load_sales_policies(configs / "policies", configs / "copy")
+    # The platform's rules, with a tenant's own approved version where it has
+    # one (ticket 19): stored, proposed and approved through `/sales/rules`.
+    book = rule_book(policies, SqlRuleVersionLookup(session_factory))
+    tenant_rules = RuleBookOrderRules(book)
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
-    # the mock until Bravo is connected. Deployed: no mock at all.
+    # the mock until Bravo is connected. Deployed: no mock at all. A sender's
+    # customer by address, then by a domain the tenant's rules do not mark
+    # shared (ticket 20).
     catalog = SnapshotSalesCatalog(
         SqlApprovedLists(session_factory),
         None if deployed else MockSalesCatalog.load(scope),
         SqlRecordedQuotations(session_factory),
         SqlRecordedConverts(session_factory),
         SqlRecordedSenders(session_factory),
+        tenant_rules,
     )
     catalog_uow = SqlCatalogUnitOfWorkFactory(
         session_factory, audit=audit, approvals=approvals, outbox=outbox
     )
-    policies = load_sales_policies(configs / "policies", configs / "copy")
     readers = client_readers(reader, policies.order_rules.intake)
     stored = SqlMailbox(session_factory, audit)
     if mail_drop is not None and mailbox != "stored":
@@ -279,9 +286,6 @@ def build_dw1(
     # one reads no file (ticket 24).
     mail = stored if mailbox == "stored" else WithUploads(MockInbox.load(scope), stored)
     inbox = ScannedInbox(mail, scanner, readers.po)
-    # The platform's rules, with a tenant's own approved version where it has
-    # one (ticket 19): stored, proposed and approved through `/sales/rules`.
-    book = rule_book(policies, SqlRuleVersionLookup(session_factory))
     dropped = (
         None
         if mail_drop is None
@@ -305,7 +309,6 @@ def build_dw1(
             ids,
         )
     )
-    tenant_rules = RuleBookOrderRules(book)
     worker_file = configs / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     order_cases = SqlOrderCaseLookup(session_factory)

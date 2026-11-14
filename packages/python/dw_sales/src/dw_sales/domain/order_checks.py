@@ -22,9 +22,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final, Literal, NamedTuple, Self, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dw_platform.domain.messages import MailAuthentication
+from dw_platform.domain.messages import MailAuthentication, is_domain
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -216,6 +216,11 @@ class OrderRules(BaseModel):
     model_assist: ModelAssist
     layout_onboarding: LayoutOnboarding
     findings: Mapping[FindingCode, Severity]
+    # Mail domains several companies write from, such as one a group of
+    # companies shares: a sender there is known by their own address only,
+    # never by the domain (dw_sales ADR 0009 decision 5, ticket 20). Empty
+    # where a version written before 1.13.0 does not say.
+    shared_mail_domains: tuple[str, ...] = Field(default=(), max_length=200)
 
     @model_validator(mode="before")
     @classmethod
@@ -226,6 +231,16 @@ class OrderRules(BaseModel):
         if isinstance(data, Mapping) and "ignored_sender_domains" in data:
             return {k: v for k, v in data.items() if k != "ignored_sender_domains"}
         return data
+
+    @field_validator("shared_mail_domains")
+    @classmethod
+    def _domains_are_keys(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for index, domain in enumerate(value):
+            if not is_domain(domain):
+                raise ValueError(f"shared_mail_domains[{index}] is not a lowercase domain")
+        if len(set(value)) != len(value):
+            raise ValueError("shared_mail_domains repeat")
+        return value
 
     @model_validator(mode="after")
     def _every_finding_has_a_severity(self) -> Self:

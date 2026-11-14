@@ -15,12 +15,16 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Final, Self
 
 from dw_agent_runtime.testing.memory_runtime import MemoryApprovals, MemoryAudit, MemoryOutbox
 from dw_kernel.errors import ConflictError
 from dw_kernel.ports import UtcClock
+from dw_sales.adapters.order_rules import PlatformOrderRules
+from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.application.catalog_imports import OPEN, CatalogSnapshot, ImportStatus
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.snapshot_catalog import (
@@ -31,6 +35,26 @@ from dw_sales.application.snapshot_catalog import (
 )
 from dw_sales.domain.catalog import ConvertEntry, Quotation
 from dw_sales.domain.master_data import CatalogList, records_of
+from dw_sales.domain.order_checks import OrderRules
+
+_CONFIGS: Final = Path(__file__).resolve().parents[6] / "configs"
+
+
+@cache
+def _platform_order_rules() -> OrderRules:
+    return load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy").order_rules
+
+
+def platform_rules(*shared_mail_domains: str) -> PlatformOrderRules:
+    """The order rules the platform ships, for every scope, as a catalog
+    reads them for its shared mail domains (`SharedDomainsPort`): none, or
+    ``shared_mail_domains`` marked shared as a tenant's version would."""
+    rules = _platform_order_rules()
+    if shared_mail_domains:
+        rules = OrderRules.model_validate(
+            {**rules.model_dump(by_alias=True), "shared_mail_domains": shared_mail_domains}
+        )
+    return PlatformOrderRules(rules)
 
 
 @dataclass

@@ -46,6 +46,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedConverts,
     MemoryRecordedQuotations,
     MemoryRecordedSenders,
+    platform_rules,
 )
 
 pytestmark = pytest.mark.unit
@@ -278,6 +279,7 @@ async def test_without_an_approved_import_every_list_is_the_mock() -> None:
         MemoryRecordedQuotations(world.store.clock),
         MemoryRecordedConverts(world.store.clock),
         MemoryRecordedSenders(world.store.clock),
+        platform_rules(),
     )
     assert await catalog.customers(ALPHA) == await mock.customers(ALPHA)
     assert await catalog.lme_months(ALPHA) == await mock.lme_months(ALPHA)

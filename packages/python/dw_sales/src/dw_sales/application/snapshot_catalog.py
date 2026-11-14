@@ -31,9 +31,13 @@ An item code Sales confirmed for a customer's own code (`learn_convert`,
 PO line with that code maps through it at once, the list answers first, and
 the first confirmation is the one kept.
 
-A sender Sales confirmed as a customer's (`learn_sender`,
-`RecordedSendersPort`, the AI list's item 5) is found by `customer_by_sender`
-after the customer's own domains: the address, never its domain.
+Whose mail a sender's is (`customer_by_sender`, dw_sales ADR 0009 decision
+5, ticket 20) is answered by address first: the customer whose contacts list
+the address; else the customer Sales confirmed that address as (`learn_sender`,
+`RecordedSendersPort`, the AI list's item 5), never against those contacts;
+else the customer whose own domain it is, unless the tenant's order rules mark
+the domain shared by several companies (`OrderRules.shared_mail_domains`),
+where nobody is known by the domain and a person decides.
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ from dw_sales.domain.catalog import (
     Quotation,
 )
 from dw_sales.domain.master_data import CatalogList, CatalogRecord
+from dw_sales.domain.order_checks import OrderRules
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,13 @@ class RecordedSendersPort(Protocol):
         ...
 
 
+class SharedDomainsPort(Protocol):
+    """The order rules in force for the scope's tenant, read here for the mail
+    domains it marks shared (`OrderRules.shared_mail_domains`)."""
+
+    async def rules(self, scope: SalesScope) -> OrderRules: ...
+
+
 class RecordedQuotationsPort(Protocol):
     """The quotations Sales sent and confirmed, in the scope's tenant and
     workspace (RLS), read the same by every process."""
@@ -210,6 +222,7 @@ class SnapshotSalesCatalog:
     recorded: RecordedQuotationsPort
     recorded_converts: RecordedConvertsPort
     recorded_senders: RecordedSendersPort
+    shared_domains: SharedDomainsPort
 
     async def _list(self, scope: SalesScope, catalog_list: CatalogList) -> ApprovedList | None:
         return await self.approved.approved(scope, catalog_list)
@@ -240,28 +253,62 @@ class SnapshotSalesCatalog:
     async def customer_by_sender(
         self, scope: SalesScope, address: str
     ) -> Snapshot[Customer | None]:
-        """The customer of the sender's domain, else the one Sales confirmed
-        the address as."""
-        by_domain = await self.customer_by_email_domain(scope, address.rpartition("@")[2])
-        if by_domain.data is not None:
-            return by_domain
-        kept = await self.recorded_senders.sender(scope, address.lower())
-        if kept is None:
-            return by_domain
-        found = await self.customer_by_code(scope, kept.customer_code)
-        if found.data is None:
-            return by_domain
-        return Snapshot(found.data, max(found.as_of, kept.recorded_at))
+        """By address, then by domain (module docstring). An address several
+        customers' contacts list is decided by the ledger among those only,
+        else by a person; one the ledger keeps for a customer no longer in the
+        list is a person's too, never the domain's."""
+        address = address.lower()
+        listed = await self._listing(scope, address)
+        if len(listed.data) == 1:
+            return Snapshot(listed.data[0], listed.as_of)
+        kept = await self.recorded_senders.sender(scope, address)
+        if kept is not None:
+            found = await self.customer_by_code(scope, kept.customer_code)
+            among = not listed.data or kept.customer_code in {c.code for c in listed.data}
+            return Snapshot(found.data if among else None, max(found.as_of, kept.recorded_at))
+        if listed.data:
+            return Snapshot(None, listed.as_of)
+        return await self._by_domain(scope, address)
+
+    async def _listing(self, scope: SalesScope, address: str) -> Snapshot[tuple[Customer, ...]]:
+        """The customers whose contacts list ``address`` (lowercase)."""
+        customers = await self.customers(scope)
+        return Snapshot(
+            tuple(
+                c
+                for c in customers.data
+                if any(contact.address.lower() == address for contact in c.contacts)
+            ),
+            customers.as_of,
+        )
+
+    async def _by_domain(self, scope: SalesScope, address: str) -> Snapshot[Customer | None]:
+        """The customer of the address's domain, none where the tenant marks
+        it shared."""
+        domain = address.rpartition("@")[2]
+        found = await self.customer_by_email_domain(scope, domain)
+        if (
+            found.data is None
+            or domain not in (await self.shared_domains.rules(scope)).shared_mail_domains
+        ):
+            return found
+        return Snapshot(None, found.as_of)
 
     async def learn_sender(
         self, scope: SalesScope, address: str, customer_code: str, *, by: uuid.UUID, message_id: str
     ) -> bool:
         """Implements `SenderLedgerPort`: keeps the address as the customer's;
-        False when the sender's domain already answers, which it keeps doing."""
-        if (await self.customer_by_email_domain(scope, address.rpartition("@")[2])).data:
+        False where the ledger would not be read for it, which then keeps
+        answering: one customer's contacts list it, several do and this is
+        not one of them, or its domain (not shared) is a customer's."""
+        address = address.lower()
+        listed = {c.code for c in (await self._listing(scope, address)).data}
+        if listed and (len(listed) == 1 or customer_code not in listed):
+            return False
+        if not listed and (await self._by_domain(scope, address)).data is not None:
             return False
         await self.recorded_senders.learn(
-            scope, address.lower(), customer_code, by=by, message_id=message_id
+            scope, address, customer_code, by=by, message_id=message_id
         )
         return True
 
