@@ -17,8 +17,12 @@ this module owns what a row of such a spreadsheet means:
   decision 8): a contact address or a price in a refusal is a customer's data
   in a log.
 - **The list as a whole** is checked too: a key twice (the later row is
-  rejected), an email domain two customers claim, a quote number two
-  customers use.
+  rejected), a quote number two customers use. An email domain several
+  customers claim is shared, and recognises none of them.
+- **A file as Bravo exports it** is read as it is (ticket 36): its header
+  found by shape under the title rows (`header_row`), each column also known
+  by Bravo's own label, a column Bravo does not have read as unknown or as its
+  default where one fails closed.
 - **A diff** (`diff`) of a proposed list against the one in force, by key:
   added, changed (column by column, old to new, as the template prints them),
   removed, unchanged.
@@ -36,7 +40,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
@@ -55,6 +59,7 @@ from dw_sales.domain.catalog import (
     Quotation,
     month_key,
 )
+from dw_sales.domain.item_names import read_name
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -97,9 +102,10 @@ class ImportedTable(BaseModel):
     truncated: bool = False
 
 
-# How much of one list a file may hold: far above Proterial's lists, and a
-# bound on what one import keeps and diffs.
-MAX_ROWS: Final = 5000
+# How much of one list a file may hold: above Proterial's lists as Bravo
+# exports them (B04 11,523 rows, B06 12,271), and a bound on what one import
+# keeps and diffs.
+MAX_ROWS: Final = 20_000
 # How many rejected rows an import keeps to show; the count is kept whole.
 MAX_REJECTED_KEPT: Final = 500
 
@@ -128,8 +134,22 @@ def header_key(text: str) -> str:
 # ---------------------------------------------------------- cell kinds --
 
 ColumnKind = Literal[
-    "text", "int", "decimal", "date", "month", "bool", "choice", "list", "contacts"
+    "text",
+    "int",
+    "decimal",
+    "pack",
+    "date",
+    "month",
+    "bool",
+    "choice",
+    "list",
+    "domains",
+    "contacts",
 ]
+# The kinds whose column a file may hold twice: the cells add up (Bravo's
+# customer list has an "E-mail liên hệ" for the contact and another for who
+# stands in for them).
+_REPEATABLE: Final[frozenset[ColumnKind]] = frozenset({"list", "domains", "contacts"})
 
 
 class CellError(ValueError):
@@ -138,6 +158,9 @@ class CellError(ValueError):
 
 _TRUE: Final = frozenset({"co", "x", "yes", "y", "true", "1", "dung"})
 _FALSE: Final = frozenset({"khong", "no", "n", "false", "0", "sai"})
+# Items of a list cell, contacts included: one per line or separated by ";"
+# or ",", as Sales types them into Bravo's export (B05); a name keeps a
+# full-width comma (U+FF0C).
 _LIST_SPLIT: Final = re.compile(r"[;,\n]+")
 _CONTACT: Final = re.compile(r"^\s*(?:(?P<name>[^<>]*?)\s*<(?P<angle>[^<>]+)>|(?P<bare>\S+))\s*$")
 _DATE_DMY: Final = re.compile(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$")
@@ -255,12 +278,30 @@ def _list(value: CellValue) -> list[str] | None:
     return [part.strip().lower() for part in _LIST_SPLIT.split(text) if part.strip()]
 
 
+def _domains(value: CellValue) -> list[str] | None:
+    """Domains, each as it follows the "@" ("@example.com" as Bravo's list
+    writes one, or "example.com")."""
+    listed = _list(value)
+    if listed is None:
+        return None
+    return [domain.removeprefix("@") for domain in listed if domain.removeprefix("@")]
+
+
+def _pack(value: CellValue) -> str | None:
+    """A pack multiple: 0 is "not known", as Bravo writes it (B06's Unit
+    Packing), never a pack of nothing."""
+    number = read_decimal(value)
+    if number is None or number == 0:
+        return None
+    return str(number)
+
+
 def _contacts(value: CellValue) -> list[dict[str, str]] | None:
     text = _text(value)
     if text is None:
         return None
     contacts: list[dict[str, str]] = []
-    for part in (p for p in re.split(r"[;\n]+", text) if p.strip()):
+    for part in (p for p in _LIST_SPLIT.split(text) if p.strip()):
         found = _CONTACT.match(part)
         if found is None:
             raise CellError("ghi mỗi người là 'Tên <email>' hoặc 'email', cách nhau bởi dấu ;")
@@ -278,11 +319,22 @@ class Column:
     kind: ColumnKind
     hint: str  # what the template's guidance sheet says about it
     required: bool = True  # the file must have the column
+    # The headers the column is also recognised by: other spellings, and
+    # Bravo's own label where its export names the column (B04, B05, B06).
     aliases: tuple[str, ...] = ()
     # A choice column's words, by `header_key`, and the value each means.
     choices: Mapping[str, str] = field(default_factory=dict)
     # How a choice value prints, for the template and the diff.
     labels: Mapping[str, str] = field(default_factory=dict)
+    # The value a file that lacks the column gives, where one fails closed
+    # (no NOC is "not confirmed"); a blank cell in a column it has is blank.
+    default: Any = None
+    # Where the printed value is read from in a record, when it is not at
+    # ``path`` (a column the record keeps in another shape).
+    shown: Callable[[Mapping[str, Any]], Any] | None = None
+    # A choice cell may name several values ("Vietnamese/English"); the first
+    # one named is read, the order Sales wrote them in.
+    first_of_several: bool = False
 
     @property
     def keys(self) -> frozenset[str]:
@@ -297,6 +349,10 @@ class Column:
             case "decimal":
                 number = read_decimal(value)
                 return None if number is None else str(number)
+            case "pack":
+                return _pack(value)
+            case "domains":
+                return _domains(value)
             case "date":
                 day = read_date(value)
                 return None if day is None else day.isoformat()
@@ -312,11 +368,14 @@ class Column:
                 text = _text(value)
                 if text is None:
                     return None
-                chosen = self.choices.get(header_key(text))
-                if chosen is None:
+                # Several values where the column takes the first one named
+                # (`first_of_several`): each must be one the column knows.
+                named = re.split(r"[/;,]", text) if self.first_of_several else [text]
+                chosen = [self.choices.get(header_key(part)) for part in named if part.strip()]
+                if not chosen or None in chosen:
                     allowed = ", ".join(dict.fromkeys(self.labels.values()))
                     raise CellError(f"chỉ nhận: {allowed}")
-                return chosen
+                return chosen[0]
 
     def show(self, value: Any) -> str:
         """The value as the template prints it: what a diff compares."""
@@ -326,7 +385,7 @@ class Column:
             return "Có" if value else "Không"
         if self.kind == "choice":
             return self.labels.get(str(value), str(value))
-        if self.kind == "list":
+        if self.kind in ("list", "domains"):
             return "; ".join(str(v) for v in value)
         if self.kind == "contacts":
             return "; ".join(
@@ -338,7 +397,7 @@ class Column:
         if self.kind == "month":
             year, month = str(value).split("-")
             return f"{month}/{year}"
-        if self.kind == "decimal":
+        if self.kind in ("decimal", "pack"):
             return plain(Decimal(str(value)))
         return str(value)
 
@@ -352,6 +411,8 @@ def _choice(
     labels: Mapping[str, str],
     aliases: tuple[str, ...] = (),
     required: bool = True,
+    default: str | None = None,
+    first_of_several: bool = False,
 ) -> Column:
     """A column of a fixed set: each value is recognised by its label, its
     own code and the extra spellings in ``options``."""
@@ -368,6 +429,8 @@ def _choice(
         choices=MappingProxyType(words),
         labels=MappingProxyType(dict(labels)),
         required=required,
+        default=default,
+        first_of_several=first_of_several,
     )
 
 
@@ -408,7 +471,10 @@ class ListSpec:
 
     def cells(self, record: Mapping[str, Any]) -> dict[str, str]:
         """The record as the template's row prints it, by header."""
-        return {c.header: c.show(_get(record, c.path)) for c in self.columns}
+        return {
+            c.header: c.show(_get(record, c.path) if c.shown is None else c.shown(record))
+            for c in self.columns
+        }
 
 
 def _nested(flat: dict[str, Any]) -> dict[str, Any]:
@@ -416,6 +482,75 @@ def _nested(flat: dict[str, Any]) -> dict[str, Any]:
     for path, value in flat.items():
         _put(shaped, path, value)
     return shaped
+
+
+def _customer_shape(flat: dict[str, Any]) -> dict[str, Any]:
+    """A file without "Trạng thái mã" states it by Bravo's group: a
+    TEMPSALES customer's code is temporary, every other one official. A
+    blank domain cell is a customer with no domain of its own."""
+    flat = {**flat, "email_domains": flat.get("email_domains") or ()}
+    if flat.get("status") is None and flat.get("group") is not None:
+        flat["status"] = "temporary" if flat["group"] == "temporary" else "official"
+    return _nested(flat)
+
+
+# The attributes a PRV item's name states (`item_names`), where no column of
+# the file gave them.
+_NAME_ATTRIBUTES: Final = ("cores", "gauge", "stranding", "colour", "standard")
+
+
+def _item_shape(flat: dict[str, Any]) -> dict[str, Any]:
+    """An item: the attributes no column gave, read from its name's spec
+    string, and its unit conversions paired unit by factor (`_cross_fields`
+    refused a pair that does not hold)."""
+    shaped = dict(flat)
+    read = read_name(shaped["name"]) if shaped.get("name") else None
+    for attribute in _NAME_ATTRIBUTES:
+        path = f"attributes.{attribute}"
+        if shaped.get(path) is None:
+            shaped[path] = None if read is None else getattr(read, attribute)
+    units = _units(shaped.pop("conversion_units", None))
+    factors = _factors(shaped.pop("conversion_factors", None), len(units)) or []
+    shaped["conversions"] = [
+        {"unit": unit, "factor": str(factor)} for unit, factor in zip(units, factors, strict=True)
+    ]
+    return _nested(shaped)
+
+
+def _units(text: str | None) -> list[str]:
+    """The units of a conversion cell, as Bravo spells them ("km,m")."""
+    return [] if text is None else [u.strip() for u in re.split(r"[;,]", text) if u.strip()]
+
+
+def _factors(text: str | None, units: int) -> list[Decimal] | None:
+    """The conversion factors of ``units`` units, as Bravo writes them: one
+    per unit, separated by a comma or ";" ("0.074,0.000074" for "km,m"); a
+    single unit's factor may itself use a comma as its decimal mark. None
+    when the cell does not give exactly one readable factor per unit."""
+    if text is None:
+        return [] if units == 0 else None
+    pieces = [p for p in re.split(r"[;,]", text) if p.strip()]
+    try:
+        if len(pieces) == units:
+            factors = [read_decimal(p) for p in pieces]
+        elif units == 1:
+            factors = [read_decimal(text)]
+        else:
+            return None
+    except CellError:
+        return None
+    if any(f is None or f <= 0 for f in factors):
+        return None
+    return [f for f in factors if f is not None]
+
+
+def _conversion_units(record: Mapping[str, Any]) -> str | None:
+    return "; ".join(c["unit"] for c in record.get("conversions") or ()) or None
+
+
+def _conversion_factors(record: Mapping[str, Any]) -> str | None:
+    factors = [plain(Decimal(str(c["factor"]))) for c in record.get("conversions") or ()]
+    return "; ".join(factors) or None
 
 
 def _quotation_shape(flat: dict[str, Any]) -> dict[str, Any]:
@@ -431,6 +566,7 @@ _YES_NO_HINT = "Có / Không"
 _LANGUAGES: Final = {"vi": "Tiếng Việt", "en": "Tiếng Anh", "ja": "Tiếng Nhật"}
 _STATUSES: Final = {"official": "Chính thức", "temporary": "Tạm thời"}
 _CHANNELS: Final = {"email": "Email", "portal": "Cổng khách hàng"}
+_GROUPS: Final = {"direct": "Trực tiếp", "temporary": "Khách tạm", "indirect": "Gián tiếp"}
 _FAMILIES: Final = {"hook_up_wire": "Dây đơn", "multi_core_cable": "Cáp nhiều lõi"}
 _STRANDING: Final = {"single": "Lõi đơn", "stranded": "Lõi xoắn"}
 _CONDUCTORS: Final = {"bare_copper": "Đồng trần", "tinned_copper": "Đồng mạ thiếc"}
@@ -463,46 +599,70 @@ _CUSTOMERS = ListSpec(
     label="Khách hàng",
     model=Customer,
     key=lambda r: str(r.get("code") or ""),
-    shape=_nested,
+    shape=_customer_shape,
     columns=(
         Column(
             "code",
             "Mã khách hàng",
             "text",
             "Chữ in hoa và số, 2-16 ký tự, ví dụ VLX",
-            aliases=("Mã KH", "Mã khách"),
+            aliases=("Mã KH", "Mã khách", "Code"),
         ),
         Column(
             "name",
             "Tên khách hàng",
             "text",
             "Như chứng từ của khách in",
-            aliases=("Tên KH", "Tên khách"),
+            aliases=("Tên KH", "Tên khách", "Tên đối tượng"),
         ),
         Column(
             "email_domains",
             "Tên miền email",
-            "list",
-            "Các tên miền người gửi, cách nhau bởi dấu ;",
+            "domains",
+            "Tên miền riêng của khách, cách nhau bởi dấu ;. Tên miền nhiều khách cùng dùng"
+            " (của tập đoàn) không nhận ra khách nào nên được bỏ trống",
             aliases=("Domain", "Tên miền"),
         ),
         Column(
             "contacts",
             "Email liên hệ",
             "contacts",
-            "Mỗi người 'Tên <email>', cách nhau bởi dấu ;. Email phải thuộc tên miền ở cột trước",
+            "Mỗi người 'Tên <email>' hoặc 'email', mỗi người một dòng hoặc cách nhau bởi dấu ;",
             aliases=("Người liên hệ", "Liên hệ"),
         ),
+        # Bravo's list names several for a customer that reads several
+        # (B05: "Vietnamese/English"); drafts are written in the first.
         _choice(
             "language",
             "Ngôn ngữ",
-            "Tiếng Việt / Tiếng Anh / Tiếng Nhật",
-            {"vi": ("Việt",), "en": ("Anh", "English"), "ja": ("Nhật", "Japanese")},
+            "Tiếng Việt / Tiếng Anh / Tiếng Nhật; ghi nhiều thì thư soạn bằng tiếng ghi đầu",
+            {
+                "vi": ("Việt", "Vietnamese"),
+                "en": ("Anh", "English"),
+                "ja": ("Nhật", "Japanese"),
+            },
             labels=_LANGUAGES,
+            first_of_several=True,
         ),
-        Column("intra_group", "Cùng tập đoàn", "bool", _YES_NO_HINT, aliases=("Nội bộ tập đoàn",)),
         Column(
-            "compliance.noc_confirmed", "NOC đã xác nhận", "bool", _YES_NO_HINT, aliases=("NOC",)
+            "intra_group",
+            "Cùng tập đoàn",
+            "bool",
+            _YES_NO_HINT,
+            aliases=("Nội bộ tập đoàn",),
+            required=False,
+            default=False,
+        ),
+        # Bravo's list has no NOC: a file without the column says nothing is
+        # confirmed, and every order raises `missing_noc_esf` (fails closed).
+        Column(
+            "compliance.noc_confirmed",
+            "NOC đã xác nhận",
+            "bool",
+            _YES_NO_HINT,
+            aliases=("NOC",),
+            required=False,
+            default=False,
         ),
         Column(
             "compliance.esf_fiscal_year",
@@ -520,6 +680,7 @@ _CUSTOMERS = ListSpec(
             required=False,
             aliases=("Kiểm tra danh sách cấm",),
         ),
+        # Without this column, the status is read from Bravo's group below.
         _choice(
             "status",
             "Trạng thái mã",
@@ -527,13 +688,32 @@ _CUSTOMERS = ListSpec(
             {"official": ("Chinh thuc",), "temporary": ("Tam", "Mã tạm")},
             labels=_STATUSES,
             aliases=("Trạng thái",),
+            required=False,
         ),
+        # Bravo's own codes for its groups ("Nhóm mẹ", B05): its closed set.
+        _choice(
+            "group",
+            "Nhóm khách",
+            "Trực tiếp / Khách tạm / Gián tiếp, như nhóm mẹ ở Bravo; để trống nếu chưa rõ",
+            {
+                "direct": ("01.CUSTOMER",),
+                "temporary": ("02.TEMPSALES",),
+                "indirect": ("03.INDIRECTCUSTOMER",),
+            },
+            labels=_GROUPS,
+            aliases=("Nhóm mẹ",),
+            required=False,
+        ),
+        # A customer confirmed on its portal is set so here; without the
+        # column, a confirmation is a mail draft Sales sends.
         _choice(
             "confirmation_channel",
             "Kênh xác nhận",
             "Email / Cổng khách hàng",
             {"email": ("Mail",), "portal": ("Portal", "Cổng")},
             labels=_CHANNELS,
+            required=False,
+            default="email",
         ),
         Column(
             "sales_pic",
@@ -590,36 +770,55 @@ _CUSTOMERS = ListSpec(
     ),
 )
 
+_ATTRIBUTE_HINT = ", để trống thì DW1 đọc từ tên hàng nếu tên ghi"
+
 _ITEMS = ListSpec(
     list=CatalogList.ITEMS,
     label="Mã hàng",
     model=Item,
     key=lambda r: str(r.get("prv_code") or ""),
-    shape=_nested,
+    shape=_item_shape,
     columns=(
-        Column("prv_code", "Mã PRV", "text", "Ví dụ HW-1001", aliases=("Mã hàng", "PRV")),
+        Column("prv_code", "Mã PRV", "text", "Ví dụ HW-1001", aliases=("Mã hàng", "PRV", "Mã")),
+        Column(
+            "name",
+            "Tên hàng",
+            "text",
+            "Như Bravo đặt, ví dụ 'Hook up wire - UL1007 1X24AWG(11/0.16) LF WHITE'",
+            required=False,
+            aliases=("Tên vật tư",),
+        ),
         _choice(
             "family",
             "Họ cáp",
             "Dây đơn / Cáp nhiều lõi, để trống nếu không thuộc hai họ này",
             _no_spellings(_FAMILIES),
             labels=_FAMILIES,
+            required=False,
         ),
-        Column("attributes.cores", "Số lõi", "int", "1-100"),
+        Column("attributes.cores", "Số lõi", "int", "1-100" + _ATTRIBUTE_HINT, required=False),
         _choice(
             "attributes.stranding",
             "Kiểu lõi",
-            "Lõi đơn / Lõi xoắn",
+            "Lõi đơn / Lõi xoắn" + _ATTRIBUTE_HINT,
             _no_spellings(_STRANDING),
             labels=_STRANDING,
+            required=False,
         ),
-        Column("attributes.gauge", "Tiết diện", "text", "AWG24 hoặc 0.5mm2"),
+        Column(
+            "attributes.gauge",
+            "Tiết diện",
+            "text",
+            "AWG24 hoặc 0.5mm2" + _ATTRIBUTE_HINT,
+            required=False,
+        ),
         _choice(
             "attributes.conductor",
             "Ruột dẫn",
             "Đồng trần / Đồng mạ thiếc",
             _no_spellings(_CONDUCTORS),
             labels=_CONDUCTORS,
+            required=False,
         ),
         _choice(
             "attributes.shield",
@@ -627,13 +826,15 @@ _ITEMS = ListSpec(
             "Không / Lá nhôm / Lưới bện",
             _no_spellings(_SHIELDS),
             labels=_SHIELDS,
+            required=False,
         ),
         _choice(
             "attributes.colour",
             "Màu",
-            ", ".join(_COLOURS.values()),
+            ", ".join(_COLOURS.values()) + _ATTRIBUTE_HINT,
             _no_spellings(_COLOURS),
             labels=_COLOURS,
+            required=False,
         ),
         _choice(
             "attributes.packaging",
@@ -641,6 +842,7 @@ _ITEMS = ListSpec(
             "Cuộn (reel) / Cuộn tròn (coil) / Lô (drum)",
             {"reel": ("reel", "Cuộn"), "coil": ("coil",), "drum": ("drum", "Lô")},
             labels=_PACKAGING,
+            required=False,
         ),
         Column(
             "attributes.spec_no",
@@ -648,29 +850,84 @@ _ITEMS = ListSpec(
             "text",
             "Số tiêu chuẩn Design, ví dụ SP-1124",
             aliases=("Spec",),
+            required=False,
         ),
-        _choice(
-            "uom",
+        Column(
+            "unit",
             "ĐVT",
-            "m (mét)",
-            {"m": ("mét", "met", "meter")},
-            labels=_UOMS,
+            "text",
+            "Như Bravo ghi (m, Pcs, kg…); DW1 chỉ so số lượng tính bằng m",
             aliases=("Đơn vị tính",),
         ),
-        Column("moq", "MOQ", "decimal", "Số lượng đặt tối thiểu, theo ĐVT"),
+        Column(
+            "conversion_units",
+            "Đvt quy đổi",
+            "text",
+            "Như Bravo ghi, nhiều đơn vị cách nhau bởi dấu phẩy, ví dụ km,m",
+            required=False,
+            shown=_conversion_units,
+        ),
+        Column(
+            "conversion_factors",
+            "Hệ số quy đổi",
+            "text",
+            "Mỗi đơn vị ở cột trước một hệ số, cùng thứ tự, ví dụ 0.001,1",
+            required=False,
+            shown=_conversion_factors,
+        ),
+        Column(
+            "moq",
+            "MOQ",
+            "decimal",
+            "Số lượng đặt tối thiểu, theo ĐVT; để trống nếu chưa có",
+            required=False,
+        ),
         Column(
             "pack_multiple",
             "Quy cách đóng gói",
-            "decimal",
-            "Số mét một cuộn/lô",
-            aliases=("Quy cách",),
+            "pack",
+            "Số mét một cuộn/lô; 0 hoặc để trống là chưa biết, không kiểm",
+            aliases=("Quy cách", "Unit Packing"),
         ),
         Column(
             "standard_lead_time_days",
             "Lead time chuẩn (ngày)",
             "int",
-            "1-365",
+            "1-365; để trống nếu chưa có",
             aliases=("Lead time chuẩn", "Lead time"),
+            required=False,
+        ),
+        Column(
+            "packaging_style",
+            "Kiểu đóng gói",
+            "text",
+            "Như Bravo ghi, ví dụ Coil, P-30K",
+            required=False,
+            aliases=("Packaging style",),
+        ),
+        Column(
+            "category",
+            "Phân loại",
+            "text",
+            "Như Bravo ghi, ví dụ HK, CA",
+            required=False,
+            # Bravo's item list spells its own header so (B06).
+            aliases=("Category", "Catergory"),
+        ),
+        Column(
+            "bp_code",
+            "Mã BP",
+            "text",
+            "Như Bravo ghi, ví dụ BP12",
+            required=False,
+            aliases=("BP Code",),
+        ),
+        Column(
+            "specification",
+            "Specification",
+            "text",
+            "Số tiêu chuẩn kỹ thuật như Bravo ghi",
+            required=False,
         ),
     ),
 )
@@ -685,18 +942,22 @@ _CONVERT = ListSpec(
             "customer_code",
             "Mã khách hàng",
             "text",
-            "Phải có trong danh mục khách hàng",
-            aliases=("Mã KH", "Khách"),
+            "Khách trực tiếp, phải có trong danh mục khách hàng",
+            aliases=("Mã KH", "Khách", "Direct customer code"),
         ),
         Column(
             "customer_item_code",
             "Mã hàng của khách",
             "text",
-            "Như PO của khách in",
-            aliases=("Mã của khách",),
+            "Mã hoặc mô tả của khách, như PO của khách in",
+            aliases=("Mã của khách", "Converting description"),
         ),
         Column(
-            "prv_code", "Mã PRV", "text", "Phải có trong danh mục mã hàng", aliases=("Mã hàng PRV",)
+            "prv_code",
+            "Mã PRV",
+            "text",
+            "Phải có trong danh mục mã hàng",
+            aliases=("Mã hàng PRV", "PRV code"),
         ),
     ),
 )
@@ -822,9 +1083,31 @@ class ParsedList:
     unknown_headers: tuple[str, ...] = ()
 
 
+# Where the header row may be: among the first rows of the sheet, under the
+# title rows an export prints above it.
+_HEADER_SEARCH: Final = 10
+
+
+def header_row(rows: Sequence[TableRow]) -> int:
+    """Where the header is, by the rows' shape alone, never by their words:
+    the first row whose text cells number at least half of the widest of the
+    first rows (and at least two). A title above it ("Danh mục vật tư hàng
+    hóa", merged across the sheet) is one cell, and hints beside it a few; a
+    header names every column. The index into ``rows``; 0 for a sheet whose
+    first row is its header, as the template's is."""
+    first = rows[:_HEADER_SEARCH]
+    widest = max((sum(cell is not None for cell in r.cells) for r in first), default=0)
+    needed = max(2, -(-widest // 2))
+    for index, row in enumerate(first):
+        if sum(isinstance(cell, str) for cell in row.cells) >= needed:
+            return index
+    return 0
+
+
 def _columns_of(spec: ListSpec, header: TableRow) -> dict[int, Column]:
     """Which cell of each row is which column; refuses a file that lacks a
-    required one or names one twice."""
+    required one or names one twice (a list or contacts column may repeat:
+    its cells add up)."""
     by_key = {key: column for column in spec.columns for key in column.keys}
     found: dict[int, Column] = {}
     seen: dict[str, int] = {}
@@ -835,9 +1118,9 @@ def _columns_of(spec: ListSpec, header: TableRow) -> dict[int, Column]:
         column = by_key.get(header_key(text))
         if column is None:
             continue
-        if column.path in seen:
+        if column.path in seen and column.kind not in _REPEATABLE:
             raise ValueError(f"cột '{column.header}' xuất hiện hai lần")
-        seen[column.path] = index
+        seen.setdefault(column.path, index)
         found[index] = column
     missing = [c.header for c in spec.columns if c.required and c.path not in seen]
     if missing:
@@ -860,6 +1143,11 @@ def _unknown(spec: ListSpec, header: TableRow) -> tuple[str, ...]:
 _REASONS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "missing": "thiếu giá trị",
+        # A column's reader hands over its kind or None: a value of another
+        # type is a blank cell where the record needs one.
+        "string_type": "thiếu giá trị",
+        "tuple_type": "thiếu giá trị",
+        "bool_type": "thiếu giá trị",
         "string_pattern_mismatch": "sai định dạng",
         "string_too_short": "thiếu giá trị",
         "string_too_long": "quá dài",
@@ -903,9 +1191,10 @@ def _cross_fields(spec: ListSpec, flat: Mapping[str, Any]) -> tuple[str, str] | 
         domains = set(flat.get("email_domains") or ())
         if len(domains) != len(flat.get("email_domains") or ()):
             return "Tên miền email", "một tên miền ghi hai lần"
-        for contact in flat.get("contacts") or ():
-            if contact["address"].rpartition("@")[2] not in domains:
-                return "Email liên hệ", "có email không thuộc tên miền của khách"
+    if spec.list is CatalogList.ITEMS:
+        units = _units(flat.get("conversion_units"))
+        if _factors(flat.get("conversion_factors"), len(units)) is None:
+            return "Hệ số quy đổi", "cần đúng một hệ số (số dương) cho mỗi đơn vị quy đổi"
     if spec.list is CatalogList.QUOTATIONS:
         valid_from, valid_to = flat.get("valid_from"), flat.get("valid_to")
         if valid_from and valid_to and valid_to < valid_from:
@@ -927,15 +1216,20 @@ def _record(
     for index, column in columns.items():
         value = row.cells[index] if index < len(row.cells) else None
         try:
-            flat[column.path] = column.read(value)
+            read = column.read(value)
         except CellError as refused:
             return RejectedRow(row=row.row, column=column.header, reason=str(refused))
+        # A column the file holds twice (`_REPEATABLE`): its cells add up.
+        held = flat.get(column.path)
+        flat[column.path] = read if held is None else [*held, *(read or ())]
     if (broken := _cross_fields(spec, flat)) is not None:
         return RejectedRow(row=row.row, column=broken[0], reason=broken[1])
-    # A field the file has no column for, and a blank optional cell, is None:
-    # the model refuses what it requires, and reads the rest as unknown.
+    # A field the file has no column for is its column's default, None
+    # unless one fails closed; a blank optional cell is None: the model
+    # refuses what it requires, and reads the rest as unknown.
+    held_paths = {column.path for column in columns.values()}
     for column in spec.columns:
-        flat.setdefault(column.path, None)
+        flat.setdefault(column.path, None if column.path in held_paths else column.default)
     try:
         record = spec.model.model_validate(spec.shape(flat))
     except ValidationError as exc:
@@ -945,14 +1239,16 @@ def _record(
 
 
 def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
-    """The file's rows as the list's records (module docstring). The first
-    non-empty row is the header. Raises `MissingColumnsError` (or ValueError
-    for a header named twice, or no rows at all); every other problem is a
+    """The file's rows as the list's records (module docstring). The header
+    is found by the rows' shape (`header_row`), the title rows above it
+    skipped; the reader already left out a group's label row (Bravo's "3. Đã
+    duyệt" over its SUBTOTAL). Raises `MissingColumnsError` (or ValueError for
+    a header named twice, or no rows at all); every other problem is a
     rejected row."""
     spec = SPECS[catalog_list]
     if not table.rows:
         raise ValueError("tệp không có dòng nào")
-    header, *rows = table.rows
+    header, *rows = table.rows[header_row(table.rows) :]
     columns = _columns_of(spec, header)
     rejected: list[RejectedRow] = []
     if table.truncated or len(rows) > MAX_ROWS:
@@ -980,7 +1276,7 @@ def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
             continue
         seen[key] = row.row
         records.append(ParsedRecord(row.row, key, read))
-    kept, refused = _list_wide(records)
+    kept, refused = _list_wide(_unshared(records, rejected))
     return ParsedList(
         records=tuple(kept),
         rejected=tuple(sorted([*rejected, *refused], key=lambda r: r.row)),
@@ -988,26 +1284,52 @@ def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
     )
 
 
+def _unshared(records: Sequence[ParsedRecord], notes: list[RejectedRow]) -> list[ParsedRecord]:
+    """A domain several customers of the file claim is shared (the group's:
+    132 customers in Bravo's list, B05): it recognises none of them, so it is
+    taken off each, the rows kept, and the file noted (row 0). The customer's
+    address decides there, never the domain (dw_sales ticket 20)."""
+    claims: dict[str, set[str]] = {}
+    for parsed in records:
+        if isinstance(parsed.record, Customer):
+            for domain in parsed.record.email_domains:
+                claims.setdefault(domain, set()).add(parsed.record.code)
+    shared = {domain for domain, codes in claims.items() if len(codes) > 1}
+    if not shared:
+        return list(records)
+    notes.append(
+        RejectedRow(
+            row=0,
+            column="Tên miền email",
+            reason=f"{len(shared)} tên miền nhiều khách cùng dùng: bỏ khỏi các khách đó,"
+            " khách được nhận theo địa chỉ email",
+        )
+    )
+    return [
+        replace(
+            parsed,
+            record=parsed.record.model_copy(
+                update={
+                    "email_domains": tuple(
+                        d for d in parsed.record.email_domains if d not in shared
+                    )
+                }
+            ),
+        )
+        if isinstance(parsed.record, Customer)
+        else parsed
+        for parsed in records
+    ]
+
+
 def _list_wide(records: Sequence[ParsedRecord]) -> tuple[list[ParsedRecord], list[RejectedRow]]:
-    """Rules over the whole list: an email domain is one customer's, a quote
-    number one customer's. The later row is refused."""
+    """Rules over the whole list: a quote number is one customer's. The later
+    row is refused. (A domain claimed twice is shared: `_unshared`.)"""
     kept: list[ParsedRecord] = []
     refused: list[RejectedRow] = []
     owners: dict[str, tuple[str, int]] = {}
     for parsed in records:
         record, row = parsed.record, parsed.row
-        if isinstance(record, Customer):
-            claimed = next((d for d in record.email_domains if d in owners), None)
-            if claimed is not None:
-                refused.append(
-                    RejectedRow(
-                        row=row,
-                        column="Tên miền email",
-                        reason=f"tên miền đã thuộc khách hàng ở dòng {owners[claimed][1]}",
-                    )
-                )
-                continue
-            owners |= dict.fromkeys(record.email_domains, (record.code, row))
         if isinstance(record, Quotation):
             owner = owners.get(record.quote_no)
             if owner is not None and owner[0] != record.customer_code:

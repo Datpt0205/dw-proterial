@@ -109,7 +109,7 @@ from dw_sales.application.ports import (
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
 from dw_sales.application.threads import ThreadedCase
-from dw_sales.domain.catalog import Customer, Item, LmeMonth, customers_named
+from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -878,7 +878,7 @@ class OrderIntake:
         unread: list[PoLine] = []
         for po_line in document.lines:
             entry = await _unless_unconnected(
-                self.catalog.convert_entry(scope, customer.code, po_line.customer_item_code),
+                _convert_entry(self.catalog, scope, customer.code, po_line),
                 unchecked,
             )
             listed = None if entry is None else entry.data
@@ -1166,9 +1166,7 @@ class OrderIntake:
         and the item that names."""
         if remap:
             entered = line.effective
-            entry = await self.catalog.convert_entry(
-                scope, customer_code, entered.customer_item_code
-            )
+            entry = await _convert_entry(self.catalog, scope, customer_code, entered)
             items = await self.catalog.items(scope)
             return map_line(entered, entry=entry.data, items=items.data)
         code = line.mapping.checked_against
@@ -1340,6 +1338,21 @@ class OrderIntake:
             customer_code=case.customer_code,
         )
         return IntakeOutcome(message.message_id, kind, disposition, case)
+
+
+async def _convert_entry(
+    catalog: SalesCatalogPort, scope: SalesScope, customer_code: str, line: PoLine
+) -> Snapshot[ConvertEntry | None]:
+    """The convert list's row for a line, by whichever of its two texts the
+    customer's PO names the item with: its code, else its description, as
+    Bravo's list holds a customer's converting description (B04, ticket 36).
+    Always that one customer's row: the same words are another customer's
+    other item."""
+    by_code = await catalog.convert_entry(scope, customer_code, line.customer_item_code)
+    description = line.description.strip()
+    if by_code.data is not None or not description or description == line.customer_item_code:
+        return by_code
+    return await catalog.convert_entry(scope, customer_code, description)
 
 
 async def _unless_unconnected[T](

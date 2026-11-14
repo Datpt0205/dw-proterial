@@ -29,7 +29,7 @@ import unicodedata
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -56,6 +56,18 @@ CustomerCode = Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9]{1,15}$")]
 PrvCode = Annotated[str, Field(pattern=r"^[A-Z0-9][A-Z0-9-]{1,31}$")]
 # A customer's own part number: their alphabet, not ours.
 CustomerItemCode = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$")]
+# Text as a customer printed it: one line, no control characters, no padding.
+# Raw on purpose: a code outside the convert list's alphabet is still what the
+# PO says, and it is reported as unmapped rather than refused as unreadable.
+_PRINTED_END = r"[^\s\x00-\x1f\x7f]"
+PrintedText = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=200,
+        pattern=rf"^{_PRINTED_END}(?:[^\x00-\x1f\x7f]*{_PRINTED_END})?$",
+    ),
+]
 DocumentNo = Annotated[str, Field(pattern=r"^[A-Z0-9][A-Z0-9/-]{1,31}$")]
 Name = Annotated[str, Field(min_length=1, max_length=200, pattern=r"\S")]
 
@@ -98,6 +110,10 @@ class Compliance(BaseModel):
 # A temporary code is issued before the customer is registered properly
 # (WIV-03-031); its orders are flagged for Sales.
 CustomerStatus = Literal["official", "temporary"]
+# The group Bravo files a customer under ("Nhóm mẹ" in its customer list,
+# B05): one PRV sells to directly, a temporary code (TEMPSALES) of one, or an
+# indirect customer, the end user a direct customer buys for.
+CustomerGroup = Literal["direct", "temporary", "indirect"]
 # How a confirmed order goes back: an email draft, or the customer's own portal.
 ConfirmationChannel = Literal["email", "portal"]
 # The kind of sales order Bravo files a customer's orders as: the set its
@@ -117,10 +133,13 @@ class Customer(BaseModel):
     # As the customer's documents print it. A document forwarded by a Sales
     # address names its buyer, and that name is matched against this one.
     name: Name
-    # The domains a sender is recognised by. A contact outside them would be a
-    # recipient nobody could match back to this customer.
-    email_domains: tuple[str, ...] = Field(min_length=1)
+    # The domains a sender is recognised by: the customer's own. Empty where
+    # its people write from a domain other customers share (the group's, B05:
+    # 132 customers), which recognises nobody; the address decides there
+    # (dw_sales ticket 20), never the domain.
+    email_domains: tuple[str, ...] = ()
     # Who a draft may be addressed to. The only source of customer recipients.
+    # On any domain: a contact on a shared domain is still this customer's.
     contacts: tuple[EmailAddress, ...] = Field(min_length=1)
     language: Language
     intra_group: bool
@@ -132,6 +151,10 @@ class Customer(BaseModel):
     # the customer has none: the case is then every PIC's to pick up. Required
     # all the same, so a record that forgets it is refused, not unassigned.
     sales_pic: str | None = Field(max_length=254)
+    # Bravo's group for the customer; None where the list does not say. An
+    # indirect customer has no convert-list rows of its own (B04 keys on the
+    # direct customer), so the import refuses one named there.
+    group: CustomerGroup | None = None
     # What every sales order of this customer carries in Bravo, the same on
     # every order seen (B41): a column of the Bravo upload file may read them
     # (`sales_bravo_upload`, a `customer` column). None where the list does
@@ -159,59 +182,127 @@ class Customer(BaseModel):
             raise ValueError("sales_pic is not an email address")
         return value
 
-    @model_validator(mode="after")
-    def _contacts_use_its_domains(self) -> Self:
-        for index, contact in enumerate(self.contacts):
-            if contact.domain not in self.email_domains:
-                raise ValueError(f"customer {self.code}: contacts[{index}] is outside its domains")
-        return self
-
 
 class ItemAttributes(BaseModel):
     """What a cable is made of: what a PO describes when its code is unknown.
 
     An attribute is None when the source's value is outside DW1's vocabulary
-    (module docstring). Required all the same, so a record that forgets one is
-    refused rather than read as unmapped.
+    (module docstring), or the source does not say: Bravo's item master holds
+    none of them, and they are read from the item's name
+    (`item_names.name_attributes`). Required all the same, so a record that
+    forgets one is refused rather than read as unmapped. None never fits a
+    stated value (`StatedAttributes.fits`).
     """
 
     model_config = _FROZEN
 
-    cores: int = Field(ge=1, le=100)
+    cores: int | None = Field(ge=1, le=100)
     stranding: Stranding | None
     # ``AWG24`` or a cross-section such as ``0.5mm2``: one spelling per size.
-    gauge: str = Field(pattern=r"^(AWG\d{1,2}|\d{1,2}\.\d{1,2}mm2)$")
+    gauge: str | None = Field(pattern=r"^(AWG\d{1,2}|\d{1,2}\.\d{1,2}mm2)$")
     conductor: Conductor | None
     shield: Shield | None
     colour: Colour | None
     packaging: Packaging | None
     # The Design specification the item is built to. Several items (the same
     # cable on a reel and on a drum) may share one.
-    spec_no: DocumentNo
+    spec_no: DocumentNo | None
+    # The wire standard its name states (``UL1007``), or None.
+    standard: str | None = Field(default=None, pattern=r"^UL\d{3,5}$")
+
+
+def known_uom(printed: str) -> Uom | None:
+    """DW1's word for a unit as a PO or the item master prints it, or None
+    when it has none."""
+    folded = printed.strip().casefold()
+    return next((u for u in get_args(Uom) if u.casefold() == folded), None)
+
+
+class UnitConversion(BaseModel):
+    """A unit Bravo also counts the item in, and its factor, as Bravo writes
+    them ("Đvt quy đổi", "Hệ số quy đổi"). Kept, not applied: DW1 converts
+    no quantity (a second unit is a rule to decide, `Uom`)."""
+
+    model_config = _FROZEN
+
+    unit: str = Field(min_length=1, max_length=16, pattern=r"^[^\s\x00-\x1f\x7f]+$")
+    factor: Decimal = Field(gt=0)
+
+
+_Text = Annotated[str, Field(min_length=1, max_length=500, pattern=r"^[^\x00-\x1f\x7f]+$")]
 
 
 class Item(BaseModel):
+    """One item of the item master. The fields after ``standard_lead_time_days``
+    are Bravo's own (B06, ticket 36), None where the source does not have
+    them: the mock's records, and DW's own template."""
+
     model_config = _FROZEN
 
     prv_code: PrvCode
     family: ItemFamily | None
     attributes: ItemAttributes
-    # None: a unit DW1 has no word for. Every PO line for the item disagrees
-    # with it (`uom_mismatch`).
+    # DW1's word for the item's unit, read from ``unit``: None where DW1 has
+    # none, and every PO line for the item disagrees with it (`uom_mismatch`).
     uom: Uom | None
-    moq: Decimal = Field(gt=0)
-    # The length one reel, coil or drum holds; an order is a whole number of them.
-    pack_multiple: Decimal = Field(gt=0)
-    standard_lead_time_days: int = Field(gt=0, le=365)
+    # None where the list does not say: the line's MOQ is then the
+    # quotation's, or not checked (`LineBasis.checks_run`).
+    moq: Decimal | None = Field(gt=0)
+    # The length one reel, coil or drum holds; an order is a whole number of
+    # them. None where unknown (Bravo writes 0): the pack is not checked.
+    pack_multiple: Decimal | None = Field(gt=0)
+    # None where the list does not say: the lead time is then the
+    # quotation's, or not checked.
+    standard_lead_time_days: int | None = Field(gt=0, le=365)
+    # Bravo's name for it ("Tên vật tư"), whose spec string the attributes
+    # are read from.
+    name: _Text | None = None
+    # The unit as Bravo writes it ("m", "Pcs", "kg"); DW1's own word where the
+    # source wrote only that.
+    unit: Annotated[str, Field(min_length=1, max_length=16)] | None = None
+    conversions: tuple[UnitConversion, ...] = ()
+    # Bravo's own words, shown to Sales, not interpreted: how it is packed
+    # ("Coil", "P-30K", a note), its category ("HK", "CA"), its base-price code
+    # and its specification numbers.
+    packaging_style: _Text | None = None
+    category: Annotated[str, Field(min_length=1, max_length=32)] | None = None
+    bp_code: Annotated[str, Field(min_length=1, max_length=32)] | None = None
+    specification: _Text | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unit_names_the_uom(cls, data: Any) -> Any:
+        """``unit`` is the owner, ``uom`` is DW1's word for it: a record
+        stating only one of them reads the other from it."""
+        if not isinstance(data, dict):
+            return data
+        unit, uom = data.get("unit"), data.get("uom")
+        if unit is not None and "uom" not in data:
+            return {**data, "uom": known_uom(str(unit))}
+        if unit is None and uom is not None:
+            return {**data, "unit": uom}
+        return data
+
+    @model_validator(mode="after")
+    def _uom_is_the_units(self) -> Self:
+        if self.unit is not None and known_uom(self.unit) != self.uom:
+            raise ValueError(f"item {self.prv_code}: uom is not its unit's")
+        return self
 
 
 class ConvertEntry(BaseModel):
-    """One row of the convert list: a customer's code for one of our items."""
+    """One row of the convert list: a customer's code for one of our items.
+
+    The customer's side is what Bravo's list holds as the converting
+    description (B04): their part number, or their words for the item, as a
+    PO prints it. Keyed per direct customer: the same words name different
+    items at different customers (66 do in B04), so one customer's row never
+    answers another's line."""
 
     model_config = _FROZEN
 
     customer_code: CustomerCode
-    customer_item_code: CustomerItemCode
+    customer_item_code: PrintedText
     prv_code: PrvCode
 
 

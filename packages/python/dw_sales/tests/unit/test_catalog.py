@@ -179,14 +179,18 @@ def test_a_quotation_with_an_impossible_value_is_refused(overrides: dict[str, An
         Quotation.model_validate(_quotation(**overrides))
 
 
-def test_a_contact_outside_the_customers_domains_is_refused() -> None:
-    """Drafts are addressed to contacts only, so a contact must be the customer's."""
-    with pytest.raises(ValidationError, match=r"customer VLX: contacts\[0\] is outside") as refused:
-        Customer.model_validate(
-            _customer(contacts=[{"address": "attacker@evil.example"}]),
-        )
+def test_a_customer_on_a_shared_domain_keeps_no_domain_and_its_contacts() -> None:
+    """Bravo's customer list (B05) gives 132 customers the group's domain. A
+    domain they share recognises none of them, so each keeps no domain, and
+    its contacts on the shared one stay its own (ticket 36; the address
+    decides there, ticket 20). Contacts still come only from the approved
+    list, and a person sends every draft."""
+    customer = Customer.model_validate(
+        _customer(email_domains=[], contacts=[{"address": "buyer@group.example"}])
+    )
 
-    assert "attacker" not in str(refused.value)
+    assert customer.email_domains == ()
+    assert [c.domain for c in customer.contacts] == ["group.example"]
 
 
 def test_a_customer_may_list_several_domains() -> None:
@@ -214,11 +218,6 @@ def test_customer_domains_are_distinct_lowercase_keys(second: str) -> None:
         Customer.model_validate(_customer(email_domains=["velatrix.example", second]))
 
 
-def test_a_customer_needs_a_domain() -> None:
-    with pytest.raises(ValidationError):
-        Customer.model_validate(_customer(email_domains=[]))
-
-
 def test_a_customer_needs_a_contact() -> None:
     with pytest.raises(ValidationError):
         Customer.model_validate(_customer(contacts=[]))
@@ -244,7 +243,7 @@ def test_an_item_with_an_impossible_value_is_refused(overrides: dict[str, Any]) 
     ("overrides", "secret"),
     [
         ({"email_domains": ["Secret-Domain.example"]}, "Secret-Domain"),
-        ({"contacts": [{"address": "secret.person@evil.example"}]}, "secret.person"),
+        ({"contacts": [{"address": "secret.person-at-nowhere"}]}, "secret.person"),
         ({"sales_pic": "secret-pic"}, "secret-pic"),
         ({"name": ""}, None),
     ],

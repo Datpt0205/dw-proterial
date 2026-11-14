@@ -35,7 +35,8 @@ def test_every_item_is_read_back_from_its_printed_description(item: Item) -> Non
     stated = read_description(printed.describe())
 
     assert stated is not None
-    assert stated.model_dump() == printed.model_dump()
+    # The mock prints no wire standard: that word is a real item's (ticket 36).
+    assert stated.model_dump(exclude={"standard"}) == printed.model_dump()
     assert candidates(stated, ITEMS) == (item,)
 
 

@@ -3044,34 +3044,43 @@ export interface components {
         /** ItemBasisView */
         ItemBasisView: {
             /** Moq */
-            moq: string;
+            moq: string | null;
             /** Pack Multiple */
-            pack_multiple: string;
+            pack_multiple: string | null;
             /** Prv Code */
             prv_code: string;
             /** Standard Lead Time Days */
-            standard_lead_time_days: number;
+            standard_lead_time_days: number | null;
             /** Uom */
             uom: string | null;
         };
-        /** ItemView */
+        /**
+         * ItemView
+         * @description An item as the master-data page and the candidate picker show it.
+         *     None: the item master does not hold the value (Bravo's holds no MOQ,
+         *     lead time or attribute but those its name states, ticket 36).
+         */
         ItemView: {
             /** Cores */
-            cores: number;
+            cores: number | null;
             /** Family */
             family: string | null;
             /** Gauge */
-            gauge: string;
+            gauge: string | null;
             /** Moq */
-            moq: string;
+            moq: string | null;
+            /** Name */
+            name: string | null;
             /** Pack Multiple */
-            pack_multiple: string;
+            pack_multiple: string | null;
             /** Prv Code */
             prv_code: string;
             /** Spec No */
-            spec_no: string;
+            spec_no: string | null;
             /** Standard Lead Time Days */
-            standard_lead_time_days: number;
+            standard_lead_time_days: number | null;
+            /** Unit */
+            unit: string | null;
             /** Uom */
             uom: string | null;
         };

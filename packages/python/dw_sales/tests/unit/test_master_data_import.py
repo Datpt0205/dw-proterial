@@ -190,7 +190,13 @@ def test_a_file_without_a_required_column_is_refused_whole() -> None:
 def test_each_bad_row_is_rejected_with_its_row_column_and_a_vietnamese_reason() -> None:
     good, other = _customers()[:2]
     rows = _cells(CatalogList.CUSTOMERS, [good, other])
-    broken_contact = dict(rows[1]) | {"Mã khách hàng": "ZZZ", "Email liên hệ": "x@nowhere.example"}
+    # A contact on a domain other than the customer's own is still its contact
+    # (ticket 36: the group's shared domain).
+    other_domain = dict(rows[1]) | {
+        "Mã khách hàng": "ZZZ",
+        "Tên miền email": "z.example",
+        "Email liên hệ": "x@nowhere.example",
+    }
     no_yes = dict(rows[1]) | {
         "Mã khách hàng": "YYY",
         "Tên miền email": "y.example",
@@ -208,17 +214,25 @@ def test_each_bad_row_is_rejected_with_its_row_column_and_a_vietnamese_reason() 
         CatalogList.CUSTOMERS,
         _table(
             CatalogList.CUSTOMERS,
-            [rows[0], rows[1], broken_contact, no_yes, duplicate, bad_code, shared],
+            [rows[0], rows[1], other_domain, no_yes, duplicate, bad_code, shared],
         ),
     )
-    assert [p.record.code for p in parsed.records] == [good.code, other.code]  # type: ignore[union-attr]
+    records = {p.record.code: p.record for p in parsed.records}  # type: ignore[union-attr]
+    assert list(records) == [good.code, other.code, "ZZZ", "SHR"]
+    # A domain two customers claim is shared: it recognises neither.
+    assert records[other.code].email_domains == records["SHR"].email_domains == ()  # type: ignore[union-attr]
+    assert records["ZZZ"].email_domains == ("z.example",)  # type: ignore[union-attr]
     refused = {(r.row, r.column, r.reason) for r in parsed.rejected}
     assert refused == {
-        (4, "Email liên hệ", "có email không thuộc tên miền của khách"),
+        (
+            0,
+            "Tên miền email",
+            "1 tên miền nhiều khách cùng dùng: bỏ khỏi các khách đó,"
+            " khách được nhận theo địa chỉ email",
+        ),
         (5, "NOC đã xác nhận", "ghi Có hoặc Không"),
         (6, "Mã khách hàng", "trùng khóa với dòng 2"),
         (7, "Mã khách hàng", "sai định dạng"),
-        (8, "Tên miền email", "tên miền đã thuộc khách hàng ở dòng 3"),
     }
     # A reason names the column, never the value it refused.
     assert not any("lower" in r.reason or "có lẽ" in r.reason for r in parsed.rejected)

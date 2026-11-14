@@ -387,9 +387,10 @@ class ItemBasisView(BaseModel):
 
     prv_code: str
     uom: str | None
-    moq: Decimal
-    pack_multiple: Decimal
-    standard_lead_time_days: int
+    # None: the item master did not hold it, and the check did not run.
+    moq: Decimal | None
+    pack_multiple: Decimal | None
+    standard_lead_time_days: int | None
 
 
 class SpanReadView(BaseModel):
@@ -1954,27 +1955,37 @@ def customer(record: Customer) -> CustomerView:
 
 
 class ItemView(BaseModel):
+    """An item as the master-data page and the candidate picker show it.
+    None: the item master does not hold the value (Bravo's holds no MOQ,
+    lead time or attribute but those its name states, ticket 36)."""
+
     model_config = _VIEW
 
     prv_code: str
+    # Bravo's name for it, None for an item that has none.
+    name: str | None
     family: str | None
-    spec_no: str
-    cores: int
-    gauge: str
+    spec_no: str | None
+    cores: int | None
+    gauge: str | None
     uom: str | None
-    moq: Decimal
-    pack_multiple: Decimal
-    standard_lead_time_days: int
+    # The unit as the item master writes it ("Pcs" where ``uom`` is None).
+    unit: str | None
+    moq: Decimal | None
+    pack_multiple: Decimal | None
+    standard_lead_time_days: int | None
 
 
 def item(record: Item) -> ItemView:
     return ItemView(
         prv_code=record.prv_code,
+        name=record.name,
         family=record.family,
         spec_no=record.attributes.spec_no,
         cores=record.attributes.cores,
         gauge=record.attributes.gauge,
         uom=record.uom,
+        unit=record.unit,
         moq=record.moq,
         pack_multiple=record.pack_multiple,
         standard_lead_time_days=record.standard_lead_time_days,

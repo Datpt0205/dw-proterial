@@ -270,7 +270,7 @@ export function comparisonRows(
       attribute: "Số spec",
       po: po(stated?.spec_no, String),
       values: each((i) => ({
-        text: i.spec_no,
+        text: i.spec_no ?? "Không rõ",
         fits: against(stated?.spec_no, i.spec_no),
       })),
     },
@@ -288,7 +288,7 @@ export function comparisonRows(
       attribute: "Số lõi",
       po: po(stated?.cores, String),
       values: each((i) => ({
-        text: String(i.cores),
+        text: i.cores === null ? "Không rõ" : String(i.cores),
         fits: against(stated?.cores, i.cores),
       })),
     },
@@ -297,7 +297,7 @@ export function comparisonRows(
       attribute: "Tiết diện",
       po: po(stated?.gauge, String),
       values: each((i) => ({
-        text: i.gauge,
+        text: i.gauge ?? "Không rõ",
         fits: against(stated?.gauge, i.gauge),
       })),
     },
@@ -315,8 +315,8 @@ export function comparisonRows(
       attribute: "Số lượng ≥ MOQ",
       po: formatQuantity(quantity),
       values: each((i) => ({
-        text: formatQuantity(i.moq),
-        fits: qty >= Number(i.moq),
+        text: i.moq === null ? "Chưa có" : formatQuantity(i.moq),
+        fits: i.moq === null ? null : qty >= Number(i.moq),
       })),
     },
     {
@@ -324,7 +324,8 @@ export function comparisonRows(
       attribute: "Chẵn quy cách đóng gói",
       po: formatQuantity(quantity),
       values: each((i) => ({
-        text: formatQuantity(i.pack_multiple),
+        text:
+          i.pack_multiple === null ? "Chưa có" : formatQuantity(i.pack_multiple),
         fits:
           Number(i.pack_multiple) > 0
             ? qty % Number(i.pack_multiple) === 0
@@ -336,7 +337,10 @@ export function comparisonRows(
       attribute: "Lead time chuẩn",
       po: "Không có trên PO",
       values: each((i) => ({
-        text: `${i.standard_lead_time_days} ngày`,
+        text:
+          i.standard_lead_time_days === null
+            ? "Chưa có"
+            : `${i.standard_lead_time_days} ngày`,
         fits: null,
       })),
     },

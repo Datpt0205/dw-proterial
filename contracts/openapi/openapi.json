@@ -6367,22 +6367,43 @@
       "ItemBasisView": {
         "properties": {
           "moq": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Moq",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moq"
           },
           "pack_multiple": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Pack Multiple",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Multiple"
           },
           "prv_code": {
             "title": "Prv Code",
             "type": "string"
           },
           "standard_lead_time_days": {
-            "title": "Standard Lead Time Days",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Lead Time Days"
           },
           "uom": {
             "anyOf": [
@@ -6407,10 +6428,18 @@
         "type": "object"
       },
       "ItemView": {
+        "description": "An item as the master-data page and the candidate picker show it.\nNone: the item master does not hold the value (Bravo's holds no MOQ,\nlead time or attribute but those its name states, ticket 36).",
         "properties": {
           "cores": {
-            "title": "Cores",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cores"
           },
           "family": {
             "anyOf": [
@@ -6424,30 +6453,87 @@
             "title": "Family"
           },
           "gauge": {
-            "title": "Gauge",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gauge"
           },
           "moq": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Moq",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moq"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           },
           "pack_multiple": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Pack Multiple",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Multiple"
           },
           "prv_code": {
             "title": "Prv Code",
             "type": "string"
           },
           "spec_no": {
-            "title": "Spec No",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec No"
           },
           "standard_lead_time_days": {
-            "title": "Standard Lead Time Days",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Lead Time Days"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           },
           "uom": {
             "anyOf": [
@@ -6463,11 +6549,13 @@
         },
         "required": [
           "prv_code",
+          "name",
           "family",
           "spec_no",
           "cores",
           "gauge",
           "uom",
+          "unit",
           "moq",
           "pack_multiple",
           "standard_lead_time_days"

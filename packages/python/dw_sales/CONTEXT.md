@@ -219,6 +219,23 @@ API and the plan use the English terms. The spec is
   is the case the conversation is on, kept as the case's kind and id, so a
   follow-up such as "PO đó" means that case.
 
+- **Convert list** (Bảng quy đổi mã): Bravo's "Converting customer to
+  PRV item" (B04), one row per direct customer and that customer's code or
+  converting description (their words for the item, as their PO prints
+  them), naming one PRV code. Keyed per customer: the same words name
+  different items at different customers, so a line is looked up under its
+  own customer only, by its code, else by its description. A row with no
+  converting description, an indirect customer's, or one naming a customer
+  or item not in force is refused with why (ticket 36).
+- **Bravo export** (Tệp xuất từ Bravo): a master list imported as Bravo
+  exports it, unedited: its header found under the title rows by shape, a
+  group's label row ("3. Đã duyệt" over its SUBTOTAL) left out by shape,
+  each column also known by Bravo's own label. A column Bravo does not have
+  reads as unknown, or as its fail-closed default (no NOC column: not
+  confirmed). An item's attributes are read from its name's spec string
+  (`UL1007 1X24AWG(11/0.16) LF WHITE`); Unit Packing 0 is "not known"; a
+  MOQ, pack or lead time the item master lacks is not checked, and the
+  coverage says so (ticket 36).
 - **Drop folder** (Thư mục thư): where real mail reaches DW without any
   access to Microsoft 365, one for DW1 and DW2 alike (2026-11-02): a DW
   account owns one OneDrive folder per person, named by the address they

@@ -22,7 +22,15 @@ from dw_platform.domain.messages import MailAuthentication
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.application.local_time import local_day
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.catalog import BravoOrder, ConvertEntry, Customer, Item, LmeMonth, Quotation
+from dw_sales.domain.catalog import (
+    BravoOrder,
+    ConvertEntry,
+    Customer,
+    Item,
+    LmeMonth,
+    Quotation,
+    known_uom,
+)
 from dw_sales.domain.order_checks import (
     SAME_REVISION_CHANGED,
     MappedLine,
@@ -32,7 +40,6 @@ from dw_sales.domain.order_checks import (
     check_history,
     check_line,
     current_quotation,
-    known_uom,
     map_line,
 )
 from dw_sales.domain.orders import (
@@ -963,3 +970,31 @@ def test_a_line_with_no_date_is_one_a_bravo_order_without_it_does_not_hold() -> 
 
     assert history.finding is not None
     assert history.finding.code is FindingCode.REVISED_PO
+
+
+# --------------------------------------- an item as Bravo's master holds it --
+
+
+def test_an_item_without_moq_pack_or_lead_time_is_not_checked_on_them_and_says_so() -> None:
+    """Bravo's item master (B06) holds no MOQ and no lead time, and writes 0
+    for a pack it does not know (ticket 36). The line is checked on what is
+    held; the rest is absent from the checks run, never a MOQ or a pack of
+    nothing, and the requested date is the proposal."""
+    item = _item(moq=None, pack_multiple=None, standard_lead_time_days=None)
+    check = _run(_po_line(quantity=Decimal(7)), mapped=_exact(item))
+
+    assert _codes(check) == [("quotation_missing", "valid on 2026-09-24", None)]
+    basis = check.line.basis
+    assert not {"moq", "pack", "lead_time"} & set(basis.checks_run)
+    assert (basis.lead_time_days, basis.lead_time_source) == (None, None)
+    assert basis.item is not None and basis.item.moq is None
+    assert check.line.suggested_delivery_date == date(2026, 12, 4)
+
+
+def test_a_known_pack_is_still_checked_beside_an_unknown_moq() -> None:
+    item = _item(moq=None, standard_lead_time_days=None)
+    check = _run(_po_line(quantity=Decimal(301)), mapped=_exact(item))
+
+    assert ("pack_multiple", "300", "301") in _codes(check)
+    assert "pack" in check.line.basis.checks_run
+    assert "moq" not in check.line.basis.checks_run
