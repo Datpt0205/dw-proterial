@@ -35,8 +35,10 @@ TITLE = "Bảng giá đồng LME theo tháng (nội bộ)"
 
 
 def _their(header: str) -> str:
-    """How the company's own file names a column: not a template header."""
-    return f"[{header}]"
+    """How the company's own file names a column: not a template header,
+    nor one its header key matches (the import finds the header row by shape
+    now, ticket 36, so a key that matched would never ask the model)."""
+    return f"Cột {header}"
 
 
 async def _lme_file(world: World) -> bytes:
@@ -70,7 +72,7 @@ class Matching(Recorded):
         if self.answer is not None:
             return schema.model_validate(self.answer)
         rows = json.loads(inputs["rows"])
-        header = next(r for r in rows if r["cells"] and r["cells"][0].startswith("["))
+        header = next(r for r in rows if r["cells"] and r["cells"][0].startswith("Cột "))
         columns = [
             {"path": c["path"], "header": _their(c["header"])}
             for c in json.loads(inputs["columns"])

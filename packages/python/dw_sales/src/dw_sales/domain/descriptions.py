@@ -58,6 +58,7 @@ _AWG = re.compile(r"AWG(\d{1,2})")
 _SECTION = re.compile(r"(\d{1,2}\.\d{1,2})MM2")
 _PACK_LENGTH = re.compile(r"(\d{1,6})M")
 _SPEC_NO = re.compile(r"[A-Z0-9][A-Z0-9/-]{1,31}")
+_STANDARD = re.compile(r"UL\d{3,5}")
 
 
 class StatedAttributes(BaseModel):
@@ -75,6 +76,9 @@ class StatedAttributes(BaseModel):
     packaging: Packaging | None = None
     pack_length_m: Decimal | None = Field(default=None, gt=0)
     spec_no: str | None = None
+    # The wire standard (``UL1007``): what a real item's name states first
+    # (`item_names`).
+    standard: str | None = None
 
     @model_validator(mode="after")
     def _states_something(self) -> Self:
@@ -97,6 +101,7 @@ class StatedAttributes(BaseModel):
             "packaging": attributes.packaging,
             "pack_length_m": item.pack_multiple,
             "spec_no": attributes.spec_no,
+            "standard": attributes.standard,
         }
         return all(value is None or known[name] == value for name, value in self)
 
@@ -154,7 +159,8 @@ def _phrase(words: list[str], position: int) -> tuple[str, object, int] | None:
 
 
 def _word(word: str) -> tuple[str, object, int] | None:
-    """A one-word attribute: cores, gauge, stranding, colour, packaging, length."""
+    """A one-word attribute: cores, gauge, stranding, colour, packaging,
+    length, standard."""
     for name, values in (
         ("stranding", get_args(Stranding)),
         ("colour", get_args(Colour)),
@@ -171,4 +177,6 @@ def _word(word: str) -> tuple[str, object, int] | None:
         return "gauge", f"{match.group(1)}mm2", 1
     if match := _PACK_LENGTH.fullmatch(word):
         return "pack_length_m", Decimal(match.group(1)), 1
+    if _STANDARD.fullmatch(word):
+        return "standard", word, 1
     return None

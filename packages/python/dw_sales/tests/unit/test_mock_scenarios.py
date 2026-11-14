@@ -324,6 +324,8 @@ async def _line_findings(
             assert len(verdicts) == 1, f"{label}: the band verdict depends on the month"
             if verdicts == {False}:
                 found.add("lme_band_mismatch")
+    assert item.moq is not None and item.pack_multiple is not None, f"{label}: mock item"
+    assert item.standard_lead_time_days is not None, f"{label}: mock item"
     minimums = [item.moq] + ([quotation.moq] if quotation else [])
     if line.quantity < min(minimums):
         found.add("moq_violation")

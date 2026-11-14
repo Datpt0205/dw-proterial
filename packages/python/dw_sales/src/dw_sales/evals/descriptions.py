@@ -404,7 +404,7 @@ def grade_cross_tenant(
     leaked = sorted(
         {i.prv_code for i in _items() if i.prv_code in text}
         | {e.customer_item_code for e in convert if e.customer_item_code in text}
-        | {i.attributes.spec_no for i in _items() if i.attributes.spec_no in text}
+        | {spec for i in _items() if (spec := i.attributes.spec_no) is not None and spec in text}
     )
     if leaked:
         return GradeResult.fail("the prompt carries master data", leaked=leaked)

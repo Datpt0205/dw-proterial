@@ -83,3 +83,37 @@ async def test_the_application_never_changes_a_kept_code(
         )
         with pytest.raises(DBAPIError, match="permission denied"):
             await session.execute(sa.text(statement))
+
+
+async def test_a_customers_words_are_kept_as_printed_and_padding_is_refused(
+    world: World, app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
+) -> None:
+    """Ticket 36 (migration d7c11e671769): the key is what the PO prints, a
+    part number or the customer's words, as Bravo's convert list holds them;
+    the CHECK follows the model and still refuses what the model refuses."""
+    worded = NEW.model_copy(
+        update={"customer_item_code": "UL1061(SPV004) AWG24(11/0.16) GRAY WIRE"}
+    )
+    await SqlRecordedConverts(app_sessions).learn(world.alpha, worded, by=WHO, case_id=CASE)
+    found = await _catalog(app_sessions, world.alpha).convert_entry(
+        world.alpha, "KMH", worded.customer_item_code
+    )
+    assert found.data == worded
+
+    for refused in (" padded", "two\nlines", "x" * 201):
+        async with migrator.connect() as connection:
+            with pytest.raises(DBAPIError, match="ck_recorded_convert_entries_customer_item_code"):
+                await connection.execute(
+                    sa.text(
+                        "INSERT INTO sales.recorded_convert_entries (tenant_id, workspace_id,"
+                        " customer_code, customer_item_code, prv_code, confirmed_by, case_id)"
+                        " VALUES (:t, :w, 'KMH', :code, 'CB-2005', :who, :case)"
+                    ),
+                    {
+                        "t": world.alpha.tenant_id.value,
+                        "w": world.alpha.workspace_id.value,
+                        "code": refused,
+                        "who": WHO,
+                        "case": CASE,
+                    },
+                )

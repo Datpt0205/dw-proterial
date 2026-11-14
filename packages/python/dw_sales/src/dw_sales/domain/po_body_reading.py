@@ -62,6 +62,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.domain.anchors import MessageText, SourceAnchor, TextRange
+from dw_sales.domain.catalog import PrintedText
 from dw_sales.domain.layouts import flagged_everywhere
 from dw_sales.domain.orders import (
     PoDocument,
@@ -69,7 +70,6 @@ from dw_sales.domain.orders import (
     PoHeaderAnchors,
     PoLine,
     PoLineAnchors,
-    PrintedText,
     PrintedTotal,
     RegionFlag,
 )

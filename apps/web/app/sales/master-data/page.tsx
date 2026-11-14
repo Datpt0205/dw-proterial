@@ -294,6 +294,11 @@ function Items() {
           dataIndex: "prv_code",
           render: (c: string) => <Typography.Text code>{c}</Typography.Text>,
         },
+        {
+          title: "Tên hàng",
+          dataIndex: "name",
+          ellipsis: { showTitle: true },
+        },
         { title: "Số spec", dataIndex: "spec_no" },
         {
           title: "Họ cáp",
@@ -305,25 +310,25 @@ function Items() {
         { title: "Tiết diện", dataIndex: "gauge" },
         {
           title: "ĐVT",
-          dataIndex: "uom",
+          dataIndex: "unit",
           render: (u: string | null) => u ?? "Không rõ",
         },
         {
           title: "MOQ",
           dataIndex: "moq",
           align: "right",
-          render: (v: string) => <Quantity value={v} />,
+          render: (v: string | null) => <Quantity value={v} />,
         },
         {
           title: "Quy cách",
           dataIndex: "pack_multiple",
           align: "right",
-          render: (v: string) => <Quantity value={v} />,
+          render: (v: string | null) => <Quantity value={v} />,
         },
         {
           title: "Lead time chuẩn",
           dataIndex: "standard_lead_time_days",
-          render: (d: number) => `${d} ngày`,
+          render: (d: number | null) => (d === null ? "Chưa có" : `${d} ngày`),
         },
       ]}
     />

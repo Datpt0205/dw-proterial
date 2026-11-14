@@ -92,7 +92,13 @@ from dw_sales.application.ports import (
     SalesScope,
     Snapshot,
 )
-from dw_sales.domain.catalog import ConvertEntry, LmeMonth, Quotation, month_key
+from dw_sales.domain.catalog import (
+    ConvertEntry,
+    CustomerGroup,
+    LmeMonth,
+    Quotation,
+    month_key,
+)
 from dw_sales.domain.master_data import (
     MAX_REJECTED_KEPT,
     SPECS,
@@ -896,36 +902,35 @@ class CatalogParsing:
         self, scope: SalesScope, snapshot: CatalogSnapshot, records: Sequence[ParsedRecord]
     ) -> tuple[list[ParsedRecord], list[RejectedRow]]:
         """What a row names must be in the lists DW1 reads now, by exact code:
-        a convert entry or a quotation names a customer and an item. An LME
-        month after the import is refused: ``as_of`` claims the data held then."""
+        a convert entry or a quotation names a customer and an item, and a
+        convert entry's customer is a direct one (Bravo's list keys on it,
+        B04). An LME month after the import is refused: ``as_of`` claims the
+        data held then. Each list is read once, whole: a Bravo export names
+        thousands of codes."""
         kept: list[ParsedRecord] = []
         refused: list[RejectedRow] = []
-        customers: dict[str, bool] = {}
-        items: dict[str, bool] = {}
+        naming = [r for r in records if isinstance(r.record, ConvertEntry | Quotation)]
+        groups = await self._groups(scope) if naming else {}
+        items = await self._item_codes(scope) if naming else frozenset()
         last_month = month_key(snapshot.as_of.date())
         for parsed in records:
             record = parsed.record
             reason: tuple[str, str] | None = None
             if isinstance(record, ConvertEntry | Quotation):
-                # A list with nothing approved holds no code at all.
-                if record.customer_code not in customers:
-                    try:
-                        found = await self.catalog.customer_by_code(scope, record.customer_code)
-                        customers[record.customer_code] = found.data is not None
-                    except CatalogNotConnectedError:
-                        customers[record.customer_code] = False
-                if record.prv_code not in items:
-                    try:
-                        item = await self.catalog.item_by_prv_code(scope, record.prv_code)
-                        items[record.prv_code] = item.data is not None
-                    except CatalogNotConnectedError:
-                        items[record.prv_code] = False
-                if not customers[record.customer_code]:
+                if record.customer_code not in groups:
                     reason = (
                         "Mã khách hàng",
                         f"khách hàng {record.customer_code} chưa có trong danh mục khách hàng",
                     )
-                elif not items[record.prv_code]:
+                elif isinstance(record, ConvertEntry) and groups[record.customer_code] == (
+                    "indirect"
+                ):
+                    reason = (
+                        "Mã khách hàng",
+                        f"khách hàng {record.customer_code} là khách gián tiếp:"
+                        " bảng quy đổi ghi theo khách trực tiếp",
+                    )
+                elif record.prv_code not in items:
                     reason = ("Mã PRV", f"mã {record.prv_code} chưa có trong danh mục mã hàng")
             if isinstance(record, LmeMonth) and record.month > last_month:
                 reason = ("Tháng", "tháng sau thời điểm nhập")
@@ -934,6 +939,22 @@ class CatalogParsing:
             else:
                 refused.append(RejectedRow(row=parsed.row, column=reason[0], reason=reason[1]))
         return kept, refused
+
+    async def _groups(self, scope: SalesScope) -> dict[str, CustomerGroup | None]:
+        """Every customer's code and Bravo group; none where a list with
+        nothing approved holds no code at all."""
+        try:
+            found = await self.catalog.customers(scope)
+        except CatalogNotConnectedError:
+            return {}
+        return {customer.code: customer.group for customer in found.data}
+
+    async def _item_codes(self, scope: SalesScope) -> frozenset[str]:
+        try:
+            found = await self.catalog.items(scope)
+        except CatalogNotConnectedError:
+            return frozenset()
+        return frozenset(item.prv_code for item in found.data)
 
 
 def _unread(refused: DomainError) -> str:

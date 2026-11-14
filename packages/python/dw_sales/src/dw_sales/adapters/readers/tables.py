@@ -8,6 +8,10 @@ semicolon or a tab. Each cell comes back as its value (text, a number, a
 yes/no) and a date as ISO text; what the cells mean is the worker's to decide
 (`dw_sales.domain.master_data.parse_rows`), not the sandbox's.
 
+A row that labels a group of rows (one label merged across the row, beside
+it only formulas: Bravo's "3. Đã duyệt" over its SUBTOTAL) is left out by its
+shape (`_group_labels`), as are empty rows.
+
 Bounded like every reader here: the order rules' caps on the file and on
 what a workbook unpacks to (`open_for_viewing`), and `MAX_ROWS` rows of at
 most `_MAX_COLUMNS` columns. A refusal is a ValueError whose sentence the
@@ -21,6 +25,8 @@ import io
 from collections.abc import Iterable
 from datetime import date, datetime, time
 from typing import Final
+
+from openpyxl.worksheet.worksheet import Worksheet
 
 from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.readers.excel import open_for_viewing
@@ -45,12 +51,15 @@ def _cell(value: object) -> CellValue:
     return text or None
 
 
-def _rows(values: Iterable[Iterable[object]]) -> tuple[list[TableRow], bool]:
-    """Non-empty rows, numbered from 1, header included; whether more were left."""
+def _rows(
+    values: Iterable[Iterable[object]], skipped: frozenset[int] = frozenset()
+) -> tuple[list[TableRow], bool]:
+    """Non-empty rows, numbered from 1, header included, but the ``skipped``
+    ones; whether more were left."""
     rows: list[TableRow] = []
     for number, raw in enumerate(values, start=1):
         cells = [_cell(v) for v in list(raw)[:_MAX_COLUMNS]]
-        if all(c is None for c in cells):
+        if all(c is None for c in cells) or number in skipped:
             continue
         if len(rows) > MAX_ROWS:
             return rows, True
@@ -58,9 +67,29 @@ def _rows(values: Iterable[Iterable[object]]) -> tuple[list[TableRow], bool]:
     return rows, False
 
 
+def _group_labels(sheet: Worksheet, formulas: Worksheet) -> frozenset[int]:
+    """The rows that label a group of the rows under them, by their shape
+    alone, never by their words: one label merged across columns of a single
+    row, and nothing else in the row but formulas (Bravo's "3. Đã duyệt" over
+    A3:K3 with its SUBTOTAL beside it, B04). A title row has no formula."""
+    labels: set[int] = set()
+    for merged in sheet.merged_cells.ranges:
+        if merged.min_row != merged.max_row or merged.min_col == merged.max_col:
+            continue
+        row = merged.min_row
+        others = [
+            cell
+            for cell in formulas[row]
+            if not merged.min_col <= cell.column <= merged.max_col and cell.value is not None
+        ]
+        if others and all(cell.data_type == "f" for cell in others):
+            labels.add(row)
+    return frozenset(labels)
+
+
 def _workbook(data: bytes, caps: IntakeCaps, named: str | None) -> ImportedTable:
     try:
-        values, _ = open_for_viewing(data, caps)
+        values, formulas = open_for_viewing(data, _table_caps(caps))
     except ValueError:
         raise ValueError("không mở được bảng tính này (hỏng, có mật khẩu hoặc có macro)") from None
     visible = [sheet for sheet in values.worksheets if sheet.sheet_state == "visible"]
@@ -73,8 +102,18 @@ def _workbook(data: bytes, caps: IntakeCaps, named: str | None) -> ImportedTable
         sheet = found
     else:
         sheet = next((s for s in visible if s.title == DATA_SHEET), visible[0])
-    rows, truncated = _rows(sheet.iter_rows(values_only=True))
+    rows, truncated = _rows(
+        sheet.iter_rows(values_only=True), _group_labels(sheet, formulas[sheet.title])
+    )
     return ImportedTable(sheet=sheet.title[:200], rows=rows, truncated=truncated)
+
+
+def _table_caps(caps: IntakeCaps) -> IntakeCaps:
+    """The caps a list is opened under: a PO's, but a sheet as large as the
+    rows and columns a list is read to (`MAX_ROWS` by `_MAX_COLUMNS`), which a
+    PO's cell cap is far below (Bravo's item list: 12,273 rows of 28 columns).
+    The zip-bomb bound on what the workbook unpacks to stays the PO's."""
+    return caps.model_copy(update={"max_cells": max(caps.max_cells, MAX_ROWS * _MAX_COLUMNS)})
 
 
 def _csv(data: bytes, caps: IntakeCaps) -> ImportedTable:

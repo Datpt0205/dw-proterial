@@ -8,11 +8,13 @@ type Item = SalesSchemas["ItemView"];
 
 const item = (code: string, overrides: Partial<Item> = {}): Item => ({
   prv_code: code,
+  name: null,
   family: "multi_core_cable",
   spec_no: "PRV-S-210",
   cores: 4,
   gauge: "AWG22",
   uom: "m",
+  unit: "m",
   moq: "300",
   pack_multiple: "300",
   standard_lead_time_days: 21,

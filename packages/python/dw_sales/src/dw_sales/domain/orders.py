@@ -44,6 +44,7 @@ from dw_sales.domain.catalog import (
     Currency,
     CustomerCode,
     DocumentNo,
+    PrintedText,
     PrvCode,
     Uom,
 )
@@ -53,18 +54,6 @@ from dw_sales.domain.legacy_fonts import LegacyEncoding
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
-# Text as a customer printed it: one line, no control characters, no padding.
-# Raw on purpose: a code outside the convert list's alphabet is still what the
-# PO says, and it is reported as unmapped rather than refused as unreadable.
-_PRINTED_END = r"[^\s\x00-\x1f\x7f]"
-PrintedText = Annotated[
-    str,
-    Field(
-        min_length=1,
-        max_length=200,
-        pattern=rf"^{_PRINTED_END}(?:[^\x00-\x1f\x7f]*{_PRINTED_END})?$",
-    ),
-]
 # Who acted: the verified principal's id (`AccessContext.principal_id`), never
 # a subject or a display name. One type for orders and quotes alike, so a maker
 # on one side and a checker on the other are compared as the same kind of id.
@@ -942,9 +931,10 @@ class ItemBasis(BaseModel):
 
     prv_code: PrvCode
     uom: Uom | None
-    moq: Decimal
-    pack_multiple: Decimal
-    standard_lead_time_days: int
+    # None: the item master did not hold it, and the check did not run.
+    moq: Decimal | None
+    pack_multiple: Decimal | None
+    standard_lead_time_days: int | None
 
 
 class QuotationBasis(BaseModel):

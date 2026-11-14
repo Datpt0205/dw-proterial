@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Final, Literal, NamedTuple, Self, assert_never, get_args
+from typing import Final, Literal, NamedTuple, Self, assert_never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -31,8 +31,8 @@ from dw_sales.domain.catalog import (
     LmeBand,
     LmeMonth,
     Quotation,
-    Uom,
     fiscal_year,
+    known_uom,
     month_key,
 )
 from dw_sales.domain.description_reading import DescriptionReading, Verified
@@ -378,12 +378,6 @@ def current_quotation(
     return max(valid, key=lambda q: (q.valid_from, q.quote_no), default=None)
 
 
-def known_uom(printed: str) -> Uom | None:
-    """DW1's word for the unit a PO prints, or None when it has none."""
-    folded = printed.casefold()
-    return next((u for u in get_args(Uom) if u.casefold() == folded), None)
-
-
 # ------------------------------------------------------------- line checks --
 
 
@@ -490,30 +484,40 @@ def check_line(
     moq = quotation.moq if quotation is not None else item.moq
     if not unit_differs:
         # A quantity in another unit is not comparable with a MOQ or a pack.
-        run.extend(("moq", "pack"))
-        if po_line.quantity < moq:
-            found.append(
-                _on(rules, FindingCode.MOQ_VIOLATION, number, str(moq), str(po_line.quantity))
-            )
-        if po_line.quantity % item.pack_multiple:
-            found.append(
-                _on(
-                    rules,
-                    FindingCode.PACK_MULTIPLE,
-                    number,
-                    str(item.pack_multiple),
-                    str(po_line.quantity),
+        # One the item master does not hold (Bravo's has neither, B06) is not
+        # checked, and the coverage says so: never a MOQ or a pack of zero.
+        if moq is not None:
+            run.append("moq")
+            if po_line.quantity < moq:
+                found.append(
+                    _on(rules, FindingCode.MOQ_VIOLATION, number, str(moq), str(po_line.quantity))
                 )
-            )
+        if item.pack_multiple is not None:
+            run.append("pack")
+            if po_line.quantity % item.pack_multiple:
+                found.append(
+                    _on(
+                        rules,
+                        FindingCode.PACK_MULTIPLE,
+                        number,
+                        str(item.pack_multiple),
+                        str(po_line.quantity),
+                    )
+                )
 
-    run.append("lead_time")
-    lead_time, source = _lead_time(item, quotation, rules)
-    earliest = rules.lead_time_start(po_date=po_date, received_on=received_on) + timedelta(
-        days=lead_time
-    )
+    known = _lead_time(item, quotation, rules)
+    lead_time, source = known if known is not None else (None, None)
+    earliest: date | None = None
+    if lead_time is not None:
+        run.append("lead_time")
+        earliest = rules.lead_time_start(po_date=po_date, received_on=received_on) + timedelta(
+            days=lead_time
+        )
     # Per schedule (ticket 21): one finding on the line, naming each date
     # requested sooner than the lead time allows.
-    if short := [s.requested_date for s in po_line.schedules if s.requested_date < earliest]:
+    if earliest is not None and (
+        short := [s.requested_date for s in po_line.schedules if s.requested_date < earliest]
+    ):
         found.append(
             _on(
                 rules,
@@ -547,10 +551,9 @@ def check_line(
         basis=basis,
         # DW1's proposal, labelled as one: the requested date when the lead
         # time allows it, else the first day it does, which is also the
-        # proposal for a line printed with no date.
-        suggested_delivery_date=(
-            earliest if po_line.requested_date is None else max(po_line.requested_date, earliest)
-        ),
+        # proposal for a line printed with no date. With no lead time known,
+        # the requested date, or none for Sales to choose.
+        suggested_delivery_date=_suggested(po_line.requested_date, earliest),
     )
     return LineCheck(line=line, findings=tuple(found))
 
@@ -597,16 +600,29 @@ def _lme_check(
     )
 
 
+def _suggested(requested: date | None, earliest: date | None) -> date | None:
+    if earliest is None:
+        return requested
+    return earliest if requested is None else max(requested, earliest)
+
+
 def _lead_time(
     item: Item, quotation: Quotation | None, rules: OrderRules
-) -> tuple[int, LeadTimeSource]:
+) -> tuple[int, LeadTimeSource] | None:
+    """The lead time a line is held to and where it came from; None where
+    neither the rule's source nor the item master holds one."""
     source = rules.short_lead_time.lead_time
+    standard: tuple[int, LeadTimeSource] | None = (
+        None
+        if item.standard_lead_time_days is None
+        else (item.standard_lead_time_days, "item_standard")
+    )
     match source:
         case "item_standard":
-            return item.standard_lead_time_days, "item_standard"
+            return standard
         case "quotation":
             if quotation is None:
-                return item.standard_lead_time_days, "item_standard"
+                return standard
             return quotation.lead_time_days, "quotation"
         case _:
             assert_never(source)
