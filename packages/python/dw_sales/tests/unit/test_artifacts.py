@@ -99,17 +99,25 @@ from dw_sales.application.order_artifacts import (
     upload_rows,
 )
 from dw_sales.application.order_intake import OrderIntake
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.application.quotation import QuotationService, QuoteRules, ReplyAttached
 from dw_sales.application.rules import Policy, TenantRuleBook
 from dw_sales.application.salesorder_rules import SalesOrderRules
 from dw_sales.application.views import order_line
-from dw_sales.domain.catalog import Customer, LmeBand, LmeMonth, Quotation
+from dw_sales.domain.catalog import (
+    BravoOrder,
+    BravoOrderLine,
+    Customer,
+    LmeBand,
+    LmeMonth,
+    Quotation,
+)
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
+    AppliedChange,
     AskCustomer,
     Capability,
     CloseReason,
@@ -164,7 +172,7 @@ PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
 FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.3.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
-    emails=load_copy(COPY / "sales_emails@1.2.0.yaml", SalesEmailCopy),
+    emails=load_copy(COPY / "sales_emails@1.3.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
@@ -645,7 +653,92 @@ def _quote(step: str) -> Builder:
     return build
 
 
+# A customer's change of a confirmed M01 (ticket 29): line 1 asked for this
+# date, and PC answering on it (6-DW4) or a week later (6-DW3).
+_ASKED = date(2026, 12, 21)
+
+
+def _looping(case: OrderCase, pc_day: date) -> OrderCase:
+    """``case`` confirmed, its line 1's change asked of PC and answered."""
+    an = Actor(user_id=AN)
+    change = AppliedChange(
+        field="requested_date", value=_ASKED.isoformat(), request_id=uuid.UUID(int=29), by=AN, at=T0
+    )
+    asked = case.loop_change(1, change, an).loop_ask_pc(T0)
+    return asked.loop_pc_answer(1, [(asked.line(1).effective.quantity, pc_day)], an, T0)
+
+
+async def _change_answered_m01(verdict: str) -> OrderCase:
+    late = _ASKED + timedelta(days=7)
+    case = _looping(await _confirmed_m01(), _ASKED if verdict == "can_do" else late)
+    assert case.update_loop is not None and case.update_loop.verdict == verdict
+    return case
+
+
+async def _waiting_customer_m01() -> OrderCase:
+    return (await _change_answered_m01("can_do")).loop_answer_sent(T0)
+
+
+async def _change_accepted_m01() -> OrderCase:
+    return await intake(OrderCases()).take_update(SCOPE, await _waiting_customer_m01(), T0)
+
+
+class _OwnEntryCatalog:
+    """The mock catalog, whose Bravo holds ``case`` as DW1 entered it."""
+
+    def __init__(self, case: OrderCase) -> None:
+        self.inner, self.case = MockSalesCatalog.load(SCOPE), case
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+    async def orders_for_po(
+        self, scope: SalesScope, customer_code: str, po_no: str
+    ) -> Snapshot[Sequence[BravoOrder]]:
+        case = self.case
+        assert case.bravo_so_no is not None
+        own = BravoOrder(
+            so_no=case.bravo_so_no,
+            customer_code=case.customer_code,
+            po_no=case.header.po_no,
+            po_revision=case.header.revision,
+            order_date=case.header.po_date,
+            currency=case.header.currency,
+            lines=tuple(
+                BravoOrderLine(
+                    line_no=line.line_no,
+                    prv_code=line.mapping.prv_code or "X",
+                    quantity=line.effective.quantity,
+                    unit_price=line.effective.unit_price,
+                    delivery_date=line.effective.requested_date or T0.date(),
+                )
+                for line in case.lines
+            ),
+        )
+        return Snapshot((own,), NOW)
+
+
+async def test_an_accepted_change_is_not_checked_against_its_own_bravo_entry() -> None:
+    """Ticket 29: the re-check of an order DW1 already entered in Bravo does
+    not read Bravo's history of its PO, where the order itself would read as
+    a revision of its own entry."""
+    waiting = await _waiting_customer_m01()
+    accepting = replace(intake(OrderCases()), catalog=_OwnEntryCatalog(waiting))
+
+    accepted = await accepting.take_update(SCOPE, waiting, T0)
+
+    codes = {f.code for f in accepted.findings}
+    assert FindingCode.REVISED_PO not in codes and FindingCode.DUPLICATE_PO not in codes
+    assert accepted.base_so_no is None and accepted.duplicate_of_so is None
+
+
 KINDS: dict[str, tuple[Builder, Builder]] = {
+    "change_can_do_draft": (lambda: _change_answered_m01("can_do"), _confirmed_m01),
+    "change_options_draft": (
+        lambda: _change_answered_m01("proposes"),
+        lambda: _change_answered_m01("can_do"),
+    ),
+    "bravo_update": (_change_accepted_m01, _waiting_customer_m01),
     "bravo_upload": (lambda: _prepared_m01(), _m01),
     "cross_check_sheet": (_uploaded_m27, _m01),
     "confirmation_draft": (_confirmed_m01, lambda: _cross_checked_m01()),
@@ -1470,7 +1563,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
     assert refused.value.details == {
         "kind": "send_draft",
         "language": "ja",
-        "copy": "sales_emails@1.2.0",
+        "copy": "sales_emails@1.3.0",
         "reason": "template_missing",
     }
     assert not world.objects and not world.artifacts
@@ -2038,6 +2131,8 @@ def test_every_customer_draft_has_every_language_and_every_internal_one_vietname
         "spec_discussion_draft",
         "decline_draft",
         "send_draft",
+        "change_can_do_draft",
+        "change_options_draft",
     }
     emails = ARTIFACT_COPY.emails.emails
     for kind in customer:

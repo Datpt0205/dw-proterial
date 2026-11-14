@@ -1139,6 +1139,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/update/answer-sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Answer Sent */
+        post: operations["update_answer_sent_api_v1_sales_orders__case_id__update_answer_sent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/update/bravo-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Bravo File */
+        post: operations["update_bravo_file_api_v1_sales_orders__case_id__update_bravo_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/update/customer-answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Customer Answer */
+        post: operations["update_customer_answer_api_v1_sales_orders__case_id__update_customer_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/update/lines/{line_no}/pc-answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Pc Answer */
+        post: operations["update_pc_answer_api_v1_sales_orders__case_id__update_lines__line_no__pc_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/update/pc-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Update Pc Request */
+        get: operations["update_pc_request_api_v1_sales_orders__case_id__update_pc_request_get"];
+        put?: never;
+        /** Update Pc Asked */
+        post: operations["update_pc_asked_api_v1_sales_orders__case_id__update_pc_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/overview": {
         parameters: {
             query?: never;
@@ -4404,6 +4490,7 @@ export interface components {
             unapplied_decision: components["schemas"]["UnappliedDecisionView"] | null;
             /** Unopened Values */
             unopened_values?: components["schemas"]["UnopenedValue"][] | null;
+            update_loop?: components["schemas"]["UpdateLoopView"] | null;
         };
         /** OrderFindingView */
         OrderFindingView: {
@@ -6711,6 +6798,126 @@ export interface components {
             field: string;
             /** Line No */
             line_no?: number | null;
+        };
+        /**
+         * UpdateAnswerBody
+         * @description What the customer answered to a change's answer (ticket 29), as the
+         *     person recorded it: keep the PO, accept, or ask PC again.
+         */
+        UpdateAnswerBody: {
+            /**
+             * Answer
+             * @enum {string}
+             */
+            answer: "keep" | "accept" | "ask_pc_again";
+            /** Case Version */
+            case_version: number;
+        };
+        /**
+         * UpdateApprovalBody
+         * @description The Bravo update file the PIC approves, drawn at ``case_version``.
+         */
+        UpdateApprovalBody: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Case Version */
+            case_version: number;
+        };
+        /**
+         * UpdateApprovalView
+         * @description The Bravo update file the PIC approved, by its id and hash.
+         */
+        UpdateApprovalView: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Case Version */
+            case_version: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /**
+         * UpdateDeliveryView
+         * @description One delivery PC gives a changed line in the update loop (ticket 29).
+         */
+        UpdateDeliveryView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Quantity */
+            quantity: string;
+        };
+        /**
+         * UpdateLineView
+         * @description One line a customer's change asks about, in the update loop: what the
+         *     order holds now, what is asked (None: that value is not changed) and PC's
+         *     answer for it, once recorded.
+         */
+        UpdateLineView: {
+            /** Asked Quantity */
+            asked_quantity: string | null;
+            /** Asked Requested Date */
+            asked_requested_date: string | null;
+            /** Held Quantity */
+            held_quantity: string;
+            /** Held Requested Date */
+            held_requested_date: string | null;
+            /** Line No */
+            line_no: number;
+            /** Pc Answered By */
+            pc_answered_by: string | null;
+            /** Pc Deliveries */
+            pc_deliveries: components["schemas"]["UpdateDeliveryView"][] | null;
+        };
+        /**
+         * UpdateLoopView
+         * @description A customer's change on an order in Bravo (ticket 29): its step, since
+         *     when, code's verdict on PC's answer (6-DW4 ``can_do`` or 6-DW3
+         *     ``proposes``), the lines and the approved Bravo update file.
+         */
+        UpdateLoopView: {
+            approval: components["schemas"]["UpdateApprovalView"] | null;
+            /**
+             * Awaits
+             * @enum {string}
+             */
+            awaits: "ask_pc" | "waiting_pc" | "answer_customer" | "waiting_customer" | "approve_update" | "bravo_entry" | "cross_check" | "confirm";
+            /** Lines */
+            lines: components["schemas"]["UpdateLineView"][];
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Step
+             * @enum {string}
+             */
+            step: "ask_pc" | "waiting_pc" | "answer_customer" | "waiting_customer" | "bravo_update";
+            /** Verdict */
+            verdict: ("can_do" | "proposes") | null;
         };
         /**
          * UploadFileBody
@@ -9210,6 +9417,228 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadSummaryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_answer_sent_api_v1_sales_orders__case_id__update_answer_sent_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_bravo_file_api_v1_sales_orders__case_id__update_bravo_file_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApprovalBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_customer_answer_api_v1_sales_orders__case_id__update_customer_answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnswerBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pc_answer_api_v1_sales_orders__case_id__update_lines__line_no__pc_answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PcAnswerBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pc_request_api_v1_sales_orders__case_id__update_pc_request_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcRequestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pc_asked_api_v1_sales_orders__case_id__update_pc_request_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
                 };
             };
             /** @description Validation Error */

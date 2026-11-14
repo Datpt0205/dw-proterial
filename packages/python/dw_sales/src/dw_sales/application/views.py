@@ -96,9 +96,12 @@ from dw_sales.domain.orders import (
     LineChange,
     OrderCase,
     OrderLine,
+    OrderStatus,
+    PcVerdict,
     PoDocument,
     PoLineAnchors,
     PrintCopy,
+    UpdateStep,
     ValueCorrection,
 )
 from dw_sales.domain.quotes import (
@@ -600,6 +603,130 @@ class PcRequestStateView(BaseModel):
     at: datetime
 
 
+class UpdateDeliveryView(BaseModel):
+    """One delivery PC gives a changed line in the update loop (ticket 29)."""
+
+    model_config = _VIEW
+
+    quantity: Decimal
+    date: date
+
+
+class UpdateLineView(BaseModel):
+    """One line a customer's change asks about, in the update loop: what the
+    order holds now, what is asked (None: that value is not changed) and PC's
+    answer for it, once recorded."""
+
+    model_config = _VIEW
+
+    line_no: int
+    held_quantity: Decimal
+    held_requested_date: date | None
+    asked_quantity: Decimal | None
+    asked_requested_date: date | None
+    pc_deliveries: list[UpdateDeliveryView] | None
+    pc_answered_by: uuid.UUID | None
+
+
+class UpdateApprovalView(BaseModel):
+    """The Bravo update file the PIC approved, by its id and hash."""
+
+    model_config = _VIEW
+
+    artifact_id: uuid.UUID
+    sha256: str
+    case_version: int
+    by: uuid.UUID
+    at: datetime
+
+
+# The one action the update loop waits on now: its step's, or once the
+# customer accepted, the Bravo update's (approve the file, record it entered,
+# the cross-check, the confirmation).
+UpdateAwaits = Literal[
+    "ask_pc",
+    "waiting_pc",
+    "answer_customer",
+    "waiting_customer",
+    "approve_update",
+    "bravo_entry",
+    "cross_check",
+    "confirm",
+]
+
+
+class UpdateLoopView(BaseModel):
+    """A customer's change on an order in Bravo (ticket 29): its step, since
+    when, code's verdict on PC's answer (6-DW4 ``can_do`` or 6-DW3
+    ``proposes``), the lines and the approved Bravo update file."""
+
+    model_config = _VIEW
+
+    request_id: uuid.UUID
+    step: UpdateStep
+    since: datetime
+    awaits: UpdateAwaits
+    verdict: PcVerdict | None
+    lines: list[UpdateLineView]
+    approval: UpdateApprovalView | None
+
+
+def _update_awaits(case: OrderCase) -> UpdateAwaits:
+    loop = case.update_loop
+    assert loop is not None
+    if loop.step != "bravo_update":
+        return loop.step
+    if case.status is OrderStatus.CHANGE_REVIEW:
+        return "approve_update" if loop.approval is None else "bravo_entry"
+    return "cross_check" if case.awaits_cross_check else "confirm"
+
+
+def update_loop_view(case: OrderCase) -> UpdateLoopView | None:
+    """The order's update loop as its page shows it; None with none."""
+    loop = case.update_loop
+    if loop is None:
+        return None
+    lines = []
+    for held in loop.lines:
+        line = case.line(held.line_no).effective
+        asked = {c.field: c.value for c in held.changes}
+        pc = held.pc_answer
+        lines.append(
+            UpdateLineView(
+                line_no=held.line_no,
+                held_quantity=line.quantity,
+                held_requested_date=line.requested_date,
+                asked_quantity=Decimal(asked["quantity"]) if "quantity" in asked else None,
+                asked_requested_date=(
+                    date.fromisoformat(asked["requested_date"])
+                    if "requested_date" in asked
+                    else None
+                ),
+                pc_deliveries=(
+                    None
+                    if pc is None
+                    else [
+                        UpdateDeliveryView(quantity=d.quantity, date=d.date) for d in pc.deliveries
+                    ]
+                ),
+                pc_answered_by=None if pc is None else pc.by,
+            )
+        )
+    return UpdateLoopView(
+        request_id=loop.request_id,
+        step=loop.step,
+        since=loop.since,
+        awaits=_update_awaits(case),
+        verdict=loop.verdict,
+        lines=lines,
+        approval=(
+            None
+            if loop.approval is None
+            else UpdateApprovalView.model_validate(loop.approval.model_dump())
+        ),
+    )
+
+
 class OrderLineView(BaseModel):
     model_config = _VIEW
 
@@ -954,6 +1081,8 @@ class OrderCaseView(BaseModel):
     change_requests: list[ChangeRequestView] = []
     # Sales asked PC for delivery dates and waits on the answer (ticket 07).
     pc_request: PcRequestStateView | None = None
+    # A customer's change on the order once it is in Bravo (ticket 29).
+    update_loop: UpdateLoopView | None = None
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
@@ -1337,6 +1466,7 @@ def order_case(
             if case.pc_request
             else None
         ),
+        update_loop=update_loop_view(case),
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker

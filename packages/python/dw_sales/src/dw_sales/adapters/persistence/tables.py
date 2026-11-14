@@ -73,6 +73,10 @@ order_cases = sa.Table(
     # Sales asked PC for the delivery dates and waits (ticket 07, migration
     # 91f83937dbf1): the lines asked, who and when; NULL otherwise.
     sa.Column("pc_request", JSONB(none_as_null=True)),
+    # A customer's change on the order once it is in Bravo (ticket 29,
+    # migration 0d1d0e4eb203): its step, lines, PC's answer and the approved
+    # Bravo update file; NULL otherwise.
+    sa.Column("update_loop", JSONB(none_as_null=True)),
     # Written by the `accumulate_makers` trigger only.
     sa.Column("makers", ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),

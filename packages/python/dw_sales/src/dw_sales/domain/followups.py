@@ -21,10 +21,14 @@ on a case changes because a reminder went out. The person decides.
   quote due date is near, counted to the end of the due day, local time.
 - ``waiting_customer``: an order whose correction was asked of the customer,
   or a quote whose spec is being discussed with them, from the moment it
-  entered that status.
+  entered that status; and an order whose answer to the customer's change
+  was sent (ticket 29's update loop), from the moment Sales recorded it sent
+  until a person records the customer's answer.
 - ``waiting_pc``: an order whose delivery dates Sales asked PC for (ticket
   07), from the moment Sales recorded asking, until PC's answer is recorded
-  for every line asked (the case then names no request, and nothing is owed).
+  for every line asked (the case then names no request, and nothing is owed);
+  and an order whose customer's change was asked of PC (ticket 29), until
+  PC's answer is recorded for every changed line.
 
 **One wait, one reminder per stage.** A stage is due when its threshold has
 passed; it is sent once per (case, follow-up, stage, wait), the wait being
@@ -391,8 +395,12 @@ class WaitingCase:
     assigned_to: uuid.UUID | None
     due: date | None
     # When Sales recorded asking PC for the dates, while the order waits on
-    # PC (`OrderCase.pc_request`); None otherwise (ticket 07).
+    # PC (`OrderCase.pc_request`, or its update loop's PC step, ticket 29);
+    # None otherwise (ticket 07).
     pc_asked_at: datetime | None = None
+    # When Sales recorded the answer to a customer's change sent, while the
+    # update loop waits on the customer (ticket 29); None otherwise.
+    customer_asked_at: datetime | None = None
 
 
 # The statuses each follow-up watches.
@@ -543,6 +551,14 @@ def owed(
                 Followup.WAITING_CUSTOMER,
                 ((Stage.REMIND, customer.remind),),
                 case.status_since,
+                now,
+            )
+        elif customer.enabled and order and case.customer_asked_at is not None:
+            found += _after(
+                case,
+                Followup.WAITING_CUSTOMER,
+                ((Stage.REMIND, customer.remind),),
+                case.customer_asked_at,
                 now,
             )
     return found

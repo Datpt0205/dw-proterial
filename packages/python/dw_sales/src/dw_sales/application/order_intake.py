@@ -1301,6 +1301,16 @@ class OrderIntake:
         recheck = await self._recheck(scope, case, corrected, details)
         return decided(lambda: case.take_pc_answer(line_no, deliveries, actor, at, recheck))
 
+    async def take_update(self, scope: SalesScope, case: OrderCase, at: datetime) -> OrderCase:
+        """A customer's change on an order in Bravo, accepted: applied with
+        the changed lines' checks run again, as a change before Bravo is
+        (`take_change`; ticket 29). Which loop step accepts, and what each
+        line takes, is the case's (`OrderCase.update_accepted`)."""
+        details: dict[str, object] = {"case_id": str(case.case_id)}
+        corrected = decided(case.update_accepted)
+        recheck = await self._recheck(scope, case, corrected, details)
+        return decided(lambda: case.take_update(at, recheck))
+
     async def _recheck(
         self, scope: SalesScope, case: OrderCase, corrected: Corrected, details: dict[str, object]
     ) -> Recheck:
@@ -1342,7 +1352,10 @@ class OrderIntake:
             for other in await self.cases.cases_for_po(scope, case.customer_code, header.po_no)
             if other.case_id != case.case_id
         ]
-        if not others and not case.superseded and case.duplicate_of_case is None:
+        # An order DW1 already entered in Bravo is not checked against its own
+        # entry there: it would read as its own duplicate (ticket 29).
+        in_bravo = case.bravo_so_no is not None
+        if not others and not case.superseded and case.duplicate_of_case is None and not in_bravo:
             codes = {line.line_no: line.mapping.checked_against for line in corrected.lines}
             codes |= {c.line.line_no: c.line.mapping.checked_against for c in checks}
             # Bravo not connected: its history stays unchecked, as the case

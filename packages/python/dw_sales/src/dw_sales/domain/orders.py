@@ -253,6 +253,130 @@ class PcRequest(BaseModel):
         )
 
 
+def reconfirmed(
+    before: PcAnswer | None,
+    deliveries: Sequence[tuple[Decimal, date]],
+    by: ActorId,
+    at: datetime,
+) -> PcAnswer:
+    """PC's answer for a line from ``deliveries`` (each quantity with PC's
+    date), keeping the date PC confirmed first (Bravo's "Ngày XN giao hàng
+    lần đầu"): delivery by delivery while PC keeps the line's quantities as
+    they were in ``before``; split anew, every delivery keeps the line's
+    earliest first date, the one PC gave the line first; with no answer
+    before, PC's dates are the first ones (ticket 07). The one owner of the
+    rule, for an answer before the order is in Bravo and for one the update
+    loop applies (ticket 29)."""
+    quantities = tuple(quantity for quantity, _ in deliveries)
+    if before is None:
+        firsts = [day for _, day in deliveries]
+    elif before.quantities == quantities:
+        firsts = [d.first_date for d in before.deliveries]
+    else:
+        firsts = [min(d.first_date for d in before.deliveries)] * len(deliveries)
+    return PcAnswer(
+        deliveries=tuple(
+            PcDelivery(quantity=quantity, first_date=first, date=day)
+            for (quantity, day), first in zip(deliveries, firsts, strict=True)
+        ),
+        by=by,
+        at=at,
+    )
+
+
+# ------------------------------------------------- the update loop (ticket 29) --
+
+# Where an order already in Bravo stands in the BA's step 6 (dw_sales ADR 0010
+# decision 3): a change the PIC confirmed waits to be asked of PC (6-DW2),
+# then on PC; PC's answer is drafted back to the customer (6-DW4 or 6-DW3),
+# then the case waits on the customer; once they accept, the Bravo update is
+# approved and entered (6.2-SP) and the order is confirmed again (6.3).
+UpdateStep = Literal["ask_pc", "waiting_pc", "answer_customer", "waiting_customer", "bravo_update"]
+# What a person records the customer answered (the BA's "Khách quyết định?").
+CustomerAnswer = Literal["keep", "accept", "ask_pc_again"]
+# Code's comparison of PC's answer with what was asked: PC can do it (6-DW4),
+# or PC proposes otherwise (6-DW3). Never a model's.
+PcVerdict = Literal["can_do", "proposes"]
+_ANSWERED: Final = frozenset({"answer_customer", "waiting_customer", "bravo_update"})
+
+
+class LoopLine(BaseModel):
+    """One line of the order a customer's change asks about, in the update
+    loop: the changes the PIC confirmed (one per field, held apart from the
+    line until the customer accepts), and PC's answer for the values asked.
+    PC's answer here names PC's dates only (``first_date`` is ``date``): the
+    line's own first confirmed date is kept when the update is applied
+    (`reconfirmed`)."""
+
+    model_config = _FROZEN
+
+    line_no: int = Field(ge=1, le=99_999)
+    changes: tuple[AppliedChange, ...] = Field(min_length=1, max_length=2)
+    pc_answer: PcAnswer | None = None
+
+    @model_validator(mode="after")
+    def _one_change_per_field(self) -> Self:
+        fields = [c.field for c in self.changes]
+        if len(fields) != len(set(fields)):
+            raise ValueError(f"line {self.line_no} is asked two values of one field")
+        return self
+
+
+class BravoUpdateApproval(BaseModel):
+    """The PIC's approval of the exact Bravo update file (6.2-SP; ADR 0026 as
+    amended 2026-11-13): the file rendered at ``case_version``, by its id and
+    hash. What is entered in Bravo is that file; until Bravo's write API
+    exists a person imports it, and records it entered."""
+
+    model_config = _FROZEN
+
+    artifact_id: uuid.UUID
+    sha256: Sha256Hex
+    case_version: int = Field(ge=1)
+    by: ActorId
+    at: AwareDatetime
+
+
+class UpdateLoop(BaseModel):
+    """A customer's change on an order already in Bravo, from the PIC's
+    confirmation to the order confirmed again (ticket 29). One per case, from
+    one change request; its step says what it waits on and ``since`` when it
+    began waiting there, the clock a reminder reads."""
+
+    model_config = _FROZEN
+
+    request_id: uuid.UUID
+    step: UpdateStep
+    since: AwareDatetime
+    lines: tuple[LoopLine, ...] = Field(min_length=1)
+    # Stamped by code when PC's answer is in for every line, and kept: what
+    # the draft to the customer says does not change after it is drafted.
+    verdict: PcVerdict | None = None
+    approval: BravoUpdateApproval | None = None
+
+    @model_validator(mode="after")
+    def _loop_is_consistent(self) -> Self:
+        numbers = [line.line_no for line in self.lines]
+        if len(numbers) != len(set(numbers)):
+            raise ValueError("the update loop names a line twice")
+        if any(c.request_id != self.request_id for line in self.lines for c in line.changes):
+            raise ValueError("the update loop holds another request's change")
+        answered = [line.pc_answer is not None for line in self.lines]
+        if self.step in _ANSWERED:
+            if not all(answered) or self.verdict is None:
+                raise ValueError("PC's answer is in for every line once drafted to the customer")
+        elif self.verdict is not None or (self.step == "ask_pc" and any(answered)):
+            raise ValueError(f"an update loop at {self.step} has no answer from PC yet")
+        elif self.step == "waiting_pc" and all(answered):
+            raise ValueError("PC answered every line: the loop is past waiting on PC")
+        if self.approval is not None and self.step != "bravo_update":
+            raise ValueError("only the Bravo update is approved")
+        return self
+
+    def line(self, line_no: int) -> LoopLine | None:
+        return next((x for x in self.lines if x.line_no == line_no), None)
+
+
 def _require_corrections(
     corrections: Sequence[ValueCorrection], flagged: frozenset[str], owner: str
 ) -> None:
@@ -1576,6 +1700,22 @@ _CHANGEABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED})
 _ACKNOWLEDGEABLE: Final = frozenset(
     {_S.IN_REVIEW, _S.PREPARED, _S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED, _S.CHANGE_REVIEW}
 )
+# Where each step of the update loop stands (ticket 29). It starts on an order
+# Sales has confirmed to the customer: `confirmed` stands for ADR 0011's
+# `confirmation_sent` until ticket 28 splits it. Talking with PC and the
+# customer leaves the order as it is; once the customer accepts, the change
+# is applied and the order is reviewed, entered in Bravo, cross-checked as
+# its rules say, and confirmed again, which ends the loop. A move anywhere
+# else (a new revision, a return from the cross-check) ends it too.
+_LOOP_STATUSES: Final[Mapping[str, frozenset[OrderStatus]]] = MappingProxyType(
+    {
+        "ask_pc": frozenset({_S.CONFIRMED}),
+        "waiting_pc": frozenset({_S.CONFIRMED}),
+        "answer_customer": frozenset({_S.CONFIRMED}),
+        "waiting_customer": frozenset({_S.CONFIRMED}),
+        "bravo_update": frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED}),
+    }
+)
 
 _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
     {
@@ -1736,6 +1876,9 @@ class OrderCase(BaseModel):
     # Sales asked PC for the delivery dates and waits (ticket 07): only where
     # PC's answer is recorded, and cleared once every line asked has it.
     pc_request: PcRequest | None = None
+    # A customer's change on the order once it is in Bravo, from the PIC's
+    # confirmation to the order confirmed again (ticket 29); None otherwise.
+    update_loop: UpdateLoop | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1789,6 +1932,11 @@ class OrderCase(BaseModel):
                 raise ValueError(f"a {self.status} case does not wait on PC")
             if not set(self.pc_request.lines) <= line_numbers:
                 raise ValueError("PC is asked about a line the case lacks")
+        if (loop := self.update_loop) is not None:
+            if self.status not in _LOOP_STATUSES[loop.step]:
+                raise ValueError(f"a {self.status} case is not at {loop.step} of an update")
+            if not {x.line_no for x in loop.lines} <= line_numbers:
+                raise ValueError("the update names a line the case lacks")
         _require_corrections(self.header_corrections, self._header_flagged, "the PO header")
         _keeps_identity(self.header, self.effective_header, "the PO header")
         if self.header_corrections:
@@ -1954,6 +2102,10 @@ class OrderCase(BaseModel):
         names |= {c.by for c in self.header_corrections}
         # PC's dates a person typed are values of the paste sheet (ticket 07).
         names |= {line.pc_answer.by for line in self.lines if line.pc_answer is not None}
+        # Who approved the Bravo update file of a customer's change (ticket 29).
+        loop = self.update_loop
+        if loop is not None and loop.approval is not None:
+            names.add(loop.approval.by)
         return frozenset(name for name in names if name is not None)
 
     def finding(self, key: str) -> Finding:
@@ -2617,21 +2769,7 @@ class OrderCase(BaseModel):
                 "PC's quantities do not add up to the line's: settle it with PC",
                 details={**details, "deliveries": len(quantities), "rule": "split_not_summing"},
             )
-        before = line.pc_answer
-        if before is None:
-            firsts = [day for _, day in deliveries]
-        elif before.quantities == quantities:
-            firsts = [d.first_date for d in before.deliveries]
-        else:
-            firsts = [min(d.first_date for d in before.deliveries)] * len(deliveries)
-        answer = PcAnswer(
-            deliveries=tuple(
-                PcDelivery(quantity=quantity, first_date=first, date=day)
-                for (quantity, day), first in zip(deliveries, firsts, strict=True)
-            ),
-            by=actor.user_id,
-            at=at,
-        )
+        answer = reconfirmed(line.pc_answer, deliveries, actor.user_id, at)
         new_line = OrderLine.model_validate(
             {
                 **dict(line),
@@ -2666,6 +2804,273 @@ class OrderCase(BaseModel):
         if request is not None and request.answered(taken.lines):
             request = None
         return self._edited(**taken.changes(), pc_request=request)
+
+    # ------------------------------------------- the update loop (ticket 29) --
+
+    def loop_target(self, loop_line: LoopLine) -> PoLine:
+        """The line as the customer asks it: as entered, each value the loop
+        changes replaced. What PC is asked about and answers for."""
+        return _with_values(self.line(loop_line.line_no).effective, loop_line.changes)
+
+    def loop_change(self, line_no: int, change: AppliedChange, actor: Actor) -> OrderCase:
+        """A change the customer asked, confirmed by the PIC on an order Sales
+        has confirmed to the customer (ADR 0010 decision 3): it joins the
+        update loop, which waits to be asked of PC, and the order itself does
+        not change until the customer accepts PC's answer (`take_update`).
+
+        Refused in any other status: before Bravo a change is taken at once
+        (`take_change`); between the Bravo entry and the confirmation the
+        PIC confirms the order first. Refused for a line printing its
+        schedules, for a change of another request while one is in the loop
+        (`update_busy`), and once PC has been asked (`update_step`): the
+        request's lines are all decided before PC is asked."""
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        if self.status is not _S.CONFIRMED:
+            raise ConflictError(
+                f"a change asked by mail is not taken in {self.status}",
+                details={**details, "status": self.status.value, "rule": "change_status"},
+            )
+        if change.by != actor.user_id:
+            raise DomainError("a decision is recorded as its actor's", details=details)
+        if self.line(line_no).po_line.prints_schedules:
+            raise ConflictError(
+                "the line prints its schedules: which one changes is asked of the customer",
+                details={**details, "rule": "printed_schedules"},
+            )
+        loop = self.update_loop
+        if loop is None:
+            added = LoopLine(line_no=line_no, changes=(change,))
+            return self._next(
+                self.status,
+                update_loop=UpdateLoop(
+                    request_id=change.request_id, step="ask_pc", since=change.at, lines=(added,)
+                ),
+            )
+        if loop.request_id != change.request_id:
+            raise ConflictError(
+                "đơn đang trong một vòng cập nhật của yêu cầu khác",
+                details={**details, "rule": "update_busy"},
+            )
+        self._loop("ask_pc")
+        held = loop.line(line_no)
+        joined = LoopLine(
+            line_no=line_no,
+            changes=(change,) if held is None else (*_without(held.changes, change.field), change),
+        )
+        lines = sorted(
+            (*(x for x in loop.lines if x.line_no != line_no), joined), key=lambda x: x.line_no
+        )
+        return self._next(self.status, update_loop=_loop_with(loop, lines=tuple(lines)))
+
+    def loop_ask_pc(self, at: datetime) -> OrderCase:
+        """6-DW2: Sales asked PC about the changed lines (from their own
+        account: DW1 sends nothing). The case waits on PC from ``at``; asked
+        again, the wait starts again and the answers recorded stay."""
+        loop = self._loop("ask_pc", "waiting_pc")
+        return self._next(self.status, update_loop=_loop_with(loop, step="waiting_pc", since=at))
+
+    def loop_pc_answer(
+        self,
+        line_no: int,
+        deliveries: Sequence[tuple[Decimal, date]],
+        actor: Actor,
+        at: datetime,
+    ) -> OrderCase:
+        """PC's answer for one changed line: its deliveries, which add up to
+        the quantity asked (or held, when only the date changes); a split that
+        does not is refused, never adjusted. With the last line's answer the
+        loop is past waiting on PC: code compares PC's dates with the dates
+        asked (`_verdict`) and the answer to the customer is drafted. The
+        order's own line does not change."""
+        loop = self._loop("waiting_pc")
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        held = loop.line(line_no)
+        if held is None:
+            raise ConflictError(
+                "PC is not asked about this line", details={**details, "rule": "update_line"}
+            )
+        if not deliveries:
+            raise DomainError("PC's answer gives the line a date", details=details)
+        quantities = [quantity for quantity, _ in deliveries]
+        if sum(quantities, Decimal(0)) != self.loop_target(held).quantity:
+            raise ConflictError(
+                "PC's quantities do not add up to the quantity asked: settle it with PC",
+                details={**details, "deliveries": len(quantities), "rule": "split_not_summing"},
+            )
+        answer = PcAnswer(
+            deliveries=tuple(
+                PcDelivery(quantity=quantity, first_date=day, date=day)
+                for quantity, day in deliveries
+            ),
+            by=actor.user_id,
+            at=at,
+        )
+        answered = LoopLine.model_validate({**dict(held), "pc_answer": answer})
+        lines = tuple(answered if x.line_no == line_no else x for x in loop.lines)
+        if all(x.pc_answer is not None for x in lines):
+            after = _loop_with(
+                loop, lines=lines, step="answer_customer", since=at, verdict=self._verdict(lines)
+            )
+        else:
+            after = _loop_with(loop, lines=lines)
+        return self._next(self.status, update_loop=after)
+
+    def _verdict(self, lines: Iterable[LoopLine]) -> PcVerdict:
+        """6-DW4 when every delivery PC gives is on the date asked (or held,
+        when only the quantity changes) of its line, 6-DW3 otherwise: compared
+        by code, never read by a model."""
+        for loop_line in lines:
+            asked = self.loop_target(loop_line).requested_date
+            assert loop_line.pc_answer is not None  # every line answered
+            if any(d.date != asked for d in loop_line.pc_answer.deliveries):
+                return "proposes"
+        return "can_do"
+
+    def loop_answer_sent(self, at: datetime) -> OrderCase:
+        """6-DW4 or 6-DW3 sent to the customer by a person (DW1 sends
+        nothing): the case waits on the customer from ``at``."""
+        loop = self._loop("answer_customer")
+        return self._next(
+            self.status, update_loop=_loop_with(loop, step="waiting_customer", since=at)
+        )
+
+    def loop_answered(self, answer: CustomerAnswer, at: datetime) -> OrderCase:
+        """The customer's answer as a person recorded it, but acceptance
+        (`take_update`, which applies the change): ``keep`` ends the loop and
+        leaves the order exactly as it was; ``ask_pc_again`` drops PC's answers
+        and waits to ask PC again. Only once the answer was sent: a customer's
+        word while PC has not answered is refused (`update_step`)."""
+        loop = self._loop("waiting_customer")
+        if answer == "keep":
+            return self._next(self.status, update_loop=None)
+        if answer == "ask_pc_again":
+            lines = tuple(x.model_copy(update={"pc_answer": None}) for x in loop.lines)
+            return self._next(
+                self.status,
+                update_loop=_loop_with(loop, lines=lines, step="ask_pc", since=at, verdict=None),
+            )
+        raise DomainError(
+            "the customer's acceptance applies the change",
+            details={"case_id": str(self.case_id), "answer": answer},
+        )
+
+    def update_accepted(self) -> Corrected:
+        """The case's values with the customer's accepted change applied, for
+        its checks to run on: each changed line takes the changes (as
+        `changed` does) and PC's answer, its first confirmed dates kept
+        (`reconfirmed`), and its confirmed dates cleared, to be confirmed
+        again."""
+        loop = self._loop("waiting_customer")
+        lines: list[OrderLine] = []
+        for line in self.lines:
+            held = loop.line(line.line_no)
+            if held is None:
+                lines.append(line)
+                continue
+            assert held.pc_answer is not None  # waiting on the customer: answered
+            fields = {c.field for c in held.changes}
+            pc = held.pc_answer
+            lines.append(
+                OrderLine.model_validate(
+                    {
+                        **dict(line),
+                        "changes": (
+                            *(c for c in line.changes if c.field not in fields),
+                            *held.changes,
+                        ),
+                        "pc_answer": reconfirmed(
+                            line.pc_answer,
+                            [(d.quantity, d.date) for d in pc.deliveries],
+                            pc.by,
+                            pc.at,
+                        ),
+                        "confirmed_delivery_dates": (),
+                    }
+                )
+            )
+        numbers = frozenset(x.line_no for x in loop.lines)
+        entered = _entered(self.document, lines, self.header_corrections)
+        return Corrected(
+            min(numbers), tuple(lines), self.header_corrections, entered, numbers, False
+        )
+
+    def take_update(self, at: datetime, recheck: Recheck) -> OrderCase:
+        """The customer accepted: the change is applied with the checks run
+        again on the changed lines (`update_accepted`), and the order goes to
+        ``change_review`` for the Bravo update (6.2-SP), its cross-check and
+        confirmation cleared as a revision in Bravo clears them. PC answered
+        for the values asked, so its answer stands as its agreement on a
+        short lead time (as `pc_answered`'s does)."""
+        corrected = self.update_accepted()
+        loop = self.update_loop
+        assert loop is not None  # `update_accepted` required it
+        taken = self._rechecked(corrected, recheck, {"case_id": str(self.case_id)})
+        lines = tuple(
+            OrderLine.model_validate(
+                {**dict(x), "pc_confirmed_by": x.pc_answer.by, "pc_confirmed_at": x.pc_answer.at}
+            )
+            if loop.line(x.line_no) is not None and x.pc_answer is not None
+            else x
+            for x in taken.lines
+        )
+        return self._next(
+            transition(self.status, _S.CHANGE_REVIEW),
+            **taken._replace(lines=lines).changes(),
+            cross_checked_by=None,
+            cross_checked_at=None,
+            confirmed_by=None,
+            confirmed_at=None,
+            update_loop=_loop_with(loop, step="bravo_update", since=at),
+        )
+
+    def approve_update(
+        self, artifact_id: uuid.UUID, sha256: str, rendered_on: int, actor: Actor, at: datetime
+    ) -> OrderCase:
+        """6.2-SP: the PIC approves the exact Bravo update file, drawn at the
+        case's current version, by its id and hash (ADR 0026 as amended). A
+        later change to the case drops the approval (`_edited`); the file is
+        approved before it is entered, and refused while a finding is open."""
+        loop = self._loop("bravo_update")
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status is not _S.CHANGE_REVIEW:
+            raise ConflictError(
+                "the Bravo update is approved before it is entered",
+                details={**details, "status": self.status.value, "rule": "update_step"},
+            )
+        if loop.approval is not None:
+            raise ConflictError(
+                "tệp cập nhật Bravo đã được duyệt",
+                details={**details, "rule": "bravo_update_approved"},
+            )
+        if rendered_on != self.case_version:
+            raise ConflictError(
+                "tài liệu được tạo từ một phiên bản hồ sơ cũ: tạo lại để duyệt bản mới",
+                details={**details, "rule": "stale_artifact"},
+            )
+        self._require_decided()
+        approval = BravoUpdateApproval(
+            artifact_id=artifact_id,
+            sha256=sha256,
+            case_version=rendered_on,
+            by=actor.user_id,
+            at=at,
+        )
+        return self._next(self.status, update_loop=_loop_with(loop, approval=approval))
+
+    def _loop(self, *steps: UpdateStep) -> UpdateLoop:
+        """The update loop, at one of ``steps``; refused otherwise."""
+        loop = self.update_loop
+        if loop is None or loop.step not in steps:
+            raise ConflictError(
+                "bước này không phải bước vòng cập nhật đang chờ",
+                details={
+                    "case_id": str(self.case_id),
+                    "step": None if loop is None else loop.step,
+                    "expected": list(steps),
+                    "rule": "update_step",
+                },
+            )
+        return loop
 
     def confirm(
         self, actor: Actor, at: datetime, delivery_dates: Mapping[int, Sequence[date]]
@@ -2765,6 +3170,8 @@ class OrderCase(BaseModel):
             # revision as read; the revision starts with no correction.
             changes=diff_lines(self.effective_document.lines, revision.document.lines),
             header_corrections=(),
+            # A new revision of the PO replaces what a mail asked to change.
+            update_loop=None,
             **cleared,
         )
 
@@ -2777,12 +3184,14 @@ class OrderCase(BaseModel):
                 details={"case_id": str(self.case_id), "status": self.status.value},
             )
         self._require_compared(entry_compared)
-        if open_findings := [
-            f.key for f in self.findings if f.is_open and f.code is not FindingCode.MISSING_NOC_ESF
-        ]:
+        self._require_decided()
+        loop = self.update_loop
+        if loop is not None and loop.approval is None:
+            # A customer's change reaches Bravo only as the file a person
+            # approved (ADR 0026 as amended 2026-11-13; ticket 29).
             raise ConflictError(
-                "the revision's findings are not all decided",
-                details={"case_id": str(self.case_id), "open_findings": open_findings},
+                "tệp cập nhật Bravo chưa được duyệt",
+                details={"case_id": str(self.case_id), "rule": "bravo_update_not_approved"},
             )
         return self._next(
             transition(self.status, _S.UPLOADED_TO_BRAVO),
@@ -2834,6 +3243,16 @@ class OrderCase(BaseModel):
                 details={"case_id": str(self.case_id), "field": "bravo_entry_compared"},
             )
 
+    def _require_decided(self) -> None:
+        """Every finding decided but `missing_noc_esf`, which blocks only `confirmed`."""
+        if open_findings := [
+            f.key for f in self.findings if f.is_open and f.code is not FindingCode.MISSING_NOC_ESF
+        ]:
+            raise ConflictError(
+                "the revision's findings are not all decided",
+                details={"case_id": str(self.case_id), "open_findings": open_findings},
+            )
+
     def _require_not_a_maker(self, actor: Actor) -> None:
         if actor.user_id in self.makers:
             raise ConflictError(
@@ -2852,6 +3271,11 @@ class OrderCase(BaseModel):
             return self._next(
                 transition(self.status, _S.IN_REVIEW), **changes, **self._cleared_from_prepared()
             )
+        loop = self.update_loop
+        if loop is not None and loop.approval is not None:
+            # The approved Bravo update file no longer is the case's: it is
+            # approved again from a file drawn on the case as it now is.
+            changes.setdefault("update_loop", loop.model_copy(update={"approval": None}))
         return self._next(self.status, **changes)
 
     def _require_editable(self) -> None:
@@ -2878,6 +3302,14 @@ class OrderCase(BaseModel):
             # Nor on PC, once its answer can no longer be taken here (ticket
             # 07): in Bravo, PC's dates are the update loop's (ticket 29).
             changes.setdefault("pc_request", None)
+        loop = self.update_loop
+        if loop is not None and (
+            status not in _LOOP_STATUSES[loop.step]
+            or (status is _S.CONFIRMED and self.status is not _S.CONFIRMED)
+        ):
+            # The update loop ends where its step does not stand: the order
+            # confirmed again, a new revision, a return from the cross-check.
+            changes.setdefault("update_loop", None)
         # Validated again: `model_copy(update=...)` would skip the invariants.
         return OrderCase.model_validate(
             {**dict(self), **changes, "status": status, "case_version": self.case_version + 1}
@@ -2903,6 +3335,11 @@ _TYPED_PER_FIELD: Final = "Sales nhập lại từng giá trị bị gắn cờ"
 
 def _without[V: (ValueCorrection, AppliedChange)](values: Iterable[V], field: str) -> tuple[V, ...]:
     return tuple(c for c in values if c.field != field)
+
+
+def _loop_with(loop: UpdateLoop, **changes: object) -> UpdateLoop:
+    """``loop`` with ``changes``, validated again (`model_copy` would skip it)."""
+    return UpdateLoop.model_validate({**dict(loop), **changes})
 
 
 def _pc_dropped(line: OrderLine, field: str) -> dict[str, object]:

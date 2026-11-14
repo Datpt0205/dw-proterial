@@ -123,3 +123,62 @@ new version of this note.
 - **What is audited**: ids, the line, the field and counts; never a value
   or the reason a person wrote, which stays on the request. The mail's text
   reaches only a reader of prices, as a PO read from a mail does.
+
+## Built 2026-11-15 (ticket 29), by the agent: decision 3, in Bravo
+
+What decisions 3 and 5 did not settle, settled here; each can be reversed by
+a new version of this note.
+
+- **Where the loop runs**: on an order Sales has confirmed (`confirmed`,
+  which stands for ADR 0011's `confirmation_sent` until ticket 28 splits
+  it). A change line confirmed between the Bravo entry and the confirmation
+  is refused (`change_status`) and stays open on the request until the order
+  is confirmed. The loop is state on the case (`OrderCase.update_loop`,
+  migration `0d1d0e4eb203`), so every step takes a case version.
+- **The order does not change until the customer accepts.** A confirmed line
+  joins the loop, not the line; PC's answer in the loop is held there; "keep
+  the PO" ends the loop and leaves every value as it was. One loop per case,
+  from one change request: a line of another request is refused while one
+  runs (`update_busy`). PC is asked once every line of the request is
+  decided (`change_request_open`); a line confirmed after PC was asked is
+  refused (`update_step`).
+- **6-DW2 is ticket 07's request** (`render_pc_request`, `sales_handoffs`'
+  `pc_request`) with the values asked. Its words say "đặt PO", not "đổi":
+  a better wording is a new version of the hand-off copy, owed.
+- **6-DW4 or 6-DW3 is code's**: every delivery PC gives a changed line on
+  the date asked (or held, when only the quantity changes) is 6-DW4, any
+  other date 6-DW3. Equality, not "on or before": delivering earlier than
+  asked is also something the customer is asked about. PC's quantities must
+  add up to the quantity asked, as in ticket 07; never adjusted. The verdict
+  is stamped when the last line is answered and drives which draft
+  (`sales_emails@1.3.0`: `change_can_do_draft`, `change_options_draft`, vi,
+  en and ja) the artifacts offer.
+- **The customer's answer is a person's**: keep, accept, ask PC again, from
+  "Chờ khách quyết định" only (a customer's word while PC has not answered is
+  refused). The thread-intent step stays off and proposes nothing here yet:
+  wiring `accepts`/`rejects` on a loop to a proposal is owed with ticket 28.
+- **Accept** applies each change and PC's answer to its line through the
+  re-check path ticket 27 uses, keeps each delivery's first confirmed date
+  (`orders.reconfirmed`, now the one owner of ticket 07's rule), clears the
+  line's confirmed dates, stands PC's answer as its agreement on a short
+  lead time, and moves the order to `change_review` with its cross-check and
+  confirmation cleared, as a revision in Bravo does. An order already in
+  Bravo is no longer checked against its own Bravo entry when re-checked
+  (it read as its own duplicate).
+- **6.2-SP reuses the path a Bravo write takes today**: the PIC approves the
+  exact file (`bravo_update`: the paste sheet's rows of the changed lines, in
+  the tenant's layout and SalesOrder rules), drawn at the case's version, by
+  id and hash; any later edit drops the approval; `apply_change` (the DW1
+  run's "Ghi đã nhập Bravo") refuses an unapproved update
+  (`bravo_update_not_approved`). Then the existing cross-check (a platform
+  approval, by someone who is no maker; whoever approved the file is a
+  maker) and confirmation, which ends the loop. The PIC approves, as
+  decision 5 says; no head approval is added. That approval is the maker's
+  own sign-off on the file (`POST .../update/bravo-file`), like "Tự kiểm
+  xong", not a checker's decision: the checker's stays the cross-check on
+  the platform approval (ADR 0004), and no Sales route decides it.
+- **Reminders reuse the two follow-ups that exist**: `waiting_pc` from when
+  PC was asked in the loop, `waiting_customer` from when the answer was
+  recorded sent. No rule field changed, so `sales_followups` keeps 1.3.0.
+- **What is audited**: ids, the step and code's verdict or the customer's
+  answer as a code; never a quantity or a date.
