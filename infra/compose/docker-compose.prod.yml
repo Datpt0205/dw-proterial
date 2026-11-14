@@ -39,6 +39,10 @@ services:
         limits:
           cpus: "1.0"
           memory: 1g
+  # Where deployed the reader carries no demo customer's PO layout (audit 7).
+  reader:
+    environment:
+      DW_API_PROFILE: production
   web:
     deploy:
       resources:

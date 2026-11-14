@@ -86,7 +86,12 @@ from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.column_mapping import ColumnMatcher
-from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
+from dw_sales.application.ports import (
+    CatalogNotConnectedError,
+    SalesCatalogPort,
+    SalesScope,
+    Snapshot,
+)
 from dw_sales.domain.catalog import ConvertEntry, LmeMonth, Quotation, month_key
 from dw_sales.domain.master_data import (
     MAX_REJECTED_KEPT,
@@ -316,12 +321,14 @@ class CatalogImportView(BaseModel):
 
 
 class CatalogInForceView(BaseModel):
-    """Where a list's rows come from now: an approved snapshot, or the mock."""
+    """Where a list's rows come from now: an approved snapshot, the mock, or
+    ``none``: no approved snapshot where nothing stands in for one (deployed,
+    audit finding 1), and then no ``as_of`` either."""
 
     model_config = ConfigDict(frozen=True)
 
-    source: Literal["mock", "file", "erp"]
-    as_of: datetime
+    source: Literal["mock", "file", "erp", "none"]
+    as_of: datetime | None
     snapshot: CatalogImportView | None
 
 
@@ -411,8 +418,19 @@ class CatalogApprovalAsked(BaseModel):
 
 async def current_records(
     catalog: SalesCatalogPort, scope: SalesScope, catalog_list: CatalogList
+) -> Snapshot[Sequence[CatalogRecord]] | None:
+    """One list whole, as DW1 reads it now: what a proposal is compared with.
+    None: the list has nothing in force (`CatalogNotConnectedError`), so a first
+    import is compared with nothing."""
+    try:
+        return await _records(catalog, scope, catalog_list)
+    except CatalogNotConnectedError:
+        return None
+
+
+async def _records(
+    catalog: SalesCatalogPort, scope: SalesScope, catalog_list: CatalogList
 ) -> Snapshot[Sequence[CatalogRecord]]:
-    """One list whole, as DW1 reads it now: what a proposal is compared with."""
     found: Snapshot[Sequence[CatalogRecord]]
     match catalog_list:
         case CatalogList.CUSTOMERS:
@@ -528,6 +546,8 @@ class CatalogImportService:
                 source=approved.source, as_of=approved.as_of, snapshot=import_view(approved)
             )
         found = await current_records(self.catalog, scope, catalog_list)
+        if found is None:
+            return CatalogInForceView(source="none", as_of=None, snapshot=None)
         return CatalogInForceView(source="mock", as_of=found.as_of, snapshot=None)
 
     async def template(
@@ -639,7 +659,7 @@ class CatalogImportService:
         changes = (
             diff(catalog_list, (), ())
             if snapshot.status in ("queued", "failed", "discarded")
-            else diff(catalog_list, current.data, proposed)
+            else diff(catalog_list, () if current is None else current.data, proposed)
         )
         return CatalogPreviewView(
             snapshot=import_view(snapshot),
@@ -681,7 +701,7 @@ class CatalogImportService:
         async with self.uow(scope) as work:
             approved = await work.snapshots.approved(catalog_list)
             proposed = records_of(catalog_list, await work.snapshots.records(snapshot_id))
-            changes = diff(catalog_list, current.data, proposed)
+            changes = diff(catalog_list, () if current is None else current.data, proposed)
             submitted = snapshot.model_copy(
                 update={
                     "status": "submitted",
@@ -887,12 +907,19 @@ class CatalogParsing:
             record = parsed.record
             reason: tuple[str, str] | None = None
             if isinstance(record, ConvertEntry | Quotation):
+                # A list with nothing approved holds no code at all.
                 if record.customer_code not in customers:
-                    found = await self.catalog.customer_by_code(scope, record.customer_code)
-                    customers[record.customer_code] = found.data is not None
+                    try:
+                        found = await self.catalog.customer_by_code(scope, record.customer_code)
+                        customers[record.customer_code] = found.data is not None
+                    except CatalogNotConnectedError:
+                        customers[record.customer_code] = False
                 if record.prv_code not in items:
-                    item = await self.catalog.item_by_prv_code(scope, record.prv_code)
-                    items[record.prv_code] = item.data is not None
+                    try:
+                        item = await self.catalog.item_by_prv_code(scope, record.prv_code)
+                        items[record.prv_code] = item.data is not None
+                    except CatalogNotConnectedError:
+                        items[record.prv_code] = False
                 if not customers[record.customer_code]:
                     reason = (
                         "Mã khách hàng",

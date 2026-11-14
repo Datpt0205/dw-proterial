@@ -40,6 +40,7 @@ from dw_sales.domain.order_checks import ModelStep, OrderRules
 from dw_sales.domain.orders import FindingCode, MappingStatus, OrderCase
 from dw_sales.evals.descriptions import Replayed
 from dw_sales.evals.world import NOW, measured_gate
+from dw_sales.testing.followups import platform_zone
 from dw_sales.testing.measurements import FixedStepModel, MemoryModelMeasurements, passing
 
 pytestmark = pytest.mark.unit
@@ -113,6 +114,7 @@ def _intake(
         inbox=INBOX,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(rules),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),

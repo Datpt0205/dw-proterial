@@ -185,36 +185,43 @@ export function EvidencePanel({ quote }: { quote: Quote }) {
           <Typography.Title level={5}>
             Lịch sử đặt hàng của khách
           </Typography.Title>
-          <Table
-            size="small"
-            rowKey={(o) => `${o.so_no}:${o.order_date}`}
-            pagination={false}
-            dataSource={line.orders}
-            scroll={{ x: "max-content" }}
-            locale={{ emptyText: "Khách chưa đặt mã này trong 12 tháng." }}
-            columns={[
-              { title: "Số đơn", dataIndex: "so_no" },
-              {
-                title: "Ngày",
-                dataIndex: "order_date",
-                render: (d: string) => formatDate(d),
-              },
-              {
-                title: "Số lượng",
-                dataIndex: "quantity",
-                align: "right",
-                render: (q: string) => <Quantity value={q} />,
-              },
-              {
-                title: "Đơn giá",
-                key: "p",
-                align: "right",
-                render: (_, o) => (
-                  <Money value={o.unit_price} currency={o.currency} />
-                ),
-              },
-            ]}
-          />
+          {line.orders === null ? (
+            <Typography.Text role="status">
+              Chưa đối chiếu Bravo: chưa kết nối. Không biết khách đã đặt mã này
+              hay chưa.
+            </Typography.Text>
+          ) : (
+            <Table
+              size="small"
+              rowKey={(o) => `${o.so_no}:${o.order_date}`}
+              pagination={false}
+              dataSource={line.orders}
+              scroll={{ x: "max-content" }}
+              locale={{ emptyText: "Khách chưa đặt mã này trong 12 tháng." }}
+              columns={[
+                { title: "Số đơn", dataIndex: "so_no" },
+                {
+                  title: "Ngày",
+                  dataIndex: "order_date",
+                  render: (d: string) => formatDate(d),
+                },
+                {
+                  title: "Số lượng",
+                  dataIndex: "quantity",
+                  align: "right",
+                  render: (q: string) => <Quantity value={q} />,
+                },
+                {
+                  title: "Đơn giá",
+                  key: "p",
+                  align: "right",
+                  render: (_, o) => (
+                    <Money value={o.unit_price} currency={o.currency} />
+                  ),
+                },
+              ]}
+            />
+          )}
           <Typography.Title level={5}>
             Giá đã báo cho khách khác
           </Typography.Title>

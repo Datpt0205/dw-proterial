@@ -1,4 +1,4 @@
 {
-  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-11-13, prompt 1.1.0) read 0.902 of the 92 golden messages as their kind, the four portal notices among them (keyword tables: 0.304; 1.0.0 read 0.909 of 88 on 2026-10-13). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-11-13, prompt 1.1.0) read 0.902 of the 92 golden messages as their kind, the four portal notices among them (the keyword tables, removed by audit finding 6 on 2026-11-13, read 0.304; with the step off a person now reads every one; 1.0.0 read 0.909 of 88 on 2026-10-13). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
   "min_kind_accuracy": 0.9
 }

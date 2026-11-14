@@ -790,7 +790,9 @@ class PriceEvidence(BaseModel):
     target_price: UnitPrice | None = None
     own_history: tuple[Quotation, ...] = ()
     other_customers: tuple[InternalQuotation, ...] = ()
-    orders: tuple[OrderedLine, ...] = ()
+    # None: the ERP is not connected (audit finding 1), so nobody knows the
+    # customer's orders; never an empty history, which reads "never ordered".
+    orders: tuple[OrderedLine, ...] | None = ()
     lme: LmeMonth | None = None
     copper: CopperComponent | None = None
     floor: PolicyFloor | None = None
@@ -814,7 +816,7 @@ class PriceEvidence(BaseModel):
         for quotation in (*self.own_history, *(row.quotation for row in self.other_customers)):
             if quotation.prv_code != self.prv_code:
                 raise ValueError(f"{quotation.quote_no} quotes {quotation.prv_code}, not this item")
-        for line in self.orders:
+        for line in self.orders or ():
             if (line.customer_code, line.prv_code) != (self.customer_code, self.prv_code):
                 raise ValueError(f"{line.so_no} is not this customer's order of this item")
         if self.copper is not None and self.copper.lme != self.lme:
@@ -885,7 +887,7 @@ def suggest_price(evidence: PriceEvidence, *, others: bool) -> PriceSuggestion |
         None,
     )
     order = max(
-        (line for line in evidence.orders if line.currency == evidence.currency),
+        (line for line in evidence.orders or () if line.currency == evidence.currency),
         key=lambda line: (line.order_date, line.so_no),
         default=None,
     )

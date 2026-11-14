@@ -39,6 +39,7 @@ from dw_sales.adapters.readers.operations import OPERATIONS, InProcessReaderTran
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.orders import PoDocument, Unreadable
+from dw_sales.domain.rfq_reading import AttachmentText
 
 pytestmark = pytest.mark.unit
 
@@ -178,7 +179,7 @@ async def test_the_other_readers_find_nothing_in_a_file_they_gave_up_on() -> Non
     assert await ClientQuoteForms(transport).form(_content(M09)) is None
     assert await ClientRfqReader(transport).read(_content(M09)) is None
     assert await ClientDesignReplyReader(transport).read(_content(M18)) is None
-    assert await ClientTexts(transport).text_parts(_content(M09), CAPS) == ()
+    assert await ClientTexts(transport).text_parts(_content(M09), CAPS) == AttachmentText()
     with pytest.raises(DomainError):
         await ClientSourceView(transport, CAPS).sheet_names(_content(M01).data)
 

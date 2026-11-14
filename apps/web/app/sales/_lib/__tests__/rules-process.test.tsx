@@ -1068,7 +1068,7 @@ describe("the DW1 process page (2026-10-22)", () => {
       })) as HTMLInputElement;
       expect(zone.disabled).toBe(true);
       expect(screen.getByText("Chỉ xem ở trang này.")).toBeTruthy();
-      expect(screen.getByText(/giờ Việt Nam cố định/)).toBeTruthy();
+      expect(screen.getByText(/luôn hiển thị giờ Việt Nam/)).toBeTruthy();
       expect(
         (screen.getByRole("textbox", { name: "Bắt đầu" }) as HTMLInputElement)
           .disabled,

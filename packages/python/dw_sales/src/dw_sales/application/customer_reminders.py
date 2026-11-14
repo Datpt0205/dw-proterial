@@ -44,12 +44,11 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import LoggedEvent, SalesUnitOfWorkFactory
-from dw_sales.application.local_time import local_day
+from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.screening_followups import ModelFollowupMail
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.order_checks import SALES_TIME_ZONE
 from dw_sales.domain.orders import DispositionKind, OrderStatus
 from dw_sales.domain.process import DW_NAMES
 from dw_sales.domain.quotes import QuoteStatus
@@ -114,6 +113,8 @@ class CustomerReminders:
     ids: IdGenerator
     worker_id: str
     worker_version: str
+    # Where "asked on" and "today" are counted (audit 14).
+    zones: LocalZonePort
 
     async def draft(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -159,8 +160,9 @@ class CustomerReminders:
         customer = (await self.catalog.customer_by_code(scope, customer_code)).data
         if customer is None:
             raise NotFoundError("no such customer", details={"customer_code": customer_code})
-        asked = local_day(asked_at(history, status, received), SALES_TIME_ZONE)
-        today = local_day(self.clock.now(), SALES_TIME_ZONE)
+        zone = await self.zones.time_zone(scope)
+        asked = local_day(asked_at(history, status, received), zone)
+        today = local_day(self.clock.now(), zone)
         base = {
             "case_id": case_id,
             "to": [c.address for c in customer.contacts],

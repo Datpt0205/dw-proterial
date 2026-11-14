@@ -42,22 +42,28 @@ def _content(data: bytes, attachment_id: str = "T1-A1") -> AttachmentContent:
 async def test_a_text_pdf_is_read_page_by_page() -> None:
     data = (ATTACHMENTS_DIR / "M38_NRV-RFQ-26-0130.pdf").read_bytes()
 
-    (page,) = await AttachmentTexts().text_parts(_content(data, "M38-A1"), CAPS)
+    read = await AttachmentTexts().text_parts(_content(data, "M38-A1"), CAPS)
+    (page,) = read.parts
 
+    assert read.unshown == ()
     assert (page.part_id, page.page, page.attachment_id) == ("M38-A1#p1", 1, "M38-A1")
     assert "NRV-RFQ-26-0130" in page.text and "2,000 m" in page.text
 
 
-async def test_a_scan_gives_no_text() -> None:
+async def test_a_scan_gives_no_text_and_says_which_pages_were_not_shown() -> None:
+    """Audit finding 10: a page with no text layer is named, never dropped."""
     data = (ATTACHMENTS_DIR / "M16_BRN-PO-2609-044.pdf").read_bytes()
 
-    assert await AttachmentTexts().text_parts(_content(data), CAPS) == []
+    read = await AttachmentTexts().text_parts(_content(data), CAPS)
+
+    assert read.parts == ()
+    assert read.unshown and all(place.startswith("page ") for place in read.unshown)
 
 
 async def test_the_customers_own_sheet_is_read_without_its_hidden_row() -> None:
     data = (ATTACHMENTS_DIR / "M39_KMH-RFQ-261002-01.xlsx").read_bytes()
 
-    (sheet,) = await AttachmentTexts().text_parts(_content(data, "M39-A1"), CAPS)
+    (sheet,) = (await AttachmentTexts().text_parts(_content(data, "M39-A1"), CAPS)).parts
 
     assert "KMH-21-0077" in sheet.text and "KMH-21-0099" not in sheet.text
     anchor = sheet.anchor(sheet.text.index("KMH-21-0077"), sheet.text.index("KMH-21-0077") + 11)
@@ -81,7 +87,7 @@ async def test_hidden_sheets_columns_and_text_in_its_fill_colour_are_not_sent() 
     buffer = io.BytesIO()
     workbook.save(buffer)
 
-    (sheet,) = await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)
+    (sheet,) = (await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)).parts
 
     assert sheet.text == "Item | Quantity\n2C AWG24 | 1200"
 
@@ -120,7 +126,49 @@ async def test_white_text_on_no_fill_and_1pt_text_are_not_sent(
     buffer = io.BytesIO()
     workbook.save(buffer)
 
-    (part,) = await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)
+    (part,) = (await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)).parts
 
     assert ("SYSTEM" not in part.text) is unseen
     assert text_unseen(sheet["A2"]) is unseen
+
+
+@pytest.mark.parametrize(
+    ("cell", "unshown"),
+    [
+        ("A1001", "RFQ: after row 1000"),
+        ("BA2", "RFQ: after column AZ"),
+    ],
+)
+async def test_content_past_what_is_read_of_a_sheet_is_named_not_dropped(
+    cell: str, unshown: str
+) -> None:
+    """Audit finding 10: the rows and columns read are the source view's
+    (`MAX_GRID_ROWS`, `MAX_GRID_COLUMNS`); a value past them is named."""
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.title = "RFQ"
+    sheet["A1"], sheet["A2"] = "Item", "2C AWG24"
+    sheet[cell] = "one more line nobody would know is missing"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+
+    read = await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)
+
+    assert read.unshown == (unshown,)
+    assert "one more line" not in read.parts[0].text
+
+
+async def test_a_column_past_z_is_read_where_a_person_can_open_it() -> None:
+    """The model is shown what the source view shows: column AA is read."""
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet["A1"], sheet["AA1"] = "Item", "Quantity 1200"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+
+    read = await AttachmentTexts().text_parts(_content(buffer.getvalue()), CAPS)
+
+    assert read.unshown == ()
+    assert "Quantity 1200" in read.parts[0].text

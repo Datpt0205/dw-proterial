@@ -45,6 +45,7 @@ const mail = (id: string, owner: string): WorkItem => ({
   customer_code: null,
   received_at: "2026-10-27T01:00:00Z",
   due: null,
+  due_soon: false,
   assigned_to: null,
   owner,
 });

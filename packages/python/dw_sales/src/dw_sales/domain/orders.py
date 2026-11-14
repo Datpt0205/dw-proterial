@@ -562,6 +562,19 @@ class PoDocument(BaseModel):
         found = self.legacy_texts()
         return (found[0][1], found[0][2]) if found else None
 
+    def with_unchecked(self, sources: Iterable[str]) -> PoDocument:
+        """The PO with each of ``sources`` named among what nobody checked:
+        a source a check needed and could not read (audit finding 1, "Bravo
+        (chưa kết nối)"). The case then says it was not checked, never that
+        it passed: the PO-level `value_uncertain` names it, and Sales settles
+        it with a note of what they checked by hand."""
+        added = tuple(dict.fromkeys(s for s in sources if s not in self.unchecked_regions))
+        if not added:
+            return self
+        return PoDocument.model_validate(
+            {**dict(self), "unchecked_regions": (*self.unchecked_regions, *added)}
+        )
+
     def anchors(self) -> Iterable[SourceAnchor]:
         """Every anchor the document holds."""
         yield from (anchor for _, anchor in self.header.anchors)

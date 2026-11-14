@@ -174,3 +174,39 @@ def test_a_declared_length_over_the_cap_is_refused_before_the_body_is_read(
     )
 
     assert response.status_code == 413
+
+
+@pytest.mark.parametrize("profile", ["uat", "production"])
+def test_a_deployed_reader_carries_no_demo_customers_layout(tmp_path: Path, profile: str) -> None:
+    """Hardcode audit, finding 7: M01 is the fictional VLX's form, which the
+    demo reads by its customer code. Where deployed the reading process is
+    started without the demo's layouts, so a real customer sharing the code
+    is never read with it: no layout reads the PO, and none is listed."""
+    deployed = ReaderSettings(
+        root=str(tmp_path / "work"),
+        read_seconds=60,
+        max_request_bytes=1 << 20,
+        profile=profile,  # type: ignore[arg-type]
+    )
+    with TestClient(create_app(deployed)) as client:
+        read = ReaderReply.model_validate_json(
+            client.post("/v1/read", content=_po_request()).content
+        )
+        listed = ReaderReply.model_validate_json(
+            client.post(
+                "/v1/read",
+                content=ReaderRequest.of(ReaderOp.PO_LAYOUTS).model_dump_json().encode("utf-8"),
+            ).content
+        )
+
+    assert not isinstance(read.value(ReaderOp.PO_READ), PoDocument)
+    assert listed.value(ReaderOp.PO_LAYOUTS) == {"xlsx": [], "pdf": []}
+
+
+def test_the_profile_is_the_one_variable_the_api_and_worker_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DW_API_PROFILE", "production")
+    assert ReaderSettings().demo_layouts is False
+    monkeypatch.setenv("DW_API_PROFILE", "local")
+    assert ReaderSettings().demo_layouts is True

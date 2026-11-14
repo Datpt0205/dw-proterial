@@ -56,7 +56,7 @@ from dw_agent_runtime.model.interpretation import (
 from dw_platform.domain.mail_parts import MessagePart
 from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.application.order_ports import OrderCaseLookupPort
-from dw_sales.application.ports import SalesCatalogPort, SalesScope
+from dw_sales.application.ports import CatalogNotConnectedError, SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.handoffs import (
     MAX_ITEMS,
@@ -234,8 +234,13 @@ class HandoffReader:
     async def order_of(self, scope: SalesScope, customer: Customer, po_no: str) -> _Order | None:
         """The order ``po_no`` is for ``customer``: the ERP's sales order keyed
         from it (its latest revision), else the one live order case DW1 holds
-        for it; None when it is neither, or when two cases hold it."""
-        erp = (await self.catalog.orders_for_po(scope, customer.code, po_no)).data
+        for it; None when it is neither, or when two cases hold it. With
+        Bravo not connected, only DW1's own case answers: a number it does
+        not hold is refused, for a person (never a guess)."""
+        try:
+            erp = (await self.catalog.orders_for_po(scope, customer.code, po_no)).data
+        except CatalogNotConnectedError:
+            erp = ()
         cases = await self.cases.cases_for_po(scope, customer.code, po_no)
         live = [case for case in cases if case.superseded_by_case is None]
         case_id = live[0].case_id if len(live) == 1 else None

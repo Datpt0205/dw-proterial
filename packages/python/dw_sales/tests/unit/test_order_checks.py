@@ -13,12 +13,14 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
 
 from dw_platform.domain.messages import MailAuthentication
 from dw_sales.adapters.order_rules import load_order_rules
+from dw_sales.application.local_time import local_day
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import BravoOrder, ConvertEntry, Customer, Item, LmeMonth, Quotation
 from dw_sales.domain.order_checks import (
@@ -32,7 +34,6 @@ from dw_sales.domain.order_checks import (
     current_quotation,
     known_uom,
     map_line,
-    received_date,
 )
 from dw_sales.domain.orders import (
     DeliverySchedule,
@@ -61,6 +62,8 @@ SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.6.0.yaml")
 PO_DATE = date(2026, 9, 24)
 # 2026-09-24 20:00 UTC is already 25 September in Hanoi.
 RECEIVED = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
+# The day RECEIVED falls on in the tenant's zone (UTC+7): its caller counts it.
+RECEIVED_ON = date(2026, 9, 25)
 SHA = "b" * 64
 
 
@@ -185,7 +188,7 @@ def _run(
         mapped or _exact(),
         currency=currency,
         po_date=PO_DATE,
-        received_at=RECEIVED,
+        received_on=RECEIVED_ON,
         quotation=quotation,
         lme=lme,
         rules=rules,
@@ -223,8 +226,12 @@ def test_a_policy_value_the_code_does_not_implement_is_refused(
         _rules(**change)
 
 
-def test_the_received_date_is_the_sales_offices_calendar_day() -> None:
-    assert received_date(RECEIVED) == date(2026, 9, 25)
+def test_the_received_date_is_the_tenants_calendar_day() -> None:
+    """Counted in the tenant's zone (`working_hours.time_zone`, audit 14),
+    never a zone of the code's: 20:00 UTC is the next day in Ho Chi Minh
+    City and the same day in London."""
+    assert local_day(RECEIVED, ZoneInfo("Asia/Ho_Chi_Minh")) == RECEIVED_ON
+    assert local_day(RECEIVED, ZoneInfo("Europe/London")) == date(2026, 9, 24)
 
 
 # ----------------------------------------------------------------- mapping --
@@ -563,7 +570,7 @@ def _customer_findings(customer: Customer, *, rules: OrderRules = SHIPPED, **kw:
         attributed_by_document=kw.get("attributed", False),
         authentication=kw.get("auth", MailAuthentication(spf="pass", dkim="pass", dmarc="pass")),
         po_date=PO_DATE,
-        received_at=RECEIVED,
+        received_on=RECEIVED_ON,
         rules=rules,
     )
     return [f.code.value for f in found]

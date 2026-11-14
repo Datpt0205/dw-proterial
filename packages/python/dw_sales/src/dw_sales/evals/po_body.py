@@ -36,12 +36,14 @@ from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
 from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
+from dw_sales.application.local_time import local_day
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION, PoBodyReader
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import FlaggedValue, OrderCase, PoDocument, RegionFlag
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, SampleWith, open_world
+from dw_sales.testing.followups import platform_zone
 
 _FIXTURE = "evals/fixtures/cases/sales_po_body.json"
 _RUN = RunContext(
@@ -130,7 +132,9 @@ def _unflagged(document: PoDocument) -> bool:
 
 async def _read(model: Any, spec: Mapping[str, Any]) -> PoDocument | str:
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
-    return await PoBodyReader(model).read(_message(spec), run=run)
+    message = _message(spec)
+    received_on = local_day(message.received_at, platform_zone().zone)
+    return await PoBodyReader(model).read(message, received_on=received_on, run=run)
 
 
 def grade_golden(

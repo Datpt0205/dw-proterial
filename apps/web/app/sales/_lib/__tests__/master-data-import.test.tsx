@@ -140,6 +140,18 @@ describe("the master-data import's logic (ticket 41)", () => {
     expect(label.text).toMatch(/^Bản nhập ngày .* bởi An, Giang duyệt$/);
   });
 
+  it("says nothing is approved where deployed, never the sample data", () => {
+    // Audit finding 1: deployed, no mock stands in for a list.
+    const label = sourceLabel(
+      { source: "none", as_of: null, snapshot: null },
+      () => "An",
+    );
+    expect(label).toEqual({
+      tone: "warn",
+      text: "Chưa có danh mục được duyệt",
+    });
+  });
+
   it("refuses an upload in words without the scope or while one waits", () => {
     expect(uploadBlocked(state())).toBeNull();
     expect(uploadBlocked(state({ can_import: false }))).toMatch(

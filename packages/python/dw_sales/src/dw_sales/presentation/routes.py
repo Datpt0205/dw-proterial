@@ -70,7 +70,7 @@ from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
-from dw_sales.application.pc_dates import PcDatesView, PcMailView
+from dw_sales.application.pc_dates import MAX_TEXT, PcDatesView, PcMailsView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
@@ -253,9 +253,10 @@ class VersionBody(BaseModel):
 
 
 class PcDatesBody(VersionBody):
-    """PC's mail as Sales pasted it (AI item 7): read, never stored."""
+    """PC's mail as Sales pasted it (AI item 7): read, never stored. Its
+    limit is DW1's reading limit (`pc_dates.MAX_TEXT`, its one owner)."""
 
-    text: Annotated[str, Field(min_length=1, max_length=8000)]
+    text: Annotated[str, Field(min_length=1, max_length=MAX_TEXT)]
 
 
 class AskBody(BaseModel):
@@ -585,11 +586,11 @@ def build_router(
     # stored), and one of them read as a paste is.
     @router.get(
         "/orders/{case_id}/pc-mails",
-        response_model=list[PcMailView],
+        response_model=PcMailsView,
         dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
     )
-    async def pc_mails(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[PcMailView]:
-        return await svc.pc_dates.mails(context, case_id)
+    async def pc_mails(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PcMailsView:
+        return PcMailsView(mails=await svc.pc_dates.mails(context, case_id))
 
     @router.post(
         "/orders/{case_id}/pc-dates/from-mail/{message_id}",

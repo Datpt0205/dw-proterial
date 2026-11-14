@@ -513,7 +513,7 @@ const LOCK_REASON: Record<LockReason, string> = {
   trust:
     "Danh sách này quyết định thư của ai được coi là của Design: đây là thiết lập tin cậy.",
   two_owners:
-    "Ngày nhận PO và các tệp vẫn tính theo giờ Việt Nam cố định, nên đổi múi giờ ở đây làm hai nơi lệch nhau.",
+    "Màn hình luôn hiển thị giờ Việt Nam, nên đổi múi giờ ở đây làm màn hình và các tệp lệch nhau.",
 };
 
 const LOCKED_ELSEWHERE =

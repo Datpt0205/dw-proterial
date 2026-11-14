@@ -2,7 +2,7 @@
 own words: what a model copies, and what code keeps of it.
 
 Ticket 33, dw_sales ADR 0005, Đạt's rule §6. A message routed to Sales as a
-delivery change, a complaint or a sample request (by the keyword tables or a
+delivery change, a complaint or a sample request (by a
 model's reading of its intent, ticket 31) was retyped by Sales into a mail to
 PC or QA. Where a tenant turns it on
 (`sales_order_rules.model_assist.request_handoff`), a local model copies the

@@ -8,3 +8,6 @@ from typing import Final
 
 REQUEST: Final = "request.json"
 RESULT: Final = "result.json"
+# The command-line switch the service gives a reading process that may carry
+# the demo's PO layouts (`ReaderSettings.demo_layouts`, hardcode audit 7).
+DEMO_LAYOUTS: Final = "--demo-layouts"

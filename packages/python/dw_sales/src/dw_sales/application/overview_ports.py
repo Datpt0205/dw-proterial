@@ -20,7 +20,9 @@ from typing import Final, Literal, Protocol
 
 from dw_kernel.pagination import CursorPosition, Page, PageRequest
 from dw_sales.application.case_store import LoggedEvent, LoggedMessage, Stored
+from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 
@@ -145,3 +147,11 @@ class OverviewReadPort(Protocol):
     async def history(self, kind: CaseKind, case_id: uuid.UUID) -> Sequence[LoggedEvent]:
         """Every event of one case, oldest first (the pipeline's timeline)."""
         ...
+
+
+class FollowupPolicyPort(Protocol):
+    """The tenant's follow-up policy in force (`TenantRuleBook.followups`):
+    the lane's timings, and what "due soon" means on the work list and the
+    quote page (`followups.due_soon`)."""
+
+    async def followups(self, scope: SalesScope) -> SalesFollowups: ...

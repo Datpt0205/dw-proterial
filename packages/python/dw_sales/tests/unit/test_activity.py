@@ -105,6 +105,7 @@ from dw_sales.evals.graders import CALLERS
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, Caller, MemoryStore, SampleSet, open_world
 from dw_sales.evals.world import NOW as WORLD_NOW
+from dw_sales.testing.followups import platform_zone
 
 # An given the set `sales_rules_editor` (`sales.rules.propose`): since
 # 2026-10-28 a PIC proposes only when the admin gives them it.
@@ -165,6 +166,7 @@ async def _order(message_id: str = "M04") -> OrderCase:
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=0xC0),
@@ -526,7 +528,9 @@ def test_the_summary_links_each_count_to_its_filter_and_series_by_local_day() ->
         _row(step, at=datetime(2026, 10, 22, 1, 0, tzinfo=UTC), ms=100),
     ]
 
-    view = activity_summary(rows, start=start, end=end, lane=CaseKind.ORDER, as_of=AT)
+    view = activity_summary(
+        rows, start=start, end=end, lane=CaseKind.ORDER, as_of=AT, zone=platform_zone().zone
+    )
     body = view.model_dump(mode="json", by_alias=True)
 
     (summary,) = [s for s in body["steps"] if s["step"] == step.value]
@@ -568,9 +572,9 @@ def test_the_top_reasons_are_the_most_frequent_first_each_with_its_filter() -> N
         *(_row(step, automatic=False, result="refused", reason=f"r{c}_x") for c in "abcdef"),
     ]
 
-    view = activity_summary(rows, start=AT.date(), end=AT.date(), lane=None, as_of=AT).model_dump(
-        mode="json", by_alias=True
-    )
+    view = activity_summary(
+        rows, start=AT.date(), end=AT.date(), lane=None, as_of=AT, zone=platform_zone().zone
+    ).model_dump(mode="json", by_alias=True)
 
     (summary,) = [s for s in view["steps"] if s["step"] == step.value]
     reasons = summary["top_reasons"]
@@ -781,7 +785,11 @@ def _service(
     reader: _Reader, cases: dict[SalesScope, dict[uuid.UUID, Any]], *scopes: str
 ) -> ActivityService:
     return ActivityService(
-        cast(SalesUnitOfWorkFactory, _Uow(cases)), Gate(_Authz(*scopes)), reader, FixedClock(AT)
+        cast(SalesUnitOfWorkFactory, _Uow(cases)),
+        Gate(_Authz(*scopes)),
+        reader,
+        FixedClock(AT),
+        platform_zone(),
     )
 
 

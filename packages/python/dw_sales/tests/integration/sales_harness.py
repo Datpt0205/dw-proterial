@@ -49,6 +49,7 @@ from dw_sales.domain.quotes import (
     QuoteCapability,
     QuoteCase,
 )
+from dw_sales.testing.followups import platform_zone
 
 TEST_DB = "dw_test_sales"
 
@@ -150,6 +151,7 @@ async def run_mailbox(
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.6.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),

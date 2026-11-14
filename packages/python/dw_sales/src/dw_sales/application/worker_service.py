@@ -30,14 +30,15 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.artifact_content import INTERNAL, time_text
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory, WorkerState
+from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.ports import (
     MemberDirectoryPort,
     NotificationSenderPort,
     ScopeHoldersPort,
 )
 from dw_sales.application.views import WorkerStateView, worker_state
-from dw_sales.domain.order_checks import SALES_TIME_ZONE
 
 logger = logging.getLogger("dw_sales.worker_service")
 
@@ -68,6 +69,8 @@ class WorkerService:
     holders: ScopeHoldersPort
     notifications: NotificationSenderPort
     directory: MemberDirectoryPort
+    # Where the paused notice's time is printed (audit 14).
+    zones: LocalZonePort
 
     async def state(self, context: AccessContext) -> WorkerStateView:
         await self.gate.require(context, SalesScopes.OVERVIEW_READ, resource_type="sales_worker")
@@ -130,13 +133,15 @@ class WorkerService:
         )
         names = {m.user_id: m.display_name for m in await self.directory.list_members(context)}
         assert paused.changed_at is not None
-        when = paused.changed_at.astimezone(SALES_TIME_ZONE).strftime("%H:%M %d/%m/%Y")
+        when = time_text(
+            paused.changed_at, INTERNAL, await self.zones.time_zone(sales_scope(context))
+        )
         who = names.get(context.principal_id, "Một PIC")
         await self.notifications.deliver(
             context,
             recipients=recipients,
             source_key=f"sales.worker.paused:{context.workspace_id}:{paused.changed_at.isoformat()}",
             title="DW1 đã tạm dừng",
-            body=f"{who} đã tạm dừng DW1 lúc {when} (giờ Việt Nam). Chỉ Trưởng bộ phận mở lại.",
+            body=f"{who} đã tạm dừng DW1 lúc {when}. Chỉ Trưởng bộ phận mở lại.",
             link="/sales",
         )

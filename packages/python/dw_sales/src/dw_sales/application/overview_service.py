@@ -34,7 +34,7 @@ that takes it), which it hands down rather than the store restating them.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Final, Literal, Protocol
@@ -47,11 +47,12 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import LoggedMessage, SalesUnitOfWorkFactory, Stored
-from dw_sales.application.local_time import LocalZonePort
+from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.next_steps import DECIDED_ON_THE_CASE, ORDER_NEXT, QUOTE_NEXT
 from dw_sales.application.overview_ports import (
     Bucket,
     FigureBasis,
+    FollowupPolicyPort,
     OpenOrder,
     OverviewFigures,
     Spread,
@@ -67,6 +68,7 @@ from dw_sales.application.runs import (
 )
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
+from dw_sales.domain.followups import due_soon
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.process import WIV_STEPS, Procedure, StepId
@@ -209,6 +211,9 @@ class WorkItem(BaseModel):
     customer_code: str | None
     received_at: datetime
     due: date | None
+    # "Sắp đến hạn": decided here from the tenant's follow-up policy
+    # (`followups.due_soon`), never by a threshold of the screen's (audit 15).
+    due_soon: bool
     assigned_to: uuid.UUID | None
     # A routed message's owner as its disposition names it: a user id, or
     # `role:<key>` for a team (the inbox draws the same). A case's owner is
@@ -287,6 +292,8 @@ class OverviewService:
     kpi: KpiPort
     directory: MemberDirectoryPort
     decisions: PendingDecisionsPort
+    # What "due soon" means for the tenant (`morning_brief.due_within_days`).
+    followups: FollowupPolicyPort
 
     async def time_zone(self, scope: SalesScope) -> ZoneInfo:
         """The tenant's time zone, for a reader counting days beside this one."""
@@ -373,6 +380,12 @@ class OverviewService:
             ),
         )
         wanted = await self._wanted(context)
+        policy = await self.followups.followups(scope)
+        today = local_day(self.clock.now(), await self.kpi.time_zone(scope))
+
+        def soon(due: date | None) -> bool:
+            return due is not None and due_soon(due, today, policy)
+
         async with self.uow(scope) as work:
             page = await work.overview.work_page(wanted, request)
             # A cross-check is decided on the case itself (who made it, what
@@ -386,11 +399,11 @@ class OverviewService:
         for entry in page.items:
             row = entry.row
             if isinstance(row, OpenOrder):
-                item = await self._order_item(context, row, checks.get(row.case_id))
+                item = await self._order_item(context, row, checks.get(row.case_id), soon)
             elif isinstance(row, LoggedMessage):
                 item = _message_item(row, wanted)
             else:
-                item = self._quote_item(context, row)
+                item = self._quote_item(context, row, soon)
             if item is not None:
                 items.append(item)
         return Page(items=tuple(items), next_cursor=page.next_cursor)
@@ -425,7 +438,11 @@ class OverviewService:
         return assigned_to is None or assigned_to == context.principal_id
 
     async def _order_item(
-        self, context: AccessContext, row: OpenOrder, stored: Stored[OrderCase] | None
+        self,
+        context: AccessContext,
+        row: OpenOrder,
+        stored: Stored[OrderCase] | None,
+        soon: Callable[[date | None], bool],
     ) -> WorkItem | None:
         step = ORDER_NEXT.get(row.status)
         if step is None:
@@ -467,10 +484,16 @@ class OverviewService:
             customer_code=row.customer_code,
             received_at=row.received_at,
             due=row.due,
+            due_soon=soon(row.due),
             assigned_to=row.assigned_to,
         )
 
-    def _quote_item(self, context: AccessContext, stored: Stored[QuoteCase]) -> WorkItem | None:
+    def _quote_item(
+        self,
+        context: AccessContext,
+        stored: Stored[QuoteCase],
+        soon: Callable[[date | None], bool],
+    ) -> WorkItem | None:
         case, assigned = stored.case, stored.origin.assigned_to
         step = QUOTE_NEXT.get(case.status)
         if step is None:
@@ -491,6 +514,7 @@ class OverviewService:
             customer_code=case.customer_code,
             received_at=case.request.received_at,
             due=due.value if due else None,
+            due_soon=soon(due.value if due else None),
             assigned_to=assigned,
         )
 
@@ -511,6 +535,7 @@ def _message_item(logged: LoggedMessage, wanted: WorkFilter) -> WorkItem | None:
         customer_code=d.customer_code,
         received_at=logged.processed_at,
         due=None,
+        due_soon=False,
         assigned_to=None,
         owner=d.owner,
     )

@@ -47,6 +47,7 @@ from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import measured_gate
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -131,6 +132,7 @@ def _intake(
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(rules),
         cases=_Cases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),

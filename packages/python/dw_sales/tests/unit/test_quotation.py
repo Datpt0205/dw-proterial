@@ -34,7 +34,7 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.generate_attachments import load_quote_requests
 from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import CatalogNotConnectedError, SalesScope
 from dw_sales.application.quotation import (
     NotADesignReplyError,
     QuotationService,
@@ -59,6 +59,7 @@ from dw_sales.domain.quotes import (
     QuoteFindingCode,
     QuoteStatus,
 )
+from dw_sales.testing.followups import platform_followups
 
 pytestmark = pytest.mark.unit
 
@@ -244,6 +245,7 @@ async def test_a_printed_target_price_reaches_no_viewer_without_prices_even_by_i
             assigned_to=None,
             release_manifest_ref=None,
             today=ISSUED,
+            followups=platform_followups(),
             prices=PriceView(amounts=amounts, other_customers=False),
             evidence_rows=None,
         )
@@ -602,6 +604,7 @@ async def test_m10_evidence_holds_every_factor_sales_weighs() -> None:
         "Q26-0122",
     ]
     assert all(r.internal_only for r in evidence.other_customers)
+    assert evidence.orders is not None
     assert [line.so_no for line in evidence.orders] == ["SO25-1120"]
     assert evidence.lme is not None and evidence.lme.month == "2026-09"
     assert evidence.copper is not None
@@ -611,6 +614,36 @@ async def test_m10_evidence_holds_every_factor_sales_weighs() -> None:
     assert evidence.freight.rate.usd_per_km == Decimal("19.50")
     assert evidence.reference is not None and evidence.reference.price == Decimal("0.7050")
     assert evidence.pricing_policy == "sales_pricing@1.0.0"
+
+
+class _BravoNotConnected:
+    """The demo's lists, and an ERP that is not connected (deployed)."""
+
+    def __init__(self, lists: MockSalesCatalog) -> None:
+        self._lists = lists
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._lists, name)
+
+    async def orders_since(self, scope: SalesScope, since: date) -> Any:
+        raise CatalogNotConnectedError(None)
+
+
+async def test_with_bravo_not_connected_the_order_history_is_unknown_never_empty() -> None:
+    """Audit finding 1: "never ordered in 12 months" is a claim nobody could
+    check; the evidence says the history is unknown, and no last-order price
+    is suggested from it."""
+    cases = FakeCases()
+    catalog: Any = _BravoNotConnected(MockSalesCatalog.load(SCOPE))
+    service = _service(cases=cases, catalog=catalog)
+    case = await _m10_replied(service, cases)
+
+    (evidence,) = await service.price_evidence(
+        SCOPE, case, as_of=date(2026, 10, 2), incoterm="CIF", destination="japan"
+    )
+
+    assert evidence.orders is None
+    assert evidence.own_history  # the lists still answer
 
 
 async def test_a_lane_the_policy_has_no_freight_rate_for_says_so() -> None:

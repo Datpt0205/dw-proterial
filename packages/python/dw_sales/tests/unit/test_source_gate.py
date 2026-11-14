@@ -27,6 +27,7 @@ from dw_sales.domain.orders import Actor, CorrectedBySales, OrderCase
 from dw_sales.evals.graders import AN as PIC_AN
 from dw_sales.evals.graders import CALLERS, DIEU, READER
 from dw_sales.evals.world import NOW, Caller, SampleSet, World, open_world
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -52,6 +53,7 @@ async def _case(message_id: str) -> OrderCase:
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),

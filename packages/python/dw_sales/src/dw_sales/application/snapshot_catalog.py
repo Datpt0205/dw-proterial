@@ -3,10 +3,13 @@ the existing source behind it (ticket 41).
 
 Each list Sales maintains by hand (`CatalogList`) is answered from the
 workspace's **approved** snapshot of that list where it has one, and from
-``fallback`` otherwise: today the fictional mock data, so a tenant keeps
-working on it until its own data is imported and approved, list by list. The
-ERP's own records (its sales orders and its open YCBG) are always the
-fallback's: they come from Bravo, not from a file.
+``fallback`` otherwise: the fictional mock data, so a demo keeps working on
+it until its own data is imported and approved, list by list. The ERP's own
+records (its sales orders and its open YCBG) are always the fallback's: they
+come from Bravo, not from a file. Where deployed there is no fallback
+(``fallback=None``, audit finding 1): a list with no approved snapshot, and
+the ERP until Bravo is connected, answer `CatalogNotConnectedError`, never the
+mock's fiction and never an empty list.
 
 Every lookup keeps the port's meaning: exact, by code or domain, never the
 nearest match; a code the snapshot does not hold answers None, whatever the
@@ -42,7 +45,12 @@ from datetime import date, datetime
 from typing import Protocol
 
 from dw_kernel.errors import ConflictError
-from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
+from dw_sales.application.ports import (
+    CatalogNotConnectedError,
+    SalesCatalogPort,
+    SalesScope,
+    Snapshot,
+)
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -197,7 +205,8 @@ class SnapshotSalesCatalog:
     """Implements `SalesCatalogPort` and `QuotationLedgerPort` (module docstring)."""
 
     approved: ApprovedListsPort
-    fallback: FallbackCatalogPort
+    # None where deployed: nothing stands in for a missing source.
+    fallback: FallbackCatalogPort | None
     recorded: RecordedQuotationsPort
     recorded_converts: RecordedConvertsPort
     recorded_senders: RecordedSendersPort
@@ -205,10 +214,17 @@ class SnapshotSalesCatalog:
     async def _list(self, scope: SalesScope, catalog_list: CatalogList) -> ApprovedList | None:
         return await self.approved.approved(scope, catalog_list)
 
+    def _standing_in(self, catalog_list: CatalogList | None) -> FallbackCatalogPort:
+        """What answers for ``catalog_list`` (None: the ERP) when the scope
+        has nothing of its own: the fallback, or `CatalogNotConnectedError`."""
+        if self.fallback is None:
+            raise CatalogNotConnectedError(catalog_list)
+        return self.fallback
+
     async def customer_by_code(self, scope: SalesScope, code: str) -> Snapshot[Customer | None]:
         own = await self._list(scope, CatalogList.CUSTOMERS)
         if own is None:
-            return await self.fallback.customer_by_code(scope, code)
+            return await self._standing_in(CatalogList.CUSTOMERS).customer_by_code(scope, code)
         return Snapshot(own.one(code, Customer), own.as_of)
 
     async def customer_by_email_domain(
@@ -216,7 +232,9 @@ class SnapshotSalesCatalog:
     ) -> Snapshot[Customer | None]:
         own = await self._list(scope, CatalogList.CUSTOMERS)
         if own is None:
-            return await self.fallback.customer_by_email_domain(scope, domain)
+            return await self._standing_in(CatalogList.CUSTOMERS).customer_by_email_domain(
+                scope, domain
+            )
         return Snapshot(own.customer_by_domain(domain.lower()), own.as_of)
 
     async def customer_by_sender(
@@ -250,19 +268,19 @@ class SnapshotSalesCatalog:
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:
         own = await self._list(scope, CatalogList.CUSTOMERS)
         if own is None:
-            return await self.fallback.customers(scope)
+            return await self._standing_in(CatalogList.CUSTOMERS).customers(scope)
         return Snapshot(own.all(Customer), own.as_of)
 
     async def items(self, scope: SalesScope) -> Snapshot[Sequence[Item]]:
         own = await self._list(scope, CatalogList.ITEMS)
         if own is None:
-            return await self.fallback.items(scope)
+            return await self._standing_in(CatalogList.ITEMS).items(scope)
         return Snapshot(own.all(Item), own.as_of)
 
     async def item_by_prv_code(self, scope: SalesScope, prv_code: str) -> Snapshot[Item | None]:
         own = await self._list(scope, CatalogList.ITEMS)
         if own is None:
-            return await self.fallback.item_by_prv_code(scope, prv_code)
+            return await self._standing_in(CatalogList.ITEMS).item_by_prv_code(scope, prv_code)
         return Snapshot(own.one(prv_code, Item), own.as_of)
 
     async def _listed_convert(
@@ -270,7 +288,9 @@ class SnapshotSalesCatalog:
     ) -> Snapshot[ConvertEntry | None]:
         own = await self._list(scope, CatalogList.CONVERT_LIST)
         if own is None:
-            return await self.fallback.convert_entry(scope, customer_code, customer_item_code)
+            return await self._standing_in(CatalogList.CONVERT_LIST).convert_entry(
+                scope, customer_code, customer_item_code
+            )
         return Snapshot(own.one((customer_code, customer_item_code), ConvertEntry), own.as_of)
 
     async def convert_entry(
@@ -294,7 +314,7 @@ class SnapshotSalesCatalog:
         listed = (
             Snapshot(own.all(ConvertEntry), own.as_of)
             if own is not None
-            else await self.fallback.convert_list(scope)
+            else await self._standing_in(CatalogList.CONVERT_LIST).convert_list(scope)
         )
         held = {(e.customer_code, e.customer_item_code) for e in listed.data}
         added = [
@@ -327,7 +347,7 @@ class SnapshotSalesCatalog:
         listed = (
             Snapshot(own.all(Quotation), own.as_of)
             if own is not None
-            else await self.fallback.quotations(scope)
+            else await self._standing_in(CatalogList.QUOTATIONS).quotations(scope)
         )
         held = {(q.quote_no, q.prv_code) for q in listed.data}
         added = [
@@ -369,13 +389,13 @@ class SnapshotSalesCatalog:
     async def lme_for_month(self, scope: SalesScope, month: str) -> Snapshot[LmeMonth | None]:
         own = await self._list(scope, CatalogList.LME)
         if own is None:
-            return await self.fallback.lme_for_month(scope, month)
+            return await self._standing_in(CatalogList.LME).lme_for_month(scope, month)
         return Snapshot(own.one(month, LmeMonth), own.as_of)
 
     async def lme_months(self, scope: SalesScope) -> Snapshot[Sequence[LmeMonth]]:
         own = await self._list(scope, CatalogList.LME)
         if own is None:
-            return await self.fallback.lme_months(scope)
+            return await self._standing_in(CatalogList.LME).lme_months(scope)
         return Snapshot(own.all(LmeMonth), own.as_of)
 
     # The ERP's own records: never imported from a file (module docstring).
@@ -383,13 +403,13 @@ class SnapshotSalesCatalog:
     async def orders_for_po(
         self, scope: SalesScope, customer_code: str, po_no: str
     ) -> Snapshot[Sequence[BravoOrder]]:
-        return await self.fallback.orders_for_po(scope, customer_code, po_no)
+        return await self._standing_in(None).orders_for_po(scope, customer_code, po_no)
 
     async def orders_since(self, scope: SalesScope, since: date) -> Snapshot[Sequence[BravoOrder]]:
-        return await self.fallback.orders_since(scope, since)
+        return await self._standing_in(None).orders_since(scope, since)
 
     async def open_ycbg(self, scope: SalesScope) -> Snapshot[Sequence[OpenYcbg]]:
-        return await self.fallback.open_ycbg(scope)
+        return await self._standing_in(None).open_ycbg(scope)
 
     async def record(self, scope: SalesScope, rows: Sequence[Quotation]) -> None:
         """Implements `QuotationLedgerPort`: a row the quotations already hold

@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Protocol
+from typing import Final, Protocol
 from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import ConflictError
@@ -39,6 +39,13 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Customer, Language
+
+# Why a file is not drawn where deployed from copy marked mock (audit 11), as
+# Purchasing refuses its mock Bravo layout (`dw_purchasing...orders.MOCK_LAYOUT`).
+MOCK_COPY: Final = (
+    "mẫu {ref} vẫn là mẫu thử của hệ thống: cài mẫu của công ty"
+    " (Quy tắc của công ty) rồi tạo lại tệp"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +122,11 @@ class Drafting[CaseT]:
     ``drafter`` is the caller rendering it, the PIC who sends the draft;
     ``at`` the server's time, printed on internal sheets as when they were
     generated.
+
+    A composer reads the copy through `emails`, `documents` and `upload`,
+    never ``copy``'s own fields: where ``deployed``, a copy marked mock is
+    refused there (`MOCK_COPY`), so a file drawn from fiction is never made
+    (audit finding 11), and only the copy a kind reads can refuse it.
     """
 
     case: CaseT
@@ -128,6 +140,26 @@ class Drafting[CaseT]:
     scope: SalesScope
     # The signed paper copy of a quote, scanned and uploaded, when it has one.
     signed_copy: bytes | None = None
+    deployed: bool = False
+
+    def _real[C: (SalesEmailCopy, SalesDocumentCopy, BravoUploadLayout)](self, copy: C) -> C:
+        if self.deployed and copy.mock:
+            raise ConflictError(
+                MOCK_COPY.format(ref=copy.ref), details={"copy": copy.ref, "rule": "mock_copy"}
+            )
+        return copy
+
+    @property
+    def emails(self) -> SalesEmailCopy:
+        return self._real(self.copy.emails)
+
+    @property
+    def documents(self) -> SalesDocumentCopy:
+        return self._real(self.copy.documents)
+
+    @property
+    def upload(self) -> BravoUploadLayout:
+        return self._real(self.copy.upload)
 
     @property
     def language(self) -> Language:
@@ -138,14 +170,14 @@ class Drafting[CaseT]:
         self, kind: str, to: tuple[EmailAddress, ...] | None = None
     ) -> tuple[Bound[EmailTemplate], EmailDraft]:
         """The template and an empty draft to the customer's own contacts."""
-        bound = self.copy.emails.template(kind, self.language)
+        bound = self.emails.template(kind, self.language)
         return bound, self._draft(to or self.customer.contacts)
 
     def design_email(
         self, kind: str, language: Language
     ) -> tuple[Bound[EmailTemplate], EmailDraft]:
         """The template and an empty draft to Design's mailbox."""
-        bound = self.copy.emails.template(kind, language)
+        bound = self.emails.template(kind, language)
         if not self.copy.design_mailboxes:
             raise ConflictError(
                 "chưa cấu hình hộp thư của Design",
@@ -155,7 +187,7 @@ class Drafting[CaseT]:
         return bound, self._draft(to)
 
     def _draft(self, to: tuple[EmailAddress, ...]) -> EmailDraft:
-        sender = self.copy.emails.sender
+        sender = self.emails.sender
         return EmailDraft(
             sender=(
                 self.people.address(self.drafter)
@@ -172,7 +204,7 @@ class Drafting[CaseT]:
     def stamp(self, ref: str) -> tuple[tuple[str, Value], ...]:
         """What every internal sheet carries: the case version, the template and
         when it was generated, in the tenant's time zone (ui-quality §6, exports)."""
-        common = self.copy.documents.template("common", INTERNAL)
+        common = self.documents.template("common", INTERNAL)
         return (
             (label(common, "case_version"), self.case_version),
             (label(common, "template"), ref),
@@ -181,7 +213,7 @@ class Drafting[CaseT]:
 
     def internal(self, kind: str) -> Bound[DocumentTemplate]:
         """An internal sheet's words: Vietnamese, whoever the customer is."""
-        return self.copy.documents.template(kind, INTERNAL)
+        return self.documents.template(kind, INTERNAL)
 
     # -------------------------------------------------------------- files --
 

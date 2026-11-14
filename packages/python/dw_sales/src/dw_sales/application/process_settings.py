@@ -560,8 +560,10 @@ class LockReason(StrEnum):
     BOUND_AT_BUILD = "bound_at_build"
     # Trust configuration: whose mail is Design's.
     TRUST = "trust"
-    # Two owners: the received date and the files fix Asia/Ho_Chi_Minh
-    # (domain/order_checks.py SALES_TIME_ZONE).
+    # Two owners: every server reader takes the tenant's zone from this field
+    # (audit 14), but the web shows every time in Asia/Ho_Chi_Minh
+    # (`apps/web/lib/dates.ts`, ui-quality §8), so a zone changed here would
+    # put the screens and the files on two clocks.
     TWO_OWNERS = "two_owners"
 
 

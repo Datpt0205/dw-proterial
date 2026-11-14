@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 from typing import Final
 
 from dw_agent_runtime.contracts import RunContext
@@ -26,7 +27,6 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
-from dw_sales.domain.order_checks import received_date
 from dw_sales.domain.orders import PoDocument
 from dw_sales.domain.po_body_reading import ModelPoBody, read_po_body
 from dw_sales.domain.rfq_reading import normalised
@@ -47,10 +47,13 @@ _OUTPUT_TOKENS: Final = 2000
 class PoBodyReader:
     model: InterpretationPort
 
-    async def read(self, message: InboundMessage, *, run: RunContext) -> PoDocument | str:
+    async def read(
+        self, message: InboundMessage, *, received_on: date, run: RunContext
+    ) -> PoDocument | str:
         """The PO written in ``message``, or why none was read: ``too_long``
         (a mail no call holds is a person's to read, never read in part),
-        ``unavailable``, or `read_po_body`'s reason."""
+        ``unavailable``, or `read_po_body`'s reason. ``received_on``: the day
+        it arrived where the tenant works, which a date without a year reads by."""
         text = normalised(newest_part(message).text)
         if estimated_tokens(text) > self.model.max_input_tokens - PROMPT_TOKENS:
             return "too_long"
@@ -67,7 +70,7 @@ class PoBodyReader:
         verdict = read_po_body(
             text,
             answer,
-            received_date(message.received_at),
+            received_on,
             parser_version=str(PO_BODY_EXTRACTION),
         )
         if verdict.refused:

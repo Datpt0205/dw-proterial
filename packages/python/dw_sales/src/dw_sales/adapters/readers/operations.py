@@ -29,6 +29,13 @@ names the customer's file, and every value of a PO read from it is flagged
 unreadable for want of a password (`Unreadable.locked`), and refused to be
 shown; which candidate opened it is never in the reply.
 
+**The fictional customers' PO layouts are carried only where a demo runs**
+(`ReaderTools.demo_layouts`, hardcode audit finding 7): the sandbox's
+settings say so (`ReaderSettings.demo_layouts`, off where deployed), never a
+request. Without them a PO is read only with a layout the tenant approved
+(`read_with`), so a real customer whose code a mock customer shares is never
+read with the demo's layout.
+
 The tools are the image's (`ReaderTools.installed`): LibreOffice and
 Tesseract. In process, where neither is installed, a legacy file is
 unreadable ("LibreOffice is not installed where this file was read") and a
@@ -61,7 +68,7 @@ from dw_sales.adapters.reader_wire import (
     ReaderRequest,
 )
 from dw_sales.adapters.readers.documents import PoDocumentReaders
-from dw_sales.adapters.readers.excel import ExcelPoReader
+from dw_sales.adapters.readers.excel import ExcelLayout, ExcelPoReader
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
 from dw_sales.adapters.readers.legacy import (
     ConversionError,
@@ -72,7 +79,7 @@ from dw_sales.adapters.readers.legacy import (
 from dw_sales.adapters.readers.locked import LockedError, opened
 from dw_sales.adapters.readers.mail import read_mail
 from dw_sales.adapters.readers.ocr import PageOcrPort, TesseractOcr
-from dw_sales.adapters.readers.pdf import PdfPoReader
+from dw_sales.adapters.readers.pdf import PdfLayout, PdfPoReader
 from dw_sales.adapters.readers.tables import read_table
 from dw_sales.adapters.readers.text_parts import AttachmentTexts, scanned_parts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
@@ -84,6 +91,9 @@ from dw_sales.domain.orders import Derivation, PoDocument, RegionFlag, Unreadabl
 
 logger = logging.getLogger("dw_sales.reader")
 
+# No layout at all: what a deployed reader carries (module docstring).
+_NONE: Final[Mapping[str, Any]] = MappingProxyType({})
+
 
 @dataclass(frozen=True)
 class ReaderTools:
@@ -91,16 +101,27 @@ class ReaderTools:
 
     converter: ConverterPort = field(default_factory=LibreOfficeConverter)
     ocr: PageOcrPort | None = field(default_factory=TesseractOcr)
+    # The fictional customers' layouts, by customer code (module docstring).
+    # True for a test, an eval and a host-run local worker; the sandbox says.
+    demo_layouts: bool = True
 
     @classmethod
-    def installed(cls) -> ReaderTools:
+    def installed(cls, *, demo_layouts: bool) -> ReaderTools:
         """LibreOffice and Tesseract, as the reader's image installs them."""
-        return cls()
+        return cls(demo_layouts=demo_layouts)
+
+    @property
+    def excel_layouts(self) -> Mapping[str, ExcelLayout]:
+        return MOCK_EXCEL_LAYOUTS if self.demo_layouts else _NONE
+
+    @property
+    def pdf_layouts(self) -> Mapping[str, PdfLayout]:
+        return MOCK_PDF_LAYOUTS if self.demo_layouts else _NONE
 
     def po_readers(self) -> PoDocumentReaders:
-        """The readers for the fictional customers' layouts, a scan read by OCR."""
+        """The readers for the layouts carried here, a scan read by OCR."""
         return PoDocumentReaders(
-            ExcelPoReader(MOCK_EXCEL_LAYOUTS), PdfPoReader(MOCK_PDF_LAYOUTS, ocr=self.ocr)
+            ExcelPoReader(self.excel_layouts), PdfPoReader(self.pdf_layouts, ocr=self.ocr)
         )
 
 
@@ -285,8 +306,8 @@ async def _label_source(request: ReaderRequest, tools: ReaderTools) -> Any:
 
 
 async def _layouts(request: ReaderRequest, tools: ReaderTools) -> Any:
-    # The same constants the PO readers are built from.
-    return {"xlsx": sorted(MOCK_EXCEL_LAYOUTS), "pdf": sorted(MOCK_PDF_LAYOUTS)}
+    # The same layouts the PO readers are built from.
+    return {"xlsx": sorted(tools.excel_layouts), "pdf": sorted(tools.pdf_layouts)}
 
 
 async def _form(request: ReaderRequest, tools: ReaderTools) -> Any:
@@ -302,7 +323,7 @@ async def _design_reply(request: ReaderRequest, tools: ReaderTools) -> Any:
 
 
 async def _text_parts(request: ReaderRequest, tools: ReaderTools) -> Any:
-    return list(await AttachmentTexts().text_parts(request.content(), _caps(request)))
+    return await AttachmentTexts().text_parts(request.content(), _caps(request))
 
 
 async def _document_text(request: ReaderRequest, tools: ReaderTools) -> Any:
@@ -317,16 +338,19 @@ async def _document_text(request: ReaderRequest, tools: ReaderTools) -> Any:
         readable = await asyncio.to_thread(_readable, request, tools)
     except (LockedError, ConversionError):
         return DocumentText(kind=kind, parts=[])
-    parts = list(await AttachmentTexts().text_parts(readable.content, caps))
+    text = await AttachmentTexts().text_parts(readable.content, caps)
+    parts = list(text.parts)
     scanned: list[Any] = []
     if tools.ocr is not None and sniff(readable.content.data) == "pdf":
         have = {part.page for part in parts if part.page is not None}
         scanned = await asyncio.to_thread(scanned_parts, readable.content, caps, tools.ocr, have)
     ordered = sorted([*parts, *scanned], key=lambda part: part.page or 0)
+    read_by_ocr = {f"page {part.page}" for part in scanned}
     return DocumentText(
         kind=kind,
         parts=[dataclasses.replace(part, sha256=readable.original_sha256) for part in ordered],
         ocr_pages=[part.page for part in scanned],
+        unshown=[place for place in text.unshown if place not in read_by_ocr],
     )
 
 
@@ -394,7 +418,11 @@ async def handle(request: ReaderRequest, tools: ReaderTools | None = None) -> Re
     raises: the caller counts it a crash, in the sandbox by the process's
     exit and in process by the transport."""
     try:
-        value = await OPERATIONS[request.operation](request, tools or ReaderTools.installed())
+        # No tools: in process (tests, evals, a host-run local worker, all
+        # outside a deployment); the sandbox's child always hands its own.
+        value = await OPERATIONS[request.operation](
+            request, tools or ReaderTools.installed(demo_layouts=True)
+        )
     except QuoteFileUnreadableError as unreadable:
         problem = str(unreadable.details.get("problem", "unreadable"))
         return ReaderReply.failed("quote_file_unreadable", problem, at=unreadable.at)

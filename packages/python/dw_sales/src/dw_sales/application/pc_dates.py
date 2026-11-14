@@ -194,6 +194,17 @@ class PcMailView(BaseModel):
     received_at: datetime
 
 
+class PcMailsView(BaseModel):
+    """The mails Sales may have DW1 read, and the longest text DW1 reads, a
+    paste's or a mail's: `MAX_TEXT`, served so the paste box holds no copy of
+    its own (hardcode audit, finding 22)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mails: list[PcMailView]
+    text_max: int = MAX_TEXT
+
+
 @dataclass(frozen=True)
 class PcDateReplies:
     """`POST /orders/{case_id}/pc-dates` (module docstring)."""

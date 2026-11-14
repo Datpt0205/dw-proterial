@@ -25,19 +25,26 @@ pre-fills the onboarding screen's mapping (`LayoutPrefiller`).
 A message routed as a delivery change, a complaint or a sample request carries,
 where the tenant turns it on, a hand-off to PC or QA a local model pre-filled
 with the customer's own words and code verified (ticket 33, `HandoffReader`).
-Only a message no reader accepted is classified by its words: by a local
-model's typed intent where the tenant's rules turn it on (`message_intent`,
-dw_sales ADR 0005), which code maps to the route (`INTENT_ROUTES`), else by
-the keyword tables over the subject and the attachment names, then the body.
-A miss lands where it is safe: routed to Sales as ``other``. Neither a
-keyword nor the model sets a value.
+Only a message no reader accepted is classified by its words, and only by a
+local model's typed intent where the tenant's rules turn it on and its bar
+is met (`message_intent`, dw_sales ADR 0005), which code maps to the route
+(`INTENT_ROUTES`). **No keyword table decides what a mail means** (CLAUDE.md
+§6, hardcode audit finding 6): with the step off or no model wired, a person
+reads it, except a mail a verified Design mailbox sent, which goes to the
+quotation flow as Design's (an identity code checks, `DesignSenderPort`).
+A mail carrying a document no reader accepted is routed
+`attachment_unreadable` (its file is what is unread, whatever its words), or
+`customer_unknown` when no customer is its sender's (no layout was tried);
+any other is routed ``other`` with its subject. So the order is: a readable
+document, then the thread headers, then the model, then a person. The model
+never sets a value.
 
 **A PO a person uploaded is that customer's PO** ("Tải PO lên", ticket 18):
 the customer is the one they chose, which the server stamped on the stored
 message (`UploadLookupPort`), never the sender (the person) and never
 anything the message carries. It is a PO by that person's word: when no
 reader accepts its file it goes the way of a PO no layout reads, and no
-model or keyword classifies it.
+model classifies it.
 
 **The body never changes a value.** Customer, items, quantities, prices and
 dates come from the sender's domain (or, for a forwarded PO, the buyer the
@@ -58,10 +65,8 @@ unreadable file is routed; the password is never held here.
 
 from __future__ import annotations
 
-import re
-import unicodedata
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from enum import StrEnum
@@ -77,10 +82,12 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
+from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
     READ_AS,
+    DesignSenderPort,
     LayoutLookupPort,
     ModelStepGatePort,
     OrderCaseLookupPort,
@@ -92,7 +99,13 @@ from dw_sales.application.order_ports import (
     UploadLookupPort,
 )
 from dw_sales.application.po_body_reading import PoBodyReader
-from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
+from dw_sales.application.ports import (
+    CatalogNotConnectedError,
+    InboxPort,
+    SalesCatalogPort,
+    SalesScope,
+    Snapshot,
+)
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
 from dw_sales.application.threads import ThreadedCase
@@ -127,7 +140,6 @@ from dw_sales.domain.order_checks import (
     check_line,
     current_quotation,
     map_line,
-    received_date,
     wants_reading,
 )
 from dw_sales.domain.orders import (
@@ -191,35 +203,19 @@ NOT_UNDERSTOOD: Final = "DW1 did not understand the message: no usable model ans
 # Why a message about an order goes to Sales when no PO is read from it.
 NO_DOCUMENT: Final = "it names an order but carries no document"
 
-# Matched against NFKC-normalised, casefolded text, in English, Vietnamese and
-# the Japanese the customers' own systems print.
-_QUOTE_REQUEST = re.compile(
-    r"\brfq\b|request for (?:quotation|quote)|(?:quotation|quote) request"
-    r"|yêu cầu báo giá|đề nghị báo giá|見積(?:もり|り)?依頼"
-)
-# Design's reply quotes the YCBG number; matching it to a request is ticket 03's.
-_DESIGN_REPLY = re.compile(r"\bycbg\b")
-_PURCHASE_ORDER = re.compile(r"\bpo\b|purchase order|đơn đặt hàng|đơn hàng|注文書|発注書")
-# "Rev.1", "rev1", "revised", "revision", but not "review" or "revenue".
-_REVISED = re.compile(r"\brev(?:ised|ision)?(?![a-z])|\bamend(?:ed|ment)?\b|sửa đổi|訂正|改訂")
-# Why a message that is no PO and no quote goes to Sales, first match wins.
-_ROUTES: tuple[tuple[RoutingReason, re.Pattern[str]], ...] = (
-    (RoutingReason.COMPLAINT, re.compile(r"khiếu nại|\bcomplaint\b|苦情|クレーム")),
-    (RoutingReason.SAMPLE_REQUEST, re.compile(r"hàng mẫu|\bsamples?\b|サンプル")),
-    (
-        RoutingReason.DELIVERY_CHANGE,
-        re.compile(r"lịch giao|giao sớm|delivery (?:schedule|date)|reschedul|納期"),
-    ),
-)
+# Why a message no reader, thread or model classified goes to a person.
+UNREAD_DOCUMENT: Final = "a document no reader accepted, and no model read the mail"
+NOT_CLASSIFIED: Final = "no model read the mail"
+UNKNOWN_SENDER: Final = "a document from a sender who is no customer, so no layout reads it"
 
 
 @dataclass(frozen=True)
 class Classification:
     """What a message is, and what decided it.
 
-    ``reason`` and ``detail`` say why an ``other`` message goes to Sales when
-    the classification already knows (a model's kind, two kinds of document);
-    otherwise the keyword reasons apply. ``reading`` is the model reading's
+    ``reason`` and ``detail`` say why an ``other`` message goes to Sales (a
+    model's kind, two kinds of document, nothing that read it); without a
+    reason it is ``other``. ``reading`` is the model reading's
     stamp, for the disposition. ``retry``: the model gave no usable answer
     and the message is young enough to try again, so it stays not yet
     processed (`ModelAssist.unread_retry_hours`). ``thread``: the case a
@@ -274,13 +270,17 @@ class OrderIntake:
     # Recognises the seller's request and Design-reply forms, so that a
     # readable document decides its message's kind first (ticket 31).
     quote_forms: QuoteFormPort
+    # The tenant's time zone, where the day a message arrived is counted
+    # (the received date, the lead time's start): `working_hours.time_zone`,
+    # its one owner (audit 14).
+    zones: LocalZonePort
     # A model reading of the descriptions DW1's vocabulary does not read
     # (dw_sales ADR 0005), for a tenant whose rules turn it on. None: no model
     # is wired in this process, and those lines stay unmapped as before.
     descriptions: DescriptionReader | None = None
     # A model reading of the intent of a message no reader accepted (ticket
     # 31), for a tenant whose rules turn it on. None: no model is wired, and
-    # the keyword tables classify those messages as before.
+    # a person reads those messages (module docstring).
     intents: IntentReader | None = None
     # The case a reply's thread headers name (ticket 32). None: no case log is
     # wired (a reader-only test), and no reply is linked.
@@ -308,6 +308,12 @@ class OrderIntake:
     # says no, the step does what it does when it is off. None: no step may
     # run, whatever the rules say.
     model_steps: ModelStepGatePort | None = None
+    # Whether a verified Design mailbox sent a message no reader, thread or
+    # model classified: Design's answer written in the mail (AI item 6) goes
+    # to the quotation flow, which matches it by its YCBG or routes it as
+    # `design_reply_unmatched` with the reader of its text. None: no Design
+    # mailbox is known here (a reader-only test).
+    design_senders: DesignSenderPort | None = None
     # The id a learned layout is stored under (dw_sales ADR 0006).
     new_layout_id: Callable[[], uuid.UUID] = uuid.uuid4
     # Which stored messages are POs a person uploaded, and for which customer
@@ -358,8 +364,12 @@ class OrderIntake:
         if classification.thread is not None:
             return await self._reply(scope, message, classification.thread, run)
         sender = await self._customer(scope, message, await self._upload(scope, message))
-        if kind is MessageKind.OTHER:
-            reason = classification.reason or _other_reason(message)
+        if kind is MessageKind.OTHER and classification.detail == UNREAD_DOCUMENT:
+            # Which file was not read, and why, as a PO's files are told
+            # (`_order`): what the mail is stays the person's to say.
+            outcome = await self._order(scope, message, kind, sender, attached, run)
+        elif kind is MessageKind.OTHER:
+            reason = classification.reason or RoutingReason.OTHER
             outcome = self._routed(message, kind, reason, sender, classification.detail)
             outcome = await self._with_handoff(scope, message, outcome, sender, run)
         else:
@@ -411,8 +421,13 @@ class OrderIntake:
             and await self._model_step(scope, rules, ModelStep.MESSAGE_INTENT)
         ):
             return await self._intent(scope, message, attached, sender, rules, run, now)
-        body = await self._reads_body(scope, rules, attached, run)
-        return Classification(self._kind(message, attached, body=body))
+        if self.design_senders is not None and await self.design_senders.from_design(
+            scope, message
+        ):
+            return Classification(MessageKind.DESIGN_REPLY)
+        return _for_a_person(
+            message, carries_document=self._carries_document(attached), sender=sender
+        )
 
     async def customer_of(self, scope: SalesScope, message: InboundMessage) -> Customer | None:
         """Whose message it is, as intake reads it: the one answer the layout
@@ -434,6 +449,10 @@ class OrderIntake:
         if upload is not None:
             return (await self.catalog.customer_by_code(scope, upload.customer_code)).data
         return (await self.catalog.customer_by_sender(scope, message.sender.address)).data
+
+    async def _received_on(self, scope: SalesScope, at: datetime) -> date:
+        """The day ``at`` falls on where the tenant works (`zones`)."""
+        return local_day(at, await self.zones.time_zone(scope))
 
     async def _model_step(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
         """Whether ``step`` may call a model for this tenant now: on in its
@@ -586,7 +605,7 @@ class OrderIntake:
             newest_part(message),
             sender,
             kind,
-            received_on=received_date(message.received_at),
+            received_on=await self._received_on(scope, message.received_at),
             rules_version=rules.version,
             run=run,
         )
@@ -714,7 +733,9 @@ class OrderIntake:
                 None,
                 "the sender's domain matches no customer, and a PO in the mail names no buyer",
             )
-        read = await self.body_pos.read(message, run=run)
+        read = await self.body_pos.read(
+            message, received_on=await self._received_on(scope, message.received_at), run=run
+        )
         if isinstance(read, str):
             return self._routed(
                 message,
@@ -843,36 +864,58 @@ class OrderIntake:
                 details={"message_id": message.message_id},
             )
 
-        items = await self.catalog.items(scope)
-        lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
-        as_of: list[datetime] = [items.as_of, lme.as_of]
+        received_on = await self._received_on(scope, message.received_at)
+        # A source with nothing to answer (`CatalogNotConnectedError`, audit 1) is
+        # read as empty and named on the PO among what nobody checked.
+        unchecked: list[str] = []
+        items = await _unless_unconnected(self.catalog.items(scope), unchecked)
+        lme = await _unless_unconnected(
+            self.catalog.lme_for_month(scope, rules.lme_month(header.po_date)), unchecked
+        )
+        as_of: list[datetime] = [found.as_of for found in (items, lme) if found is not None]
+        item_rows = () if items is None else items.data
         mapped_lines: list[tuple[PoLine, MappedLine]] = []
         unread: list[PoLine] = []
         for po_line in document.lines:
-            entry = await self.catalog.convert_entry(
-                scope, customer.code, po_line.customer_item_code
+            entry = await _unless_unconnected(
+                self.catalog.convert_entry(scope, customer.code, po_line.customer_item_code),
+                unchecked,
             )
-            as_of.append(entry.as_of)
-            mapped_lines.append((po_line, map_line(po_line, entry=entry.data, items=items.data)))
-            if wants_reading(po_line, entry=entry.data):
+            listed = None if entry is None else entry.data
+            as_of += [] if entry is None else [entry.as_of]
+            mapped_lines.append((po_line, map_line(po_line, entry=listed, items=item_rows)))
+            if wants_reading(po_line, entry=listed):
                 unread.append(po_line)
-        read = await self._read(scope, unread, items.data, rules, run)
+        read = await self._read(scope, unread, item_rows, rules, run)
         checks: list[LineCheck] = []
         for po_line, by_code in mapped_lines:
             mapped = read.get(po_line.line_no, by_code)
             check, quoted_as_of = await self._check_line(
-                scope, customer.code, header, message.received_at, po_line, mapped, lme.data, rules
+                scope,
+                customer.code,
+                header,
+                received_on,
+                po_line,
+                mapped,
+                None if lme is None else lme.data,
+                rules,
+                unchecked,
             )
             as_of.extend(quoted_as_of)
             checks.append(check)
-        orders = await self.catalog.orders_for_po(scope, customer.code, header.po_no)
-        as_of.append(orders.as_of)
+        # Bravo not connected: DW1's own cases still say duplicate or
+        # revision; what Bravo holds is unchecked, never "no duplicate".
+        orders = await _unless_unconnected(
+            self.catalog.orders_for_po(scope, customer.code, header.po_no), unchecked
+        )
+        as_of += [] if orders is None else [orders.as_of]
+        document = document.with_unchecked(unchecked)
         history = check_history(
             customer.code,
             document,
             {c.line.line_no: c.line.mapping.checked_against for c in checks},
             earlier,
-            orders.data,
+            () if orders is None else orders.data,
             rules=rules,
         )
         if history.stale:
@@ -890,7 +933,7 @@ class OrderIntake:
                 attributed_by_document=attributed,
                 authentication=message.authentication,
                 po_date=header.po_date,
-                received_at=message.received_at,
+                received_on=received_on,
                 rules=rules,
             )
         )
@@ -912,8 +955,9 @@ class OrderIntake:
             findings=findings,
             rules_version=rules.version,
             # The oldest snapshot any check read: nothing was checked against
-            # data newer than this.
-            catalog_as_of=min(as_of),
+            # data newer than this. Where nothing was read, nothing newer than
+            # the message.
+            catalog_as_of=min(as_of, default=message.received_at),
             cross_check_required=rules.cross_check_required,
             export_control_mode=rules.export_control_mode,
             duplicate_of_case=history.duplicate_of_case,
@@ -962,7 +1006,10 @@ class OrderIntake:
                 "the item master has no such PRV code", details={**details, "field": "prv_code"}
             )
         header = case.effective_header
-        lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
+        # No LME price list: the band is unchecked, a finding (`check_line`).
+        lme = await _unless_unconnected(
+            self.catalog.lme_for_month(scope, rules.lme_month(header.po_date)), []
+        )
         # The reading the candidates came from, and what it stated, stay the
         # line's evidence.
         mapped = MappedLine(
@@ -976,11 +1023,12 @@ class OrderIntake:
             scope,
             case.customer_code,
             header,
-            case.received_at,
+            await self._received_on(scope, case.received_at),
             line.effective,
             mapped,
-            lme.data,
+            None if lme is None else lme.data,
             rules,
+            [],
         )
         return case.confirm_mapping(line_no, prv_code, actor, at, recheck)
 
@@ -1021,7 +1069,11 @@ class OrderIntake:
         corrected = decided(lambda: case.corrected(finding_key, correction, actor))
         rules = await self._case_rules(scope, case, details)
         header = corrected.document.header
-        lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
+        # No LME price list: the band is unchecked, a finding (`check_line`).
+        lme = await _unless_unconnected(
+            self.catalog.lme_for_month(scope, rules.lme_month(header.po_date)), []
+        )
+        received_on = await self._received_on(scope, case.received_at)
         checks: list[LineCheck] = []
         for line in corrected.lines:
             if line.line_no not in corrected.rechecked:
@@ -1032,11 +1084,12 @@ class OrderIntake:
                 scope,
                 case.customer_code,
                 header,
-                case.received_at,
+                received_on,
                 line.effective,
                 mapped,
-                lme.data,
+                None if lme is None else lme.data,
                 rules,
+                [],
             )
             checks.append(check)
         po_findings = list(check_document(corrected.document, rules))
@@ -1053,11 +1106,19 @@ class OrderIntake:
         if not others and not case.superseded and case.duplicate_of_case is None:
             codes = {line.line_no: line.mapping.checked_against for line in corrected.lines}
             codes |= {c.line.line_no: c.line.mapping.checked_against for c in checks}
-            orders = await self.catalog.orders_for_po(scope, case.customer_code, header.po_no)
-            history = check_history(
-                case.customer_code, corrected.document, codes, (), orders.data, rules=rules
+            # Bravo not connected: its history stays unchecked, as the case
+            # was read (`_case`), and no finding of it is raised again.
+            orders = await _unless_unconnected(
+                self.catalog.orders_for_po(scope, case.customer_code, header.po_no), []
             )
-            if not history.stale:
+            history = (
+                None
+                if orders is None
+                else check_history(
+                    case.customer_code, corrected.document, codes, (), orders.data, rules=rules
+                )
+            )
+            if history is not None and not history.stale:
                 po_findings += [] if history.finding is None else [history.finding]
                 po_codes |= HISTORY_CHECK_CODES
                 bravo = BravoHistory(history.duplicate_of_so, history.base_so_no)
@@ -1146,7 +1207,7 @@ class OrderIntake:
             ),
             authentication=message.authentication,
             po_date=po_date,
-            received_at=case.received_at,
+            received_on=await self._received_on(scope, case.received_at),
             rules=rules,
         )
 
@@ -1155,23 +1216,29 @@ class OrderIntake:
         scope: SalesScope,
         customer_code: str,
         header: PoHeader,
-        received_at: datetime,
+        received_on: date,
         po_line: PoLine,
         mapped: MappedLine,
         lme: LmeMonth | None,
         rules: OrderRules,
+        unchecked: list[str],
     ) -> tuple[LineCheck, list[datetime]]:
         """One line checked against its item and the customer's quotation for it
-        on the PO date, with the ``as_of`` of what that read."""
+        on the PO date, with the ``as_of`` of what that read. Quotations with
+        nothing to answer are named in ``unchecked`` and read as none, which
+        raises `quotation_missing`: never a pass."""
         quotation = None
         read: list[datetime] = []
         if mapped.item is not None:
-            valid = await self.catalog.quotations_valid_on(
-                scope, customer_code, mapped.item.prv_code, header.po_date
+            valid = await _unless_unconnected(
+                self.catalog.quotations_valid_on(
+                    scope, customer_code, mapped.item.prv_code, header.po_date
+                ),
+                unchecked,
             )
-            read.append(valid.as_of)
+            read += [] if valid is None else [valid.as_of]
             quotation = current_quotation(
-                valid.data,
+                () if valid is None else valid.data,
                 customer_code=customer_code,
                 prv_code=mapped.item.prv_code,
                 day=header.po_date,
@@ -1181,7 +1248,7 @@ class OrderIntake:
             mapped,
             currency=header.currency,
             po_date=header.po_date,
-            received_at=received_at,
+            received_on=received_on,
             quotation=quotation,
             lme=lme,
             rules=rules,
@@ -1238,31 +1305,6 @@ class OrderIntake:
             for item in attached
         )
 
-    def _kind(
-        self, message: InboundMessage, attached: Sequence[_Attached], *, body: bool
-    ) -> MessageKind:
-        """The keyword tables: for a message no reader accepted, while the
-        tenant's rules leave the model reading off. ``body``: a PO written
-        in the mail may be read (`_reads_body`)."""
-        carries_document = self._carries_document(attached)
-        headline = " ".join([message.subject, *(a.name for a in message.attachments)])
-        for text in (headline, message.body_text):
-            words = _words(text)
-            if _QUOTE_REQUEST.search(words):
-                return MessageKind.QUOTE_REQUEST
-            # A YCBG named, with a file or without one: Design may write its
-            # answer in the mail (AI item 6); whether Design sent it at all is
-            # `take_design_reply`'s check, the one every reply passes.
-            if _DESIGN_REPLY.search(words):
-                return MessageKind.DESIGN_REPLY
-            if _PURCHASE_ORDER.search(words):
-                # A message about a PO is not a PO: it has to carry one, or,
-                # where a model reads it, be written in the mail.
-                if not carries_document:
-                    return MessageKind.PO if body else MessageKind.OTHER
-                return MessageKind.REVISED_PO if _REVISED.search(words) else MessageKind.PO
-        return MessageKind.OTHER
-
     def _routed(
         self,
         message: InboundMessage,
@@ -1300,6 +1342,19 @@ class OrderIntake:
         return IntakeOutcome(message.message_id, kind, disposition, case)
 
 
+async def _unless_unconnected[T](
+    read: Awaitable[Snapshot[T]], unchecked: list[str]
+) -> Snapshot[T] | None:
+    """What ``read`` answers, or None where its source has nothing to answer
+    (`CatalogNotConnectedError`), named once in ``unchecked``."""
+    try:
+        return await read
+    except CatalogNotConnectedError as missing:
+        if missing.statement not in unchecked:
+            unchecked.append(missing.statement)
+        return None
+
+
 def _stamped(outcome: IntakeOutcome, reading: IntentReading | None) -> IntakeOutcome:
     """The outcome with the model reading's stamp on its disposition."""
     if reading is None or outcome.disposition is None:
@@ -1321,15 +1376,19 @@ def _with_prefill(outcome: IntakeOutcome, prefill: LayoutPrefill | None) -> Inta
     return replace(outcome, disposition=stamped)
 
 
-def _words(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).casefold()
-
-
-def _other_reason(message: InboundMessage) -> RoutingReason:
-    headline = " ".join([message.subject, *(a.name for a in message.attachments)])
-    for text in (headline, message.body_text):
-        words = _words(text)
-        for reason, pattern in _ROUTES:
-            if pattern.search(words):
-                return reason
-    return RoutingReason.OTHER
+def _for_a_person(
+    message: InboundMessage, *, carries_document: bool, sender: Customer | None
+) -> Classification:
+    """What no reader, thread or model classified (module docstring): a
+    person reads it, told why, never a kind its words were taken to mean. A
+    document from a sender no customer is was never read (a layout is a
+    customer's): the customer is what is unknown."""
+    if carries_document and sender is None:
+        return Classification(MessageKind.OTHER, RoutingReason.CUSTOMER_UNKNOWN, UNKNOWN_SENDER)
+    if carries_document:
+        return Classification(
+            MessageKind.OTHER, RoutingReason.ATTACHMENT_UNREADABLE, UNREAD_DOCUMENT
+        )
+    return Classification(
+        MessageKind.OTHER, RoutingReason.OTHER, f"{NOT_CLASSIFIED}: {message.subject}"
+    )

@@ -11,14 +11,28 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from typing import Literal
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MEGABYTE = 1024 * 1024
+DEPLOYED_PROFILES: frozenset[str] = frozenset({"uat", "production"})
 
 
 class ReaderSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="DW_READER_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="DW_READER_", extra="ignore", populate_by_name=True
+    )
+
+    # The deployment's profile: the one variable the compose overlays pin for
+    # the api and the worker, pinned for the reader the same way. Where
+    # deployed the reader carries no layout keyed by a fictional customer's
+    # code (hardcode audit, finding 7): a real customer sharing the code would
+    # be read with a demo layout and skip "first PO uncertain".
+    profile: Literal["local", "test", "uat", "production"] = Field(
+        default="local", validation_alias=AliasChoices("DW_READER_PROFILE", "DW_API_PROFILE")
+    )
 
     # tmpfs in the container, a real directory in tests. Each request gets a
     # directory of its own under it, removed when the answer is read.
@@ -62,6 +76,17 @@ class ReaderSettings(BaseSettings):
     max_request_bytes: int = 32 * MEGABYTE
     # One answer: a sheet grid of a thousand rows is the largest.
     max_result_bytes: int = 32 * MEGABYTE
+
+    @property
+    def is_deployed(self) -> bool:
+        return self.profile in DEPLOYED_PROFILES
+
+    @property
+    def demo_layouts(self) -> bool:
+        """Whether a reading process carries the fictional customers' PO
+        layouts: never where deployed. Handed to it on its command line
+        (`dw_reader.reading`), never by a request, which a caller writes."""
+        return not self.is_deployed
 
     @property
     def enforce_limits(self) -> bool:

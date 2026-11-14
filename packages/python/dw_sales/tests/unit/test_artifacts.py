@@ -119,6 +119,7 @@ from dw_sales.domain.quotes import (
     QuoteStatus,
 )
 from dw_sales.evals.world import MemoryStore
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -412,6 +413,7 @@ def intake(cases: OrderCases) -> OrderIntake:
         inbox=MockInbox.load(SCOPE),
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=_INTAKE_RULES,
         cases=cases,
         new_case_id=uuid.uuid4,
@@ -820,6 +822,60 @@ async def test_each_kind_is_refused_while_dw1_is_paused_and_renders_once_resumed
 
     world.worker = WorkerState(paused=False, changed_by=GIANG, changed_at=NOW, reason="mở lại")
     assert await render(world, case, kind)
+
+
+class _FixedCopy:
+    """`ArtifactCopyPort` answering one copy whatever the stamps."""
+
+    def __init__(self, copy: ArtifactCopy) -> None:
+        self.copy = copy
+
+    async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:
+        return self.copy
+
+
+# The tenant's own wording, and its Bravo template still the platform's mock.
+_OWN_WORDS = replace(
+    ARTIFACT_COPY,
+    emails=ARTIFACT_COPY.emails.model_copy(update={"mock": False}),
+    documents=ARTIFACT_COPY.documents.model_copy(update={"mock": False}),
+)
+
+
+@pytest.mark.parametrize("kind", sorted(KINDS))
+async def test_where_deployed_no_kind_is_drawn_from_mock_copy(kind: str) -> None:
+    """Audit finding 11, as Purchasing refuses its mock Bravo layout: every
+    shipped copy is fiction (`mock: true`), so where deployed nothing is drawn
+    from it, the person is told which copy to replace, and nothing is stored."""
+    world = World()
+    case = await KINDS[kind][0]()
+
+    with pytest.raises(ConflictError) as refused:
+        await render(world, case, kind, svc=replace(service(world), deployed=True))
+
+    assert refused.value.details["rule"] == "mock_copy"
+    assert "mẫu thử" in refused.value.message
+    assert (world.artifacts, world.objects) == ({}, {})
+
+
+async def test_where_deployed_only_the_copy_a_kind_reads_can_refuse_it() -> None:
+    """A tenant with its own wording draws its cross-check sheet; its Bravo
+    upload still waits for its own template."""
+    world = World()
+    svc = replace(service(world, copy=_FixedCopy(_OWN_WORDS)), deployed=True)
+
+    assert await render(world, await _uploaded_m27(), "cross_check_sheet", svc=svc)
+    with pytest.raises(ConflictError) as refused:
+        await render(world, await _prepared_m01(), "bravo_upload", svc=svc)
+    assert refused.value.details["copy"] == ARTIFACT_COPY.upload.ref
+
+
+async def test_the_demo_still_draws_from_mock_copy() -> None:
+    world = World()
+
+    (view,) = await render(world, await _prepared_m01(), "bravo_upload")
+
+    assert world.artifacts[(SCOPE, view.artifact_id)].kind == "bravo_upload"
 
 
 async def test_what_is_already_rendered_stays_readable_while_dw1_is_paused() -> None:

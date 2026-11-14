@@ -48,7 +48,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
 
@@ -79,7 +78,7 @@ from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
-from dw_sales.domain.rfq_reading import TextPart
+from dw_sales.domain.rfq_reading import AttachmentText
 
 logger = logging.getLogger("dw_sales.reader")
 
@@ -348,15 +347,15 @@ class ClientTexts:
 
     transport: ReaderTransport
 
-    async def text_parts(self, content: AttachmentContent, caps: IntakeCaps) -> Sequence[TextPart]:
+    async def text_parts(self, content: AttachmentContent, caps: IntakeCaps) -> AttachmentText:
         if content.attachment.size > caps.max_attachment_bytes:
-            return ()
+            return AttachmentText()
         operation = ReaderOp.TEXT_PARTS
         reply = await _ask(self.transport, operation, content=content, args=ReaderArgs(caps=caps))
         if _failed(operation, reply):
-            return ()
-        parts: list[TextPart] = _value(operation, reply)
-        return tuple(parts)
+            return AttachmentText()
+        text: AttachmentText = _value(operation, reply)
+        return text
 
 
 @dataclass(frozen=True)

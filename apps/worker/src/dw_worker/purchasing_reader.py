@@ -98,8 +98,9 @@ class _SalesDocumentText(Protocol):
 class PurchasingDocumentReader:
     """Implements DW2's `DocumentTextPort` over the same client: each page or
     sheet with its text, and whether OCR read it. A file that is no document
-    is `not_a_document`; one with no text, over the caps, given up on, or
-    whose text DW2 would have to cut (a page past `MAX_PAGE_CHARS`, more
+    is `not_a_document`; one with no text, over the caps, given up on, with
+    content the text leaves out (`DocumentText.unshown`), or whose text DW2
+    would have to cut (a page past `MAX_PAGE_CHARS`, more
     than `MAX_PAGES`) is `unreadable`, never kept in part. An answer of
     another reader version is `unreadable` too: asking again gets the same.
     A reader that does not answer raises as it did."""
@@ -118,6 +119,9 @@ class PurchasingDocumentReader:
         if (
             read is None
             or not read.parts
+            # A sheet or a page a person sees and the text leaves out (audit
+            # finding 10): never kept in part.
+            or read.unshown
             or len(read.parts) > MAX_PAGES
             or any(len(part.text) > MAX_PAGE_CHARS for part in read.parts)
         ):

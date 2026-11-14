@@ -69,9 +69,9 @@ STORE: Any = _Untouchable()
 CLOCK = FixedClock(datetime(2026, 10, 2, tzinfo=UTC))
 IDS = Uuid4Generator()
 
-order_queries = OrderQueries(STORE, GATE, STORE, STORE)
+order_queries = OrderQueries(STORE, GATE, STORE, STORE, STORE)
 order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
-quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE)
+quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
 quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 # The routes' way to start DW1, and the steps the run takes: both check.
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
@@ -84,8 +84,8 @@ artifacts = ArtifactService(
     STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE, STORE
 )
 master = MasterDataService(GATE, STORE)
-overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
-worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE)
+worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 assignment = AssignmentService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 
 type Call = Callable[[AccessContext], Awaitable[object]]

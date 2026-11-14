@@ -61,6 +61,7 @@ from dw_sales.domain.orders import (
     Unreadable,
 )
 from dw_sales.testing.excel_strings import as_excel_writes_it
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -547,6 +548,7 @@ def _intake(inbox: InboxPort, cases: _Cases) -> OrderIntake:
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(RULES),
         cases=cases,
         new_case_id=lambda: uuid.UUID(int=next(ids)),

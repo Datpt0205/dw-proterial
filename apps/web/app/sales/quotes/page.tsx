@@ -325,6 +325,7 @@ function Quotes() {
                           <DueText
                             day={q.quote_due}
                             now={now}
+                            soon={q.due_soon}
                             done={DONE.includes(q.status)}
                           />
                         )}
@@ -371,6 +372,7 @@ function Quotes() {
                     <DueText
                       day={q.quote_due}
                       now={now}
+                      soon={q.due_soon}
                       done={DONE.includes(q.status)}
                     />
                   ),
