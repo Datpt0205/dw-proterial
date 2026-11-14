@@ -76,9 +76,10 @@ NOT_RAISED_BY_A_MESSAGE = {
     "price_basis_mismatch",
     "above_target_price",
 }
-# A message routed on what its text says: no rule over the data can recompute
-# which of these it is, so the oracle checks only that it is one of them.
-ROUTED_BY_CONTENT = frozenset({"delivery_change", "complaint", "sample_request", "other"})
+# A message no document, thread or model classified: a person reads it
+# (`other`). No keyword table routes one as a complaint, a sample request or a
+# delivery change (audit finding 6): a model's reading alone gives those.
+ROUTED_BY_CONTENT = frozenset({"other"})
 # A price that differs from its quotation differs by at least this much.
 PRICE_MARGIN = Decimal("0.02")
 # A denial-list check no older than this on every message date reads the same
@@ -538,19 +539,22 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
                 # maps it (ticket 30), so nothing is read.
                 outcome = Outcome(
                     customer.code if customer else None,
-                    "po",
+                    "other",
                     ("routed_to_sales", "attachment_unreadable"),
                     frozenset(),
                 )
             elif po.layout == "pdf_image":
                 outcome = Outcome(
                     customer.code if customer else None,
-                    "po",
+                    "other",
                     ("routed_to_sales", "attachment_unreadable"),
                     frozenset(),
                 )
             elif customer is None:
-                outcome = Outcome(None, "po", ("routed_to_sales", "customer_unknown"), frozenset())
+                # Nobody's layout was tried, so no word of it said "PO".
+                outcome = Outcome(
+                    None, "other", ("routed_to_sales", "customer_unknown"), frozenset()
+                )
             else:
                 outcome = await _order_outcome(
                     catalog, customer, forwarded, message, po, revisions, prints.get(mid)
@@ -586,10 +590,16 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
         elif (own := free.get(mid)) is not None:
             customer, _ = await _attribute(catalog, message, None)
             assert customer is not None and customer.code == own.customer_code, mid
+            # Without a model no word of it says "request" (audit 6): a
+            # file nobody read, or a mail for a person.
             outcome = Outcome(
                 customer.code,
-                "quote_request",
-                ("routed_to_sales", "attachment_unreadable"),
+                "other",
+                (
+                    ("routed_to_sales", "attachment_unreadable")
+                    if message.attachments
+                    else ("routed_to_sales", "by_content")
+                ),
                 frozenset(),
             )
         elif message.references:
@@ -694,12 +704,15 @@ async def test_each_message_triggers_what_the_readme_says_and_nothing_else(
     assert await _outcomes(catalog, inbox) == claimed
 
 
-def test_a_message_routed_by_its_text_names_a_reason_text_can_give() -> None:
+def test_a_message_nothing_classified_is_routed_for_a_reason_code_can_give() -> None:
+    """With no model, an `other` message is a person's: a mail to read
+    (`other`), a file nobody read, or a sender who is no customer. Never
+    a reason only the mail's words could give (audit finding 6)."""
     for mid, outcome in _claimed_outcomes().items():
         kind, reason = outcome.disposition
         if outcome.classification == "other":
             assert kind == "routed_to_sales", mid
-            assert reason in ROUTED_BY_CONTENT, mid
+            assert reason in {"other", "attachment_unreadable", "customer_unknown"}, mid
 
 
 async def test_each_quote_request_has_the_evidence_the_readme_lists(
@@ -818,8 +831,13 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
     # `portal_notice` (ticket 18) is a model's reading alone, as
     # `reply_to_case` is; `test_message_intent.py` and the intent evals give it.
     given = {reason for _, reason in claimed if reason}
+    # `complaint`, `sample_request` and `delivery_change` too: no keyword
+    # table gives them any more (audit finding 6), a model's reading alone.
     not_in_the_sample = {
         "other",
+        "complaint",
+        "sample_request",
+        "delivery_change",
         "reply_to_case",
         "malware_detected",
         "attachment_locked",
@@ -833,7 +851,8 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
 async def test_the_sample_request_comes_from_a_customer_without_noc(
     catalog: MockSalesCatalog,
 ) -> None:
-    (sample,) = [o for o in _claimed_outcomes().values() if o.disposition[1] == "sample_request"]
+    # M17, the sample request: routed `other` until a model reads it as one.
+    sample = _claimed_outcomes()["M17"]
     assert sample.customer is not None
     customer = (await catalog.customer_by_code(SCOPE, sample.customer)).data
 

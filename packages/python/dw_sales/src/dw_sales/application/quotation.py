@@ -27,7 +27,12 @@ from dw_platform.domain.messages import (
     is_email_address,
 )
 from dw_sales.application.local_time import LocalZonePort, local_day
-from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
+from dw_sales.application.ports import (
+    CatalogNotConnectedError,
+    InboxPort,
+    SalesCatalogPort,
+    SalesScope,
+)
 from dw_sales.application.quote_ports import (
     DesignReplyReaderPort,
     QuotationLedgerPort,
@@ -144,11 +149,14 @@ type NotExtractedReason = Literal[
     "model_unavailable",
     "model_not_understood",
     "request_too_long",
+    # A file holds more than the model is shown (rows, columns, a scan).
+    "request_partly_shown",
     "currency_missing",
 ]
 # Why a model reading of a request came to nothing, as the refusal says it.
 _NOT_READ: Final[dict[NotRead, NotExtractedReason]] = {
     "too_long": "request_too_long",
+    "partly_shown": "request_partly_shown",
     "unavailable": "model_unavailable",
     "not_understood": "model_not_understood",
     "currency_missing": "currency_missing",
@@ -478,11 +486,16 @@ class QuotationService:
         rules = await self._rules_of(scope, case)
         lme = await self._lme_as_of(scope, as_of)
         since = _year_before(as_of)
-        orders = [
-            order
-            for order in (await self.catalog.orders_since(scope, since)).data
-            if order.customer_code == customer_code and order.order_date <= as_of
-        ]
+        try:
+            ordered = (await self.catalog.orders_since(scope, since)).data
+        except CatalogNotConnectedError:
+            # Bravo not connected: the history is unknown, said as such.
+            ordered = None
+        orders = (
+            None
+            if ordered is None
+            else [o for o in ordered if o.customer_code == customer_code and o.order_date <= as_of]
+        )
         freight = (
             FreightEvidence(
                 incoterm=incoterm,
@@ -522,11 +535,15 @@ class QuotationService:
                         for q in newest_first
                         if q.customer_code != customer_code
                     ),
-                    orders=tuple(
-                        line
-                        for order in orders
-                        if prv_code is not None
-                        for line in OrderedLine.lines_of(order, prv_code)
+                    orders=(
+                        None
+                        if orders is None
+                        else tuple(
+                            line
+                            for order in orders
+                            if prv_code is not None
+                            for line in OrderedLine.lines_of(order, prv_code)
+                        )
                     ),
                     lme=lme,
                     copper=copper,
@@ -730,7 +747,15 @@ class QuotationService:
             content = await self.inbox.read_attachment(scope, message_id, attachment.attachment_id)
             if content is not None:
                 contents.append(content)
-        read = await step.reader.read(scope, message, contents, customer, rules, run=run)
+        read = await step.reader.read(
+            scope,
+            message,
+            contents,
+            customer,
+            rules,
+            received_on=local_day(message.received_at, await self.policies.time_zone(scope)),
+            run=run,
+        )
         if isinstance(read, str):
             raise RequestNotExtractedError(message_id, _NOT_READ[read])
         items = await self.catalog.items(scope)

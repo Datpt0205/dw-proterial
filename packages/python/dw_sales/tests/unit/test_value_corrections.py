@@ -66,6 +66,7 @@ from dw_sales.domain.orders import (
     Severity,
     ValueCorrection,
 )
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -495,6 +496,7 @@ def _intake(catalog: MockSalesCatalog | None = None, cases: _HeldBy | None = Non
         inbox=MockInbox.load(SCOPE),
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
         cases=cases or _NoCases(),
         new_case_id=uuid.uuid4,

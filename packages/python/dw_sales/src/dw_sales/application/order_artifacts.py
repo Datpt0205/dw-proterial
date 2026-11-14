@@ -245,7 +245,7 @@ def _people_line(d: OrderDrafting, user_id: uuid.UUID | None) -> str | None:
 def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     """O3: the file the PIC imports into Bravo, in the MOCK template's layout,
     and a second sheet that says it is a MOCK."""
-    case, layout = d.case, d.copy.upload
+    case, layout = d.case, d.upload
     doc = d.internal("bravo_upload")
     rows = tuple(
         tuple(row[c.field] for c in layout.columns)

@@ -28,9 +28,10 @@ from dw_sales.adapters.readers.export import EXPORT_SHEET, export_grid
 from dw_sales.application.source import SheetCell, SheetGrid
 from dw_sales.domain.order_checks import IntakeCaps
 
-# What a grid shows of a sheet, whatever dimensions the sheet declares.
-_MAX_ROWS: Final = 1000
-_MAX_COLUMNS: Final = 52
+# What a grid shows of a sheet, whatever dimensions the sheet declares: what a
+# person can open of it, so also what a model is shown of it (`text_parts`).
+MAX_GRID_ROWS: Final = 1000
+MAX_GRID_COLUMNS: Final = 52
 
 
 class FileSourceView:
@@ -83,8 +84,8 @@ class FileSourceView:
             return None
         sheet = values[title]
         formula_sheet = formulas[title]
-        rows = min(sheet.max_row, _MAX_ROWS)
-        columns = min(sheet.max_column, _MAX_COLUMNS)
+        rows = min(sheet.max_row, MAX_GRID_ROWS)
+        columns = min(sheet.max_column, MAX_GRID_COLUMNS)
         hidden_rows = {
             number for number, dimension in sheet.row_dimensions.items() if dimension.hidden
         }
@@ -126,7 +127,7 @@ class FileSourceView:
             hidden_sheet=sheet.sheet_state != "visible",
             rows=rows,
             columns=columns,
-            truncated=sheet.max_row > _MAX_ROWS or sheet.max_column > _MAX_COLUMNS,
+            truncated=sheet.max_row > MAX_GRID_ROWS or sheet.max_column > MAX_GRID_COLUMNS,
             cells=cells,
             sheets=list(values.sheetnames),
         )
@@ -161,7 +162,7 @@ def _hidden_columns(sheet: Worksheet) -> set[int]:
     hidden: set[int] = set()
     for dimension in sheet.column_dimensions.values():
         if dimension.hidden and dimension.min is not None and dimension.max is not None:
-            hidden.update(range(dimension.min, min(dimension.max, _MAX_COLUMNS) + 1))
+            hidden.update(range(dimension.min, min(dimension.max, MAX_GRID_COLUMNS) + 1))
     return hidden
 
 

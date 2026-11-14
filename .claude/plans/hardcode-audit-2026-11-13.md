@@ -15,28 +15,28 @@ findings it closes, and this file marks them.
 
 | #   | Sev  | Where                                                                                                                                         | Failure                                                                                                                       |
 | --- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 1   | HIGH | `dw_sales/application/snapshot_catalog.py:383-392`, `adapters/assembly.py:246-262`, `apps/api/src/dw_api/settings.py:147`                     | Deployed DW1 checks real POs against the mock catalog's ERP orders and open YCBGs, and the mock master lists until approved    |
+| 1   | HIGH | `dw_sales/application/snapshot_catalog.py:383-392`, `adapters/assembly.py:246-262`, `apps/api/src/dw_api/settings.py:147`                     | Deployed DW1 checks real POs against the mock catalog's ERP orders and open YCBGs, and the mock master lists until approved — fixed 2026-11-13 |
 | 2   | HIGH | `dw_purchasing/application/sourcing.py:657`                                                                                                   | A supplier's reply naming PR-12 attaches to PR-1 (substring match); at AI_AUTO the offer is recorded on the wrong case — fixed 2026-11-13 |
 | 3   | HIGH | `dw_purchasing/application/intake.py:346,365`, `sourcing.py:376,389`, `follow_up.py:201`; `dw_agent_runtime/model/interpretation.py:50-57`    | `cut_to_tokens` cuts mid-line and spans are verified against the cut text: "1500" can pass as "15"; later lines vanish — fixed 2026-11-13 |
 | 4   | HIGH | `dw_sales/domain/handoffs.py:230-279`, `application/handoffs.py:312`                                                                          | "3 km" reaches PC as 3 m when the model's span omits the unit; yards, kgs, spools pass as metres — fixed 2026-11-13 |
 | 5   | HIGH | `dw_sales/application/design_text_reading.py:101-110,139`                                                                                    | Copper weight anchored by `str.find`: "2.5" accepted inside "12.5 kg/km"; kg/m or g/m taken as kg/km — fixed 2026-11-13 |
-| 6   | MED  | `dw_sales/application/order_intake.py:179-195,1184-1207,1271-1278`                                                                            | Keyword tables are the default path (model step shipped off); a complaint about an order with a PDF reads as a PO             |
-| 7   | MED  | `dw_sales/adapters/readers/layouts.py:71-84`, `readers/operations.py:89-93`                                                                   | The reader carries layouts keyed by mock customer codes; a real customer with the same code skips "first PO uncertain"        |
+| 6   | MED  | `dw_sales/application/order_intake.py:179-195,1184-1207,1271-1278`                                                                            | Keyword tables are the default path (model step shipped off); a complaint about an order with a PDF reads as a PO — fixed 2026-11-13 |
+| 7   | MED  | `dw_sales/adapters/readers/layouts.py:71-84`, `readers/operations.py:89-93`                                                                   | The reader carries layouts keyed by mock customer codes; a real customer with the same code skips "first PO uncertain" — fixed 2026-11-13 |
 | 8   | MED  | `dw_sales/domain/rfq_reading.py:203-215`, `dw_purchasing/domain/mail_reading.py:159-178` vs `dw_sales/domain/master_data.py:149-186`         | "1.250" is 1250 in two parsers and refused as ambiguous in a third: one question, two answers — fixed 2026-11-13 |
 | 9   | MED  | `dw_sales/domain/rfq_reading.py:336-342`, `dw_purchasing/domain/mail_reading.py:142,180-196`                                                  | Dates always day first: US "05/11/2026" becomes 5 Nov; "11/15/2026" silently swapped — fixed 2026-11-13 |
-| 10  | MED  | `dw_sales/adapters/readers/text_parts.py:48-49,155-160,20-23`                                                                                 | The model sees ≤1000 rows, columns A–Z, no scanned pages of a mixed PDF; nobody is told                                       |
-| 11  | MED  | `dw_sales/application/artifact_content.py:362-375`, `order_artifacts.py:264` vs `dw_purchasing/application/orders.py:88-91`                   | Sales' mock Bravo upload layout and mock mail copy are only noted when deployed (Purchasing refuses its mock)                 |
+| 10  | MED  | `dw_sales/adapters/readers/text_parts.py:48-49,155-160,20-23`                                                                                 | The model sees ≤1000 rows, columns A–Z, no scanned pages of a mixed PDF; nobody is told — fixed 2026-11-13 |
+| 11  | MED  | `dw_sales/application/artifact_content.py:362-375`, `order_artifacts.py:264` vs `dw_purchasing/application/orders.py:88-91`                   | Sales' mock Bravo upload layout and mock mail copy are only noted when deployed (Purchasing refuses its mock) — fixed 2026-11-13 |
 | 12  | MED  | `dw_knowledge/adapters/qdrant_index.py:38-47,320-328`                                                                                         | Any error whose text says "404"/"not found" becomes an empty search, read as "no evidence" — fixed 2026-11-13 |
 | 13  | MED  | `dw_purchasing/domain/master_lists.py:181-186` (used `automation_lane.py:766`, `sourcing.py:666`, `follow_up.py:120`)                         | A supplier contact on gmail makes gmail.com its domain: any verified gmail sender counts as that supplier — fixed 2026-11-13  |
-| 14  | MED  | `dw_sales/domain/order_checks.py:65,279`, `artifact_content.py:50`, `overview_service.py:75`, `quotes_service.py:82`                          | Asia/Ho_Chi_Minh in code 4+ times while `working_hours.time_zone` is tenant config — partly fixed 2026-11-13 (see below) |
-| 15  | LOW  | `apps/web/app/sales/page.tsx:57`, `apps/web/app/sales/quotes/[caseId]/page.tsx:80,277-279`                                                    | "Due soon" 48 h / 1–2 days in the UI beside the policy's `hours_before_due` / `due_within_days`                               |
+| 14  | MED  | `dw_sales/domain/order_checks.py:65,279`, `artifact_content.py:50`, `overview_service.py:75`, `quotes_service.py:82`                          | Asia/Ho_Chi_Minh in code 4+ times while `working_hours.time_zone` is tenant config — fixed 2026-11-13 (outside Sales: see below) |
+| 15  | LOW  | `apps/web/app/sales/page.tsx:57`, `apps/web/app/sales/quotes/[caseId]/page.tsx:80,277-279`                                                    | "Due soon" 48 h / 1–2 days in the UI beside the policy's `hours_before_due` / `due_within_days` — fixed 2026-11-13 |
 | 16  | LOW  | `dw_platform/domain/approval.py:115`                                                                                                          | A strict approval with no `makers` key excludes only the requester — fixed 2026-11-13 |
 | 17  | LOW  | `dw_agent_runtime/adapters/docgen_client.py:137`                                                                                              | A reply with no `results` gives `[]`, read as "uploaded with no errors" — fixed 2026-11-13 |
 | 18  | LOW  | `apps/api/src/dw_api/routes/v1/knowledge.py:30,125`                                                                                           | The route keeps its own `platform_admin` string and decides authorization there — fixed 2026-11-13 |
 | 19  | LOW  | `run_store.py:195`, `approval_codes.py:85`, `provisioning_repo.py:213,218`, `admin_console_repo.py:99`, `rfq_mails.py:106`, purchasing `store.py:216` | Constraint names found by substring in the error text (others read `constraint_name`) — fixed 2026-11-13 |
 | 20  | LOW  | `rfq_reading.py:253-270`, `mail_reading.py:144-156`                                                                                           | "$" always USD, "¥" always JPY; the table exists twice — fixed 2026-11-13 |
 | 21  | LOW  | `dw_sales/application/artifact_content.py:128`                                                                                                | `%d %b %Y` prints the month in the server's locale on customer documents — fixed 2026-11-13 |
-| 22  | LOW  | `dw_sales/adapters/readers/ocr.py:51,197`; `pc_dates.py:64` + `routes.py:231` + `pc-dates.tsx:17`                                             | A scanned line under 30 confidence vanishes unflagged; the 8000-character PC paste limit written three times — OCR half fixed 2026-11-13; the limit owes its route and web reads (see below) |
+| 22  | LOW  | `dw_sales/adapters/readers/ocr.py:51,197`; `pc_dates.py:64` + `routes.py:231` + `pc-dates.tsx:17`                                             | A scanned line under 30 confidence vanishes unflagged; the 8000-character PC paste limit written three times — fixed 2026-11-13 |
 
 ## Suggested fixes (from the audit)
 
@@ -148,3 +148,74 @@ findings it closes, and this file marks them.
     `presentation/routes.py` to read `max_length=MAX_TEXT`, and
     `pc-dates.tsx` to read it from the API (the route's schema, or a field on
     the PC-dates view) instead of `TEXT_MAX = 8000`.
+- Batch A and the rest of D (11-13), findings 1, 6, 7, 10, 11, 14, 15, 22:
+  - 1: `SnapshotSalesCatalog` takes no fallback where deployed (`build_dw1`'s
+    required `deployed`); a list with no approved snapshot and the ERP raise
+    `CatalogNotConnectedError` (an `InfrastructureError`: 503 with its
+    sentence, a queued job `unavailable`). Intake reads such a source as
+    empty and names it on the PO's `unchecked_regions` ("Bravo (chưa kết
+    nối)", "<list> (chưa có danh mục được duyệt)"), which raises the PO-level
+    `value_uncertain` Sales settles with a note; a duplicate only Bravo
+    holds is unchecked, never "no duplicate". A missing customer list fails
+    the processing closed (no case without a customer). A number the intent
+    reading names resolves to nothing without Bravo (a YCBG and a PO could
+    not be told apart); a hand-off resolves DW1's own case only. Price
+    evidence answers `orders: null` ("Chưa đối chiếu Bravo"), never "never
+    ordered"; the screening, the Bravo and YCBG master-data tabs answer 503.
+    The master-data page shows `source: "none"` ("Chưa có danh mục được
+    duyệt") and a first import is compared with nothing. Both composition
+    roots refuse `sales_mailbox=mock` where deployed, as Purchasing does.
+  - 6: the keyword tables are gone. With the intent step off or no model, a
+    mail carrying a document no reader accepted is routed
+    `attachment_unreadable` with each file's reason (its file is what is
+    unread; the "map form" button still reaches a new customer's PO), or
+    `customer_unknown` when the sender is no customer; any other `other` with
+    its subject in the detail. A mail a verified Design mailbox sent goes to
+    the quotation flow by that identity (`DesignSenderPort`), so Design's
+    answer written in the mail (AI item 6) keeps its reader. The
+    `sales.intent_golden` grader's baseline is now "without a model"
+    (`without_model_accuracy`). Changed to the new truth: the mock README
+    table and `test_order_intake.GOLDEN` (M11, M17, M31 `other`; M15, M16,
+    M43 classified `other`; free requests M37 `other`, M38/M39
+    `attachment_unreadable`), `test_mock_scenarios`' oracle, `test_handoffs`'
+    switch-off case. Owed decision: with the intent step off, a free-form
+    request never reaches the RFQ model step (it waits for the intent model),
+    and complaints, sample requests and delivery changes reach a person as
+    `other` with no hand-off form.
+  - 7: the reader sandbox carries the demo's PO layouts only where its
+    settings allow (`ReaderSettings.demo_layouts`, off where deployed; the
+    profile is `DW_API_PROFILE`, now pinned for the `reader` service in the
+    uat and production overlays and passed in the base compose), handed to
+    each reading process on its command line, never by a request.
+  - 10: `AttachmentTexts` answers `AttachmentText(parts, unshown)`: content
+    past the source view's caps (one owner now: `source_view.MAX_GRID_ROWS`
+    1000 and `MAX_GRID_COLUMNS` 52, so the model sees columns AA-AZ as a
+    person does) and every PDF page with no text layer are named; the RFQ
+    model reading then refuses (`request_partly_shown`, to a person), and
+    DW2's `PurchasingDocumentReader` keeps no part either.
+  - 11: where deployed a composer reading copy marked `mock: true` (emails,
+    documents, the Bravo upload layout) is refused with `rule: mock_copy`
+    and the copy to replace, per copy a kind actually reads (`Drafting`'s
+    accessors); nothing is stored.
+  - 14: `SALES_TIME_ZONE` and `order_checks.received_date` are gone; the
+    received date, the lead time's start, the compliance day, the RFQ and
+    PO-body readings' received day, the activity page's days and its case
+    filter, the customer reminders and the paused notice (now "(UTC+7)", the
+    zone's own offset) read `LocalZonePort`. The `TWO_OWNERS` lock on
+    `working_hours.time_zone` stays, re-worded: the web prints every time in
+    Asia/Ho_Chi_Minh (`apps/web/lib/dates.ts`, ui-quality §8), so a tenant
+    zone would put screens and files on two clocks. Lifting it is owed with
+    a served zone for `lib/dates.ts`. Outside Sales, no tenant zone exists to
+    read: `dw_platform/application/rule_versions.py:76`,
+    `dw_purchasing/application/follow_up.py:78`, `dw_purchasing/domain/brief.py:39`,
+    `dw_agent_runtime/model/readiness.py:41` keep theirs.
+  - 15: `followups.due_soon` (`morning_brief.due_within_days`, the brief's
+    own "sắp đến hạn") decides `WorkItem.due_soon`, `QuoteSummaryView` and
+    `QuoteCaseView.due_soon`; the work list, the quote list, the review page
+    and the quote page draw it, red only once passed (the 24 h / 48 h / 1-2
+    day thresholds of `DueText` and the pages are gone).
+  - 22: `PcDatesBody.text` reads `MAX_TEXT`; `GET .../pc-mails` answers
+    `PcMailsView {mails, text_max}` and the paste box takes its limit.
+  - Found: `test_followups_lane.py::test_quiet_hours_defer_a_reminder_and_never_drop_it`
+    and `::test_sunday_is_no_working_day` fail on the clean tree since
+    867b8862 (reminders at any hour by default); not touched here.

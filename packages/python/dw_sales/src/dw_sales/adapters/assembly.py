@@ -208,6 +208,9 @@ def build_dw1(
     requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
     one_call_model: ModelGateway | None = None,
+    # Where deployed, nothing fictional answers (audit findings 1 and 11):
+    # said by each composition root, never assumed.
+    deployed: bool,
     mailbox: Mailbox = "mock",
     mail_drop: Path | None = None,
     source_cache: SourceCachePort | None = None,
@@ -239,13 +242,20 @@ def build_dw1(
     The mailbox is ``mailbox``: the mock bound to ``scope``, or the mail
     stored from the drop folder (ticket 43), which ``mail_drop`` names for the
     one process that reads it into the store: the folder every DW shares, of
-    which DW1 reads the subfolders of those holding `sales.inbox.process`."""
+    which DW1 reads the subfolders of those holding `sales.inbox.process`.
+
+    Given ``deployed``, nothing fictional answers (audit findings 1 and 11):
+    the mock mailbox is refused, a list with no approved import and the ERP
+    answer "not connected" (`CatalogNotConnectedError`) instead of the mock, and
+    a file drawn from copy marked mock is refused."""
+    if deployed and mailbox == "mock":
+        raise ValueError("the mock mailbox is refused where deployed")
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
-    # the mock until Bravo is connected.
+    # the mock until Bravo is connected. Deployed: no mock at all.
     catalog = SnapshotSalesCatalog(
         SqlApprovedLists(session_factory),
-        MockSalesCatalog.load(scope),
+        None if deployed else MockSalesCatalog.load(scope),
         SqlRecordedQuotations(session_factory),
         SqlRecordedConverts(session_factory),
         SqlRecordedSenders(session_factory),
@@ -332,6 +342,7 @@ def build_dw1(
         cases=order_cases,
         new_case_id=ids.new_uuid,
         quote_forms=readers.forms,
+        zones=book,
         descriptions=None if interpretation is None else DescriptionReader(interpretation),
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
@@ -348,6 +359,7 @@ def build_dw1(
         body_pos=None if interpretation is None else PoBodyReader(interpretation),
         model_steps=readiness,
         uploads=stored,
+        design_senders=quotation,
     )
     runs = RuntimeDw1Runs(
         runtime.runner,
@@ -400,6 +412,7 @@ def build_dw1(
         ),
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
+        deployed=deployed,
         outbox_enabled=outbox_enabled or outbox_dir is not None,
     )
     register(
@@ -432,7 +445,7 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
-    activity = ActivityService(uow, assembly.services.gate, step_activity, clock)
+    activity = ActivityService(uow, assembly.services.gate, step_activity, clock, book)
     lane = (
         None
         if lane_access is None

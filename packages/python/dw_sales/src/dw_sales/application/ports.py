@@ -14,8 +14,9 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Protocol
+from typing import Final, Protocol
 
+from dw_kernel.errors import InfrastructureError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.directory import WorkspaceMember
@@ -29,6 +30,7 @@ from dw_sales.domain.catalog import (
     OpenYcbg,
     Quotation,
 )
+from dw_sales.domain.master_data import SPECS, CatalogList
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +60,40 @@ class Snapshot[T]:
     as_of: datetime
 
 
+# What a person reads where a source a check needed has no data to give, as
+# the case's coverage says it: "Chưa kiểm: <this>". A list is named by its
+# label (`SPECS`, the master-data page's words).
+BRAVO_NOT_CONNECTED: Final = "Bravo (chưa kết nối)"
+
+
+class CatalogNotConnectedError(InfrastructureError):
+    """A master-data read with nothing true to answer (audit finding 1): the
+    ERP (Bravo) is not connected, or ``catalog_list`` has no approved
+    snapshot, where nothing may stand in for it (a deployed profile, where the
+    mock never answers). Never an empty list: an empty "orders for this PO"
+    reads as "no duplicate", which nobody checked.
+
+    An `InfrastructureError` so that what does not catch it fails closed: a
+    request answers 503 with ``statement``, a queued processing job is
+    `unavailable`. A check that can go on without the source catches it and
+    names ``statement`` on the case (`OrderIntake`)."""
+
+    def __init__(self, catalog_list: CatalogList | None) -> None:
+        self.catalog_list = catalog_list
+        self.statement = (
+            BRAVO_NOT_CONNECTED
+            if catalog_list is None
+            else f"{SPECS[catalog_list].label} (chưa có danh mục được duyệt)"
+        )
+        super().__init__(
+            f"Chưa đối chiếu được: {self.statement}",
+            details={
+                "reason_code": "catalog_not_connected",
+                "source": "erp" if catalog_list is None else catalog_list.value,
+            },
+        )
+
+
 class SalesCatalogPort(Protocol):
     """The company's master data, read-only.
 
@@ -66,7 +102,8 @@ class SalesCatalogPort(Protocol):
     ``scope``'s tenant. Every read returns the snapshot's ``as_of`` beside its
     data. Every lookup is exact: a code or domain that is not there answers
     None, never the nearest match, because a near match is a guess and the
-    decision belongs to Sales.
+    decision belongs to Sales. A source with nothing true to answer raises
+    `CatalogNotConnectedError`, never an empty answer.
     """
 
     async def customer_by_code(self, scope: SalesScope, code: str) -> Snapshot[Customer | None]: ...

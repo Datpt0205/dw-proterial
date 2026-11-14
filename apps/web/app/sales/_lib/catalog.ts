@@ -59,14 +59,17 @@ export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 export const IMPORT_ACCEPT = ".xlsx,.xls,.csv";
 
 /**
- * Where the list's rows come from now, in words: the sample data, or the
- * import approved, when and by whom.
+ * Where the list's rows come from now, in words: nothing approved yet (where
+ * deployed), the sample data, or the import approved, when and by whom.
  */
 export function sourceLabel(
   inForce: InForce,
   name: (id: string | null | undefined) => string,
 ): { tone: "warn" | "ok"; text: string } {
   const snapshot = inForce.snapshot;
+  // Deployed with nothing approved: no list answers, and no mock stands in.
+  if (inForce.source === "none" || !inForce.as_of)
+    return { tone: "warn", text: "Chưa có danh mục được duyệt" };
   if (inForce.source === "mock" || !snapshot)
     return {
       tone: "warn",

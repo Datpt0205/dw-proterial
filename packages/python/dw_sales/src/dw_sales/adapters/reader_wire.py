@@ -48,7 +48,7 @@ from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
-from dw_sales.domain.rfq_reading import TextPart
+from dw_sales.domain.rfq_reading import AttachmentText, TextPart
 
 # `hide_input_in_errors`: a refusal never quotes what was sent, the file's
 # values or a password among them.
@@ -210,6 +210,8 @@ class DocumentText(BaseModel):
     kind: Literal["pdf", "xlsx", "xls", "doc", "other"]
     parts: list[TextPart]
     ocr_pages: list[int] = Field(default_factory=list)
+    # What a person sees that ``parts`` leave out (`AttachmentText.unshown`).
+    unshown: list[str] = Field(default_factory=list)
 
 
 # What each operation returns: the one table both sides validate against.
@@ -224,7 +226,7 @@ RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
         ReaderOp.QUOTE_FORM: TypeAdapter(QuoteForm | None),
         ReaderOp.QUOTE_RFQ: TypeAdapter(RfqDocument | None),
         ReaderOp.QUOTE_DESIGN_REPLY: TypeAdapter(DesignReplyDocument | None),
-        ReaderOp.TEXT_PARTS: TypeAdapter(list[TextPart]),
+        ReaderOp.TEXT_PARTS: TypeAdapter(AttachmentText),
         ReaderOp.SOURCE_PDF_PAGE: TypeAdapter(PdfPage | None),
         ReaderOp.SOURCE_SHEET_NAMES: TypeAdapter(list[str]),
         ReaderOp.SOURCE_SHEET_GRID: TypeAdapter(SheetGrid | None),

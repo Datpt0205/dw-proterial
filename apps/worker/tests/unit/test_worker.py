@@ -445,3 +445,48 @@ def test_dw2s_automation_runs_where_deployed_on_the_stored_mailbox_only(
         settings, sessions, clock=SystemClock(), ids=Uuid4Generator(), telemetry=NullTelemetry()
     )
     assert (lane is not None) is built
+
+
+@pytest.mark.parametrize(
+    ("profile", "mailbox", "built"),
+    [
+        ("local", "mock", True),
+        ("uat", "stored", True),
+        ("production", "stored", True),
+        ("uat", "mock", False),
+        ("production", "mock", False),
+    ],
+)
+def test_dw1_is_built_where_deployed_on_the_stored_mailbox_only(
+    profile: str, mailbox: str, built: bool
+) -> None:
+    """As the API refuses it (audit finding 1): a deployed DW1 never reads
+    the fictional mailbox, so the worker builds none of its lanes over it."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from dw_kernel.ports import SystemClock, Uuid4Generator
+    from dw_observability.telemetry import NullTelemetry
+    from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
+    from dw_worker.main import build_sales
+
+    settings = bare_settings(
+        profile=profile,
+        database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+        s3_endpoint_url="http://localhost:9000",
+        sales_demo_tenant_id="d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d",
+        sales_demo_workspace_id="64764894-718d-5558-ba17-9a2949214063",
+        sales_mailbox=mailbox,
+        model_provider="onprem",
+        onprem_model_base_url="http://model:11434/v1",
+        outbound_allowed_hosts=["model"],
+    )
+    sessions = async_sessionmaker(create_async_engine(settings.database_url or ""))
+    mount = build_sales(
+        settings, sessions, clock=SystemClock(), ids=Uuid4Generator(), telemetry=NullTelemetry()
+    )
+    assert (mount is not None) is built
+    if mount is not None:
+        # Deployed, no list and no ERP read falls back to the demo's fiction.
+        catalog = mount[0].services.master_data.catalog
+        assert isinstance(catalog, SnapshotSalesCatalog)
+        assert (catalog.fallback is None) is settings.is_deployed

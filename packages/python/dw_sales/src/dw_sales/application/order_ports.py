@@ -96,6 +96,14 @@ class QuoteFormPort(Protocol):
     async def form(self, content: AttachmentContent) -> QuoteForm | None: ...
 
 
+class DesignSenderPort(Protocol):
+    """Whether one of the tenant's Design mailboxes sent a message, as the
+    mail system verified it (`QuotationService.from_design`): an identity
+    code checks, never a word of the mail."""
+
+    async def from_design(self, scope: SalesScope, message: InboundMessage) -> bool: ...
+
+
 class ModelStepGatePort(Protocol):
     """Whether a model step may run for ``scope``'s tenant under ``rules``:
     the rules turn it on AND its live eval met the bar for the model and the

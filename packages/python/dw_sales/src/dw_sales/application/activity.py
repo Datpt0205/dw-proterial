@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Final, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,13 +49,13 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.activity_ports import HandledBy, StepActivityReadPort, day_window
 from dw_sales.application.case_store import LoggedEvent, SalesUnitOfWorkFactory
-from dw_sales.application.local_time import local_day
+from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.model_readiness import BARS
 from dw_sales.application.process_settings import model_steps
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.activity import StepOutcome, StepResult, StepTally, percentile, tally
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
-from dw_sales.domain.order_checks import SALES_TIME_ZONE, ModelStep
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import AMOUNT_FIELDS, OrderCase
 from dw_sales.domain.process import StepId
 from dw_sales.domain.quotes import QuoteCase
@@ -422,8 +423,10 @@ def activity_summary(
     end: date,
     lane: CaseKind | None,
     as_of: datetime,
+    zone: ZoneInfo,
 ) -> ActivitySummaryView:
-    """Per step over ``start``..``end`` (local days, both included): counts
+    """Per step over ``start``..``end`` (days in ``zone``, the tenant's, both
+    included): counts
     each with the case list filter it stands for, the top reason codes, the
     latency, and a series per day."""
 
@@ -469,7 +472,7 @@ def activity_summary(
 
     by_day: dict[date, list[StepOutcome]] = {}
     for row in rows:
-        by_day.setdefault(local_day(row.occurred_at, SALES_TIME_ZONE), []).append(row)
+        by_day.setdefault(local_day(row.occurred_at, zone), []).append(row)
     days: list[DayView] = []
     day = start
     while day <= end:
@@ -505,6 +508,8 @@ class ActivityService:
     gate: Gate
     reader: StepActivityReadPort
     clock: UtcClock
+    # Where the tenant's days are counted (`working_hours.time_zone`, audit 14).
+    zones: LocalZonePort
 
     async def case_activity(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -550,8 +555,10 @@ class ActivityService:
                 context, SalesScopes.OVERVIEW_READ, resource_type="sales_activity"
             )
         now = self.clock.now()
-        last = end or local_day(now, SALES_TIME_ZONE)
+        scope = sales_scope(context)
+        zone = await self.zones.time_zone(scope)
+        last = end or local_day(now, zone)
         first = start or last - timedelta(days=DEFAULT_SUMMARY_DAYS - 1)
-        since, until = day_window(first, last)
-        rows = await self.reader.between(sales_scope(context), since, until, lane)
-        return activity_summary(rows, start=first, end=last, lane=lane, as_of=now)
+        since, until = day_window(first, last, zone)
+        rows = await self.reader.between(scope, since, until, lane)
+        return activity_summary(rows, start=first, end=last, lane=lane, as_of=now, zone=zone)

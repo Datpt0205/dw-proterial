@@ -205,7 +205,7 @@ function Review() {
                 key: "due",
                 render: (_, q) =>
                   q.quote_due ? (
-                    <DueText day={q.quote_due} now={now} />
+                    <DueText day={q.quote_due} now={now} soon={q.due_soon} />
                   ) : (
                     <StatusTag
                       tone="unk"

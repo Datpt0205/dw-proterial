@@ -366,6 +366,8 @@ class ArtifactService:
     design: DesignRequestSource
     # Every uploaded file is scanned before it is stored (ticket 25).
     scanner: MalwareScanPort
+    # Where deployed, a file is never drawn from copy marked mock (audit 11).
+    deployed: bool = False
 
     # ------------------------------------------------------------- orders --
 
@@ -558,6 +560,7 @@ class ArtifactService:
                         writer=self.writer,
                         scope=scope,
                         signed_copy=await self._signed_bytes(work, scope, case),
+                        deployed=self.deployed,
                     )
                     for rendered in await compose(drafting, self.design):
                         record = self._record(cases.kind, case, kind, rendered, context, now)

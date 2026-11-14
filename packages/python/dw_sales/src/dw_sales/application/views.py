@@ -65,6 +65,7 @@ from dw_sales.domain.catalog import (
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.followups import SalesFollowups, due_soon
 from dw_sales.domain.handoffs import Handoff
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
@@ -1334,7 +1335,8 @@ class EvidenceView(BaseModel):
     target_price: Amount | None
     own_history: list[QuotationRowView]
     other_customers: list[QuotationRowView] | Hidden
-    orders: list[OrderedLineView]
+    # None: Bravo is not connected; nobody knows the orders (audit 1).
+    orders: list[OrderedLineView] | None
     lme: LmeView | None
     copper_usd_per_uom: Amount | None
     floor: Amount | None
@@ -1390,16 +1392,20 @@ def evidence(rows: Iterable[PriceEvidence], prices: PriceView) -> list[EvidenceV
                     if prices.other_customers
                     else HIDDEN
                 ),
-                orders=[
-                    OrderedLineView(
-                        so_no=line.so_no,
-                        order_date=line.order_date,
-                        currency=line.currency,
-                        quantity=line.quantity,
-                        unit_price=line.unit_price,
-                    )
-                    for line in row.orders
-                ],
+                orders=(
+                    None
+                    if row.orders is None
+                    else [
+                        OrderedLineView(
+                            so_no=line.so_no,
+                            order_date=line.order_date,
+                            currency=line.currency,
+                            quantity=line.quantity,
+                            unit_price=line.unit_price,
+                        )
+                        for line in row.orders
+                    ]
+                ),
                 lme=_lme(row.lme, True),
                 copper_usd_per_uom=row.copper.usd_per_uom if row.copper else None,
                 floor=row.floor.price if row.floor else None,
@@ -1428,6 +1434,8 @@ class QuoteSummaryView(BaseModel):
     received_at: datetime
     quote_due: date | None
     overdue: bool
+    # "Sắp đến hạn" by the tenant's follow-up policy (audit 15).
+    due_soon: bool
     assigned_to: uuid.UUID | None
     ycbg_no: str | None
     open_findings: int
@@ -1462,6 +1470,9 @@ class QuoteCaseView(BaseModel):
     rfq_date: date | None
     quote_due: date | None
     overdue: bool
+    # "Sắp đến hạn", by the tenant's follow-up policy (`followups.due_soon`):
+    # the page draws the flag and holds no threshold of its own (audit 15).
+    due_soon: bool
     currency: Currency
     # The request's file; None for a request a model read from the mail alone.
     attachment_id: str | None
@@ -1509,7 +1520,15 @@ def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
     return {name: anchor for name, anchor in named.items() if anchor is not None}
 
 
-def quote_summary(case: QuoteCase, assigned_to: uuid.UUID | None, today: date) -> QuoteSummaryView:
+def _due_soon(case: QuoteCase, today: date, followups: SalesFollowups) -> bool:
+    """The quote's due day is "sắp đến hạn" by the tenant's policy (audit 15)."""
+    due = case.request.document.quote_due
+    return due is not None and due_soon(due.value, today, followups)
+
+
+def quote_summary(
+    case: QuoteCase, assigned_to: uuid.UUID | None, today: date, followups: SalesFollowups
+) -> QuoteSummaryView:
     document = case.request.document
     return QuoteSummaryView(
         case_id=case.case_id,
@@ -1520,6 +1539,7 @@ def quote_summary(case: QuoteCase, assigned_to: uuid.UUID | None, today: date) -
         received_at=case.request.received_at,
         quote_due=document.quote_due.value if document.quote_due else None,
         overdue=case.is_overdue(today),
+        due_soon=_due_soon(case, today, followups),
         assigned_to=assigned_to,
         ycbg_no=case.ycbg.ycbg_no if case.ycbg else None,
         open_findings=sum(1 for f in case.findings if f.is_open),
@@ -1532,6 +1552,7 @@ def quote_case(
     assigned_to: uuid.UUID | None,
     release_manifest_ref: str | None,
     today: date,
+    followups: SalesFollowups,
     prices: PriceView,
     evidence_rows: Sequence[PriceEvidence] | None,
     decision: PendingDecisionView | None = None,
@@ -1561,6 +1582,7 @@ def quote_case(
         rfq_date=document.rfq_date.value if document.rfq_date else None,
         quote_due=document.quote_due.value if document.quote_due else None,
         overdue=case.is_overdue(today),
+        due_soon=_due_soon(case, today, followups),
         currency=request.currency,
         attachment_id=request.attachment.attachment_id if request.attachment else None,
         attachment_sha256=request.attachment.sha256 if request.attachment else None,

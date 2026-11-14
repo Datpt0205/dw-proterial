@@ -46,6 +46,7 @@ from dw_sales.application.views import (
 from dw_sales.domain.catalog import LmeBand, LmeMonth
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import LinePrice, PricingDecision, QuoteCase
+from dw_sales.testing.followups import platform_followups, platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -97,6 +98,7 @@ async def _order(message_id: str, kept: _Kept | None = None) -> OrderCase:
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
         cases=kept if kept is not None else _NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
@@ -249,6 +251,7 @@ async def test_a_quote_carries_no_amount_and_no_evidence_without_the_price_scope
         assigned_to=None,
         release_manifest_ref=None,
         today=date(2026, 10, 2),
+        followups=platform_followups(),
         prices=NONE,
         evidence_rows=evidence,
     ).model_dump(mode="json")
@@ -274,6 +277,7 @@ async def test_another_customers_prices_need_their_own_scope() -> None:
         assigned_to=None,
         release_manifest_ref=None,
         today=date(2026, 10, 2),
+        followups=platform_followups(),
         prices=OWN,
         evidence_rows=evidence,
     ).model_dump(mode="json")
@@ -282,6 +286,7 @@ async def test_another_customers_prices_need_their_own_scope() -> None:
         assigned_to=None,
         release_manifest_ref=None,
         today=date(2026, 10, 2),
+        followups=platform_followups(),
         prices=ALL,
         evidence_rows=evidence,
     ).model_dump(mode="json")
@@ -341,6 +346,7 @@ async def test_a_suggested_price_never_reveals_another_customers_price() -> None
             assigned_to=None,
             release_manifest_ref=None,
             today=date(2026, 10, 2),
+            followups=platform_followups(),
             prices=prices,
             evidence_rows=evidence,
         ).model_dump(mode="json")

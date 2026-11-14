@@ -451,11 +451,8 @@ async def test_with_the_switch_off_no_model_is_asked_and_the_message_routes_as_b
 
     seen = await world.process_each(AN, ["M11", "M17", "M31"])
 
-    assert {d.reason for d, _ in seen.values()} == {
-        "delivery_change",
-        "sample_request",
-        "complaint",
-    }
+    # No keyword table gives a reason (audit finding 6): a person reads each.
+    assert {d.reason for d, _ in seen.values()} == {"other"}
     assert all(d.handoff is None for d, _ in seen.values())
     assert not model.calls
 

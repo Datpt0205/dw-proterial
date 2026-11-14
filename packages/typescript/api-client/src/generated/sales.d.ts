@@ -2131,20 +2131,19 @@ export interface components {
         };
         /**
          * CatalogInForceView
-         * @description Where a list's rows come from now: an approved snapshot, or the mock.
+         * @description Where a list's rows come from now: an approved snapshot, the mock, or
+         *     ``none``: no approved snapshot where nothing stands in for one (deployed,
+         *     audit finding 1), and then no ``as_of`` either.
          */
         CatalogInForceView: {
-            /**
-             * As Of
-             * Format: date-time
-             */
-            as_of: string;
+            /** As Of */
+            as_of: string | null;
             snapshot: components["schemas"]["CatalogImportView"] | null;
             /**
              * Source
              * @enum {string}
              */
-            source: "mock" | "file" | "erp";
+            source: "mock" | "file" | "erp" | "none";
         };
         /**
          * CatalogList
@@ -2693,7 +2692,7 @@ export interface components {
             line_no: number;
             lme: components["schemas"]["LmeView"] | null;
             /** Orders */
-            orders: components["schemas"]["OrderedLineView"][];
+            orders: components["schemas"]["OrderedLineView"][] | null;
             /** Other Customers */
             other_customers: components["schemas"]["QuotationRowView"][] | components["schemas"]["Hidden"];
             /** Own History */
@@ -4038,7 +4037,8 @@ export interface components {
         };
         /**
          * PcDatesBody
-         * @description PC's mail as Sales pasted it (AI item 7): read, never stored.
+         * @description PC's mail as Sales pasted it (AI item 7): read, never stored. Its
+         *     limit is DW1's reading limit (`pc_dates.MAX_TEXT`, its one owner).
          */
         PcDatesBody: {
             /** Case Version */
@@ -4087,6 +4087,21 @@ export interface components {
             sender: string;
             /** Subject */
             subject: string;
+        };
+        /**
+         * PcMailsView
+         * @description The mails Sales may have DW1 read, and the longest text DW1 reads, a
+         *     paste's or a mail's: `MAX_TEXT`, served so the paste box holds no copy of
+         *     its own (hardcode audit, finding 22).
+         */
+        PcMailsView: {
+            /** Mails */
+            mails: components["schemas"]["PcMailView"][];
+            /**
+             * Text Max
+             * @default 8000
+             */
+            text_max: number;
         };
         /**
          * PendingDecisionView
@@ -4549,6 +4564,8 @@ export interface components {
             /** Design Replies */
             design_replies: number;
             design_reply: components["schemas"]["DesignReplyView"] | null;
+            /** Due Soon */
+            due_soon: boolean;
             /** Earlier Pricing */
             earlier_pricing: number;
             /** Evidence */
@@ -4720,6 +4737,8 @@ export interface components {
             case_version: number;
             /** Customer Code */
             customer_code: string;
+            /** Due Soon */
+            due_soon: boolean;
             /** Open Findings */
             open_findings: number;
             /** Overdue */
@@ -5791,6 +5810,8 @@ export interface components {
             customer_code: string | null;
             /** Due */
             due: string | null;
+            /** Due Soon */
+            due_soon: boolean;
             /** Id */
             id: string;
             /**
@@ -7636,7 +7657,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PcMailView"][];
+                    "application/json": components["schemas"]["PcMailsView"];
                 };
             };
             /** @description Validation Error */

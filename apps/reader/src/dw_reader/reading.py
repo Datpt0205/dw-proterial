@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 
 from dw_docgen.runner import LIMITS_UNAVAILABLE_EXIT_CODE, run_command
-from dw_reader.files import REQUEST, RESULT
+from dw_reader.files import DEMO_LAYOUTS, REQUEST, RESULT
 from dw_reader.settings import ReaderSettings
 from dw_sales.adapters.reader_wire import Failure, ReaderReply
 
@@ -57,8 +57,10 @@ def read_once(body: bytes, settings: ReaderSettings) -> bytes:
     work = Path(tempfile.mkdtemp(prefix="read-", dir=root))
     try:
         (work / REQUEST).write_bytes(body)
+        # The demo's layouts only where the settings allow them (audit 7).
+        flag = f" {DEMO_LAYOUTS}" if settings.demo_layouts else ""
         ran = run_command(
-            child_command(),
+            f"{child_command()}{flag}",
             cwd=work,
             sink_dir=sink,
             settings=settings,

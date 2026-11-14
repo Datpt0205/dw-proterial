@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 
@@ -26,7 +32,8 @@ afterEach(() => {
 });
 
 function renderIt(onDates = vi.fn()) {
-  if (!pcMails.getMockImplementation()) pcMails.mockResolvedValue([]);
+  if (!pcMails.getMockImplementation())
+    pcMails.mockResolvedValue({ mails: [], text_max: 8000 });
   render(
     <UiProvider>
       <PcDatesReader caseId="c-1" caseVersion={4} onDates={onDates} />
@@ -61,6 +68,16 @@ describe("DW1 đọc ngày giao trong thư PC (AI item 7)", () => {
     );
   });
 
+  it("holds the paste to the limit the API serves, no copy of its own", async () => {
+    // Audit finding 22: the limit's owner is the API (`pc_dates.MAX_TEXT`).
+    pcMails.mockResolvedValue({ mails: [], text_max: 1234 });
+    renderIt();
+    const box = await screen.findByRole("textbox", {
+      name: "Thư trả lời của PC",
+    });
+    await waitFor(() => expect(box.getAttribute("maxlength")).toBe("1234"));
+  });
+
   it("fills nothing when the mail gives no date", async () => {
     readPcDates.mockResolvedValue({ status: "nothing", dates: [], dropped: 0 });
     const onDates = renderIt();
@@ -77,14 +94,17 @@ describe("DW1 đọc ngày giao trong thư PC (AI item 7)", () => {
     const dates = [
       { line_no: 1, delivery: 1, date: "2026-11-10", quote: "10/11/2026" },
     ];
-    pcMails.mockResolvedValue([
-      {
-        message_id: "PC01",
-        sender: "pc@proterial.example",
-        subject: "Re: ngày giao VLX-PO-2609-0118",
-        received_at: "2026-10-28T02:00:00+00:00",
-      },
-    ]);
+    pcMails.mockResolvedValue({
+      mails: [
+        {
+          message_id: "PC01",
+          sender: "pc@proterial.example",
+          subject: "Re: ngày giao VLX-PO-2609-0118",
+          received_at: "2026-10-28T02:00:00+00:00",
+        },
+      ],
+      text_max: 8000,
+    });
     readPcDatesFromMail.mockResolvedValue({
       status: "read",
       dates,

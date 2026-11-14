@@ -500,8 +500,10 @@ def build_sales(
 
     DW1's master data and mailbox are fictional mocks bound to one demo
     (tenant, workspace) (`ApiSettings.sales_demo_scope`); every other scope
-    reads them empty. In a deployed profile without that pair nothing is
-    wired, and the Sales routes answer that no data source is configured.
+    reads them empty. In a deployed profile without that pair, or with the
+    mock mailbox, nothing is wired, and the Sales routes answer that no data
+    source is configured. Where deployed, no list and no ERP read falls back
+    to the mock (audit finding 1): each says "not connected" instead.
 
     DW1 runs on the runtime (dw_sales ADR 0004): its graph and worker
     (`configs/workers/sales.yaml`) are registered here, every `sales.`
@@ -532,6 +534,10 @@ def build_sales(
     demo = settings.sales_demo_scope()
     if demo is None:
         _LOG.warning("sales: no data source configured; /api/v1/sales answers 503")
+        return SalesMount(services=None)
+    if settings.is_deployed and settings.sales_mailbox == "mock":
+        # As Purchasing's: a deployed DW1 never reads the fictional mailbox.
+        _LOG.warning("sales: the mock mailbox is refused when deployed; 503")
         return SalesMount(services=None)
     mount = build_dw1(
         scope=SalesScope(TenantId(demo[0]), WorkspaceId(demo[1])),
@@ -577,6 +583,7 @@ def build_sales(
         ),
         # The mock, or the mail the worker stores from the drop folder
         # (ticket 43); the API reads it, never the folder.
+        deployed=settings.is_deployed,
         mailbox=settings.sales_mailbox,
         outbox_enabled=settings.sales_outbox_enabled,
         source_cache=source_cache,

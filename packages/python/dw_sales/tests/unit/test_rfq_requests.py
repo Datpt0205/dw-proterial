@@ -36,9 +36,10 @@ from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader, ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.case_store import CaseOrigin, Stored
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.quotation import QuotationService, RequestNotExtractedError
-from dw_sales.application.rfq_reading import PROMPT_TOKENS, RFQ_EXTRACTION
+from dw_sales.application.rfq_reading import PROMPT_TOKENS, RFQ_EXTRACTION, RfqModelReader
 from dw_sales.domain.orders import RegionFlag
 from dw_sales.domain.quotes import (
     DesignReply,
@@ -48,6 +49,7 @@ from dw_sales.domain.quotes import (
     QuoteFindingCode,
     price_findings,
 )
+from dw_sales.domain.rfq_reading import AttachmentText, TextPart
 from dw_sales.evals.graders import AN, CALLERS, DIEU, READER
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import (
@@ -59,6 +61,7 @@ from dw_sales.evals.world import (
     measured_gate,
     open_world,
 )
+from dw_sales.testing.followups import platform_followups
 
 pytestmark = pytest.mark.unit
 
@@ -206,7 +209,7 @@ def _service(
         reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=MemoryStore(),
         ledger=catalog,
-        policies=platform_book(POLICIES.quote_rules, POLICIES.pricing),
+        policies=platform_book(POLICIES.quote_rules, POLICIES.pricing, POLICIES.followups),
         requests=requests,
     )
 
@@ -589,6 +592,7 @@ async def test_the_mail_text_and_a_stated_target_are_shown_only_with_prices() ->
             assigned_to=None,
             release_manifest_ref=None,
             today=AT.date(),
+            followups=platform_followups(),
             prices=PriceView(amounts=amounts, other_customers=False),
             evidence_rows=None,
         )
@@ -850,3 +854,38 @@ async def test_a_request_read_from_the_mail_or_a_form_names_where_its_lines_came
     sheets = {a.sheet for item in form.request.document.items for a in item.anchors()}
     assert set(coverage.regions) == sheets
     assert (coverage.lines_read, coverage.model_read) == (len(form.request.document.items), 0)
+
+
+class _PartlyShown:
+    """`AttachmentTextPort` whose file holds more than it shows: a sheet
+    past its last column read (audit finding 10)."""
+
+    async def text_parts(self, content: AttachmentContent, caps: Any) -> AttachmentText:
+        return AttachmentText(
+            (TextPart("A1!RFQ", "Item | Qty\n2C AWG24 | 1200", "A1", content.attachment.sha256),),
+            ("RFQ: after column AZ",),
+        )
+
+
+async def test_a_file_shown_in_part_is_a_persons_and_no_model_is_asked() -> None:
+    """A request read in part would miss lines nobody knows are missing."""
+    asked = Recorded(failure=AssertionError("asked with a file shown in part"))
+    inbox = MockInbox.load(SCOPE)
+    message = await inbox.get_message(SCOPE, "M39")
+    assert message is not None
+    contents = [
+        content
+        for a in message.attachments
+        if (content := await inbox.read_attachment(SCOPE, "M39", a.attachment_id)) is not None
+    ]
+    catalog = MockSalesCatalog.load(SCOPE)
+    customer = (await catalog.customer_by_code(SCOPE, "KMH")).data
+    assert customer is not None and DEMO is not None
+    reader = RfqModelReader(asked, _PartlyShown(), catalog, DescriptionReader(_Down()))
+
+    read = await reader.read(
+        SCOPE, message, contents, customer, DEMO, received_on=message.received_at.date(), run=RUN
+    )
+
+    assert read == "partly_shown"
+    assert not asked.calls

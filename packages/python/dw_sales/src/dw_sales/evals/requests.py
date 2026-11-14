@@ -62,6 +62,7 @@ from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
 from dw_sales.adapters.reader_client import ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.local_time import local_day
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.quotation import RequestNotExtractedError
@@ -79,6 +80,7 @@ from dw_sales.domain.quotes import (
 from dw_sales.evals.intents import _demo_rules, message_of
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+from dw_sales.testing.followups import platform_zone
 
 RECORDED = "evals/fixtures/cases/sales_rfq_recorded.json"
 INTENTS = "evals/fixtures/cases/sales_intent_recorded.json"
@@ -193,7 +195,10 @@ async def read_request(model: Any, spec: Mapping[str, Any]) -> RequestRead | str
     assert customer is not None, spec["id"]
     rules = await _demo_rules().rules(ALPHA)
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
-    return await _reader(model).read(ALPHA, message, contents, customer, rules, run=run)
+    received_on = local_day(message.received_at, platform_zone().zone)
+    return await _reader(model).read(
+        ALPHA, message, contents, customer, rules, received_on=received_on, run=run
+    )
 
 
 # ------------------------------------------------------------ scoring --

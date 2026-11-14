@@ -77,8 +77,6 @@ import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
 import { SendPanel, SIGNABLE } from "./send-panel";
 
-const DAY = 86_400_000;
-
 export default function QuotePage() {
   return (
     <ScopeGate scope={SCOPE.caseRead}>
@@ -272,11 +270,12 @@ function QuoteDetail() {
               ? {
                   value: deadline.absolute,
                   sub: done ? undefined : deadline.relative,
+                  // Due soon is the server's (the tenant's policy).
                   tone: done
                     ? undefined
-                    : deadline.overdue || deadline.leftMs < DAY
+                    : deadline.overdue
                       ? ("err" as const)
-                      : deadline.leftMs < 2 * DAY
+                      : data.due_soon
                         ? ("warn" as const)
                         : undefined,
                 }

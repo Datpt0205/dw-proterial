@@ -183,6 +183,8 @@ def assemble(
     one_call: InterpretationPort | None,
     worker_id: str,
     worker_version: str,
+    # Where deployed, no file is drawn from copy marked mock (audit 11).
+    deployed: bool,
     # Whether the deployment names an outbox share ("Gửi cho khách").
     outbox_enabled: bool = False,
 ) -> SalesAssembly:
@@ -204,9 +206,9 @@ def assemble(
         SalesSpans(telemetry),
         sources,
     )
-    overview = OverviewService(uow, gate, clock, inbox, book, directory, pending)
-    orders = OrderQueries(uow, gate, pending, step_activity)
-    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity)
+    overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
+    orders = OrderQueries(uow, gate, pending, step_activity, book)
+    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity, book)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
@@ -231,9 +233,10 @@ def assemble(
             directory,
             quotation,
             scanner,
+            deployed,
         ),
         master_data=MasterDataService(gate, catalog),
-        worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
+        worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         routed_mail=RoutedMailService(uow, gate, directory, clock, ids),
         layouts=LayoutService(
@@ -274,7 +277,7 @@ def assemble(
             gate, catalog, quotation, one_call, clock, ids, worker_id, worker_version
         ),
         customer_reminders=CustomerReminders(
-            uow, gate, catalog, one_call, clock, ids, worker_id, worker_version
+            uow, gate, catalog, one_call, clock, ids, worker_id, worker_version, book
         ),
         assistant=AssistantService(
             assistant,

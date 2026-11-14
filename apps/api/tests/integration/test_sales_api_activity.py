@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from sales_api_harness import AN, HA, Api
@@ -27,7 +28,7 @@ from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.order_checks import SALES_TIME_ZONE, ModelStep
+from dw_sales.domain.order_checks import ModelStep
 
 pytestmark = pytest.mark.integration
 
@@ -75,7 +76,11 @@ async def _written(api: Api) -> tuple[str, str, str]:
             ]
         )
         await work.commit()
-    return carried["case_id"], left["case_id"], now.astimezone(SALES_TIME_ZONE).date().isoformat()
+    return (
+        carried["case_id"],
+        left["case_id"],
+        now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat(),
+    )
 
 
 async def test_a_count_on_the_activity_page_opens_the_cases_it_counts(api: Api) -> None:

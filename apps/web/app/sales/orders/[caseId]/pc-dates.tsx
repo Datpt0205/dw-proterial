@@ -13,9 +13,6 @@ import { useCachedResource } from "../../../../lib/use-cached-resource";
 type Dates = SalesSchemas["PcDatesView"];
 type PcDate = SalesSchemas["PcDateView"];
 
-/** The longest mail the API reads (`PcDatesBody.text`). */
-const TEXT_MAX = 8000;
-
 /**
  * PC's answer on delivery dates (AI item 7): Sales has DW1 read one of the
  * verified mails naming the order (listed by the server, sender shown), or
@@ -79,12 +76,12 @@ export function PcDatesReader({
       items={[
         {
           key: "pc",
-          label: mails.data?.length
-            ? `Thư nêu đơn này (${mails.data.length}) hoặc dán thư PC để DW1 điền ngày`
+          label: mails.data?.mails.length
+            ? `Thư nêu đơn này (${mails.data.mails.length}) hoặc dán thư PC để DW1 điền ngày`
             : "Dán thư trả lời của PC để DW1 điền ngày",
           children: (
             <Flex vertical gap={8}>
-              {(mails.data ?? []).map((mail) => (
+              {(mails.data?.mails ?? []).map((mail) => (
                 <Flex key={mail.message_id} gap={8} align="center" wrap>
                   <MailOutlined aria-hidden />
                   <Typography.Text>
@@ -103,7 +100,8 @@ export function PcDatesReader({
                 aria-label="Thư trả lời của PC"
                 placeholder="Dán nội dung thư PC trả lời về ngày giao"
                 autoSize={{ minRows: 3, maxRows: 8 }}
-                maxLength={TEXT_MAX}
+                // The longest text DW1 reads, as the API says it.
+                maxLength={mails.data?.text_max}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />

@@ -10,8 +10,14 @@ text is not seen (drawn in its own fill colour, white on no fill, or too small
 to read: `excel.text_unseen`), and a formula with no cached value are
 left out: what a person looking at the file would not see is not part of the
 request, and it is the injection channel (`ai-automation.md`, "What stays
-human"). A scan (no text layer), an encrypted or macro-enabled file, or one
-over the caps gives no text at all, and the request goes to a person.
+human"). An encrypted or macro-enabled file, or one over the caps, gives no
+text at all, and the request goes to a person.
+
+**Nothing a person sees is dropped silently** (hardcode audit, finding 10):
+what is read of a sheet is what the source view shows of it (its row and
+column caps, one owner: `source_view`), and a sheet with content past them,
+or a PDF page with no text layer (a scan, alone or among text pages), is
+named in `AttachmentText.unshown`, which sends the request to a person.
 
 A sheet's text is its rows, top to bottom, each its visible cells left to
 right joined by `` | ``; every cell's place in that text is kept, so a value
@@ -28,25 +34,22 @@ from __future__ import annotations
 import asyncio
 import io
 import re
-from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Final
 
 from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 from pypdf import PdfReader
 
 from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import open_for_viewing, text_unseen
 from dw_sales.adapters.readers.ocr import OcrError, PageOcrPort
+from dw_sales.adapters.source_view import MAX_GRID_COLUMNS, MAX_GRID_ROWS
 from dw_sales.domain.order_checks import IntakeCaps
-from dw_sales.domain.rfq_reading import TextPart, normalised
+from dw_sales.domain.rfq_reading import AttachmentText, TextPart, normalised
 
-# What is read of each sheet, whatever dimensions it declares (as the
-# fixed-label reader).
-_MAX_ROWS: Final = 1000
-_MAX_COLUMNS: Final = 26
 _CELL_JOIN: Final = " | "
 _SPACES = re.compile(r"[ \t]+")
 
@@ -54,28 +57,32 @@ _SPACES = re.compile(r"[ \t]+")
 class AttachmentTexts:
     """Implements `AttachmentTextPort` for text PDFs and .xlsx workbooks."""
 
-    async def text_parts(self, content: AttachmentContent, caps: IntakeCaps) -> Sequence[TextPart]:
+    async def text_parts(self, content: AttachmentContent, caps: IntakeCaps) -> AttachmentText:
         kind = sniff(content.data)
         if content.attachment.size > caps.max_attachment_bytes:
-            return ()
+            return AttachmentText()
         # Parsing is CPU work on a file of the sender's choosing: off the loop.
         if kind == "pdf":
             return await asyncio.to_thread(_pdf_parts, content, caps)
         if kind == "xlsx":
             return await asyncio.to_thread(_sheet_parts, content, caps)
-        return ()
+        return AttachmentText()
 
 
-def _pdf_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]:
+def _pdf_parts(content: AttachmentContent, caps: IntakeCaps) -> AttachmentText:
+    """Each page's text layer; a page with none (a scan) named as unshown."""
     attachment = content.attachment
     try:
         pdf = PdfReader(io.BytesIO(content.data))
         if pdf.is_encrypted or len(pdf.pages) > caps.max_pages:
-            return []
+            return AttachmentText()
         parts = []
+        unshown: list[str] = []
         for number, page in enumerate(pdf.pages, start=1):
             text = _clean(page.extract_text())
-            if text:
+            if not text:
+                unshown.append(f"page {number}")
+            else:
                 parts.append(
                     TextPart(
                         part_id=f"{attachment.attachment_id}#p{number}",
@@ -85,9 +92,9 @@ def _pdf_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]:
                         page=number,
                     )
                 )
-        return parts
+        return AttachmentText(tuple(parts), tuple(unshown))
     except Exception:  # any parser failure on a sender's file: no text
-        return []
+        return AttachmentText()
 
 
 def scanned_parts(
@@ -135,26 +142,28 @@ def scanned_parts(
     return parts
 
 
-def _sheet_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]:
+def _sheet_parts(content: AttachmentContent, caps: IntakeCaps) -> AttachmentText:
     attachment = content.attachment
     try:
         values, _ = open_for_viewing(content.data, caps)
     except ValueError:
-        return []
+        return AttachmentText()
     parts = []
+    unshown: list[str] = []
     for sheet in values.worksheets:
         if sheet.sheet_state != "visible":
             continue
         hidden_columns = {
             index
-            for index in range(1, _MAX_COLUMNS + 1)
+            for index in range(1, MAX_GRID_COLUMNS + 1)
             if sheet.column_dimensions[get_column_letter(index)].hidden
         }
         lines: list[str] = []
         cells: list[tuple[int, int, str]] = []
         offset = 0
-        rows = min(sheet.max_row, _MAX_ROWS)
-        columns = min(sheet.max_column, _MAX_COLUMNS)
+        rows = min(sheet.max_row, MAX_GRID_ROWS)
+        columns = min(sheet.max_column, MAX_GRID_COLUMNS)
+        unshown += _past_the_caps(sheet)
         for row in range(1, rows + 1):
             if sheet.row_dimensions[row].hidden:
                 continue
@@ -187,7 +196,28 @@ def _sheet_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]
                     cells=tuple(cells),
                 )
             )
-    return parts
+    return AttachmentText(tuple(parts), tuple(unshown))
+
+
+def _past_the_caps(sheet: Worksheet) -> list[str]:
+    """Where the sheet holds a value past the rows or columns read: a sheet's
+    declared size alone (a formatted, empty column) is no content."""
+    found: list[str] = []
+    if any(
+        value is not None
+        for row in sheet.iter_rows(min_row=MAX_GRID_ROWS + 1, values_only=True)
+        for value in row
+    ):
+        found.append(f"{sheet.title}: after row {MAX_GRID_ROWS}")
+    if any(
+        value is not None
+        for row in sheet.iter_rows(
+            min_col=MAX_GRID_COLUMNS + 1, max_row=MAX_GRID_ROWS, values_only=True
+        )
+        for value in row
+    ):
+        found.append(f"{sheet.title}: after column {get_column_letter(MAX_GRID_COLUMNS)}")
+    return found
 
 
 def _cell_text(cell: Cell | MergedCell) -> str:

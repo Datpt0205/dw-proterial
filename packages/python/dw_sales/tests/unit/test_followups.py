@@ -29,6 +29,7 @@ from dw_sales.domain.followups import (
     Stage,
     WaitingCase,
     brief_slot,
+    due_soon,
     owed,
 )
 
@@ -391,3 +392,28 @@ def test_your_turn_on_a_quote_says_what_to_do_next(status: str, step: str) -> No
     title, body = reminder_text(PLATFORM, due, MONDAY_8)
     assert title == "Đến lượt bạn: Báo giá PO-1"
     assert body.endswith(step)
+
+
+@pytest.mark.parametrize(
+    ("due", "within", "soon"),
+    [
+        (date(2026, 10, 5), 2, True),  # today
+        (date(2026, 10, 7), 2, True),  # the last day the policy counts
+        (date(2026, 10, 8), 2, False),
+        (date(2026, 10, 8), 3, True),  # a tenant counting three days
+        (date(2026, 10, 4), 2, False),  # past: overdue, not "due soon"
+    ],
+)
+def test_due_soon_is_the_policys_days_and_nothing_else(due: date, within: int, soon: bool) -> None:
+    """Audit finding 15: "sắp đến hạn" is `morning_brief.due_within_days`,
+    decided here for the brief, the work list and the quote page alike; the
+    web holds no threshold of its own."""
+    platform = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy")
+    policy = platform.followups
+    policy = policy.model_copy(
+        update={
+            "morning_brief": policy.morning_brief.model_copy(update={"due_within_days": within})
+        }
+    )
+
+    assert due_soon(due, date(2026, 10, 5), policy) is soon

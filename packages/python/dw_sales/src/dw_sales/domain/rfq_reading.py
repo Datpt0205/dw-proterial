@@ -115,6 +115,19 @@ class ModelRfqReading(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
+class AttachmentText:
+    """The text a model may be shown of one attachment, and what of it a
+    person sees that the text leaves out (hardcode audit, finding 10): rows or
+    columns past what is read of a sheet, a PDF page with no text layer. A
+    reading that leaves something out is never taken as the whole file: the
+    caller sends it to a person (`rfq_reading`'s ``partly_shown``)."""
+
+    parts: tuple[TextPart, ...] = ()
+    # Each place left out, as a person finds it: "Sheet1: after row 1000".
+    unshown: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class TextPart:
     """Text a model is shown, and where its characters are in the original.
 

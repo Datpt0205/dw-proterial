@@ -211,6 +211,7 @@ export function pendingQuote(): Quote {
     rfq_date: "2026-09-30",
     quote_due: "2026-10-07",
     overdue: false,
+    due_soon: false,
     currency: "USD",
     attachment_id: "M10-A1",
     attachment_sha256: SHA,

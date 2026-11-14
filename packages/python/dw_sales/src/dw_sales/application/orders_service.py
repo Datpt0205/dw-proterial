@@ -35,6 +35,7 @@ from dw_sales.application.activity_ports import (
     activity_cases,
 )
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.runs import (
@@ -87,6 +88,8 @@ class OrderQueries:
     decisions: PendingDecisionsPort
     # The step rows a list narrowed by DW1's activity is read through.
     activity: StepActivityReadPort
+    # Where the activity filter's days are counted (audit 14).
+    zones: LocalZonePort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -96,7 +99,7 @@ class OrderQueries:
         scope."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_ORDER)
         scope = sales_scope(context)
-        kept = await activity_cases(self.activity, scope, CaseKind.ORDER, activity)
+        kept = await activity_cases(self.activity, scope, CaseKind.ORDER, activity, self.zones)
         async with self.uow(scope) as work:
             stored = await work.orders.list_all()
         return [

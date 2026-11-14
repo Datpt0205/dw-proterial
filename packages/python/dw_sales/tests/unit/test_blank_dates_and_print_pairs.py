@@ -32,10 +32,10 @@ from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOU
 from dw_sales.adapters.readers.stored import excel_layout, pdf_layout
 from dw_sales.application.access import PriceView
 from dw_sales.application.artifact_content import Value
+from dw_sales.application.local_time import local_day
 from dw_sales.application.order_artifacts import upload_rows
 from dw_sales.application.views import order_case
 from dw_sales.domain.layouts import LayoutMapping
-from dw_sales.domain.order_checks import received_date
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -55,6 +55,7 @@ from dw_sales.domain.orders import (
 from dw_sales.domain.print_pairs import one_po
 from dw_sales.evals.graders import AN, CALLERS, READER
 from dw_sales.evals.world import SampleSet, World, open_world
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
@@ -134,7 +135,8 @@ async def test_m44_reads_line_2_with_no_date_and_is_not_prepared_until_sales_dec
     assert line.po_line.anchors.requested_date.cell_ref == "PO!H11"
     # DW1's proposal: the first day the lead time allows.
     assert line.basis.lead_time_days is not None
-    first_day = received_date(case.received_at) + timedelta(days=line.basis.lead_time_days)
+    received_on = local_day(case.received_at, platform_zone().zone)
+    first_day = received_on + timedelta(days=line.basis.lead_time_days)
     assert line.suggested_delivery_date == first_day
     finding = case.finding(MISSING)
     assert (finding.blocking, finding.is_open, finding.expected) == (True, True, "a date")

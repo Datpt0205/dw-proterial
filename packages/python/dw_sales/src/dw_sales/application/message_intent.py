@@ -32,7 +32,7 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_platform.domain.mail_parts import MessagePart
 from dw_sales.application.order_ports import OrderCaseLookupPort
-from dw_sales.application.ports import SalesCatalogPort, SalesScope
+from dw_sales.application.ports import CatalogNotConnectedError, SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.message_intent import (
     IntentKind,
@@ -124,10 +124,16 @@ class IntentReader:
         a PO (an order case or an ERP order under that PO number) or an open
         YCBG (by its own number or the RFQ number it was raised for). A number
         that is both, or several YCBGs, or nothing, resolves to nothing. With
-        no customer (a sender on no customer's domain) nothing resolves."""
+        no customer (a sender on no customer's domain) nothing resolves; nor
+        with Bravo not connected (`CatalogNotConnectedError`): a number it might
+        hold as a YCBG or an order cannot be told apart, and the message
+        goes to a person unresolved."""
         if customer is None:
             return ()
-        ycbgs = (await self.catalog.open_ycbg(scope)).data
+        try:
+            ycbgs = (await self.catalog.open_ycbg(scope)).data
+        except CatalogNotConnectedError:
+            return ()
         resolved: list[ResolvedReference] = []
         for number in numbers:
             cases = await self.cases.cases_for_po(scope, customer.code, number)

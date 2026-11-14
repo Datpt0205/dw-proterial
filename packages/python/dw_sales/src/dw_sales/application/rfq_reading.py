@@ -43,7 +43,7 @@ from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.anchors import MessageText
 from dw_sales.domain.catalog import Customer, Item
 from dw_sales.domain.descriptions import candidates, read_description
-from dw_sales.domain.order_checks import IntakeCaps, OrderRules, received_date
+from dw_sales.domain.order_checks import IntakeCaps, OrderRules
 from dw_sales.domain.orders import FlaggedValue, RegionFlag
 from dw_sales.domain.quotes import (
     RequestedItem,
@@ -53,6 +53,7 @@ from dw_sales.domain.quotes import (
 )
 from dw_sales.domain.rfq_reading import (
     MAX_LINES_PER_CALL,
+    AttachmentText,
     ModelRfqReading,
     Read,
     TextPart,
@@ -75,16 +76,22 @@ MAX_CALLS: Final = 3
 # Room for up to 15 items (about 120 tokens each) and the request's own.
 _OUTPUT_TOKENS: Final = 2000
 
-NotRead = Literal["too_long", "unavailable", "not_understood", "currency_missing", "several_files"]
+NotRead = Literal[
+    "too_long",
+    "partly_shown",
+    "unavailable",
+    "not_understood",
+    "currency_missing",
+    "several_files",
+]
 
 
 class AttachmentTextPort(Protocol):
     """The text a model may read of one attachment: a PDF's pages, a
-    workbook's visible sheets; nothing for a file no reader opens."""
+    workbook's visible sheets, and what of it a person sees that the text
+    leaves out; nothing for a file no reader opens."""
 
-    async def text_parts(
-        self, content: AttachmentContent, caps: IntakeCaps
-    ) -> Sequence[TextPart]: ...
+    async def text_parts(self, content: AttachmentContent, caps: IntakeCaps) -> AttachmentText: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,12 +125,20 @@ class RfqModelReader:
         customer: Customer,
         rules: OrderRules,
         *,
+        received_on: date,
         run: RunContext,
     ) -> RequestRead | NotRead:
+        """The request a model read, or why none was. ``received_on``: the
+        day it arrived where the tenant works (`local_time`)."""
         body_text = normalised(newest_part(message).text)
         parts = [TextPart("body", body_text, None, text_digest(body_text))]
         for content in contents:
-            parts.extend(await self.texts.text_parts(content, rules.intake))
+            text = await self.texts.text_parts(content, rules.intake)
+            if text.unshown:
+                # A request read in part would miss lines nobody knows are
+                # missing (audit finding 10): a person reads it whole.
+                return "partly_shown"
+            parts.extend(text.parts)
         budget = self.model.max_input_tokens - PROMPT_TOKENS
         pieces = [piece for part in parts for piece in part.pieces(budget, estimated_tokens)]
         if any(estimated_tokens(piece.text) > budget for piece in pieces):
@@ -134,7 +149,6 @@ class RfqModelReader:
         verdict = VerifiedRfq()
         # Each document's notation from all of it, not from one call's pieces.
         documents = notations(parts)
-        received_on = received_date(message.received_at)
         for call in calls:
             inputs = {
                 # Code-built JSON inside the untrusted block: a part cannot

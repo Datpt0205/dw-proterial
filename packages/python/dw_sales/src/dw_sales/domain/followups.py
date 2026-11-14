@@ -424,6 +424,17 @@ class Due:
     notify: tuple[Audience, ...]
 
 
+def due_soon(due: date, today: date, policy: SalesFollowups) -> bool:
+    """Whether a case due on ``due`` is "sắp đến hạn" on ``today`` (the
+    tenant's day): not past, and within `morning_brief.due_within_days`. The
+    one meaning of it: the brief counts by it, and the work list and the
+    quote page show the flag it gives, holding no threshold of their own
+    (hardcode audit, finding 15)."""
+    return today <= due and due.toordinal() <= today.toordinal() + (
+        policy.morning_brief.due_within_days
+    )
+
+
 def deadline_of(due: date, hours: WorkingHours) -> datetime:
     """The end of the due day, local time: the instant a quote is late."""
     return datetime.combine(due + timedelta(days=1), time(0), tzinfo=hours.zone)

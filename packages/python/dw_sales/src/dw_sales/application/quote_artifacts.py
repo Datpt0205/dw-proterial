@@ -223,7 +223,7 @@ def quotation_book(d: QuoteDrafting, *, final: bool) -> tuple[Workbook, str]:
     submission = _submission(d.case)
     document: CustomerQuoteDocument = submission.document
     language = document.addressee.language
-    doc = d.copy.documents.template("quotation", language)
+    doc = d.documents.template("quotation", language)
     heading: list[tuple[str, Value]] = [
         (label(doc, "status"), doc.word("final" if final else "preview")),
         (label(doc, "quote_no"), document.quote_no),

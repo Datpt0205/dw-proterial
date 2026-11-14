@@ -140,7 +140,7 @@ export const ROUTING_ADVICE = {
   portal_notice:
     "Khách báo PO đã có trên cổng của khách, thư không kèm PO: tải PO từ cổng rồi bấm “Tải PO lên” và chọn khách này.",
   other:
-    "Thư không phải PO hay yêu cầu báo giá: đọc thư và xử lý nếu cần, rồi đánh dấu đã xử lý.",
+    "DW1 chưa xếp được thư này vào việc nào: đọc thư và xử lý nếu cần, rồi đánh dấu đã xử lý.",
 } as const;
 
 /** "Processing jobs": where a message's "DW xử lý" stands (ticket 25). */

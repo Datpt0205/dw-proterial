@@ -65,7 +65,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import lane_audit_event, system_actor
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.overview_ports import BUCKETS, Bucket
+from dw_sales.application.overview_ports import BUCKETS, Bucket, FollowupPolicyPort
 from dw_sales.application.overview_service import STATUS_BUCKETS, WHOSE_TURN
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
 from dw_sales.domain.dispositions import CaseKind
@@ -78,6 +78,7 @@ from dw_sales.domain.followups import (
     Stage,
     WaitingCase,
     brief_slot,
+    due_soon,
     owed,
 )
 from dw_sales.domain.quotes import QuoteStatus
@@ -155,12 +156,6 @@ class FollowupStorePort(Protocol):
         """Delete the brief records of days before ``day``: only today's is
         ever asked for. How many went."""
         ...
-
-
-class FollowupPolicyPort(Protocol):
-    """The tenant's follow-up policy in force (`TenantRuleBook.followups`)."""
-
-    async def followups(self, scope: SalesScope) -> SalesFollowups: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,7 +538,6 @@ def brief_of(
     mine = [c for c in cases if person is None or c.assigned_to == person]
     new = [c for c in mine if c.received_at >= slot.since]
     open_ = [(c, b) for c in mine if (b := _bucket(c)) is not None]
-    horizon = slot.day.toordinal() + policy.morning_brief.due_within_days
 
     def count(rows: Sequence[WaitingCase]) -> dict[Bucket, int]:
         found = [b for c in rows if (b := _bucket(c)) is not None]
@@ -558,10 +552,7 @@ def brief_of(
             kind: sum(
                 1
                 for c in dated
-                if c.kind is kind
-                and c.due is not None
-                and slot.day <= c.due
-                and c.due.toordinal() <= horizon
+                if c.kind is kind and c.due is not None and due_soon(c.due, slot.day, policy)
             )
             for kind in CaseKind
         },
@@ -592,7 +583,6 @@ def brief_facts(
     ``person``'s cases (the workspace's for None), overdue first, then due
     soon, then the longest waiting. References and customer codes, never an
     amount or a name."""
-    horizon = slot.day.toordinal() + policy.morning_brief.due_within_days
     mine = [
         (c, b)
         for c in cases
@@ -602,8 +592,10 @@ def brief_facts(
     def rank(row: tuple[WaitingCase, Bucket]) -> tuple[int, str, datetime]:
         case = row[0]
         due = case.due
-        tier = 2 if due is None else 0 if due < slot.day else 1 if due.toordinal() <= horizon else 2
-        return tier, (due.isoformat() if due else "9999"), case.status_since
+        if due is None:
+            return 2, "9999", case.status_since
+        tier = 0 if due < slot.day else 1 if due_soon(due, slot.day, policy) else 2
+        return tier, due.isoformat(), case.status_since
 
     shown = sorted(mine, key=rank)[:BRIEF_CASES]
     return {

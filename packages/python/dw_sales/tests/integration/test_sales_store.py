@@ -37,6 +37,7 @@ from dw_sales.application.case_store import (
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
 from dw_sales.domain.orders import Accepted, Actor, OrderCase, OrderStatus
+from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.integration
 
@@ -204,6 +205,7 @@ async def test_a_corrected_value_reads_back_beside_the_value_as_read(
         inbox=MockInbox.load(scope),
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
+        zones=platform_zone(),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
         cases=SqlOrderCaseLookup(app_sessions),
         new_case_id=uuid.uuid4,

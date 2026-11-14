@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final, Literal, NamedTuple, Self, assert_never, get_args
-from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -60,17 +59,6 @@ from dw_sales.domain.orders import (
 )
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
-
-# Where the received date is counted: the Sales office's own calendar day.
-# The tenant's zone has one owner, `working_hours.time_zone` in its
-# `sales_followups` (`TenantRuleBook.time_zone`), which the overview, the
-# pipeline, quote dates, the assistant and every document already read. This
-# copy is the default that policy ships, left only for the readers built where
-# no rule book reaches yet (audit 14, owed to the wiring in
-# `application/services.py`, `adapters/assembly.py` and `order_intake.py`):
-# the received date and lead-time start here, the activity page's days, the
-# customer reminders and the worker-paused notice. Each names it at its call.
-SALES_TIME_ZONE: Final = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 class PriceRule(BaseModel):
@@ -271,20 +259,17 @@ class OrderRules(BaseModel):
         months = po_date.year * 12 + po_date.month - 1 - self.lme_band.months_before_po_date
         return month_key(date(months // 12, months % 12 + 1, 1))
 
-    def lead_time_start(self, *, po_date: date, received_at: datetime) -> date:
-        """The day a line's lead time is counted from."""
+    def lead_time_start(self, *, po_date: date, received_on: date) -> date:
+        """The day a line's lead time is counted from. ``received_on`` is the
+        day the message arrived where the tenant works: its caller counts it
+        in the tenant's zone (`local_time`), the one owner of that fact."""
         match self.short_lead_time.start:
             case "received_date":
-                return received_date(received_at)
+                return received_on
             case "po_date":
                 return po_date
             case other:
                 assert_never(other)
-
-
-def received_date(received_at: datetime) -> date:
-    """The calendar day a message arrived, in the Sales office's time zone."""
-    return received_at.astimezone(SALES_TIME_ZONE).date()
 
 
 # ----------------------------------------------------------------- mapping --
@@ -408,7 +393,7 @@ def check_line(
     *,
     currency: str,
     po_date: date,
-    received_at: datetime,
+    received_on: date,
     quotation: Quotation | None,
     lme: LmeMonth | None,
     rules: OrderRules,
@@ -523,7 +508,7 @@ def check_line(
 
     run.append("lead_time")
     lead_time, source = _lead_time(item, quotation, rules)
-    earliest = rules.lead_time_start(po_date=po_date, received_at=received_at) + timedelta(
+    earliest = rules.lead_time_start(po_date=po_date, received_on=received_on) + timedelta(
         days=lead_time
     )
     # Per schedule (ticket 21): one finding on the line, naming each date
@@ -738,7 +723,7 @@ def check_customer(
     attributed_by_document: bool,
     authentication: MailAuthentication,
     po_date: date,
-    received_at: datetime,
+    received_on: date,
     rules: OrderRules,
 ) -> tuple[Finding, ...]:
     """Findings about the customer and the sender, in the order shown.
@@ -762,7 +747,7 @@ def check_customer(
         found.append(
             rules.finding(FindingCode.CUSTOMER_TEMPORARY, expected="official", actual="temporary")
         )
-    if compliance := _compliance_finding(customer, po_date, received_date(received_at), rules):
+    if compliance := _compliance_finding(customer, po_date, received_on, rules):
         found.append(compliance)
     if not authentication.verified:
         results = (authentication.spf, authentication.dkim, authentication.dmarc)

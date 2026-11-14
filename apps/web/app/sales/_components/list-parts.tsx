@@ -35,7 +35,6 @@ import { describeActivity } from "../_lib/activity";
  * the four lists read alike (ui-quality §1).
  */
 
-const HOUR = 3_600_000;
 
 // ------------------------------------------------------------ Cần xử lý --
 
@@ -403,29 +402,32 @@ export function Assignee({
 }
 
 /**
- * A date-only deadline as the prototype draws it: time left first, red with
- * a clock inside a day or once passed, amber inside two days, plain beyond;
+ * A date-only deadline: time left first, red with a clock once passed, amber
+ * with a clock while the server calls it due soon (`due_soon`, the tenant's
+ * follow-up policy: the screen holds no threshold of its own), plain beyond;
  * the day itself under it. The words carry the urgency, the colour repeats it.
  */
 export function DueText({
   day,
   now,
+  soon,
   done = false,
 }: {
   day: string;
   now: number;
+  /** The server's "sắp đến hạn" for this case. */
+  soon: boolean;
   /** A finished case shows the day only. */
   done?: boolean;
 }) {
   const { token } = theme.useToken();
   const deadline = dayDeadline(day, now);
   if (!deadline) return <span>{UNKNOWN_TIME}</span>;
-  const colour =
-    deadline.overdue || deadline.leftMs < 24 * HOUR
-      ? token.colorErrorText
-      : deadline.leftMs < 48 * HOUR
-        ? token.colorWarningText
-        : undefined;
+  const colour = deadline.overdue
+    ? token.colorErrorText
+    : soon
+      ? token.colorWarningText
+      : undefined;
   return (
     <span className="flex flex-col items-end text-end">
       {done ? null : (

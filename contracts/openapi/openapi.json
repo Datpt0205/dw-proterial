@@ -2348,12 +2348,19 @@
         "type": "object"
       },
       "CatalogInForceView": {
-        "description": "Where a list's rows come from now: an approved snapshot, or the mock.",
+        "description": "Where a list's rows come from now: an approved snapshot, the mock, or\n``none``: no approved snapshot where nothing stands in for one (deployed,\naudit finding 1), and then no ``as_of`` either.",
         "properties": {
           "as_of": {
-            "format": "date-time",
-            "title": "As Of",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
           },
           "snapshot": {
             "anyOf": [
@@ -2369,7 +2376,8 @@
             "enum": [
               "mock",
               "file",
-              "erp"
+              "erp",
+              "none"
             ],
             "title": "Source",
             "type": "string"
@@ -4781,11 +4789,18 @@
             ]
           },
           "orders": {
-            "items": {
-              "$ref": "#/components/schemas/OrderedLineView"
-            },
-            "title": "Orders",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OrderedLineView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orders"
           },
           "other_customers": {
             "anyOf": [
@@ -11033,7 +11048,7 @@
       },
       "PcDatesBody": {
         "additionalProperties": false,
-        "description": "PC's mail as Sales pasted it (AI item 7): read, never stored.",
+        "description": "PC's mail as Sales pasted it (AI item 7): read, never stored. Its\nlimit is DW1's reading limit (`pc_dates.MAX_TEXT`, its one owner).",
         "properties": {
           "case_version": {
             "minimum": 1.0,
@@ -11136,6 +11151,28 @@
           "received_at"
         ],
         "title": "PcMailView",
+        "type": "object"
+      },
+      "PcMailsView": {
+        "description": "The mails Sales may have DW1 read, and the longest text DW1 reads, a\npaste's or a mail's: `MAX_TEXT`, served so the paste box holds no copy of\nits own (hardcode audit, finding 22).",
+        "properties": {
+          "mails": {
+            "items": {
+              "$ref": "#/components/schemas/PcMailView"
+            },
+            "title": "Mails",
+            "type": "array"
+          },
+          "text_max": {
+            "default": 8000,
+            "title": "Text Max",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mails"
+        ],
+        "title": "PcMailsView",
         "type": "object"
       },
       "PendingDecisionView": {
@@ -13387,6 +13424,10 @@
               }
             ]
           },
+          "due_soon": {
+            "title": "Due Soon",
+            "type": "boolean"
+          },
           "earlier_pricing": {
             "title": "Earlier Pricing",
             "type": "integer"
@@ -13630,6 +13671,7 @@
           "rfq_date",
           "quote_due",
           "overdue",
+          "due_soon",
           "currency",
           "attachment_id",
           "attachment_sha256",
@@ -14033,6 +14075,10 @@
             "title": "Customer Code",
             "type": "string"
           },
+          "due_soon": {
+            "title": "Due Soon",
+            "type": "boolean"
+          },
           "open_findings": {
             "title": "Open Findings",
             "type": "integer"
@@ -14094,6 +14140,7 @@
           "received_at",
           "quote_due",
           "overdue",
+          "due_soon",
           "assigned_to",
           "ycbg_no",
           "open_findings"
@@ -18744,6 +18791,10 @@
             ],
             "title": "Due"
           },
+          "due_soon": {
+            "title": "Due Soon",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -18786,6 +18837,7 @@
           "customer_code",
           "received_at",
           "due",
+          "due_soon",
           "assigned_to"
         ],
         "title": "WorkItem",
@@ -27499,11 +27551,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PcMailView"
-                  },
-                  "title": "Response Pc Mails Api V1 Sales Orders  Case Id  Pc Mails Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/PcMailsView"
                 }
               }
             },

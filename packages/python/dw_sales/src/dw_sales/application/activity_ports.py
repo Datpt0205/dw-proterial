@@ -21,12 +21,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Final, Literal, Protocol
+from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import DomainError
+from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.activity import StepOutcome, StepResult, tally
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.order_checks import SALES_TIME_ZONE, ModelStep
+from dw_sales.domain.order_checks import ModelStep
 
 # Who carried an item: DW1 (its row is automatic) or a person.
 HandledBy = Literal["dw1", "person"]
@@ -95,19 +97,19 @@ class StepActivityReadPort(Protocol):
         ...
 
 
-def day_window(start: date, end: date) -> tuple[datetime, datetime]:
+def day_window(start: date, end: date, zone: ZoneInfo) -> tuple[datetime, datetime]:
     """Local days ``start`` to ``end``, both included, as the instants from
     the first's midnight (included) to the midnight after the last
-    (excluded), Asia/Ho_Chi_Minh. Refuses a window backwards or longer than
-    `MAX_WINDOW_DAYS`."""
+    (excluded), in ``zone``, the tenant's (`local_time`). Refuses a window
+    backwards or longer than `MAX_WINDOW_DAYS`."""
     if start > end or (end - start).days >= MAX_WINDOW_DAYS:
         raise DomainError(
             "the window is from a day to the same or a later day, at most 31 days",
             details={"from": start.isoformat(), "to": end.isoformat()},
         )
     return (
-        datetime.combine(start, time.min, tzinfo=SALES_TIME_ZONE),
-        datetime.combine(end + timedelta(days=1), time.min, tzinfo=SALES_TIME_ZONE),
+        datetime.combine(start, time.min, tzinfo=zone),
+        datetime.combine(end + timedelta(days=1), time.min, tzinfo=zone),
     )
 
 
@@ -124,10 +126,11 @@ class CaseListActivity:
     start: date | None = None
     end: date | None = None
 
-    def rows(self, kind: CaseKind) -> StepRowFilter | None:
-        """The rows a list of ``kind`` narrows to; None when nothing is
-        asked. Refuses (422) a filter that names no step or no window, or
-        names the other lane: an unnamed part is not read as "any"."""
+    def rows(self, kind: CaseKind, zone: ZoneInfo) -> StepRowFilter | None:
+        """The rows a list of ``kind`` narrows to, its days counted in
+        ``zone``; None when nothing is asked. Refuses (422) a filter that
+        names no step or no window, or names the other lane: an unnamed part
+        is not read as "any"."""
         if self == CaseListActivity():
             return None
         if self.step is None or self.start is None or self.end is None:
@@ -140,7 +143,7 @@ class CaseListActivity:
                 "the activity filter is of the other lane",
                 details={"rule": "activity_filter_lane", "lane": self.lane.value},
             )
-        start, end = day_window(self.start, self.end)
+        start, end = day_window(self.start, self.end, zone)
         return StepRowFilter(
             step=self.step,
             lane=kind,
@@ -157,11 +160,14 @@ async def activity_cases(
     scope: SalesScope,
     kind: CaseKind,
     activity: CaseListActivity | None,
+    zones: LocalZonePort,
 ) -> frozenset[uuid.UUID] | None:
-    """The cases of ``kind`` a list keeps under ``activity``; None: the list
-    is not narrowed. The caller has already decided the caller may read the
-    list."""
-    rows = None if activity is None else activity.rows(kind)
+    """The cases of ``kind`` a list keeps under ``activity``, its days
+    counted where the tenant works; None: the list is not narrowed. The
+    caller has already decided the caller may read the list."""
+    if activity is None:
+        return None
+    rows = activity.rows(kind, await zones.time_zone(scope))
     return None if rows is None else await reader.cases(scope, rows)
 
 

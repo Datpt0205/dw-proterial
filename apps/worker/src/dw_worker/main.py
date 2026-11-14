@@ -411,7 +411,8 @@ def build_sales(
     telemetry: TelemetryPort,
 ) -> tuple[Dw1Mount, SalesScope] | None:
     """DW1 over the workspace its mock mailbox is bound to, or None where no
-    mailbox is (a deployed profile without SALES_DEMO_*): the drain of the
+    mailbox is (a deployed profile without SALES_DEMO_*, or with the mock
+    mailbox, which is refused there as the API refuses it): the drain of the
     processing queue "DW xử lý" fills (ticket 25), and, with the host's
     switch on, the mailbox lane (ticket 16).
 
@@ -422,6 +423,9 @@ def build_sales(
     """
     demo = settings.sales_demo_scope()
     if demo is None:
+        return None
+    if settings.is_deployed and settings.sales_mailbox == "mock":
+        # Refused where deployed, as the API refuses it (audit finding 1).
         return None
     scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
     runtime = build_workflow_runtime(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
@@ -464,6 +468,7 @@ def build_sales(
         one_call_model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
         # The mailbox the API reads too (ticket 43), and, for the stored one,
         # the folder this process alone reads into it.
+        deployed=settings.is_deployed,
         mailbox=settings.sales_mailbox,
         mail_drop=_mail_drop_dir(settings),
         outbox_dir=_outbox_dir(settings),

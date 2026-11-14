@@ -137,6 +137,33 @@ def test_build_sales_in_a_deployed_profile_without_the_demo_tenant_mounts_nothin
     assert mount == SalesMount(services=None)
 
 
+@pytest.mark.parametrize("profile", ["uat", "production"])
+def test_a_deployed_dw1_refuses_the_mock_mailbox(profile: str) -> None:
+    """As Purchasing's (audit finding 1): with the demo pair named, a
+    deployed DW1 on the fictional mailbox mounts nothing and answers 503."""
+    unused: Any = object()
+    mount = build_sales(
+        ApiSettings(
+            profile=profile,  # type: ignore[arg-type]
+            sales_demo_tenant_id=str(TENANT),
+            sales_demo_workspace_id=str(WORKSPACE),
+            sales_mailbox="mock",
+        ),
+        session_factory=unused,
+        clock=unused,
+        ids=unused,
+        authorization=ScopeAuthorizationService(),
+        directory=unused,
+        holders=unused,
+        notifications=unused,
+        artifact_bytes=unused,
+        release_manifest_ref=None,
+        runtime=unused,
+        telemetry=unused,
+    )
+    assert mount == SalesMount(services=None)
+
+
 class _Lookup:
     async def find_access(
         self, subject: str, issuer: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID

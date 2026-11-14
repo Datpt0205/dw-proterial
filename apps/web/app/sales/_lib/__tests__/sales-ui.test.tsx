@@ -124,6 +124,32 @@ describe("a hidden amount", () => {
     expect(screen.getAllByText(MASKED_LABEL).length).toBeGreaterThanOrEqual(2);
   });
 
+  it("says the order history is unknown when Bravo is not connected", () => {
+    // Audit finding 1: never "the customer has not ordered this", which an
+    // empty table would say.
+    const quote = pendingQuote();
+    quote.evidence = [
+      {
+        line_no: 1,
+        prv_code: "CB-2005",
+        as_of: "2026-10-02",
+        copper_usd_per_uom: null,
+        floor: null,
+        freight_usd_per_km: null,
+        lme: null,
+        orders: null,
+        own_history: [],
+        other_customers: [],
+        pricing_policy: "sales_pricing@1.0.0",
+        reference_price: null,
+        target_price: null,
+      },
+    ];
+    ui(<EvidencePanel quote={quote} />);
+    expect(screen.getByText(/Chưa đối chiếu Bravo: chưa kết nối/)).toBeTruthy();
+    expect(screen.queryByText(/Khách chưa đặt mã này/)).toBeNull();
+  });
+
   it("locks the whole evidence when the viewer may not read prices", () => {
     const quote = pendingQuote();
     quote.evidence = { hidden: true };

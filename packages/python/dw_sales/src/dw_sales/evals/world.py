@@ -1391,6 +1391,7 @@ def open_world(
         inbox=inbox,
         reader=readers.po,
         quote_forms=readers.forms,
+        zones=book,
         rules=order_rules,
         cases=store,
         new_case_id=ids.new_uuid,
@@ -1404,6 +1405,7 @@ def open_world(
         body_pos=None if model is None else PoBodyReader(model),
         model_steps=readiness,
         uploads=uploads,
+        design_senders=quotation,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()
@@ -1453,6 +1455,8 @@ def open_world(
         one_call=model,
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
+        # The demo: the mock copy draws its files, marked as mock.
+        deployed=False,
         # As a deployment with the outbox share: "Gửi cho khách" is offered.
         outbox_enabled=True,
     )

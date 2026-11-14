@@ -329,3 +329,17 @@ async def test_another_tenant_lists_no_mail_of_ours_and_reads_none() -> None:
         assert len(model.calls) == calls
     finally:
         sample.__exit__(None, None, None)
+
+
+def test_the_routes_limit_is_the_readers_one_owner() -> None:
+    """Audit finding 22: `PcDatesBody.text` reads `MAX_TEXT`, and the paste
+    box reads it from the API (`PcMailsView.text_max`): no third copy."""
+    from pydantic import ValidationError as Invalid
+
+    from dw_sales.application.pc_dates import PcMailsView
+    from dw_sales.presentation.routes import PcDatesBody
+
+    assert PcDatesBody(case_version=1, text="x" * MAX_TEXT).text
+    with pytest.raises(Invalid):
+        PcDatesBody(case_version=1, text="x" * (MAX_TEXT + 1))
+    assert PcMailsView(mails=[]).text_max == MAX_TEXT

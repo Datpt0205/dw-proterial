@@ -54,7 +54,6 @@ type WorkItem = SalesSchemas["WorkItem"];
 
 const TABS = ["all", "order", "quote", "message"] as const;
 const SORTS = ["api", "age", "customer"] as const;
-const SOON_MS = 48 * 3_600_000;
 
 /**
  * Việc cần làm (G22): what is mine to do next, in the order the API sorts it
@@ -178,10 +177,10 @@ function MyWork() {
 
   const items = useMemo(() => work.data ?? [], [work.data]);
   const overdue = items.filter((i) => dayDeadline(i.due, now)?.overdue);
-  const soon = items.filter((i) => {
-    const d = dayDeadline(i.due, now);
-    return d && !d.overdue && d.leftMs < SOON_MS;
-  });
+  // "Sắp đến hạn" is the server's (the tenant's follow-up policy).
+  const soon = items.filter(
+    (i) => i.due_soon && !dayDeadline(i.due, now)?.overdue,
+  );
   const unknownDue = items.filter((i) => i.kind === "quote" && !i.due);
 
   const waiting = useMemo(
@@ -521,5 +520,5 @@ function DueCell({ item, now }: { item: WorkItem; now: number }) {
     ) : (
       <span>Không đặt hạn</span>
     );
-  return <DueText day={item.due} now={now} />;
+  return <DueText day={item.due} now={now} soon={item.due_soon} />;
 }
