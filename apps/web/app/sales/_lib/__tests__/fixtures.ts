@@ -170,6 +170,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     cross_check_stalled: false,
     unapplied_decision: null,
     replies: [],
+    thread_before: [],
     lines: [line],
     ...overrides,
   };
@@ -273,5 +274,6 @@ export function pendingQuote(): Quote {
       approval_type: "sales.quote",
     },
     replies: [],
+    thread_before: [],
   };
 }

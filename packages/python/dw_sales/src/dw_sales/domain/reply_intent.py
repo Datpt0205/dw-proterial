@@ -28,6 +28,7 @@ used:
 from __future__ import annotations
 
 import unicodedata
+import uuid
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self
@@ -121,6 +122,9 @@ class CaseReply(BaseModel):
     linked_to: str = Field(pattern=r"^[!-~]{1,512}$")
     # The model's reading of it, where the tenant's rules asked for one.
     reading: ReplyReading | None = None
+    # Who picked the case, where the thread held several and the reply named
+    # none of them (ticket 24); None where code linked it.
+    picked_by: uuid.UUID | None = None
 
 
 def located_quotes(part: str, spans: tuple[str, ...]) -> tuple[ReplyQuote, ...]:

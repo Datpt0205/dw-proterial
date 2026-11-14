@@ -48,7 +48,13 @@ from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.reply_intent import REPLY_INTENT, ReplyReader
 from dw_sales.application.runs import subject_of
-from dw_sales.application.threads import AskedAbout, ThreadedCase, ThreadLinks, question
+from dw_sales.application.threads import (
+    AskedAbout,
+    ThreadedCase,
+    ThreadIndex,
+    ThreadLinks,
+    question,
+)
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import ModelStep
@@ -497,18 +503,21 @@ async def _linked(
         body_text="Please keep the PO as it is.",
         references=references,
     )
-    return await links.linked_case(scope, reply, customer) is not None
+    return bool(await links.cases(scope, reply, customer))
 
 
 class _Every:
-    """A mailbox listing the same messages to every scope, as a misconfigured
+    """A mailbox answering the same threads to every scope, as a misconfigured
     adapter would: the case log is still read per scope."""
 
     def __init__(self, messages: list[InboundMessage]) -> None:
-        self.messages = messages
+        self.threads = ThreadIndex(messages)
 
-    async def list_messages(self, scope: Any) -> list[InboundMessage]:
-        return self.messages
+    async def get_message(self, scope: Any, message_id: str) -> InboundMessage | None:
+        raise NotImplementedError("not exercised by the cross-tenant grader")
+
+    async def thread_messages(self, scope: Any, message: InboundMessage) -> list[InboundMessage]:
+        return self.threads.thread_of(message)
 
 
 async def _master_data_in_prompt(

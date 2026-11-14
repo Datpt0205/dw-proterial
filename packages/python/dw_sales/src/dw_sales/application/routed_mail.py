@@ -17,6 +17,15 @@ to PC or QA, decided it needs nothing):
 - Each change is one audit row in the change's transaction. The note is the
   person's words, so it stays on the message and the audit row says only
   whether one was left.
+
+**A reply Sales picks the case for** ("Chọn hồ sơ", ticket 24): a reply whose
+mail thread holds several cases of its customer and names none of them is
+routed `reply_to_case` with those cases (`MessageDisposition.thread_cases`).
+Whoever may process the mailbox (`sales.inbox.process`, as "DW xử lý" asks)
+picks one, and only one of those: the message is then attached to it as a
+reply on it, saying who picked it, and leaves Việc cần làm. A case not
+offered is refused (409), whatever the caller sends: the offer is the allowed
+list. The time DW1 processed the message stays as it was.
 """
 
 from __future__ import annotations
@@ -41,7 +50,14 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
 )
 from dw_sales.application.ports import MemberDirectoryPort
-from dw_sales.domain.dispositions import SALES_PIC_POOL, DispositionKind
+from dw_sales.application.views import MessageDispositionView, message_disposition
+from dw_sales.domain.dispositions import (
+    SALES_PIC_POOL,
+    CaseKind,
+    DispositionKind,
+    MessageDisposition,
+)
+from dw_sales.domain.reply_intent import CaseReply
 
 _RESOURCE = "sales_message"
 
@@ -113,6 +129,60 @@ class RoutedMailService:
             await self._write(context, work, message_id, None, "sales.message.reopened")
             await work.commit()
         return _view(message_id, None)
+
+    async def pick_case(
+        self, context: AccessContext, message_id: str, case_id: uuid.UUID
+    ) -> MessageDispositionView:
+        """The reply attached to ``case_id``, one of the cases its thread
+        holds that it was routed with (module docstring): 404 for a message
+        the workspace does not hold, 409 for a case it was not offered."""
+        await self.gate.require(
+            context, SalesScopes.INBOX_PROCESS, resource_type=_RESOURCE, resource_id=message_id
+        )
+        async with self.uow(sales_scope(context)) as work:
+            logged = await work.messages.logged(message_id)
+            if logged is None:
+                raise NotFoundError("no such message", details={"message_id": message_id})
+            routed = logged.disposition
+            offered = routed.thread_case(case_id)
+            if routed.kind is not DispositionKind.ROUTED_TO_SALES or offered is None:
+                raise ConflictError(
+                    "only a case the reply's thread holds is picked for it",
+                    details={"message_id": message_id, "rule": "case_not_offered"},
+                )
+            stored = await (
+                work.orders.get(case_id)
+                if offered.case_kind is CaseKind.ORDER
+                else work.quotes.get(case_id)
+            )
+            if stored is None or stored.case.customer_code != routed.customer_code:
+                raise NotFoundError("no such case", details={"case_id": str(case_id)})
+            picked = MessageDisposition(
+                message_id=message_id,
+                kind=DispositionKind.ATTACHED_TO_CASE,
+                case_kind=offered.case_kind,
+                case_id=offered.case_id,
+                customer_code=routed.customer_code,
+                reading=routed.reading,
+                reply=CaseReply(linked_to=offered.linked_to, picked_by=context.principal_id),
+            )
+            # Refused here when it was processed onto a case meanwhile.
+            await work.messages.record(picked, logged.processed_at)
+            await work.audit.append(
+                AuditEvent(
+                    id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    actor_id=UserId(context.principal_id),
+                    action="sales.message.case_picked",
+                    resource_type=_RESOURCE,
+                    resource_id=message_id,
+                    occurred_at=self.clock.now(),
+                    details={"case_kind": offered.case_kind.value, "case_id": str(case_id)},
+                )
+            )
+            await work.commit()
+        return message_disposition(picked, logged.processed_at)
 
     async def _routed(
         self, context: AccessContext, work: SalesUnitOfWork, message_id: str

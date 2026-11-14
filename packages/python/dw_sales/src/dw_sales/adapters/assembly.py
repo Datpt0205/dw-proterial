@@ -275,11 +275,10 @@ def build_dw1(
         raise ValueError("a drop folder is read into the stored mailbox only")
     # The mock beside the stored mailbox in a demo: what people upload ("Tải
     # PO lên", ticket 18) is stored either way, and read with the mail.
-    inbox = ScannedInbox(
-        stored if mailbox == "stored" else WithUploads(MockInbox.load(scope), stored),
-        scanner,
-        readers.po,
-    )
+    # A thread is read from the mail itself, not through the scanner: listing
+    # one reads no file (ticket 24).
+    mail = stored if mailbox == "stored" else WithUploads(MockInbox.load(scope), stored)
+    inbox = ScannedInbox(mail, scanner, readers.po)
     # The platform's rules, with a tenant's own approved version where it has
     # one (ticket 19): stored, proposed and approved through `/sales/rules`.
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
@@ -352,7 +351,7 @@ def build_dw1(
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
         ),
-        threads=ThreadLinks(uow, inbox),
+        threads=ThreadLinks(uow, mail),
         replies=None if interpretation is None else ReplyReader(interpretation),
         handoffs=(
             None if interpretation is None else HandoffReader(interpretation, catalog, order_cases)
@@ -381,6 +380,7 @@ def build_dw1(
         ids=ids,
         catalog=catalog,
         inbox=inbox,
+        threads=mail,
         intake=intake,
         quotation=quotation,
         files=readers.source,

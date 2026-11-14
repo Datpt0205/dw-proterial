@@ -22,7 +22,7 @@ Three rules shape these ports:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
@@ -253,6 +253,15 @@ class LoggedMessage:
     handled: MessageHandled | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class MessageOnCase:
+    """One case a message is on (`case_created` or `attached_to_case`)."""
+
+    message_id: str
+    case_kind: CaseKind
+    case_id: uuid.UUID
+
+
 # Where a message's processing stands (ticket 25): `sales.processing_jobs`.
 JobStatus = Literal["queued", "running", "done", "failed"]
 # Why a job failed, from a fixed set the table's CHECK holds too:
@@ -448,6 +457,12 @@ class MessageLogPort(Protocol):
 
     async def list_all(self) -> Sequence[LoggedMessage]:
         """Every message with a disposition, newest processed first."""
+        ...
+
+    async def cases_of(self, message_ids: Collection[str]) -> Sequence[MessageOnCase]:
+        """Every case any of ``message_ids`` is on, one entry per message and
+        case (ticket 24): a set of messages, never only one, so a message on
+        several cases (ticket 19) is read here as it is written."""
         ...
 
     async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:

@@ -367,7 +367,13 @@ class _Threads:
     def __init__(self, outcomes: dict[str, IntakeOutcome]) -> None:
         self.outcomes = outcomes
 
-    async def linked_case(
+    async def cases(
+        self, scope: SalesScope, message: InboundMessage, sender: Customer | None
+    ) -> tuple[ThreadedCase, ...]:
+        found = await self._first(scope, message, sender)
+        return () if found is None else (found,)
+
+    async def _first(
         self, scope: SalesScope, message: InboundMessage, sender: Customer | None
     ) -> ThreadedCase | None:
         for other in await INBOX.list_messages(scope):

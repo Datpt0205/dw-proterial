@@ -33,7 +33,7 @@ from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthen
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import PROMPT_TOKENS, REPLY_INTENT, ReplyReader
-from dw_sales.application.threads import ThreadedCase, ThreadLinks
+from dw_sales.application.threads import ThreadedCase, ThreadIndex, ThreadLinks
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
@@ -160,14 +160,15 @@ async def test_a_reply_naming_another_customers_message_is_not_attached() -> Non
     own = _reply("hana.westbrook@norvanta.example", (str(m04.internet_message_id),))
     links = ThreadLinks(world.store, _Listed([m04]))
 
-    assert await links.linked_case(ALPHA, forged, await _customer(world, "QRL")) is None
-    linked = await links.linked_case(ALPHA, own, await _customer(world, "NRV"))
-    assert linked is not None and linked.linked_to == "M04"
+    assert await links.cases(ALPHA, forged, await _customer(world, "QRL")) == ()
+    (linked,) = await links.cases(ALPHA, own, await _customer(world, "NRV"))
+    assert linked.linked_to == "M04"
 
 
-async def test_a_reply_naming_two_cases_or_from_an_unknown_sender_links_nothing() -> None:
+async def test_a_reply_naming_two_cases_finds_both_and_an_unknown_sender_none() -> None:
     """M01 and M08 are two of Velatrix's cases (M08 is a duplicate PO): a
-    reply naming both points at neither."""
+    reply naming both is on a thread holding both, and which one it answers
+    is not the thread's to say (ticket 24)."""
     world = _world()
     await world.process_each(AN, ["M01", "M08"])
     m01 = (await _sample(world, "M01")).model_copy(update={"internet_message_id": "<m1@v.example>"})
@@ -176,11 +177,11 @@ async def test_a_reply_naming_two_cases_or_from_an_unknown_sender_links_nothing(
     vlx = await _customer(world, "VLX")
 
     both = _reply("an.trinh@velatrix.example", ("<m1@v.example>", "<m8@v.example>"))
-    assert await links.linked_case(ALPHA, both, vlx) is None
+    assert [c.linked_to for c in await links.cases(ALPHA, both, vlx)] == ["M01", "M08"]
     one = _reply("an.trinh@velatrix.example", ("<m8@v.example>",))
-    linked = await links.linked_case(ALPHA, one, vlx)
-    assert linked is not None and linked.linked_to == "M08"
-    assert await links.linked_case(ALPHA, one, None) is None
+    (linked,) = await links.cases(ALPHA, one, vlx)
+    assert linked.linked_to == "M08"
+    assert await links.cases(ALPHA, one, None) == ()
 
 
 async def test_another_tenants_log_is_never_read_for_a_thread() -> None:
@@ -194,8 +195,8 @@ async def test_another_tenants_log_is_never_read_for_a_thread() -> None:
     links = ThreadLinks(world.store, _Listed([m04], every_scope=True))
     norvanta = await _customer(world, "NRV")
 
-    assert await links.linked_case(ALPHA, reply, norvanta) is not None
-    assert await links.linked_case(BETA, reply, norvanta) is None
+    assert await links.cases(ALPHA, reply, norvanta) != ()
+    assert await links.cases(BETA, reply, norvanta) == ()
 
 
 # --------------------------------------------------------- the reading --
@@ -439,14 +440,20 @@ def _reply(sender: str, references: tuple[str, ...], *, body: str = "Thanks.") -
 
 
 class _Listed:
-    """A mailbox listing ``messages`` to the demo scope, or to every scope as
-    a misconfigured adapter would (``every_scope``)."""
+    """A mailbox threading ``messages`` (stored in that order) to the demo
+    scope, or to every scope as a misconfigured adapter would
+    (``every_scope``)."""
 
     def __init__(self, messages: list[InboundMessage], *, every_scope: bool = False) -> None:
-        self.messages, self.every_scope = messages, every_scope
+        self.threads, self.every_scope = ThreadIndex(messages), every_scope
 
-    async def list_messages(self, scope: SalesScope) -> list[InboundMessage]:
-        return self.messages if self.every_scope or scope == ALPHA else []
+    async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
+        raise NotImplementedError("not exercised by the reply tests")
+
+    async def thread_messages(
+        self, scope: SalesScope, message: InboundMessage
+    ) -> list[InboundMessage]:
+        return self.threads.thread_of(message) if self.every_scope or scope == ALPHA else []
 
 
 async def _sample(world: World, message_id: str) -> InboundMessage:

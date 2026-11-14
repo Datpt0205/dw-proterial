@@ -22,7 +22,7 @@ are the screen's (CONTEXT.md): a code goes out as its code.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -799,11 +799,35 @@ class OrderCaseView(BaseModel):
     unapplied_decision: UnappliedDecisionView | None
     # The customer's replies its thread headers attached to the case (ticket 32).
     replies: list[CaseReplyView] = []
+    # The messages of its thread(s) received before it opened (ticket 24).
+    thread_before: list[ThreadMessageView] = []
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
     # None for anyone else, since it tells how colleagues read the case.
     unopened_values: list[UnopenedValue] | None = None
+
+
+class ThreadMessageView(BaseModel):
+    """A message of a case's mail thread received before the case opened:
+    the talk before the PO (ticket 24, dw_sales ADR 0009). The mail itself
+    opens in the inbox."""
+
+    model_config = _VIEW
+
+    message_id: str
+    received_at: datetime
+    sender: str
+    subject: str
+
+
+def thread_message(message: InboundMessage) -> ThreadMessageView:
+    return ThreadMessageView(
+        message_id=message.message_id,
+        received_at=message.received_at,
+        sender=message.sender.address,
+        subject=message.subject,
+    )
 
 
 class CaseReplyView(BaseModel):
@@ -828,6 +852,9 @@ class CaseReplyView(BaseModel):
     quotes: list[str]
     prompt: str | None
     proposal: ProposedStep | None
+    # Who picked the case among those the reply's thread holds (ticket 24);
+    # None where code linked it.
+    picked_by: uuid.UUID | None = None
 
 
 def case_replies(
@@ -855,6 +882,7 @@ def case_replies(
                 quotes=[quote.text for quote in reading.quotes] if reading else [],
                 prompt=reading.prompt if reading else None,
                 proposal=proposed_step(case_kind.value, status, reading) if newest else None,
+                picked_by=reply.picked_by,
             )
         )
     return views
@@ -942,6 +970,7 @@ def order_case(
     replies: Sequence[LoggedMessage] = (),
     servings: Sequence[ServedSource] = (),
     cross_checker: bool = False,
+    thread_before: Sequence[InboundMessage] = (),
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1040,6 +1069,7 @@ def order_case(
             else None
         ),
         replies=case_replies(CaseKind.ORDER, case.case_id, case.status.value, replies),
+        thread_before=[thread_message(m) for m in thread_before],
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker
@@ -1515,6 +1545,8 @@ class QuoteCaseView(BaseModel):
     decision: PendingDecisionView | None = None
     # The customer's replies its thread headers attached to the case (ticket 32).
     replies: list[CaseReplyView] = []
+    # The messages of its thread(s) received before it opened (ticket 24).
+    thread_before: list[ThreadMessageView] = []
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -1559,6 +1591,7 @@ def quote_case(
     decision: PendingDecisionView | None = None,
     replies: Sequence[LoggedMessage] = (),
     served: frozenset[SourceRegion] = frozenset(),
+    thread_before: Sequence[InboundMessage] = (),
 ) -> QuoteCaseView:
     """The case for one caller. ``served``: the regions of this case version
     the caller was served (`SourceServedPort.served`); none by default, so
@@ -1751,6 +1784,7 @@ def quote_case(
         evidence=evidence(evidence_rows, prices) if evidence_rows is not None else None,
         decision=decision,
         replies=case_replies(CaseKind.QUOTE, case.case_id, case.status.value, replies),
+        thread_before=[thread_message(m) for m in thread_before],
     )
 
 
@@ -1784,13 +1818,32 @@ class MessageDispositionView(BaseModel):
     handled_at: datetime | None = None
     handled_by: uuid.UUID | None = None
     handled_note: str | None = None
+    # The cases a reply's thread holds when it names none of them, for Sales
+    # to pick one ("Chọn hồ sơ", ticket 24).
+    thread_cases: list[ThreadCaseView] = []
+
+
+class ThreadCaseView(BaseModel):
+    """A case offered for a reply: its kind, id and the number it goes by
+    (the PO's, or the request's)."""
+
+    model_config = _VIEW
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    number: str
 
 
 def message_disposition(
     disposition: MessageDisposition,
     processed_at: datetime | None,
     handled: MessageHandled | None = None,
+    numbers: Mapping[uuid.UUID, str] | None = None,
 ) -> MessageDispositionView:
+    """The disposition as the inbox shows it. ``numbers``: what each case a
+    reply is offered goes by, for those the caller may see; an offered case
+    not in it is left out."""
+    shown = numbers or {}
     return MessageDispositionView(
         kind=disposition.kind.value,
         case_kind=disposition.case_kind,
@@ -1807,6 +1860,11 @@ def message_disposition(
         handled_at=handled.at if handled else None,
         handled_by=handled.by if handled else None,
         handled_note=handled.note if handled else None,
+        thread_cases=[
+            ThreadCaseView(case_kind=c.case_kind, case_id=c.case_id, number=shown[c.case_id])
+            for c in disposition.thread_cases
+            if c.case_id in shown
+        ],
     )
 
 

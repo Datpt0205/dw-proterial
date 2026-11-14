@@ -156,4 +156,41 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
     },
     SLOW,
   );
+
+  it(
+    "shows the customer's mails before the PO, each opening in the inbox, and a picked reply as Sales'",
+    async () => {
+      shown = {
+        ...waiting([
+          reply({
+            outcome: null,
+            kind: null,
+            quotes: [],
+            prompt: null,
+            proposal: null,
+            picked_by: AN,
+          }),
+        ]),
+        thread_before: [
+          {
+            message_id: "T0",
+            received_at: "2026-09-23T01:00:00Z",
+            sender: "hana.westbrook@norvanta.example",
+            subject: "Kế hoạch đặt hàng quý 4",
+          },
+        ],
+      };
+      page();
+
+      const before = await screen.findByRole("region", {
+        name: "Trao đổi trước PO",
+      });
+      expect(before.textContent).toContain("Kế hoạch đặt hàng quý 4");
+      expect(
+        screen.getByRole("link", { name: "Thư T0" }).getAttribute("href"),
+      ).toBe("/sales/inbox?message=T0");
+      expect(screen.getByText("Sales chọn hồ sơ: chưa đọc")).toBeTruthy();
+    },
+    SLOW,
+  );
 });

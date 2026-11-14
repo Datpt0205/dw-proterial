@@ -5,7 +5,7 @@ inside a unit of work's transaction."""
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -21,6 +21,7 @@ from dw_sales.application.case_store import (
     ArtifactRecord,
     LoggedMessage,
     MessageHandled,
+    MessageOnCase,
     ServedSource,
     SourceRegion,
     WorkerState,
@@ -81,6 +82,12 @@ class SqlMessageLog:
                 if disposition.layout_prefill
                 else None
             ),
+            # None, never `[]`: the column's CHECK refuses an empty offer.
+            "thread_cases": (
+                [case.model_dump(mode="json") for case in disposition.thread_cases]
+                if disposition.thread_cases
+                else None
+            ),
             "processed_at": processed_at,
             # Processed again, the message is open again: a mark made on the
             # disposition it replaces does not carry over.
@@ -139,6 +146,26 @@ class SqlMessageLog:
         ).mappings()
         return [logged_message(row) for row in rows]
 
+    async def cases_of(self, message_ids: Collection[str]) -> Sequence[MessageOnCase]:
+        if not message_ids:
+            return []
+        rows = (
+            await self.session.execute(
+                sa.select(_M.c.message_id, _M.c.order_case_id, _M.c.quote_case_id).where(
+                    _M.c.message_id.in_(list(message_ids)),
+                    _M.c.disposition.in_(
+                        [DispositionKind.CASE_CREATED.value, DispositionKind.ATTACHED_TO_CASE.value]
+                    ),
+                )
+            )
+        ).mappings()
+        found: list[MessageOnCase] = []
+        for row in rows:
+            case = _case_of(row)
+            if case is not None:
+                found.append(MessageOnCase(row["message_id"], *case))
+        return found
+
     async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
         written = await self.session.execute(
             sa.update(_M)
@@ -183,6 +210,7 @@ def disposition_of(row: RowMapping) -> MessageDisposition:
             "reply": row["case_reply"],
             "handoff": row["handoff"],
             "layout_prefill": row["layout_prefill"],
+            "thread_cases": row["thread_cases"] or (),
         }
     )
 

@@ -286,6 +286,16 @@ export class SalesApi {
     );
   }
 
+  /** "Chọn hồ sơ" (ticket 24): a reply whose mail thread holds several cases
+   * and names none, attached to the one picked among those it was offered. */
+  pickThreadCase(messageId: string, caseId: string, key: string) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/case">(
+      `/api/v1/sales/inbox/${enc(messageId)}/case`,
+      { case_id: caseId },
+      key,
+    );
+  }
+
   /** A handled message open again, back on its owner's Việc cần làm. */
   reopenMessage(messageId: string, key: string) {
     return this.post<"/api/v1/sales/inbox/{message_id}/reopen">(

@@ -149,8 +149,8 @@ async def test_a_stamp_goes_with_an_upload_id_only(
                 sa.text(
                     "INSERT INTO sales.mailbox_messages (tenant_id, workspace_id, message_id,"
                     " received_at, sender_address, source_name, message, uploaded_by,"
-                    " uploaded_for) VALUES (:t, :w, :id, now(), :s, 'ORD.csv',"
-                    " CAST(:m AS jsonb), CAST(:by AS uuid), :for)"
+                    " uploaded_for, thread_key) VALUES (:t, :w, :id, now(), :s, 'ORD.csv',"
+                    " CAST(:m AS jsonb), CAST(:by AS uuid), :for, :id)"
                 ),
                 {
                     "t": world.alpha.tenant_id.value,

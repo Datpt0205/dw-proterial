@@ -178,6 +178,8 @@ messages = sa.Table(
     sa.Column("case_reply", JSONB(none_as_null=True)),
     sa.Column("handoff", JSONB(none_as_null=True)),
     sa.Column("layout_prefill", JSONB(none_as_null=True)),
+    # The cases a routed reply's thread holds, for Sales to pick (ticket 24).
+    sa.Column("thread_cases", JSONB(none_as_null=True)),
     sa.Column("processed_at", _TS, nullable=False),
     # A routed message a person marked handled (migration `handled`): all
     # three null while it is open.
@@ -463,6 +465,9 @@ mailbox_messages = sa.Table(
     sa.Column("internet_message_id", sa.Text),
     sa.Column("source_name", sa.Text, nullable=False),
     sa.Column("message", JSONB, nullable=False),
+    # The thread it is on, computed when it is stored and never changed
+    # (ticket 24, `dw_sales.application.threads.thread_key`).
+    sa.Column("thread_key", sa.Text, nullable=False),
     sa.Column("stored_at", _TS, nullable=False, server_default=sa.func.now()),
     # A PO a person uploaded ("Tải PO lên", ticket 18): who, and the customer
     # they chose. Null on every mail.

@@ -135,21 +135,28 @@ API and the plan use the English terms. The spec is
   The customer is the sender domain's; a target price the customer states
   is kept as their words only and never reaches price evidence (ticket 29).
 - **Mail thread** (Luồng thư): the messages one Outlook conversation holds,
-  joined by their `Message-ID`, `In-Reply-To` and `References`, within one
-  workspace and one customer. It has no status of its own: a thread holds
-  the talk before a PO and after it, and its cases hold the state. One
-  thread may carry several cases, and one case may be talked about in
-  several threads (dw_sales ADR 0009). Avoid: "conversation case".
+  joined by their `Message-ID`, `In-Reply-To` and `References`: each stored
+  message carries a **thread key**, code's, set when it is stored (the key
+  of the earliest stored message its headers name, else its own Message-ID)
+  and never changed. The key is the workspace's; a thread counts for one
+  customer only, applied where it is read (another customer's mail naming
+  the thread joins none of its cases and shows on none). It has no status
+  of its own: a thread holds the talk before a PO ("Trao đổi trước PO") and
+  after it, and its cases hold the state. One thread may carry several
+  cases, and one case may be talked about in several threads (dw_sales ADR
+  0009). Avoid: "conversation case".
 - **Outgoing message** (Thư Sales gửi): a message in a thread whose sender
   is the member's own address. It never opens a case and never changes a
   value; it tells what Sales asked and when a confirmation left.
 - **Reply in a case's thread** (Khách trả lời trong luồng thư): a message
-  whose `In-Reply-To`/`References` name a message already on a case of the
-  sender's own customer; it is attached to that case (`attached_to_case`)
-  with no model. Where the thread carries several cases, the numbers the
-  message names decide which, else Sales picks. Where the tenant turns it
-  on, a model reads its **thread intents** and the case proposes its next
-  step; Sales takes the step, or another (tickets 32, 24, 27).
+  whose mail thread holds a case of the sender's own customer; it is
+  attached to that case (`attached_to_case`) with no model. Where the thread
+  carries several cases, the numbers the message names decide which (a
+  model reads them, code resolves them), else it is routed `reply_to_case`
+  with those cases offered and Sales picks one ("Chọn hồ sơ"), never
+  another. Where the tenant turns it on, a model reads its **thread
+  intents** and the case proposes its next step; Sales takes the step, or
+  another (tickets 32, 24, 27).
 - **Thread intent** (Ý định của thư): what a message in a thread does, from
   one closed set: `sends_po` (gửi PO), `requests_change` (xin điều chỉnh),
   `cancels` (huỷ), `accepts` (đồng ý), `rejects` (không đồng ý), `asks`
