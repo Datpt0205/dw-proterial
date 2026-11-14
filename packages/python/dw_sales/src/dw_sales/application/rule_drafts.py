@@ -100,10 +100,12 @@ from dw_sales.application.template_reading import (
     ModelBravoMapping,
     Proposal,
     Refused,
+    TemplateHeader,
     TemplateRow,
     header_row,
     mapping_inputs,
     offered,
+    repeated_values,
     verify,
 )
 
@@ -120,13 +122,13 @@ RULE_DRAFT_LANE: Final = "sales_rule_drafts"
 # What the drafting needs, and so all a context it builds carries.
 DRAFT_CEILING: Final = frozenset({SalesScopes.RULES_PROPOSE.value})
 # The prompt a template is mapped with. Its file is
-# `configs/prompts/sales/bravo_template_mapping@1.0.0.yaml`; a test holds the
+# `configs/prompts/sales/bravo_template_mapping@2.0.0.yaml`; a test holds the
 # two together, and a new wording is a new version here and a new file there.
-BRAVO_TEMPLATE_MAPPING: Final = PromptRef("sales.bravo_template_mapping", "1.0.0")
+BRAVO_TEMPLATE_MAPPING: Final = PromptRef("sales.bravo_template_mapping", "2.0.0")
 # What the prompt itself costs, held above its rendered size by a test.
-PROMPT_TOKENS: Final = 1500
-# Fifteen short headers or nulls: about 300 tokens.
-_OUTPUT_TOKENS: Final = 600
+PROMPT_TOKENS: Final = 2500
+# Forty columns of a letter and one short source each: about 1,200 tokens.
+_OUTPUT_TOKENS: Final = 2400
 
 MAX_DRAFT_BYTES: Final = 2 * 1024 * 1024
 DRAFT_EXTENSIONS: Final = (".xlsx", ".xls")
@@ -527,13 +529,14 @@ class RuleDrafting:
         if self.sheets.kind(content) != "xlsx":
             return _failed(draft, "tệp không phải bảng tính Excel")
         try:
-            row = await self._header_row(content)
+            read = await self._header_row(content)
         except DomainError as refused:
             return _failed(draft, _unopened(refused))
-        if row is None:
+        if read is None:
             return _failed(
                 draft, "không tìm thấy hàng tiêu đề: cần một hàng có ít nhất 4 ô tiêu đề hiện"
             )
+        row, repeated = read
         base = (await self.rules.current(scope, draft.rule_key)).policy
         assert isinstance(base, BravoUploadLayout)  # the only key in `DRAFTABLE`
         drafted = draft.model_copy(update={"template": row})
@@ -548,7 +551,7 @@ class RuleDrafting:
         try:
             answer = await self.model.interpret(
                 BRAVO_TEMPLATE_MAPPING,
-                mapping_inputs(row, self.model.max_input_tokens - PROMPT_TOKENS),
+                mapping_inputs(row, repeated, self.model.max_input_tokens - PROMPT_TOKENS),
                 ModelBravoMapping,
                 run=self._run(context, draft),
                 max_output_tokens=_OUTPUT_TOKENS,
@@ -557,7 +560,7 @@ class RuleDrafting:
             return self._without_mapping(stamped, row, base, "unavailable", "model_unavailable")
         except QuotaExceededError:
             return self._without_mapping(stamped, row, base, "unavailable", "model_quota")
-        checked = verify(answer.model_dump(), row, base)
+        checked = verify(answer, row, base, repeated)
         if isinstance(checked, Refused):
             fallback = offered(row, base)
             return _with(stamped, "refused", fallback, (*checked.problems, *fallback.problems))
@@ -648,12 +651,16 @@ class RuleDrafting:
             return None
         return context
 
-    async def _header_row(self, content: bytes) -> TemplateRow | None:
+    async def _header_row(
+        self, content: bytes
+    ) -> tuple[TemplateRow, dict[int, TemplateHeader]] | None:
+        """The first sheet's header row, with the value each column repeats
+        on every filled row below it (`repeated_values`)."""
         for name in (await self.sheets.sheet_names(content))[:MAX_SHEETS]:
             grid = await self.sheets.sheet_grid(content, name)
             row = None if grid is None else header_row(grid)
-            if row is not None:
-                return row
+            if grid is not None and row is not None:
+                return row, repeated_values(grid, row)
         return None
 
     def _run(self, context: AccessContext, draft: RuleDraft) -> RunContext:

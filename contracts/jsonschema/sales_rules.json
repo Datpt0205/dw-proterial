@@ -1,39 +1,131 @@
 {
   "sales_bravo_upload": {
     "$defs": {
-      "UploadColumn": {
+      "BannerCell": {
         "additionalProperties": false,
+        "description": "A text above the header row, merged over columns ``first`` to ``last``\n(1 is A), as the template prints its title and its group labels.",
         "properties": {
-          "field": {
-            "enum": [
-              "customer_code",
-              "po_no",
-              "revision",
-              "po_date",
-              "currency",
-              "line_no",
-              "customer_item_code",
-              "prv_code",
-              "description",
-              "quantity",
-              "uom",
-              "unit_price",
-              "amount",
-              "requested_date",
-              "suggested_delivery_date"
-            ],
-            "title": "Field",
-            "type": "string"
+          "first": {
+            "maximum": 120,
+            "minimum": 1,
+            "title": "First",
+            "type": "integer"
           },
-          "header": {
-            "maxLength": 64,
+          "last": {
+            "maximum": 120,
+            "minimum": 1,
+            "title": "Last",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 200,
             "minLength": 1,
-            "title": "Header",
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Text",
             "type": "string"
           }
         },
         "required": [
-          "field",
+          "text",
+          "first",
+          "last"
+        ],
+        "title": "BannerCell",
+        "type": "object"
+      },
+      "UploadColumn": {
+        "additionalProperties": false,
+        "description": "One column of the upload file, at its place in the template, and where\nits value comes from: a field code computes from the case, an attribute of\nthe customer's master record, or a fixed text; none of the three, and the\ncolumn is blank for the person who pastes (ticket 02: a column change is\ndata, never code). ``number_format`` is the template's own format for the\ncolumn's cells; without one a value prints as it is held.",
+        "properties": {
+          "constant": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Constant"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "order_type",
+                  "delivery_term",
+                  "delivery_mode",
+                  "destination",
+                  "shipment_type"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Customer"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "enum": [
+                  "row_no",
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "received_date",
+                  "currency",
+                  "usd_rate",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field"
+          },
+          "header": {
+            "maxLength": 200,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Header",
+            "type": "string"
+          },
+          "number_format": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Number Format"
+          }
+        },
+        "required": [
           "header"
         ],
         "title": "UploadColumn",
@@ -41,12 +133,25 @@
       }
     },
     "additionalProperties": false,
-    "description": "``configs/policies/sales_bravo_upload@<version>.yaml``.\n\nMOCK until Proterial sends its Bravo import template (requirements doc,\ninputs owed): the file says so, and so does every file made from it.",
+    "description": "``configs/policies/sales_bravo_upload@<version>.yaml``.\n\nSchema 1.0 (the mock layouts 1.0.0 and 1.1.0) is a header row and the\nfields under it. Schema 2.0 (B41, ticket 02) is the template as Bravo's\n\"Import Sales Order\" prints it: the rows above the header row\n(``banner``, an empty row for a row with nothing on it), then the header\nrow, each column at its place with its source, then a row per delivery.\nA 1.0 document has no rows above its headers: one read over a 2.0\nplatform version (`read_over`) is not given the platform's.",
     "properties": {
+      "banner": {
+        "default": [],
+        "items": {
+          "items": {
+            "$ref": "#/$defs/BannerCell"
+          },
+          "type": "array"
+        },
+        "maxItems": 10,
+        "title": "Banner",
+        "type": "array"
+      },
       "columns": {
         "items": {
           "$ref": "#/$defs/UploadColumn"
         },
+        "maxItems": 120,
         "minItems": 1,
         "title": "Columns",
         "type": "array"
@@ -71,7 +176,10 @@
         "type": "string"
       },
       "schema_version": {
-        "const": "1.0",
+        "enum": [
+          "1.0",
+          "2.0"
+        ],
         "title": "Schema Version",
         "type": "string"
       },

@@ -136,7 +136,8 @@ async def test_a_template_is_drafted_from_its_event_and_its_file_dropped(
     view = await _drafted(world, drafts, app_sessions, migrator)
     assert view.status == "ready"
     layout = BravoUploadLayout.model_validate(view.document)
-    assert [c.header for c in layout.columns] == [h for h, f in _TEMPLATE["columns"] if f]
+    # Every column of the template at its place, the one no field takes blank.
+    assert [c.header for c in layout.columns] == [h for h, _ in _TEMPLATE["columns"]]
     assert view.template is not None and view.evidence["sheet_name"] == view.template.span
     assert [p.code for p in view.problems] == ["column_unmapped"]
     left = await _count(

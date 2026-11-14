@@ -23,7 +23,7 @@ from decimal import Decimal
 from email import policy
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Self, cast
+from typing import Any, Self, cast, get_args
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -59,6 +59,7 @@ from dw_sales.adapters.policy_files import (
     load_followups,
     load_pricing,
     load_quote_rules,
+    load_sales_policies,
 )
 from dw_sales.adapters.reader_client import (
     ClientDesignReplyReader,
@@ -73,6 +74,7 @@ from dw_sales.application.artifact_content import (
     PDF,
     XLSX,
     BravoUploadLayout,
+    CustomerAttribute,
     SalesDocumentCopy,
     SalesEmailCopy,
     time_text,
@@ -88,13 +90,14 @@ from dw_sales.application.artifacts_service import (
 )
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
-from dw_sales.application.order_artifacts import portal_checklist
+from dw_sales.application.local_time import local_day
+from dw_sales.application.order_artifacts import bravo_upload, portal_checklist, upload_rows
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService, QuoteRules, ReplyAttached
 from dw_sales.application.rules import Policy, TenantRuleBook
 from dw_sales.application.views import order_line
-from dw_sales.domain.catalog import LmeBand, LmeMonth, Quotation
+from dw_sales.domain.catalog import Customer, LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.orders import (
@@ -1213,12 +1216,13 @@ async def test_the_cross_check_sheet_lists_each_schedule_beside_its_upload_row()
 
 async def test_the_upload_file_prints_the_value_sales_corrected_not_the_value_read() -> None:
     """Ticket 15: a corrected value reaches the upload file; the value as read
-    stays on the line as the evidence."""
+    stays on the line as the evidence. Drawn in a layout that carries no
+    amount: M27's amount was not corrected with its price, and a layout
+    carrying it refuses the file (ticket 02, below)."""
     case = await _uploaded_m27()
-    data = await _one(case, "bravo_upload")
+    rows = _data_rows(await _upload_2(case))
 
-    _header, *rows = _sheet_rows(data)
-    fields = [c.field for c in ARTIFACT_COPY.upload.columns]
+    fields = [c.field for c in UPLOAD_2.columns]
     by_line = {int(row[fields.index("line_no")]): row for row in rows}
     price = fields.index("unit_price")
     assert Decimal(str(by_line[2][price])) == CORRECTED_PRICE
@@ -1664,6 +1668,281 @@ async def test_a_bravo_upload_follows_the_tenants_own_template() -> None:
     # Another tenant still draws the platform's template.
     other = await book.artifact_copy(OTHER, [])
     assert other.upload.ref == ARTIFACT_COPY.upload.ref
+
+
+# ------------------------- Bravo's "Import Sales Order" layout (ticket 02) --
+
+UPLOAD_2 = load_bravo_upload(POLICIES / "sales_bravo_upload@2.0.0.yaml")
+# Rows 1-3 of Bravo's own template (B41's IMPORT PO-TEMP/SalesOrder.xlsx),
+# written out here from the file: Bravo's title, group labels and headers,
+# spellings included, so the shipped layout is checked against a second copy
+# taken from the template, not against itself.
+B41_HEADERS = [
+    "Stt",
+    "Ngày",
+    "Số",
+    "Tiền tệ (VND/USD,..)",
+    "Tỷ giá (Nếu USD thì là 1)",
+    "Type (Loại đơn hàng: Mass/Returned/Sample/SampleFee)",
+    "Mã KH trực tiếp",
+    "Người đại diện",
+    "Mã khách hàng gián tiếp",
+    "người lập",
+    "LME center",
+    "Số PO của KH",
+    "Receipt date",
+    "Delivery term",
+    "Delivery mode",
+    "Destination",
+    "End user",
+    "Shipment type",
+    "PO line",
+    "Mã hàng",
+    "Mã của KH",
+    "Other infomation1",
+    "Other Infomation2",
+    "Other Infomation3",
+    "Other Infomation4",
+    "đvt",
+    "Số lượng",
+    "Unit length",
+    "MOQ",
+    "lead time",
+    "Đơn giá nguyên tệ",
+    "Ngày KH yêu cầu",
+    "Ngày XN giao hàng lần đầu",
+    "Ngày XN giao hàng",
+    "Sales accounting",
+    "Delivery mode",
+    "Delivery term",
+    "Destination",
+    "Invoice Seperation",
+]
+B41_ROWS = [
+    ["File import Sales order", *[None] * 38],
+    ["ĐẦU PHIẾU", *[None] * 17, "CHI TIẾT", *[None] * 20],
+    B41_HEADERS,
+]
+B41_MERGED = {"A1:AM1", "A2:R2", "S2:AM2"}
+# A customer's sales-order values, invented.
+ORDER_TERMS = {
+    "order_type": "Mass",
+    "delivery_term": "DAP",
+    "delivery_mode": "ROAD",
+    "destination": "Kho Bắc Ninh",
+    "shipment_type": "Commercial",
+}
+
+
+async def _upload_2(
+    case: OrderCase, layout: BravoUploadLayout = UPLOAD_2, **customer_values: str
+) -> Any:
+    """The upload file drawn for ``case`` in ``layout``, its customer holding
+    ``customer_values``: the workbook, opened."""
+    customer = (await MockSalesCatalog.load(SCOPE).customer_by_code(SCOPE, case.customer_code)).data
+    assert customer is not None
+    drafting = Drafting(
+        case=case,
+        case_version=case.case_version,
+        customer=customer.model_copy(update=customer_values),
+        people=People({m.user_id: m for m in MEMBERS}),
+        drafter=AN,
+        at=NOW,
+        copy=replace(ARTIFACT_COPY, upload=layout),
+        writer=WRITER,
+        scope=SCOPE,
+    )
+    (rendered,) = bravo_upload(drafting)
+    assert rendered.template_ref == layout.version
+    return load_workbook(io.BytesIO(rendered.data))
+
+
+def _data_rows(book: Any) -> list[list[Any]]:
+    return [[c.value for c in row] for row in book.worksheets[0].iter_rows(min_row=4)]
+
+
+def _with_column(at: int, **source: str) -> BravoUploadLayout:
+    """2.0.0 with the column at ``at`` (0 is A) reading ``source``, as a
+    tenant's version of it."""
+    document = UPLOAD_2.model_dump(mode="json")
+    document["columns"][at] = {"header": document["columns"][at]["header"], **source}
+    return BravoUploadLayout.model_validate({**document, "policy_version": "9.0.1"})
+
+
+async def test_the_upload_file_opens_with_bravos_template_rows_cell_by_cell() -> None:
+    """Acceptance (ticket 02): rows 1-3 are the template's, merged as it
+    merges them, so the rows below paste where Bravo expects them."""
+    case = await _prepared_m01()
+    book = await _upload_2(case)
+
+    sheet = book.worksheets[0]
+    assert (sheet.title, UPLOAD_2.mock) == ("Sheet1", False)
+    assert [[c.value for c in row] for row in sheet.iter_rows(max_row=3)] == B41_ROWS
+    assert {str(merged) for merged in sheet.merged_cells.ranges} == B41_MERGED
+    assert len(_data_rows(book)) == sum(len(upload_rows(case, line)) for line in case.lines)
+    # Not a mock: the file says nothing of one.
+    assert "MOCK" not in "".join(str(c.value) for c in book.worksheets[1]["A"])
+
+
+async def test_each_column_holds_what_its_source_says_and_a_blank_one_nothing() -> None:
+    case = await _prepared_m01()
+    book = await _upload_2(case, UPLOAD_2, **ORDER_TERMS)
+    sheet = book.worksheets[0]
+    received = local_day(case.received_at, ARTIFACT_COPY.zone)
+
+    rows = _data_rows(book)
+    for number, (row, line) in enumerate(zip(rows, case.lines, strict=True), start=1):
+        at = dict(zip(B41_HEADERS, row, strict=False))
+        assert at["Stt"] == number
+        assert at["Tiền tệ (VND/USD,..)"] == case.header.currency
+        assert at["Tỷ giá (Nếu USD thì là 1)"] == (1 if case.header.currency == "USD" else None)
+        assert at["Type (Loại đơn hàng: Mass/Returned/Sample/SampleFee)"] == "Mass"
+        assert at["Mã KH trực tiếp"] == case.customer_code
+        assert at["Số PO của KH"] == case.header.po_no
+        assert at["Receipt date"].date() == received
+        assert row[13:18] == ["DAP", "ROAD", "Kho Bắc Ninh", None, "Commercial"]
+        assert at["PO line"] == line.line_no
+        assert at["Mã của KH"] == line.po_line.customer_item_code
+        assert Decimal(str(at["Số lượng"])) == line.po_line.quantity
+        assert Decimal(str(at["Đơn giá nguyên tệ"])) == line.po_line.unit_price
+        assert at["Ngày KH yêu cầu"].date() == line.po_line.requested_date
+        # Every blank column holds nothing: "Mã hàng" and the rest.
+        blank = [i for i, c in enumerate(UPLOAD_2.columns) if c.blank]
+        assert 19 in blank
+        assert [row[i] for i in blank] == [None] * len(blank)
+    # Dates are dates, written in the template's formats.
+    formats = {sheet.cell(row=4, column=n).number_format for n in (13, 32)}
+    assert formats == {"dd/mm/yyyy"}
+    assert sheet["AA4"].number_format == "#,##0"
+    assert sheet["AE4"].number_format == "#,##0.00000"
+
+
+async def test_a_customer_value_the_list_does_not_hold_leaves_its_column_blank() -> None:
+    rows = _data_rows(await _upload_2(await _prepared_m01()))
+    assert {row[5] for row in rows} == {None}
+    assert {tuple(row[13:18]) for row in rows} == {(None,) * 5}
+
+
+async def test_a_tenant_switching_ma_hang_to_the_prv_code_gets_the_prv_code_there() -> None:
+    case = await _prepared_m01()
+    layout = _with_column(19, field="prv_code")
+
+    rows = _data_rows(await _upload_2(case, layout))
+
+    assert [row[19] for row in rows] == [line.mapping.prv_code for line in case.lines]
+
+
+async def test_a_split_line_is_a_row_per_date_in_bravos_layout() -> None:
+    """Each delivery its own row: its number, the line's PO line, its
+    quantity and its date (1.1.0's rule, kept)."""
+    case = prepared(decided_all(await in_review("M34")))
+
+    rows = _data_rows(await _upload_2(case))
+
+    assert [(r[0], r[18], str(r[26]), r[31].date().isoformat()) for r in rows] == [
+        (1, 1, "6100", "2026-11-16"),
+        (2, 1, "6100", "2026-12-01"),
+        (3, 2, "6000", "2026-11-27"),
+        (4, 3, "1500", "2026-11-27"),
+        (5, 3, "900", "2026-12-11"),
+        (6, 3, "600", "2026-12-28"),
+    ]
+
+
+async def test_an_amount_the_file_carries_is_quantity_times_price_or_no_file() -> None:
+    """Checked before the file is made (ticket 02, acceptance 3): M27's
+    line 2 price was corrected by Sales and its amount was not."""
+    layout = _with_column(16, field="amount")
+    good = await _prepared_m01()
+    rows = _data_rows(await _upload_2(good, layout))
+    assert [Decimal(str(row[16])) for row in rows] == [line.po_line.amount for line in good.lines]
+    case = prepared(decided_all(await typed_all(await in_review("M27"))))
+    line = case.line(2).effective
+    assert line.quantity * line.unit_price != line.amount
+
+    with pytest.raises(ConflictError) as refused:
+        await _upload_2(case, layout)
+
+    assert refused.value.details == {"line": 2, "reason": "upload_amount_mismatch"}
+
+
+async def test_a_value_its_column_would_show_rounded_is_refused() -> None:
+    """A paste copies what a cell shows: a price with places its column's
+    format hides would reach Bravo rounded."""
+    case = await _prepared_m01()
+    assert any(_places(line.po_line.unit_price) > 0 for line in case.lines)
+    layout = _with_column(30, field="unit_price", number_format="#,##0")
+
+    with pytest.raises(ConflictError) as refused:
+        await _upload_2(case, layout)
+
+    assert refused.value.details["reason"] == "upload_value_rounded"
+    assert refused.value.details["column"] == "Đơn giá nguyên tệ"
+
+
+def _places(value: Decimal) -> int:
+    exponent = value.normalize().as_tuple().exponent
+    assert isinstance(exponent, int)
+    return max(0, -exponent)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"field": "voucher_no"},
+        {"customer": "credit_limit"},
+        {"formula": "=A1"},
+        {"field": "uom", "customer": "destination"},
+        {"field": "quantity"},
+    ],
+    ids=["unknown_field", "unknown_customer_value", "unknown_source", "two_sources", "field_twice"],
+)
+def test_a_layout_column_with_a_source_outside_the_closed_set_is_refused(
+    change: dict[str, str],
+) -> None:
+    document = UPLOAD_2.model_dump(mode="json")
+    document["columns"][1] = {"header": "Ngày", **change}
+    with pytest.raises(ValidationError):
+        BravoUploadLayout.model_validate(document)
+
+
+def test_a_layout_that_names_no_item_or_overlaps_its_banner_is_refused() -> None:
+    document = UPLOAD_2.model_dump(mode="json")
+    no_item = [
+        {"header": c["header"]} if c.get("field") == "customer_item_code" else c
+        for c in document["columns"]
+    ]
+    with pytest.raises(ValidationError, match="names the PO"):
+        BravoUploadLayout.model_validate({**document, "columns": no_item})
+    for banner in (
+        [[{"text": "x", "first": 1, "last": 40}]],
+        [[{"text": "x", "first": 1, "last": 5}, {"text": "y", "first": 5, "last": 6}]],
+    ):
+        with pytest.raises(ValidationError, match="banner"):
+            BravoUploadLayout.model_validate({**document, "banner": banner})
+
+
+async def test_a_customer_value_that_reads_like_a_formula_is_written_as_text() -> None:
+    """The customer list is data a person typed (G29): never a formula."""
+    book = await _upload_2(await _prepared_m01(), UPLOAD_2, delivery_term="=HYPERLINK(1)")
+    cell = book.worksheets[0]["N4"]
+    assert (cell.value, cell.data_type, cell.quotePrefix) == ("=HYPERLINK(1)", "s", True)
+
+
+def test_a_layout_written_before_schema_2_is_not_given_the_platforms_banner() -> None:
+    """`read_over` tops a released document up with the platform's current
+    version; the rows above the header row are not topped up, or 1.1.0's
+    files would gain Bravo's title rows and every row would move down."""
+    shipped = load_sales_policies(POLICIES, COPY)
+    assert shipped.upload.banner
+    for ref in ("sales_bravo_upload@1.0.0", "sales_bravo_upload@1.1.0"):
+        released = shipped.released[ref]
+        assert isinstance(released, BravoUploadLayout)
+        assert (released.schema_version, released.banner) == ("1.0", ())
+
+
+def test_every_customer_value_a_column_may_read_is_on_the_customer_record() -> None:
+    assert set(get_args(CustomerAttribute)) <= set(Customer.model_fields)
 
 
 async def test_the_send_draft_attaches_the_final_files_drawn_before_a_new_documents_copy() -> None:

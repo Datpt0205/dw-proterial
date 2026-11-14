@@ -261,8 +261,11 @@ API and the plan use the English terms. The spec is
   is priced by JP & HQ, not by Sales (production ticket 05).
 - **Paste sheet** (File SalesOrder): the rows Sales pastes into Bravo's
   "Đơn đặt hàng bán" grid, one row per delivery date, in the layout of the
-  tenant's `sales_bravo_upload` version. DW1 makes it; a person pastes it.
-  Was "Bravo upload file" while the layout was a mock.
+  tenant's `sales_bravo_upload` version (2.0.0: Bravo's "Import Sales
+  Order" template, rows 1–3 as it prints them). Each column reads one
+  source: a value code computes from the case, a value of the customer's
+  record, a fixed text, or none (left blank for the person). DW1 makes it;
+  a person pastes it. Was "Bravo upload file" while the layout was a mock.
 - **SO number** (SO order): Bravo's number for a sales order, `SO` + yymm +
   sequence (`SO2611-000161`); one per customer PO as far as seen. Kept on
   the order case as `bravo_so_no`.

@@ -5,30 +5,44 @@ The person uploads the Excel template their Bravo imports; DW1 proposes a
 `sales_bravo_upload` version from it, which the person reviews and sends
 through the rules editor like any other proposal (`rules.SalesRulesService`).
 This module is the part that decides, and it decides in code (dw_sales ADR
-0005): the model only says which template column holds which upload field.
+0005): the model only says, column by column, where a column's value comes
+from.
 
 - **What is read** (`header_row`): the first visible sheet with a row of at
   least `MIN_HEADERS` visible text cells; that row is the template's header
-  row, its cells in column order. A hidden sheet, row or column, and a cell
-  whose text cannot be seen (its font the colour of its fill, white on no
-  fill, or 2pt and smaller: `text_unseen`, which the reader sandbox sets) are
-  dropped before anything else: a person reviewing the template cannot see
-  them, so an instruction hidden there never reaches the model (`visible`).
-- **What the model is asked** (`ModelBravoMapping`, one optional header per
-  `UploadField`, built from that list so the two cannot drift): which header
-  names which field, copied exactly, or null.
-- **What code accepts** (`verify`): every header the model names is exactly
-  one visible cell of the header row (both NFC, without surrounding spaces:
-  `plain`; the document holds the cell's own text so), a header no longer
-  than a layout holds (`HEADER_LIMIT`), no cell is named for two fields, the
-  fields every upload needs are named (`REQUIRED_UPLOAD_FIELDS`), the columns
-  come in the template's own order, the sheet is the one read, and the whole
-  document passes `BravoUploadLayout`. Anything else is refused, with the
-  fields named and never a word of the model's.
+  row, its cells in column order, and the visible text of each row above it
+  (a title, group labels: Bravo's "Import Sales Order" prints both above row
+  3). A hidden sheet, row or column, and a cell whose text cannot be seen
+  (its font the colour of its fill, white on no fill, or 2pt and smaller:
+  `text_unseen`, which the reader sandbox sets) are dropped before anything
+  else: a person reviewing the template cannot see them, so an instruction
+  hidden there never reaches the model (`visible`). Below the header row,
+  a column whose filled rows all hold one visible value has that value read
+  too (`repeated_values`): what a fixed value can be taken from.
+- **What the model is asked** (`ModelBravoMapping`): for each column, by its
+  letter, one source: a field code computes (`UploadField`), a value of the
+  customer's record (`CustomerAttribute`), or a fixed text; a column it does
+  not name is left blank. Columns are named by letter, never by header: a
+  template prints the same header twice (Bravo's repeats "Delivery mode",
+  "Delivery term" and "Destination" at line level), and a header names no
+  one column.
+- **What code accepts** (`verify`): every column the model names is a
+  visible cell of the header row, named once, with at most one source; a
+  fixed text is the value every filled row of that column holds; no field
+  is two columns; the fields every upload needs are named
+  (`REQUIRED_UPLOAD_FIELDS`, and the item by one of `UPLOAD_ITEM_FIELDS`);
+  the sheet is the one read; and the whole document passes
+  `BravoUploadLayout`. Anything else is refused, with the fields and cells
+  named and never a word of the model's.
+- **What is drafted**: every column at its place in the template, from A to
+  the last header (a column with no visible header is blank and headless),
+  the rows above the header row as the layout's ``banner``, each text over
+  the columns up to the next one's, and each column's number format as the
+  version in force has it for the same source.
 - **What the person is shown**: each value the machine filled is listed by
   its document path (`machine_read`) with the cell it came from
-  (`evidence`, ``Sheet!C1``); template columns no field takes are listed as
-  problems, since a layout cannot hold a blank column yet (open).
+  (`evidence`, ``Sheet!C1``); a template column left blank is listed, for
+  the person to check it is meant to be.
 """
 
 from __future__ import annotations
@@ -39,15 +53,17 @@ import unicodedata
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, Literal, get_args
+from typing import Any, Final, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.model.interpretation import estimated_tokens
 from dw_sales.application.artifact_content import (
     REQUIRED_UPLOAD_FIELDS,
     UPLOAD_HEADER_MAX,
+    UPLOAD_ITEM_FIELDS,
     BravoUploadLayout,
+    CustomerAttribute,
     UploadField,
 )
 from dw_sales.application.source import SheetCell, SheetGrid
@@ -59,15 +75,20 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 MIN_HEADERS: Final = 4
 # How many sheets of a workbook are looked at for a header row.
 MAX_SHEETS: Final = 10
-# The longest header a layout may hold (`UploadColumn.header`): a longer one is
-# sent cut to it, and a mapping naming it is refused as `header_too_long`.
+# The longest header a layout may hold: a longer one is refused as
+# `header_too_long`.
 HEADER_LIMIT: Final = UPLOAD_HEADER_MAX
+# How much of a header or a value the model is shown at most; less when the
+# template is too long for the model's input (`mapping_inputs`).
+SHOWN_LIMIT: Final = 64
 
 UPLOAD_FIELDS: Final[tuple[UploadField, ...]] = get_args(UploadField)
+CUSTOMER_ATTRIBUTES: Final[tuple[CustomerAttribute, ...]] = get_args(CustomerAttribute)
 
 
 class TemplateHeader(BaseModel):
-    """One visible cell of the header row, as the workbook holds it."""
+    """One visible cell of the header row (or a row above it), as the
+    workbook holds it."""
 
     model_config = _FROZEN
 
@@ -77,13 +98,16 @@ class TemplateHeader(BaseModel):
 
 
 class TemplateRow(BaseModel):
-    """The template's header row: its sheet, its row number, its cells."""
+    """The template's header row: its sheet, its row number, its cells, and
+    the visible cells of each row above it, from row 1 (an empty tuple for a
+    row with none)."""
 
     model_config = _FROZEN
 
     sheet: str = Field(min_length=1, max_length=200)
     row: int = Field(ge=1)
     headers: tuple[TemplateHeader, ...] = Field(min_length=MIN_HEADERS)
+    above: tuple[tuple[TemplateHeader, ...], ...] = ()
 
     def at(self, header: TemplateHeader) -> str:
         """Where a value was read: ``Sheet!C1``."""
@@ -107,53 +131,97 @@ def visible(cell: SheetCell) -> bool:
     return not (cell.hidden_row or cell.hidden_column or cell.font_matches_fill or cell.text_unseen)
 
 
-def header_row(grid: SheetGrid) -> TemplateRow | None:
-    """The first row of a visible sheet with `MIN_HEADERS` visible text
-    cells, or None. Hidden cells are dropped first (module docstring)."""
-    if grid.hidden_sheet:
-        return None
+def _shown(grid: SheetGrid) -> dict[int, list[SheetCell]]:
+    """The visible text cells of a sheet, by row, each row in column order."""
     rows: dict[int, list[SheetCell]] = {}
     for cell in grid.cells:
         if visible(cell) and cell.text.strip():
             rows.setdefault(cell.row, []).append(cell)
+    return {number: sorted(cells, key=lambda c: c.column) for number, cells in rows.items()}
+
+
+def _header(cell: SheetCell) -> TemplateHeader:
+    return TemplateHeader(ref=cell.ref, column=cell.column, text=cell.text[:2000])
+
+
+def header_row(grid: SheetGrid) -> TemplateRow | None:
+    """The first row of a visible sheet with `MIN_HEADERS` visible text
+    cells, with the rows above it, or None. Hidden cells are dropped first
+    (module docstring)."""
+    if grid.hidden_sheet:
+        return None
+    rows = _shown(grid)
     for number in sorted(rows):
-        cells = sorted(rows[number], key=lambda c: c.column)
-        if len(cells) >= MIN_HEADERS:
+        if len(rows[number]) >= MIN_HEADERS:
             return TemplateRow(
                 sheet=grid.sheet,
                 row=number,
-                headers=tuple(
-                    TemplateHeader(ref=c.ref, column=c.column, text=c.text[:2000]) for c in cells
+                headers=tuple(_header(c) for c in rows[number]),
+                above=tuple(
+                    tuple(_header(c) for c in rows.get(above, ())) for above in range(1, number)
                 ),
             )
     return None
 
 
+def repeated_values(grid: SheetGrid, row: TemplateRow) -> dict[int, TemplateHeader]:
+    """By column, the one value every filled row below the header row holds
+    in it, where they hold one (the first such cell, to cite): what a fixed
+    value of the column can be read from. Hidden cells are dropped first."""
+    seen: dict[int, list[SheetCell]] = {}
+    for number, cells in _shown(grid).items():
+        if number > row.row:
+            for cell in cells:
+                seen.setdefault(cell.column, []).append(cell)
+    return {
+        column: _header(cells[0])
+        for column, cells in seen.items()
+        if len({plain(c.text) for c in cells}) == 1 and len(plain(cells[0].text)) <= HEADER_LIMIT
+    }
+
+
 # ------------------------------------------------------------- the model --
 
-_Header = Annotated[str, Field(max_length=200)]
 
-# One optional header per upload field, built from `UploadField` itself: a
-# field added there is asked here without a second list to forget.
-_ASKED: Final[dict[str, Any]] = dict.fromkeys(UPLOAD_FIELDS, (_Header | None, None))
-ModelBravoMapping: Final[type[BaseModel]] = create_model(
-    "ModelBravoMapping", __config__=_FROZEN, **_ASKED
-)
+class ModelColumnSource(BaseModel):
+    """One template column, by its letter, and where its value comes from:
+    at most one of the three; none leaves it blank."""
+
+    model_config = _FROZEN
+
+    column: str = Field(pattern=r"^[A-Z]{1,3}$")
+    field: UploadField | None = None
+    customer: CustomerAttribute | None = None
+    constant: str | None = Field(default=None, max_length=HEADER_LIMIT)
+
+
+class ModelBravoMapping(BaseModel):
+    """The model's answer: the columns it gives a source, by letter."""
+
+    model_config = _FROZEN
+
+    columns: tuple[ModelColumnSource, ...] = Field(default=(), max_length=200)
 
 
 def _letters(ref: str) -> str:
     return re.sub(r"\d", "", ref)
 
 
-def mapping_inputs(row: TemplateRow, room: int) -> dict[str, str]:
-    """The header row as code-built JSON, each header cut to fit ``room``
-    tokens (at most `HEADER_LIMIT` characters, the longest a layout holds)."""
-    width = HEADER_LIMIT
+def mapping_inputs(
+    row: TemplateRow, repeated: Mapping[int, TemplateHeader], room: int
+) -> dict[str, str]:
+    """The header row as code-built JSON, a column's repeated value beside
+    its header, each text cut to fit ``room`` tokens (at most `SHOWN_LIMIT`
+    characters)."""
+    width = SHOWN_LIMIT
     while True:
-        headers = json.dumps(
-            [{"column": _letters(h.ref), "header": plain(h.text)[:width]} for h in row.headers],
-            ensure_ascii=False,
-        )
+        shown: list[dict[str, str]] = []
+        for header in row.headers:
+            column = {"column": _letters(header.ref), "header": plain(header.text)[:width]}
+            if (value := repeated.get(header.column)) is not None:
+                column["every_row"] = plain(value.text)[:width]
+            shown.append(column)
+        headers = json.dumps(shown, ensure_ascii=False)
         if estimated_tokens(headers) <= room or width <= 16:
             return {"headers": headers}
         width //= 2
@@ -162,16 +230,25 @@ def mapping_inputs(row: TemplateRow, room: int) -> dict[str, str]:
 # ---------------------------------------------------------- verification --
 
 ProblemCode = Literal[
-    # A template column no upload field takes (a layout has no blank column).
+    # A template column no source was given: left blank in the draft, for the
+    # person to check it is meant to be.
     "column_unmapped",
-    # The model named a header the header row does not hold, exactly.
+    # The model named a column the header row does not have.
     "header_not_in_template",
     # The header is longer than a layout's column holds (`HEADER_LIMIT`).
     "header_too_long",
-    # The header the model named is printed on two columns.
+    # A draft of the first layout schema named a header printed twice; kept
+    # so a draft stored before 2.0 still reads.
     "header_ambiguous",
-    # Two fields were given the same column.
+    # A column was answered twice.
     "header_twice",
+    # One field was given to two columns.
+    "field_twice",
+    # A column was given more than one source.
+    "source_invalid",
+    # A fixed value that is not the value every filled row of its column
+    # holds in the template.
+    "constant_not_in_template",
     # A field every upload needs was given no column.
     "required_missing",
     # The proposal is no valid layout (`where`: the path that failed).
@@ -227,57 +304,135 @@ def _base(layout: BravoUploadLayout) -> dict[str, Any]:
     return layout.model_dump(mode="json", by_alias=True)
 
 
-def _names(asked: str, header: TemplateHeader) -> bool:
-    """Whether ``asked`` is this cell's header: its whole text, or, for one
-    longer than a layout holds, the part of it the model was shown."""
-    text = plain(header.text)
-    return asked == text or (len(text) > HEADER_LIMIT and asked == text[:HEADER_LIMIT].strip())
+def _source(entry: ModelColumnSource) -> dict[str, str]:
+    """The sources an answer gives one column, an empty text read as none."""
+    given = {
+        "field": entry.field,
+        "customer": entry.customer,
+        "constant": plain(entry.constant) if entry.constant is not None else None,
+    }
+    return {kind: value for kind, value in given.items() if value}
 
 
-def verify(
-    answer: Mapping[str, object], row: TemplateRow, base: BravoUploadLayout
-) -> Proposal | Refused:
-    """The model's mapping as a layout code accepts, or refused (module
-    docstring). An empty header is read as none."""
+def _sources(
+    answer: ModelBravoMapping, row: TemplateRow, repeated: Mapping[int, TemplateHeader]
+) -> tuple[dict[int, dict[str, str]], list[DraftProblem]]:
+    """Each named column's one source, by column number, and what is wrong
+    with the answer column by column."""
+    cells = {_letters(h.ref): h for h in row.headers}
+    answered = Counter(entry.column for entry in answer.columns)
     problems: list[DraftProblem] = []
-    chosen: dict[UploadField, TemplateHeader] = {}
-    named: set[UploadField] = set()
-    for name in UPLOAD_FIELDS:
-        header = answer.get(name)
-        asked = plain(header) if isinstance(header, str) else ""
-        if not asked:
+    chosen: dict[int, dict[str, str]] = {}
+    for entry in answer.columns:
+        source, cell = _source(entry), cells.get(entry.column)
+        if cell is None:
+            if source:
+                problems.append(
+                    DraftProblem(code="header_not_in_template", field=entry.field, ref=entry.column)
+                )
             continue
-        named.add(name)
-        found = [h for h in row.headers if _names(asked, h)]
-        if not found:
-            problems.append(DraftProblem(code="header_not_in_template", field=name))
-        elif len(found) > 1:
-            problems.append(DraftProblem(code="header_ambiguous", field=name))
-        elif len(plain(found[0].text)) > HEADER_LIMIT:
-            problems.append(DraftProblem(code="header_too_long", field=name, ref=found[0].ref))
-        else:
-            chosen[name] = found[0]
-    taken = Counter(cell.ref for cell in chosen.values())
+        if answered[entry.column] > 1:
+            problems.append(DraftProblem(code="header_twice", field=entry.field, ref=cell.ref))
+        elif len(source) > 1:
+            problems.append(DraftProblem(code="source_invalid", field=entry.field, ref=cell.ref))
+        elif "constant" in source and (
+            (fixed := repeated.get(cell.column)) is None or plain(fixed.text) != source["constant"]
+        ):
+            problems.append(DraftProblem(code="constant_not_in_template", ref=cell.ref))
+        elif source:
+            chosen[cell.column] = source
+    fields = Counter(s["field"] for s in chosen.values() if "field" in s)
     problems += [
-        DraftProblem(code="header_twice", field=name, ref=cell.ref)
-        for name, cell in chosen.items()
-        if taken[cell.ref] > 1
+        DraftProblem.model_validate({"code": "field_twice", "field": name})
+        for name, count in fields.items()
+        if count > 1
     ]
+    named = set(fields)
     problems += [
         DraftProblem(code="required_missing", field=name)
         for name in UPLOAD_FIELDS
         if name in REQUIRED_UPLOAD_FIELDS and name not in named
     ]
+    if not named & UPLOAD_ITEM_FIELDS:
+        problems.append(DraftProblem(code="required_missing", field="customer_item_code"))
+    problems += [
+        DraftProblem(code="header_too_long", ref=h.ref)
+        for h in row.headers
+        if len(plain(h.text)) > HEADER_LIMIT
+    ]
+    return chosen, list(dict.fromkeys(problems))
+
+
+def _banner(row: TemplateRow, width: int) -> list[list[dict[str, Any]]]:
+    """The rows above the header row, each text merged up to the next one."""
+    banner: list[list[dict[str, Any]]] = []
+    for cells in row.above:
+        ends = [c.column - 1 for c in cells[1:]] + [width] if cells else []
+        banner.append(
+            [
+                {"text": plain(c.text)[:HEADER_LIMIT], "first": c.column, "last": end}
+                for c, end in zip(cells, ends, strict=True)
+            ]
+        )
+    return banner
+
+
+def _formats(base: BravoUploadLayout) -> dict[tuple[str, str], str]:
+    """The version in force's number format for each source that has one."""
+    found: dict[tuple[str, str], str] = {}
+    for column in base.columns:
+        if column.number_format is None:
+            continue
+        if column.field is not None:
+            found[("field", column.field)] = column.number_format
+        elif column.customer is not None:
+            found[("customer", column.customer)] = column.number_format
+    return found
+
+
+def verify(
+    answer: ModelBravoMapping,
+    row: TemplateRow,
+    base: BravoUploadLayout,
+    repeated: Mapping[int, TemplateHeader],
+) -> Proposal | Refused:
+    """The model's mapping as a layout code accepts, or refused (module
+    docstring)."""
+    chosen, problems = _sources(answer, row, repeated)
     if problems:
         return Refused(tuple(problems))
-    ordered = sorted(chosen.items(), key=lambda item: item[1].column)
+    by_column = {h.column: h for h in row.headers}
+    width = max(by_column)
+    formats = _formats(base)
+    columns: list[dict[str, Any]] = []
+    evidence = {"sheet_name": row.span}
+    for number in range(1, width + 1):
+        cell, source = by_column.get(number), chosen.get(number, {})
+        column: dict[str, Any] = {"header": plain(cell.text) if cell else "", **source}
+        for kind, value in source.items():
+            if (number_format := formats.get((kind, value))) is not None:
+                column["number_format"] = number_format
+        index = len(columns)
+        if cell is not None:
+            evidence[f"columns.{index}.header"] = row.at(cell)
+        for kind in source:
+            cited = repeated[number] if kind == "constant" else cell
+            assert cited is not None  # a source is only given to a header cell
+            evidence[f"columns.{index}.{kind}"] = row.at(cited)
+        columns.append(column)
+    banner = _banner(row, width)
+    for r, cells in enumerate(row.above):
+        for k, cell in enumerate(cells):
+            evidence[f"banner.{r}.{k}.text"] = row.at(cell)
     document = {
         **_base(base),
         # The company's own template, not the platform's placeholder.
+        "schema_version": "2.0",
         "mock": False,
         "description": "",
         "sheet_name": row.sheet,
-        "columns": [{"field": name, "header": plain(cell.text)} for name, cell in ordered],
+        "banner": banner,
+        "columns": columns,
     }
     try:
         BravoUploadLayout.model_validate(document)
@@ -288,11 +443,6 @@ def verify(
                 for e in invalid.errors()[:20]
             )
         )
-    evidence = {"sheet_name": row.span}
-    for index, (_, cell) in enumerate(ordered):
-        evidence[f"columns.{index}.field"] = row.at(cell)
-        evidence[f"columns.{index}.header"] = row.at(cell)
-    used = {cell.ref for cell in chosen.values()}
     return Proposal(
         document=document,
         machine_read=tuple(evidence),
@@ -300,7 +450,7 @@ def verify(
         problems=tuple(
             DraftProblem(code="column_unmapped", ref=h.ref, header=h.text[:200])
             for h in row.headers
-            if h.ref not in used
+            if h.column not in chosen
         ),
     )
 

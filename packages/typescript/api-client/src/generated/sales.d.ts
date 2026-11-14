@@ -2651,9 +2651,9 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota" | "nothing_understood" | "path_unknown" | "type_changed" | "placeholder_changed" | "digit_invented" | "document_invalid";
+            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "field_twice" | "source_invalid" | "constant_not_in_template" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota" | "nothing_understood" | "path_unknown" | "type_changed" | "placeholder_changed" | "digit_invented" | "document_invalid";
             /** Field */
-            field?: ("customer_code" | "po_no" | "revision" | "po_date" | "currency" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
             /** Header */
             header?: string | null;
             /** Ref */
@@ -5566,7 +5566,8 @@ export interface components {
         };
         /**
          * TemplateHeader
-         * @description One visible cell of the header row, as the workbook holds it.
+         * @description One visible cell of the header row (or a row above it), as the
+         *     workbook holds it.
          */
         TemplateHeader: {
             /** Column */
@@ -5578,9 +5579,16 @@ export interface components {
         };
         /**
          * TemplateRow
-         * @description The template's header row: its sheet, its row number, its cells.
+         * @description The template's header row: its sheet, its row number, its cells, and
+         *     the visible cells of each row above it, from row 1 (an empty tuple for a
+         *     row with none).
          */
         TemplateRow: {
+            /**
+             * Above
+             * @default []
+             */
+            above: components["schemas"]["TemplateHeader"][][];
             /** Headers */
             headers: components["schemas"]["TemplateHeader"][];
             /** Row */

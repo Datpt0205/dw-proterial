@@ -265,17 +265,25 @@ export function draftProblemText(problem: DraftProblem): string {
   const field = problem.field ? `“${valueLabel(problem.field)}”` : "";
   switch (problem.code) {
     case "column_unmapped":
-      return `Cột ${problem.ref ?? ""} “${problem.header ?? ""}” của mẫu không ứng với giá trị nào: tệp nhập Bravo chưa có cột để trống, nên cột này không có trong tệp.`;
+      return `Cột ${problem.ref ?? ""} “${problem.header ?? ""}” để trống: người dán tự điền. Chọn nguồn cho cột nếu cần.`;
     case "header_not_in_template":
-      return `${field}: DW1 nêu một tiêu đề không có nguyên văn ở hàng tiêu đề của mẫu, nên không lấy.`;
+      return `${field || "Một giá trị"}: DW1 nêu cột ${problem.ref ?? ""}, hàng tiêu đề của mẫu không có cột này, nên không lấy.`;
     case "header_too_long":
-      return `${field}: tiêu đề ở cột ${problem.ref ?? ""} dài hơn 64 ký tự, mẫu tệp nhập Bravo chỉ giữ được tiêu đề tối đa 64 ký tự.`;
+      return `Tiêu đề ở ô ${problem.ref ?? ""} dài hơn 200 ký tự, mẫu tệp nhập Bravo chỉ giữ được tiêu đề tối đa 200 ký tự.`;
     case "header_ambiguous":
       return `${field}: tiêu đề DW1 nêu có ở hai cột của mẫu, không biết lấy cột nào.`;
     case "header_twice":
-      return `${field}: cột ${problem.ref ?? ""} đã được dùng cho một giá trị khác.`;
+      return `Cột ${problem.ref ?? ""} được DW1 nêu hai lần, không biết lấy nguồn nào.`;
+    case "field_twice":
+      return `${field}: DW1 đặt giá trị này vào hai cột; mỗi giá trị chỉ ở một cột.`;
+    case "source_invalid":
+      return `Cột ${problem.ref ?? ""}: DW1 nêu nhiều hơn một nguồn cho một cột.`;
+    case "constant_not_in_template":
+      return `Cột ${problem.ref ?? ""}: chữ cố định DW1 nêu không phải giá trị mọi dòng của cột này trong mẫu đều có, nên không lấy.`;
     case "required_missing":
-      return `Mẫu không có cột cho ${field}: tệp nhập Bravo bắt buộc có giá trị này.`;
+      return problem.field === "customer_item_code"
+        ? "Mẫu không có cột cho mã hàng (mã PRV hoặc mã hàng của khách): tệp nhập Bravo bắt buộc có một trong hai."
+        : `Mẫu không có cột cho ${field}: tệp nhập Bravo bắt buộc có giá trị này.`;
     case "layout_invalid":
       return `Bản gợi ý không hợp lệ ở ${problem.where ?? "tài liệu"}.`;
     case "sheet_name_invalid":

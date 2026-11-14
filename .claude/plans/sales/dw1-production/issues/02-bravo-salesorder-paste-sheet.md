@@ -1,6 +1,7 @@
 # 02 — The Bravo paste sheet in Proterial's real "SalesOrder" layout
 
-Status: ready-for-agent (columns from the 11-09 recording and the 11-10 screens); final headers on B41
+Status: ready-for-agent (2026-11-14: the 2.0.0 layout, its column sources and the checks
+built, see "## Done"; acceptance 2, a PO's delivery term against the customer's, remains)
 Blocked by: none (B41 received 11-13 and measured below)
 Category: enhancement
 
@@ -101,3 +102,41 @@ staff code (DW then keeps it on the member, set by the admin).
   product group, `CA`), quantity, unit, price, amount, currency, USD rate,
   price USD, total USD, delivery date, sales counting date. B41 still fixes
   which of these the paste sheet carries.
+
+## Done
+
+2026-11-14, against B41's measured template:
+
+- `configs/policies/sales_bravo_upload@2.0.0.yaml`, `mock: false`, the
+  platform default (`policy_files.py`; 1.0.0 and 1.1.0 stay loadable):
+  sheet "Sheet1", the title and group rows (A1:AM1, A2:R2, S2:AM2) as
+  `banner`, the 39 headers of row 3 spelled as the template spells them,
+  data from row 4, a row per delivery (a split line is a row per date, each
+  its own "Stt", the line's "PO line", its quantity and its date).
+- Each column reads one source, a closed set validated by
+  `BravoUploadLayout` (an unknown one refuses the version): `field` (code;
+  new `row_no`, `received_date`, `usd_rate` = 1 for USD else blank),
+  `customer` (`order_type`, `delivery_term`, `delivery_mode`,
+  `destination`, `shipment_type`: new optional fields of the customer
+  record, imported under Bravo's own headers as aliases), `constant`, or
+  none (blank). "Mã hàng" is blank in 2.0.0; a tenant sets `field:
+  prv_code` on it. "người lập" is blank: DW1 has no per-member attribute
+  yet, so no `member` source was added.
+- Formats from the template: quantity `#,##0`, price `#,##0.00000`, dates
+  `dd/mm/yyyy` written as dates.
+- Checked before the file is made: an amount column holds quantity × price
+  (at the amount's places), and no number has more places than its
+  column's format shows (a paste copies the shown text). A blank column is
+  written empty by construction.
+- An upload names the PO, the line, the quantity and the item by either
+  code (PRV or the customer's): acceptance 4 now reads "the item" so.
+- "Tạo từ tệp mẫu" (prompt `bravo_template_mapping@2.0.0`): the model
+  answers per column letter (a duplicate header is two columns), with a
+  field, a customer value or a fixed text, which code accepts only when
+  every filled row of that column holds it; every template column is
+  drafted at its place, the rows above row 3 as the banner. Eval dataset
+  gained a synthetic B41-shaped template.
+
+Remains: acceptance 2 needs the PO's delivery term read from the PO (not
+read today) to compare with the customer's; box quantity has no column in
+B41's layout, so acceptance 3's second check has nothing to check yet.

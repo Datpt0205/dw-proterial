@@ -153,7 +153,7 @@ async def test_an_renders_the_upload_file_and_downloads_exactly_what_was_recorde
     (record,) = body["artifacts"]
     assert record == rendered
     assert (record["template_ref"], record["case_version"]) == (
-        "sales_bravo_upload@1.1.0",
+        "sales_bravo_upload@2.0.0",
         ready["case_version"],
     )
     assert served.status_code == 200
@@ -165,8 +165,9 @@ async def test_an_renders_the_upload_file_and_downloads_exactly_what_was_recorde
         == f'attachment; filename="bravo_upload-{ready["case_id"]}.xlsx"'
     )
     sheet = load_workbook(io.BytesIO(served.content)).worksheets[0]
+    # Bravo's "Import Sales Order": rows from 4, the PO line in column S.
     assert [line["line_no"] for line in ready["lines"]] == [
-        row[4] for row in sheet.iter_rows(min_row=2, values_only=True)
+        row[18] for row in sheet.iter_rows(min_row=4, values_only=True)
     ]
 
 
@@ -190,8 +191,8 @@ async def test_a_line_split_over_several_dates_keeps_each_through_the_store_and_
     assert served.status_code == 200
     sheet = load_workbook(io.BytesIO(served.content)).worksheets[0]
     rows = [
-        (r[4], Decimal(str(r[8])), r[13].date())  # Dong, SoLuong, NgayYeuCau
-        for r in sheet.iter_rows(min_row=2, values_only=True)
+        (r[18], Decimal(str(r[26])), r[31].date())  # PO line, Số lượng, Ngày KH yêu cầu
+        for r in sheet.iter_rows(min_row=4, values_only=True)
     ]
     assert rows == [
         (line["line_no"], Decimal(s["quantity"]), date.fromisoformat(s["requested_date"]))

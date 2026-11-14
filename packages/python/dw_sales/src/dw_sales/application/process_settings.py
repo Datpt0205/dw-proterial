@@ -606,6 +606,7 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         Placement(RuleKey.EMAILS, "emails"): _COPY,
         Placement(RuleKey.DOCUMENTS, "documents"): _COPY,
         Placement(RuleKey.BRAVO_UPLOAD, "sheet_name"): _COPY,
+        Placement(RuleKey.BRAVO_UPLOAD, "banner"): _COPY,
         Placement(RuleKey.BRAVO_UPLOAD, "columns"): _COPY,
         Placement(RuleKey.HANDOFFS, "unknown"): _COPY,
         Placement(RuleKey.HANDOFFS, "line"): _COPY,

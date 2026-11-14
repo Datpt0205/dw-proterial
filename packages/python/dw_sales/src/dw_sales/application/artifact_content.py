@@ -60,7 +60,9 @@ class Sheet:
     column headers, the rows, and notes below.
 
     A sheet with no title and no heading starts with its header row, as an
-    import file must.
+    import file must; or with its ``banner``, the rows an import template
+    prints above its header row, each cell merged over its columns.
+    ``formats`` is each column's number format, None for the value's own.
     """
 
     name: str
@@ -69,6 +71,8 @@ class Sheet:
     title: str | None = None
     heading: tuple[tuple[str, Value], ...] = ()
     notes: tuple[str, ...] = ()
+    banner: tuple[tuple[BannerCell, ...], ...] = ()
+    formats: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,15 +348,21 @@ class SalesDocumentCopy(_Copy):
 
 # ----------------------------------------------------- the Bravo upload file --
 
-# What an upload row can carry. Code decides each value (`order_artifacts`);
-# the policy decides only which of them the template has, in what order, under
-# what header.
+# What an upload row can carry. Code decides each value (`order_artifacts`):
+# the case's values, and three of the file's own (`row_no`, the row's number
+# from 1; `received_date`, the day the PO came in, in the tenant's zone;
+# `usd_rate`, 1 for a USD order and blank otherwise, never a guessed rate).
+# The policy decides only which of them the template has, where, under what
+# header.
 UploadField = Literal[
+    "row_no",
     "customer_code",
     "po_no",
     "revision",
     "po_date",
+    "received_date",
     "currency",
+    "usd_rate",
     "line_no",
     "customer_item_code",
     "prv_code",
@@ -364,55 +374,126 @@ UploadField = Literal[
     "requested_date",
     "suggested_delivery_date",
 ]
-# What every upload names: the PO, the line, the item and the quantity. Read by
-# the layout's own check and by a draft made from a template (`template_reading`).
-REQUIRED_UPLOAD_FIELDS: Final[frozenset[UploadField]] = frozenset(
-    {"po_no", "line_no", "prv_code", "quantity"}
-)
+# What a column may read from the customer's master record (`Customer`, the
+# fields of the same names): what every sales order of the customer carries.
+CustomerAttribute = Literal[
+    "order_type", "delivery_term", "delivery_mode", "destination", "shipment_type"
+]
+# What every upload names: the PO, the line and the quantity, and the item by
+# one of its two codes (`UPLOAD_ITEM_FIELDS`). Read by the layout's own check
+# and by a draft made from a template (`template_reading`).
+REQUIRED_UPLOAD_FIELDS: Final[frozenset[UploadField]] = frozenset({"po_no", "line_no", "quantity"})
+# Proterial's Bravo converts the customer's code to its own on import, so its
+# template leaves the PRV code blank (B41): either code names the item.
+UPLOAD_ITEM_FIELDS: Final[frozenset[UploadField]] = frozenset({"prv_code", "customer_item_code"})
 
 
-# The longest header an upload column holds; a draft from a template refuses
-# a longer one by name (`template_reading`).
-UPLOAD_HEADER_MAX: Final = 64
+# The longest header or fixed value an upload column holds.
+UPLOAD_HEADER_MAX: Final = 200
+# How many columns a layout holds, and rows above its header row.
+UPLOAD_COLUMNS_MAX: Final = 120
+UPLOAD_BANNER_MAX: Final = 10
+
+_Line = Annotated[str, Field(max_length=UPLOAD_HEADER_MAX, pattern=r"^[^\x00-\x1f\x7f]*$")]
+# An Excel number format, as the template's own cells carry it.
+_NumberFormat = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[^\x00-\x1f\x7f]+$")]
 
 
 class UploadColumn(BaseModel):
+    """One column of the upload file, at its place in the template, and where
+    its value comes from: a field code computes from the case, an attribute of
+    the customer's master record, or a fixed text; none of the three, and the
+    column is blank for the person who pastes (ticket 02: a column change is
+    data, never code). ``number_format`` is the template's own format for the
+    column's cells; without one a value prints as it is held."""
+
     model_config = _FROZEN
 
-    field: UploadField
-    header: Annotated[str, Field(min_length=1, max_length=UPLOAD_HEADER_MAX)]
+    header: _Line
+    field: UploadField | None = None
+    customer: CustomerAttribute | None = None
+    constant: Annotated[_Line, Field(min_length=1)] | None = None
+    number_format: _NumberFormat | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> UploadColumn:
+        if sum(s is not None for s in (self.field, self.customer, self.constant)) > 1:
+            raise ValueError("a column reads one source: a field, a customer value or a constant")
+        if not self.blank and not self.header.strip():
+            raise ValueError("a column that is filled has a header")
+        return self
+
+    @property
+    def blank(self) -> bool:
+        """Nothing is written in the column: the person fills it, or Bravo does."""
+        return self.field is None and self.customer is None and self.constant is None
+
+
+class BannerCell(BaseModel):
+    """A text above the header row, merged over columns ``first`` to ``last``
+    (1 is A), as the template prints its title and its group labels."""
+
+    model_config = _FROZEN
+
+    text: Annotated[_Line, Field(min_length=1)]
+    first: int = Field(ge=1, le=UPLOAD_COLUMNS_MAX)
+    last: int = Field(ge=1, le=UPLOAD_COLUMNS_MAX)
 
 
 class BravoUploadLayout(BaseModel):
     """``configs/policies/sales_bravo_upload@<version>.yaml``.
 
-    MOCK until Proterial sends its Bravo import template (requirements doc,
-    inputs owed): the file says so, and so does every file made from it.
+    Schema 1.0 (the mock layouts 1.0.0 and 1.1.0) is a header row and the
+    fields under it. Schema 2.0 (B41, ticket 02) is the template as Bravo's
+    "Import Sales Order" prints it: the rows above the header row
+    (``banner``, an empty row for a row with nothing on it), then the header
+    row, each column at its place with its source, then a row per delivery.
+    A 1.0 document has no rows above its headers: one read over a 2.0
+    platform version (`read_over`) is not given the platform's.
     """
 
     model_config = _FROZEN
 
-    schema_version: Literal["1.0"]
+    schema_version: Literal["1.0", "2.0"]
     policy_id: Literal["sales_bravo_upload"]
     policy_version: _Semver
     mock: bool
     description: str = ""
     sheet_name: Annotated[str, Field(min_length=1, max_length=31, pattern=r"^[^\[\]:*?/\\']+$")]
-    columns: tuple[UploadColumn, ...] = Field(min_length=1)
+    banner: tuple[tuple[BannerCell, ...], ...] = Field(default=(), max_length=UPLOAD_BANNER_MAX)
+    columns: tuple[UploadColumn, ...] = Field(min_length=1, max_length=UPLOAD_COLUMNS_MAX)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_banner_before_2(cls, data: object) -> object:
+        if isinstance(data, Mapping) and data.get("schema_version") == "1.0":
+            return {key: value for key, value in data.items() if key != "banner"}
+        return data
 
     @field_validator("columns")
     @classmethod
     def _each_field_once(cls, value: tuple[UploadColumn, ...]) -> tuple[UploadColumn, ...]:
-        fields = [column.field for column in value]
+        fields = [column.field for column in value if column.field is not None]
         if len(fields) != len(set(fields)):
             raise ValueError("a field is a column once")
         return value
 
     @model_validator(mode="after")
     def _names_the_lines(self) -> BravoUploadLayout:
-        if not {c.field for c in self.columns} >= REQUIRED_UPLOAD_FIELDS:
+        fields = self.fields
+        if not (fields >= REQUIRED_UPLOAD_FIELDS and fields & UPLOAD_ITEM_FIELDS):
             raise ValueError("an upload names the PO, the line, the item and the quantity")
+        for number, row in enumerate(self.banner, start=1):
+            end = 0
+            for cell in row:
+                if not end < cell.first <= cell.last <= len(self.columns):
+                    raise ValueError(f"banner row {number}: cells overlap or pass the columns")
+                end = cell.last
         return self
+
+    @property
+    def fields(self) -> frozenset[UploadField]:
+        return frozenset(c.field for c in self.columns if c.field is not None)
 
     @property
     def version(self) -> str:

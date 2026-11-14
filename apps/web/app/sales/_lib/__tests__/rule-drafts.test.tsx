@@ -73,6 +73,7 @@ const PLATFORM_DOC = layout("SO_IMPORT", true, [
 const TEMPLATE = {
   sheet: "NhapDonBan",
   row: 3,
+  above: [],
   headers: [
     ["A3", "Số đơn hàng"],
     ["B3", "Dòng"],
@@ -271,15 +272,19 @@ describe("a draft's logic (Tạo từ tệp mẫu)", () => {
       "Mẫu không có cột cho “Số lượng”: tệp nhập Bravo bắt buộc có giá trị này.",
     );
     expect(
-      draftProblemText({ code: "header_not_in_template", field: "po_no" }),
-    ).toMatch(/^“Số PO”: DW1 nêu một tiêu đề không có nguyên văn/);
+      draftProblemText({
+        code: "header_not_in_template",
+        field: "po_no",
+        ref: "Z",
+      }),
+    ).toMatch(/^“Số PO”: DW1 nêu cột Z, hàng tiêu đề của mẫu không có cột này/);
     expect(
       draftProblemText({
         code: "column_unmapped",
         ref: "E3",
         header: "Ghi chú",
       }),
-    ).toMatch(/^Cột E3 “Ghi chú” của mẫu không ứng với giá trị nào/);
+    ).toMatch(/^Cột E3 “Ghi chú” để trống: người dán tự điền/);
   });
 });
 
@@ -330,8 +335,8 @@ describe("Tạo từ tệp mẫu on the rules page", () => {
         expect(screen.getAllByText("Đọc từ NhapDonBan!D3")).toHaveLength(2),
       );
       expect(screen.getAllByText("Máy đọc").length).toBeGreaterThanOrEqual(5);
-      // The template's column no value takes, said in the notice.
-      expect(screen.getByText(/Cột E3 “Ghi chú” của mẫu/)).toBeTruthy();
+      // The template's column left blank, said in the notice.
+      expect(screen.getByText(/Cột E3 “Ghi chú” để trống/)).toBeTruthy();
     },
     SLOW,
   );

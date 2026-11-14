@@ -6,7 +6,7 @@
     {
       "case_id": "sales-rule-draft-golden",
       "category": "normal",
-      "description": "4 mẫu nhập Bravo hư cấu (tiêu đề VI/EN/JA, có dòng tiêu đề phụ và sheet hướng dẫn): mô hình ánh xạ đúng bao nhiêu trường, bao nhiêu bản nháp code nhận là sẵn sàng, cột theo đúng thứ tự của mẫu, bản nháp sẵn sàng nào ánh xạ sai",
+      "description": "5 mẫu nhập Bravo hư cấu (tiêu đề VI/EN/JA, có dòng tiêu đề phụ và sheet hướng dẫn; một mẫu theo hình \"Import Sales Order\" của Bravo: dòng tiêu đề tệp và nhãn nhóm trên hàng 3, 39 cột, tiêu đề lặp hai lần, giá trị của khách và chữ cố định): mô hình chọn đúng nguồn cho bao nhiêu cột, bao nhiêu bản nháp code nhận là sẵn sàng, mọi cột đúng chỗ của mẫu, bản nháp sẵn sàng nào có cột sai",
       "input_ref": "evals/fixtures/cases/sales_rule_drafts.json",
       "expected_ref": "evals/expected/sales_rule_drafts.json",
       "grader": "sales.rule_draft_golden",

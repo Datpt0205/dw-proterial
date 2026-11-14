@@ -25,7 +25,7 @@ import io
 import json
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Coroutine, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -46,7 +46,7 @@ from dw_sales.adapters.mock.generate_attachments import (
     load_purchase_orders,
 )
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.artifact_content import EML
+from dw_sales.application.artifact_content import EML, BravoUploadLayout
 from dw_sales.application.orders_service import DispositionChoice
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.views import MessageDispositionView
@@ -943,12 +943,13 @@ async def grade_legacy_encoding_held(
 # ------------------------------------------- delivery schedules (ticket 21) --
 
 
-def _upload_rows(data: bytes, headers: Mapping[str, str]) -> list[tuple[int, Decimal, date]]:
+def _upload_rows(data: bytes, layout: BravoUploadLayout) -> list[tuple[int, Decimal, date]]:
     """(line, quantity, requested date) of each row of an upload file's first
-    sheet, read by the template's column headers."""
+    sheet, read at the template's own places: below the rows above its
+    header row and the header row, in the columns its fields are."""
     sheet = load_workbook(io.BytesIO(data)).worksheets[0]
-    header, *rows = ([cell.value for cell in row] for row in sheet.iter_rows())
-    at = {name: header.index(title) for name, title in headers.items()}
+    rows = [[cell.value for cell in row] for row in sheet.iter_rows()][len(layout.banner) + 1 :]
+    at = {c.field: index for index, c in enumerate(layout.columns) if c.field is not None}
     read: list[tuple[int, Decimal, date]] = []
     for row in rows:
         day = row[at["requested_date"]]
@@ -977,7 +978,6 @@ async def grade_schedules_kept(
     up = await world.walk_to_uploaded(AN, case.case_id)
     services, context = world.services.artifacts, AN.context()
     layout = world.policies.upload
-    headers: dict[str, str] = {c.field: c.header for c in layout.columns}
     downloads: dict[str, bytes] = {}
     for kind in ("bravo_upload", "cross_check_sheet"):
         (view,) = await services.render_order(
@@ -987,7 +987,7 @@ async def grade_schedules_kept(
         downloads[kind] = download.data
     printed = truth[message_id].lines
     wanted = [(line.no, q, d) for line in printed for q, d in _printed_schedules(line)]
-    got = _upload_rows(downloads["bravo_upload"], headers)
+    got = _upload_rows(downloads["bravo_upload"], layout)
     if got != wanted:
         problems.append(
             f"{message_id}: the upload file has {len(got)} rows, not one per schedule"
