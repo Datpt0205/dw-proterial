@@ -630,6 +630,11 @@ class FindingCode(StrEnum):
     SENDER_UNVERIFIED = "sender_unverified"
     LEGACY_ENCODING = "legacy_encoding"
     REQUESTED_DATE_MISSING = "requested_date_missing"
+    # The length per reel the PO's line states ("610X12", "305M") is not the
+    # item's standard length; `pack_multiple` checks the quantity only.
+    REEL_LENGTH_MISMATCH = "reel_length_mismatch"
+    # The spec number the PO's line states is not one of the item's.
+    SPEC_MISMATCH = "spec_mismatch"
 
 
 # About the PO as a whole.
@@ -659,6 +664,8 @@ ITEM_FINDINGS: Final = frozenset(
         FindingCode.UOM_MISMATCH,
         FindingCode.MOQ_VIOLATION,
         FindingCode.PACK_MULTIPLE,
+        FindingCode.REEL_LENGTH_MISMATCH,
+        FindingCode.SPEC_MISMATCH,
         FindingCode.REQUESTED_DATE_SHORT_LT,
     }
 )
@@ -744,6 +751,8 @@ ALLOWED_DISPOSITIONS: Final[Mapping[FindingCode, frozenset[DispositionKind]]] = 
         FindingCode.LME_BAND_MISMATCH: _ACCEPT_OR_ASK,
         FindingCode.MOQ_VIOLATION: _ACCEPT_OR_ASK,
         FindingCode.PACK_MULTIPLE: _ACCEPT_OR_ASK,
+        FindingCode.REEL_LENGTH_MISMATCH: _ACCEPT_OR_ASK,
+        FindingCode.SPEC_MISMATCH: _ACCEPT_OR_ASK,
         FindingCode.LINE_TOTAL_MISMATCH: _CORRECT_OR_ASK,
         FindingCode.VALUE_UNCERTAIN: _CORRECT_OR_ASK,
         FindingCode.CUSTOMER_UNKNOWN: frozenset({DispositionKind.CORRECTED_BY_SALES}),
@@ -920,6 +929,8 @@ CheckName = Literal[
     "uom",
     "moq",
     "pack",
+    "reel_length",
+    "spec",
     "lead_time",
 ]
 

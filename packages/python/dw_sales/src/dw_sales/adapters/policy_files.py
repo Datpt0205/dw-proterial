@@ -31,6 +31,7 @@ from dw_sales.application.rules import (
     TenantRuleBook,
     read_over,
 )
+from dw_sales.application.salesorder_rules import SalesOrderRules
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -93,6 +94,8 @@ class SalesPolicies:
     handoff_copy: HandoffCopy
     # When DW1 reminds a person, and the morning brief (ticket 42).
     followups: SalesFollowups
+    # Each customer's own SalesOrder rules (ticket 38): none on the platform.
+    salesorder: SalesOrderRules
     # Every version of each key the checkout ships, by ref, the ones above
     # included: what a case stamped before a release is read with after it.
     released: Mapping[str, Policy]
@@ -108,6 +111,7 @@ class SalesPolicies:
             RuleKey.BRAVO_UPLOAD: self.upload,
             RuleKey.HANDOFFS: self.handoff_copy,
             RuleKey.FOLLOWUPS: self.followups,
+            RuleKey.SALESORDER_RULES: self.salesorder,
         }
 
 
@@ -119,7 +123,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
     file names still points at.
     """
     current = SalesPolicies(
-        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.10.0.yaml"),
+        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.11.0.yaml"),
         quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
@@ -128,6 +132,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         upload=load_bravo_upload(policies_dir / "sales_bravo_upload@2.0.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.0.0.yaml", HandoffCopy),
         followups=load_followups(policies_dir / "sales_followups@1.2.0.yaml"),
+        salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
         released={},
     )
     released = load_released(current.current(), policies_dir, copy_dir)

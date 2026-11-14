@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { RULE_KEY, type RuleKey } from "../rules";
+import { LEARNED_RULES, RULE_KEY, type RuleKey } from "../rules";
 import {
   fieldWords,
   humanise,
@@ -38,12 +38,15 @@ describe("the rules editor's words (ticket 40)", () => {
     expect(Object.keys(SCHEMAS).sort()).toEqual(Object.keys(RULE_KEY).sort());
   });
 
+  // A key learned from a worked example (ticket 38) is never drawn as a
+  // form: its rules are said in words on the approval, its button refused.
+  const EDITED = (Object.entries(SCHEMAS) as [RuleKey, JsonSchema][]).filter(
+    ([key]) => !(key in LEARNED_RULES),
+  );
+
   it("labels every field path of every key's schema", () => {
     const missing: string[] = [];
-    for (const [key, schema] of Object.entries(SCHEMAS) as [
-      RuleKey,
-      JsonSchema,
-    ][])
+    for (const [key, schema] of EDITED)
       for (const path of fieldPaths(readSchema(schema)))
         if (!knownFieldWords(key, path)) missing.push(`${key}: ${path}`);
     expect(missing).toEqual([]);
@@ -62,7 +65,7 @@ describe("the rules editor's words (ticket 40)", () => {
 
   it("names every value a choice or a closed map key may take", () => {
     const missing: string[] = [];
-    for (const schema of Object.values(SCHEMAS))
+    for (const [, schema] of EDITED)
       for (const value of enumValues(readSchema(schema)))
         if (!knownValueLabel(value)) missing.push(value);
     expect(missing).toEqual([]);

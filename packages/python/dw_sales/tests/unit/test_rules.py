@@ -25,6 +25,7 @@ from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
+    LEARNED_ONLY,
     ONE_OPEN_PROPOSAL,
     OVERRIDABLE,
     PRICE_BEARING,
@@ -609,7 +610,9 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
     read or proposal of one is refused, the platform's documents included."""
     world = open_world(REPO, SampleSet.of(REPO, None), (*CALLERS, OUTSIDER, IT))
     rules = world.services.rules
-    for key in PRICE_BEARING:
+    # A key learned from a worked example is proposed through its learning
+    # only (ticket 38): its refusal of this door is held below.
+    for key in PRICE_BEARING - LEARNED_ONLY:
         await rules.propose(AN.context(), key, _bumped(world, key, "9.0.1"))
 
     listed = await rules.list(IT.context())
@@ -631,7 +634,9 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
         RuleKey.FOLLOWUPS,
     }
     # The search can fail: a PIC, who reads prices, is shown them.
-    assert {v.key for v in (await rules.list(AN.context())).versions} >= PRICE_BEARING
+    assert {v.key for v in (await rules.list(AN.context())).versions} >= (
+        PRICE_BEARING - LEARNED_ONLY
+    )
     for key in PRICE_BEARING:
         for read in (rules.schema, rules.platform_documents):
             with pytest.raises(PermissionDeniedError):
@@ -789,3 +794,18 @@ async def test_a_number_the_platform_shipped_since_approval_is_rejected_and_free
         AN.context(), RuleKey.ORDER_RULES, _version(world, "9.11.1")
     )
     assert again.status == "proposed"
+
+
+async def test_a_customers_salesorder_rules_are_never_proposed_through_the_editor() -> None:
+    """dw_sales ADR 0013: a customer's SalesOrder rules are proposed from a
+    worked example whose replay matched, never typed in the rules editor: the
+    general door refuses the key for the head as for a PIC, so nothing
+    reaches the approval without its replay (`salesorder_learning`)."""
+    world = open_world(REPO, SampleSet.of(REPO, None), (*CALLERS, OUTSIDER, IT))
+    key = RuleKey.SALESORDER_RULES
+    for caller in (AN, GIANG):
+        with pytest.raises(DomainError) as refused:
+            await world.services.rules.propose(caller.context(), key, _bumped(world, key, "9.0.1"))
+        assert refused.value.details["rule"] == "learned_from_example_only"
+    listed = await world.services.rules.list(GIANG.context())
+    assert key not in {v.key for v in listed.versions}

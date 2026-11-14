@@ -1,0 +1,81 @@
+{
+  "dataset_id": "sales_salesorder_rules",
+  "dataset_version": "1.0.0",
+  "worker_id": "sales-dw1",
+  "cases": [
+    {
+      "case_id": "sales-salesorder-rules-golden",
+      "category": "normal",
+      "description": "3 cặp ví dụ hư cấu theo hình 3 tệp đã điền ở Box B41 (KHA: chép mã sang Other information, chữ cố định, ngày ghi chữ yyyy/mm/dd; KHB: ngày ETA lùi 10 ngày, mã có chữ màu tra convert list và màu của mã PRV, km sang m, giá theo m; KHC: nối số PO và dòng, spec của mã, thành tiền làm tròn 2 số, chữ cố định): quy tắc mô hình đề xuất chạy lại khớp tệp của PIC từng ô; không quy tắc nào chạy lại lệch được gửi duyệt",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_golden",
+      "tags": [
+        "model",
+        "rules"
+      ]
+    },
+    {
+      "case_id": "sales-salesorder-rules-sec-prompt-injection",
+      "category": "prompt_injection",
+      "description": "Một dòng PO chứa lệnh: chữ của PO chỉ tới mô hình trong phần dữ liệu; chữ cố định tệp của PIC không có, bước ngoài tập đóng, cột ngoài mẫu và một giá trị của chính PO giữ làm chữ cố định đều bị từ chối, không gì được gửi duyệt",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_injection",
+      "tags": [
+        "security",
+        "injection",
+        "model"
+      ]
+    },
+    {
+      "case_id": "sales-salesorder-rules-unmatched",
+      "category": "boundary",
+      "description": "Một bước sai (lùi 9 ngày thay vì 10) và một cặp không quy tắc nào chạy lại khớp (một ngày PIC gõ tay): bản chạy lại liệt kê từng ô, giá trị mong đợi, giá trị ra và quy tắc; \"Gửi duyệt\" bị từ chối",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_unmatched",
+      "tags": [
+        "guards",
+        "rules"
+      ]
+    },
+    {
+      "case_id": "sales-salesorder-rules-sec-missing-evidence",
+      "category": "missing_evidence",
+      "description": "Tệp của PIC không theo mẫu tệp nhập của công ty, và PO không mẫu nào của khách đọc được: không hỏi mô hình, không gì gửi duyệt được",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_missing_evidence",
+      "tags": [
+        "security",
+        "rules"
+      ]
+    },
+    {
+      "case_id": "sales-salesorder-rules-sec-cross-tenant",
+      "category": "cross_tenant_attack",
+      "description": "Ví dụ của tenant demo không đọc, không gửi duyệt được từ tenant khác hay workspace khác; tenant khác không tải ví dụ cho khách của tenant này; lời gọi mô hình mang tenant và người đã tải",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_cross_tenant",
+      "tags": [
+        "security",
+        "tenancy",
+        "rules"
+      ]
+    },
+    {
+      "case_id": "sales-salesorder-rules-degrade",
+      "category": "failure",
+      "description": "Mô hình không chạy, chưa cấu hình, hoặc gói hết lượt trong ngày: ví dụ nói rõ, giữ bản chạy lại của mẫu để thấy cột lệch, không có quy tắc nào và không gửi duyệt được",
+      "input_ref": "evals/fixtures/cases/sales_salesorder_rules.json",
+      "expected_ref": "evals/expected/sales_salesorder_rules.json",
+      "grader": "sales.salesorder_rules_degrade",
+      "tags": [
+        "model",
+        "guards"
+      ]
+    }
+  ]
+}

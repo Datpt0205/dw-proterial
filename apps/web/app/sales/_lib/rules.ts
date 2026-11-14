@@ -23,6 +23,7 @@ export const RULE_KEY: Record<RuleKey, string> = {
   sales_bravo_upload: "Mẫu tệp nhập Bravo",
   sales_handoffs: "Nội dung chuyển giao",
   sales_followups: "Nhắc việc và tóm tắt buổi sáng",
+  sales_salesorder_rules: "Quy tắc SalesOrder của từng khách",
 };
 
 export const RULE_STATUS: Record<RuleVersion["status"], string> = {
@@ -78,6 +79,8 @@ export const RULE_ABOUT: Record<RuleKey, string> = {
   sales_documents: "Chữ trên các bảng tính và tài liệu DW1 xuất ra.",
   sales_bravo_upload: "Mẫu tệp nhập Bravo: tên sheet và thứ tự cột.",
   sales_handoffs: "Nội dung thư chuyển việc cho PC và QA.",
+  sales_salesorder_rules:
+    "Cách tệp SalesOrder của từng khách khác mẫu chung: học từ một PO và tệp PIC đã làm.",
 };
 
 /** Rules that read as engineering: under "Nâng cao", not the first screen. */
@@ -86,7 +89,18 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
   "sales_documents",
   "sales_bravo_upload",
   "sales_handoffs",
+  "sales_salesorder_rules",
 ]);
+
+/**
+ * Rules learned from a worked example and proven by replay (ticket 38),
+ * never written in the editor: the server refuses them there, and the
+ * button says where they are learned instead.
+ */
+export const LEARNED_RULES: Readonly<Partial<Record<RuleKey, string>>> = {
+  sales_salesorder_rules:
+    "Học từ một ví dụ ở Dữ liệu chủ → Khách hàng → Học từ ví dụ; không sửa ở đây.",
+};
 
 export interface KeyRow {
   key: RuleKey;

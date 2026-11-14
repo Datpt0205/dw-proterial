@@ -85,7 +85,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict
 
 from dw_agent_runtime.approval_flow import ProposedDecision
-from dw_kernel.errors import ConflictError, NotFoundError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import (
@@ -124,6 +124,7 @@ from dw_sales.application.model_readiness import (
 )
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
+from dw_sales.application.salesorder_rules import SalesOrderRules
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -142,6 +143,9 @@ __all__ = [
 ]
 
 _RESOURCE: Final = "sales_rule_version"
+# The refusal of a key proposed by any other door than its learning
+# (`LEARNED_ONLY`).
+LEARNED_FROM_EXAMPLE: Final = "learned_from_example_only"
 
 # The platform approval a version's proposal opens, and the event its decision
 # is announced by. Under `sales.`, so the strict rule (a second person who is
@@ -173,6 +177,7 @@ class RuleKey(StrEnum):
     BRAVO_UPLOAD = "sales_bravo_upload"
     HANDOFFS = "sales_handoffs"
     FOLLOWUPS = "sales_followups"
+    SALESORDER_RULES = "sales_salesorder_rules"
 
 
 type Policy = (
@@ -185,6 +190,7 @@ type Policy = (
     | BravoUploadLayout
     | HandoffCopy
     | SalesFollowups
+    | SalesOrderRules
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -199,11 +205,16 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.BRAVO_UPLOAD: BravoUploadLayout,
         RuleKey.HANDOFFS: HandoffCopy,
         RuleKey.FOLLOWUPS: SalesFollowups,
+        RuleKey.SALESORDER_RULES: SalesOrderRules,
     }
 )
 # The keys a version may be drafted for from the company's own file ("Tạo từ
 # tệp mẫu", `rule_drafts`): the Bravo upload template now, the copy in phase 2.
 DRAFTABLE: Final = frozenset({RuleKey.BRAVO_UPLOAD})
+# The keys a version may only be proposed of from a worked example whose
+# replay matched (`salesorder_learning`, dw_sales ADR 0013): never typed in
+# the rules editor, and never applied by its proposer, the head included.
+LEARNED_ONLY: Final = frozenset({RuleKey.SALESORDER_RULES})
 # The keys whose documents hold prices or price policy: the pricing inputs
 # (copper adders, the floor, freight), the quote rules (the reference price
 # band, the copper basis) and the order rules (`price.relative_tolerance`, the
@@ -212,7 +223,12 @@ DRAFTABLE: Final = frozenset({RuleKey.BRAVO_UPLOAD})
 # proposer without it (tenant IT, whom `sod_sales_price_vs_member_admin` keeps
 # from it) is not shown them at all. A key added to `RuleKey` fails
 # `test_rules.py` until someone decides whether it belongs here.
-PRICE_BEARING: Final = frozenset({RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, RuleKey.PRICING})
+# The customers' SalesOrder rules hold no amount, but they are learned from and
+# replayed against a PO and the PIC's file whose cells carry prices (ticket
+# 38): whoever reads them reads those cells too.
+PRICE_BEARING: Final = frozenset(
+    {RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, RuleKey.PRICING, RuleKey.SALESORDER_RULES}
+)
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
 _ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 
@@ -266,6 +282,11 @@ class TenantRuleBook(RuleBook):
         assert isinstance(policy, SalesFollowups)
         return policy
 
+    async def salesorder_rules(self, scope: SalesScope) -> SalesOrderRules:
+        policy = (await self.current(scope, RuleKey.SALESORDER_RULES)).policy
+        assert isinstance(policy, SalesOrderRules)
+        return policy
+
     async def time_zone(self, scope: SalesScope) -> ZoneInfo:
         """The tenant's own time zone, where its calendar day is counted: the
         follow-up policy's `working_hours.time_zone`, its one owner (audit 14)."""
@@ -302,6 +323,7 @@ class TenantRuleBook(RuleBook):
             upload=upload,
             design_mailboxes=(await self.quote_rules(scope)).design_mailboxes,
             zone=await self.time_zone(scope),
+            salesorder=await self.salesorder_rules(scope),
         )
 
 
@@ -594,6 +616,11 @@ class SalesRulesService:
         2026-10-28), anyone else's waits on a `sales.rules` approval."""
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         await self._require_readable(context, key)
+        if key in LEARNED_ONLY:
+            raise DomainError(
+                "quy tắc SalesOrder của khách chỉ đề xuất được từ một ví dụ đã chạy lại khớp",
+                details={"rule": LEARNED_FROM_EXAMPLE, "key": key.value},
+            )
         version = await self._engine.propose(
             context,
             key,
@@ -601,6 +628,19 @@ class SalesRulesService:
             applies_directly=self.gate.allows(context, SalesScopes.RULES_APPROVE),
         )
         return _view(version)
+
+    async def propose_learned(
+        self, context: AccessContext, document: Mapping[str, Any]
+    ) -> RuleVersionView:
+        """Implements `LearnedProposalPort`: a version of the customers'
+        SalesOrder rules whose replay matched, from the learning's door
+        only (`salesorder_learning.SalesOrderExamples.submit`). Never applied
+        directly, the head's included: the head approves, never the person
+        who proposed it (dw_sales ADR 0013)."""
+        key = RuleKey.SALESORDER_RULES
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        await self._require_readable(context, key)
+        return _view(await self._engine.propose(context, key, document, applies_directly=False))
 
     def _readable(self, context: AccessContext, key: RuleKey) -> bool:
         return readable(self.gate, context, key)

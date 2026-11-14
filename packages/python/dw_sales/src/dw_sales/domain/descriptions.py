@@ -57,6 +57,10 @@ _CORES = re.compile(r"(\d{1,3})C")
 _AWG = re.compile(r"AWG(\d{1,2})")
 _SECTION = re.compile(r"(\d{1,2}\.\d{1,2})MM2")
 _PACK_LENGTH = re.compile(r"(\d{1,6})M")
+# A length per reel and a count of reels, as a PO's packing prints it
+# ("610X12": twelve reels of 610 m). The length is the attribute; the count is
+# the quantity's, which `pack_multiple` checks.
+_REELS = re.compile(r"(\d{1,6})X\d{1,4}")
 _SPEC_NO = re.compile(r"[A-Z0-9][A-Z0-9/-]{1,31}")
 _STANDARD = re.compile(r"UL\d{3,5}")
 
@@ -175,7 +179,7 @@ def _word(word: str) -> tuple[str, object, int] | None:
         return "gauge", f"AWG{match.group(1)}", 1
     if match := _SECTION.fullmatch(word):
         return "gauge", f"{match.group(1)}mm2", 1
-    if match := _PACK_LENGTH.fullmatch(word):
+    if match := _PACK_LENGTH.fullmatch(word) or _REELS.fullmatch(word):
         return "pack_length_m", Decimal(match.group(1)), 1
     if _STANDARD.fullmatch(word):
         return "standard", word, 1

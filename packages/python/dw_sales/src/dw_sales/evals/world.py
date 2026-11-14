@@ -138,6 +138,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedSenders,
 )
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
+from dw_sales.testing.example_store import MemoryExampleStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
 from dw_sales.testing.role_catalog import StaticRoleCatalog
 from dw_sales.workflows.graph import register
@@ -1028,6 +1029,8 @@ class World:
     catalog_parsing: CatalogParsing
     # Rule drafts from a company's template ("Tạo từ tệp mẫu"), in memory.
     draft_store: MemoryRuleDraftStore
+    # Worked examples a customer's SalesOrder rules are learned from (ticket 38).
+    example_store: MemoryExampleStore
     # Each tenant's live measurements of the model steps (ADR 0005, addendum
     # of 2026-10-23), which the gate in front of every model call reads.
     measurements: MemoryModelMeasurements
@@ -1341,6 +1344,7 @@ def open_world(
     # and approved, else the sample's mock; with no import, the mock exactly.
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
     draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
+    example_store = MemoryExampleStore(outbox=runtime.outbox)
     catalog = SnapshotSalesCatalog(
         MemoryApprovedLists(catalog_store),
         mock,
@@ -1444,6 +1448,7 @@ def open_world(
         catalog_uow=catalog_store,
         templates=XlsxCatalogTemplates(),
         draft_uow=draft_store,
+        example_uow=example_store,
         readiness=readiness,
         roles=StaticRoleCatalog(),
         step_activity=store,
@@ -1499,6 +1504,7 @@ def open_world(
             worker_version=worker.worker_version,
         ),
         draft_store,
+        example_store,
         measurements,
         uploads,
     )

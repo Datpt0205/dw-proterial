@@ -13,6 +13,8 @@ it was compared against, stamped when the check ran (spec decision 11).
 
 from __future__ import annotations
 
+import re
+import unicodedata
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
@@ -505,6 +507,8 @@ def check_line(
                     )
                 )
 
+    found += _stated_checks(po_line, mapped, item, run, rules)
+
     known = _lead_time(item, quotation, rules)
     lead_time, source = known if known is not None else (None, None)
     earliest: date | None = None
@@ -556,6 +560,58 @@ def check_line(
         suggested_delivery_date=_suggested(po_line.requested_date, earliest),
     )
     return LineCheck(line=line, findings=tuple(found))
+
+
+def _stated_checks(
+    po_line: PoLine, mapped: MappedLine, item: Item, run: list[CheckName], rules: OrderRules
+) -> list[Finding]:
+    """What the line's description states against the item ("hk & cable",
+    ticket 38): its length per reel against the item's standard length
+    (`reel_length_mismatch`), its spec number against the item's
+    (`spec_mismatch`). Each runs only where both sides are known, and
+    ``run`` says which ran: a description DW1's vocabulary does not read,
+    or an item with no standard length or spec, is not checked."""
+    stated = mapped.stated
+    if stated is None and "description" not in po_line.legacy_fields:
+        stated = read_description(po_line.description)
+    if stated is None:
+        return []
+    number = po_line.line_no
+    found: list[Finding] = []
+    if stated.pack_length_m is not None and item.pack_multiple is not None:
+        run.append("reel_length")
+        if stated.pack_length_m != item.pack_multiple:
+            found.append(
+                _on(
+                    rules,
+                    FindingCode.REEL_LENGTH_MISMATCH,
+                    number,
+                    str(item.pack_multiple),
+                    str(stated.pack_length_m),
+                )
+            )
+    specs = item_specs(item)
+    if stated.spec_no is not None and specs:
+        run.append("spec")
+        if _spec_key(stated.spec_no) not in {_spec_key(s) for s in specs}:
+            found.append(
+                _on(rules, FindingCode.SPEC_MISMATCH, number, ", ".join(specs), stated.spec_no)
+            )
+    return found
+
+
+def item_specs(item: Item) -> tuple[str, ...]:
+    """The spec numbers the item master holds for ``item``: DW1's own
+    attribute and the numbers Bravo's specification column lists (split on
+    commas, semicolons and spaces), each once, in that order."""
+    listed = [item.attributes.spec_no] if item.attributes.spec_no else []
+    if item.specification:
+        listed += [part for part in re.split(r"[\s,;]+", item.specification) if part]
+    return tuple(dict.fromkeys(listed))
+
+
+def _spec_key(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).strip().casefold()
 
 
 def _on(

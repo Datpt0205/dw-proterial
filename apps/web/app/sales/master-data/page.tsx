@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, type ReactNode } from "react";
+import { Suspense, useCallback, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -36,6 +36,9 @@ import { ScopeGate } from "../_components/scope-gate";
 import { LIST_NAME, type CatalogList } from "../_lib/catalog";
 import type { Resource } from "../_lib/use-resource";
 import { ImportPanel } from "./import-panel";
+import { SalesOrderLearning } from "./salesorder-learning";
+import { GuardedButton } from "../_components/guarded-button";
+import { useAuth } from "../../../lib/auth/auth-context";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
 type S = SalesSchemas;
@@ -221,63 +224,95 @@ function Snapshot<T extends object>({
 
 function Customers() {
   const name = usePeople();
+  const { hasScope } = useAuth();
+  const [learning, setLearning] = useState<string | null>(null);
+  // The pair and its replay carry prices, as the rules learned from it do.
+  const learnBlocked = !hasScope(SCOPE.rulesPropose)
+    ? "Cần quyền đề xuất quy tắc (sales.rules.propose)."
+    : !hasScope(SCOPE.price)
+      ? "Cần quyền xem giá (sales.price.read): hai tệp có đơn giá."
+      : null;
   return (
-    <Snapshot<S["CustomerView"]>
-      cacheKey="sales/master-data/customers"
-      load={useCallback(() => salesApi().customers(), [])}
-      rowKey={(c) => c.code}
-      empty="Không gian làm việc này chưa có khách hàng: tải mẫu và nhập tệp danh mục khách hàng."
-      columns={[
-        { title: "Mã", dataIndex: "code" },
-        { title: "Tên", dataIndex: "name" },
-        {
-          title: "Trạng thái",
-          dataIndex: "status",
-          render: (s: string) =>
-            s === "temporary" ? (
-              <StatusTag tone="warn">{label(CUSTOMER_STATUS, s)}</StatusTag>
-            ) : (
-              label(CUSTOMER_STATUS, s)
+    <>
+      {learning ? (
+        <SalesOrderLearning
+          customerCode={learning}
+          onClose={() => setLearning(null)}
+        />
+      ) : null}
+      <Snapshot<S["CustomerView"]>
+        cacheKey="sales/master-data/customers"
+        load={useCallback(() => salesApi().customers(), [])}
+        rowKey={(c) => c.code}
+        empty="Không gian làm việc này chưa có khách hàng: tải mẫu và nhập tệp danh mục khách hàng."
+        columns={[
+          { title: "Mã", dataIndex: "code" },
+          { title: "Tên", dataIndex: "name" },
+          {
+            title: "Trạng thái",
+            dataIndex: "status",
+            render: (s: string) =>
+              s === "temporary" ? (
+                <StatusTag tone="warn">{label(CUSTOMER_STATUS, s)}</StatusTag>
+              ) : (
+                label(CUSTOMER_STATUS, s)
+              ),
+          },
+          {
+            title: "Ngôn ngữ",
+            dataIndex: "language",
+            render: (l: string) => label(LANGUAGE, l),
+          },
+          {
+            title: "Kênh xác nhận",
+            dataIndex: "confirmation_channel",
+            render: (c: string) => label(CONFIRMATION_CHANNEL, c),
+          },
+          {
+            title: "NOC",
+            dataIndex: "noc_confirmed",
+            render: (v: boolean) =>
+              v ? "Có" : <StatusTag tone="warn">Chưa có</StatusTag>,
+          },
+          {
+            title: "ESF (năm tài chính)",
+            dataIndex: "esf_fiscal_year",
+            render: (v: number | null) => v ?? "Chưa có",
+          },
+          {
+            title: "Kiểm tra danh sách cấm",
+            dataIndex: "denial_list_checked_on",
+            render: (d: string | null) => (d ? formatDate(d) : "Chưa kiểm"),
+          },
+          {
+            title: "Cùng tập đoàn",
+            dataIndex: "intra_group",
+            render: (v: boolean) => (v ? "Có" : "Không"),
+          },
+          {
+            title: "Sales phụ trách",
+            dataIndex: "sales_pic",
+            render: (v: string | null) => (v ? name(v) : "Chưa giao"),
+          },
+          {
+            title: "Quy tắc SalesOrder",
+            key: "salesorder",
+            fixed: "right",
+            render: (_, c) => (
+              <GuardedButton
+                size="small"
+                reason={learnBlocked}
+                inlineReason={false}
+                onClick={() => setLearning(c.code)}
+                aria-label={`Học quy tắc SalesOrder từ ví dụ: ${c.code}`}
+              >
+                Học từ ví dụ
+              </GuardedButton>
             ),
-        },
-        {
-          title: "Ngôn ngữ",
-          dataIndex: "language",
-          render: (l: string) => label(LANGUAGE, l),
-        },
-        {
-          title: "Kênh xác nhận",
-          dataIndex: "confirmation_channel",
-          render: (c: string) => label(CONFIRMATION_CHANNEL, c),
-        },
-        {
-          title: "NOC",
-          dataIndex: "noc_confirmed",
-          render: (v: boolean) =>
-            v ? "Có" : <StatusTag tone="warn">Chưa có</StatusTag>,
-        },
-        {
-          title: "ESF (năm tài chính)",
-          dataIndex: "esf_fiscal_year",
-          render: (v: number | null) => v ?? "Chưa có",
-        },
-        {
-          title: "Kiểm tra danh sách cấm",
-          dataIndex: "denial_list_checked_on",
-          render: (d: string | null) => (d ? formatDate(d) : "Chưa kiểm"),
-        },
-        {
-          title: "Cùng tập đoàn",
-          dataIndex: "intra_group",
-          render: (v: boolean) => (v ? "Có" : "Không"),
-        },
-        {
-          title: "Sales phụ trách",
-          dataIndex: "sales_pic",
-          render: (v: string | null) => (v ? name(v) : "Chưa giao"),
-        },
-      ]}
-    />
+          },
+        ]}
+      />
+    </>
   );
 }
 

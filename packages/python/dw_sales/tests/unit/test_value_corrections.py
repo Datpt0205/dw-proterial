@@ -70,7 +70,7 @@ from dw_sales.testing.followups import platform_zone
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.6.0"
+RULES = "sales_order_rules@1.11.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -497,7 +497,7 @@ def _intake(catalog: MockSalesCatalog | None = None, cases: _HeldBy | None = Non
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.11.0.yaml")),
         cases=cases or _NoCases(),
         new_case_id=uuid.uuid4,
     )
@@ -758,7 +758,7 @@ def test_a_typed_quantity_its_schedules_do_not_add_up_to_is_line_total_mismatch(
     """The PO-level checks run again on the PO as entered, so a quantity typed
     over a split line is held against its printed schedules: the upload file
     writes the schedules, and they must say the quantity Sales confirmed."""
-    rules = load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml")
+    rules = load_order_rules(POLICIES / "sales_order_rules@1.11.0.yaml")
     case = _case(flagged=("quantity", "requested_date"), split=True)
 
     entered = case.corrected(KEY, _typed("quantity", "7000"), AN).document

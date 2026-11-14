@@ -211,3 +211,7 @@ findings:
   # Sales asks the customer for the date or goes ahead with it to follow
   # (DW1 then suggests the first day the lead time allows).
   requested_date_missing: error
+  # Ticket 38 ("hk & cable"): what a line's description states against the
+  # item, its length per reel and its spec number.
+  reel_length_mismatch: error
+  spec_mismatch: error

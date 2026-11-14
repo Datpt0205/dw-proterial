@@ -260,6 +260,46 @@ class _Attached:
 
 
 @dataclass(frozen=True)
+class CustomerPoReading:
+    """The normal reading of a customer's PO file: with the tenant's own
+    approved layout of the customer's form where it has one (ticket 30), the
+    platform's otherwise. Intake reads every PO through it, and so does the
+    replay of a worked example (ticket 38): one reading, not two."""
+
+    reader: PoDocumentReaderPort
+    layouts: LayoutLookupPort | None
+
+    async def stored_layout(
+        self, scope: SalesScope, customer_code: str, content: AttachmentContent
+    ) -> PoLayout | None:
+        if self.layouts is None:
+            return None
+        read_as = READ_AS.get(self.reader.sniff(content.data) or "", "")
+        kind = {"xlsx": "excel", "pdf": "pdf", "csv": "csv"}.get(read_as)
+        approved = await self.layouts.approved(scope, customer_code)
+        return next((layout for layout in approved if layout.kind == kind), None)
+
+    async def read(
+        self, scope: SalesScope, content: AttachmentContent, customer_code: str, caps: IntakeCaps
+    ) -> PoDocument | Unreadable:
+        stored = await self.stored_layout(scope, customer_code, content)
+        return await self.read_through(content, customer_code, caps, stored)
+
+    async def read_through(
+        self,
+        content: AttachmentContent,
+        customer_code: str,
+        caps: IntakeCaps,
+        stored: PoLayout | None,
+    ) -> PoDocument | Unreadable:
+        """``content`` read through ``stored``, the layout `stored_layout`
+        found, or the platform's layouts where it found none."""
+        if stored is None:
+            return await self.reader.read(content, customer_code, caps)
+        return await self.reader.read_with(content, stored.mapping, caps, layout_ref=stored.ref)
+
+
+@dataclass(frozen=True)
 class OrderIntake:
     catalog: SalesCatalogPort
     inbox: InboxPort
@@ -756,14 +796,13 @@ class OrderIntake:
         flag: OrderRules | None,
     ) -> PoDocument | Unreadable:
         """The PO, read with the tenant's own approved layout of the customer's
-        form where it has one, the platform's otherwise. With ``flag``, the
-        rules under which a PO among the first a new layout reads has every
-        value flagged `new_layout`."""
-        stored = await self._stored_layout(scope, customer_code, content)
-        if stored is None:
-            return await self.reader.read(content, customer_code, caps)
-        read = await self.reader.read_with(content, stored.mapping, caps, layout_ref=stored.ref)
-        if isinstance(read, Unreadable) or flag is None or self.layouts is None:
+        form where it has one, the platform's otherwise (`CustomerPoReading`).
+        With ``flag``, the rules under which a PO among the first a new layout
+        reads has every value flagged `new_layout`."""
+        reading = CustomerPoReading(self.reader, self.layouts)
+        stored = await reading.stored_layout(scope, customer_code, content)
+        read = await reading.read_through(content, customer_code, caps, stored)
+        if stored is None or isinstance(read, Unreadable) or flag is None or self.layouts is None:
             return read
         seen = await self.layouts.read_count(scope, stored.ref)
         if seen < flag.layout_onboarding.uncertain_first_pos:
@@ -773,12 +812,9 @@ class OrderIntake:
     async def _stored_layout(
         self, scope: SalesScope, customer_code: str, content: AttachmentContent
     ) -> PoLayout | None:
-        if self.layouts is None:
-            return None
-        read_as = READ_AS.get(self.reader.sniff(content.data) or "", "")
-        kind = {"xlsx": "excel", "pdf": "pdf", "csv": "csv"}.get(read_as)
-        approved = await self.layouts.approved(scope, customer_code)
-        return next((layout for layout in approved if layout.kind == kind), None)
+        return await CustomerPoReading(self.reader, self.layouts).stored_layout(
+            scope, customer_code, content
+        )
 
     async def _learn(
         self,

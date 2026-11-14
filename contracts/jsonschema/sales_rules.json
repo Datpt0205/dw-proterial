@@ -1062,7 +1062,9 @@
           "customer_temporary",
           "sender_unverified",
           "legacy_encoding",
-          "requested_date_missing"
+          "requested_date_missing",
+          "reel_length_mismatch",
+          "spec_mismatch"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -1626,6 +1628,530 @@
       "design_mailboxes"
     ],
     "title": "QuoteRules",
+    "type": "object"
+  },
+  "sales_salesorder_rules": {
+    "$defs": {
+      "ColumnRule": {
+        "additionalProperties": false,
+        "description": "One column of the upload file, by its letter in the tenant's layout:\nwhere its value starts (a field of the normal reading, or the customer's\nrecord; none only where the first step is a constant) and the steps it\nthen goes through, in order.",
+        "properties": {
+          "column": {
+            "pattern": "^[A-Z]{1,3}$",
+            "title": "Column",
+            "type": "string"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "order_type",
+                  "delivery_term",
+                  "delivery_mode",
+                  "destination",
+                  "shipment_type"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Customer"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "enum": [
+                  "row_no",
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "received_date",
+                  "currency",
+                  "usd_rate",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field"
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "concat": "#/$defs/Concat",
+                  "constant": "#/$defs/Constant",
+                  "copy": "#/$defs/Copy",
+                  "cut": "#/$defs/Cut",
+                  "lookup": "#/$defs/Lookup",
+                  "multiply": "#/$defs/Multiply",
+                  "round": "#/$defs/Round",
+                  "shift_days": "#/$defs/ShiftDays",
+                  "unit_factor": "#/$defs/UnitFactor"
+                },
+                "propertyName": "step"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/Copy"
+                },
+                {
+                  "$ref": "#/$defs/Constant"
+                },
+                {
+                  "$ref": "#/$defs/Lookup"
+                },
+                {
+                  "$ref": "#/$defs/UnitFactor"
+                },
+                {
+                  "$ref": "#/$defs/ShiftDays"
+                },
+                {
+                  "$ref": "#/$defs/Round"
+                },
+                {
+                  "$ref": "#/$defs/Cut"
+                },
+                {
+                  "$ref": "#/$defs/Concat"
+                },
+                {
+                  "$ref": "#/$defs/Multiply"
+                }
+              ]
+            },
+            "maxItems": 8,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "column"
+        ],
+        "title": "ColumnRule",
+        "type": "object"
+      },
+      "Concat": {
+        "additionalProperties": false,
+        "description": "Appends the values of other fields, each after the separator.",
+        "properties": {
+          "separator": {
+            "default": "",
+            "enum": [
+              "",
+              " ",
+              "-",
+              "/",
+              "_",
+              ".",
+              ", "
+            ],
+            "title": "Separator",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "enum": [
+                "row_no",
+                "customer_code",
+                "po_no",
+                "revision",
+                "po_date",
+                "received_date",
+                "currency",
+                "usd_rate",
+                "line_no",
+                "customer_item_code",
+                "prv_code",
+                "description",
+                "quantity",
+                "uom",
+                "unit_price",
+                "amount",
+                "requested_date",
+                "suggested_delivery_date"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "step": {
+            "const": "concat",
+            "default": "concat",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "Concat",
+        "type": "object"
+      },
+      "Constant": {
+        "additionalProperties": false,
+        "description": "The value is this fixed text.",
+        "properties": {
+          "step": {
+            "const": "constant",
+            "default": "constant",
+            "title": "Step",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "Constant",
+        "type": "object"
+      },
+      "Copy": {
+        "additionalProperties": false,
+        "description": "Keeps the value as it is.",
+        "properties": {
+          "step": {
+            "const": "copy",
+            "default": "copy",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "title": "Copy",
+        "type": "object"
+      },
+      "CustomerSalesOrderRules": {
+        "additionalProperties": false,
+        "description": "One customer's columns: each named once.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/$defs/ColumnRule"
+            },
+            "maxItems": 120,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "CustomerSalesOrderRules",
+        "type": "object"
+      },
+      "Cut": {
+        "additionalProperties": false,
+        "description": "Keeps the characters from ``start`` to before ``end`` (from 0; a\nnegative number counts from the end; none: the start or the end).",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "maximum": 200,
+                "minimum": -200,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "maximum": 200,
+                "minimum": -200,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "step": {
+            "const": "cut",
+            "default": "cut",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "title": "Cut",
+        "type": "object"
+      },
+      "Lookup": {
+        "additionalProperties": false,
+        "description": "The value is what the master data's table holds for it, or for the\nfield ``key`` where one is named.",
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "enum": [
+                  "row_no",
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "received_date",
+                  "currency",
+                  "usd_rate",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Key"
+          },
+          "step": {
+            "const": "lookup",
+            "default": "lookup",
+            "title": "Step",
+            "type": "string"
+          },
+          "table": {
+            "enum": [
+              "convert_list",
+              "item_name",
+              "item_specification",
+              "item_standard_length",
+              "item_unit",
+              "item_category",
+              "item_colour"
+            ],
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "Lookup",
+        "type": "object"
+      },
+      "Multiply": {
+        "additionalProperties": false,
+        "description": "Multiplies the value by another field's.",
+        "properties": {
+          "source": {
+            "enum": [
+              "row_no",
+              "customer_code",
+              "po_no",
+              "revision",
+              "po_date",
+              "received_date",
+              "currency",
+              "usd_rate",
+              "line_no",
+              "customer_item_code",
+              "prv_code",
+              "description",
+              "quantity",
+              "uom",
+              "unit_price",
+              "amount",
+              "requested_date",
+              "suggested_delivery_date"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "step": {
+            "const": "multiply",
+            "default": "multiply",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "Multiply",
+        "type": "object"
+      },
+      "Round": {
+        "additionalProperties": false,
+        "description": "Rounds a number to ``places`` decimals.",
+        "properties": {
+          "mode": {
+            "default": "half_up",
+            "enum": [
+              "half_up",
+              "down",
+              "up"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "places": {
+            "maximum": 6,
+            "minimum": 0,
+            "title": "Places",
+            "type": "integer"
+          },
+          "step": {
+            "const": "round",
+            "default": "round",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "places"
+        ],
+        "title": "Round",
+        "type": "object"
+      },
+      "ShiftDays": {
+        "additionalProperties": false,
+        "description": "Moves a date by whole calendar days.",
+        "properties": {
+          "days": {
+            "maximum": 366,
+            "minimum": -366,
+            "title": "Days",
+            "type": "integer"
+          },
+          "step": {
+            "const": "shift_days",
+            "default": "shift_days",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "ShiftDays",
+        "type": "object"
+      },
+      "UnitFactor": {
+        "additionalProperties": false,
+        "description": "Multiplies the value by how many ``to`` make one ``from``.",
+        "properties": {
+          "from": {
+            "enum": [
+              "mm",
+              "cm",
+              "m",
+              "km"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "step": {
+            "const": "unit_factor",
+            "default": "unit_factor",
+            "title": "Step",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "mm",
+              "cm",
+              "m",
+              "km"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "UnitFactor",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "``sales_salesorder_rules``: the tenant's customers' rules, by customer\ncode. The platform ships none; every customer's arrives as a tenant\nversion learned from a worked example and approved.",
+    "properties": {
+      "customers": {
+        "patternProperties": {
+          "^[A-Z][A-Z0-9]{1,15}$": {
+            "$ref": "#/$defs/CustomerSalesOrderRules"
+          }
+        },
+        "title": "Customers",
+        "type": "object"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "mock": {
+        "title": "Mock",
+        "type": "boolean"
+      },
+      "policy_id": {
+        "const": "sales_salesorder_rules",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "schema_version": {
+        "const": "1.0",
+        "title": "Schema Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "mock"
+    ],
+    "title": "SalesOrderRules",
     "type": "object"
   }
 }

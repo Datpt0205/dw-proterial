@@ -10,6 +10,7 @@ import { salesApi } from "../_lib/api";
 import { usePeople } from "../_lib/people";
 import {
   ADVANCED_RULES,
+  LEARNED_RULES,
   keyRows,
   RULE_ABOUT,
   RULE_KEY,
@@ -26,6 +27,7 @@ import {
   usePhoneColumns,
   usePhoneTable,
 } from "../_components/list-parts";
+import { GuardedButton } from "../_components/guarded-button";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -143,13 +145,15 @@ function Rules() {
             key: "propose",
             fixed: "right",
             render: (_, k) => (
-              <Button
+              <GuardedButton
                 size="small"
+                reason={LEARNED_RULES[k.key] ?? null}
+                inlineReason={false}
                 onClick={() => setProposing({ key: k.key })}
                 aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
               >
                 {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
-              </Button>
+              </GuardedButton>
             ),
           },
         ],

@@ -156,6 +156,7 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
+from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -221,6 +222,7 @@ from dw_worker.consumers.sales_rule_drafts import (
     build_rule_draft_handler,
     build_rule_draft_sweep_consumer,
 )
+from dw_worker.consumers.sales_salesorder_examples import build_example_handler
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -1056,6 +1058,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # tệp mẫu"), on the same condition.
                 if mount.rule_drafting is not None:
                     handlers[RULE_DRAFT_REQUESTED] = build_rule_draft_handler(mount.rule_drafting)
+                # A customer's worked example, learned from (ticket 38), on
+                # the same condition.
+                if mount.salesorder_learning is not None:
+                    handlers[EXAMPLE_REQUESTED] = build_example_handler(mount.salesorder_learning)
                 if mount.rule_draft_sweep is not None:
                     sales_rule_drafts_consumer = build_rule_draft_sweep_consumer(
                         mount.rule_draft_sweep

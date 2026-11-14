@@ -88,6 +88,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/customers/{customer_code}/salesorder-examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Salesorder Examples */
+        get: operations["salesorder_examples_api_v1_sales_customers__customer_code__salesorder_examples_get"];
+        put?: never;
+        /** Request Salesorder Example */
+        post: operations["request_salesorder_example_api_v1_sales_customers__customer_code__salesorder_examples_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox": {
         parameters: {
             query?: never;
@@ -1618,6 +1636,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/salesorder-examples/by-version/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Salesorder Example Of Version */
+        get: operations["salesorder_example_of_version_api_v1_sales_salesorder_examples_by_version__version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/salesorder-examples/{example_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Salesorder Example */
+        get: operations["salesorder_example_api_v1_sales_salesorder_examples__example_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/salesorder-examples/{example_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Salesorder Example */
+        post: operations["submit_salesorder_example_api_v1_sales_salesorder_examples__example_id__submissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/worker/pause": {
         parameters: {
             query?: never;
@@ -2216,6 +2285,34 @@ export interface components {
             /** Old */
             old: string;
         };
+        /**
+         * CellDifference
+         * @description One cell the replay did not reproduce: where (the PIC's file's cell),
+         *     what was expected and what came out, and what produced it (the
+         *     customer's rule for the column, its step that could not apply, or the
+         *     layout). Carries the cells' values: price-bearing, as the key is.
+         */
+        CellDifference: {
+            /** Cell */
+            cell: string;
+            /** Column */
+            column?: string | null;
+            /** Expected */
+            expected?: string | null;
+            /** Got */
+            got?: string | null;
+            /** Header */
+            header?: string | null;
+            /** Problem */
+            problem: ("value_differs" | "row_missing" | "row_extra" | "row_refused") | ("value_missing" | "not_text" | "not_a_number" | "not_a_date" | "lookup_missing");
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "layout" | "rule" | "row";
+            /** Step */
+            step?: number | null;
+        };
         /** ChangedRow */
         ChangedRow: {
             /** Changes */
@@ -2250,12 +2347,64 @@ export interface components {
          * @enum {string}
          */
         CloseReason: "duplicate" | "not_an_order" | "superseded" | "cannot_supply";
+        /**
+         * ColumnRule
+         * @description One column of the upload file, by its letter in the tenant's layout:
+         *     where its value starts (a field of the normal reading, or the customer's
+         *     record; none only where the first step is a constant) and the steps it
+         *     then goes through, in order.
+         */
+        ColumnRule: {
+            /** Column */
+            column: string;
+            /** Customer */
+            customer?: ("order_type" | "delivery_term" | "delivery_mode" | "destination" | "shipment_type") | null;
+            /** Field */
+            field?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: (components["schemas"]["Copy"] | components["schemas"]["Constant"] | components["schemas"]["Lookup"] | components["schemas"]["UnitFactor"] | components["schemas"]["ShiftDays"] | components["schemas"]["Round"] | components["schemas"]["Cut"] | components["schemas"]["Concat"] | components["schemas"]["Multiply"])[];
+        };
+        /**
+         * Concat
+         * @description Appends the values of other fields, each after the separator.
+         */
+        Concat: {
+            /**
+             * Separator
+             * @default
+             * @enum {string}
+             */
+            separator: "" | " " | "-" | "/" | "_" | "." | ", ";
+            /** Sources */
+            sources: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date")[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "concat";
+        };
         /** ConfirmBody */
         ConfirmBody: {
             /** Case Version */
             case_version: number;
             /** Delivery Dates */
             delivery_dates: components["schemas"]["LineDate"][];
+        };
+        /**
+         * Constant
+         * @description The value is this fixed text.
+         */
+        Constant: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "constant";
+            /** Value */
+            value: string;
         };
         /** ConvertEntryView */
         ConvertEntryView: {
@@ -2278,6 +2427,17 @@ export interface components {
              */
             kind: "fixed" | "lme_band";
             low_usd_per_tonne?: components["schemas"]["Amount"] | null;
+        };
+        /**
+         * Copy
+         * @description Keeps the value as it is.
+         */
+        Copy: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "copy";
         };
         /**
          * CorrectionBody
@@ -2355,6 +2515,14 @@ export interface components {
              */
             to: string[];
         };
+        /**
+         * CustomerSalesOrderRules
+         * @description One customer's columns: each named once.
+         */
+        CustomerSalesOrderRules: {
+            /** Columns */
+            columns: components["schemas"]["ColumnRule"][];
+        };
         /** CustomerView */
         CustomerView: {
             /** Code */
@@ -2379,6 +2547,22 @@ export interface components {
             sales_pic: string | null;
             /** Status */
             status: string;
+        };
+        /**
+         * Cut
+         * @description Keeps the characters from ``start`` to before ``end`` (from 0; a
+         *     negative number counts from the end; none: the start or the end).
+         */
+        Cut: {
+            /** End */
+            end?: number | null;
+            /** Start */
+            start?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "cut";
         };
         /** DayStepView */
         DayStepView: {
@@ -2707,6 +2891,26 @@ export interface components {
             target_price: components["schemas"]["Amount"] | null;
         };
         /**
+         * ExampleFileBody
+         * @description One file of a worked example (ticket 38): its name and its bytes,
+         *     base64, decoded here and never opened: the worker reads it in the reader
+         *     sandbox.
+         */
+        ExampleFileBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
+        /**
+         * ExampleSubmissionBody
+         * @description "Gửi duyệt": the number the new version of the customers' rules takes.
+         */
+        ExampleSubmissionBody: {
+            /** Version */
+            version: string;
+        };
+        /**
          * ExportMapping
          * @description A customer portal's export (ticket 18): the title of each column read,
          *     the column saying whether a row is a firm order, and the values of it
@@ -2785,7 +2989,7 @@ export interface components {
          * @description The order checks of the spec's findings table, one code each.
          * @enum {string}
          */
-        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing";
+        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing" | "reel_length_mismatch" | "spec_mismatch";
         /**
          * FindingExplanationView
          * @description An explanation, or why there is none; always marked as the model's.
@@ -3333,6 +3537,36 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * LearnProblem
+         * @description Why a proposal was refused: a code, the column, a path. Never a word
+         *     of the model's, never a cell's value.
+         */
+        LearnProblem: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "header_differs" | "column_outside_layout" | "rule_invalid" | "constant_not_alone" | "constant_not_in_file" | "constant_from_po" | "model_unavailable" | "model_not_configured" | "model_quota";
+            /** Column */
+            column?: string | null;
+            /** Where */
+            where?: string | null;
+        };
+        /**
+         * LeftBlank
+         * @description A column neither the layout nor the rules fill: left for the person
+         *     who pastes, as in the file a case draws. Not compared; how many rows of
+         *     the PIC's file fill it is shown.
+         */
+        LeftBlank: {
+            /** Column */
+            column: string;
+            /** Filled Rows */
+            filled_rows: number;
+            /** Header */
+            header: string;
+        };
         /** LineBasisView */
         LineBasisView: {
             /** Candidates */
@@ -3437,6 +3671,25 @@ export interface components {
          * @enum {string}
          */
         LockReason: "model_bar" | "bound_at_build" | "trust" | "two_owners";
+        /**
+         * Lookup
+         * @description The value is what the master data's table holds for it, or for the
+         *     field ``key`` where one is named.
+         */
+        Lookup: {
+            /** Key */
+            key?: ("row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "lookup";
+            /**
+             * Table
+             * @enum {string}
+             */
+            table: "convert_list" | "item_name" | "item_specification" | "item_standard_length" | "item_unit" | "item_category" | "item_colour";
+        };
         /** MappingBody */
         MappingBody: {
             /** Case Version */
@@ -3652,6 +3905,22 @@ export interface components {
          * @enum {string}
          */
         ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction";
+        /**
+         * Multiply
+         * @description Multiplies the value by another field's.
+         */
+        Multiply: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "row_no" | "customer_code" | "po_no" | "revision" | "po_date" | "received_date" | "currency" | "usd_rate" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "multiply";
+        };
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -4815,6 +5084,32 @@ export interface components {
             artifacts: components["schemas"]["ArtifactView"][];
         };
         /**
+         * Replay
+         * @description The rules applied to the example's PO and compared with the PIC's file.
+         */
+        Replay: {
+            /** Cells Compared */
+            cells_compared: number;
+            /**
+             * Differences
+             * @default []
+             */
+            differences: components["schemas"]["CellDifference"][];
+            /** Differences Total */
+            differences_total: number;
+            /** Layout Ref */
+            layout_ref: string;
+            /**
+             * Left Blank
+             * @default []
+             */
+            left_blank: components["schemas"]["LeftBlank"][];
+            /** Rows Expected */
+            rows_expected: number;
+            /** Rows Got */
+            rows_got: number;
+        };
+        /**
          * ReplyQuote
          * @description A sentence of the reply that code found, once, in its newest part:
          *     the text as the customer wrote it and where it is (offsets into the NFKC
@@ -4917,6 +5212,25 @@ export interface components {
             returned_by: string;
         };
         /**
+         * Round
+         * @description Rounds a number to ``places`` decimals.
+         */
+        Round: {
+            /**
+             * Mode
+             * @default half_up
+             * @enum {string}
+             */
+            mode: "half_up" | "down" | "up";
+            /** Places */
+            places: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "round";
+        };
+        /**
          * RuleDraftBody
          * @description A company's template to draft a rule version from ("Tạo từ tệp
          *     mẫu"): its name and its bytes, base64, decoded here and never opened.
@@ -4986,7 +5300,7 @@ export interface components {
          * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
          */
-        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups";
+        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_salesorder_rules";
         /**
          * RuleProposalBody
          * @description A whole policy document for one key, validated by that key's schema.
@@ -5095,6 +5409,72 @@ export interface components {
             platform: components["schemas"]["PlatformRuleView"][];
             /** Versions */
             versions: components["schemas"]["RuleVersionView"][];
+        };
+        /**
+         * SalesOrderExampleBody
+         * @description A customer's worked example: its PO, the SalesOrder file the PIC made
+         *     from it, and the day the PO came in. The customer is the path's, looked
+         *     up in the caller's own tenant; who uploads is the caller.
+         */
+        SalesOrderExampleBody: {
+            po: components["schemas"]["ExampleFileBody"];
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            salesorder: components["schemas"]["ExampleFileBody"];
+        };
+        /**
+         * SalesOrderExampleView
+         * @description An example as the customer's screen and the approval read it.
+         */
+        SalesOrderExampleView: {
+            /** Customer Code */
+            customer_code: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Example Id
+             * Format: uuid
+             */
+            example_id: string;
+            /** Model Profile */
+            model_profile: string | null;
+            /** Po File Name */
+            po_file_name: string;
+            /** Problems */
+            problems: components["schemas"]["LearnProblem"][];
+            /** Prompt Ref */
+            prompt_ref: string | null;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            replay: components["schemas"]["Replay"] | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+            rules: components["schemas"]["CustomerSalesOrderRules"] | null;
+            /** Salesorder File Name */
+            salesorder_file_name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "replayed" | "refused" | "unavailable" | "failed" | "submitted";
+            /** Submittable */
+            submittable: boolean;
+            /** Version Id */
+            version_id: string | null;
         };
         /**
          * ScreeningRow
@@ -5235,6 +5615,19 @@ export interface components {
             sheets: string[];
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * ShiftDays
+         * @description Moves a date by whole calendar days.
+         */
+        ShiftDays: {
+            /** Days */
+            days: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "shift_days";
         };
         /**
          * SignedCopyBody
@@ -5720,6 +6113,27 @@ export interface components {
             run_id: string;
         };
         /**
+         * UnitFactor
+         * @description Multiplies the value by how many ``to`` make one ``from``.
+         */
+        UnitFactor: {
+            /**
+             * From
+             * @enum {string}
+             */
+            from: "mm" | "cm" | "m" | "km";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            step: "unit_factor";
+            /**
+             * To
+             * @enum {string}
+             */
+            to: "mm" | "cm" | "m" | "km";
+        };
+        /**
          * UnopenedValue
          * @description A value of the order nobody was served the page or sheet of.
          */
@@ -6016,6 +6430,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionDetailView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    salesorder_examples_api_v1_sales_customers__customer_code__salesorder_examples_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesOrderExampleView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_salesorder_example_api_v1_sales_customers__customer_code__salesorder_examples_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                customer_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesOrderExampleBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesOrderExampleView"];
                 };
             };
             /** @description Validation Error */
@@ -9075,6 +9558,106 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RuleProposalBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleVersionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    salesorder_example_of_version_api_v1_sales_salesorder_examples_by_version__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesOrderExampleView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    salesorder_example_api_v1_sales_salesorder_examples__example_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                example_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesOrderExampleView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_salesorder_example_api_v1_sales_salesorder_examples__example_id__submissions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                example_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExampleSubmissionBody"];
             };
         };
         responses: {

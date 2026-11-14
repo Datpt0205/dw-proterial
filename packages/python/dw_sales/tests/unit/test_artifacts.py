@@ -57,6 +57,7 @@ from dw_sales.adapters.policy_files import (
     load_bravo_upload,
     load_copy,
     load_followups,
+    load_policy,
     load_pricing,
     load_quote_rules,
     load_sales_policies,
@@ -91,11 +92,17 @@ from dw_sales.application.artifacts_service import (
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
 from dw_sales.application.local_time import local_day
-from dw_sales.application.order_artifacts import bravo_upload, portal_checklist, upload_rows
+from dw_sales.application.order_artifacts import (
+    bravo_upload,
+    line_values,
+    portal_checklist,
+    upload_rows,
+)
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService, QuoteRules, ReplyAttached
 from dw_sales.application.rules import Policy, TenantRuleBook
+from dw_sales.application.salesorder_rules import SalesOrderRules
 from dw_sales.application.views import order_line
 from dw_sales.domain.catalog import Customer, LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import CaseKind
@@ -108,6 +115,7 @@ from dw_sales.domain.orders import (
     CloseReason,
     CorrectedBySales,
     FindingCode,
+    LinePo,
     MappingStatus,
     OrderCase,
     OrderStatus,
@@ -161,6 +169,7 @@ ARTIFACT_COPY = ArtifactCopy(
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
     zone=FOLLOWUPS.working_hours.zone,
+    salesorder=load_policy(POLICIES / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
 )
 # The platform layer every service here resolves through: no tenant holds a
 # version of its own until a test proposes one.
@@ -171,6 +180,7 @@ BOOK = platform_book(
     ARTIFACT_COPY.documents,
     ARTIFACT_COPY.upload,
     FOLLOWUPS,
+    ARTIFACT_COPY.salesorder,
 )
 WRITER = ArtifactFiles()
 GATE = Gate(ScopeAuthorizationService())
@@ -407,7 +417,7 @@ def service(
 
 # ------------------------------------------------------------ order cases --
 
-_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.6.0.yaml"))
+_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.11.0.yaml"))
 
 
 def intake(cases: OrderCases) -> OrderIntake:
@@ -1230,6 +1240,22 @@ async def test_the_upload_file_prints_the_value_sales_corrected_not_the_value_re
     assert Decimal(str(by_line[1][price])) == case.line(1).po_line.unit_price
 
 
+async def test_a_line_printing_its_own_po_number_carries_it_into_the_upload_file() -> None:
+    """Ticket 18: a portal export prints a PO number on every row, and a line's
+    own number is the one Bravo is told, not the first line's."""
+    case = await _uploaded_m27()
+    po = case.line(2).effective
+    own = po.model_copy(update={"line_po": LinePo(po_no="PO-OTHER-2", anchor=po.anchors.line_no)})
+
+    assert (
+        line_values("C", case.header, own, prv_code=None, suggested=None)["po_no"] == "PO-OTHER-2"
+    )
+    assert (
+        line_values("C", case.header, po, prv_code=None, suggested=None)["po_no"]
+        == case.header.po_no
+    )
+
+
 async def test_the_confirmation_names_the_pic_the_checker_and_a_date_per_line() -> None:
     case = await _confirmed_m01()
     message = _eml(await _one(case, "confirmation_draft"))
@@ -1427,7 +1453,13 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
         }
     )
     copy = platform_book(
-        QUOTE_RULES, PRICING, without_ja, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload, FOLLOWUPS
+        QUOTE_RULES,
+        PRICING,
+        without_ja,
+        ARTIFACT_COPY.documents,
+        ARTIFACT_COPY.upload,
+        FOLLOWUPS,
+        ARTIFACT_COPY.salesorder,
     )
     world = World()
     case = await m10("approved")
@@ -1593,6 +1625,7 @@ def _tenant_book() -> TenantRuleBook:
         ARTIFACT_COPY.documents,
         ARTIFACT_COPY.upload,
         FOLLOWUPS,
+        ARTIFACT_COPY.salesorder,
     )
 
 
@@ -2253,3 +2286,61 @@ def test_a_document_time_says_the_offset_it_is_in() -> None:
     assert time_text(at, "vi", ZoneInfo("Asia/Ho_Chi_Minh")) == "13/11/2026 23:30 (UTC+7)"
     assert time_text(at, "vi", ZoneInfo("Asia/Tokyo")) == "14/11/2026 01:30 (UTC+9)"
     assert time_text(at, "en", ZoneInfo("Asia/Kolkata")) == "13 Nov 2026 22:00 (UTC+5:30)"
+
+
+# ------------------------ a customer's own SalesOrder rules (ticket 38) --
+
+
+async def test_a_customers_approved_salesorder_rules_fill_its_upload_file_by_code() -> None:
+    """dw_sales ADR 0013: once a customer's rules are the tenant's version in
+    force, every PO of that customer is drawn through them, by code (the
+    artifact service has no model at all): the columns they name, the rest
+    as the layout says. Another customer's file is untouched."""
+    book = _tenant_book()
+    _seed(book, SCOPE, UPLOAD_2.model_copy(update={"policy_version": "9.0.5"}))
+    case = await _prepared_m01()
+    rules = SalesOrderRules.model_validate(
+        {
+            **ARTIFACT_COPY.salesorder.model_dump(mode="json", by_alias=True),
+            "policy_version": "9.0.1",
+            "customers": {
+                case.customer_code: {
+                    "columns": [
+                        {
+                            "column": "T",
+                            "field": "customer_item_code",
+                            "steps": [{"step": "lookup", "table": "convert_list"}],
+                        },
+                        {"column": "W", "steps": [{"step": "constant", "value": "HK"}]},
+                        {
+                            "column": "AF",
+                            "field": "requested_date",
+                            "steps": [{"step": "shift_days", "days": -10}],
+                        },
+                    ]
+                }
+            },
+        }
+    )
+    _seed(book, SCOPE, rules)
+    world = World()
+
+    (view,) = await render(world, case, "bravo_upload", svc=service(world, book))
+
+    data = world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)]
+    opened = load_workbook(io.BytesIO(data))
+    rows = _data_rows(opened)
+    requested = [line.po_line.requested_date for line in case.lines]
+    assert None not in requested
+    assert [(r[19], r[22], r[31].date()) for r in rows] == [
+        (line.mapping.prv_code, "HK", day - timedelta(days=10))
+        for line, day in zip(case.lines, requested, strict=True)
+        if day is not None
+    ]
+    # The layout's own columns are as before; the file names the rules.
+    assert [r[11] for r in rows] == [case.header.po_no] * len(rows)
+    about = " ".join(str(c.value) for row in opened.worksheets[1].iter_rows() for c in row)
+    assert "sales_salesorder_rules@9.0.1" in about
+    # Another tenant draws the layout alone.
+    other = await book.artifact_copy(OTHER, [])
+    assert other.salesorder.of(case.customer_code) is None

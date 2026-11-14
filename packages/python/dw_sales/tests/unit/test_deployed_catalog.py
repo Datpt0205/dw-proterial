@@ -46,7 +46,7 @@ pytestmark = pytest.mark.unit
 
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.6.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.11.0.yaml"
 )
 
 MOCK = MockSalesCatalog.load(SCOPE)

@@ -62,7 +62,13 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
 )
-from dw_sales.application.drafting import ArtifactCopyPort, Drafting, People, Rendered
+from dw_sales.application.drafting import (
+    ArtifactCopy,
+    ArtifactCopyPort,
+    Drafting,
+    People,
+    Rendered,
+)
 from dw_sales.application.order_artifacts import (
     OrderDrafting,
     bravo_upload,
@@ -92,6 +98,7 @@ from dw_sales.application.quote_artifacts import (
     spec_discussion_draft,
     ycbg_draft,
 )
+from dw_sales.application.salesorder_rules import Lookups
 from dw_sales.application.support import (
     person_event,
     same_version,
@@ -545,22 +552,25 @@ class ArtifactService:
                 current = [record for record in drawn if record.kind == kind]
                 if not current:
                     await require_running(work)
+                    customer = await self._customer(scope, case.customer_code)
+                    copy = await self.copy.artifact_copy(
+                        scope, [record.template_ref for record in drawn]
+                    )
                     drafting = Drafting(
                         case=case,
                         case_version=case.case_version,
-                        customer=await self._customer(scope, case.customer_code),
+                        customer=customer,
                         people=People(
                             {m.user_id: m for m in await self.directory.list_members(context)}
                         ),
                         drafter=context.principal_id,
                         at=now,
-                        copy=await self.copy.artifact_copy(
-                            scope, [record.template_ref for record in drawn]
-                        ),
+                        copy=copy,
                         writer=self.writer,
                         scope=scope,
                         signed_copy=await self._signed_bytes(work, scope, case),
                         deployed=self.deployed,
+                        lookups=await self._lookups(scope, copy, customer),
                     )
                     for rendered in await compose(drafting, self.design):
                         record = self._record(cases.kind, case, kind, rendered, context, now)
@@ -700,6 +710,19 @@ class ArtifactService:
                 "this artifact carries prices: it needs sales.price.read",
                 details={"action": SalesScopes.PRICE_READ.value, "kind": kind},
             )
+
+    async def _lookups(self, scope: SalesScope, copy: ArtifactCopy, customer: Customer) -> Lookups:
+        """The master data the customer's SalesOrder rules look up (ticket
+        38), read only where they name a lookup: its own convert list and the
+        item master."""
+        rules = copy.salesorder.of(customer.code)
+        if rules is None or not rules.looks_up:
+            return Lookups()
+        return Lookups.of(
+            customer.code,
+            (await self.catalog.convert_list(scope)).data,
+            (await self.catalog.items(scope)).data,
+        )
 
     async def _customer(self, scope: SalesScope, code: str) -> Customer:
         customer = (await self.catalog.customer_by_code(scope, code)).data

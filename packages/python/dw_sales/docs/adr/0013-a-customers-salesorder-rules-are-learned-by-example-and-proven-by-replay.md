@@ -47,3 +47,58 @@ copy every PO's values into the file cannot be checked.
 A new PO the approved rules cannot reproduce on its own customer's next
 worked example (a form changed) is noticed the same way: Sales hands DW the
 new pair, and the replay says which rule broke.
+
+## Applied to ticket 38 (2026-11-14, by the agent, Đạt away)
+
+Built as decided; what the decision did not settle was settled so, and is
+recorded here rather than in a new ADR, because no rule above moved.
+
+- **One key for every customer.** The customers' rules are one tenant
+  version, `sales_salesorder_rules`, a map by customer code: the platform's
+  rule-version engine (approval, decision guard, settlement, stamps) holds
+  it unchanged. A version sent from an example is the version in force with
+  that customer's entry replaced. The engine's one-waiting-per-key rule
+  therefore holds across customers: a second customer's example waits
+  until the first one's version is decided.
+- **Learned only.** The rules editor's door refuses the key
+  (`rules.LEARNED_ONLY`, 422), and so does a draft in words; "Gửi duyệt"
+  (`salesorder_learning.SalesOrderExamples.submit`) is the only way a
+  version is proposed, and only for an example whose replay matched against
+  the layout still in force. It is never applied directly, the head's
+  included: the head approves, never the person who sent it. The key is
+  price-bearing (`sales.price.read`): the files and the replay carry prices.
+- **Sources are the normal reading's.** A column starts from a field the
+  normal reading gives (the PO read with the customer's approved layout,
+  `order_intake.CustomerPoReading`, the same code intake reads with) or a
+  value of the customer's record. A PO column the reading does not keep
+  (customer 1's PRS production number) is not a source yet: it would need a
+  field of the PO layout, a later change.
+- **Tables are the master data DW already owns.** `lookup` names the
+  customer's own convert list (exact, never another customer's rows) or a
+  column of the item master by PRV code. Colour letters reach the PRV code
+  through the convert list, which Bravo writes the colour into; a separate
+  colour-letter list is ticket 04's (its sheet is broken, `#REF!`).
+- **A constant is held to the example**: it is a column's only step, the
+  value every row of the PIC's file holds there, and not a value of the
+  PO's own (its number, a code, a quantity, a price, a date), which would
+  pass the first two on a one-PO file.
+- **The comparison**: numbers by value, dates by day (a text written
+  yyyy-mm-dd, yyyy/mm/dd or yyyy.mm.dd, with or without a time of day, is
+  that day: customer 1 writes its date as text), text NFKC (the reader's own
+  form) and trimmed; rows in order. The 02 file builder's own checks run on
+  each row too.
+- **What nothing fills is left for the person**, as in the file a case
+  draws: a column neither the layout nor the rules fill is not compared,
+  and is listed with how many rows the PIC filled (B41: PC's dates, the
+  PIC's code). The model is asked about those columns with the differing
+  ones; what it cannot explain stays visible to the head.
+- **The day the PO came in** is given with the pair: the file's "Receipt
+  date" is not in the PO.
+- **The model is asked only when the layout alone does not reproduce the
+  file**, is shown the layout's columns, the columns to explain and five
+  rows of each side, and is outside the model-step gate, as
+  `bravo_template_mapping` is: a one-call proposal a person asks for, which
+  the replay proves before anyone may send it.
+- **Kept**: an example never sent is dropped by the next request of its
+  workspace after 30 days; a sent one stays, for its approval shows its
+  replay.

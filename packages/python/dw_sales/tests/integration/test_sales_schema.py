@@ -24,6 +24,7 @@ from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
 from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
+from dw_sales.application.salesorder_learning import ExampleStatus
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
@@ -84,6 +85,8 @@ _SETS: dict[str, set[str]] = {
     # Every key: a draft in words may be of any (ADR 0006); from a file, only
     # `DRAFTABLE`'s, which the service refuses for the rest.
     "ck_rule_drafts_rule_key": _values(RuleKey),
+    # A worked example's status (ticket 38).
+    "ck_salesorder_examples_status": set(get_args(ExampleStatus)),
     # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
 }
 
