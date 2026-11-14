@@ -1064,7 +1064,8 @@
           "legacy_encoding",
           "requested_date_missing",
           "reel_length_mismatch",
-          "spec_mismatch"
+          "spec_mismatch",
+          "files_disagree"
         ],
         "title": "FindingCode",
         "type": "string"

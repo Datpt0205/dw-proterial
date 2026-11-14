@@ -250,6 +250,13 @@ function OrderDetail() {
                 Rev.{data.revision}
               </StatusTag>
             ) : null}
+            {data.name_revision ? (
+              // A hint from the file's name (ticket 22): the printed revision
+              // and the line comparison still decide.
+              <StatusTag tone="outline" mono>
+                Tên tệp gợi ý PO sửa: {data.name_revision}
+              </StatusTag>
+            ) : null}
             <StatusTag tone="outline" mono>
               Phiên bản {data.case_version}
             </StatusTag>

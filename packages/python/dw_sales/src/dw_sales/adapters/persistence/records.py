@@ -30,6 +30,7 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 
 _M = tables.messages
+_MC = tables.message_cases
 _S = tables.source_served
 _A = tables.artifacts
 _W = tables.worker_state
@@ -121,14 +122,25 @@ class SqlMessageLog:
                         "rule": "message_already_processed",
                     },
                 )
+            if disposition.more_cases:
+                # The mail's other POs' cases (ticket 19), in the same
+                # transaction as the disposition that keys the message.
+                await self.session.execute(
+                    sa.insert(_MC),
+                    [
+                        {
+                            **scope_values(self.scope),
+                            "message_id": disposition.message_id,
+                            "position": position,
+                            "order_case_id": case_id,
+                        }
+                        for position, case_id in enumerate(disposition.more_cases, start=1)
+                    ],
+                )
 
     async def get(self, message_id: str) -> MessageDisposition | None:
-        row = (
-            (await self.session.execute(sa.select(_M).where(_M.c.message_id == message_id)))
-            .mappings()
-            .first()
-        )
-        return None if row is None else disposition_of(row)
+        logged = await self.logged(message_id)
+        return None if logged is None else logged.disposition
 
     async def logged(self, message_id: str) -> LoggedMessage | None:
         row = (
@@ -136,7 +148,10 @@ class SqlMessageLog:
             .mappings()
             .first()
         )
-        return None if row is None else logged_message(row)
+        if row is None:
+            return None
+        more = await self._more_cases([message_id])
+        return logged_message(row, more.get(message_id, ()))
 
     async def list_all(self) -> Sequence[LoggedMessage]:
         rows = (
@@ -144,7 +159,9 @@ class SqlMessageLog:
                 sa.select(_M).order_by(_M.c.processed_at.desc(), _M.c.id.desc())
             )
         ).mappings()
-        return [logged_message(row) for row in rows]
+        listed = list(rows)
+        more = await self._more_cases(None) if listed else {}
+        return [logged_message(row, more.get(row["message_id"], ())) for row in listed]
 
     async def cases_of(self, message_ids: Collection[str]) -> Sequence[MessageOnCase]:
         if not message_ids:
@@ -164,7 +181,25 @@ class SqlMessageLog:
             case = _case_of(row)
             if case is not None:
                 found.append(MessageOnCase(row["message_id"], *case))
+        # A mail with several POs is on each of their cases (ticket 19).
+        for message_id, more in (await self._more_cases(message_ids)).items():
+            found += [MessageOnCase(message_id, CaseKind.ORDER, case_id) for case_id in more]
         return found
+
+    async def _more_cases(
+        self, message_ids: Collection[str] | None
+    ) -> dict[str, tuple[uuid.UUID, ...]]:
+        """The further cases of ``message_ids`` (every message: None), each
+        message's in the mail's order."""
+        query = sa.select(_MC.c.message_id, _MC.c.order_case_id).order_by(
+            _MC.c.message_id, _MC.c.position
+        )
+        if message_ids is not None:
+            query = query.where(_MC.c.message_id.in_(list(message_ids)))
+        found: dict[str, list[uuid.UUID]] = {}
+        for row in (await self.session.execute(query)).mappings():
+            found.setdefault(row["message_id"], []).append(row["order_case_id"])
+        return {message_id: tuple(cases) for message_id, cases in found.items()}
 
     async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
         written = await self.session.execute(
@@ -183,17 +218,18 @@ class SqlMessageLog:
         return written.first() is not None
 
 
-def logged_message(row: RowMapping) -> LoggedMessage:
-    """A `sales.messages` row as the log's reader sees it."""
+def logged_message(row: RowMapping, more_cases: Sequence[uuid.UUID] = ()) -> LoggedMessage:
+    """A `sales.messages` row as the log's reader sees it, with the further
+    cases `sales.message_cases` holds for it (ticket 19)."""
     handled = (
         MessageHandled(by=row["handled_by"], at=row["handled_at"], note=row["handled_note"])
         if row["handled_at"] is not None
         else None
     )
-    return LoggedMessage(disposition_of(row), row["processed_at"], handled)
+    return LoggedMessage(disposition_of(row, more_cases), row["processed_at"], handled)
 
 
-def disposition_of(row: RowMapping) -> MessageDisposition:
+def disposition_of(row: RowMapping, more_cases: Sequence[uuid.UUID] = ()) -> MessageDisposition:
     case = _case_of(row)
     return MessageDisposition.model_validate(
         {
@@ -211,6 +247,7 @@ def disposition_of(row: RowMapping) -> MessageDisposition:
             "handoff": row["handoff"],
             "layout_prefill": row["layout_prefill"],
             "thread_cases": row["thread_cases"] or (),
+            "more_cases": tuple(more_cases),
         }
     )
 

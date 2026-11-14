@@ -167,7 +167,7 @@ async def _order(message_id: str = "M04") -> OrderCase:
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.11.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.12.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=0xC0),
     )
@@ -246,7 +246,7 @@ async def _quote() -> QuoteCase:
         prompt=_RFQ,
         model_profile=_PROFILE,
         route="structured_extraction",
-        rules="sales_order_rules@1.11.0",
+        rules="sales_order_rules@1.12.0",
         calls=1,
         refused={"price_unparsed": 1},
     )
@@ -261,7 +261,7 @@ def _intent(outcome: str = "read") -> IntentReading:
         prompt="sales.message_intent@1.0.0",
         model_profile=_PROFILE,
         route="structured_extraction",
-        rules="sales_order_rules@1.11.0",
+        rules="sales_order_rules@1.12.0",
         outcome=outcome,
         kind="po" if read else None,
         language="vi" if read else None,
@@ -293,7 +293,12 @@ def _rows(
     at: datetime = AT,
 ) -> tuple[StepOutcome, ...]:
     return outcomes_of(
-        disposition, case, calls, steps_by_prompt=STEPS_BY_PROMPT, at=at, new_id=_ids()
+        disposition,
+        () if case is None else (case,),
+        calls,
+        steps_by_prompt=STEPS_BY_PROMPT,
+        at=at,
+        new_id=_ids(),
     )
 
 
@@ -395,7 +400,7 @@ def test_a_refused_layout_names_its_first_problem_and_an_odd_code_reads_as_other
             prompt="sales.layout_proposal@1.0.0",
             model_profile=_PROFILE,
             route="structured_extraction",
-            rules="sales_order_rules@1.11.0",
+            rules="sales_order_rules@1.12.0",
             outcome="refused",
             attachment_id="M41-A1",
             problems=("Not A Code",),

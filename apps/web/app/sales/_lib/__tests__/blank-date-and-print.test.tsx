@@ -44,6 +44,8 @@ function withPrint() {
           line_no: 1,
           field: "requested_date",
           anchor: { ...at, attachment_id: "M45-A2", quote: "23/11/2026" },
+          ours: "2026-11-16",
+          theirs: "2026-11-23",
         },
       ],
     },
@@ -73,8 +75,8 @@ describe("a line printed with no date (ticket 34)", () => {
   }, 20_000);
 });
 
-describe("a workbook and its PDF print (ticket 34)", () => {
-  it("says the print differs and opens it where it does", () => {
+describe("two files of one PO (tickets 34 and 22)", () => {
+  it("says the second file differs, with both values, and opens it where it does", () => {
     const onOpenSource = vi.fn();
     render(
       <UiProvider>
@@ -83,12 +85,14 @@ describe("a workbook and its PDF print (ticket 34)", () => {
     );
     expect(
       screen.getByText(
-        "Kèm bản in PDF (M45-A2): 1 giá trị bản in ghi khác file Excel.",
+        "Cùng PO có tệp thứ hai (M45-A2): 1 giá trị ghi khác tệp M03-A1.",
       ),
     ).toBeTruthy();
+    // Neither file wins: both values, each as its file prints it.
+    expect(screen.getByText(/16\/11\/2026 \/ 23\/11\/2026/)).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Xem trên bản in: Dòng 1: Ngày yêu cầu",
+        name: "Xem trên tệp thứ hai: Dòng 1: Ngày yêu cầu",
       }),
     );
     expect(onOpenSource).toHaveBeenCalledWith("print:0", null);

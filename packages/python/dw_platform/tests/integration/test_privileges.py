@@ -108,6 +108,8 @@ _SALES_TABLES = (
     # Migration e0940c90ce04 (dw_sales ADR 0007): the status assistant's sessions.
     "sales.assistant_sessions",
     "sales.assistant_turns",
+    # Migration 3fcedec4e4f1 (ticket 19): a message's further order cases.
+    "sales.message_cases",
 )
 
 
@@ -169,6 +171,8 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "SELECT",
         "INSERT",
     }
+    # A message's further cases are how it was processed (3fcedec4e4f1).
+    assert {verb for tbl, verb in held if tbl == "message_cases"} == {"SELECT", "INSERT"}
     # A mail Sales asked DW1 to send moves on, and is never removed (c42ed45c73a2).
     assert {verb for tbl, verb in held if tbl == "outbound_mails"} == {
         "SELECT",

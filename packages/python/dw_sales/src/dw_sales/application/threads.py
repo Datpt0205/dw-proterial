@@ -253,7 +253,7 @@ async def talk_before(
     opened: list[datetime] = []
     for entry in logged.values():
         disposition = entry.disposition
-        if disposition.case_kind is not case_kind or disposition.case_id != case_id:
+        if not disposition.is_on(case_kind, case_id):
             continue
         message = await mailbox.get_message(scope, disposition.message_id)
         if message is None:

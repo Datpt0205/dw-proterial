@@ -635,7 +635,17 @@ function Inbox() {
                     {m.disposition.handled_at ? (
                       <StatusTag tone="ok">Sales đã xử lý</StatusTag>
                     ) : null}
-                    {m.disposition.case_id ? (
+                    {m.disposition.order_cases.length > 0 ? (
+                      // A mail with several POs: one case each (ticket 19).
+                      m.disposition.order_cases.map((c) => (
+                        <Link
+                          key={c.case_id}
+                          href={`/sales/orders/${c.case_id}`}
+                        >
+                          PO {c.number}
+                        </Link>
+                      ))
+                    ) : m.disposition.case_id ? (
                       <Link
                         href={`/sales/${m.disposition.case_kind === "quote" ? "quotes" : "orders"}/${m.disposition.case_id}`}
                       >

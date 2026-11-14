@@ -260,12 +260,23 @@ class LinePo(BaseModel):
     """The PO number a line prints for itself (ticket 18): a customer portal's
     export puts one PO number on every row. Where a line has one, it is the
     line's PO number, and the PO's own (`PoHeader.po_no`) is the first line's.
-    Grouping a file's lines into one case per PO number is ticket 19's."""
+    Intake opens one case per PO number (ticket 19, `po_groups`), each dated
+    by its own first line's ``po_date`` where the file prints one per row."""
 
     model_config = _FROZEN
 
     po_no: PrintedText
     anchor: SourceAnchor
+    # The PO date the line's row prints, and where (ticket 19); None: the
+    # file prints the date once, the PO's.
+    po_date: date | None = None
+    po_date_anchor: SourceAnchor | None = None
+
+    @model_validator(mode="after")
+    def _a_date_names_its_cell(self) -> Self:
+        if (self.po_date is None) != (self.po_date_anchor is None):
+            raise ValueError("a line's PO date and its anchor go together")
+        return self
 
 
 class PoLine(BaseModel):
@@ -398,11 +409,18 @@ class PrintDifference(BaseModel):
     line_no: int | None = Field(default=None, ge=1)
     field: str = Field(pattern=r"^[a-z_]{1,32}$")
     anchor: SourceAnchor
+    # Both values as text, as each file prints them (ticket 22): the case's
+    # file's (``ours``) and this one's (``theirs``). Kept here, as read, so
+    # the finding citing them reads the same however Sales corrects the
+    # case's value. None on a difference stored before they were kept.
+    ours: str | None = Field(default=None, max_length=200)
+    theirs: str | None = Field(default=None, max_length=200)
 
 
 class PrintCopy(BaseModel):
-    """The PDF print of a PO attached beside its workbook in the same mail
-    (ticket 34): kept as a second source, never read as a second PO."""
+    """The second file of the same PO in one mail, kept as a second source
+    and never read as a second PO: the PDF print beside its workbook (ticket
+    34), or any other file naming the same PO number (ticket 22, `print_pairs`)."""
 
     model_config = _FROZEN
 
@@ -489,6 +507,11 @@ class PoDocument(BaseModel):
     # portal's export mixes forecast rows with firm ones): counted and shown,
     # never read as lines and never ordered.
     forecast_rows: int = Field(default=0, ge=0)
+    # The revision the file's name suggests after the PO number ("R1", "2",
+    # "RV"; ticket 22, `revision_hints.name_revision`): a hint shown beside
+    # the printed revision, which, with the lines, still decides
+    # (`check_history`). None: the name suggests none.
+    name_revision: str | None = Field(default=None, pattern=r"^[A-Z0-9]{1,8}$")
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -571,6 +594,8 @@ class PoDocument(BaseModel):
             yield from (anchor for _, anchor in line.anchors)
             if line.line_po is not None:
                 yield line.line_po.anchor
+                if line.line_po.po_date_anchor is not None:
+                    yield line.line_po.po_date_anchor
         if self.buyer_anchor is not None:
             yield self.buyer_anchor
         if self.total is not None:
@@ -635,6 +660,9 @@ class FindingCode(StrEnum):
     REEL_LENGTH_MISMATCH = "reel_length_mismatch"
     # The spec number the PO's line states is not one of the item's.
     SPEC_MISMATCH = "spec_mismatch"
+    # Two files of the same PO in one mail print a value differently (ticket
+    # 22): neither file wins, each value waits for a person.
+    FILES_DISAGREE = "files_disagree"
 
 
 # About the PO as a whole.
@@ -649,6 +677,7 @@ PO_LEVEL_FINDINGS: Final = frozenset(
         FindingCode.CUSTOMER_TEMPORARY,
         FindingCode.SENDER_UNVERIFIED,
         FindingCode.LEGACY_ENCODING,
+        FindingCode.FILES_DISAGREE,
     }
 )
 # About one line or the PO as a whole: a value in a line or in the header.
@@ -772,6 +801,11 @@ ALLOWED_DISPOSITIONS: Final[Mapping[FindingCode, frozenset[DispositionKind]]] = 
         # the customer for it, or goes ahead with the date to follow, DW1
         # suggesting the first day the lead time allows and PC confirming one.
         FindingCode.REQUESTED_DATE_MISSING: _ACCEPT_OR_ASK,
+        # Two files of one PO disagree (ticket 22): every differing value is
+        # also `value_uncertain` on the case's file, typed by Sales or asked
+        # of the customer; this one names both values and both files, and is
+        # accepted once Sales has settled them, or asked of the customer.
+        FindingCode.FILES_DISAGREE: _ACCEPT_OR_ASK,
     }
 )
 

@@ -25,8 +25,9 @@ read in part would leave out lines nobody knows are missing.
 are, flagged `not_printed` for Sales: the currency the layout states, at the
 first line's PO number; a price of zero (and so an amount of zero), at the
 line's quantity. A revision is 0, at the PO number, as for a form that
-prints none. Each line keeps its own PO number (`PoLine.line_po`); the PO's
-is the first line's (grouping lines into a case per PO number is ticket 19).
+prints none. Each line keeps its own PO number and PO date (`PoLine.line_po`);
+the PO's are the first line's, and intake opens one case per PO number
+(ticket 19, `po_groups`), each dated by its own first row.
 
 Every anchor is ``CSV!<column><row>`` in the customer's file, which the
 source view shows as a sheet of the same rows (`export_grid`).
@@ -67,7 +68,8 @@ from dw_sales.domain.orders import (
     Unreadable,
 )
 
-PARSER_VERSION: Final = "export_po_reader@1.0.0"
+# 1.1.0 (ticket 19): each line carries its own row's PO date.
+PARSER_VERSION: Final = "export_po_reader@1.1.0"
 # The one sheet an export is, as anchors and the source view name it.
 EXPORT_SHEET: Final = "CSV"
 # Where the titles are looked for, and how much of the export a person
@@ -261,6 +263,7 @@ def _line(table: _Table, row: int, cells: Sequence[str], line_no: int) -> PoLine
     priced = mapping.unit_price is not None
     try:
         po_no = _text(table.cell(cells, "po_no"), "po no")
+        po_date = _day(table.cell(cells, "po_date"), mapping, "po date")
         code = _text(table.cell(cells, "customer_item_code"), "customer item code")
         quantity = _number(table.cell(cells, "quantity"), mapping, "quantity")
         uom = _text(table.cell(cells, "uom"), "uom")
@@ -307,7 +310,12 @@ def _line(table: _Table, row: int, cells: Sequence[str], line_no: int) -> PoLine
                 requested_date=table.anchor(row, "requested_date"),
             ),
             flags=flags,
-            line_po=LinePo(po_no=po_no, anchor=table.anchor(row, "po_no")),
+            line_po=LinePo(
+                po_no=po_no,
+                anchor=table.anchor(row, "po_no"),
+                po_date=po_date,
+                po_date_anchor=table.anchor(row, "po_date"),
+            ),
         )
     except ValidationError as exc:
         raise _RefusedError(f"row {row}: {_first_error(exc)}", quantity_at) from exc

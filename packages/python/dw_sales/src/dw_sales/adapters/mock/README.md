@@ -98,7 +98,7 @@ else by the YCBG a Design reply quotes.
 | `M42`   | `NRV`    | Replies in `M04`'s thread to keep the PO as it is: line 2's price was agreed. Names a PO, carries no attachment.                                                | none                                          | `case_reply`    | `attached_to_case`                           | none                                                                                                           |
 | `M43`   | `NRV`    | A PO from Norvanta's new system in its own PDF form, which no layout reads: routed until a person maps the form (ticket 30).                                    | `NRV-PO-26-0502.pdf`                          | `other`         | `routed_to_sales` (`attachment_unreadable`)  | none                                                                                                           |
 | `M44`   | `VLX`    | Line 2's requested-date cell is blank: the customer will send the date later ("date to follow").                                                                | `VLX-PO-2610-0011.xlsx`                       | `po`            | `case_created`                               | `requested_date_missing` (line 2)                                                                              |
-| `M45`   | `BRN`    | The workbook and its PDF print of one PO, in one mail. The print shows line 1's date a week later.                                                              | `BRN-PO-2610-018.xlsx`, `BRN-PO-2610-018.pdf` | `po`            | `case_created`                               | `missing_noc_esf`, `value_uncertain` (line 1)                                                                  |
+| `M45`   | `BRN`    | The workbook and its PDF print of one PO, in one mail. The print shows line 1's date a week later.                                                              | `BRN-PO-2610-018.xlsx`, `BRN-PO-2610-018.pdf` | `po`            | `case_created`                               | `missing_noc_esf`, `value_uncertain` (line 1), `files_disagree`                                                |
 
 Every finding code in the glossary is raised by a message here except
 `revision_without_base`, which comes from processing `M07` before `M04`, and
@@ -134,8 +134,9 @@ suggests the first day the lead time allows.
 `BRN-PO-2610-018.pdf` (ticket 34). They read as one PO, from the workbook;
 the print is kept beside it as a source, and the one value it prints
 differently (line 1's date) is flagged `print_differs`, so line 1 is
-`value_uncertain` on its requested date and nothing else. Brennic has the
-one-sheet Excel layout for this.
+`value_uncertain` on its requested date, and `files_disagree` names both
+files' dates (ticket 22: neither file wins). Brennic has the one-sheet Excel
+layout for this.
 
 `M36`'s three lines carry new item numbers, so the convert list maps none,
 and their descriptions are written the way the customer's store writes them

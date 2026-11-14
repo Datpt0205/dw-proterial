@@ -59,6 +59,14 @@ thread" was proposed.
    model off or unanswering (after the intent step's retry window): routed
    `reply_to_case` with the cases offered; Sales picks with
    `sales.inbox.process`, as "DW xử lý" asks, and only an offered case.
+
+   *Built 2026-11-14 (ticket 19), by the agent:* one stored message may be
+   on several order cases, one per PO number it carries; its disposition
+   names the first and lists the rest (`sales.message_cases`), and the log's
+   `cases_of` returns every one of them, so a reply in the thread of a
+   three-PO mail is attached to the PO it names or offered the three. A
+   mail's cases are written in the transaction that records it: processed
+   again, it is refused whole.
 3. **Sales' sent mail joins the thread.** Each person's flow also exports
    Sent Items to the same folder. A message is outgoing when its sender is
    the member's own address, resolved by the server, never by the folder the

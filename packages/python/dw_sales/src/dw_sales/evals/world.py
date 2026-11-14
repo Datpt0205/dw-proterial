@@ -363,8 +363,13 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
         self._held[case_id] = Stored(stored.case, origin)
 
 
-def _message_of(case: OrderCase | QuoteCase) -> str:
-    return case.message_id if isinstance(case, OrderCase) else case.request.message_id
+def _message_of(case: OrderCase | QuoteCase) -> tuple[str, str | None]:
+    """What a stored case is keyed by besides its id, as the SQL store keys
+    it: an order's message and PO number (a mail with several POs is one
+    revision of each, ticket 19), a quote's message."""
+    if isinstance(case, OrderCase):
+        return case.message_id, case.header.po_no
+    return case.request.message_id, None
 
 
 class _Messages:
@@ -402,9 +407,10 @@ class _Messages:
             if (logged := self._held.get(message_id)) is not None
         )
         return [
-            MessageOnCase(d.message_id, d.case_kind, d.case_id)
+            MessageOnCase(d.message_id, d.case_kind, case_id)
             for d in on_cases
-            if d.case_kind is not None and d.case_id is not None
+            if d.case_kind is not None
+            for case_id in d.case_ids
         ]
 
     async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:

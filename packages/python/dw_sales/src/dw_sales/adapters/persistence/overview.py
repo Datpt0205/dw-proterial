@@ -59,6 +59,7 @@ _L = tables.order_lines
 _F = tables.order_findings
 _Q = tables.quote_cases
 _M = tables.messages
+_MC = tables.message_cases
 _E = tables.case_events
 
 # The statuses no work list step is on: the bounds of the partial indexes.
@@ -249,13 +250,26 @@ class SqlOverviewReader:
             .group_by(stepped.c.case_id, bucket_of.c.bucket)
         )
         case_of_message = sa.func.coalesce(_M.c.order_case_id, _M.c.quote_case_id)
-        ingest = (
-            sa.select(case_of_message.label("case_id"), sa.func.min(_M.c.processed_at).label("at"))
-            .where(
-                _M.c.disposition == DispositionKind.CASE_CREATED.value,
-                case_of_message.is_not(None),
+        opened = _M.c.disposition == DispositionKind.CASE_CREATED.value
+        # A mail with several POs opened each of their cases (ticket 19).
+        on_cases = sa.union_all(
+            sa.select(case_of_message.label("case_id"), _M.c.processed_at).where(
+                opened, case_of_message.is_not(None)
+            ),
+            sa.select(_MC.c.order_case_id.label("case_id"), _M.c.processed_at)
+            .join(
+                _MC,
+                sa.and_(
+                    _MC.c.tenant_id == _M.c.tenant_id,
+                    _MC.c.workspace_id == _M.c.workspace_id,
+                    _MC.c.message_id == _M.c.message_id,
+                ),
             )
-            .group_by(case_of_message)
+            .where(opened),
+        ).subquery("on_cases")
+        ingest = (
+            sa.select(on_cases.c.case_id, sa.func.min(on_cases.c.processed_at).label("at"))
+            .group_by(on_cases.c.case_id)
             .subquery("ingest")
         )
         draft_kinds = sorted(basis.draft_ready)

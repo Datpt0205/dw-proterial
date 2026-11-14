@@ -55,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.11.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.12.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -392,7 +392,8 @@ def _printed_otherwise(
     po: PurchaseOrderDocument, printed: PurchaseOrderDocument | None
 ) -> set[Finding]:
     """A value the PDF print beside the workbook shows differently is
-    uncertain where the workbook prints it: on its line, or on the PO."""
+    uncertain where the workbook prints it: on its line, or on the PO; and
+    any such value is the PO's `files_disagree` (ticket 22)."""
     if printed is None:
         return set()
     assert printed.print_of == po.name, f"{po.message_id}: a print of another workbook"
@@ -404,6 +405,8 @@ def _printed_otherwise(
     }
     if (po.po_date, po.currency) != (printed.po_date, printed.currency):
         found.add(("value_uncertain", None))
+    if found:
+        found.add(("files_disagree", None))
     return found
 
 

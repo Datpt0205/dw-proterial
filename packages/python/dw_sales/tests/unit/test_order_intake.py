@@ -74,7 +74,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 CATALOG = MockSalesCatalog.load(SCOPE)
 INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.11.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.12.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -317,6 +317,14 @@ GOLDEN: dict[str, Expected] = {
                 None,
                 _NOC,
                 "no NOC, ESF FY2025, denial-list check 2026-09-01",
+            ),
+            # Ticket 22: the two files disagree, both cited.
+            (
+                "files_disagree",
+                "error",
+                None,
+                "M45-A1: line 1 requested_date 2026-11-16 [PO!H10]",
+                "M45-A2: line 1 requested_date 2026-11-23 [p1]",
             ),
             ("value_uncertain", "error", 1, None, "print_differs"),
         ),
@@ -690,7 +698,7 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     case = _case(outcomes, "M01")
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
-    assert case.rules_version == "sales_order_rules@1.11.0"
+    assert case.rules_version == "sales_order_rules@1.12.0"
     assert case.document.parser_version == "excel_po_reader@1.6.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
@@ -971,16 +979,19 @@ async def test_a_po_whose_file_cannot_be_read_is_routed_naming_the_attachment_no
     )
 
 
-async def test_two_attachments_that_read_as_pos_are_routed_for_sales_to_choose() -> None:
+async def test_two_attachments_of_one_po_are_one_case_the_second_kept_beside_it() -> None:
+    """Ticket 22: the same PO in two files is one case; two copies that
+    agree raise nothing, the second kept as a source."""
     message, inbox = _built("PO VLX-PO-2609-0118", XLSX, ("copy.dat", M01_XLSX))
 
     outcome = await _intake(inbox).process(SCOPE, message)
 
-    assert outcome.disposition is not None
-    assert (outcome.disposition.reason, outcome.disposition.detail) == (
-        "other",
-        "more than one attachment reads as a PO: T01-A1, T01-A2",
-    )
+    assert outcome.disposition is not None and outcome.case is not None
+    assert outcome.disposition.kind is DispositionKind.CASE_CREATED
+    assert outcome.more_cases == ()
+    copy = outcome.case.document.print_copy
+    assert copy is not None and (copy.attachment_id, copy.differences) == ("T01-A2", ())
+    assert "files_disagree" not in {f.code.value for f in outcome.case.findings}
 
 
 async def test_a_file_over_the_policy_size_is_not_opened() -> None:

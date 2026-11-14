@@ -2,6 +2,8 @@
 
 `case_created` (an order or a quote case), `attached_to_case` (a PO revision,
 or a Design reply), `routed_to_sales` with its reason, or `not_yet_processed`.
+A mail carrying several POs is one message on several order cases (ticket
+19): its disposition names the first and lists the others (`more_cases`).
 "No message missed" is then a count anyone can take: messages still
 `not_yet_processed`, and routed messages without an owner. Names and labels
 are in CONTEXT.md.
@@ -64,6 +66,8 @@ class RoutingReason(StrEnum):
 
 # The most cases a routed reply offers: a thread holds a few POs, not fifty.
 MAX_THREAD_CASES = 50
+# The most POs one message opens cases for (ticket 19): customer 1 sends nine.
+MAX_MESSAGE_CASES = 50
 
 
 class ThreadCase(BaseModel):
@@ -117,6 +121,10 @@ class MessageDisposition(BaseModel):
     # The cases a reply's thread holds when it names none of them (ticket
     # 24): Sales picks one ("Chọn hồ sơ"), and only one of these.
     thread_cases: tuple[ThreadCase, ...] = Field(default=(), max_length=MAX_THREAD_CASES)
+    # The further order cases the message opened or joined, one per PO
+    # number after the first (ticket 19), in the order the mail names them.
+    # Empty for a message with one PO, as every message before ticket 19.
+    more_cases: tuple[uuid.UUID, ...] = Field(default=(), max_length=MAX_MESSAGE_CASES - 1)
 
     @model_validator(mode="after")
     def _kind_says_what_is_there(self) -> Self:
@@ -146,7 +154,23 @@ class MessageDisposition(BaseModel):
             or len({c.case_id for c in self.thread_cases}) != len(self.thread_cases)
         ):
             raise ValueError("only a reply routed for its thread's several cases offers them")
+        if self.more_cases and (
+            not on_case
+            or self.case_kind is not CaseKind.ORDER
+            or self.reply is not None
+            or len({self.case_id, *self.more_cases}) != len(self.more_cases) + 1
+        ):
+            raise ValueError("only a message whose POs opened several order cases lists them")
         return self
+
+    @property
+    def case_ids(self) -> tuple[uuid.UUID, ...]:
+        """Every case the message is on: none, one, or one per PO (ticket 19)."""
+        return () if self.case_id is None else (self.case_id, *self.more_cases)
+
+    def is_on(self, case_kind: CaseKind, case_id: uuid.UUID) -> bool:
+        """Whether the message is on that case, as its first or a further one."""
+        return self.case_kind is case_kind and case_id in self.case_ids
 
     def thread_case(self, case_id: uuid.UUID) -> ThreadCase | None:
         """The offered case with this id, or None when it is not one of them."""
