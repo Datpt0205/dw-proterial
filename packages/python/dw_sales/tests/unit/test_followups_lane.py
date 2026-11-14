@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -203,9 +203,18 @@ async def test_a_day_unconfirmed_tells_the_head() -> None:
     assert escalated.title == "PO VLX-PO-2609-0118 quá 24 giờ chưa xác nhận"
 
 
+# The platform reminds at any hour (sales_followups@1.2.0, Đạt 2026-11-13);
+# a tenant narrows its hours as a rule version, and these are its hours.
+OFFICE_HOURS: Final = {
+    "days": ["mon", "tue", "wed", "thu", "fri", "sat"],
+    "start": "08:00",
+    "end": "17:30",
+}
+
+
 async def test_quiet_hours_defer_a_reminder_and_never_drop_it() -> None:
-    # Owed at 12:12; the first tick is at 18:00, after work.
-    rig = await _rig()
+    # Owed at 12:12; the first tick is at 18:00, after the tenant's hours.
+    rig = await _rig(working_hours=OFFICE_HOURS)
     evening = rig.received.replace(hour=18, minute=0)
     rig.clock.advance_to(evening)
     deferred = await rig.lane.tick(ALPHA)
@@ -217,8 +226,8 @@ async def test_quiet_hours_defer_a_reminder_and_never_drop_it() -> None:
     assert rig.sender.calls[0].recipients == (AN.user_id,)
 
 
-async def test_sunday_is_no_working_day() -> None:
-    rig = await _rig()
+async def test_sunday_is_no_working_day_where_a_tenant_says_so() -> None:
+    rig = await _rig(working_hours=OFFICE_HOURS)
     sunday = rig.received + 6 * 24 * HOUR  # Sunday 27 September, 08:12
     assert sunday.weekday() == 6
     assert await rig.tick(sunday.replace(hour=10)) == ()
