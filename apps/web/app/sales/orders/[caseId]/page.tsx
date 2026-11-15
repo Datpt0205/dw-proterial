@@ -14,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
-import type { ReplyKind, SalesSchemas, SourceRegion } from "@dw/api-client";
+import type { ReplyKind, SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
@@ -36,10 +36,8 @@ import {
   anchorRegion,
   mailRange,
   markMailServed,
-  regionLabel,
+  unopenedSources,
   useServedRevision,
-  wasMailServed,
-  wasServed,
 } from "../../_lib/served";
 import { coverageStatement } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
@@ -122,29 +120,6 @@ function anchorOf(
   return line?.anchors[field] ?? line?.anchors.description ?? null;
 }
 
-/**
- * The regions the screen expects the server to ask for before prepare and
- * cross-check: the page or sheet the PO number was read on, and every one
- * holding a value that is uncertain or typed by hand. The server's rule
- * (`required_regions`) is the owner; when it asks for more, its 409 names it.
- */
-function expectedRegions(order: Order): SourceRegion[] {
-  const regions = new Map<string, SourceRegion>();
-  const add = (anchor: Anchor | null | undefined) => {
-    const region = anchorRegion(anchor);
-    if (region) regions.set(JSON.stringify(region), region);
-  };
-  add(order.header_anchors.po_no);
-  for (const flag of order.header_flags) add(order.header_anchors[flag.field]);
-  for (const line of order.lines) {
-    for (const [field, state] of Object.entries(line.value_states))
-      if (state === "uncertain" || state === "hand_entered")
-        add(line.anchors[field]);
-    for (const flag of line.flags) add(line.anchors[flag.field]);
-  }
-  return [...regions.values()];
-}
-
 function OrderDetail() {
   const { caseId } = useParams<{ caseId: string }>();
   const name = usePeople();
@@ -192,16 +167,7 @@ function OrderDetail() {
 
   // A PO written in the mail (AI item 4): its one source is the mail's text.
   const fromMail = data.attachment_id === null;
-  const missingRegions = fromMail
-    ? []
-    : expectedRegions(data).filter(
-        (r) => !wasServed(data.case_id, data.case_version, r),
-      );
-  const missing = fromMail
-    ? wasMailServed(data.case_id, data.case_version)
-      ? []
-      : ["nội dung thư"]
-    : missingRegions.map(regionLabel);
+  const { regions: missingRegions, labels: missing } = unopenedSources(data);
   const mine = (work.data ?? []).find(
     (w) => w.kind === "order" && w.id === data.case_id,
   );

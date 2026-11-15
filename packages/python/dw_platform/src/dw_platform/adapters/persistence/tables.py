@@ -557,6 +557,23 @@ notifications = sa.Table(
     sa.Column("read_at", sa.TIMESTAMP(timezone=True), nullable=True),
 )
 
+# A device a member turned pushes on from, in one workspace (Sales ticket 48).
+# Rows are created only by `platform.save_push_subscription`; the application
+# reads and deletes a person's own.
+push_subscriptions = sa.Table(
+    "push_subscriptions",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), sa.ForeignKey("workspaces.id"), nullable=False),
+    sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("endpoint", sa.Text, nullable=False),
+    sa.Column("p256dh", sa.Text, nullable=False),
+    sa.Column("auth", sa.Text, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+)
+
 # A notification on its way out through a linked chat (migration 5a25154e0296,
 # ADR 0006-provider-neutral-channel-delivery-outbox). Rows are created only by
 # `platform.deliver_notification`; the application updates the delivery's own state and nothing

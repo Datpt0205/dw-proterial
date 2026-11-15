@@ -1995,6 +1995,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today */
+        get: operations["today_api_v1_sales_today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/today/reminders/{notification_id}/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Reminder */
+        post: operations["mark_reminder_api_v1_sales_today_reminders__notification_id__mark_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/worker/pause": {
         parameters: {
             query?: never;
@@ -2402,6 +2436,25 @@ export interface components {
             po_revision: number;
             /** So No */
             so_no: string;
+        };
+        /** BriefView */
+        BriefView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Counts */
+            counts: string[];
+            /**
+             * Notification Id
+             * Format: uuid
+             */
+            notification_id: string;
+            /** Opening */
+            opening: string | null;
+            /** Title */
+            title: string;
         };
         /** CaseActivityView */
         CaseActivityView: {
@@ -4346,6 +4399,19 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * MarkIn
+         * @description What a person did with a reminder.
+         */
+        MarkIn: {
+            /** Hours */
+            hours?: number | null;
+            /**
+             * Mark
+             * @enum {string}
+             */
+            mark: "done" | "dismissed" | "snoozed";
+        };
         /** MasterDataView[BravoOrderView] */
         MasterDataView_BravoOrderView_: {
             /**
@@ -5879,6 +5945,33 @@ export interface components {
             /** Row */
             row: number;
         };
+        /** ReminderView */
+        ReminderView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Body */
+            body: string;
+            /** Case Id */
+            case_id: string | null;
+            /** Customer Term */
+            customer_term: boolean;
+            /** Followup */
+            followup: string;
+            /** Link */
+            link: string | null;
+            /**
+             * Notification Id
+             * Format: uuid
+             */
+            notification_id: string;
+            /** Stage */
+            stage: string;
+            /** Title */
+            title: string;
+        };
         /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
@@ -7119,6 +7212,14 @@ export interface components {
             pc?: null;
             sales: components["schemas"]["TimeStat"];
         };
+        /** TodayView */
+        TodayView: {
+            brief: components["schemas"]["BriefView"] | null;
+            /** Hidden */
+            hidden: number;
+            /** Reminders */
+            reminders: components["schemas"]["ReminderView"][];
+        };
         /** TurnView */
         TurnView: {
             /** Answer */
@@ -7450,6 +7551,10 @@ export interface components {
              * Format: date-time
              */
             received_at: string;
+            /** Sla Due At */
+            sla_due_at?: string | null;
+            /** Sla Warn At */
+            sla_warn_at?: string | null;
             /** Status */
             status: string;
         };
@@ -11574,6 +11679,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillVersionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    today_api_v1_sales_today_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayView"];
+                };
+            };
+        };
+    };
+    mark_reminder_api_v1_sales_today_reminders__notification_id__mark_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayView"];
                 };
             };
             /** @description Validation Error */

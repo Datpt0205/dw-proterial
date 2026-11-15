@@ -80,6 +80,7 @@ from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
 from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
 from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
+from dw_sales.adapters.persistence.reminder_marks import SqlReminderMarkStoreFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
@@ -95,7 +96,7 @@ from dw_sales.application.activity import ActivityService
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
-from dw_sales.application.followups import BriefWriterPort, FollowupLane
+from dw_sales.application.followups import BriefWriterPort, FollowupLane, PushNoticePort
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
@@ -155,6 +156,7 @@ from dw_sales.application.thread_tools import (
     registered_tools,
 )
 from dw_sales.application.threads import ThreadLinks
+from dw_sales.application.today import FollowupNoticesPort
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
@@ -230,6 +232,8 @@ def build_dw1(
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
+    # The same inbox, read back for a person's feed (tickets 47, 48).
+    notices: FollowupNoticesPort,
     artifact_bytes: ArtifactBytesPort,
     release_manifest_ref: str | None,
     runtime: Dw1Runtime,
@@ -476,6 +480,8 @@ def build_dw1(
         converts=catalog,
         senders=catalog,
         assistant=SqlAssistantStoreFactory(session_factory),
+        notices=notices,
+        reminder_marks=SqlReminderMarkStoreFactory(session_factory),
         uploads=stored,
         one_call=(
             None
@@ -711,6 +717,8 @@ def build_followup_lane(
     notifications: NotificationSenderPort,
     # The brief's writer (AI item 10), from DW1's mount; None: counts only.
     writer: BriefWriterPort | None = None,
+    # Web push to the people told (ticket 48); None where it is off.
+    push: PushNoticePort | None = None,
 ) -> tuple[FollowupLane, SqlFollowupScopes]:
     """DW1's follow-ups and morning brief (ticket 42), for the worker's
     `sales_followups` lane, and the workspaces it visits: every one with a
@@ -720,7 +728,7 @@ def build_followup_lane(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     policies = load_sales_policies(configs / "policies", configs / "copy")
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
-    lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer)
+    lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer, push)
     return lane, SqlFollowupScopes(session_factory)
 
 

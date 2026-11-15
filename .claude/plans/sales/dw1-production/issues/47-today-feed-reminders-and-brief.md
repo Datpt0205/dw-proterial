@@ -1,6 +1,6 @@
 # 47 — "Hôm nay": one feed per person for the morning brief and reminders, learning what matters
 
-Status: ready-for-agent (after 43–44)
+Status: in progress (slice built 2026-11-15, built with 48; what is left is under "Done")
 Blocked by: 43 (labelled cases), 44 (tiers)
 Category: enhancement
 
@@ -36,3 +36,37 @@ person as separate notifications.
 3. Every figure in an item is a fact; an item that fails the check is shown
    in code's own sentence.
 4. One person's feed and feedback never reach another's.
+
+## Done (2026-11-15, one slice with ticket 48)
+
+- **One feed, one page.** `/sales` ("Việc cần làm") is the place: today's
+  brief on top, the work list (48), then "Nhắc việc". The brief is the one
+  the `sales_followups` lane delivered to the person today, read back from
+  the inbox (`GET /sales/today`, `dw_sales.application.today`), so nothing
+  slow runs when the page opens; its model-written opening (already
+  figure-checked in the worker) shows tagged "DW1 viết", the counts behind
+  "Xem số liệu". Reminders are the person's follow-up notifications of the
+  last 7 days in this workspace, but "your turn" (the work list holds that
+  work) and the brief.
+- **"Đã xử lý", "Nhắc lại sau" (1 h, 4 h, ngày mai), "Không cần"**, stored
+  per person in `sales.reminder_marks` (migration `4bcfa82060fc`; RLS
+  tenant + workspace + user, read scope for offboarding; gone with its
+  notification by cascade, so 90 days like the inbox).
+- **Learns, never drops a term.** A follow-up kind the person dismissed more
+  often ranks lower for them; a customer's term (`CUSTOMER_TERM`:
+  `quote_deadline`, `implied_acceptance`) is first, takes "Đã xử lý" only,
+  and is never hidden by a dismiss or a snooze: the service refuses (409),
+  `ck_reminder_marks_customer_term` refuses the row, and a mark that exists
+  anyway is read as nothing (acceptance 1).
+- **One person's** (acceptance 4): the inbox read is the caller's own, marks
+  are RLS-narrowed to the person, a mark on someone else's notification is
+  404 (unit and integration tests).
+- Decided: a dismissal is stored as a reminder mark, not in
+  `sales.labelled_cases` (that table holds a model step's proposed and kept
+  values, ADR 0015 decision 5; a reminder carries neither).
+
+**Left:** the model wording each reminder line (reminders are still code's
+sentences as the lane writes them; acceptance 3 holds because no model text
+is in them); batching similar reminders for a person (only ranking down);
+the bell still lists the inbox beside the page.
+

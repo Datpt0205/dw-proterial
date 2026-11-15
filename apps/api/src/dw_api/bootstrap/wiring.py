@@ -83,6 +83,7 @@ from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdmin
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
+from dw_platform.adapters.persistence.push_subscriptions import SqlPushSubscriptions
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
@@ -94,6 +95,7 @@ from dw_platform.adapters.persistence.support_grants import (
 from dw_platform.adapters.persistence.tenant_members import SqlTenantMembersRepository
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
+from dw_platform.adapters.web_push import vapid_public_key
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
@@ -118,6 +120,7 @@ from dw_platform.application.support_access import (
     SupportScopeCatalog,
 )
 from dw_platform.application.tenant_members import TenantMembersService
+from dw_platform.application.web_push import WebPushService
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 
 _LOG = logging.getLogger("dw_api.bootstrap")
@@ -274,6 +277,15 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
         SqlStalledEvents(session_factory), authorization, clock, ids, OUTBOX_MAX_ATTEMPTS
     )
     container.notifications = NotificationService(SqlNotificationRepository(session_factory))
+    # The API stores a member's subscription and hands the browser the public
+    # key; the worker alone sends (ticket 48).
+    push_sender = settings.web_push_sender()
+    container.web_push = WebPushService(
+        store=SqlPushSubscriptions(session_factory),
+        sender=push_sender,
+        public_key=vapid_public_key(push_sender.private_key) if push_sender else None,
+        allowed_hosts=frozenset(settings.outbound_allowed_hosts),
+    )
     container.support_grants = SupportGrantService(
         repo=SqlSupportGrantRepository(session_factory),
         member_scopes=SqlScopeHolders(session_factory),
@@ -553,6 +565,7 @@ def build_sales(
         directory=directory,
         holders=holders,
         notifications=notifications,
+        notices=notifications,
         artifact_bytes=artifact_bytes,
         release_manifest_ref=release_manifest_ref,
         runtime=runtime,

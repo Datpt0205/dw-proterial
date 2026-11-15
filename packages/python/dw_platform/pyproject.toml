@@ -15,6 +15,12 @@ dependencies = [
     # A spreadsheet cell written as text, never a formula (`adapters/spreadsheet.py`):
     # the range `dw_sales` declares.
     "openpyxl>=3.1,<4",
+    # Web Push (Sales ticket 48, `adapters/web_push.py`): the sender, pinned
+    # and measured against a local endpoint before it was depended on; the
+    # VAPID key it signs with, and the curve the public key is read from.
+    "pywebpush==2.5.0",
+    "py-vapid>=1.9.6,<2",
+    "cryptography>=44,<51",
 ]
 
 [build-system]

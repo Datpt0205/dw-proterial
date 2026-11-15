@@ -29,6 +29,7 @@ import {
 } from "../lib/nav/visibility";
 import { LoginScreen } from "./login-screen";
 import { NotificationBell } from "./notification-bell";
+import { PushRenewal } from "./push-settings";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { BrandMark, ContextSwitcher } from "./context-switcher";
@@ -256,6 +257,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
           <>
             {phone ? <FeedbackLauncher placement="bar" /> : null}
             <NotificationBell />
+            <PushRenewal />
             <SessionChip
               contextPrefix={bar.context?.context?.roleKeyPrefix ?? null}
             />

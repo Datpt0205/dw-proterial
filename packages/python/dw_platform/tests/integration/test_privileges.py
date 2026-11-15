@@ -117,6 +117,8 @@ _SALES_TABLES = (
     # Migration eac4fabdb31a (ticket 43): what a person kept of a model's
     # proposal.
     "sales.labelled_cases",
+    # Migration 4bcfa82060fc (tickets 47, 48): a person's marks on reminders.
+    "sales.reminder_marks",
 )
 
 
@@ -408,6 +410,69 @@ async def test_a_table_added_later_is_readable_without_a_new_grant(
             await conn.execute(sa.text("SELECT count(*) FROM platform.grant_probe"))
         async with migrator.begin() as conn:
             await conn.execute(sa.text("DROP TABLE platform.grant_probe"))
+    finally:
+        await migrator.dispose()
+
+
+async def test_web_push_rows_come_in_through_one_door_and_marks_change_only_their_mark(
+    db_urls: DatabaseUrls,
+) -> None:
+    """Migration 4bcfa82060fc (Sales tickets 47, 48). `dw_app` reads and
+    deletes push subscriptions (a person turning theirs off; one the push
+    service says is gone) and writes none: `platform.save_push_subscription`
+    is the one door in. A reminder mark is inserted and may change its mark,
+    its snooze and when, never whose it is or which reminder; never deleted
+    (it goes with its notification)."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_table_privilege('dw_app', :t, :verb)"),
+                        {"t": name, "verb": verb},
+                    )
+                )
+
+            async def column(name: str, col: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_column_privilege('dw_app', :t, :col, :verb)"),
+                        {"t": name, "col": col, "verb": verb},
+                    )
+                )
+
+            async def runs(signature: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_function_privilege('dw_app', :f, 'EXECUTE')"),
+                        {"f": signature},
+                    )
+                )
+
+            subs = "platform.push_subscriptions"
+            assert await table(subs, "SELECT") and await table(subs, "DELETE")
+            for verb in ("INSERT", "UPDATE", "TRUNCATE"):
+                assert not await table(subs, verb), verb
+            assert await runs("platform.save_push_subscription(text, text, text)")
+            assert await runs("platform.prune_push_subscriptions()")
+            public = await conn.scalar(
+                sa.text(
+                    "SELECT has_function_privilege('public',"
+                    " 'platform.save_push_subscription(text, text, text)', 'EXECUTE')"
+                )
+            )
+            assert not public
+
+            marks = "sales.reminder_marks"
+            assert await table(marks, "SELECT") and await table(marks, "INSERT")
+            for verb in ("UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table(marks, verb), verb
+            for name in ("mark", "until", "marked_at"):
+                assert await column(marks, name, "UPDATE"), name
+            for name in ("notification_id", "user_id", "tenant_id", "workspace_id", "followup"):
+                assert not await column(marks, name, "UPDATE"), name
     finally:
         await migrator.dispose()
 

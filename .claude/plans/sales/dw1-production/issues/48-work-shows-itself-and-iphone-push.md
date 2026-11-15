@@ -1,6 +1,6 @@
 # 48 — Work shows itself: one place with inline decisions, pushed to the iPhone, held to an SLA
 
-Status: ready-for-agent (built with 47's feed; after 43 part 1)
+Status: in progress (slice built 2026-11-15; a real iPhone is a UAT step; what is left is under "Done")
 Blocked by: none (44 later lowers how much reaches a person)
 Category: enhancement
 
@@ -62,3 +62,56 @@ the SLA.
   its profile on each iPhone (ask IT).
 - Cato's client sits between the iPhone and the portal; the push itself
   goes from Apple to the phone, outside it.
+
+## Done (2026-11-15, one slice with ticket 47)
+
+- **Decided inline.** Each row of "Việc cần làm" expands (and a push's link
+  `/sales?item=order:<id>` opens it expanded and scrolled to) into the case
+  page's own components: `OrderActions` for an order, `QuoteActions` plus the
+  send and approval panels for a quote, so no rule is decided twice. An
+  order step that needs its source opened stays disabled with the reason and
+  links to the case page (the server refuses it too). A mail links to its
+  place in "Hộp thư". `served.ts` now owns "what of the source is unopened"
+  for both the page and the row.
+- **Ordered by the SLA.** `WorkItem.sla_warn_at` / `sla_due_at` come from
+  `dw_sales.domain.followups.sla_of`, the same timings the lane reminds and
+  escalates by: an unconfirmed order is about to be late at its reminder
+  (4 h) and late at its escalation to the head (24 h); a quote request at its
+  deadline warning (48 h before) and the end of its due day. Late first,
+  then about to be, then by due time, with a countdown column ("Hạn xử lý").
+  Sorted in the browser over the whole list (`myWork` reads every page).
+- **Web Push.** The portal's manifest and icons were there; `public/sw.js`
+  is our own worker (no library): shows the push, adds to the app badge,
+  opens the link on tap. "Thông báo trên điện thoại" in the account menu
+  turns it on per device (iOS: explains, once, to add DW to the Home Screen
+  first). `platform.push_subscriptions` (RLS per tenant + workspace + user,
+  one door in `platform.save_push_subscription`, a device that signs in as
+  someone else moves to them, 90-day prune for one not renewed, the portal
+  renews on every open). `PushSenderPort` with `PyWebPushSender`
+  (`pywebpush==2.5.0`, measured against a local endpoint and kept as a test:
+  aes128gcm decrypts, VAPID `sub`/`aud`, 410 is gone) and fakes in tests. A
+  gone subscription (404/410) is deleted. VAPID key from
+  `DW_WEB_PUSH_VAPID_PRIVATE_KEY` only; a deployed profile with
+  `DW_WEB_PUSH_ENABLED=true` and no key or subject refuses to start;
+  `scripts/dev.sh` writes a local key into `.env` when it has none. A
+  subscription and a send are allowed only for an `https` endpoint whose
+  host is in the outbound allow-list (on premises: `web.push.apple.com`).
+- **What is pushed.** Every reminder the `sales_followups` lane records:
+  "your turn" (a new item), the reminder before the SLA breaks, the
+  escalation to the head (once: the lane's record), and the other
+  follow-ups. One push per person per tick (about five minutes), so several
+  items ring once ("3 việc mới"). Payload: five fields, the kind of work and
+  the case number at most (a number that does not look like one is left
+  out; the tenant can turn the number off: `sales_followups@1.5.0`
+  `push.case_number`). Test over every push kind. Audited as the lane
+  (`sales.followup.pushed`, counts only).
+
+**Left:** "Xem trong thư" (the quote or figure an item rests on) in the row;
+the item showing who was told of an escalation and when; a mail routed to
+Sales is not pushed (no follow-up times it); approvals of rule versions,
+layouts and master data are linked from the priority panel, not inlined;
+signing out does not turn a device's pushes off (a shared phone would keep
+ringing for its last person until someone else turns pushes on there); a
+real iPhone at UAT (HTTPS with a certificate the iPhone trusts, installed to
+the Home Screen, 16.4+).
+

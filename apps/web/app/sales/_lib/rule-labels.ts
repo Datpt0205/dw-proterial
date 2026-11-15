@@ -582,6 +582,14 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "DW1 xong phần của mình thì báo ngay người phải làm tiếp: Sales phụ trách, hoặc Trưởng bộ phận cho bước kiểm chéo và duyệt.",
     },
     "your_turn.enabled": { label: "Bật báo khi đến lượt" },
+    push: {
+      label: "Thông báo trên điện thoại",
+      help: "Thông báo đẩy chỉ ghi loại việc và số hồ sơ, không bao giờ ghi giá, số tiền hay lời của khách.",
+    },
+    "push.case_number": {
+      label: "Ghi số PO, số yêu cầu báo giá trên màn hình khóa",
+      help: "Tắt thì thông báo chỉ ghi loại việc.",
+    },
   },
 };
 

@@ -185,6 +185,12 @@ ignore_missing_imports = true
 module = ["msoffcrypto", "msoffcrypto.*"]
 ignore_missing_imports = true
 
+# pywebpush, py-vapid and http-ece ship no py.typed marker. Used in one place: the Web
+# Push sender (`dw_platform.adapters.web_push`, Sales ticket 48), and its test.
+[[tool.mypy.overrides]]
+module = ["pywebpush", "pywebpush.*", "py_vapid", "py_vapid.*", "http_ece", "http_ece.*"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # pytest
 # ---------------------------------------------------------------------------

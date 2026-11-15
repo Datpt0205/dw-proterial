@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
+  BellOutlined,
   KeyOutlined,
   LogoutOutlined,
   ProfileOutlined,
@@ -11,6 +13,7 @@ import { useAuth } from "../lib/auth/auth-context";
 import { initials } from "../lib/initials";
 import { NAV_ITEMS } from "../lib/nav/registry";
 import { displayRole } from "../lib/nav/roles";
+import { PushSettingsDialog } from "./push-settings";
 
 // The menu's second door to the audit trail reads its scope from the nav
 // registry's entry, the one owner of "who is offered /audit": hard-coding a
@@ -44,6 +47,7 @@ export function SessionChip({
     changePassword,
   } = useAuth();
   const { token } = theme.useToken();
+  const [pushOpen, setPushOpen] = useState(false);
   if (status !== "ready") return null;
 
   const role = displayRole({
@@ -55,97 +59,107 @@ export function SessionChip({
   const name = displayName || "Người dùng";
 
   return (
-    <Dropdown
-      trigger={["click"]}
-      placement="bottomRight"
-      popupRender={(menu) => (
-        <div
-          className="w-72 max-w-[90vw] overflow-hidden"
-          style={{
-            background: token.colorBgElevated,
-            borderRadius: token.borderRadiusLG,
-            boxShadow: token.boxShadowSecondary,
-          }}
-        >
-          <div className="flex flex-col gap-0.5 px-4 pb-2 pt-3">
-            <Typography.Text strong>{name}</Typography.Text>
-            {email ? (
-              <Typography.Text type="secondary">{email}</Typography.Text>
-            ) : null}
-            {role ? <Typography.Text>{role}</Typography.Text> : null}
-          </div>
-          {menu}
-        </div>
-      )}
-      menu={{
-        items: [
-          ...(AUDIT_LOG && (!AUDIT_LOG.scope || hasScope(AUDIT_LOG.scope))
-            ? [
-                {
-                  key: "audit",
-                  icon: <ProfileOutlined aria-hidden />,
-                  label: <Link href="/audit">Nhật ký hoạt động</Link>,
-                },
-              ]
-            : []),
-          ...(changePassword
-            ? [
-                {
-                  key: "password",
-                  icon: <KeyOutlined aria-hidden />,
-                  label: "Đổi mật khẩu",
-                  onClick: changePassword,
-                },
-              ]
-            : []),
-          {
-            key: "logout",
-            icon: <LogoutOutlined aria-hidden />,
-            label: "Đăng xuất",
-            onClick: logout,
-          },
-        ],
-      }}
-    >
-      <Button
-        type="text"
-        className="h-auto px-1 py-1"
-        aria-label={`Tài khoản: ${name}${role ? `, ${role}` : ""}`}
-      >
-        <span className="flex items-center gap-2">
-          <Avatar
-            size={32}
+    <>
+      <Dropdown
+        trigger={["click"]}
+        placement="bottomRight"
+        popupRender={(menu) => (
+          <div
+            className="w-72 max-w-[90vw] overflow-hidden"
             style={{
-              backgroundColor: token.colorFill,
-              color: token.colorText,
-              fontSize: token.fontSizeSM,
-              fontWeight: token.fontWeightStrong,
+              background: token.colorBgElevated,
+              borderRadius: token.borderRadiusLG,
+              boxShadow: token.boxShadowSecondary,
             }}
           >
-            {initials(name)}
-          </Avatar>
-          <span className="hidden min-w-0 flex-col items-start leading-tight 2xl:flex">
-            <Typography.Text
-              strong
-              ellipsis
-              className="max-w-44 leading-tight"
-              style={{ fontSize: token.fontSizeSM + 1 }}
+            <div className="flex flex-col gap-0.5 px-4 pb-2 pt-3">
+              <Typography.Text strong>{name}</Typography.Text>
+              {email ? (
+                <Typography.Text type="secondary">{email}</Typography.Text>
+              ) : null}
+              {role ? <Typography.Text>{role}</Typography.Text> : null}
+            </div>
+            {menu}
+          </div>
+        )}
+        menu={{
+          items: [
+            ...(AUDIT_LOG && (!AUDIT_LOG.scope || hasScope(AUDIT_LOG.scope))
+              ? [
+                  {
+                    key: "audit",
+                    icon: <ProfileOutlined aria-hidden />,
+                    label: <Link href="/audit">Nhật ký hoạt động</Link>,
+                  },
+                ]
+              : []),
+            {
+              // Web Push on this device (Sales ticket 48).
+              key: "push",
+              icon: <BellOutlined aria-hidden />,
+              label: "Thông báo trên điện thoại",
+              onClick: () => setPushOpen(true),
+            },
+            ...(changePassword
+              ? [
+                  {
+                    key: "password",
+                    icon: <KeyOutlined aria-hidden />,
+                    label: "Đổi mật khẩu",
+                    onClick: changePassword,
+                  },
+                ]
+              : []),
+            {
+              key: "logout",
+              icon: <LogoutOutlined aria-hidden />,
+              label: "Đăng xuất",
+              onClick: logout,
+            },
+          ],
+        }}
+      >
+        <Button
+          type="text"
+          className="h-auto px-1 py-1"
+          aria-label={`Tài khoản: ${name}${role ? `, ${role}` : ""}`}
+        >
+          <span className="flex items-center gap-2">
+            <Avatar
+              size={32}
+              style={{
+                backgroundColor: token.colorFill,
+                color: token.colorText,
+                fontSize: token.fontSizeSM,
+                fontWeight: token.fontWeightStrong,
+              }}
             >
-              {name}
-            </Typography.Text>
-            {role ? (
+              {initials(name)}
+            </Avatar>
+            <span className="hidden min-w-0 flex-col items-start leading-tight 2xl:flex">
               <Typography.Text
-                type="secondary"
+                strong
                 ellipsis
                 className="max-w-44 leading-tight"
-                style={{ fontSize: token.fontSizeSM }}
+                style={{ fontSize: token.fontSizeSM + 1 }}
               >
-                {role}
+                {name}
               </Typography.Text>
-            ) : null}
+              {role ? (
+                <Typography.Text
+                  type="secondary"
+                  ellipsis
+                  className="max-w-44 leading-tight"
+                  style={{ fontSize: token.fontSizeSM }}
+                >
+                  {role}
+                </Typography.Text>
+              ) : null}
+            </span>
           </span>
-        </span>
-      </Button>
-    </Dropdown>
+        </Button>
+      </Dropdown>
+      <PushSettingsDialog open={pushOpen} onClose={() => setPushOpen(false)} />
+    </>
   );
 }

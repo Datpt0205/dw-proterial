@@ -112,7 +112,10 @@ def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.4.0"
+    assert policy.ref == "sales_followups@1.5.0"
+    # 1.5.0 (ticket 48): a push names the case number unless the tenant
+    # turns it off.
+    assert policy.push.case_number
     assert policy.implied_acceptance.enabled
     assert policy.waiting_pc.enabled
     assert policy.waiting_pc.remind.after_hours == 24

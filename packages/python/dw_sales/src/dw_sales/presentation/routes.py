@@ -95,6 +95,7 @@ from dw_sales.application.services import SalesServices
 from dw_sales.application.skills import SkillProposal, SkillsView, SkillVersionView
 from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.thread_summaries import ThreadSummaryView
+from dw_sales.application.today import MarkIn, TodayView
 from dw_sales.application.views import (
     BravoOrderView,
     CaseChangeView,
@@ -1036,6 +1037,23 @@ def build_router(
         cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
     ) -> Page[WorkItem]:
         return await svc.overview.my_work(context, limit=limit, cursor=cursor)
+
+    # A person's day (tickets 47, 48): today's brief and their reminders,
+    # each marked by them. The work list beside it is `/my-work`.
+    @router.get("/today", response_model=TodayView)
+    async def today(context: Ctx, svc: Svc) -> TodayView:
+        return await svc.today.today(context)
+
+    @router.post(
+        "/today/reminders/{notification_id}/mark",
+        response_model=TodayView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def mark_reminder(
+        notification_id: uuid.UUID, body: MarkIn, context: Ctx, svc: Svc, idem: Idem
+    ) -> TodayView:
+        await svc.today.mark(context, notification_id, body)
+        return await idem.record(await svc.today.today(context))
 
     # --------------------------------------------------------------- inbox --
 

@@ -53,13 +53,14 @@ from dw_agent_runtime.testing.memory_turns import memory_turn_kit
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.pagination import Page, PageRequest
-from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_kernel.ports import FixedClock, UtcClock, Uuid4Generator
 from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.application.malware import MalwareScanPort
+from dw_platform.application.notifications import SourcedNotification
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
@@ -145,6 +146,7 @@ from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
+from dw_sales.evals.today_memory import MemoryReminderMarks
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
     MemoryCatalogStore,
@@ -1096,13 +1098,18 @@ class Delivered:
     title: str
     body: str
     link: str | None
+    tenant_id: uuid.UUID | None = None
+    at: datetime | None = None
 
 
 @dataclass
 class Notifications:
-    """`NotificationSenderPort`, idempotent by source key, keeping what it sent."""
+    """`NotificationSenderPort`, idempotent by source key, keeping what it
+    sent; and `FollowupNoticesPort`, reading back one recipient's own."""
 
     sent: list[Delivered] = field(default_factory=list)
+    # When each was delivered; the wall clock where none is given.
+    clock: UtcClock | None = None
 
     async def deliver(
         self,
@@ -1116,7 +1123,33 @@ class Notifications:
     ) -> None:
         if any(d.source_key == source_key for d in self.sent):
             return
-        self.sent.append(Delivered(tuple(recipients), source_key, title, body, link))
+        at = self.clock.now() if self.clock is not None else datetime.now(UTC)
+        self.sent.append(
+            Delivered(tuple(recipients), source_key, title, body, link, context.tenant_id, at)
+        )
+
+    async def sourced(
+        self, context: AccessContext, *, prefix: str, since: datetime, limit: int
+    ) -> list[SourcedNotification]:
+        """One row per recipient, as the platform keeps them: the caller's
+        own, in the caller's tenant, newest first."""
+        mine = [
+            SourcedNotification(
+                id=uuid.uuid5(uuid.NAMESPACE_URL, f"{d.source_key}|{context.principal_id}"),
+                source_key=d.source_key,
+                title=d.title,
+                body=d.body,
+                link=d.link,
+                created_at=d.at,
+            )
+            for d in reversed(self.sent)
+            if d.at is not None
+            and d.at >= since
+            and d.tenant_id == context.tenant_id
+            and context.principal_id in d.recipients
+            and d.source_key.startswith(prefix)
+        ]
+        return mine[:limit]
 
 
 @dataclass
@@ -1682,7 +1715,7 @@ def open_world(
         design_senders=quotation,
     )
     directory = Directory(tuple(callers))
-    notifications = Notifications()
+    notifications = Notifications(clock=clock)
     objects = Objects()
     runs = RuntimeDw1Runs(
         runtime.runner,
@@ -1728,6 +1761,8 @@ def open_world(
         converts=catalog,
         senders=catalog,
         assistant=MemoryAssistantStores(),
+        notices=notifications,
+        reminder_marks=MemoryReminderMarks(),
         uploads=uploads,
         one_call=model,
         worker_id=worker.worker_id,

@@ -29,6 +29,8 @@ import {
   stalledEventSchema,
   type StalledEvent,
   inboxSchema,
+  pushKeySchema,
+  type PushKey,
   hierarchyMemberSchema,
   type AdminWorkspace,
   type AdminTenant,
@@ -738,6 +740,30 @@ export class ApiClient {
 
   markAllNotificationsRead(): Promise<void> {
     return this.requestNoContent("POST", "/api/v1/notifications/read-all");
+  }
+
+  // ---- web push (Sales ticket 48) -------------------------------------------
+
+  /** Whether pushes are on here, and the key the browser subscribes with. */
+  pushKey(): Promise<PushKey> {
+    return this.request("GET", "/api/v1/push/key", pushKeySchema);
+  }
+
+  /** The caller's device, kept (or renewed) for pushes in this workspace. */
+  savePushSubscription(subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }): Promise<void> {
+    return this.requestNoContent("PUT", "/api/v1/push/subscription", {
+      body: subscription,
+    });
+  }
+
+  /** The caller's device at `endpoint`, turned off. */
+  deletePushSubscription(endpoint: string): Promise<void> {
+    return this.requestNoContent("POST", "/api/v1/push/subscription/delete", {
+      body: { endpoint },
+    });
   }
 
   // ---- admin: separation of duties ------------------------------------------

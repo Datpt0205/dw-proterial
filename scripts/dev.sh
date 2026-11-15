@@ -5,6 +5,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# A local Web Push key in .env when it has none (Sales ticket 48); never
+# replaces one, never written anywhere git tracks.
+uv run python scripts/dev_web_push_key.py .env || true
+
 if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091

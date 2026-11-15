@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -18,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.notifications import Inbox, Notification
+from dw_platform.application.notifications import Inbox, Notification, SourcedNotification
 
 _n = tables.notifications
 # The one door into `platform.notifications`; the Zalo link store calls it inside
@@ -67,6 +68,45 @@ class SqlNotificationRepository:
             ),
             unread=int(unread or 0),
         )
+
+    async def sourced(
+        self, context: AccessContext, *, prefix: str, since: datetime, limit: int
+    ) -> list[SourcedNotification]:
+        """The caller's own notifications whose key starts with ``prefix``,
+        delivered since ``since``, newest first: what one sender told them
+        lately (`dw_sales.application.today.FollowupNoticesPort`)."""
+        # The prefix is matched as written: LIKE's own characters escaped.
+        literal = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"{literal}%"
+        async with tenant_session(
+            self.session_factory, TenantScope.from_access_context(context)
+        ) as session:
+            rows = (
+                await session.execute(
+                    sa.select(
+                        _n.c.id, _n.c.source_key, _n.c.title, _n.c.body, _n.c.link, _n.c.created_at
+                    )
+                    .where(
+                        _n.c.tenant_id == context.tenant_id,
+                        _n.c.recipient_user_id == context.principal_id,
+                        _n.c.created_at >= since,
+                        _n.c.source_key.like(pattern, escape="\\"),
+                    )
+                    .order_by(_n.c.created_at.desc(), _n.c.id.desc())
+                    .limit(limit)
+                )
+            ).all()
+        return [
+            SourcedNotification(
+                id=row.id,
+                source_key=row.source_key,
+                title=row.title,
+                body=row.body,
+                link=row.link,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
 
     async def mark_read(self, context: AccessContext, notification_id: uuid.UUID) -> bool:
         async with tenant_session(

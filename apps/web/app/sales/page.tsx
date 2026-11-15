@@ -1,7 +1,16 @@
 "use client";
 
-import { Suspense, useCallback, useMemo } from "react";
-import { Button, Card, Empty, Table, Typography } from "antd";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Key,
+} from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Alert, Button, Card, Empty, Table, Typography } from "antd";
 import { ExclamationCircleOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
@@ -21,12 +30,14 @@ import {
 import { compareVi, matches } from "../../lib/search";
 import { useNow } from "../../lib/use-now";
 import { approvalInbox } from "../../lib/approvals/registry";
+import { showBadge } from "../../lib/push";
 import { apiClient } from "../../lib/session";
 import { salesApi } from "./_lib/api";
 import { useCustomerName } from "./_lib/customers";
 import { ACTION, label, ROUTING_REASON } from "./_lib/labels";
 import { quoteTitle } from "./_lib/quote-actions";
 import { usePeople } from "./_lib/people";
+import { bySla, itemKey } from "./_lib/sla";
 import { useResource } from "./_lib/use-resource";
 import { useListView } from "./_lib/use-status-filter";
 import { salesCrumbs } from "./_components/crumbs";
@@ -44,6 +55,12 @@ import {
 import { SCOPE } from "./_components/sales-frame";
 import { ScopeGate } from "./_components/scope-gate";
 import {
+  InlineDecision,
+  SlaText,
+  TodayBrief,
+  TodayReminders,
+} from "./_components/today";
+import {
   MessageDispositionTag,
   OrderStateTag,
   QuoteStateTag,
@@ -51,17 +68,20 @@ import {
 import { useFillHeight } from "../../lib/use-fill-height";
 
 type WorkItem = SalesSchemas["WorkItem"];
+type Today = SalesSchemas["TodayView"];
 
 const TABS = ["all", "order", "quote", "message"] as const;
 const SORTS = ["api", "age", "customer"] as const;
 
 /**
- * Việc cần làm (G22): what is mine to do next, in the order the API sorts it
- * (due date first, then the oldest), with how long each has waited and the
- * deadline in giờ Việt Nam. The list is the API's `my-work`, which already
+ * Việc cần làm (G22), the one place for a person's work (tickets 47, 48):
+ * today's brief on top, then what is mine to do next, late and about to be
+ * late first (each item's SLA is the server's, from the tenant's follow-up
+ * timings), each decided in its own row with the case page's own buttons,
+ * then the day's reminders. The list is the API's `my-work`, which already
  * leaves out a cross-check the caller made part of and an approval of a quote
- * they priced; the screen never re-filters it, and re-sorts it only when the
- * person picks another order.
+ * they priced; the screen never re-filters it. `?item=order:<id>` (a push's
+ * deep link) opens that item's row.
  */
 export default function MyWorkPage() {
   return (
@@ -82,10 +102,19 @@ function MyWork() {
   const table = usePhoneTable();
   const customerName = useCustomerName();
   const view = useListView(TABS, "all", SORTS, "api");
+  const focus = useSearchParams().get("item");
   const work = useResource(
     "sales/my-work",
     useCallback(() => salesApi().myWork(), []),
   );
+  const today = useResource(
+    "sales/today",
+    useCallback(() => salesApi().today(), []),
+  );
+  // A mark answers the day as it now stands: shown until the next read.
+  const [marked, setMarked] = useState<Today | null>(null);
+  const day = marked ?? today.data;
+  const [expanded, setExpanded] = useState<readonly Key[]>([]);
   const orders = useResource(
     "sales/orders",
     useCallback(() => salesApi().orders(), []),
@@ -176,6 +205,32 @@ function MyWork() {
         : undefined;
 
   const items = useMemo(() => work.data ?? [], [work.data]);
+  const rowKey = (i: WorkItem) => `${i.kind}:${i.id}:${i.action}`;
+  const focused = focus
+    ? items.find((item) => itemKey(item) === focus)
+    : undefined;
+  const focusedKey = focused ? rowKey(focused) : null;
+  // The deep link's item opens expanded, scrolled to, once the list is read.
+  useEffect(() => {
+    if (!focusedKey) return;
+    setExpanded((open) =>
+      open.includes(focusedKey) ? open : [...open, focusedKey],
+    );
+    window.requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-row-key="${CSS.escape(focusedKey)}"]`)
+        ?.scrollIntoView({ block: "center" }),
+    );
+  }, [focusedKey]);
+  // The app badge is the count of work waiting on this person.
+  useEffect(() => {
+    if (work.data) showBadge(work.data.length);
+  }, [work.data]);
+  const reloadAll = useCallback(() => {
+    work.reload();
+    today.reload();
+    setMarked(null);
+  }, [work, today]);
   const overdue = items.filter((i) => dayDeadline(i.due, now)?.overdue);
   // "Sắp đến hạn" is the server's (the tenant's follow-up policy).
   const soon = items.filter(
@@ -217,7 +272,7 @@ function MyWork() {
           customerName(b.customer_code) || b.customer_code,
         ),
       );
-    return rows;
+    return bySla(rows, now);
   })();
   const filtered = view.tab !== "all" || view.query !== "";
 
@@ -288,8 +343,17 @@ function MyWork() {
               : ""}
           </span>
         }
-        help={`Việc xếp theo hạn rồi theo thời gian chờ, cũ nhất trước. Mọi giờ là ${TIME_ZONE_LABEL}.`}
+        help={`Việc quá hạn xử lý và sắp quá hạn lên đầu; hạn xử lý theo giờ nhắc và giờ báo Trưởng bộ phận trong cài đặt nhắc việc. Bấm mũi tên đầu dòng để quyết định ngay tại đây. Mọi giờ là ${TIME_ZONE_LABEL}.`}
       />
+      <TodayBrief today={day} />
+      {focus && work.data && !focused ? (
+        <Alert
+          type="info"
+          showIcon
+          title="Việc này không còn chờ bạn."
+          description={<FocusLink focus={focus} />}
+        />
+      ) : null}
       {work.error ? (
         <LoadError error={work.error} onRetry={work.reload} />
       ) : (
@@ -325,7 +389,7 @@ function MyWork() {
             onQuery={view.setQuery}
             placeholder="Số PO, số RFQ, khách hàng"
             sorts={[
-              { value: "api", label: "Theo hạn" },
+              { value: "api", label: "Theo hạn xử lý" },
               { value: "age", label: "Nhận sớm nhất" },
               { value: "customer", label: "Khách hàng (A–Z)" },
             ]}
@@ -333,7 +397,19 @@ function MyWork() {
             onSort={view.setSort}
           />
           <Table<WorkItem>
-            rowKey={(i) => `${i.kind}:${i.id}:${i.action}`}
+            rowKey={rowKey}
+            expandable={{
+              expandedRowKeys: expanded,
+              onExpand: (open, item) =>
+                setExpanded((keys) =>
+                  open
+                    ? [...keys, rowKey(item)]
+                    : keys.filter((key) => key !== rowKey(item)),
+                ),
+              expandedRowRender: (item) => (
+                <InlineDecision item={item} onChanged={reloadAll} />
+              ),
+            }}
             loading={work.loading}
             dataSource={shown}
             pagination={false}
@@ -381,7 +457,7 @@ function MyWork() {
                     phone={
                       <>
                         <ItemState item={item} />
-                        <DueCell item={item} now={now} />
+                        <SlaText item={item} now={now} />
                       </>
                     }
                   />
@@ -423,6 +499,14 @@ function MyWork() {
                 render: (_, item) => <DueCell item={item} now={now} />,
               },
               {
+                // The SLA (tickets 47, 48): late at the escalation to the
+                // head, about to be at the reminder.
+                title: `Hạn xử lý (${TIME_ZONE_LABEL})`,
+                key: "sla",
+                align: "right",
+                render: (_, item) => <SlaText item={item} now={now} />,
+              },
+              {
                 title: "Phụ trách",
                 key: "assigned",
                 align: "center",
@@ -444,6 +528,15 @@ function MyWork() {
           />
         </>
       )}
+
+      <TodayReminders
+        today={day}
+        loading={today.loading}
+        error={today.error}
+        onRetry={today.reload}
+        onChanged={setMarked}
+        focusCase={focus?.split(":")[1] ?? null}
+      />
 
       <Card title="YCBG chờ Design" size="small" id="ycbg-cho-design">
         {ycbg.error ? (
@@ -497,6 +590,17 @@ function MyWork() {
         )}
       </Card>
     </div>
+  );
+}
+
+/** Where a deep link's case lives, when it no longer waits on this person. */
+function FocusLink({ focus }: { focus: string }) {
+  const [kind, id] = focus.split(":");
+  if (!id || (kind !== "order" && kind !== "quote")) return null;
+  return (
+    <Link href={`/sales/${kind === "order" ? "orders" : "quotes"}/${id}`}>
+      Mở hồ sơ
+    </Link>
   );
 }
 

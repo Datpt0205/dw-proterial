@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
 
 type Anchor = SalesSchemas["SourceAnchor"];
+type Order = SalesSchemas["OrderCaseView"];
 
 /**
  * The pages and sheets this browser was shown, per case version.
@@ -104,4 +105,50 @@ export function anchorRegion(
 /** "trang 2" / "sheet 注文書", for a sentence. */
 export function regionLabel(region: SourceRegion): string {
   return "page" in region ? `trang ${region.page}` : `sheet ${region.sheet}`;
+}
+
+/**
+ * The regions the screen expects the server to ask for before prepare and
+ * cross-check: the page or sheet the PO number was read on, and every one
+ * holding a value that is uncertain or typed by hand. The server's rule
+ * (`required_regions`) is the owner; when it asks for more, its 409 names it.
+ */
+export function expectedRegions(order: Order): SourceRegion[] {
+  const regions = new Map<string, SourceRegion>();
+  const add = (anchor: Anchor | null | undefined) => {
+    const region = anchorRegion(anchor);
+    if (region) regions.set(JSON.stringify(region), region);
+  };
+  add(order.header_anchors.po_no);
+  for (const flag of order.header_flags) add(order.header_anchors[flag.field]);
+  for (const line of order.lines) {
+    for (const [field, state] of Object.entries(line.value_states))
+      if (state === "uncertain" || state === "hand_entered")
+        add(line.anchors[field]);
+    for (const flag of line.flags) add(line.anchors[flag.field]);
+  }
+  return [...regions.values()];
+}
+
+/**
+ * What of an order's source this browser has not opened yet for its version:
+ * the regions, and each in words. A PO written in the mail (AI item 4) has
+ * one source, the mail's text. The order page and the work list's inline
+ * decision (ticket 48) both read it, so "Chưa mở nguồn" says one thing.
+ */
+export function unopenedSources(order: Order): {
+  regions: SourceRegion[];
+  labels: string[];
+} {
+  if (order.attachment_id === null)
+    return {
+      regions: [],
+      labels: wasMailServed(order.case_id, order.case_version)
+        ? []
+        : ["nội dung thư"],
+    };
+  const regions = expectedRegions(order).filter(
+    (r) => !wasServed(order.case_id, order.case_version, r),
+  );
+  return { regions, labels: regions.map(regionLabel) };
 }
