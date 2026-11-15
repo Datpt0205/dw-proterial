@@ -100,6 +100,8 @@ def test_the_onprem_profile_stays_on_the_server_with_thinking_off() -> None:
     declared = [route for route in routes if route is not None]
     assert {route.provider for route in declared} == {Provider.ONPREM}
     assert {route.reasoning_effort for route in declared} == {"none"}
+    # One model serves every step (docs/adr/0025): no second, smaller one.
+    assert len({route.model for route in declared}) == 1
     # Down means a person, never someone else's model.
     assert profile.fallback is None
     # Embeddings stay on the same server (infra/onprem): nothing leaves.
@@ -150,14 +152,18 @@ def _profiles() -> ModelProfileRegistry:
 def test_the_onprem_chat_route_reaches_the_plants_server_and_not_the_gateway() -> None:
     """dw_sales ADR 0012: a reading with tools talks to the same server as a
     one-call reading, through the same guard; never to the gateway."""
+    profiles = _profiles()
     factory = onprem_chat_models(
-        _config(deployed=False, onprem="http://localhost:11434/v1"), _profiles()
+        _config(deployed=False, onprem="http://localhost:11434/v1"), profiles
     )
     assert factory is not None
     model = factory.resolve("onprem")
     assert isinstance(model, ChatOpenAI)
     assert str(model.openai_api_base) == "http://localhost:11434/v1"
-    assert (model.model_name, model.reasoning_effort) == ("qwen3.5-9b-dw", "none")
+    # The profile names the model; this test does not name it a second time.
+    route = profiles.resolve("onprem").chat
+    assert route is not None
+    assert (model.model_name, model.reasoning_effort) == (route.model, "none")
     with pytest.raises(OutboundUrlError):
         onprem_chat_models(_config(deployed=True, onprem="http://localhost:11434/v1"), _profiles())
     assert onprem_chat_models(_config(deployed=False, onprem=None), _profiles()) is None

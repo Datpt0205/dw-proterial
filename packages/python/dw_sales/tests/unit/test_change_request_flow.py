@@ -416,6 +416,33 @@ async def test_the_model_off_or_unmeasured_is_never_asked_and_a_person_types() -
     )
 
 
+async def test_the_model_down_reads_nothing_and_a_person_types() -> None:
+    """Sales ticket 01, acceptance 3: the step on and measured, the model
+    server down. The call is made and fails; nothing is guessed, the mail
+    opens no request by itself, and the person's typed line is the request,
+    which says the reading was unavailable."""
+    body = "Hello,\n\nCould you deliver line 3 on 18/12/2026?\n\nHana"
+    with SampleWith([_reply(html=None, body=body)]) as sample:
+        world, model, case_id = await _with_model(sample, {})
+        model.failure = ModelUnavailableError("InfrastructureError")
+        before = world.order(case_id)
+
+        with pytest.raises(ConflictError) as nothing:
+            await _open(world, case_id)
+        typed = await _open(
+            world,
+            case_id,
+            typed=[TypedChange(line_no=3, field="requested_date", value="2026-12-18")],
+        )
+
+    assert nothing.value.details["rule"] == "nothing_read"
+    assert [c for c in model.calls if str(c[0]).startswith("sales.change_request")] != []
+    assert world.order(case_id).lines == before.lines
+    assert typed.request.reading == "unavailable"
+    (line,) = typed.request.lines
+    assert (line.read_by, line.asked) == ("person", "2026-12-18")
+
+
 async def test_a_typed_line_the_order_does_not_have_is_refused() -> None:
     with SampleWith([_reply()]) as sample:
         world = _world(sample)
