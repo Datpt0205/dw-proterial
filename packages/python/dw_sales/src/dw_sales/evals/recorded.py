@@ -145,6 +145,10 @@ class Observed:
     calls: list[tuple[PromptRef, RunContext, dict[str, str]]] = field(default_factory=list)
     # The calls that gave an answer in the schema; the rest were unavailable.
     answered: int = 0
+    # The chat route's model, for a step that reads with tools (the thread
+    # agent, tickets 30 and 31): its turns are recorded through this object
+    # too (`thread_agent.Recording`). None: the lane runs no such step.
+    chat: Any = None
 
     @property
     def model_profile(self) -> str:

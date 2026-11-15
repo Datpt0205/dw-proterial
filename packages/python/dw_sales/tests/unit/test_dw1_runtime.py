@@ -351,25 +351,32 @@ def test_the_worker_config_pins_dw1s_graph_and_names_dw1() -> None:
 
 def test_dw1_offers_a_model_no_outbound_tool() -> None:
     """SEC02: a turn that reads a document gets no outbound tool. Every DW1
-    run reads customer mail, so the worker's toolset must hold none: today it
-    has no toolset at all; one added later is held to this."""
+    run reads customer mail, so the worker's toolset holds read-only tools
+    only (dw_sales ADR 0012, the amendment of ADR 0005 decision 5): side
+    effect `none` and no approval to ask, for the thread agent's turn."""
     definition, _ = parse_worker_file(WORKER_FILE)
-    if definition.toolset_version is None:
-        return
+    assert definition.toolset_version is not None
     toolset = REPO / "configs" / "toolsets" / f"{DW1_WORKER_ID}@{definition.toolset_version}.yaml"
     pins = yaml.safe_load(toolset.read_text(encoding="utf-8"))["tools"]
+    assert pins
     for pin in pins:
         spec = REPO / "configs" / "tools" / f"{pin['name']}@{pin['version']}.yaml"
-        level = yaml.safe_load(spec.read_text(encoding="utf-8"))["side_effect_level"]
-        assert level not in {"external", "critical"}, pin["name"]
+        declared = yaml.safe_load(spec.read_text(encoding="utf-8"))
+        assert (declared["side_effect_level"], declared["approval_policy"]) == (
+            "none",
+            "never",
+        ), pin["name"]
 
 
 def test_a_dw1_turn_that_reads_a_document_gets_no_tool_and_a_typed_flagged_answer() -> None:
     """The invariant that replaced "DW1 calls no model" (dw_sales ADR 0005).
 
-    - No tool: the worker declares no toolset, and the one door to a model
-      (`InterpretationPort`) offers none: a turn that reads customer text
-      cannot reach anything (ADR 0007-document-content-turns-cannot-call-outbound-tools).
+    - No tool in a one-call step: the one door to a model
+      (`InterpretationPort`) offers none, so a turn that reads customer text
+      through it cannot reach anything (ADR
+      0007-document-content-turns-cannot-call-outbound-tools). The worker's
+      toolset is the thread agent's alone, read-only and bound by code
+      (dw_sales ADR 0012; `test_dw1_offers_a_model_no_outbound_tool`).
     - The graph holds no model: a node gets its steps by injection, and the
       step that reads a description gets the run's context handed down, so
       the call is attributed to this run.
@@ -378,8 +385,6 @@ def test_a_dw1_turn_that_reads_a_document_gets_no_tool_and_a_typed_flagged_answe
     - Flagged: a value the model chose is marked as the model's, and a number
       is never one (`SpanRead`).
     """
-    definition, _ = parse_worker_file(WORKER_FILE)
-    assert definition.toolset_version is None
     assert "tools" not in inspect.signature(InterpretationPort.interpret).parameters
 
     assert list(inspect.signature(graph.build_graph).parameters) == ["steps"]

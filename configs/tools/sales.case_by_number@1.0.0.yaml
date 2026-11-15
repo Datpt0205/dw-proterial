@@ -1,0 +1,20 @@
+schema_version: "1.0"
+# DW1's read-only tool for reading a thread message (dw_sales ADR 0012,
+# tickets 30 and 31; `dw_sales.application.thread_tools`). The customer,
+# tenant and workspace it reads are bound from the run by code, never an
+# argument.
+name: sales.case_by_number
+version: "1.0.0"
+summary: "This customer's case known by a PO, RFQ or YCBG number the message names."
+when_to_use: "The message names a number and you need to know whether it is this customer's case and what it holds."
+when_not_to_use: "No number is named, or the number is one of the cases of the thread already shown. A number of another customer's finds nothing."
+returns: "found, and the case (kind, numbers, status, lines) when found."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The customer's own records and words, read for their own thread.
+data_classification: [confidential]

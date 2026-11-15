@@ -1,0 +1,20 @@
+schema_version: "1.0"
+# DW1's read-only tool for reading a thread message (dw_sales ADR 0012,
+# tickets 30 and 31; `dw_sales.application.thread_tools`). The customer,
+# tenant and workspace it reads are bound from the run by code, never an
+# argument.
+name: sales.pc_status
+version: "1.0.0"
+summary: "Whether Sales asked PC for the delivery dates of this customer's order, since when, and PC's answer per line."
+when_to_use: "The message is about delivery dates PC gave or has not given yet."
+when_not_to_use: "The message is not about delivery dates. A number of another customer's finds nothing."
+returns: "found, number, waiting_on_pc_since, and the lines with their pc_deliveries (quantity, date, first_date)."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The customer's own records and words, read for their own thread.
+data_classification: [confidential]

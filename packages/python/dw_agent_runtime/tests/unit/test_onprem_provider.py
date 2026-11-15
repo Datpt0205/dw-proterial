@@ -12,10 +12,17 @@ from pathlib import Path
 
 import pytest
 import yaml
+from langchain_openai import ChatOpenAI
 
-from dw_agent_runtime.adapters.model_stack import ModelProviderConfig, build_model_adapters
+from dw_agent_runtime.adapters.chat_model import OnPremChatModelFactory
+from dw_agent_runtime.adapters.model_stack import (
+    ModelProviderConfig,
+    build_model_adapters,
+    onprem_chat_models,
+)
 from dw_agent_runtime.adapters.openai_compatible import OpenAICompatibleAdapter
-from dw_agent_runtime.model.profiles import ModelProfile, Provider
+from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry, Provider
+from dw_agent_runtime.registry import ConfigError
 from dw_kernel.net_guard import OutboundUrlError
 
 pytestmark = pytest.mark.unit
@@ -129,3 +136,34 @@ def test_a_deployed_process_with_no_real_provider_is_refused() -> None:
     )
     with pytest.raises(RuntimeError, match="requires a real model provider"):
         build_model_adapters(config, mock_fixtures_dir=FIXTURES)
+
+
+# ------------------------------------------------- the tool-calling path --
+
+
+def _profiles() -> ModelProfileRegistry:
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(REPO_ROOT / "configs" / "models")
+    return profiles
+
+
+def test_the_onprem_chat_route_reaches_the_plants_server_and_not_the_gateway() -> None:
+    """dw_sales ADR 0012: a reading with tools talks to the same server as a
+    one-call reading, through the same guard; never to the gateway."""
+    factory = onprem_chat_models(
+        _config(deployed=False, onprem="http://localhost:11434/v1"), _profiles()
+    )
+    assert factory is not None
+    model = factory.resolve("onprem")
+    assert isinstance(model, ChatOpenAI)
+    assert str(model.openai_api_base) == "http://localhost:11434/v1"
+    assert (model.model_name, model.reasoning_effort) == ("qwen3.5-9b-dw", "none")
+    with pytest.raises(OutboundUrlError):
+        onprem_chat_models(_config(deployed=True, onprem="http://localhost:11434/v1"), _profiles())
+    assert onprem_chat_models(_config(deployed=False, onprem=None), _profiles()) is None
+
+
+def test_the_onprem_chat_factory_refuses_a_route_on_another_provider() -> None:
+    factory = OnPremChatModelFactory(_profiles(), "http://localhost:11434/v1", "k")
+    with pytest.raises(ConfigError, match="not the on-premises server"):
+        factory.resolve("gateway")

@@ -806,6 +806,37 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "6ff2fc7f3c2d2706cb63f9ed645b117146fbeeff463d740b5dc83fc13e2138d3",
+      "dataset_id": "sales_thread_agent",
+      "files": [
+        {
+          "checksum": "20140d509fe7ae394138ebacef5e7583775950a8f80798b1957e8dbac2e2154c",
+          "path": "evals/expected/sales_thread_agent.json"
+        },
+        {
+          "checksum": "9b678f2c56751174b32a80993b0f945e4a221cc874e5c077579b3d4cbcc0c418",
+          "path": "evals/expected/sales_thread_agent_golden.json"
+        },
+        {
+          "checksum": "6aeaac77c7f39fe3426ad54ab0ca5d51cd8e0f28f552900aa558530d5d871857",
+          "path": "evals/fixtures/cases/sales_reply_golden.json"
+        },
+        {
+          "checksum": "ebb35963fea81ae202db1067bf8753b1cab11a8425916cca6d2e6e0eadc3a672",
+          "path": "evals/fixtures/cases/sales_thread_agent.json"
+        },
+        {
+          "checksum": "832745599bf9c00b1a94235a8c848ed5246b0b87ddd75daa0cb744c4f43e1985",
+          "path": "evals/fixtures/cases/sales_thread_agent_security.json"
+        },
+        {
+          "checksum": "1599b55f24ec68f9393a20d031331edb2eac82dc1a9e1af9a9c431b38ce3feab",
+          "path": "evals/fixtures/cases/sales_thread_agent_threads.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "fbc513f60b061d12a33eb6ae3ee441976f5a576d22d364404aefae80785774a9",
       "dataset_id": "sales_thread_summaries",
       "files": [
@@ -821,7 +852,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "271e7672b219df89c261071d917abc0875988606",
+  "git_sha": "0f2164048354b3697ea391088bbb3ec778db4a41",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -851,9 +882,9 @@
       "routing_policy_version": "1.0.0"
     },
     {
-      "checksum": "d4c034056f9fc0554d559e1e1643cf8be54b688375e5200f1c4e7c4552cf3bef",
+      "checksum": "0f26d94568ed7fe3ea2cb47cee0536a17a74623f28f6400164c04f2cc03dda43",
       "profile_id": "onprem",
-      "routing_policy_version": "1.1.0"
+      "routing_policy_version": "1.2.0"
     },
     {
       "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",
@@ -1281,6 +1312,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "fb246acb4d6a75060b736ec14e97ae208c9475a06233ae8bd69c534be3422ef8",
+      "prompt_id": "sales.thread_agent",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "a3287ec19131d57babc0afcae8d8dad69023dec897ef79c0cc58369009aaf87a",
       "prompt_id": "sales.thread_summary",
       "version": "1.0.0"
@@ -1288,8 +1324,65 @@
   ],
   "rubrics": [],
   "schema_version": "1.0",
-  "tool_specs": [],
-  "toolsets": [],
+  "tool_specs": [
+    {
+      "approval_policy": "never",
+      "checksum": "f77cfdd94a66f4879bebe640f82e12f3aaf0882904e3081748a03a86711e6781",
+      "name": "sales.case_by_number",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "0dc1dc32f5c4e5487fb4bd1330b07a02f220cda3a124930d38f4e78df42f81f0",
+      "name": "sales.case_snapshot",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "057ee8d7429760a0f62fa5b2dee8b36840d5aded97102191c3277d6f73fa54ca",
+      "name": "sales.conversion_lookup",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "19bc204b7bb393057dc144744e576c337358ce3d4b785fb273c5ccb8b082e48b",
+      "name": "sales.lead_time",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "b75eb5da5f62e3bc2242bacf5bd3536fa0ec17263fc250829357f5722a509721",
+      "name": "sales.pc_status",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "04e76f9d479e5a3eb60ff6ec12c5562fad82701318421a9a1bade8fa8c1d255c",
+      "name": "sales.thread_messages",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    }
+  ],
+  "toolsets": [
+    {
+      "checksum": "75f9a8e8a496502e34b0b95b6dd66047cdf81181abc287bb3c01e3f24d01dc85",
+      "tools": [
+        "sales.thread_messages@1.0.0",
+        "sales.case_snapshot@1.0.0",
+        "sales.case_by_number@1.0.0",
+        "sales.conversion_lookup@1.0.0",
+        "sales.lead_time@1.0.0",
+        "sales.pc_status@1.0.0"
+      ],
+      "toolset_id": "sales-dw1",
+      "version": "1.0.0"
+    }
+  ],
   "workers": [
     {
       "agent_prompt_id": null,
@@ -1310,8 +1403,8 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.1.0",
-      "toolset_version": null,
+      "prompt_bundle_version": "1.2.0",
+      "toolset_version": "1.0.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"
     }

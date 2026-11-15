@@ -468,6 +468,10 @@ def build_sales(
         # The same rule for a template drafted outside a run, through the
         # one-call door: the plan's daily allowance checked before the call.
         one_call_model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
+        # The thread agent's turn (tickets 30 and 31), on the same server's
+        # chat route: built only where that server is, and used only where a
+        # tenant's rules turn it on and its live eval met the bar.
+        agent_turns=runtime.agent_turns,
         # The mailbox the API reads too (ticket 43), and, for the stored one,
         # the folder this process alone reads into it.
         deployed=settings.is_deployed,

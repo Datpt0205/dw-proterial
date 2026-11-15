@@ -65,6 +65,10 @@ def test_both_hold_runs_to_the_same_run_policy() -> None:
     assert composition.WORKER_RUN_POLICY.name == api_paths.WORKER_RUN_POLICY.name
 
 
+def test_both_frame_tools_in_the_same_runtime_copy() -> None:
+    assert composition.RUNTIME_COPY.name == api_paths.RUNTIME_COPY_CONFIG.name
+
+
 @pytest.mark.parametrize("named", [None, "mock", "stored"])
 def test_both_read_the_same_mailbox(monkeypatch: pytest.MonkeyPatch, named: str | None) -> None:
     """Ticket 43: the API shows the mailbox the worker's lanes work."""

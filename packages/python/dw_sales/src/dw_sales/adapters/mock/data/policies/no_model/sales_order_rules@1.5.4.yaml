@@ -156,6 +156,7 @@ model_assist:
   layout_proposal: false
   po_body_extraction: false
   change_request: false
+  thread_agent: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

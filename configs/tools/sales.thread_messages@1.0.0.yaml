@@ -1,0 +1,20 @@
+schema_version: "1.0"
+# DW1's read-only tool for reading a thread message (dw_sales ADR 0012,
+# tickets 30 and 31; `dw_sales.application.thread_tools`). The customer,
+# tenant and workspace it reads are bound from the run by code, never an
+# argument.
+name: sales.thread_messages
+version: "1.0.0"
+summary: "The earlier messages of this mail thread with this customer, oldest first: when each came, its subject and what the customer wrote then."
+when_to_use: "The message answers or refers to something said earlier in the thread ('as discussed', 'see below', 'the dates you sent')."
+when_not_to_use: "The message says what it does on its own. It never shows another customer's mail."
+returns: "messages: up to five, each with author, received_on, subject and text."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The customer's own records and words, read for their own thread.
+data_classification: [confidential]

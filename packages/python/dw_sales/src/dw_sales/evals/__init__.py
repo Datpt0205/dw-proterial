@@ -6,8 +6,9 @@ and `descriptions`, `intents`, `requests`, `replies`, `handoffs` and
 ticket 15's header path, and `rule_drafts` for a layout drafted from a
 company's template, `rule_words` for one changed in words, and
 `salesorder_rules` for a customer's SalesOrder rules learned from a worked
-example and proven by replay, and `change_requests` for ticket 27's change
-asked in a reply's words)."""
+example and proven by replay, `change_requests` for ticket 27's change
+asked in a reply's words, and `thread_agent` for tickets 30 and 31's thread
+message read with read-only tools)."""
 
 from dw_sales.evals.assistant import GRADERS as ASSISTANT_GRADERS
 from dw_sales.evals.catalog_columns import GRADERS as COLUMN_GRADERS
@@ -33,6 +34,7 @@ from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
 from dw_sales.evals.salesorder_rules import GRADERS as SALESORDER_RULES_GRADERS
 from dw_sales.evals.screening_followups import GRADERS as SCREENING_GRADERS
 from dw_sales.evals.sender_customers import GRADERS as SENDER_GRADERS
+from dw_sales.evals.thread_agent import GRADERS as THREAD_AGENT_GRADERS
 from dw_sales.evals.thread_summaries import GRADERS as THREAD_GRADERS
 
 # Every grader, failing a live case whose model gave no usable answer
@@ -65,6 +67,7 @@ GRADERS = {
         **CHANGE_REQUEST_GRADERS,
         **REMINDER_GRADERS,
         **ASSISTANT_GRADERS,
+        **THREAD_AGENT_GRADERS,
     }.items()
 }
 

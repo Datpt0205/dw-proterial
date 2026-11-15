@@ -1,0 +1,20 @@
+schema_version: "1.0"
+# DW1's read-only tool for reading a thread message (dw_sales ADR 0012,
+# tickets 30 and 31; `dw_sales.application.thread_tools`). The customer,
+# tenant and workspace it reads are bound from the run by code, never an
+# argument.
+name: sales.conversion_lookup
+version: "1.0.0"
+summary: "This customer's item code or words for an item, looked up in their conversion list: the seller's PRV code it converts to."
+when_to_use: "The message names an item by the customer's own code or words and you need to know which item it is."
+when_not_to_use: "The message names no item. It never looks up another customer's list."
+returns: "found, the customer_item_code asked, and the prv_code and item_name when found."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The customer's own records and words, read for their own thread.
+data_classification: [confidential]

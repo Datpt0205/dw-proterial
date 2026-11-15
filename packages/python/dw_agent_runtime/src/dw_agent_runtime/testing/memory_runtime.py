@@ -44,7 +44,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
-from dw_platform.application.ports import PlatformUnitOfWork
+from dw_platform.application.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -330,6 +330,74 @@ class _Work:
     async def rollback(self) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class MemoryExecution:
+    """One tool execution as `SqlToolExecutionStore` keeps it."""
+
+    tool_name: str
+    tool_version: str
+    status: str
+    input_hash: str
+    output: dict[str, object] | None
+    idempotency_key: str | None
+    run_id: uuid.UUID
+    tenant_id: uuid.UUID
+
+
+@dataclass
+class MemoryToolExecutions:
+    """Implements the executor's `ExecutionStorePort`: every execution kept,
+    a succeeded one found again by tool and key within the run's tenant, as
+    the SQL store finds it under the tenant's row security."""
+
+    executions: list[MemoryExecution] = field(default_factory=list)
+
+    async def find_succeeded(
+        self, run_context: RunContext, tool_name: str, idempotency_key: str
+    ) -> MemoryExecution | None:
+        return next(
+            (
+                e
+                for e in self.executions
+                if e.tenant_id == run_context.tenant_id
+                and e.tool_name == tool_name
+                and e.idempotency_key == idempotency_key
+                and e.status == "succeeded"
+            ),
+            None,
+        )
+
+    async def record(
+        self,
+        run_context: RunContext,
+        *,
+        execution_id: uuid.UUID,
+        tool_name: str,
+        tool_version: str,
+        status: str,
+        input_hash: str,
+        output_hash: str | None,
+        output: dict[str, object] | None,
+        idempotency_key: str | None,
+        error: str | None,
+        attempts: int,
+        started_at: datetime,
+        finished_at: datetime,
+    ) -> None:
+        self.executions.append(
+            MemoryExecution(
+                tool_name,
+                tool_version,
+                status,
+                input_hash,
+                output,
+                idempotency_key,
+                run_context.run_id,
+                run_context.tenant_id,
+            )
+        )
+
+
 @dataclass(frozen=True)
 class _Unmetered:
     """A plan with no daily limits: a real answer (`RunAllowancePort`)."""
@@ -357,6 +425,8 @@ class MemoryRuntime:
     approvals: MemoryApprovals
     audit: MemoryAudit
     outbox: MemoryOutbox
+    # What a tool executor audits through: the audit log above.
+    uow_factory: PlatformUnitOfWorkFactory
 
     @classmethod
     def build(
@@ -401,4 +471,4 @@ class MemoryRuntime:
             clock=clock,
             id_generator=ids,
         )
-        return cls(runner, flow, graphs, workers, runs, approvals, audit, outbox)
+        return cls(runner, flow, graphs, workers, runs, approvals, audit, outbox, uow_factory)

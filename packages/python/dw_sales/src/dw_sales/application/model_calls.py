@@ -34,8 +34,8 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     PromptRef,
 )
+from dw_agent_runtime.model.readiness import StepModelPort
 from dw_kernel.errors import NotFoundError
-from dw_sales.application.model_readiness import StepModelPort
 from dw_sales.domain.activity import ModelCall
 
 _LOG = logging.getLogger("dw_sales.model")
@@ -52,6 +52,15 @@ def recording_model_calls() -> Iterator[list[ModelCall]]:
         yield calls
     finally:
         _CALLS.reset(token)
+
+
+def record_model_call(call: ModelCall) -> None:
+    """Records a call a step timed itself (an agent turn, which no
+    `TimedInterpretation` sees), for the message being processed; nothing
+    outside `recording_model_calls`."""
+    calls = _CALLS.get()
+    if calls is not None:
+        calls.append(call)
 
 
 def model_calls() -> tuple[ModelCall, ...]:

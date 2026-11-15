@@ -2156,6 +2156,23 @@
       "CaseReplyView": {
         "description": "A customer's reply attached to the case by its thread (ticket 32), with\nthe thread intents a model read in it (ticket 26) and the step code\nproposes from that, now.\n\n``proposal`` is computed from the case's status as it is now, and only for\nthe newest message of the case's thread, a reply or one Sales sent: an\nolder one's reading does not pre-select anything. It is a suggestion: the\nstep is the existing one, which Sales confirms and the server checks as\nfor any other caller. The quotes are the customer's sentences, shown to a\ncase reader as the inbox shows the whole mail.",
         "properties": {
+          "fallback": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calls",
+                  "spend",
+                  "time",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback"
+          },
           "intents": {
             "items": {
               "$ref": "#/components/schemas/IntentView"
@@ -10275,7 +10292,8 @@
           "request_handoff",
           "layout_proposal",
           "po_body_extraction",
-          "change_request"
+          "change_request",
+          "thread_agent"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -16408,6 +16426,23 @@
         "additionalProperties": false,
         "description": "What the model reading of a thread message did, stamped where the\nmessage is kept (a reply's disposition, a sent message's record): the\nprompt, profile and route of the call, the rules whose switch asked for\nit, the outcome and the intents code kept. ``unavailable``: no usable\nanswer, so the message proposes nothing and Sales reads it.",
         "properties": {
+          "fallback": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calls",
+                  "spend",
+                  "time",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback"
+          },
           "intents": {
             "default": [],
             "items": {
@@ -17990,6 +18025,23 @@
       "SentMessageView": {
         "description": "A message Sales sent on the case's thread (ticket 25: \"Sales gửi\"),\nwith the thread intents a model read in it where the tenant's rules turn\nthe step on (ticket 26), and the step that proposes when it is the\nthread's newest: Sales asking the customer proposes that the case waits\non them. Its subject is Sales' own words.",
         "properties": {
+          "fallback": {
+            "anyOf": [
+              {
+                "enum": [
+                  "calls",
+                  "spend",
+                  "time",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback"
+          },
           "intents": {
             "items": {
               "$ref": "#/components/schemas/IntentView"

@@ -1,0 +1,20 @@
+schema_version: "1.0"
+# DW1's read-only tool for reading a thread message (dw_sales ADR 0012,
+# tickets 30 and 31; `dw_sales.application.thread_tools`). The customer,
+# tenant and workspace it reads are bound from the run by code, never an
+# argument.
+name: sales.lead_time
+version: "1.0.0"
+summary: "The standard lead time of one of the seller's items (PRV code), and how the order rules count it."
+when_to_use: "The message asks for, or proposes, a delivery date and you need to know whether it fits the item's lead time."
+when_not_to_use: "No item or date is in question."
+returns: "found, prv_code, standard_lead_time_days, counted_from (received_date or po_date) and day_basis (calendar)."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The customer's own records and words, read for their own thread.
+data_classification: [confidential]
