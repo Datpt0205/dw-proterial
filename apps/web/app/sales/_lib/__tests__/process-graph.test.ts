@@ -65,7 +65,7 @@ describe("placing a lane's statuses from the served moves (2026-10-22)", () => {
       ...ORDERS,
       nodes: [
         ...ORDERS.nodes,
-        { status: "on_hold", steps: [], holder: "sales" },
+        { status: "on_hold", steps: [], holder: "sales", ba_steps: [] },
       ],
       edges: [
         ...ORDERS.edges,
@@ -126,7 +126,12 @@ describe("the main path: the canvas's one row (2026-10-24)", () => {
   });
   const lane = (statuses: string[], edges: [string, string][]): Lane => ({
     ...ORDERS,
-    nodes: statuses.map((status) => ({ status, steps: [], holder: "sales" })),
+    nodes: statuses.map((status) => ({
+      status,
+      steps: [],
+      holder: "sales",
+      ba_steps: [],
+    })),
     edges: edges.map(([from, to]) => move(from, to)),
   });
 

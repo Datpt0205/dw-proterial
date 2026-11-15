@@ -13,7 +13,9 @@ transitions ticket 03 owns.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -148,3 +150,89 @@ def step(step_id: str) -> ProcessStep:
         if candidate.step_id == step_id:
             return candidate
     raise KeyError(step_id)
+
+
+# ------------------------------------------- the BA's merged flows (11-13) --
+
+
+class BaStep(BaseModel):
+    """One step of the BA's two merged flows of 2026-11-13, "QUY TRÌNH ĐƠN
+    HÀNG (PO)" (0-KH … 6.3) and "QUY TRÌNH BÁO GIÁ (RFQ)" (1 … 2.1.6): the
+    code the BA wrote on it, and what it does in a few words. The BA's
+    decision gates (◇) carry no code and are not listed."""
+
+    model_config = _FROZEN
+
+    code: str = Field(pattern=r"^[0-9][0-9A-Z.\-]{0,9}$")
+    label: str = Field(min_length=1, max_length=80)
+
+
+def _ba(code: str, label: str) -> BaStep:
+    return BaStep(code=code, label=label)
+
+
+# Where DW1 is while each of the BA's steps runs, the one owner of the
+# code -> words mapping (ticket 35): per procedure, a place is a case status
+# (`OrderStatus`, `QuoteStatus`) or a step of a flow beside the statuses,
+# ``<flow>.<step>`` (`process_settings.SUBFLOWS`). The process page draws
+# each code on its place; `test_process_settings.py` holds every place to the
+# served view. A step DW1 does not do yet (5.1, 6.1B, 6-HUY, 2.2.x, …) has no
+# place and is left out; so is a status the BA's flow has no step for.
+BA_STEPS: Final[Mapping[Procedure, Mapping[str, tuple[BaStep, ...]]]] = MappingProxyType(
+    {
+        Procedure.ORDER_ENTRY: MappingProxyType(
+            {
+                "thread.before_po": (_ba("0-KH", "Khách trao đổi trong luồng thư, rồi gửi PO"),),
+                "received": (
+                    _ba("0-SP", "Sales tải PO từ cổng của khách lên DW1"),
+                    _ba("1", "Gom PO, phân loại, giao đúng PIC"),
+                ),
+                "checked": (
+                    _ba("2", "Đọc PO, trích xuất từng dòng"),
+                    _ba("2.1A", "Kiểm giá theo LME"),
+                    _ba("2.2A", "Đổi mã khách sang mã PRV"),
+                    _ba("3.1", "So PO với báo giá"),
+                ),
+                "in_review": (_ba("3", "PIC tự kiểm, quyết định từng sai lệch"),),
+                "correction_requested": (_ba("4", "Đề nghị khách sửa PO, nhắc khách"),),
+                "prepared": (_ba("5", "Xác nhận PO hợp lệ, lịch giao theo PC"),),
+                "uploaded_to_bravo": (_ba("5-BR", "Nhập đơn vào Bravo, ghi số SO"),),
+                "cross_checked": (_ba("5-KC", "Kiểm chéo đơn hàng"),),
+                "confirmation_sent": (
+                    _ba("5.2", "Gửi kèm Excel đã xử lý"),
+                    _ba("5.3", "Gửi thư xác nhận cho khách"),
+                    _ba("6.3", "Gửi lại khách PO và lịch giao mới"),
+                ),
+                "change_review": (_ba("6.2B", "Làm lại PO, kiểm lại bước 2 đến 3"),),
+                "closed": (_ba("1-X", "Đóng hồ sơ PO không hợp lệ"),),
+                "pc_request.waiting_pc": (_ba("2.4B", "Hỏi PC lịch giao và cách tách dòng"),),
+                "change_request.confirm_lines": (
+                    _ba("6.1A", "Khách xin điều chỉnh qua thư"),
+                    _ba("6-DW1", "Nhận ra yêu cầu, gắn với PO gốc, so thay đổi"),
+                ),
+                "update.ask_pc": (_ba("6-DW2", "Soạn yêu cầu gửi PC"),),
+                "update.waiting_pc": (_ba("6-PC", "PC xem và trả lời"),),
+                "update.answer_customer": (
+                    _ba("6-DW3", "PC đề xuất khác: soạn thư phương án cho khách"),
+                    _ba("6-DW4", "PC làm được: soạn thư xác nhận điều chỉnh"),
+                ),
+                "update.bravo_update": (_ba("6.2-SP", "Duyệt cập nhật đơn trên Bravo"),),
+            }
+        ),
+        Procedure.QUOTATION: MappingProxyType(
+            {
+                "received": (_ba("1-DW", "Gom RFQ, đọc, phân loại, giao PIC"),),
+                "ycbg_recorded": (_ba("1.1.1", "Nhập RFQ lên Bravo"),),
+                "sent_to_design": (_ba("1.1.2", "Gửi RFQ cho Design, nhắc khi chậm"),),
+                "spec_discussion": (_ba("1.1.3", "Hỏi lại khách về spec"),),
+                "design_replied": (_ba("1.1.4", "Ghi BP code và Base price"),),
+                "declined": (_ba("1.1.5", "Sales quyết định đóng"),),
+                "priced": (_ba("2.1.1", "Tính giá theo LME và policy, chốt giá"),),
+                "pending_approval": (_ba("2.1.4", "In báo giá, trình ký"),),
+                "approved": (_ba("2.1.5", "Bản đã ký"),),
+                "sent": (_ba("2.1.6", "Gửi thư báo giá"),),
+                "master_list_recorded": (_ba("2.1.3", "Ghi báo giá vào master list"),),
+            }
+        ),
+    }
+)

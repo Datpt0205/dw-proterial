@@ -11,6 +11,8 @@ import {
 } from "../_lib/process-graph";
 import { AiStateTag } from "./tags";
 
+type BaStep = Lane["nodes"][number]["ba_steps"][number];
+
 /**
  * A lane's statuses as cards (2026-10-22, re-cut 2026-10-23). On a wide
  * screen they sit on the React Flow canvas as compact tiles
@@ -36,6 +38,10 @@ export interface StatusCard {
   href: string;
   label: string;
   steps: { step_id: string; coverage: string }[];
+  /** The BA's steps a case is at in the status (ticket 35), as served. */
+  ba: BaStep[];
+  /** The flows beside the statuses that run while a case is here, in words. */
+  flows: string[];
   /** Whose turn a case in the status is. */
   holder: string;
   /** The same, as the server's code (`dw`, `sales`, …); null: nobody's, done. */
@@ -108,6 +114,7 @@ export function StatusFacts({
   const long = clamp ? "line-clamp-2" : undefined;
   return (
     <>
+      <BaSteps steps={card.ba} />
       <span>Đến lượt: {card.holder}</span>
       <span>
         {card.settings ? `${card.settings} thiết lập` : "Không có thiết lập"}
@@ -125,8 +132,36 @@ export function StatusFacts({
       {card.exits ? (
         <span className={long}>Có thể đóng từ: {card.exits}</span>
       ) : null}
+      {card.flows.length ? (
+        <span className={long}>
+          Trong lúc này có thể: {card.flows.join(", ")}
+        </span>
+      ) : null}
     </>
   );
+}
+
+/**
+ * The BA's steps at a place of the map, each its code and its words, as the
+ * server serves them (`process.BA_STEPS`, ticket 35): this file names none.
+ */
+export function BaSteps({ steps }: { steps: BaStep[] }) {
+  if (!steps.length) return null;
+  return (
+    <span className="flex flex-col items-start gap-1">
+      {steps.map((b) => (
+        <span key={b.code}>
+          <Tag className="me-1">{b.code}</Tag>
+          {b.label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** The BA's codes alone, for a tile with no room for their words. */
+export function baCodes(steps: BaStep[]): string {
+  return steps.map((b) => b.code).join(" · ");
 }
 
 /**

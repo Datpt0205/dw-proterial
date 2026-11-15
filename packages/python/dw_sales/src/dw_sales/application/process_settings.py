@@ -52,6 +52,20 @@ domain fails until it says what it is.
 
 A price-bearing key (`rules.PRICE_BEARING`) is absent, not empty, for a caller
 without `sales.price.read`, as the rules list leaves it out (`rules.readable`).
+
+Ticket 35 (2026-11-16) adds three facts, each read from its owner:
+
+- **The BA's step codes** on each status and each step of a flow beside the
+  statuses (`process.BA_STEPS`, the one owner of the code and its words).
+- **The flows beside the statuses** (`SUBFLOWS`): the talk before the PO
+  (ticket 24), the wait on PC before the order is in Bravo (07), a change the
+  customer asks by mail (27) and the update loop on an order in Bravo (29),
+  each step with the statuses a case is in meanwhile and, for the loop, its
+  moves, all read from the domain (`orders.update_loop_moves`, ...).
+- **The head's short list** (`HEAD_SETTINGS`): the few settings a Sales head
+  changes, each with one plain sentence; every other placement is the
+  admin's, under "Nâng cao" (`audience`, which fails closed). Grouping only:
+  what a field means, who may propose it and who approves it are unchanged.
 """
 
 from __future__ import annotations
@@ -61,7 +75,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal, Protocol
+from typing import Any, Final, Literal, Protocol, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,8 +96,16 @@ from dw_sales.application.rules import RuleKey, readable
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import OrderStatus, order_moves
-from dw_sales.domain.process import WIV_STEPS, Coverage, StepId
+from dw_sales.domain.orders import (
+    CONFIRMATION_LEFT,
+    OrderStatus,
+    UpdateStep,
+    changeable_statuses,
+    order_moves,
+    update_loop_moves,
+    update_loop_statuses,
+)
+from dw_sales.domain.process import BA_STEPS, WIV_STEPS, BaStep, Coverage, Procedure, StepId
 from dw_sales.domain.quotes import QuoteStatus, quote_moves
 
 _VIEW = ConfigDict(frozen=True)
@@ -669,6 +691,157 @@ def lock(placement: Placement) -> LockReason | None:
     )
 
 
+class SubflowKey(StrEnum):
+    """A flow beside a lane's statuses: a case waits or loops in it while its
+    status stays where it is (ticket 35)."""
+
+    # The customer's mails before the PO, read as its thread (ticket 24):
+    # before any case exists.
+    THREAD = "thread"
+    # Sales asked PC for delivery dates before the order is in Bravo (07).
+    PC_REQUEST = "pc_request"
+    # A change the customer asked by mail, confirmed line by line (27).
+    CHANGE_REQUEST = "change_request"
+    # The update loop on an order whose confirmation has left (29).
+    UPDATE = "update"
+
+
+@dataclass(frozen=True, slots=True)
+class Subflow:
+    """A flow's steps in order, the statuses a case is in at each (none:
+    before any case), and where each step may go next."""
+
+    steps: tuple[str, ...]
+    statuses: Mapping[str, frozenset[OrderStatus]]
+    moves: Mapping[str, frozenset[str]]
+
+
+_UPDATE_STEPS: Final[tuple[str, ...]] = get_args(UpdateStep)
+
+# Each lane's flows beside its statuses, read from the domain: nothing about
+# where a flow runs or how it moves is written here.
+SUBFLOWS: Final[Mapping[CaseKind, Mapping[SubflowKey, Subflow]]] = MappingProxyType(
+    {
+        CaseKind.ORDER: MappingProxyType(
+            {
+                SubflowKey.THREAD: Subflow(
+                    steps=("before_po",), statuses={"before_po": frozenset()}, moves={}
+                ),
+                SubflowKey.PC_REQUEST: Subflow(
+                    steps=("waiting_pc",),
+                    statuses={"waiting_pc": changeable_statuses()},
+                    moves={},
+                ),
+                # Taken at once before the order is in Bravo; once its
+                # confirmation has left, a confirmed line joins the update loop.
+                SubflowKey.CHANGE_REQUEST: Subflow(
+                    steps=("confirm_lines",),
+                    statuses={"confirm_lines": changeable_statuses() | CONFIRMATION_LEFT},
+                    moves={},
+                ),
+                SubflowKey.UPDATE: Subflow(
+                    steps=_UPDATE_STEPS,
+                    statuses=update_loop_statuses(),
+                    moves=update_loop_moves(),
+                ),
+            }
+        ),
+        CaseKind.QUOTE: MappingProxyType({}),
+    }
+)
+
+# The procedure whose BA steps a lane draws.
+_PROCEDURE: Final[Mapping[CaseKind, Procedure]] = MappingProxyType(
+    {kind: procedure for procedure, kind in PROCEDURE_KIND.items()}
+)
+
+
+def ba_steps(kind: CaseKind, place: str) -> tuple[BaStep, ...]:
+    """The BA's steps at ``place`` of ``kind``'s lane: a status, or
+    ``<flow>.<step>``; none where the BA's flow has none."""
+    return BA_STEPS[_PROCEDURE[kind]].get(place, ())
+
+
+class Audience(StrEnum):
+    """Who a setting is shown to first. Presentation only: who may propose or
+    approve it is the rules' own (`sales.rules.propose`, the head's approval)."""
+
+    # The Sales head's short list: on one screen, each with one sentence.
+    HEAD = "head"
+    # Everything else, under "Nâng cao": the admin's, or the platform's.
+    ADMIN = "admin"
+
+
+@dataclass(frozen=True, slots=True)
+class HeadSetting:
+    """A setting on the head's short list, with the one plain sentence that
+    says what it does."""
+
+    placement: Placement
+    sentence: str
+
+
+# The head's short list for DW1 (ticket 35; Đạt, 11-13: "không được quá nhiều
+# dẫn tới rối loạn"): numbers a head decides without reading a rule's schema,
+# in the order the work meets them. Each is a field placed on the page (its
+# step's, lane's or the process's) and edited there; none is locked. Why
+# these and not the rest is in the ticket's "## Done".
+HEAD_SETTINGS: Final[tuple[HeadSetting, ...]] = (
+    HeadSetting(
+        Placement(_ORDER, "price.relative_tolerance"),
+        "Đơn giá trên PO được lệch bao nhiêu so với báo giá mà DW1 vẫn coi là khớp"
+        " (0 là phải bằng đúng).",
+    ),
+    HeadSetting(
+        Placement(_ORDER, "cross_check_required"),
+        "Bật thì mỗi đơn đã nhập Bravo cần người thứ hai kiểm chéo trước khi gửi xác nhận"
+        " cho khách.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "waiting_pc.remind.after_hours"),
+        "PC chưa trả ngày giao sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "waiting_customer.remind.after_hours"),
+        "Khách chưa trả lời sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "order_unconfirmed.remind.after_hours"),
+        "PO chưa được xác nhận sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "order_unconfirmed.escalate.after_hours"),
+        "PO chưa được xác nhận sau bấy nhiêu giờ thì DW1 báo Trưởng bộ phận.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "quote_waiting_design.remind.after_hours"),
+        "Design chưa trả lời yêu cầu báo giá sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "quote_deadline.warn.hours_before_due"),
+        "Còn bấy nhiêu giờ đến hạn báo giá thì DW1 báo Sales phụ trách.",
+    ),
+    HeadSetting(
+        Placement(_QUOTE, "validity_days"),
+        "Báo giá đã duyệt có hiệu lực bấy nhiêu ngày, tính cả ngày phát hành.",
+    ),
+    HeadSetting(
+        Placement(_FOLLOWUPS, "morning_brief.at"),
+        "Giờ DW1 gửi bản tin buổi sáng mỗi ngày làm việc.",
+    ),
+)
+# One screen: a head reads the whole list without scrolling past it.
+HEAD_SETTINGS_MAX: Final = 10
+
+
+def audience(placement: Placement) -> Audience:
+    """The head's for a field on their short list; the admin's for anything
+    else, a field added later included, until someone puts it on the list."""
+    if any(h.placement == placement for h in HEAD_SETTINGS):
+        return Audience.HEAD
+    return Audience.ADMIN
+
+
 # ------------------------------------------------------------------ views --
 
 
@@ -681,6 +854,13 @@ class SettingView(BaseModel):
     lock: LockReason | None
 
 
+class BaStepView(BaseModel):
+    model_config = _VIEW
+
+    code: str
+    label: str
+
+
 class ProcessNodeView(BaseModel):
     model_config = _VIEW
 
@@ -688,6 +868,8 @@ class ProcessNodeView(BaseModel):
     steps: list[str]
     # Whose turn a case in this status is; None: it waits on nobody (done).
     holder: Bucket | None
+    # The BA's steps a case is at in this status; empty where the BA's flow has none.
+    ba_steps: list[BaStepView]
 
 
 class ProcessEdgeView(BaseModel):
@@ -701,6 +883,25 @@ class ProcessEdgeView(BaseModel):
     guards: list[EdgeGuard]
 
 
+class SubflowStepView(BaseModel):
+    model_config = _VIEW
+
+    step: str
+    # The statuses a case is in at this step, in the lane's order; empty:
+    # before any case exists.
+    statuses: list[str]
+    # The flow's steps it may go to next, in the flow's order; itself left out.
+    next: list[str]
+    ba_steps: list[BaStepView]
+
+
+class ProcessSubflowView(BaseModel):
+    model_config = _VIEW
+
+    key: SubflowKey
+    steps: list[SubflowStepView]
+
+
 class ProcessLaneView(BaseModel):
     model_config = _VIEW
 
@@ -709,6 +910,8 @@ class ProcessLaneView(BaseModel):
     edges: list[ProcessEdgeView]
     # The lane's steps no status stands for (a suggestion, a document, DW2's).
     stateless_steps: list[str]
+    # The flows beside the statuses, in `SubflowKey` order.
+    subflows: list[ProcessSubflowView]
 
 
 class MeasurementView(BaseModel):
@@ -786,10 +989,22 @@ class ProcessStepView(BaseModel):
     actors: list[ActorView]
 
 
+class HeadSettingView(BaseModel):
+    """A setting of the head's short list: where it is, and its sentence."""
+
+    model_config = _VIEW
+
+    key: RuleKey
+    path: str
+    sentence: str
+
+
 class ProcessSettingsView(BaseModel):
     model_config = _VIEW
 
     lanes: list[ProcessLaneView]
+    # The head's short list, in its order; a key the caller may not read is left out.
+    head_settings: list[HeadSettingView]
     steps: list[ProcessStepView]
     lane_settings: dict[CaseKind, list[SettingView]]
     process_settings: list[SettingView]
@@ -805,6 +1020,7 @@ def _lane(kind: CaseKind) -> ProcessLaneView:
                 status=status.value,
                 steps=steps_at(kind, status.value),
                 holder=STATUS_BUCKETS[kind].get(status.value),
+                ba_steps=_ba_views(kind, status.value),
             )
             for status in statuses
         ],
@@ -818,6 +1034,28 @@ def _lane(kind: CaseKind) -> ProcessLaneView:
             step.step_id
             for step in WIV_STEPS
             if PROCEDURE_KIND[step.procedure] is kind and not step.states
+        ],
+        subflows=[_subflow_view(kind, key, flow, statuses) for key, flow in SUBFLOWS[kind].items()],
+    )
+
+
+def _ba_views(kind: CaseKind, place: str) -> list[BaStepView]:
+    return [BaStepView(code=b.code, label=b.label) for b in ba_steps(kind, place)]
+
+
+def _subflow_view(
+    kind: CaseKind, key: SubflowKey, flow: Subflow, statuses: Sequence[StrEnum]
+) -> ProcessSubflowView:
+    return ProcessSubflowView(
+        key=key,
+        steps=[
+            SubflowStepView(
+                step=step,
+                statuses=[s.value for s in statuses if s in flow.statuses[step]],
+                next=[t for t in flow.steps if t != step and t in flow.moves.get(step, ())],
+                ba_steps=_ba_views(kind, f"{key.value}.{step}"),
+            )
+            for step in flow.steps
         ],
     )
 
@@ -916,6 +1154,11 @@ class ProcessSettingsService:
             )
         return ProcessSettingsView(
             lanes=[_lane(kind) for kind in CASE_STATUSES],
+            head_settings=[
+                HeadSettingView(key=h.placement.key, path=h.placement.path, sentence=h.sentence)
+                for h in HEAD_SETTINGS
+                if readable(self.gate, context, h.placement.key)
+            ],
             steps=steps,
             lane_settings={kind: shown(placed) for kind, placed in LANE_SETTINGS.items()},
             process_settings=shown(PROCESS_SETTINGS),

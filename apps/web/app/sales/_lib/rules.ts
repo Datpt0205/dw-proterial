@@ -241,7 +241,8 @@ export interface MachineRead {
   value: unknown;
 }
 
-function valueAt(document: unknown, path: string): unknown {
+/** The value at a dot-separated document path; undefined where there is none. */
+export function valueAt(document: unknown, path: string): unknown {
   let current = document;
   for (const step of path.split(".")) {
     if (current === null || typeof current !== "object") return undefined;

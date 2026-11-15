@@ -13,16 +13,75 @@ export const PROCESS: SalesSchemas["ProcessSettingsView"] = {
     {
       kind: "order",
       nodes: [
-        { status: "received", steps: ["O1"], holder: "dw" },
-        { status: "checked", steps: ["O2"], holder: "dw" },
-        { status: "in_review", steps: ["O6"], holder: "sales" },
-        { status: "correction_requested", steps: ["O8"], holder: "customer" },
-        { status: "prepared", steps: ["O7"], holder: "sales" },
-        { status: "uploaded_to_bravo", steps: ["O3", "O7"], holder: "sales" },
-        { status: "cross_checked", steps: ["O9"], holder: "sales" },
-        { status: "confirmed", steps: ["O10"], holder: null },
-        { status: "change_review", steps: [], holder: "sales" },
-        { status: "closed", steps: [], holder: null },
+        {
+          status: "received",
+          steps: ["O1"],
+          holder: "dw",
+          ba_steps: [
+            { code: "0-SP", label: "Sales tải PO từ cổng của khách lên DW1" },
+            { code: "1", label: "Gom PO, phân loại, giao đúng PIC" },
+          ],
+        },
+        {
+          status: "checked",
+          steps: ["O2"],
+          holder: "dw",
+          ba_steps: [
+            { code: "2", label: "Đọc PO, trích xuất từng dòng" },
+            { code: "2.1A", label: "Kiểm giá theo LME" },
+            { code: "2.2A", label: "Đổi mã khách sang mã PRV" },
+            { code: "3.1", label: "So PO với báo giá" },
+          ],
+        },
+        {
+          status: "in_review",
+          steps: ["O6"],
+          holder: "sales",
+          ba_steps: [
+            { code: "3", label: "PIC tự kiểm, quyết định từng sai lệch" },
+          ],
+        },
+        {
+          status: "correction_requested",
+          steps: ["O8"],
+          holder: "customer",
+          ba_steps: [{ code: "4", label: "Đề nghị khách sửa PO, nhắc khách" }],
+        },
+        {
+          status: "prepared",
+          steps: ["O7"],
+          holder: "sales",
+          ba_steps: [
+            { code: "5", label: "Xác nhận PO hợp lệ, lịch giao theo PC" },
+          ],
+        },
+        {
+          status: "uploaded_to_bravo",
+          steps: ["O3", "O7"],
+          holder: "sales",
+          ba_steps: [{ code: "5-BR", label: "Nhập đơn vào Bravo, ghi số SO" }],
+        },
+        {
+          status: "cross_checked",
+          steps: ["O9"],
+          holder: "sales",
+          ba_steps: [{ code: "5-KC", label: "Kiểm chéo đơn hàng" }],
+        },
+        { status: "confirmed", steps: ["O10"], holder: null, ba_steps: [] },
+        {
+          status: "change_review",
+          steps: [],
+          holder: "sales",
+          ba_steps: [
+            { code: "6.2B", label: "Làm lại PO, kiểm lại bước 2 đến 3" },
+          ],
+        },
+        {
+          status: "closed",
+          steps: [],
+          holder: null,
+          ba_steps: [{ code: "1-X", label: "Đóng hồ sơ PO không hợp lệ" }],
+        },
       ],
       edges: [
         {
@@ -192,23 +251,188 @@ export const PROCESS: SalesSchemas["ProcessSettingsView"] = {
         },
       ],
       stateless_steps: ["O4", "O5", "O11"],
+      subflows: [
+        {
+          key: "thread",
+          steps: [
+            {
+              step: "before_po",
+              statuses: [],
+              next: [],
+              ba_steps: [
+                {
+                  code: "0-KH",
+                  label: "Khách trao đổi trong luồng thư, rồi gửi PO",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: "pc_request",
+          steps: [
+            {
+              step: "waiting_pc",
+              statuses: ["in_review", "prepared"],
+              next: [],
+              ba_steps: [
+                { code: "2.4B", label: "Hỏi PC lịch giao và cách tách dòng" },
+              ],
+            },
+          ],
+        },
+        {
+          key: "change_request",
+          steps: [
+            {
+              step: "confirm_lines",
+              statuses: [
+                "in_review",
+                "prepared",
+                "confirmation_sent",
+                "confirmed",
+              ],
+              next: [],
+              ba_steps: [
+                { code: "6.1A", label: "Khách xin điều chỉnh qua thư" },
+                {
+                  code: "6-DW1",
+                  label: "Nhận ra yêu cầu, gắn với PO gốc, so thay đổi",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: "update",
+          steps: [
+            {
+              step: "ask_pc",
+              statuses: ["confirmation_sent", "confirmed"],
+              next: ["waiting_pc"],
+              ba_steps: [{ code: "6-DW2", label: "Soạn yêu cầu gửi PC" }],
+            },
+            {
+              step: "waiting_pc",
+              statuses: ["confirmation_sent", "confirmed"],
+              next: ["answer_customer"],
+              ba_steps: [{ code: "6-PC", label: "PC xem và trả lời" }],
+            },
+            {
+              step: "answer_customer",
+              statuses: ["confirmation_sent", "confirmed"],
+              next: ["waiting_customer"],
+              ba_steps: [
+                {
+                  code: "6-DW3",
+                  label: "PC đề xuất khác: soạn thư phương án cho khách",
+                },
+                {
+                  code: "6-DW4",
+                  label: "PC làm được: soạn thư xác nhận điều chỉnh",
+                },
+              ],
+            },
+            {
+              step: "waiting_customer",
+              statuses: ["confirmation_sent", "confirmed"],
+              next: ["ask_pc", "bravo_update"],
+              ba_steps: [],
+            },
+            {
+              step: "bravo_update",
+              statuses: ["uploaded_to_bravo", "cross_checked", "change_review"],
+              next: [],
+              ba_steps: [
+                { code: "6.2-SP", label: "Duyệt cập nhật đơn trên Bravo" },
+              ],
+            },
+          ],
+        },
+      ],
     },
     {
       kind: "quote",
       nodes: [
-        { status: "received", steps: ["Q1"], holder: "sales" },
-        { status: "ycbg_drafted", steps: ["Q2"], holder: "sales" },
-        { status: "ycbg_recorded", steps: ["Q2"], holder: "sales" },
-        { status: "sent_to_design", steps: ["Q3"], holder: "design" },
-        { status: "design_replied", steps: ["Q4"], holder: "sales" },
-        { status: "spec_discussion", steps: ["Q6"], holder: "customer" },
-        { status: "priced", steps: ["Q7"], holder: "sales" },
-        { status: "pending_approval", steps: ["Q9"], holder: "approver" },
-        { status: "returned", steps: ["Q9"], holder: "sales" },
-        { status: "approved", steps: ["Q9"], holder: "sales" },
-        { status: "sent", steps: ["Q10"], holder: "sales" },
-        { status: "master_list_recorded", steps: ["Q11"], holder: null },
-        { status: "declined", steps: ["Q5"], holder: null },
+        {
+          status: "received",
+          steps: ["Q1"],
+          holder: "sales",
+          ba_steps: [
+            { code: "1-DW", label: "Gom RFQ, đọc, phân loại, giao PIC" },
+          ],
+        },
+        {
+          status: "ycbg_drafted",
+          steps: ["Q2"],
+          holder: "sales",
+          ba_steps: [],
+        },
+        {
+          status: "ycbg_recorded",
+          steps: ["Q2"],
+          holder: "sales",
+          ba_steps: [{ code: "1.1.1", label: "Nhập RFQ lên Bravo" }],
+        },
+        {
+          status: "sent_to_design",
+          steps: ["Q3"],
+          holder: "design",
+          ba_steps: [
+            { code: "1.1.2", label: "Gửi RFQ cho Design, nhắc khi chậm" },
+          ],
+        },
+        {
+          status: "design_replied",
+          steps: ["Q4"],
+          holder: "sales",
+          ba_steps: [{ code: "1.1.4", label: "Ghi BP code và Base price" }],
+        },
+        {
+          status: "spec_discussion",
+          steps: ["Q6"],
+          holder: "customer",
+          ba_steps: [{ code: "1.1.3", label: "Hỏi lại khách về spec" }],
+        },
+        {
+          status: "priced",
+          steps: ["Q7"],
+          holder: "sales",
+          ba_steps: [
+            { code: "2.1.1", label: "Tính giá theo LME và policy, chốt giá" },
+          ],
+        },
+        {
+          status: "pending_approval",
+          steps: ["Q9"],
+          holder: "approver",
+          ba_steps: [{ code: "2.1.4", label: "In báo giá, trình ký" }],
+        },
+        { status: "returned", steps: ["Q9"], holder: "sales", ba_steps: [] },
+        {
+          status: "approved",
+          steps: ["Q9"],
+          holder: "sales",
+          ba_steps: [{ code: "2.1.5", label: "Bản đã ký" }],
+        },
+        {
+          status: "sent",
+          steps: ["Q10"],
+          holder: "sales",
+          ba_steps: [{ code: "2.1.6", label: "Gửi thư báo giá" }],
+        },
+        {
+          status: "master_list_recorded",
+          steps: ["Q11"],
+          holder: null,
+          ba_steps: [{ code: "2.1.3", label: "Ghi báo giá vào master list" }],
+        },
+        {
+          status: "declined",
+          steps: ["Q5"],
+          holder: null,
+          ba_steps: [{ code: "1.1.5", label: "Sales quyết định đóng" }],
+        },
       ],
       edges: [
         {
@@ -395,6 +619,7 @@ export const PROCESS: SalesSchemas["ProcessSettingsView"] = {
         },
       ],
       stateless_steps: ["Q8", "Q12"],
+      subflows: [],
     },
   ],
   steps: [
@@ -1189,6 +1414,67 @@ export const PROCESS: SalesSchemas["ProcessSettingsView"] = {
       models: [],
       uses: { lists: ["quotations"], layouts: false },
       actors: [],
+    },
+  ],
+  head_settings: [
+    {
+      key: "sales_order_rules",
+      path: "price.relative_tolerance",
+      sentence:
+        "Đơn giá trên PO được lệch bao nhiêu so với báo giá mà DW1 vẫn coi là khớp (0 là phải bằng đúng).",
+    },
+    {
+      key: "sales_order_rules",
+      path: "cross_check_required",
+      sentence:
+        "Bật thì mỗi đơn đã nhập Bravo cần người thứ hai kiểm chéo trước khi gửi xác nhận cho khách.",
+    },
+    {
+      key: "sales_followups",
+      path: "waiting_pc.remind.after_hours",
+      sentence:
+        "PC chưa trả ngày giao sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    },
+    {
+      key: "sales_followups",
+      path: "waiting_customer.remind.after_hours",
+      sentence:
+        "Khách chưa trả lời sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    },
+    {
+      key: "sales_followups",
+      path: "order_unconfirmed.remind.after_hours",
+      sentence:
+        "PO chưa được xác nhận sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    },
+    {
+      key: "sales_followups",
+      path: "order_unconfirmed.escalate.after_hours",
+      sentence:
+        "PO chưa được xác nhận sau bấy nhiêu giờ thì DW1 báo Trưởng bộ phận.",
+    },
+    {
+      key: "sales_followups",
+      path: "quote_waiting_design.remind.after_hours",
+      sentence:
+        "Design chưa trả lời yêu cầu báo giá sau bấy nhiêu giờ thì DW1 nhắc Sales phụ trách.",
+    },
+    {
+      key: "sales_followups",
+      path: "quote_deadline.warn.hours_before_due",
+      sentence:
+        "Còn bấy nhiêu giờ đến hạn báo giá thì DW1 báo Sales phụ trách.",
+    },
+    {
+      key: "sales_quote_rules",
+      path: "validity_days",
+      sentence:
+        "Báo giá đã duyệt có hiệu lực bấy nhiêu ngày, tính cả ngày phát hành.",
+    },
+    {
+      key: "sales_followups",
+      path: "morning_brief.at",
+      sentence: "Giờ DW1 gửi bản tin buổi sáng mỗi ngày làm việc.",
     },
   ],
   lane_settings: {
