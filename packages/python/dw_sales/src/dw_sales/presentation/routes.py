@@ -1385,6 +1385,26 @@ def build_router(
         return await idem.record(change)
 
     @router.post(
+        "/orders/{case_id}/lines/{line_no}/mapping/reject",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def reject_mapping(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        # "Không phải mã này": the candidates a model's reading proposed,
+        # rejected; the line is unmapped (ticket 44).
+        change = await svc.order_commands.reject_candidates(
+            context, case_id, line_no, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
         "/orders/{case_id}/lines/{line_no}/delivery-date",
         response_model=CaseChangeView,
         dependencies=prepare_scope,

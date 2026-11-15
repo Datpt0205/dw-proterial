@@ -161,7 +161,14 @@ API and the plan use the English terms. The spec is
   `not_understood` (with the check that refused it) or `unavailable` (no
   usable answer: "DW1 không đọc được mô tả"). A line read this way is at best
   a candidate Sales confirms, never `exact`. Turned on per tenant by
-  `sales_order_rules.model_assist` (ticket 28).
+  `sales_order_rules.model_assist` (ticket 28). Sales may instead reject a
+  reading's candidates, one or several together ("Không phải mã này",
+  ticket 44): the line is then `unmapped` and keeps nothing of the reading
+  (no candidate, no reading, no attribute it stated), so it takes what any
+  unmapped line takes, a PRV code the item master holds, typed by Sales; the
+  rejection is a labelled case with nothing kept. Candidates DW1's own
+  vocabulary or the convert list gave are not rejected this way, nor is a
+  confirmed code: one DW applied by itself is undone ("Hoàn tác") first.
 - **Message intent** (Mô hình đọc loại thư): the kind a model reads a message
   no reader accepted as (`po`, `quote_request`, `design_reply`,
   `reply_to_case`, `delivery_change`, `complaint`, `sample_request`,

@@ -467,6 +467,20 @@ export class SalesApi {
     );
   }
 
+  /** "Không phải mã này": the candidates a model's reading proposed, rejected (ticket 44). */
+  rejectMapping(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/reject">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/reject">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/mapping/reject`,
+      body,
+      key,
+    );
+  }
+
   recordPcDate(
     caseId: string,
     lineNo: number,

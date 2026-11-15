@@ -391,6 +391,7 @@ export const CASE_EVENT = {
   "order.finding_disposed": "Quyết định một cờ",
   "order.value_corrected": "Sửa một giá trị",
   "order.mapping_confirmed": "Xác nhận mã PRV",
+  "order.mapping_rejected": "Bỏ mã ứng viên (không phải mã này)",
   "order.pc_date_recorded": "Ghi PC đồng ý lead time ngắn",
   "order.pc_asked": "Ghi đã hỏi PC ngày giao",
   "order.pc_answer_recorded": "Ghi ngày PC trả lời",
