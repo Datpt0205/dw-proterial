@@ -66,7 +66,9 @@ function fit(fits: boolean | null) {
  * model read the description (ticket 28), what it read is shown with the text
  * each attribute came from and who read it (`DescriptionReadingPanel`). DW1
  * checks the line again against the code Sales confirms, and any finding it
- * raises lands on the case.
+ * raises lands on the case. Candidates a model's reading proposed can be
+ * rejected together ("Không phải mã này", ticket 44): the line is then
+ * unmapped and the picker asks for a typed code, in place.
  */
 export function CandidatePicker({
   order,
@@ -100,6 +102,12 @@ export function CandidatePicker({
   if (!line) return null;
   const candidates = line.mapping.candidates;
   const typing = candidates.length === 0;
+  // The server decides which lines may reject (`OrderCase.reject_candidates`);
+  // this only offers it where it would.
+  const rejectable =
+    !typing &&
+    ["candidate", "ambiguous"].includes(line.mapping.status) &&
+    line.basis.description_reading?.outcome === "read";
   const code = typing ? typed.trim() : picked;
   const byCode = new Map((items.data?.items ?? []).map((i) => [i.prv_code, i]));
   const shown: string[] = typing
@@ -121,6 +129,22 @@ export function CandidatePicker({
     if (result.ok) {
       onDone();
       onClose();
+    } else setError(result.error);
+  };
+
+  // The line becomes unmapped: the picker stays open, now asking for a code.
+  const reject = async () => {
+    const body = { case_version: order.case_version };
+    const result = await run(
+      `reject/${line.line_no}`,
+      body,
+      (key) => salesApi().rejectMapping(order.case_id, line.line_no, body, key),
+      `Đã bỏ mã ứng viên của dòng ${line.line_no}: nhập mã đúng`,
+    );
+    if (result.ok) {
+      setPicked(null);
+      setError(null);
+      onDone();
     } else setError(result.error);
   };
 
@@ -178,12 +202,28 @@ export function CandidatePicker({
             </Form.Item>
           </Form>
         ) : (
-          <Radio.Group
-            aria-label="Mã ứng viên"
-            value={picked}
-            onChange={(e) => setPicked(e.target.value as string)}
-            options={candidates.map((c) => ({ value: c, label: c }))}
-          />
+          <Space wrap>
+            <Radio.Group
+              aria-label="Mã ứng viên"
+              value={picked}
+              onChange={(e) => setPicked(e.target.value as string)}
+              options={candidates.map((c) => ({ value: c, label: c }))}
+            />
+            {rejectable ? (
+              <Button
+                danger
+                loading={pending === `reject/${line.line_no}`}
+                disabled={
+                  pending !== null && pending !== `reject/${line.line_no}`
+                }
+                onClick={reject}
+              >
+                {candidates.length > 1
+                  ? "Không phải các mã này"
+                  : "Không phải mã này"}
+              </Button>
+            ) : null}
+          </Space>
         )}
         {items.error ? (
           <LoadError error={items.error} onRetry={items.reload} />

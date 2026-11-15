@@ -177,6 +177,7 @@ from dw_sales.domain.orders import (
     FindingCode,
     ImpliedTerm,
     LineCheck,
+    LineMapping,
     MappingStatus,
     OrderCase,
     OrderLine,
@@ -1304,17 +1305,11 @@ class OrderIntake:
         """
         line = case.line(line_no)
         details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
-        rules = await self._case_rules(scope, case, details)
         item = (await self.catalog.item_by_prv_code(scope, prv_code)).data
         if item is None:
             raise ConflictError(
                 "the item master has no such PRV code", details={**details, "field": "prv_code"}
             )
-        header = case.effective_header
-        # No LME price list: the band is unchecked, a finding (`check_line`).
-        lme = await _unless_unconnected(
-            self.catalog.lme_for_month(scope, rules.lme_month(header.po_date)), []
-        )
         # The reading the candidates came from, and what it stated, stay the
         # line's evidence.
         mapped = MappedLine(
@@ -1323,6 +1318,42 @@ class OrderIntake:
             line.basis.convert_prv_code,
             line.basis.description_reading,
             line.basis.stated_attributes,
+        )
+        recheck = await self._line_again(scope, case, line, mapped, details)
+        return case.confirm_mapping(line_no, prv_code, actor, at, recheck)
+
+    async def reject_candidates(
+        self, scope: SalesScope, case: OrderCase, line_no: int
+    ) -> OrderCase:
+        """Sales rejects the candidates a model's reading proposed for a line
+        (ticket 44): the line is checked again as unmapped, against no item
+        and without the reading, under the rules stamped on the case, as for
+        a confirmed code. Which lines may reject is the case's to decide
+        (`OrderCase.reject_candidates`)."""
+        line = case.line(line_no)
+        details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
+        unmapped = MappedLine(
+            LineMapping(status=MappingStatus.UNMAPPED), None, line.basis.convert_prv_code
+        )
+        recheck = await self._line_again(scope, case, line, unmapped, details)
+        return case.reject_candidates(line_no, recheck)
+
+    async def _line_again(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        line: OrderLine,
+        mapped: MappedLine,
+        details: dict[str, object],
+    ) -> LineCheck:
+        """One line's checks run again on its entered values against
+        ``mapped``, under the rules stamped on the case (refused once the
+        tenant's rules have moved on: two versions on one case)."""
+        rules = await self._case_rules(scope, case, details)
+        header = case.effective_header
+        # No LME price list: the band is unchecked, a finding (`check_line`).
+        lme = await _unless_unconnected(
+            self.catalog.lme_for_month(scope, rules.lme_month(header.po_date)), []
         )
         recheck, _ = await self._check_line(
             scope,
@@ -1335,7 +1366,7 @@ class OrderIntake:
             rules,
             [],
         )
-        return case.confirm_mapping(line_no, prv_code, actor, at, recheck)
+        return recheck
 
     async def correct_value(
         self,

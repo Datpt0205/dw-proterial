@@ -41,6 +41,15 @@ _PARAMS = {
     "prv_code": "CB-2006",
     # A case's status-assistant conversation (dw_sales ADR 0007, ticket 46).
     "kind": "order",
+    # A customer's change request and one of its lines (ticket 27).
+    "request_id": str(uuid.uuid4()),
+    "seq": "1",
+    # A reminder on "Việc cần làm" (ticket 48).
+    "notification_id": str(uuid.uuid4()),
+    # A skill's versions (dw_sales ADR 0014).
+    "name": "thread-intents",
+    # A sales order example (salesorder learning).
+    "example_id": str(uuid.uuid4()),
 }
 
 
@@ -98,6 +107,10 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
         ("POST", "/rules/sales_bravo_upload/drafts"),
         ("POST", "/rules/sales_bravo_upload/drafts/words"),
         ("GET", "/rules/drafts/{draft_id}"),
+        # An agent's skill is a rule version too (dw_sales ADR 0014), the
+        # same scope; the walk's body is no proposal, so it is refused (422).
+        ("GET", "/skills"),
+        ("POST", "/skills/thread-intents/versions"),
     }
 
 

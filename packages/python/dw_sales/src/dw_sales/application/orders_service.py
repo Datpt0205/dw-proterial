@@ -269,6 +269,36 @@ class OrderCommands:
             await work.commit()
         return order_change(undone)
 
+    async def reject_candidates(
+        self, context: AccessContext, case_id: uuid.UUID, line_no: int, *, case_version: int
+    ) -> CaseChangeView:
+        """Sales rejects the candidates a model's reading proposed for a line
+        ("Không phải mã này", ticket 44): the line is unmapped, a code for
+        Sales to type, and the rejection is a labelled case, nothing kept,
+        which the step's threshold and audits learn from. Taken by whoever
+        may confirm the line (`sales.order.prepare`)."""
+        await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
+        actor, now, scope = order_actor(context, self.gate), self.clock.now(), sales_scope(context)
+        async with self.uow(scope) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+            same_version(case_id, case.case_version, case_version)
+            rejected = await self.intake.reject_candidates(scope, case, line_no)
+            event = person_event("order.mapping_rejected", context, now, field="prv_code")
+            await save_order(work, context, self.ids, case, rejected, event)
+            label = mapping_label(
+                case, line_no, None, new_id=self.ids.new_uuid, at=now, by=actor.user_id
+            )
+            if label is None:
+                # The case rejects only a model's candidates; a rejection
+                # without its labelled case is not taken.
+                raise DomainError(
+                    "a rejection names the reading it rejects",
+                    details={"case_id": str(case_id), "line": line_no},
+                )
+            await work.labelled_cases.append([label])
+            await work.commit()
+        return order_change(rejected)
+
     async def correct_value(
         self,
         context: AccessContext,

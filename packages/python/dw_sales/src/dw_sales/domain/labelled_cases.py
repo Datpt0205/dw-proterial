@@ -152,7 +152,7 @@ NewId = Callable[[], uuid.UUID]
 def mapping_label(
     before: OrderCase,
     line_no: int,
-    prv_code: str,
+    prv_code: str | None,
     *,
     new_id: NewId,
     at: AwareDatetime,
@@ -162,8 +162,11 @@ def mapping_label(
     model's reading of the description (`description_attributes`). The
     proposal is the candidates in their order, the kept value the one code:
     one candidate kept is confirmed; one of several picked, or a code typed,
-    is a correction (the reading did not settle the item). None where no
-    model read the line, or the convert list mapped it."""
+    is a correction (the reading did not settle the item). ``prv_code`` None
+    is the candidates rejected ("Không phải mã này", ticket 44): nothing
+    kept. None where no model read the line, or the convert list mapped it;
+    a line whose candidates were rejected holds no reading any more, so the
+    code typed after it labels nothing a second time."""
     line = before.line(line_no)
     reading = line.basis.description_reading
     if reading is None or reading.outcome != "read" or line.mapping.status is MappingStatus.EXACT:
@@ -180,7 +183,7 @@ def mapping_label(
         line_no=line_no,
         field="prv_code",
         proposed=list(line.mapping.candidates),
-        kept=[prv_code],
+        kept=None if prv_code is None else [prv_code],
         prompt=reading.prompt,
         model_profile=reading.model_profile,
         rules=before.rules_version,

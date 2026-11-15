@@ -1,6 +1,6 @@
 # 44 — Reversible steps apply themselves under a measured error rate, with sampling audits
 
-Status: in progress (2026-11-16): the slice for `description_attributes` done end to end; the gaps under "Left" open
+Status: in progress (2026-11-16): the slice for `description_attributes` done end to end, a person can reject a model's candidates; the gaps under "Left" open
 Blocked by: 40, 43
 Category: enhancement
 
@@ -92,15 +92,39 @@ The slice, end to end, for one step (2026-11-16; migration `efc46a50e75e`):
   and sent-to-a-person counts over 30 days, the threshold, cases, target and
   audited error on click.
 
+Follow-up (2026-11-16, uncommitted until reviewed):
+
+- **"Không phải mã này"**: `POST /orders/{id}/lines/{n}/mapping/reject`
+  (`sales.order.prepare`, the case version seen, case event
+  `order.mapping_rejected`, audit row), `OrderCommands.reject_candidates`,
+  `OrderIntake.reject_candidates`, `OrderCase.reject_candidates`. The rule a
+  line now follows: candidates a model's reading proposed (`candidate` or
+  `ambiguous`, reading `read`) may be rejected, all together; the line is
+  then `unmapped` and keeps nothing of the reading (no candidate, no
+  reading, no stated attributes), its item findings go and `code_unmapped`
+  opens, every other finding keeps its decision; it then takes what any
+  unmapped line takes, a PRV code the item master holds, typed by Sales.
+  Candidates from DW1's own vocabulary or the convert list are not rejected
+  this way, nor is a confirmed code (DW's own is undone first). The
+  rejection is a labelled case `rejected` (`mapping_label` with nothing
+  kept); the code then typed labels nothing a second time (the line holds no
+  reading). Picker button in `candidate-picker.tsx`, which then stays open
+  for the typed code; glossary entry "Model reading" in `CONTEXT.md`.
+- `apps/api/tests/integration/test_sales_api_access.py` walks every route
+  again: the params the router gained since (`request_id`, `seq`,
+  `notification_id`, `name`, `example_id`), and tenant IT's reach now lists
+  the skills routes (`sales.rules.propose`, ADR 0014).
+
 ## Left
 
-- **A person cannot reject a single candidate today** (the picker only
-  confirms it). So for `description_attributes` a person's verdict on a
-  one-candidate line is almost always "confirmed", and a blind audit cannot
-  find an error either: the measured error is optimistic until the picker
-  gets "Không phải mã này" (a labelled case `rejected`). The undo counts
-  against the step (fail closed) meanwhile. Decide before a tenant's
-  threshold is trusted.
+- A line undone ("Hoàn tác") and then rejected is labelled twice, both
+  `rejected` with gate `applied` (as undo then confirm is two cases): the
+  audited error counts that item twice, which can only stop a step sooner.
+- "Việc cần làm"'s inline row decides through `OrderActions`, which holds
+  no code picker: a line's code is still picked (or rejected) on the case
+  page, which the row links to.
+- The release manifest is stale and was not regenerated here (ticket 43's
+  uncommitted prompt `description_attributes@1.1.0` would be pinned with it).
 - Every other T0/T1 step: no score, no effect path; each needs the scored
   call and its own `AutoApply` effect (`po_body_extraction` next).
 - A live check on Strata of `logprobs` through the adapter.

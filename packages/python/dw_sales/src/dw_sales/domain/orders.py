@@ -1183,7 +1183,8 @@ class MappingStatus(StrEnum):
 
     ``exact``: the convert list has the code. ``candidate``: it does not, and
     exactly one item fits the description; Sales confirms it explicitly.
-    ``ambiguous``: several items fit. ``unmapped``: none does.
+    ``ambiguous``: several items fit. ``unmapped``: none does, or Sales
+    rejected the candidates a model's reading proposed (`reject_candidates`).
     ``candidate_confirmed``: Sales confirmed one of the candidates, or typed a
     PRV code that exists in the item master for an unmapped line.
     """
@@ -2495,6 +2496,59 @@ class OrderCase(BaseModel):
             }
         )
         return self._edited(lines=tuple(undone if x.line_no == line_no else x for x in self.lines))
+
+    def reject_candidates(self, line_no: int, recheck: LineCheck) -> OrderCase:
+        """Sales says the code a model's reading proposed is not this line's
+        ("Không phải mã này", ticket 44): the line's candidates, one or
+        several, are rejected together, and the line is `unmapped`, a code
+        for Sales to type from the item master (`confirm_mapping`'s
+        exception). Only candidates a model's reading proposed
+        (``description_reading`` "read") on a line not yet confirmed: a
+        convert list's code and DW1's own vocabulary are facts the reading
+        did not make, and a confirmed code is not a candidate (one DW
+        applied by itself is undone first, `undo_applied_mapping`).
+
+        The line keeps nothing of the reading it rejected: no candidate, no
+        reading, no attributes stated by it (``recheck`` is the line checked
+        again as unmapped, exactly as without a model), so the picker never
+        compares a typed code against attributes the person just refused. The
+        reading stays on record as the rejection's labelled case. The line's
+        mapping and item findings are ``recheck``'s (`code_unmapped`, open);
+        every other finding keeps its decision."""
+        line = self.line(line_no)
+        mapping = line.mapping
+        reading = line.basis.description_reading
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        if mapping.status not in (MappingStatus.CANDIDATE, MappingStatus.AMBIGUOUS):
+            raise ConflictError("the line holds no candidates to reject", details=details)
+        if reading is None or reading.outcome != "read":
+            raise ConflictError(
+                "only candidates a model's reading proposed are rejected", details=details
+            )
+        checked = recheck.line
+        if (
+            checked.line_no != line_no
+            or checked.mapping != LineMapping(status=MappingStatus.UNMAPPED)
+            or checked.basis.item is not None
+            or checked.basis.description_reading is not None
+            or checked.basis.stated_attributes is not None
+        ):
+            raise DomainError("the line was checked again with a mapping", details=details)
+        if checked.po_line != line.effective:
+            raise DomainError("the line was checked again on other values", details=details)
+        raised = [f for f in recheck.findings if f.code in MAPPING_FINDINGS | ITEM_FINDINGS]
+        if any(f.rule_version != self.rules_version for f in raised):
+            raise ConflictError("the line was checked again under other rules", details=details)
+        rejected = _rechecked_line(line, recheck, self.findings)
+        kept = [
+            f
+            for f in self.findings
+            if f.line_no != line_no or f.code not in MAPPING_FINDINGS | ITEM_FINDINGS
+        ]
+        return self._edited(
+            lines=tuple(rejected if x.line_no == line_no else x for x in self.lines),
+            findings=_in_line_order((*kept, *raised)),
+        )
 
     def corrected(self, key: str, correction: ValueCorrection, actor: Actor) -> Corrected:
         """The case's values with ``correction`` too, for its checks to run on.
