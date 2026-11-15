@@ -24,6 +24,7 @@ from dw_knowledge.ingest_jobs import (
     DEFAULT_LEASE_SECONDS,
     DEFAULT_RETRY_BACKOFF_SECONDS,
 )
+from dw_platform.adapters.web_push import PyWebPushSender, web_push_sender
 
 # Mirrors dw_api.settings: the same four profiles, and the same rule that
 # anything forbidden in production is forbidden in UAT, because the difference
@@ -117,10 +118,10 @@ class WorkerSettings(BaseSettings):
         default="feedback", validation_alias=AliasChoices("DW_WORKER_FEEDBACK_BUCKET")
     )
 
-    # Which Qdrant collection this process reads and writes. Named explicitly
-    # because the collection's vector width is fixed at creation: moving to a
-    # different embedding model means a new collection and a reindex, and
-    # pointing two widths at one name is refused rather than resolved.
+    # Which Qdrant alias this process reads and writes. Behind it is a
+    # collection named by its embedding model: moving to a different model is
+    # a rebuild that moves the alias (scripts/knowledge_reindex.py), and a
+    # process with another model or width is refused rather than resolved.
     qdrant_collection: str = Field(
         default=DEFAULT_COLLECTION,
         validation_alias=AliasChoices("DW_WORKER_QDRANT_COLLECTION", "QDRANT_COLLECTION"),
@@ -211,6 +212,22 @@ class WorkerSettings(BaseSettings):
             "DW_WORKER_OUTBOUND_ALLOWED_HOSTS", "DW_API_OUTBOUND_ALLOWED_HOSTS"
         ),
     )
+    # --- web push (Sales ticket 48) ---
+    # On: a person may turn pushes on from their profile, and the worker
+    # pushes their reminders to the phone. The VAPID private key comes from
+    # the deployment's secrets only (never the repository); the API derives
+    # the public key the browser subscribes with from it, the worker signs
+    # with it, so one value serves both. The subject is who runs the
+    # deployment (``mailto:`` or ``https:``), as the push services ask. A
+    # deployed profile with pushes on refuses to start without both.
+    web_push_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("DW_WEB_PUSH_ENABLED")
+    )
+    web_push_vapid_private_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DW_WEB_PUSH_VAPID_PRIVATE_KEY")
+    )
+    web_push_subject: str = Field(default="", validation_alias=AliasChoices("DW_WEB_PUSH_SUBJECT"))
+
     # Reads uploaded documents and images. Verified per modality, not chosen by
     # tier: gpt-4.1-mini reads a PDF correctly through this gateway but does NOT
     # receive images - asked the colour of a solid blue square it answered
@@ -473,8 +490,20 @@ class WorkerSettings(BaseSettings):
         """True for profiles real people's data flows through."""
         return self.profile in DEPLOYED_PROFILES
 
+    def web_push_sender(self) -> PyWebPushSender | None:
+        """The push sender this deployment configures, or None where pushes
+        are off (`dw_platform.adapters.web_push.web_push_sender`)."""
+        return web_push_sender(
+            enabled=self.web_push_enabled,
+            private_key=self.web_push_vapid_private_key.get_secret_value(),
+            subject=self.web_push_subject,
+            deployed=self.is_deployed,
+        )
+
     def validate_for_profile(self) -> None:
         """Fail fast on configurations that must never reach a deployed profile."""
+        # Pushes on with no key: refused when deployed, off when local.
+        self.web_push_sender()
         if not self.is_deployed:
             return
         if not self.database_url:

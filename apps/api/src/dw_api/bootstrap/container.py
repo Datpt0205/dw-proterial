@@ -83,6 +83,7 @@ from dw_platform.application.support_access import (
     SupportScopeCatalog,
 )
 from dw_platform.application.tenant_members import TenantMembersService
+from dw_platform.application.web_push import WebPushService
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,8 @@ class ApiContainer:
     # The workspace's stopped outbox events, sent back by an admin (2026-10-29).
     background_failures: BackgroundFailuresService | None = None
     notifications: NotificationService | None = None
+    # A member's devices for Web Push (Sales ticket 48).
+    web_push: WebPushService | None = None
     # Customer-granted support access (ADR 0024). A context registers its
     # grantable scope sets and resource describers on the catalog at the seam
     # in `wiring.py`; `build_container` freezes it once wiring is done.

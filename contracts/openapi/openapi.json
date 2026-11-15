@@ -1875,6 +1875,51 @@
         "title": "BravoPoLayout",
         "type": "object"
       },
+      "BriefView": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "counts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Counts",
+            "type": "array"
+          },
+          "notification_id": {
+            "format": "uuid",
+            "title": "Notification Id",
+            "type": "string"
+          },
+          "opening": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notification_id",
+          "title",
+          "opening",
+          "counts",
+          "at"
+        ],
+        "title": "BriefView",
+        "type": "object"
+      },
       "CancelResult": {
         "description": "Whether a run was actually stopped, not whether the request was understood.\n\n`False` is an ordinary answer: the turn had already finished, or another\nprocess holds it. A caller pressing Stop twice should get 200 both times —\nthe second one describes a thread that is already not running, which is what\nthey asked for.",
         "properties": {
@@ -5756,6 +5801,23 @@
         "title": "EdgeGuard",
         "type": "string"
       },
+      "EndpointIn": {
+        "additionalProperties": false,
+        "description": "A subscription named by its endpoint, to turn it off.",
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 12,
+            "title": "Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "EndpointIn",
+        "type": "object"
+      },
       "EvidenceView": {
         "description": "What Sales weighs for one line (step 7). Only for `sales.price.read`;\nother customers' rows and the reference price only for\n`sales.price.other_customers.read` too.",
         "properties": {
@@ -9312,6 +9374,39 @@
           "hand_entered"
         ],
         "title": "MappingView",
+        "type": "object"
+      },
+      "MarkIn": {
+        "additionalProperties": false,
+        "description": "What a person did with a reminder.",
+        "properties": {
+          "hours": {
+            "anyOf": [
+              {
+                "maximum": 72.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "mark": {
+            "enum": [
+              "done",
+              "dismissed",
+              "snoozed"
+            ],
+            "title": "Mark",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mark"
+        ],
+        "title": "MarkIn",
         "type": "object"
       },
       "MasterDataView": {
@@ -14951,6 +15046,32 @@
         "title": "PurchasingRulesView",
         "type": "object"
       },
+      "PushKeyView": {
+        "description": "Whether pushes are on in this deployment, and the VAPID public key the\nbrowser subscribes with (`applicationServerKey`).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Key"
+          }
+        },
+        "required": [
+          "enabled",
+          "public_key"
+        ],
+        "title": "PushKeyView",
+        "type": "object"
+      },
       "QuestionKind": {
         "description": "What DW1 answers (the agreed list), and everything else.",
         "enum": [
@@ -16345,6 +16466,76 @@
           "reason"
         ],
         "title": "RejectedRow",
+        "type": "object"
+      },
+      "ReminderView": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "customer_term": {
+            "title": "Customer Term",
+            "type": "boolean"
+          },
+          "followup": {
+            "title": "Followup",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "notification_id": {
+            "format": "uuid",
+            "title": "Notification Id",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notification_id",
+          "followup",
+          "stage",
+          "case_id",
+          "title",
+          "body",
+          "link",
+          "at",
+          "customer_term"
+        ],
+        "title": "ReminderView",
         "type": "object"
       },
       "RenameTenantRequest": {
@@ -19882,6 +20073,52 @@
         "title": "SubmitBody",
         "type": "object"
       },
+      "SubscriptionIn": {
+        "description": "What the browser hands the portal when a person turns pushes on.",
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 12,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/SubscriptionKeys"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "title": "SubscriptionIn",
+        "type": "object"
+      },
+      "SubscriptionKeys": {
+        "additionalProperties": false,
+        "description": "The browser's `PushSubscription.toJSON().keys`.",
+        "properties": {
+          "auth": {
+            "maxLength": 32,
+            "minLength": 16,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "Auth",
+            "type": "string"
+          },
+          "p256dh": {
+            "maxLength": 100,
+            "minLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+={0,2}$",
+            "title": "P256Dh",
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "SubscriptionKeys",
+        "type": "object"
+      },
       "SuggestionView": {
         "properties": {
           "basis": {
@@ -20969,6 +21206,38 @@
         "title": "TimesView",
         "type": "object"
       },
+      "TodayView": {
+        "properties": {
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "integer"
+          },
+          "reminders": {
+            "items": {
+              "$ref": "#/components/schemas/ReminderView"
+            },
+            "title": "Reminders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "brief",
+          "reminders",
+          "hidden"
+        ],
+        "title": "TodayView",
+        "type": "object"
+      },
       "TurnView": {
         "properties": {
           "answer": {
@@ -21924,6 +22193,30 @@
             "format": "date-time",
             "title": "Received At",
             "type": "string"
+          },
+          "sla_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Due At"
+          },
+          "sla_warn_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Warn At"
           },
           "status": {
             "title": "Status",
@@ -27418,6 +27711,95 @@
         "summary": "Suppliers",
         "tags": [
           "purchasing"
+        ]
+      }
+    },
+    "/api/v1/push/key": {
+      "get": {
+        "operationId": "push_key_api_v1_push_key_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushKeyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Push Key",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/v1/push/subscription": {
+      "put": {
+        "operationId": "subscribe_api_v1_push_subscription_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Subscribe",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/v1/push/subscription/delete": {
+      "post": {
+        "operationId": "unsubscribe_api_v1_push_subscription_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unsubscribe",
+        "tags": [
+          "push"
         ]
       }
     },
@@ -34829,6 +35211,98 @@
           }
         },
         "summary": "Propose Skill",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/today": {
+      "get": {
+        "operationId": "today_api_v1_sales_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Today",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/today/reminders/{notification_id}/mark": {
+      "post": {
+        "operationId": "mark_reminder_api_v1_sales_today_reminders__notification_id__mark_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Reminder",
         "tags": [
           "sales"
         ]

@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dw_agent_runtime.model.profiles import DEFAULT_PROFILE_ID
 from dw_knowledge.contracts import DEFAULT_COLLECTION
+from dw_platform.adapters.web_push import PyWebPushSender, web_push_sender
 
 # Four profiles, two of them deployed.
 #
@@ -222,8 +223,9 @@ class ApiSettings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("DW_API_QDRANT_API_KEY", "QDRANT_API_KEY"),
     )
-    # Fixed at collection-creation time, so moving to another embedding model
-    # means naming a new collection and reindexing into it, never editing this.
+    # An alias over a collection named by its embedding model: moving to
+    # another model is a rebuild that moves the alias
+    # (scripts/knowledge_reindex.py), never an edit of this.
     qdrant_collection: str = Field(
         default=DEFAULT_COLLECTION,
         validation_alias=AliasChoices("DW_API_QDRANT_COLLECTION", "QDRANT_COLLECTION"),
@@ -305,6 +307,22 @@ class ApiSettings(BaseSettings):
         default=[],
         validation_alias=AliasChoices("DW_API_OUTBOUND_ALLOWED_HOSTS"),
     )
+
+    # --- web push (Sales ticket 48) ---
+    # On: a person may turn pushes on from their profile, and the worker
+    # pushes their reminders to the phone. The VAPID private key comes from
+    # the deployment's secrets only (never the repository); the API derives
+    # the public key the browser subscribes with from it, the worker signs
+    # with it, so one value serves both. The subject is who runs the
+    # deployment (``mailto:`` or ``https:``), as the push services ask. A
+    # deployed profile with pushes on refuses to start without both.
+    web_push_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("DW_WEB_PUSH_ENABLED")
+    )
+    web_push_vapid_private_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DW_WEB_PUSH_VAPID_PRIVATE_KEY")
+    )
+    web_push_subject: str = Field(default="", validation_alias=AliasChoices("DW_WEB_PUSH_SUBJECT"))
 
     # --- task connector ---
     # "none" (nothing integrated) | "mock" (test placeholder).
@@ -448,8 +466,20 @@ class ApiSettings(BaseSettings):
             )
         return self.database_url
 
+    def web_push_sender(self) -> PyWebPushSender | None:
+        """The push sender this deployment configures, or None where pushes
+        are off (`dw_platform.adapters.web_push.web_push_sender`)."""
+        return web_push_sender(
+            enabled=self.web_push_enabled,
+            private_key=self.web_push_vapid_private_key.get_secret_value(),
+            subject=self.web_push_subject,
+            deployed=self.is_deployed,
+        )
+
     def validate_for_profile(self) -> None:
         """Fail fast on configurations that must never reach a deployed profile."""
+        # Pushes on with no key: refused when deployed, off when local.
+        self.web_push_sender()
         if self.is_deployed:
             if self.auth_mode == "dev":
                 raise RuntimeError(f"dev auth mode is forbidden in the {self.profile} profile")

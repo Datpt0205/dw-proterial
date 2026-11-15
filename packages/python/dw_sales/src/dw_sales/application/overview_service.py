@@ -68,7 +68,7 @@ from dw_sales.application.runs import (
 )
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
-from dw_sales.domain.followups import due_soon
+from dw_sales.domain.followups import Sla, due_soon, sla_of
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.process import WIV_STEPS, Procedure, StepId
@@ -220,6 +220,12 @@ class WorkItem(BaseModel):
     # `assigned_to`; this is None on a case (2026-10-27: every mail read
     # "Chưa giao" on Việc cần làm while the inbox named its owner).
     owner: str | None = None
+    # The item's SLA (tickets 47, 48): when it starts being about to be late
+    # and when it is late, from the tenant's follow-up timings (`sla_of`), so
+    # the countdown and the lane's reminder and escalation are one rule. None
+    # where no follow-up times this step.
+    sla_warn_at: datetime | None = None
+    sla_due_at: datetime | None = None
 
 
 def _stat(spread: Spread) -> TimeStat:
@@ -270,6 +276,8 @@ WHOSE_TURN: Final[Mapping[CaseKind, Mapping[str, Literal["pic", "head"]]]] = {
     kind: {status: audience for status in statuses if (audience := _turn(kind, status)) is not None}
     for kind, statuses in STATUS_BUCKETS.items()
 }
+# Which SLA an item has: its kind, status, arrival and due date.
+_SlaOf = Callable[[CaseKind, str, datetime, date | None], Sla | None]
 # The page a work list is cut into when the caller names none.
 WORK_PAGE: Final = 50
 
@@ -386,6 +394,9 @@ class OverviewService:
         def soon(due: date | None) -> bool:
             return due is not None and due_soon(due, today, policy)
 
+        def sla(kind: CaseKind, status: str, received_at: datetime, due: date | None) -> Sla | None:
+            return sla_of(policy, kind, status, received_at=received_at, due=due)
+
         async with self.uow(scope) as work:
             page = await work.overview.work_page(wanted, request)
             # A cross-check is decided on the case itself (who made it, what
@@ -399,11 +410,11 @@ class OverviewService:
         for entry in page.items:
             row = entry.row
             if isinstance(row, OpenOrder):
-                item = await self._order_item(context, row, checks.get(row.case_id), soon)
+                item = await self._order_item(context, row, checks.get(row.case_id), soon, sla)
             elif isinstance(row, LoggedMessage):
                 item = _message_item(row, wanted)
             else:
-                item = self._quote_item(context, row, soon)
+                item = self._quote_item(context, row, soon, sla)
             if item is not None:
                 items.append(item)
         return Page(items=tuple(items), next_cursor=page.next_cursor)
@@ -443,6 +454,7 @@ class OverviewService:
         row: OpenOrder,
         stored: Stored[OrderCase] | None,
         soon: Callable[[date | None], bool],
+        sla: _SlaOf,
     ) -> WorkItem | None:
         step = ORDER_NEXT.get(row.status)
         if step is None:
@@ -476,6 +488,7 @@ class OverviewService:
                 return None
         elif not self._eligible(context, scope, row.assigned_to):
             return None
+        timed = sla(CaseKind.ORDER, row.status.value, row.received_at, row.due)
         return WorkItem(
             kind="order",
             id=str(row.case_id),
@@ -486,6 +499,8 @@ class OverviewService:
             due=row.due,
             due_soon=soon(row.due),
             assigned_to=row.assigned_to,
+            sla_warn_at=timed.warn_at if timed else None,
+            sla_due_at=timed.due_at if timed else None,
         )
 
     def _quote_item(
@@ -493,6 +508,7 @@ class OverviewService:
         context: AccessContext,
         stored: Stored[QuoteCase],
         soon: Callable[[date | None], bool],
+        sla: _SlaOf,
     ) -> WorkItem | None:
         case, assigned = stored.case, stored.origin.assigned_to
         step = QUOTE_NEXT.get(case.status)
@@ -506,6 +522,8 @@ class OverviewService:
         elif not self._eligible(context, scope, assigned):
             return None
         due = case.request.document.quote_due
+        received = case.request.received_at
+        timed = sla(CaseKind.QUOTE, case.status.value, received, due.value if due else None)
         return WorkItem(
             kind="quote",
             id=str(case.case_id),
@@ -516,6 +534,8 @@ class OverviewService:
             due=due.value if due else None,
             due_soon=soon(due.value if due else None),
             assigned_to=assigned,
+            sla_warn_at=timed.warn_at if timed else None,
+            sla_due_at=timed.due_at if timed else None,
         )
 
 

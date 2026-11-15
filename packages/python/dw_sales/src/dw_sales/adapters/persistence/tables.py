@@ -647,6 +647,23 @@ recorded_quotations = sa.Table(
     sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# Tickets 47 and 48: what a person did with a reminder in their feed ("Đã xử
+# lý", "Không cần", "Nhắc lại sau"), their own (`tenant AND ((workspace AND
+# user) OR scope)`), gone with the notification it marks.
+reminder_marks = sa.Table(
+    "reminder_marks",
+    metadata,
+    sa.Column("notification_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("user_id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("followup", sa.Text, nullable=False),
+    sa.Column("mark", sa.Text, nullable=False),
+    sa.Column("until", _TS),
+    sa.Column("marked_at", _TS, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # dw_sales ADR 0007: the status assistant's sessions, each a person's own
 # (`tenant AND ((workspace AND user) OR scope)`), and their turns. Thirty days
 # after a session's last turn, `sales.prune_assistant_sessions()` removes it.

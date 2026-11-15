@@ -56,6 +56,7 @@ const api = {
   quotes: vi.fn(async () => []),
   inbox: vi.fn(async () => []),
   openYcbg: vi.fn(async () => []),
+  today: vi.fn(async () => ({ brief: null, reminders: [], hidden: 0 })),
   customers: vi.fn(async () => ({ items: [] })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));

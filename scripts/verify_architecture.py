@@ -46,6 +46,10 @@ IMPORT_TO_DIST = {
     "pypdf": "pypdf",
     "msoffcrypto": "msoffcrypto-tool",
     "PIL": "pillow",
+    # Web Push (Sales ticket 48): the sender, its VAPID key, the key's curve.
+    "pywebpush": "pywebpush",
+    "py_vapid": "py-vapid",
+    "cryptography": "cryptography",
     "langchain": "langchain",
     "langchain_core": "langchain-core",
     "langchain_openai": "langchain-openai",

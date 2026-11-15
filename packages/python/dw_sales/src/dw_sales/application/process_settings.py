@@ -591,6 +591,8 @@ PROCESS_SETTINGS: Final[tuple[Placement, ...]] = _in(
     "working_hours.end",
     "morning_brief",
     "your_turn",
+    # What a push to a phone may show (ticket 48).
+    "push",
 )
 
 

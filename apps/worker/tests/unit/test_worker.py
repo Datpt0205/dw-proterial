@@ -127,7 +127,10 @@ def test_only_the_platform_lanes_are_wired() -> None:
     so it is a technical constant in code, not a term in
     `retention@1.8.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
     `notifications_retention` is the sixth, on the same footing: the in-app
-    inbox's 90 days live in `platform.prune_notifications()` itself.
+    inbox's 90 days live in `platform.prune_notifications()` itself, and
+    `push_subscriptions_retention` beside it: a Web Push subscription the
+    portal stopped renewing goes after the 90 days of
+    `platform.prune_push_subscriptions()`, wired whether or not pushes are on.
     `checkpoint_retention` is the seventh, and reads the policy file again:
     a checkpoint holds a conversation verbatim, so how long it stays is a
     compliance answer like memory's (`checkpoints` in the same file).
@@ -167,6 +170,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "partitions",
         "spend_guard_retention",
         "notifications_retention",
+        "push_subscriptions_retention",
         "checkpoint_retention",
         "channel_link_nonces_retention",
         "channel_inbound_messages_retention",

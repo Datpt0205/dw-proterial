@@ -32,6 +32,20 @@ class Notification:
 
 
 @dataclass(frozen=True, slots=True)
+class SourcedNotification:
+    """A notification with the key its sender delivered it under, for a
+    context reading back what it told this person (Sales' feed, ticket 47).
+    The key is the sender's own: only the sender parses it."""
+
+    id: uuid.UUID
+    source_key: str
+    title: str
+    body: str
+    link: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Inbox:
     items: tuple[Notification, ...]
     unread: int

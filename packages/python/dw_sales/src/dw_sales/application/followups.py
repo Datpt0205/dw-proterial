@@ -52,6 +52,7 @@ the follow-up, the stage and how many were told, never who or what.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -111,6 +112,10 @@ _REFERENCE_LIMIT: Final = 60
 BRIEF_RECORDS_KEPT: Final = timedelta(days=35)
 
 Stopped = Literal["paused"]
+# What opens a brief whose first sentences the model wrote: the feed (ticket
+# 47) splits the brief on it, so the two read one constant.
+OPENING_PREFIX: Final = "DW1 viết: "
+_KEY_PREFIX: Final = "sales.followup"
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,9 +181,38 @@ def key_of(due: Due) -> FollowupKey:
 def source_key(key: FollowupKey, scope: SalesScope) -> str:
     """The inbox's idempotency key: the record's key, in its workspace."""
     return (
-        f"sales.followup:{scope.workspace_id.value}:{key.followup}:{key.stage}:"
+        f"{source_key_prefix(scope.workspace_id.value)}{key.followup}:{key.stage}:"
         f"{key.subject}:{key.since.isoformat()}"
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SourceKey:
+    """A follow-up's inbox key read back (`source_key`'s inverse)."""
+
+    workspace_id: uuid.UUID
+    followup: str
+    stage: str
+    subject: str
+
+
+def source_key_prefix(workspace_id: uuid.UUID) -> str:
+    """What every follow-up delivered in ``workspace_id`` is keyed under."""
+    return f"{_KEY_PREFIX}:{workspace_id}:"
+
+
+def parse_source_key(text: str) -> SourceKey | None:
+    """The workspace, follow-up, stage and subject of a key `source_key` made,
+    or None for any other key. The wait's instant is last because its ISO
+    form holds colons."""
+    parts = text.split(":", 5)
+    if len(parts) != 6 or parts[0] != _KEY_PREFIX:
+        return None
+    try:
+        workspace = uuid.UUID(parts[1])
+    except ValueError:
+        return None
+    return SourceKey(workspace, parts[2], parts[3], parts[4])
 
 
 def lane_context(scope: SalesScope) -> AccessContext:
@@ -203,6 +237,31 @@ class BriefWriterPort(Protocol):
     ) -> str | None: ...
 
 
+class PushResult(Protocol):
+    """How many of a person's devices took a push, and how many of their
+    subscriptions were gone and removed."""
+
+    @property
+    def reached(self) -> int: ...
+
+    @property
+    def removed(self) -> int: ...
+
+
+class PushNoticePort(Protocol):
+    """A push to every device ``person`` turned notifications on from in the
+    workspace (`dw_platform.application.web_push.WebPushService.push`). The
+    payload is `PushNotice.payload`'s, nothing else."""
+
+    async def push(
+        self,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        person: uuid.UUID,
+        payload: Mapping[str, object],
+    ) -> PushResult: ...
+
+
 @dataclass(frozen=True)
 class FollowupLane:
     uow: SalesUnitOfWorkFactory
@@ -213,6 +272,8 @@ class FollowupLane:
     ids: IdGenerator
     # None where no model is wired: every brief is the counts alone.
     writer: BriefWriterPort | None = None
+    # None where web push is off: the inbox alone tells people (ticket 48).
+    push: PushNoticePort | None = None
 
     async def tick(self, scope: SalesScope) -> FollowupTick:
         policy = await self.policies.followups(scope)
@@ -233,21 +294,32 @@ class FollowupLane:
         deferred = 0
         if pending and not policy.working_hours.is_open(now):
             deferred, pending = len(pending), []
+        # What each person was told by this tick: one push each, however
+        # many (ticket 48: several within a tick's few minutes ring once).
+        told: dict[uuid.UUID, list[Due]] = {}
         for due in pending:
             delivered = await self._remind(scope, policy, due, now)
             if delivered is not None:
-                sent.append(delivered)
+                key, recipients = delivered
+                sent.append(key)
+                for person in recipients:
+                    told.setdefault(person, []).append(due)
+        if told and self.push is not None:
+            await self._push(scope, policy, told, now)
         if slot is not None and brief_key is not None and brief_key not in done:
-            delivered = await self._brief(scope, policy, slot, brief_key, cases, now)
-            if delivered is not None:
-                sent.append(delivered)
+            briefed = await self._brief(scope, policy, slot, brief_key, cases, now)
+            if briefed is not None:
+                sent.append(briefed)
         return FollowupTick(sent=tuple(sent), deferred=deferred)
 
     # ------------------------------------------------------------- stages --
 
     async def _remind(
         self, scope: SalesScope, policy: SalesFollowups, due: Due, now: datetime
-    ) -> str | None:
+    ) -> tuple[str, list[uuid.UUID]] | None:
+        """The source key and whom it told, when this tick recorded it; None
+        when not delivered, or recorded already by another worker (which
+        pushes it, so a person's phone rings once)."""
         recipients = await self._audience(scope, due.notify, due.case.assigned_to)
         if not recipients:
             return None
@@ -273,10 +345,10 @@ class FollowupLane:
             "since": key.since.isoformat(),
             "recipients": len(recipients),
         }
-        await self._record(
+        recorded = await self._record(
             scope, key, len(recipients), now, _RESOURCE_CASE[due.case.kind], key.subject, details
         )
-        return source_key(key, scope)
+        return (source_key(key, scope), recipients) if recorded else None
 
     async def _audience(
         self, scope: SalesScope, notify: Sequence[Audience], assignee: uuid.UUID | None
@@ -306,10 +378,10 @@ class FollowupLane:
         details: dict[str, object],
         *,
         forget_before: date | None = None,
-    ) -> None:
+    ) -> bool:
         async with self.uow(scope) as work:
             if not await work.followups.record(SentFollowup(key, recipients, now)):
-                return
+                return False
             if forget_before is not None:
                 await work.followups.forget_briefs_before(forget_before)
             await work.audit.append(
@@ -326,6 +398,53 @@ class FollowupLane:
                 )
             )
             await work.commit()
+        return True
+
+    # --------------------------------------------------------------- push --
+
+    async def _push(
+        self,
+        scope: SalesScope,
+        policy: SalesFollowups,
+        told: Mapping[uuid.UUID, Sequence[Due]],
+        now: datetime,
+    ) -> None:
+        """One push per person told, after the reminders are recorded. A push
+        is a nudge towards the feed, which holds the reminder either way, so
+        one that fails is logged and not tried again."""
+        assert self.push is not None
+        for person, dues in told.items():
+            notice = push_notice(dues, case_number=policy.push.case_number)
+            try:
+                outcome = await self.push.push(
+                    scope.tenant_id.value, scope.workspace_id.value, person, notice.payload()
+                )
+            except Exception:
+                logger.exception("sales_followups: a push was not sent")
+                continue
+            if not (outcome.reached or outcome.removed):
+                # Nobody's phone: nothing happened worth a row.
+                continue
+            async with self.uow(scope) as work:
+                await work.audit.append(
+                    lane_audit_event(
+                        lane=SALES_FOLLOWUPS_LANE,
+                        event_id=self.ids.new_uuid(),
+                        tenant_id=TenantId(scope.tenant_id.value),
+                        workspace_id=WorkspaceId(scope.workspace_id.value),
+                        action="sales.followup.pushed",
+                        resource_type="sales_workspace",
+                        resource_id=str(scope.workspace_id.value),
+                        occurred_at=now,
+                        # How many, never who or which case.
+                        details={
+                            "items": notice.items,
+                            "devices": outcome.reached,
+                            "removed": outcome.removed,
+                        },
+                    )
+                )
+                await work.commit()
 
     # -------------------------------------------------------------- brief --
 
@@ -358,7 +477,7 @@ class FollowupLane:
                 else None
             )
             if opening is not None:
-                body = f"DW1 viết: {opening}\n\n{body}"
+                body = f"{OPENING_PREFIX}{opening}\n\n{body}"
             try:
                 await self.notifications.deliver(
                     lane_context(scope),
@@ -667,3 +786,90 @@ def brief_text(brief: Brief, slot: BriefSlot, *, workspace: bool) -> tuple[str, 
         f"Đang chờ: {_buckets(brief.waiting)}.",
     ]
     return title, "\n".join(lines)
+
+
+# ------------------------------------------------------------- the push --
+
+# What a push says, per follow-up and stage: the kind of work in a few words,
+# and of the case nothing but its number (ticket 48).
+_PUSH_KIND: Final[Mapping[tuple[Followup, Stage], str]] = MappingProxyType(
+    {
+        (Followup.YOUR_TURN, Stage.NOTIFY): "Đến lượt bạn",
+        (Followup.ORDER_UNCONFIRMED, Stage.REMIND): "Sắp quá hạn xác nhận",
+        (Followup.ORDER_UNCONFIRMED, Stage.ESCALATE): "Quá hạn xác nhận",
+        (Followup.QUOTE_WAITING_DESIGN, Stage.REMIND): "Chờ Design quá lâu",
+        (Followup.QUOTE_DEADLINE, Stage.WARN): "Sắp đến hạn báo giá",
+        (Followup.WAITING_CUSTOMER, Stage.REMIND): "Chờ khách quá lâu",
+        (Followup.WAITING_PC, Stage.REMIND): "Chờ PC quá lâu",
+        (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY): "Khách im lặng quá hạn",
+    }
+)
+_HEAD_TURN: Final[Mapping[CaseKind, str]] = {
+    CaseKind.ORDER: "Chờ bạn kiểm chéo",
+    CaseKind.QUOTE: "Chờ bạn duyệt",
+}
+_PUSH_CASE: Final[Mapping[CaseKind, str]] = {CaseKind.ORDER: "PO", CaseKind.QUOTE: "Báo giá"}
+# A case number fit for a lock screen: what a PO or quote request number
+# looks like. A reference read from a customer's document that is anything
+# else (words, spaces, a long string) is left out, never shown: a push never
+# carries the customer's text.
+_PUSH_NUMBER: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9/._-]{0,39}")
+FEED_LINK: Final = "/sales"
+
+
+@dataclass(frozen=True, slots=True)
+class PushNotice:
+    """One push: a title and a line, the page it opens, and how many items it
+    stands for (the app badge adds them up)."""
+
+    title: str
+    body: str
+    link: str
+    items: int
+    tag: str
+
+    def payload(self) -> dict[str, object]:
+        """What leaves for the push service, encrypted to the device: these
+        five fields and nothing else (`apps/web/public/sw.js` reads them)."""
+        return {
+            "title": self.title,
+            "body": self.body,
+            "url": self.link,
+            "count": self.items,
+            "tag": self.tag,
+        }
+
+
+def item_link(kind: CaseKind, case_id: uuid.UUID) -> str:
+    """The feed with one case's item open (ticket 48's deep link)."""
+    return f"{FEED_LINK}?item={kind.value}:{case_id}"
+
+
+def push_notice(dues: Sequence[Due], *, case_number: bool) -> PushNotice:
+    """The push for what one person was told in one tick: one item named by
+    its kind and, where the tenant allows it and it looks like one, its
+    number; several, counted. Never a price, an amount, a customer or their
+    text."""
+    if len(dues) > 1:
+        return PushNotice(
+            title=f"{len(dues)} việc mới",
+            body="Mở DW1 để xem và quyết định.",
+            link=FEED_LINK,
+            items=len(dues),
+            tag="sales:batch",
+        )
+    (due,) = dues
+    case = due.case
+    if due.followup is Followup.YOUR_TURN and due.notify == ("head",):
+        title = _HEAD_TURN[case.kind]
+    else:
+        title = _PUSH_KIND[(due.followup, due.stage)]
+    what = _PUSH_CASE[case.kind]
+    number = case.reference if _PUSH_NUMBER.fullmatch(case.reference) else None
+    return PushNotice(
+        title=title,
+        body=f"{what} {number}" if case_number and number else what,
+        link=item_link(case.kind, case.case_id),
+        items=1,
+        tag=f"sales:{case.kind.value}:{case.case_id}",
+    )

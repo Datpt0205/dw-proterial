@@ -633,6 +633,22 @@
         "title": "OrderUnconfirmedRule",
         "type": "object"
       },
+      "PushRule": {
+        "additionalProperties": false,
+        "description": "What a push to a person's phone may show on the lock screen (ticket\n48). A push only ever names the kind of work and, when this allows, the\ncase number: never a price, an amount, a customer's name or their text.",
+        "properties": {
+          "case_number": {
+            "description": "Thông báo trên điện thoại ghi số PO hoặc số yêu cầu báo giá; tắt thì chỉ ghi loại việc (màn hình khóa không lộ số hồ sơ).",
+            "title": "Case Number",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "case_number"
+        ],
+        "title": "PushRule",
+        "type": "object"
+      },
       "QuoteDeadlineRule": {
         "additionalProperties": false,
         "description": "A quote request whose due date is near and that is not yet sent.",
@@ -811,6 +827,13 @@
         "pattern": "^\\d+\\.\\d+\\.\\d+$",
         "title": "Policy Version",
         "type": "string"
+      },
+      "push": {
+        "$ref": "#/$defs/PushRule",
+        "default": {
+          "case_number": true
+        },
+        "description": "Thông báo đẩy đến điện thoại của người xử lý."
       },
       "quote_deadline": {
         "$ref": "#/$defs/QuoteDeadlineRule",

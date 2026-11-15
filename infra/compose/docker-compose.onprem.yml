@@ -151,7 +151,8 @@ services:
       DW_API_RERANK_BASE_URL: http://rerank:8080
       DW_API_RERANK_API_KEY: ""
       DW_API_RERANK_MODEL: bge-reranker-v2-m3
-      DW_API_OUTBOUND_ALLOWED_HOSTS: '["model", "rerank"]'
+      # Apple's push service (Sales ticket 48): called only with web push on.
+      DW_API_OUTBOUND_ALLOWED_HOSTS: '["model", "rerank", "web.push.apple.com"]'
       # bge-m3 is 1024 wide; a collection built at another width is never
       # reused (configs/models/onprem.yaml).
       QDRANT_COLLECTION: dw_knowledge_bge_m3
@@ -174,7 +175,7 @@ services:
       OPENAI_API_KEY: ""
       OPENAI_BASE_URL: ""
       DW_WORKER_EMBEDDING_PROVIDER: openai_compatible
-      DW_WORKER_OUTBOUND_ALLOWED_HOSTS: '["model"]'
+      DW_WORKER_OUTBOUND_ALLOWED_HOSTS: '["model", "web.push.apple.com"]'
       QDRANT_COLLECTION: dw_knowledge_bge_m3
       ZALO_BOT_TOKEN: ""
       # The drop folder (ticket 43; one for every DW since 2026-11-02): the

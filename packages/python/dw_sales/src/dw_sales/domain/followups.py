@@ -364,6 +364,21 @@ class MorningBrief(BaseModel):
         return value
 
 
+class PushRule(BaseModel):
+    """What a push to a person's phone may show on the lock screen (ticket
+    48). A push only ever names the kind of work and, when this allows, the
+    case number: never a price, an amount, a customer's name or their text."""
+
+    model_config = _FROZEN
+
+    case_number: bool = Field(
+        description=(
+            "Thông báo trên điện thoại ghi số PO hoặc số yêu cầu báo giá; tắt thì chỉ ghi "
+            "loại việc (màn hình khóa không lộ số hồ sơ)."
+        )
+    )
+
+
 class SalesFollowups(BaseModel):
     """Every timing and switch of DW1's follow-ups and its morning brief."""
 
@@ -387,6 +402,12 @@ class SalesFollowups(BaseModel):
         description="Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
     )
     your_turn: YourTurnRule = Field(description="Hồ sơ đến lượt người xử lý.")
+    # 1.5.0 (ticket 48): a version written before the field shows the number,
+    # as every push before it would have.
+    push: PushRule = Field(
+        default=PushRule(case_number=True),
+        description="Thông báo đẩy đến điện thoại của người xử lý.",
+    )
 
     @property
     def version(self) -> str:
@@ -517,6 +538,53 @@ def pc_reminder_at(policy: SalesFollowups, asked_at: datetime) -> datetime | Non
     wait, from the same rule `owed` reads (quiet hours may defer it)."""
     pc = policy.waiting_pc
     return asked_at + timedelta(hours=pc.remind.after_hours) if pc.enabled else None
+
+
+# The follow-ups whose deadline is the customer's own term (the quote due
+# date they asked for; their days of silence after a confirmation): a person
+# may be reminded of them, never spared them. "Nhắc lại sau" and "Không cần"
+# never hide one, however often the person dismissed its like (ticket 47,
+# acceptance 1; dw_sales ADR 0015 decision 6: guards stay code).
+CUSTOMER_TERM: Final = frozenset({Followup.QUOTE_DEADLINE, Followup.IMPLIED_ACCEPTANCE})
+
+
+@dataclass(frozen=True, slots=True)
+class Sla:
+    """When a waiting item is late, and when it starts being about to be.
+
+    Read from the follow-ups the tenant configured, so the countdown a person
+    sees and the reminder and escalation the lane sends are one rule: an
+    order unconfirmed is warned at its first reminder and late at its
+    escalation to the head; a quote request is warned at its deadline warning
+    and late at the end of its due day."""
+
+    warn_at: datetime
+    due_at: datetime
+
+
+def sla_of(
+    policy: SalesFollowups,
+    kind: CaseKind,
+    status: str,
+    *,
+    received_at: datetime,
+    due: date | None,
+) -> Sla | None:
+    """The SLA of a case in ``status``, or None where no follow-up the tenant
+    has switched on times it (the case is not late by any rule of theirs)."""
+    if kind is CaseKind.ORDER:
+        orders = policy.order_unconfirmed
+        if not orders.enabled or status not in _ORDER_UNCONFIRMED:
+            return None
+        return Sla(
+            warn_at=received_at + timedelta(hours=orders.remind.after_hours),
+            due_at=received_at + timedelta(hours=orders.escalate.after_hours),
+        )
+    deadline = policy.quote_deadline
+    if not deadline.enabled or due is None or status not in _BEFORE_SENT:
+        return None
+    late = deadline_of(due, policy.working_hours)
+    return Sla(warn_at=late - timedelta(hours=deadline.warn.hours_before_due), due_at=late)
 
 
 def owed(

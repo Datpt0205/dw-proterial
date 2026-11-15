@@ -218,6 +218,14 @@ export const inboxSchema = z.object({
 });
 export type Inbox = z.infer<typeof inboxSchema>;
 
+// Whether this deployment pushes to phones (Sales ticket 48), and the VAPID
+// public key a browser subscribes with (`GET /push/key`).
+export const pushKeySchema = z.object({
+  enabled: z.boolean(),
+  public_key: z.string().nullable(),
+});
+export type PushKey = z.infer<typeof pushKeySchema>;
+
 // A workspace member as the reporting-hierarchy editor reads it: who they are,
 // the roles they hold, and who they report to. `manager_user_id` is null for a
 // root of the tree; the API rejects an edit that would create a cycle.

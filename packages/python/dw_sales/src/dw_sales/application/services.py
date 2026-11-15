@@ -84,6 +84,7 @@ from dw_sales.application.source import SourceCachePort, SourceService, SourceVi
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.thread_summaries import ThreadSummaries
 from dw_sales.application.threads import ThreadMembersPort
+from dw_sales.application.today import FollowupNoticesPort, ReminderMarkStoreFactory, TodayService
 from dw_sales.application.update_loop import UpdateLoops
 from dw_sales.application.worker_service import WorkerService
 
@@ -152,6 +153,8 @@ class SalesServices:
     confirmations: Confirmations
     # DW1's skills, and a version of one proposed for the head (ticket 40).
     skills: SkillsService
+    # A person's day: today's brief and their reminders, marked (tickets 47, 48).
+    today: TodayService
     gate: Gate
 
 
@@ -211,6 +214,10 @@ def assemble(
     senders: SenderLedgerPort,
     # The status assistant's sessions, each bound to its person (ADR 0007).
     assistant: AssistantStoreFactory,
+    # What the follow-ups told a person, read back for their feed, and what
+    # they did with each reminder (tickets 47, 48).
+    notices: FollowupNoticesPort,
+    reminder_marks: ReminderMarkStoreFactory,
     # Where an uploaded PO is stored, with whose it is (ticket 18).
     uploads: UploadStorePort,
     # The one-call door's model, for the steps a person asks for on a page
@@ -366,6 +373,7 @@ def assemble(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory),
+        today=TodayService(gate, clock, notices, reminder_marks, book),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)

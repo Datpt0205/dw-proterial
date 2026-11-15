@@ -83,6 +83,10 @@ from dw_platform.adapters.persistence.offboarding import (
 )
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
+from dw_platform.adapters.persistence.push_subscriptions import (
+    SqlPushSubscriptionRetention,
+    SqlPushSubscriptions,
+)
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
@@ -94,12 +98,14 @@ from dw_platform.adapters.persistence.zalo_link_repo import (
     SqlChannelLinkNonceRetention,
     SqlZaloLink,
 )
+from dw_platform.adapters.web_push import vapid_public_key
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.background_failures import OUTBOX_ALARMS_LANE, OutboxAlarms
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.application.rule_versions import ContextScope
+from dw_platform.application.web_push import WebPushService
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
 from dw_purchasing.adapters.assembly import (
@@ -448,6 +454,7 @@ def build_sales(
         directory=SqlWorkspaceDirectory(sessions),
         holders=SqlScopeHolders(sessions),
         notifications=SqlNotificationRepository(sessions),
+        notices=SqlNotificationRepository(sessions),
         artifact_bytes=build_object_storage(settings),
         release_manifest_ref=release_manifest_ref(),
         runtime=runtime,
@@ -698,6 +705,23 @@ def _purchasing_mail_drop_dir(settings: WorkerSettings) -> Path | None:
     return _drop_root(settings) if settings.purchasing_mailbox == "stored" else None
 
 
+def web_push(
+    settings: WorkerSettings, sessions: async_sessionmaker[AsyncSession]
+) -> WebPushService | None:
+    """The pushes the follow-ups send (Sales ticket 48), or None where this
+    deployment has them off. Only to the push services the outbound
+    allow-list names, the API's subscribe check and this send's alike."""
+    sender = settings.web_push_sender()
+    if sender is None:
+        return None
+    return WebPushService(
+        store=SqlPushSubscriptions(sessions),
+        sender=sender,
+        public_key=vapid_public_key(sender.private_key),
+        allowed_hosts=frozenset(settings.outbound_allowed_hosts),
+    )
+
+
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     """Wire the lanes this process hosts, skipping any whose infra is absent."""
     registry = ConsumerRegistry()
@@ -738,6 +762,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     spend_guard_retention: RetentionPrunePort | None = None
     # The in-app inbox's own bound: 90 days, the database's constant.
     notifications_retention: RetentionPrunePort | None = None
+    # Web Push subscriptions not renewed for 90 days, the database's constant.
+    push_subscriptions_retention: RetentionPrunePort | None = None
     # One-time channel link nonces: a day past expiry, then gone.
     channel_link_nonces_retention: RetentionPrunePort | None = None
     # Inbound chat message ids: seven days, then gone (INBOUND_MESSAGE_RETENTION).
@@ -953,6 +979,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
         notifications_retention = SqlNotificationRetention(session_factory=sessions)
+        push_subscriptions_retention = SqlPushSubscriptionRetention(session_factory=sessions)
         channel_link_nonces_retention = SqlChannelLinkNonceRetention(session_factory=sessions)
         channel_inbound_messages_retention = SqlChannelInboundRetention(session_factory=sessions)
         approval_codes_retention = SqlApprovalCodeRetention(session_factory=sessions)
@@ -1064,6 +1091,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     holders=SqlScopeHolders(sessions),
                     notifications=SqlNotificationRepository(sessions),
                     writer=mount.brief_writer,
+                    # Web push to the people told (ticket 48), where it is on.
+                    push=web_push(settings, sessions),
                 )
                 sales_followups_consumer = build_sales_followups_consumer(
                     followups, followup_scopes
@@ -1325,6 +1354,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "notifications_retention",
             build_retention_consumer(notifications_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if push_subscriptions_retention is not None:
+        registry.register(
+            "push_subscriptions_retention",
+            build_retention_consumer(push_subscriptions_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if channel_link_nonces_retention is not None:

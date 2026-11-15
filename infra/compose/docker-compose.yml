@@ -333,6 +333,11 @@ services:
       ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
       DW_APPROVAL_CODE_SECRET: ${DW_APPROVAL_CODE_SECRET:-}
       ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
+      # Web Push to people's phones (Sales ticket 48): off unless the
+      # deployment turns it on, with its VAPID private key from its secrets.
+      DW_WEB_PUSH_ENABLED: ${DW_WEB_PUSH_ENABLED:-false}
+      DW_WEB_PUSH_VAPID_PRIVATE_KEY: ${DW_WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      DW_WEB_PUSH_SUBJECT: ${DW_WEB_PUSH_SUBJECT:-}
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
       REDIS_URL: redis://valkey:6379/0
@@ -682,6 +687,11 @@ services:
       DW_APPROVAL_CODE_SECRET: ${DW_APPROVAL_CODE_SECRET:-}
       ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
       ZALO_UPDATES_MODE: ${ZALO_UPDATES_MODE:-poll}
+      # Web Push to people's phones (Sales ticket 48): off unless the
+      # deployment turns it on, with its VAPID private key from its secrets.
+      DW_WEB_PUSH_ENABLED: ${DW_WEB_PUSH_ENABLED:-false}
+      DW_WEB_PUSH_VAPID_PRIVATE_KEY: ${DW_WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      DW_WEB_PUSH_SUBJECT: ${DW_WEB_PUSH_SUBJECT:-}
       DW_PRODUCT_NAME: ${DW_PRODUCT_NAME:-Digital Worker}
       # The `channel_delivery` lane: notifications to linked Zalo chats.
       DW_WORKER_CHANNEL_DELIVERY_INTERVAL_SECONDS: ${DW_WORKER_CHANNEL_DELIVERY_INTERVAL_SECONDS:-30}

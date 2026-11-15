@@ -220,6 +220,29 @@ export class SalesApi {
     return items;
   }
 
+  /**
+   * The caller's day (tickets 47, 48): today's brief and their reminders,
+   * each marked by them. The work list beside it is `myWork`.
+   */
+  today() {
+    return this.get<"/api/v1/sales/today">("/api/v1/sales/today");
+  }
+
+  /** "Đã xử lý", "Không cần" or "Nhắc lại sau" on one of the caller's own
+   * reminders; answers the day as it now stands. A customer's term takes
+   * "Đã xử lý" alone (409 otherwise). */
+  markReminder(
+    notificationId: string,
+    mark: Body<"/api/v1/sales/today/reminders/{notification_id}/mark">,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/sales/today/reminders/{notification_id}/mark">(
+      `/api/v1/sales/today/reminders/${enc(notificationId)}/mark`,
+      mark,
+      idempotencyKey,
+    );
+  }
+
   // ---- inbox --------------------------------------------------------------
 
   inbox() {

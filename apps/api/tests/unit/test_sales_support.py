@@ -57,6 +57,8 @@ _PARAMS = {
     "request_id": str(uuid.uuid4()),
     "seq": "1",
     "message_id": "M01",
+    # A reminder in a person's day (tickets 47, 48).
+    "notification_id": str(uuid.uuid4()),
     # A tenant's own rule versions (ticket 19).
     "key": "sales_order_rules",
     "version_id": str(uuid.uuid4()),
