@@ -81,7 +81,14 @@ def _activity(world: World) -> ActivityService:
     wires it over the SQL readers."""
     gate = world.services.gate
     return ActivityService(
-        world.store, gate, world.store, FixedClock(AT), platform_zone(), world.store
+        world.store,
+        gate,
+        world.store,
+        FixedClock(AT),
+        platform_zone(),
+        world.store,
+        world.store,
+        world.intake.rules,
     )
 
 

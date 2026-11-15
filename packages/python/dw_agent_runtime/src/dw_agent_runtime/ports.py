@@ -6,7 +6,7 @@ and application handlers depend only on the protocols.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from decimal import Decimal
 from typing import Literal, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
@@ -74,6 +74,21 @@ class StreamingModelGateway(ModelGateway, Protocol):
         *,
         run_context: RunContext,
     ) -> AsyncGenerator[str | OutputT, None]: ...
+
+
+@runtime_checkable
+class ScoringModelGateway(ModelGateway, Protocol):
+    """Gateway that can also say how sure the model was of each value of its
+    output (`dw_agent_runtime.model.scoring`): the probability of each value
+    by its JSON path, or None when the route answering gave none."""
+
+    async def generate_structured_scored(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> tuple[OutputT, Mapping[str, float] | None]: ...
 
 
 class TracedModelGateway(ModelGateway, Protocol):

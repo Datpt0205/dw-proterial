@@ -321,6 +321,25 @@ def test_dw1s_followups_run_wherever_dw1_does_every_five_minutes() -> None:
     assert "sales_followups" not in build_registry(deployed).all()
 
 
+def test_dw1s_thresholds_are_set_wherever_dw1_runs_every_hour() -> None:
+    """Sales ticket 44: what applies itself is measured from the labelled
+    cases in DW1's database under the tenants' rules, nothing of the mailbox,
+    so its lane runs wherever DW1 is wired, switch or no switch, hourly,
+    under the name a result it lets apply is applied in; not on a database
+    alone, and not where a deployed profile has no DW1."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_auto_apply" not in build_registry(bare_settings(database_url=db)).all()
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    registry = build_registry(switched_off)
+    assert "sales_auto_apply" in registry.all()
+    assert registry.interval_for("sales_auto_apply", 1.0) == 3600.0
+
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert "sales_auto_apply" not in build_registry(deployed).all()
+
+
 def test_dw1s_rule_drafts_are_swept_wherever_dw1_drafts_them() -> None:
     """ "Tạo từ tệp mẫu": a draft its event lost, or one nobody asks after for
     30 days, is dealt with by a lane of its own, under the name the drafting

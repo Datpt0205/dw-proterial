@@ -102,6 +102,7 @@ from dw_platform.application.malware import (
 )
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
+from dw_sales.application.autonomy import AutonomyGate
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.local_time import LocalZonePort, local_day
@@ -176,6 +177,7 @@ from dw_sales.domain.orders import (
     FindingCode,
     ImpliedTerm,
     LineCheck,
+    MappingStatus,
     OrderCase,
     OrderLine,
     OrderStatus,
@@ -401,6 +403,11 @@ class OrderIntake:
     # says no, the step does what it does when it is off. None: no step may
     # run, whatever the rules say.
     model_steps: ModelStepGatePort | None = None
+    # What code's gate does with a line's one candidate a model reading gave
+    # (dw_sales ADR 0015, ticket 44): stamped on the reading, then applied by
+    # `AutoApply` once the case is stored where it says so. None: no
+    # threshold is read here, and every such line goes to a person.
+    autonomy: AutonomyGate | None = None
     # Whether a verified Design mailbox sent a message no reader, thread or
     # model classified: Design's answer written in the mail (AI item 6) goes
     # to the quotation flow, which matches it by its YCBG or routes it as
@@ -1179,7 +1186,12 @@ class OrderIntake:
             mapped_lines.append((po_line, map_line(po_line, entry=listed, items=item_rows)))
             if wants_reading(po_line, entry=listed):
                 unread.append(po_line)
-        read = await self._read(scope, unread, item_rows, rules, run)
+        read = await self._gated(
+            scope,
+            await self._read(scope, unread, item_rows, rules, run),
+            rules,
+            item=f"{message.message_id}:{document.attachment_id or '-'}",
+        )
         checks: list[LineCheck] = []
         for po_line, by_code in mapped_lines:
             mapped = read.get(po_line.line_no, by_code)
@@ -1490,6 +1502,38 @@ class OrderIntake:
         if not await self._model_step(scope, rules, ModelStep.DESCRIPTION_ATTRIBUTES):
             return {}
         return await self.descriptions.read(lines, items, run=run)
+
+    async def _gated(
+        self, scope: SalesScope, read: dict[int, MappedLine], rules: OrderRules, *, item: str
+    ) -> dict[int, MappedLine]:
+        """Each read line with exactly one candidate, stamped with what code's
+        gate does with it (ticket 44); every other line as it was read. The
+        item key names the message, the document and the line, so the audit
+        sample is the same for the same line whenever it is read."""
+        if self.autonomy is None:
+            return read
+        step = ModelStep.DESCRIPTION_ATTRIBUTES
+        gated: dict[int, MappedLine] = {}
+        for line_no, mapped in read.items():
+            reading = mapped.reading
+            if (
+                reading is None
+                or reading.outcome != "read"
+                or mapped.mapping.status is not MappingStatus.CANDIDATE
+            ):
+                gated[line_no] = mapped
+                continue
+            route = await self.autonomy.route(
+                scope,
+                rules,
+                step,
+                prompt=reading.prompt,
+                model_profile=reading.model_profile,
+                confidence=reading.confidence,
+                item_key=f"{item}:{line_no}:{step.value}",
+            )
+            gated[line_no] = mapped._replace(reading=reading.model_copy(update={"gate": route}))
+        return gated
 
     async def implied_term(
         self, scope: SalesScope, case: OrderCase

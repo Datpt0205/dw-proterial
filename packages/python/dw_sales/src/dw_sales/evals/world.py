@@ -77,6 +77,7 @@ from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.activity_ports import StepRowFilter
+from dw_sales.application.autonomy import AutonomyGate, VersionKey
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
     ArtifactRecord,
@@ -136,6 +137,7 @@ from dw_sales.application.thread_tools import ThreadContext, ThreadTools
 from dw_sales.application.threads import ThreadIndex, ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.activity import StepOutcome
+from dw_sales.domain.autonomy import LabelledScore, StepThreshold
 from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.followups import WaitingCase
@@ -313,6 +315,9 @@ class _ScopeState:
     change_requests: dict[uuid.UUID, ChangeRequest] = field(default_factory=dict)
     # What a person kept of a model's proposal (ticket 43), in the order written.
     labelled_cases: list[LabelledCase] = field(default_factory=list)
+    # Each step's threshold per prompt and model profile (ticket 44): what
+    # the lane last stored, committed at once as the lane's own transaction.
+    thresholds: dict[VersionKey, StepThreshold] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -333,6 +338,7 @@ class _ScopeState:
             sent=dict(self.sent),
             change_requests=dict(self.change_requests),
             labelled_cases=list(self.labelled_cases),
+            thresholds=dict(self.thresholds),
         )
 
 
@@ -922,7 +928,8 @@ class _Work:
 class MemoryStore:
     """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort`,
     `QuoteCaseLookupPort`, `LayoutLookupPort`, `ProcessingQueuePort`,
-    `StepActivityReadPort` and `LabelledCaseReadPort` in memory, per scope:
+    `StepActivityReadPort`, `LabelledCaseReadPort`, `StepThresholdStorePort`
+    and `GatedLabelsPort` in memory, per scope:
     what one scope committed no other scope reads. ``clock`` says when a queued job is due."""
 
     def __init__(
@@ -1040,6 +1047,41 @@ class MemoryStore:
         for case in self.state(scope).labelled_cases:
             counted[case.step] = counted.get(case.step, StepLabels()).counted(case.verdict)
         return counted
+
+    async def threshold(
+        self, scope: SalesScope, step: ModelStep, prompt: str, model_profile: str
+    ) -> StepThreshold | None:
+        """`StepThresholdReadPort.threshold`."""
+        return self.state(scope).thresholds.get((step, prompt, model_profile))
+
+    async def thresholds(self, scope: SalesScope) -> Sequence[StepThreshold]:
+        return list(self.state(scope).thresholds.values())
+
+    async def save(
+        self,
+        scope: SalesScope,
+        thresholds: Sequence[StepThreshold],
+        audits: Sequence[AuditEvent],
+    ) -> None:
+        """`StepThresholdStorePort.save`: one per step and versions, the
+        latest kept, with the lane's audit rows."""
+        state = self.state(scope)
+        for threshold in thresholds:
+            state.thresholds[(threshold.step, threshold.prompt, threshold.model_profile)] = (
+                threshold
+            )
+        state.audit.extend(audits)
+
+    async def gated(self, scope: SalesScope) -> Mapping[VersionKey, Sequence[LabelledScore]]:
+        """`GatedLabelsPort.gated`: the labelled cases of gated results."""
+        found: dict[VersionKey, list[LabelledScore]] = {}
+        for case in self.state(scope).labelled_cases:
+            if case.gate is None or case.model_profile is None:
+                continue
+            found.setdefault((case.step, case.prompt, case.model_profile), []).append(
+                LabelledScore(confidence=case.confidence, verdict=case.verdict, gate=case.gate)
+            )
+        return found
 
     async def cases_for_ycbg(self, scope: SalesScope, ycbg_no: str) -> Sequence[QuoteCase]:
         return [
@@ -1711,6 +1753,9 @@ def open_world(
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
         body_pos=None if model is None else PoBodyReader(model),
         model_steps=readiness,
+        # The thresholds the store holds (ticket 44): none until a test or
+        # the lane stores one, so every result goes to a person.
+        autonomy=AutonomyGate(store),
         uploads=uploads,
         design_senders=quotation,
     )

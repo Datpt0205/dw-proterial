@@ -209,6 +209,27 @@ class ModelAssist(BaseModel):
         return switch
 
 
+class Autonomy(BaseModel):
+    """How much error a step that applies its result by itself may make
+    (dw_sales ADR 0015, decided 2026-11-16; ticket 44). The tier of each step
+    is code's (`dw_sales.domain.autonomy.STEP_TIERS`); these are the
+    tenant's numbers for each tier that may apply itself. A tenant may only
+    tighten them: the upper bounds are the platform's defaults, so loosening
+    one is a platform change."""
+
+    model_config = _FROZEN
+
+    # The highest share of wrong results among those a reading, classifying
+    # or linking step applied by itself (T0).
+    applies_itself_error: float = Field(default=0.05, gt=0.0, le=0.05)
+    # The same for an internal hand-off or a move into someone's queue (T1).
+    hand_off_error: float = Field(default=0.02, gt=0.0, le=0.02)
+    # The share of what applied itself that goes to the case's PIC instead,
+    # unannounced, to confirm: never below the platform's 3%, since the
+    # audit is what keeps the measured rate honest.
+    audit_share: float = Field(default=0.03, ge=0.03, le=1.0)
+
+
 class LayoutOnboarding(BaseModel):
     """How a newly approved PO layout earns trust (ticket 30)."""
 
@@ -259,6 +280,10 @@ class OrderRules(BaseModel):
     implied_acceptance: Mapping[CustomerCode, ImpliedTerm] = Field(
         default_factory=dict, max_length=2000
     )
+    # The error a step that applies itself may make, per tier, and the audit
+    # share (dw_sales ADR 0015, ticket 44). The defaults above where a version
+    # does not say, as none of the platform's versions does.
+    autonomy: Autonomy = Field(default_factory=Autonomy)
 
     @model_validator(mode="before")
     @classmethod

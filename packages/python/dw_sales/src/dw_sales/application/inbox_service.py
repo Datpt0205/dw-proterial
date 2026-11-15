@@ -41,6 +41,7 @@ from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.activity import STEPS_BY_PROMPT
+from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.case_store import (
     CaseOrigin,
     LoggedMessage,
@@ -318,6 +319,9 @@ class InboxProcessing:
     release_manifest_ref: str | None
     spans: SalesSpans
     sources: SourceWarmPort
+    # The lines code's gate let apply themselves, applied once the case is
+    # opened (dw_sales ADR 0015, ticket 44). None: nothing applies itself.
+    auto_apply: AutoApply | None = None
 
     async def process(
         self, context: AccessContext, message_id: str, *, run: RunContext
@@ -516,6 +520,9 @@ class InboxProcessing:
                         work, context, self.ids, stored.case, case, revised, run_id=run.run_id
                     )
                     case = await self._start_review(work, context, case, run)
+                if self.auto_apply is not None:
+                    case = await self.auto_apply.apply(work, scope, case, run_id=run.run_id)
+                if stored is not None:
                     revised_from.append((stored.case, case))
                 stored_cases.append(case)
             if outcome.learned is not None:

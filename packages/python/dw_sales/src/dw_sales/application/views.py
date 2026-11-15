@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import PriceView
+from dw_sales.application.autonomy import applied_by
 from dw_sales.application.case_store import (
     JobError,
     JobStatus,
@@ -97,6 +98,7 @@ from dw_sales.domain.orders import (
     FindingDisposition,
     FlaggedValue,
     LineChange,
+    MappingStatus,
     OrderCase,
     OrderLine,
     OrderStatus,
@@ -471,6 +473,10 @@ class MappingView(BaseModel):
     confirmed_by: uuid.UUID | None
     confirmed_at: datetime | None
     hand_entered: bool
+    # DW confirmed the code by itself (ticket 44): shown as such, and undone
+    # by a person in one click. Never says whether a line still waiting was
+    # sampled for the audit: the person decides it as any other.
+    applied_by_dw: bool = False
 
 
 class QuotationBasisView(BaseModel):
@@ -939,6 +945,18 @@ def _stated(stated: StatedAttributes | None) -> StatedAttributesView | None:
     )
 
 
+def _applied_by_dw(line: OrderLine) -> bool:
+    """Whether the line's code is one DW applied by itself and nobody has
+    confirmed or undone since (`OrderCase.undo_applied_mapping` takes it)."""
+    mapping, reading = line.mapping, line.basis.description_reading
+    return (
+        mapping.status is MappingStatus.CANDIDATE_CONFIRMED
+        and mapping.confirmed_by == applied_by()
+        and reading is not None
+        and reading.gate == "applied"
+    )
+
+
 def _reading(reading: DescriptionReading | None) -> DescriptionReadingView | None:
     if reading is None:
         return None
@@ -997,6 +1015,7 @@ def order_line(
             confirmed_by=mapping.confirmed_by,
             confirmed_at=mapping.confirmed_at,
             hand_entered=mapping.hand_entered,
+            applied_by_dw=_applied_by_dw(line),
         ),
         basis=_basis(line, prices),
         suggested_delivery_date=line.suggested_delivery_date,

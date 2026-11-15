@@ -140,6 +140,7 @@ from dw_sales.adapters.assembly import (
     build_layout_settlement,
     build_rule_settlement,
     build_skill_settlement,
+    build_threshold_lane,
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
@@ -154,6 +155,7 @@ from dw_sales.adapters.reader_client import (
     ReaderTransport,
 )
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
@@ -210,6 +212,10 @@ from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
+from dw_worker.consumers.sales_auto_apply import (
+    INTERVAL_SECONDS as SALES_AUTO_APPLY_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_auto_apply import build_sales_auto_apply_consumer
 from dw_worker.consumers.sales_catalog import build_catalog_import_handler
 from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_followups import (
@@ -810,6 +816,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # DW1's follow-ups and morning brief (Sales ticket 42): wherever DW1 is,
     # over every workspace with a Sales case.
     sales_followups_consumer: Callable[[], Awaitable[None]] | None = None
+    # What applies itself (Sales ticket 44): every step's threshold set again
+    # from the labelled cases, wherever DW1 is, over every workspace with a
+    # Sales case.
+    sales_auto_apply_consumer: Callable[[], Awaitable[None]] | None = None
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
@@ -1097,6 +1107,16 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_followups_consumer = build_sales_followups_consumer(
                     followups, followup_scopes
                 )
+                thresholds, threshold_scopes = build_threshold_lane(
+                    configs=REPO_ROOT / "configs",
+                    session_factory=sessions,
+                    audit=SqlAuditRepository,
+                    clock=clock,
+                    ids=ids,
+                )
+                sales_auto_apply_consumer = build_sales_auto_apply_consumer(
+                    thresholds, threshold_scopes
+                )
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
@@ -1214,6 +1234,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             SALES_FOLLOWUPS_LANE,
             sales_followups_consumer,
             interval_seconds=SALES_FOLLOWUPS_INTERVAL_SECONDS,
+        )
+    # And its thresholds for what applies itself (ticket 44), under the name
+    # a result it lets apply is applied in, which only reads and writes
+    # thresholds, so no ReapTarget either.
+    if sales_auto_apply_consumer is not None:
+        registry.register(
+            AUTO_APPLY_LANE,
+            sales_auto_apply_consumer,
+            interval_seconds=SALES_AUTO_APPLY_INTERVAL_SECONDS,
         )
 
     # And the months of its step rows past their term (slice 3), hourly like

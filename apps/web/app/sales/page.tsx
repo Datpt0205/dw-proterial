@@ -39,6 +39,7 @@ import { quoteTitle } from "./_lib/quote-actions";
 import { usePeople } from "./_lib/people";
 import { bySla, itemKey } from "./_lib/sla";
 import { useResource } from "./_lib/use-resource";
+import { useUnreadCases } from "./_lib/unread";
 import { useListView } from "./_lib/use-status-filter";
 import { salesCrumbs } from "./_components/crumbs";
 import {
@@ -101,6 +102,7 @@ function MyWork() {
   const phone = usePhoneColumns();
   const table = usePhoneTable();
   const customerName = useCustomerName();
+  const unread = useUnreadCases();
   const view = useListView(TABS, "all", SORTS, "api");
   const focus = useSearchParams().get("item");
   const work = useResource(
@@ -445,6 +447,7 @@ function MyWork() {
                 render: (_, item) => (
                   <RowTitle
                     href={href(item)}
+                    unread={item.kind !== "message" && unread.has(item.id)}
                     title={actionText(item)}
                     code={code(item)}
                     sub={

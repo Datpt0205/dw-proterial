@@ -40,6 +40,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, mod
 
 from dw_sales.domain.catalog import CustomerCode
 from dw_sales.domain.change_requests import ChangeLine, ChangeRequest
+from dw_sales.domain.description_reading import GateRoute
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import LayoutPrefill, PoLayout
 from dw_sales.domain.order_checks import ModelStep
@@ -110,6 +111,12 @@ class LabelledCase(BaseModel):
     model_profile: str | None = Field(min_length=1, max_length=64)
     rules: str | None = Field(pattern=_VERSION)
     decided_by: uuid.UUID
+    # How sure the model was of the proposal, where the step scores it, and
+    # what code's gate did with it (ticket 44): what the threshold is set
+    # from and the audits are counted from. None for a result that was not
+    # gated: not eligible, or decided before ticket 44.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    gate: GateRoute | None = None
 
     @model_validator(mode="after")
     def _values_fit(self) -> Self:
@@ -178,6 +185,46 @@ def mapping_label(
         model_profile=reading.model_profile,
         rules=before.rules_version,
         decided_by=by,
+        confidence=reading.confidence,
+        gate=reading.gate,
+    )
+
+
+def undo_label(
+    before: OrderCase,
+    line_no: int,
+    *,
+    new_id: NewId,
+    at: AwareDatetime,
+    by: uuid.UUID,
+) -> LabelledCase:
+    """A person undoing the PRV code DW applied by itself (ticket 44): the
+    applied code, rejected. The case is the error the threshold and the
+    audits learn from; a code the person then confirms is a case of its own."""
+    line = before.line(line_no)
+    reading = line.basis.description_reading
+    code = line.mapping.prv_code
+    if reading is None or reading.gate != "applied" or code is None:
+        raise ValueError("only a code DW applied by itself is undone")
+    return LabelledCase(
+        label_id=new_id(),
+        decided_at=at,
+        step=ModelStep.DESCRIPTION_ATTRIBUTES,
+        lane=CaseKind.ORDER,
+        case_id=before.case_id,
+        customer_code=before.customer_code,
+        message_id=before.message_id,
+        attachment_id=before.document.attachment_id,
+        line_no=line_no,
+        field="prv_code",
+        proposed=[code],
+        kept=None,
+        prompt=reading.prompt,
+        model_profile=reading.model_profile,
+        rules=before.rules_version,
+        decided_by=by,
+        confidence=reading.confidence,
+        gate=reading.gate,
     )
 
 

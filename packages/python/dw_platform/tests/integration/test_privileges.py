@@ -119,6 +119,9 @@ _SALES_TABLES = (
     "sales.labelled_cases",
     # Migration 4bcfa82060fc (tickets 47, 48): a person's marks on reminders.
     "sales.reminder_marks",
+    # Migration efc46a50e75e (ticket 44): each step's threshold for what
+    # applies itself.
+    "sales.step_thresholds",
 )
 
 
@@ -202,8 +205,9 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "INSERT",
     }
     # The status assistant's turns are appended; a session moves only its
-    # `last_turn_at` (a column grant, which `has_table_privilege` does not
-    # count) and leaves through `sales.prune_assistant_sessions()` (e0940c90ce04).
+    # `last_turn_at` and `last_read_at` (column grants, which
+    # `has_table_privilege` does not count; bfe2d1aeadcd's test refuses its
+    # case moving) and leaves through `sales.prune_assistant_sessions()` (e0940c90ce04).
     for table in ("assistant_sessions", "assistant_turns"):
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     # Stored mail and the files it came from (ticket 43), every partition:
@@ -213,6 +217,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {prefix, f"{prefix}_default"} <= tables, prefix
         for table in tables:
             assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+    # Each step's threshold (ticket 44): the lane replaces it, never removes it.
+    assert {verb for tbl, verb in held if tbl == "step_thresholds"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+    }
     # What a person kept of a model's proposal (ticket 43), every partition:
     # a decision is a fact about the past.
     labelled = {tbl for tbl, _ in held if tbl.startswith("labelled_cases")}

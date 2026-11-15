@@ -14,7 +14,7 @@ DW1's here is:
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -23,6 +23,7 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
+    ScoredInterpretationPort,
 )
 from dw_sales.domain.catalog import Item
 from dw_sales.domain.description_reading import (
@@ -87,14 +88,29 @@ class DescriptionReader:
             ),
             "vocabulary": json.dumps(vocabulary(), ensure_ascii=False),
         }
+        budget = _OUTPUT_TOKENS_PER_LINE * len(batch) + 100
+        scores: Mapping[str, float] | None = None
         try:
-            answer = await self.model.interpret(
-                DESCRIPTION_ATTRIBUTES,
-                inputs,
-                ModelDescriptionReading,
-                run=run,
-                max_output_tokens=_OUTPUT_TOKENS_PER_LINE * len(batch) + 100,
-            )
+            # Scored where the door can score (dw_sales ADR 0015): the same
+            # call, with each label's probability from its tokens.
+            if isinstance(self.model, ScoredInterpretationPort):
+                scored = await self.model.interpret_scored(
+                    DESCRIPTION_ATTRIBUTES,
+                    inputs,
+                    ModelDescriptionReading,
+                    run=run,
+                    max_output_tokens=budget,
+                )
+                answer: ModelDescriptionReading | None = scored.answer
+                scores = scored.confidences
+            else:
+                answer = await self.model.interpret(
+                    DESCRIPTION_ATTRIBUTES,
+                    inputs,
+                    ModelDescriptionReading,
+                    run=run,
+                    max_output_tokens=budget,
+                )
         except ModelUnavailableError:
             answer = None
         readings = _by_line(answer, {line.line_no for line in batch})
@@ -105,7 +121,9 @@ class DescriptionReader:
         for line in batch:
             verdict = verify_reading(line.description, readings.get(line.line_no))
             if isinstance(verdict, Verified):
-                read = self._stamp("read", spans=verdict)
+                assert answer is not None  # a verdict comes from an answer
+                confidence = _confidence(answer, line.line_no, verdict, scores)
+                read = self._stamp("read", spans=verdict, confidence=confidence)
                 result[line.line_no] = map_read_line(verdict, read, items)
             else:
                 refused = self._stamp("not_understood", reason=verdict)
@@ -118,6 +136,7 @@ class DescriptionReader:
         *,
         spans: Verified | None = None,
         reason: str | None = None,
+        confidence: float | None = None,
     ) -> DescriptionReading:
         return DescriptionReading.model_validate(
             {
@@ -127,8 +146,30 @@ class DescriptionReader:
                 "outcome": outcome,
                 "reason": reason,
                 "spans": spans.spans if spans is not None else (),
+                "confidence": confidence,
             }
         )
+
+
+def _confidence(
+    answer: ModelDescriptionReading,
+    line_no: int,
+    verified: Verified,
+    scores: Mapping[str, float] | None,
+) -> float | None:
+    """How sure the model was of the line's reading: the least probable of
+    the labels code took from it (check 5: the one judgement left to the
+    model; every span is located and every number parsed by code). None with
+    no scores, no label taken, or a label the scores do not cover: a result
+    with no confidence never applies itself."""
+    if scores is None:
+        return None
+    index = next(i for i, line in enumerate(answer.lines) if line.line_no == line_no)
+    labels = [s.attribute for s in verified.spans if s.read_by == "model"]
+    found = [scores.get(f"lines.{index}.{attribute}") for attribute in labels]
+    if not found or any(score is None for score in found):
+        return None
+    return min(score for score in found if score is not None)
 
 
 def _by_line(

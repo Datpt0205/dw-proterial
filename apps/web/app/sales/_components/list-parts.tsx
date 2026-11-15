@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Grid,
@@ -305,6 +306,9 @@ export function usePhoneTable() {
   };
 }
 
+/** The mark on a case whose conversation holds an answer not seen (ticket 46). */
+const UNREAD = "Có trả lời của DW1 chưa xem";
+
 /**
  * The row's two lines: its name, which is the link (opens in a new tab,
  * truncated with the whole on hover), over its identifier in monospace and
@@ -317,22 +321,39 @@ export function RowTitle({
   code,
   sub,
   phone,
+  unread = false,
 }: {
   href: string;
   title: string;
   code?: string | null;
   sub?: ReactNode;
   phone?: ReactNode;
+  /** The case's conversation holds an answer the person has not seen. */
+  unread?: boolean;
 }) {
   const { token } = theme.useToken();
   const isPhone = useIsPhone();
+  const link = (
+    <Link href={href} className="min-w-0 text-foreground hover:underline">
+      <Typography.Text strong ellipsis={{ tooltip: title }}>
+        {title}
+      </Typography.Text>
+    </Link>
+  );
   return (
     <span className="flex min-w-0 max-w-md flex-col">
-      <Link href={href} className="min-w-0 text-foreground hover:underline">
-        <Typography.Text strong ellipsis={{ tooltip: title }}>
-          {title}
-        </Typography.Text>
-      </Link>
+      {unread ? (
+        <span className="flex min-w-0 items-center gap-1">
+          {link}
+          <Tooltip title={UNREAD}>
+            <span role="img" aria-label={UNREAD} className="shrink-0">
+              <Badge status="processing" />
+            </span>
+          </Tooltip>
+        </span>
+      ) : (
+        link
+      )}
       <span className="flex min-w-0 items-baseline gap-1">
         {code ? (
           <Typography.Text

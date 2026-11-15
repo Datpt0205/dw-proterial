@@ -60,6 +60,8 @@ step_outcomes = sa.Table(
     sa.Column("model", sa.Text),
     sa.Column("calls", sa.Integer, nullable=False),
     sa.Column("duration_ms", sa.Integer),
+    # What code's gate did with the item (ticket 44, migration efc46a50e75e).
+    sa.Column("gate", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 _S = step_outcomes
@@ -92,6 +94,7 @@ def _values(scope: SalesScope, row: StepOutcome) -> dict[str, object]:
         "model": row.model,
         "calls": row.calls,
         "duration_ms": row.duration_ms,
+        "gate": row.gate,
     }
 
 
@@ -113,6 +116,7 @@ def _outcome(row: RowMapping) -> StepOutcome:
         model=row["model"],
         calls=row["calls"],
         duration_ms=row["duration_ms"],
+        gate=row["gate"],
     )
 
 

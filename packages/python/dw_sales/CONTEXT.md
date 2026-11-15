@@ -349,7 +349,11 @@ API and the plan use the English terms. The spec is
 - **Assistant session** (Phiên hỏi đáp): a person's own conversation with
   the status assistant, kept thirty days after its last turn. Its **focus**
   is the case the conversation is on, kept as the case's kind and id, so a
-  follow-up such as "PO đó" means that case.
+  follow-up such as "PO đó" means that case. Since ticket 46 a person has
+  exactly two kinds: a **case conversation** (Hỏi DW1 về hồ sơ này), one per
+  case, on the case's page, bound to that case and answering from it alone;
+  and one **general conversation** (Trò chuyện chung), where a case named is
+  a link to its own conversation. Neither is created or picked by hand.
 
 - **Convert list** (Bảng quy đổi mã): Bravo's "Converting customer to
   PRV item" (B04), one row per direct customer and that customer's code or

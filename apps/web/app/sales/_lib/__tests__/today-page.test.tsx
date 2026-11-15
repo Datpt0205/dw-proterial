@@ -105,6 +105,8 @@ const day = (): Today => ({
 
 let items: WorkItem[] = [];
 const api = {
+  // No case holds an answer the person has not seen (ticket 46).
+  assistantUnread: vi.fn(async (): Promise<string[]> => []),
   myWork: vi.fn(async () => items),
   orders: vi.fn(async () => []),
   quotes: vi.fn(async () => []),

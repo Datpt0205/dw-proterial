@@ -147,6 +147,12 @@ NotUnderstood = Literal[
     "value_refused",
 ]
 ReadingOutcome = Literal["read", "not_understood", "unavailable"]
+# What code's gate did with a result a step may apply by itself (dw_sales ADR
+# 0015, `dw_sales.domain.autonomy.gate_route`): left with a person (below the
+# threshold, none set, or no confidence); cleared it while the step is stopped
+# (shadow: logged, not applied); cleared it and sampled for the blind audit (a
+# person decides it as any other); cleared it and applied by DW.
+GateRoute = Literal["person", "shadow", "audit", "applied"]
 
 
 class SpanRead(BaseModel):
@@ -190,6 +196,14 @@ class DescriptionReading(BaseModel):
     outcome: ReadingOutcome
     reason: NotUnderstood | None = None
     spans: tuple[SpanRead, ...] = ()
+    # How sure the model was of the labels it gave (the least probable of
+    # them, from the call's token probabilities, `dw_agent_runtime.model.
+    # scoring`); None where the server gave none or no label was taken.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    # What code's gate did with the line's one candidate (`GateRoute`); None
+    # where the line was not eligible (not read, or not exactly one item
+    # fits) or was read before ticket 44.
+    gate: GateRoute | None = None
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
@@ -198,6 +212,10 @@ class DescriptionReading(BaseModel):
             raise ValueError("a reading holds spans exactly when it was read")
         if (self.outcome == "not_understood") != (self.reason is not None):
             raise ValueError("a reading not understood names why, and only then")
+        if not read and (self.confidence is not None or self.gate is not None):
+            raise ValueError("only a reading code took has a confidence or a gate")
+        if self.gate not in (None, "person") and self.confidence is None:
+            raise ValueError("a reading cleared the gate on a confidence")
         return self
 
     @property

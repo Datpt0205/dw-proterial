@@ -22,6 +22,7 @@ import { label, QUOTE_STATE } from "../_lib/labels";
 import { quoteTitle } from "../_lib/quote-actions";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
+import { useUnreadCases } from "../_lib/unread";
 import {
   useActivityFilter,
   useListView,
@@ -91,6 +92,7 @@ function Quotes() {
   const phone = usePhoneColumns();
   const table = usePhoneTable();
   const customerName = useCustomerName();
+  const unread = useUnreadCases();
   const view = useListView(TABS, "open", SORTS, "due");
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
   // server narrows it, by the filter the count was served with.
@@ -305,6 +307,7 @@ function Quotes() {
                 render: (_, q) => (
                   <RowTitle
                     href={`/sales/quotes/${q.case_id}`}
+                    unread={unread.has(q.case_id)}
                     title={
                       customerName(q.customer_code) ||
                       `Khách ${q.customer_code}`

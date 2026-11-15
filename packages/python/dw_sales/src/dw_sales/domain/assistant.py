@@ -57,6 +57,15 @@ class QuestionIntent(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
+class CaseKey:
+    """The case a conversation is bound to, as the case page's route names
+    it (ticket 46): code checks the caller may read it before anything else."""
+
+    kind: CaseKind
+    case_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
 class CaseRef:
     """A case an answer rests on: the page it links to, and what it is called."""
 
@@ -84,11 +93,23 @@ class Turn:
 
 @dataclass(frozen=True, slots=True)
 class Session:
+    """A person's conversation: on one case (``case``, bound by code from the
+    case page's route, ticket 46), or their one general conversation (None).
+    Code finds it by the case, never by an id a client sends."""
+
     session_id: uuid.UUID
     user_id: uuid.UUID
     title: str
     created_at: datetime
     last_turn_at: datetime
+    case: CaseRef | None = None
+    # When the person last saw the conversation; an answer kept after it is
+    # unread (the mark on the case lists). None: never seen.
+    last_read_at: datetime | None = None
+
+    @property
+    def unread(self) -> bool:
+        return self.last_read_at is None or self.last_turn_at > self.last_read_at
 
 
 _SEPARATORS: Final = re.compile(r"[\s\-_/.]+")
@@ -159,6 +180,10 @@ CATALOG: Final = (
     "DW1 trả lời được: trạng thái một PO (ghi số PO), trạng thái một yêu cầu báo giá "
     "(ghi số yêu cầu), việc đang chờ bạn, và việc đã quá hạn."
 )
+
+# What a case's own conversation answers (ticket 46), and where the rest is asked.
+CASE_CATALOG: Final = "Ở đây DW1 trả lời về hồ sơ này: trạng thái, các mốc ngày và cờ đang mở."
+ELSEWHERE: Final = "Hỏi hồ sơ khác hoặc việc của bạn ở trang Hỏi đáp DW1."
 
 
 def day(value: date) -> str:

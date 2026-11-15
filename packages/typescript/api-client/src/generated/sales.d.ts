@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/activity/autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity Autonomy */
+        get: operations["activity_autonomy_api_v1_sales_activity_autonomy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/activity/labels": {
         parameters: {
             query?: never;
@@ -71,15 +88,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/assistant/sessions": {
+    "/api/v1/sales/assistant/cases": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Assistant Sessions */
-        get: operations["assistant_sessions_api_v1_sales_assistant_sessions_get"];
+        /** Assistant Cases */
+        get: operations["assistant_cases_api_v1_sales_assistant_cases_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -88,15 +105,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/assistant/sessions/{session_id}": {
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Assistant Session */
-        get: operations["assistant_session_api_v1_sales_assistant_sessions__session_id__get"];
+        /** Assistant Case */
+        get: operations["assistant_case_api_v1_sales_assistant_cases__kind___case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Case Ask */
+        post: operations["assistant_case_ask_api_v1_sales_assistant_cases__kind___case_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/ask/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Case Stream */
+        post: operations["assistant_case_stream_api_v1_sales_assistant_cases__kind___case_id__ask_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Conversation */
+        get: operations["assistant_conversation_api_v1_sales_assistant_conversation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Unread */
+        get: operations["assistant_unread_api_v1_sales_assistant_unread_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -974,6 +1059,23 @@ export interface paths {
         put?: never;
         /** Mapping */
         post: operations["mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Mapping */
+        post: operations["undo_mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2254,11 +2356,6 @@ export interface components {
         };
         /** AnswerView */
         AnswerView: {
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
             turn: components["schemas"]["TurnView"];
         };
         /**
@@ -2340,14 +2437,13 @@ export interface components {
         };
         /**
          * AskBody
-         * @description A question to the status assistant (ADR 0007), and the session it
-         *     continues; none opens a new one.
+         * @description A question to the status assistant (ADR 0007). Which conversation it
+         *     continues is the route's (ticket 46): the caller's general one, or their
+         *     one on the case the path names; never an id the body sends.
          */
         AskBody: {
             /** Question */
             question: string;
-            /** Session Id */
-            session_id?: string | null;
         };
         /**
          * AssigneeBody
@@ -2382,6 +2478,13 @@ export interface components {
             name: string;
             /** Size */
             size: number;
+        };
+        /** AutonomySummaryView */
+        AutonomySummaryView: {
+            /** Days */
+            days: number;
+            /** Steps */
+            steps: components["schemas"]["StepAutonomyView"][];
         };
         /** BaStepView */
         BaStepView: {
@@ -2482,6 +2585,17 @@ export interface components {
             case_version: number;
             /** Status */
             status: string;
+        };
+        /**
+         * CaseConversationView
+         * @description A case talked about, on the assistant page's short list.
+         */
+        CaseConversationView: {
+            case: components["schemas"]["CaseRefView"];
+            /** Last Turn At */
+            last_turn_at: string;
+            /** Unread */
+            unread: boolean;
         };
         /** CaseHistoryEntry */
         CaseHistoryEntry: {
@@ -3032,6 +3146,15 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * ConversationView
+         * @description A conversation as its person sees it; before its first turn, empty.
+         */
+        ConversationView: {
+            case: components["schemas"]["CaseRefView"] | null;
+            /** Turns */
+            turns: components["schemas"]["TurnView"][];
+        };
         /** ConvertEntryView */
         ConvertEntryView: {
             /** Customer Code */
@@ -3289,6 +3412,10 @@ export interface components {
          *     output invalid); the line is unmapped exactly as without the model.
          */
         DescriptionReading: {
+            /** Confidence */
+            confidence?: number | null;
+            /** Gate */
+            gate?: ("person" | "shadow" | "audit" | "applied") | null;
             /** Model Profile */
             model_profile: string;
             /**
@@ -4386,6 +4513,11 @@ export interface components {
         };
         /** MappingView */
         MappingView: {
+            /**
+             * Applied By Dw
+             * @default false
+             */
+            applied_by_dw: boolean;
             /** Candidates */
             candidates: string[];
             /** Confirmed At */
@@ -6516,36 +6648,6 @@ export interface components {
             /** Subject */
             subject: string;
         };
-        /** SessionDetailView */
-        SessionDetailView: {
-            /** Created At */
-            created_at: string;
-            /** Last Turn At */
-            last_turn_at: string;
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /** Title */
-            title: string;
-            /** Turns */
-            turns: components["schemas"]["TurnView"][];
-        };
-        /** SessionView */
-        SessionView: {
-            /** Created At */
-            created_at: string;
-            /** Last Turn At */
-            last_turn_at: string;
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /** Title */
-            title: string;
-        };
         /** SettingView */
         SettingView: {
             key: components["schemas"]["RuleKey"];
@@ -6887,6 +6989,41 @@ export interface components {
             /** Spec No */
             spec_no: string | null;
         };
+        /**
+         * StepAutonomyView
+         * @description One step's line on the head's view (ticket 44).
+         */
+        StepAutonomyView: {
+            /** Applied */
+            applied: number;
+            /** Audited */
+            audited: number;
+            /** Audited Error */
+            audited_error: number | null;
+            /** Audits */
+            audits: number;
+            /** Cases */
+            cases: number;
+            /** Computed At */
+            computed_at: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "never" | "measuring" | "applying" | "stopped";
+            /** Needed */
+            needed: number | null;
+            /** Shadow */
+            shadow: number;
+            step: components["schemas"]["ModelStep"];
+            /** Target */
+            target: number | null;
+            /** Threshold */
+            threshold: number | null;
+            tier: components["schemas"]["Tier"];
+            /** To Person */
+            to_person: number;
+        };
         /** StepCount */
         StepCount: {
             /** Cases */
@@ -7193,6 +7330,12 @@ export interface components {
              */
             status: "summarized" | "empty" | "unavailable" | "refused";
         };
+        /**
+         * Tier
+         * @description What a step's effect is, and so whether its result may apply itself.
+         * @enum {string}
+         */
+        Tier: "applies_itself" | "hand_off" | "person_approves";
         /** TimeStat */
         TimeStat: {
             /** Cases */
@@ -7618,6 +7761,26 @@ export interface operations {
             };
         };
     };
+    activity_autonomy_api_v1_sales_activity_autonomy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomySummaryView"];
+                };
+            };
+        };
+    };
     activity_labels_api_v1_sales_activity_labels_get: {
         parameters: {
             query?: never;
@@ -7710,7 +7873,7 @@ export interface operations {
             };
         };
     };
-    assistant_sessions_api_v1_sales_assistant_sessions_get: {
+    assistant_cases_api_v1_sales_assistant_cases_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7725,17 +7888,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionView"][];
+                    "application/json": components["schemas"]["CaseConversationView"][];
                 };
             };
         };
     };
-    assistant_session_api_v1_sales_assistant_sessions__session_id__get: {
+    assistant_case_api_v1_sales_assistant_cases__kind___case_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                session_id: string;
+                kind: components["schemas"]["CaseKind"];
+                case_id: string;
             };
             cookie?: never;
         };
@@ -7747,7 +7911,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionDetailView"];
+                    "application/json": components["schemas"]["ConversationView"];
                 };
             };
             /** @description Validation Error */
@@ -7757,6 +7921,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_case_ask_api_v1_sales_assistant_cases__kind___case_id__ask_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                kind: components["schemas"]["CaseKind"];
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_case_stream_api_v1_sales_assistant_cases__kind___case_id__ask_stream_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                kind: components["schemas"]["CaseKind"];
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_conversation_api_v1_sales_assistant_conversation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationView"];
+                };
+            };
+        };
+    };
+    assistant_unread_api_v1_sales_assistant_unread_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };
@@ -9567,6 +9849,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MappingBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
             };
         };
         responses: {

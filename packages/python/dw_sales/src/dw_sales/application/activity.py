@@ -48,6 +48,11 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.activity_ports import HandledBy, StepActivityReadPort, day_window
+from dw_sales.application.autonomy import (
+    AutonomySummaryView,
+    StepThresholdReadPort,
+    autonomy_summary,
+)
 from dw_sales.application.case_store import LoggedEvent, SalesUnitOfWorkFactory
 from dw_sales.application.labelled_cases import (
     LabelledCaseReadPort,
@@ -56,6 +61,7 @@ from dw_sales.application.labelled_cases import (
 )
 from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.model_readiness import BARS
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.process_settings import model_steps
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.activity import StepOutcome, StepResult, StepTally, percentile, tally
@@ -83,6 +89,9 @@ PROCESS_STEPS: Final[Mapping[ModelStep, tuple[StepId, ...]]] = {
 PRICE_FIELDS: Final = AMOUNT_FIELDS | {"target_price", "stated_target_price"}
 # The default window: the last week, today included.
 DEFAULT_SUMMARY_DAYS: Final = 7
+# The days the head's view of what applied itself counts (ticket 44): a
+# month, so a step's audit sample is more than a handful.
+AUTONOMY_DAYS: Final = 30
 # The reason codes a step's summary lists, most frequent first.
 TOP_REASONS: Final = 5
 # Steps whose produced values are on the message's disposition, not the case.
@@ -533,6 +542,10 @@ class ActivityService:
     zones: LocalZonePort
     # What people kept of each step's proposals (ticket 43).
     label_reader: LabelledCaseReadPort
+    # Each step's threshold, and the rules whose targets it is set at
+    # (ticket 44).
+    thresholds: StepThresholdReadPort
+    rules: OrderRulesPort
 
     async def case_activity(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -585,6 +598,22 @@ class ActivityService:
         the summary."""
         await self._require_summary(context)
         return label_summary(await self.label_reader.counts(sales_scope(context)))
+
+    async def autonomy(self, context: AccessContext) -> AutonomySummaryView:
+        """Per step (ticket 44): whether it applies its results by itself, at
+        what threshold set from how many cases, the audited error, and what
+        the gate did with its results over the last `AUTONOMY_DAYS` days.
+        Codes, counts and rates only, read by whoever reads the summary."""
+        await self._require_summary(context)
+        scope = sales_scope(context)
+        now = self.clock.now()
+        rows = await self.reader.between(scope, now - timedelta(days=AUTONOMY_DAYS), now, None)
+        return autonomy_summary(
+            await self.rules.rules(scope),
+            await self.thresholds.thresholds(scope),
+            rows,
+            days=AUTONOMY_DAYS,
+        )
 
     async def _require_summary(self, context: AccessContext) -> None:
         if not (

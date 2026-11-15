@@ -26,11 +26,13 @@ from pydantic import BaseModel
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import ModelUnavailableError, PromptRef
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
+from dw_agent_runtime.model.scoring import Scored
 from dw_agent_runtime.model.streaming import JsonStringField
 from dw_agent_runtime.ports import (
     ModelGateway,
     ModelOutputInvalidError,
     ModelRequest,
+    ScoringModelGateway,
     StreamingModelGateway,
 )
 from dw_kernel.errors import InfrastructureError, NotFoundError
@@ -72,6 +74,30 @@ class GatewayInterpretation:
         request = self._request(prompt, inputs, max_output_tokens)
         try:
             return await self.gateway.generate_structured(request, schema, run_context=run)
+        except (InfrastructureError, ModelOutputInvalidError, NotFoundError) as exc:
+            raise self._unavailable(run, prompt, exc) from exc
+
+    async def interpret_scored[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> Scored[OutputT]:
+        """Implements `ScoredInterpretationPort`. A gateway that cannot score
+        gives the answer with no confidences, and nothing it read applies
+        itself."""
+        request = self._request(prompt, inputs, max_output_tokens)
+        try:
+            if isinstance(self.gateway, ScoringModelGateway):
+                answer, scores = await self.gateway.generate_structured_scored(
+                    request, schema, run_context=run
+                )
+                return Scored(answer, scores)
+            output = await self.gateway.generate_structured(request, schema, run_context=run)
+            return Scored(output, None)
         except (InfrastructureError, ModelOutputInvalidError, NotFoundError) as exc:
             raise self._unavailable(run, prompt, exc) from exc
 

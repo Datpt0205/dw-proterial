@@ -82,6 +82,7 @@ from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotati
 from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.adapters.persistence.reminder_marks import SqlReminderMarkStoreFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
+from dw_sales.adapters.persistence.step_thresholds import SqlStepThresholds
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
     AuditFactory,
@@ -93,6 +94,7 @@ from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
+from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
@@ -357,6 +359,9 @@ def build_dw1(
         )
     )
     readiness = model_readiness(configs, session_factory)
+    # Each step's threshold from its labelled cases (ticket 44): read by the
+    # gate the intake asks, set by the worker's `sales_auto_apply` lane.
+    thresholds = SqlStepThresholds(session_factory, audit)
     # DW1's skills (ticket 40): the platform's in `configs/skills/dw1`, a
     # tenant's own approved version of one in `platform.rule_versions`.
     dw1_skills = load_dw1_skills(configs / "skills" / "dw1")
@@ -431,6 +436,7 @@ def build_dw1(
         ),
         body_pos=None if interpretation is None else PoBodyReader(interpretation),
         model_steps=readiness,
+        autonomy=AutonomyGate(thresholds),
         uploads=stored,
         design_senders=quotation,
     )
@@ -531,6 +537,8 @@ def build_dw1(
         clock,
         book,
         SqlLabelledCaseReader(session_factory),
+        thresholds,
+        tenant_rules,
     )
     lane = (
         None
@@ -729,6 +737,30 @@ def build_followup_lane(
     policies = load_sales_policies(configs / "policies", configs / "copy")
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
     lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer, push)
+    return lane, SqlFollowupScopes(session_factory)
+
+
+def build_threshold_lane(
+    *,
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> tuple[ThresholdLane, SqlFollowupScopes]:
+    """The worker's `sales_auto_apply` lane (ticket 44): each workspace's
+    thresholds set again from its labelled cases, at the targets of the
+    tenant's resolved `sales_order_rules`, and the workspaces it visits:
+    every one with a Sales case, as the follow-ups visit them."""
+    policies = load_sales_policies(configs / "policies", configs / "copy")
+    book = rule_book(policies, SqlRuleVersionLookup(session_factory))
+    lane = ThresholdLane(
+        labels=SqlLabelledCaseReader(session_factory),
+        thresholds=SqlStepThresholds(session_factory, audit),
+        rules=RuleBookOrderRules(book),
+        clock=clock,
+        ids=ids,
+    )
     return lane, SqlFollowupScopes(session_factory)
 
 

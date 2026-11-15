@@ -7,7 +7,7 @@ are selected per profile (Strategy). Usage/cost is recorded per call.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import aclosing
 from dataclasses import dataclass, field, replace
 from time import perf_counter
@@ -20,6 +20,7 @@ from dw_agent_runtime.model.budget import RunBudgetLedger, route_cost
 from dw_agent_runtime.model.interpretation import estimated_tokens
 from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry, ModelRoute
 from dw_agent_runtime.model.prompts import PromptRegistry, RenderedPrompt
+from dw_agent_runtime.model.scoring import TokenLogprob, value_confidences
 from dw_agent_runtime.model.streaming import StreamedAnswer
 from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest, OutputT
 from dw_kernel.errors import InfrastructureError, NotFoundError
@@ -72,6 +73,24 @@ class StreamingProviderAdapter(ModelProviderAdapter, Protocol):
         max_output_tokens: int | None,
     ) -> AsyncGenerator[str | StreamedAnswer, None]:
         """Pieces of the raw answer, then a `StreamedAnswer` when it is whole."""
+        ...
+
+
+@runtime_checkable
+class ScoringProviderAdapter(ModelProviderAdapter, Protocol):
+    """A provider that can also return the answer's tokens with their
+    log-probabilities (`dw_agent_runtime.model.scoring`), where the route
+    says its server sends them (`ModelRoute.logprobs`)."""
+
+    async def complete_json_scored(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+    ) -> tuple[dict[str, object], ModelUsage, str | None, tuple[TokenLogprob, ...] | None]:
+        """`complete_json`, and the tokens (None: none were returned)."""
         ...
 
 
@@ -160,6 +179,35 @@ class RoutingModelGateway:
         *,
         run_context: RunContext,
     ) -> tuple[OutputT, str]:
+        output, reasoning, _scores = await self._generate(
+            request, output_type, run_context=run_context, scored=False
+        )
+        return output, reasoning
+
+    async def generate_structured_scored(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> tuple[OutputT, Mapping[str, float] | None]:
+        """Implements `ScoringModelGateway`: the validated output and each of
+        its values' probability by path (`model.scoring.value_confidences`),
+        or None when the route answering gave no token probabilities (its
+        adapter cannot, its route does not ask, or its server sent none)."""
+        output, _reasoning, scores = await self._generate(
+            request, output_type, run_context=run_context, scored=True
+        )
+        return output, scores
+
+    async def _generate(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+        scored: bool,
+    ) -> tuple[OutputT, str, Mapping[str, float] | None]:
         prompt, request, profile = self._prepared(request, run_context)
 
         last_error: Exception | None = None
@@ -173,13 +221,22 @@ class RoutingModelGateway:
                     )
                 continue  # fallback route pointing at an unwired provider
             started = perf_counter()
+            tokens: tuple[TokenLogprob, ...] | None = None
             try:
-                raw, usage, reasoning = await adapter.complete_json(
-                    prompt,
-                    output_type.model_json_schema(),
-                    route,
-                    max_output_tokens=request.max_output_tokens,
-                )
+                if scored and isinstance(adapter, ScoringProviderAdapter):
+                    raw, usage, reasoning, tokens = await adapter.complete_json_scored(
+                        prompt,
+                        output_type.model_json_schema(),
+                        route,
+                        max_output_tokens=request.max_output_tokens,
+                    )
+                else:
+                    raw, usage, reasoning = await adapter.complete_json(
+                        prompt,
+                        output_type.model_json_schema(),
+                        route,
+                        max_output_tokens=request.max_output_tokens,
+                    )
             except InfrastructureError as exc:
                 last_error = exc
                 continue
@@ -188,10 +245,12 @@ class RoutingModelGateway:
             self._spend(run_context, priced)
             await self._record(run_context, request, priced)
             try:
-                return output_type.model_validate(raw), reasoning or ""
+                output = output_type.model_validate(raw)
             except ValidationError as exc:
                 last_error = self._invalid(request, output_type, exc)
                 continue
+            scores = value_confidences(tokens) if tokens else None
+            return output, reasoning or "", scores or None
         assert last_error is not None  # attempts list is never empty
         raise last_error
 

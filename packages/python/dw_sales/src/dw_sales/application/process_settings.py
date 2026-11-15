@@ -593,6 +593,13 @@ PROCESS_SETTINGS: Final[tuple[Placement, ...]] = _in(
     "your_turn",
     # What a push to a phone may show (ticket 48).
     "push",
+) + _in(
+    # How much error what applies itself may make, and the audit share
+    # (ticket 44): every model step's, so the whole process's.
+    _ORDER,
+    "autonomy.applies_itself_error",
+    "autonomy.hand_off_error",
+    "autonomy.audit_share",
 )
 
 
@@ -832,9 +839,27 @@ HEAD_SETTINGS: Final[tuple[HeadSetting, ...]] = (
         Placement(_FOLLOWUPS, "morning_brief.at"),
         "Giờ DW1 gửi bản tin buổi sáng mỗi ngày làm việc.",
     ),
+    # What applies itself (ticket 44): a tenant may only lower the two rates
+    # and raise the share, as the rule's bounds hold.
+    HeadSetting(
+        Placement(_ORDER, "autonomy.applies_itself_error"),
+        "DW1 chỉ tự làm việc đọc, phân loại, ghép mã khi đo được tỷ lệ sai không quá mức"
+        " này (tối đa 0,05 là 5%).",
+    ),
+    HeadSetting(
+        Placement(_ORDER, "autonomy.hand_off_error"),
+        "DW1 chỉ tự chuyển việc cho PC, QA, Design khi đo được tỷ lệ sai không quá mức"
+        " này (tối đa 0,02 là 2%).",
+    ),
+    HeadSetting(
+        Placement(_ORDER, "autonomy.audit_share"),
+        "Trong những việc DW1 tự làm, phần này được gửi người phụ trách kiểm lại mà không"
+        " báo trước (ít nhất 0,03 là 3%).",
+    ),
 )
-# One screen: a head reads the whole list without scrolling past it.
-HEAD_SETTINGS_MAX: Final = 10
+# One screen: a head reads the whole list without scrolling past it. Thirteen
+# since ticket 44 added the three that bound what applies itself.
+HEAD_SETTINGS_MAX: Final = 13
 
 
 def audience(placement: Placement) -> Audience:

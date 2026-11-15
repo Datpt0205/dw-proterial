@@ -61,6 +61,7 @@ import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
+import { WithCaseChat } from "../../_components/case-chat";
 import {
   SourceDrawer,
   type SourceTarget,
@@ -84,9 +85,13 @@ type Order = SalesSchemas["OrderCaseView"];
 type Anchor = SalesSchemas["SourceAnchor"];
 
 export default function OrderPage() {
+  const { caseId } = useParams<{ caseId: string }>();
   return (
     <ScopeGate scope={SCOPE.caseRead}>
-      <OrderDetail />
+      {/* The case is its conversation (ticket 46). */}
+      <WithCaseChat onCase={{ kind: "order", caseId }}>
+        <OrderDetail />
+      </WithCaseChat>
     </ScopeGate>
   );
 }

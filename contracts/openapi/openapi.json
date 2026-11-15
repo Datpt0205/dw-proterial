@@ -578,17 +578,11 @@
       },
       "AnswerView": {
         "properties": {
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
           "turn": {
             "$ref": "#/components/schemas/TurnView"
           }
         },
         "required": [
-          "session_id",
           "turn"
         ],
         "title": "AnswerView",
@@ -979,25 +973,13 @@
       },
       "AskBody": {
         "additionalProperties": false,
-        "description": "A question to the status assistant (ADR 0007), and the session it\ncontinues; none opens a new one.",
+        "description": "A question to the status assistant (ADR 0007). Which conversation it\ncontinues is the route's (ticket 46): the caller's general one, or their\none on the case the path names; never an id the body sends.",
         "properties": {
           "question": {
             "maxLength": 500,
             "minLength": 1,
             "title": "Question",
             "type": "string"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
           }
         },
         "required": [
@@ -1489,6 +1471,27 @@
         ],
         "title": "AutomationStep",
         "type": "string"
+      },
+      "AutonomySummaryView": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepAutonomyView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "days",
+          "steps"
+        ],
+        "title": "AutonomySummaryView",
+        "type": "object"
       },
       "BaStepView": {
         "properties": {
@@ -2011,6 +2014,29 @@
           "status"
         ],
         "title": "CaseChangeView",
+        "type": "object"
+      },
+      "CaseConversationView": {
+        "description": "A case talked about, on the assistant page's short list.",
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseRefView"
+          },
+          "last_turn_at": {
+            "title": "Last Turn At",
+            "type": "string"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "case",
+          "last_turn_at",
+          "unread"
+        ],
+        "title": "CaseConversationView",
         "type": "object"
       },
       "CaseHistoryEntry": {
@@ -4009,6 +4035,34 @@
         "title": "Constant",
         "type": "object"
       },
+      "ConversationView": {
+        "description": "A conversation as its person sees it; before its first turn, empty.",
+        "properties": {
+          "case": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnView"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case",
+          "turns"
+        ],
+        "title": "ConversationView",
+        "type": "object"
+      },
       "ConvertEntryView": {
         "properties": {
           "customer_code": {
@@ -4952,6 +5006,36 @@
         "additionalProperties": false,
         "description": "What a model reading did for one line, stamped on its check basis.\n\n``read``: every check passed, and ``spans`` are what the candidates were\ncomputed from. ``not_understood``: a check refused it (``reason``).\n``unavailable``: no usable answer (the model down, timed out, or its\noutput invalid); the line is unmapped exactly as without the model.",
         "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "enum": [
+                  "person",
+                  "shadow",
+                  "audit",
+                  "applied"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate"
+          },
           "model_profile": {
             "maxLength": 64,
             "minLength": 1,
@@ -9314,6 +9398,11 @@
       },
       "MappingView": {
         "properties": {
+          "applied_by_dw": {
+            "default": false,
+            "title": "Applied By Dw",
+            "type": "boolean"
+          },
           "candidates": {
             "items": {
               "type": "string"
@@ -18565,72 +18654,6 @@
         "title": "SentMessageView",
         "type": "object"
       },
-      "SessionDetailView": {
-        "properties": {
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "last_turn_at": {
-            "title": "Last Turn At",
-            "type": "string"
-          },
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "turns": {
-            "items": {
-              "$ref": "#/components/schemas/TurnView"
-            },
-            "title": "Turns",
-            "type": "array"
-          }
-        },
-        "required": [
-          "session_id",
-          "title",
-          "created_at",
-          "last_turn_at",
-          "turns"
-        ],
-        "title": "SessionDetailView",
-        "type": "object"
-      },
-      "SessionView": {
-        "properties": {
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "last_turn_at": {
-            "title": "Last Turn At",
-            "type": "string"
-          },
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id",
-          "title",
-          "created_at",
-          "last_turn_at"
-        ],
-        "title": "SessionView",
-        "type": "object"
-      },
       "SetEnabledRequest": {
         "additionalProperties": false,
         "properties": {
@@ -19658,6 +19681,124 @@
           "gauge"
         ],
         "title": "StatedAttributesView",
+        "type": "object"
+      },
+      "StepAutonomyView": {
+        "description": "One step's line on the head's view (ticket 44).",
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "integer"
+          },
+          "audited": {
+            "title": "Audited",
+            "type": "integer"
+          },
+          "audited_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audited Error"
+          },
+          "audits": {
+            "title": "Audits",
+            "type": "integer"
+          },
+          "cases": {
+            "title": "Cases",
+            "type": "integer"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "mode": {
+            "enum": [
+              "never",
+              "measuring",
+              "applying",
+              "stopped"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "needed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed"
+          },
+          "shadow": {
+            "title": "Shadow",
+            "type": "integer"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/Tier"
+          },
+          "to_person": {
+            "title": "To Person",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "tier",
+          "mode",
+          "target",
+          "needed",
+          "threshold",
+          "cases",
+          "audits",
+          "audited_error",
+          "computed_at",
+          "applied",
+          "audited",
+          "shadow",
+          "to_person"
+        ],
+        "title": "StepAutonomyView",
         "type": "object"
       },
       "StepCount": {
@@ -21089,6 +21230,16 @@
         ],
         "title": "ThreadSummaryView",
         "type": "object"
+      },
+      "Tier": {
+        "description": "What a step's effect is, and so whether its result may apply itself.",
+        "enum": [
+          "applies_itself",
+          "hand_off",
+          "person_approves"
+        ],
+        "title": "Tier",
+        "type": "string"
       },
       "TimeStat": {
         "properties": {
@@ -28041,6 +28192,27 @@
         ]
       }
     },
+    "/api/v1/sales/activity/autonomy": {
+      "get": {
+        "operationId": "activity_autonomy_api_v1_sales_activity_autonomy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomySummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Activity Autonomy",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/activity/labels": {
       "get": {
         "operationId": "activity_labels_api_v1_sales_activity_labels_get",
@@ -28180,18 +28352,18 @@
         ]
       }
     },
-    "/api/v1/sales/assistant/sessions": {
+    "/api/v1/sales/assistant/cases": {
       "get": {
-        "operationId": "assistant_sessions_api_v1_sales_assistant_sessions_get",
+        "operationId": "assistant_cases_api_v1_sales_assistant_cases_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/SessionView"
+                    "$ref": "#/components/schemas/CaseConversationView"
                   },
-                  "title": "Response Assistant Sessions Api V1 Sales Assistant Sessions Get",
+                  "title": "Response Assistant Cases Api V1 Sales Assistant Cases Get",
                   "type": "array"
                 }
               }
@@ -28199,23 +28371,31 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Assistant Sessions",
+        "summary": "Assistant Cases",
         "tags": [
           "sales"
         ]
       }
     },
-    "/api/v1/sales/assistant/sessions/{session_id}": {
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}": {
       "get": {
-        "operationId": "assistant_session_api_v1_sales_assistant_sessions__session_id__get",
+        "operationId": "assistant_case_api_v1_sales_assistant_cases__kind___case_id__get",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CaseKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Case Id",
               "type": "string"
             }
           }
@@ -28225,7 +28405,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionDetailView"
+                  "$ref": "#/components/schemas/ConversationView"
                 }
               }
             },
@@ -28242,7 +28422,208 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Assistant Session",
+        "summary": "Assistant Case",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/ask": {
+      "post": {
+        "operationId": "assistant_case_ask_api_v1_sales_assistant_cases__kind___case_id__ask_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CaseKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Case Ask",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/ask/stream": {
+      "post": {
+        "operationId": "assistant_case_stream_api_v1_sales_assistant_cases__kind___case_id__ask_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CaseKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Case Stream",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/assistant/conversation": {
+      "get": {
+        "operationId": "assistant_conversation_api_v1_sales_assistant_conversation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Assistant Conversation",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/assistant/unread": {
+      "get": {
+        "operationId": "assistant_unread_api_v1_sales_assistant_unread_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "title": "Response Assistant Unread Api V1 Sales Assistant Unread Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Assistant Unread",
         "tags": [
           "sales"
         ]
@@ -31457,6 +31838,88 @@
           }
         },
         "summary": "Mapping",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/undo": {
+      "post": {
+        "operationId": "undo_mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Mapping",
         "tags": [
           "sales"
         ]

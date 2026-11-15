@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Empty, Progress, Segmented, Table, Tag, Typography } from "antd";
 import type { ActivityQuery, SalesSchemas } from "@dw/api-client";
-import { InfoTip, PageHeader } from "@dw/ui";
+import { InfoTip, PageHeader, StatusTag, type StatusTone } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import {
   formatDate,
@@ -33,6 +33,8 @@ import { useAuth } from "../../../lib/auth/auth-context";
 type Summary = SalesSchemas["ActivitySummaryView"];
 type Labels = SalesSchemas["LabelSummaryView"];
 type StepLabels = SalesSchemas["StepLabelView"];
+type Autonomy = SalesSchemas["AutonomySummaryView"];
+type StepAutonomy = SalesSchemas["StepAutonomyView"];
 type StepSummary = SalesSchemas["StepSummaryView"];
 type Filter = SalesSchemas["ActivityFilter"];
 type Lane = "order" | "quote";
@@ -257,6 +259,7 @@ function Activity() {
         />
       )}
       <Checked />
+      <SelfApplied />
     </div>
   );
 }
@@ -324,6 +327,109 @@ function Checked() {
                 row.confirmed_share === null
                   ? "Chưa có"
                   : formatShare(row.confirmed_share),
+            },
+          ]}
+        />
+      )}
+    </section>
+  );
+}
+
+const MODE: Record<StepAutonomy["mode"], { text: string; tone: StatusTone }> = {
+  applying: { text: "Đang tự làm", tone: "ok" },
+  measuring: { text: "Đang đo", tone: "pri" },
+  stopped: { text: "Đã dừng", tone: "err" },
+  never: { text: "Luôn cần người", tone: "gray" },
+};
+
+/**
+ * DW tự làm (ticket 44): per model step that may apply its results by
+ * itself, whether it does now (measuring until enough checked results, then
+ * applying, stopped when its audits find too many wrong), and over the last
+ * days how many results it applied and how many went to a person. The
+ * threshold, the cases it was set from and the audited error open on click.
+ * A step a person always approves, and one with nothing yet, are left out.
+ */
+function SelfApplied() {
+  const view = useResource<Autonomy>(
+    "sales/activity/autonomy",
+    useCallback(() => salesApi().activityAutonomy(), []),
+  );
+  const steps = (view.data?.steps ?? []).filter(
+    (s) =>
+      s.mode !== "never" &&
+      s.cases + s.applied + s.audited + s.shadow + s.to_person > 0,
+  );
+  return (
+    <section aria-labelledby="self-applied-title" className="space-y-2">
+      <span className="flex items-center gap-1">
+        <Typography.Title level={5} id="self-applied-title" className="m-0!">
+          DW tự làm
+        </Typography.Title>
+        <InfoTip label="DW tự làm là gì">
+          Bước nào đã đủ kết quả người kiểm để đo được tỷ lệ sai dưới mức cho
+          phép thì DW tự làm phần chắc chắn, gửi người phần còn lại, và gửi
+          người kiểm lại một phần nhỏ việc đã tự làm. Mỗi việc DW tự làm đều
+          hoàn tác được.
+        </InfoTip>
+      </span>
+      {view.error ? (
+        <LoadError error={view.error} onRetry={view.reload} />
+      ) : view.data && steps.length === 0 ? (
+        <Empty description="Chưa bước nào có kết quả để đo." />
+      ) : (
+        <Table<StepAutonomy>
+          rowKey="step"
+          loading={view.loading}
+          dataSource={steps}
+          pagination={false}
+          scroll={{ x: "max-content" }}
+          locale={{ emptyText: " " }}
+          expandable={{
+            expandedRowRender: (row) => (
+              <span>
+                Ngưỡng tin cậy{" "}
+                {row.threshold === null
+                  ? "chưa có"
+                  : formatShare(row.threshold)}{" "}
+                · {row.cases}/{row.needed ?? "–"} kết quả đã kiểm · Sai tối đa{" "}
+                {row.target === null ? "–" : formatShare(row.target)} · Kiểm lại{" "}
+                {row.audits}, sai{" "}
+                {row.audited_error === null
+                  ? "–"
+                  : formatShare(row.audited_error)}{" "}
+                · Lẽ ra đã tự làm khi đang dừng {row.shadow}
+                {row.computed_at
+                  ? ` · đo lúc ${formatDateTime(row.computed_at)}`
+                  : ""}
+              </span>
+            ),
+          }}
+          columns={[
+            {
+              title: "Bước",
+              key: "step",
+              render: (_, row) => modelStepLabel(row.step),
+            },
+            {
+              title: "Chế độ",
+              key: "mode",
+              render: (_, row) => (
+                <StatusTag tone={MODE[row.mode].tone}>
+                  {MODE[row.mode].text}
+                </StatusTag>
+              ),
+            },
+            {
+              title: `DW tự làm (${view.data?.days ?? 30} ngày)`,
+              dataIndex: "applied",
+              align: "right",
+            },
+            {
+              title: "Gửi người",
+              key: "to_person",
+              align: "right",
+              render: (_, row) => row.to_person + row.audited + row.shadow,
             },
           ]}
         />

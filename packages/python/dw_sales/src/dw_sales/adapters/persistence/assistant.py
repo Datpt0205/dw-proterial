@@ -1,11 +1,13 @@
 """`AssistantStorePort` on PostgreSQL (`sales.assistant_sessions`,
-`sales.assistant_turns`; dw_sales ADR 0007), and the worker's retention
-(`sales.prune_assistant_sessions()`).
+`sales.assistant_turns`; dw_sales ADR 0007, ticket 46), and the worker's
+retention (`sales.prune_assistant_sessions()`).
 
 Each store is one transaction bound to the caller's tenant, workspace **and
 user** (`tenant_session`): the tables' policy reads all three, so another
-person's session is not found, whatever id is asked for. The statements name
-the same three again, so a policy dropped by mistake still finds nothing.
+person's conversation is not found, whatever case is asked for. The
+statements name the same three again, so a policy dropped by mistake still
+finds nothing. A conversation is found by its case (or as the general one),
+which the table's unique indexes keep to one per person.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import uuid
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -44,6 +47,9 @@ def _session(row: RowMapping) -> Session:
         title=row["title"],
         created_at=row["created_at"],
         last_turn_at=row["last_turn_at"],
+        # A case conversation's title is its case's label when it was opened.
+        case=_ref(row["case_kind"], row["case_id"], row["title"]),
+        last_read_at=row["last_read_at"],
     )
 
 
@@ -81,24 +87,32 @@ class SqlAssistantStore:
             table.c.user_id == self.user_id,
         )
 
-    async def session(self, session_id: uuid.UUID) -> Session | None:
-        row = (
-            (await self.db.execute(sa.select(_S).where(_S.c.id == session_id, *self._mine(_S))))
-            .mappings()
-            .first()
-        )
+    async def conversation(self, case_id: uuid.UUID | None) -> Session | None:
+        on = _S.c.case_id.is_(None) if case_id is None else _S.c.case_id == case_id
+        row = (await self.db.execute(sa.select(_S).where(on, *self._mine(_S)))).mappings().first()
         return None if row is None else _session(row)
 
-    async def sessions(self, limit: int) -> Sequence[Session]:
+    async def _on_cases(self, limit: int, *where: sa.ColumnElement[bool]) -> Sequence[Session]:
+        """The person's case conversations, the most recently talked about
+        first: `ix_assistant_sessions_tenant_id_user_id_last_turn_at_id`."""
         rows = (
             await self.db.execute(
                 sa.select(_S)
-                .where(*self._mine(_S))
+                .where(_S.c.case_id.is_not(None), *where, *self._mine(_S))
                 .order_by(_S.c.last_turn_at.desc(), _S.c.id.desc())
                 .limit(limit)
             )
         ).mappings()
         return [_session(r) for r in rows]
+
+    async def recent(self, limit: int) -> Sequence[Session]:
+        return await self._on_cases(limit)
+
+    async def unread(self, limit: int) -> Sequence[Session]:
+        return await self._on_cases(
+            limit,
+            sa.or_(_S.c.last_read_at.is_(None), _S.c.last_turn_at > _S.c.last_read_at),
+        )
 
     async def turns(self, session_id: uuid.UUID) -> Sequence[Turn]:
         rows = (
@@ -120,6 +134,8 @@ class SqlAssistantStore:
                 title=session.title,
                 created_at=session.created_at,
                 last_turn_at=session.last_turn_at,
+                case_kind=session.case.kind.value if session.case else None,
+                case_id=session.case.case_id if session.case else None,
             )
         )
 
@@ -151,6 +167,11 @@ class SqlAssistantStore:
             sa.update(_S)
             .where(_S.c.id == turn.session_id, *self._mine(_S))
             .values(last_turn_at=turn.asked_at)
+        )
+
+    async def seen(self, session_id: uuid.UUID, at: datetime) -> None:
+        await self.db.execute(
+            sa.update(_S).where(_S.c.id == session_id, *self._mine(_S)).values(last_read_at=at)
         )
 
 

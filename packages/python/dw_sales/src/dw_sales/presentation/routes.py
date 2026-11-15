@@ -58,7 +58,7 @@ from dw_sales.application.activity import ActivityService
 from dw_sales.application.activity_ports import CaseListActivity, HandledBy
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
-from dw_sales.application.assistant import AnswerView, SessionDetailView, SessionView
+from dw_sales.application.assistant import AnswerView, CaseConversationView, ConversationView
 from dw_sales.application.catalog_imports import (
     CatalogImportView,
     CatalogPreviewView,
@@ -116,7 +116,7 @@ from dw_sales.application.views import (
     WorkerStateView,
 )
 from dw_sales.domain.activity import StepResult
-from dw_sales.domain.assistant import QUESTION_CHARS
+from dw_sales.domain.assistant import QUESTION_CHARS, CaseKey
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.change_requests import MAX_LINES
 from dw_sales.domain.dispositions import CaseKind
@@ -347,13 +347,13 @@ class UpdateApprovalBody(VersionBody):
 
 
 class AskBody(BaseModel):
-    """A question to the status assistant (ADR 0007), and the session it
-    continues; none opens a new one."""
+    """A question to the status assistant (ADR 0007). Which conversation it
+    continues is the route's (ticket 46): the caller's general one, or their
+    one on the case the path names; never an id the body sends."""
 
     model_config = ConfigDict(extra="forbid")
 
     question: Annotated[str, Field(min_length=1, max_length=QUESTION_CHARS)]
-    session_id: uuid.UUID | None = None
 
 
 class SignedCopyBody(VersionBody):
@@ -932,16 +932,18 @@ def build_router(
         )
         return await idem.record(view)
 
-    # Status questions answered from live data, in the caller's own sessions
-    # (ADR 0007; the contract's DW01 criterion 6). The model reads the
-    # question; code finds the case among those the caller may see.
+    # Status questions answered from live data (ADR 0007; the contract's DW01
+    # criterion 6), in the caller's own conversations (ticket 46): one general,
+    # and one per case, bound by code to the case the path names after the
+    # caller's read of it is checked. The model reads the question; code
+    # finds the case among those the caller may see.
     @router.post(
         "/assistant/ask",
         response_model=AnswerView,
         dependencies=[scopes(SalesScopes.CASE_READ)],
     )
     async def assistant_ask(body: AskBody, context: Ctx, svc: Svc, idem: Idem) -> AnswerView:
-        view = await svc.assistant.ask(context, body.question, body.session_id)
+        view = await svc.assistant.ask(context, body.question)
         return await idem.record(view)
 
     @router.post(
@@ -953,26 +955,67 @@ def build_router(
     async def assistant_stream(
         body: AskBody, context: Ctx, svc: Svc, idem: Idem
     ) -> StreamingResponse:
-        frames = await opened_stream(
-            svc.assistant.stream(context, body.question, body.session_id), idem.record
-        )
+        frames = await opened_stream(svc.assistant.stream(context, body.question), idem.record)
         return StreamingResponse(frames, media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
 
     @router.get(
-        "/assistant/sessions",
-        response_model=list[SessionView],
+        "/assistant/conversation",
+        response_model=ConversationView,
         dependencies=[scopes(SalesScopes.CASE_READ)],
     )
-    async def assistant_sessions(context: Ctx, svc: Svc) -> list[SessionView]:
-        return await svc.assistant.sessions(context)
+    async def assistant_conversation(context: Ctx, svc: Svc) -> ConversationView:
+        return await svc.assistant.conversation(context)
 
     @router.get(
-        "/assistant/sessions/{session_id}",
-        response_model=SessionDetailView,
+        "/assistant/cases",
+        response_model=list[CaseConversationView],
         dependencies=[scopes(SalesScopes.CASE_READ)],
     )
-    async def assistant_session(session_id: uuid.UUID, context: Ctx, svc: Svc) -> SessionDetailView:
-        return await svc.assistant.session(context, session_id)
+    async def assistant_cases(context: Ctx, svc: Svc) -> list[CaseConversationView]:
+        return await svc.assistant.recent(context)
+
+    @router.get(
+        "/assistant/unread",
+        response_model=list[uuid.UUID],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_unread(context: Ctx, svc: Svc) -> list[uuid.UUID]:
+        return await svc.assistant.unread(context)
+
+    @router.get(
+        "/assistant/cases/{kind}/{case_id}",
+        response_model=ConversationView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_case(
+        kind: CaseKind, case_id: uuid.UUID, context: Ctx, svc: Svc
+    ) -> ConversationView:
+        return await svc.assistant.conversation(context, CaseKey(kind, case_id))
+
+    @router.post(
+        "/assistant/cases/{kind}/{case_id}/ask",
+        response_model=AnswerView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_case_ask(
+        kind: CaseKind, case_id: uuid.UUID, body: AskBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> AnswerView:
+        view = await svc.assistant.ask(context, body.question, CaseKey(kind, case_id))
+        return await idem.record(view)
+
+    @router.post(
+        "/assistant/cases/{kind}/{case_id}/ask/stream",
+        response_class=StreamingResponse,
+        responses={200: {"content": {SSE_MEDIA_TYPE: {}}}},
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_case_stream(
+        kind: CaseKind, case_id: uuid.UUID, body: AskBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> StreamingResponse:
+        frames = await opened_stream(
+            svc.assistant.stream(context, body.question, CaseKey(kind, case_id)), idem.record
+        )
+        return StreamingResponse(frames, media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
 
     # A case's mail thread summarised by the model, on request (AI item 8):
     # each point cites its mails, and nothing is stored.
@@ -1319,6 +1362,25 @@ def build_router(
     ) -> CaseChangeView:
         change = await svc.order_commands.confirm_mapping(
             context, case_id, line_no, case_version=body.case_version, prv_code=body.prv_code
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/mapping/undo",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def undo_mapping(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        # "Hoàn tác": the PRV code DW applied by itself, undone (ticket 44).
+        change = await svc.order_commands.undo_applied_mapping(
+            context, case_id, line_no, case_version=body.case_version
         )
         return await idem.record(change)
 

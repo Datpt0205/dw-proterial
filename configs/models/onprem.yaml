@@ -1,6 +1,6 @@
 schema_version: "1.0"
 profile_id: onprem
-routing_policy_version: "1.3.0"
+routing_policy_version: "1.4.0"
 # A model server the deployment runs itself, for a step whose input must not
 # leave it: DW1 reading a customer's item description (dw_sales ADR 0005).
 # Reached as provider `onprem`, at DW_ONPREM_MODEL_BASE_URL (any server
@@ -42,6 +42,13 @@ routing_policy_version: "1.3.0"
 # changes how a step splits what it reads, which those sets did not measure.
 # Raise it with the set that needs it.
 #
+# 1.4.0: the structured route asks for each token's log-probability
+# (`logprobs: true`), so a DW1 step scores what it read in the same call and
+# a result may apply itself under a measured error rate (dw_sales ADR 0015,
+# ticket 44). Measured 2026-11-16 on Strata: `logprobs: true` returns each
+# token's log-probability beside a strict JSON-schema answer
+# (`docs/research/2026-11-16-less-human-review.md`, "Measured after writing").
+#
 # Unpriced: the server is the deployment's own, so a run is bounded by the
 # token ceiling below, not by cost.
 structured_extraction:
@@ -54,6 +61,7 @@ structured_extraction:
   # step cuts or splits what it reads under this (tickets 29, 31), so no call
   # is refused as too long and retried for nothing.
   max_input_tokens: 6000
+  logprobs: true
 reasoning:
   provider: onprem
   model: qwen3.8-flash-next-q2_0
