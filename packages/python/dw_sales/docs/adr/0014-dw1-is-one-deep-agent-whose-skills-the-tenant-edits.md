@@ -1,8 +1,8 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-15
-proposed-by: Đạt (2026-11-15, in conversation); written by the agent, not yet accepted
-supersedes-if-accepted: dw_sales ADR 0012 decision 3, and "code chooses the step" wherever ADRs 0005 and 0010 imply it
+accepted: 2026-11-16 (Đạt: "tôi duyệt", measured on Giang's home-lab Strata first)
+supersedes: dw_sales ADR 0012 decision 3, and "code chooses the step" wherever ADRs 0005 and 0010 imply it
 ---
 
 # DW1 is one deep agent whose skills the tenant edits; code only guards
@@ -84,7 +84,9 @@ What is true of the code today:
 
 ## Open
 
-- Đạt: accept, amend or reject.
+- Accepted 2026-11-16 with one condition: measure on Strata (Giang's home
+  lab, reached with its API key from `.env`, never committed) before the
+  agent replaces a step.
 - The skill store's shape (one row per skill version per tenant, the
   replay's example set) and who may write a skill (PIC and head, as ADR 0012
   says, or the admin only).
