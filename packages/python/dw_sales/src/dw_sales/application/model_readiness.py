@@ -56,6 +56,7 @@ from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.reply_drafts import REPLY_DRAFT
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
 from dw_sales.application.thread_agent import THREAD_AGENT
@@ -145,6 +146,14 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             THREAD_AGENT,
             "sales_thread_agent",
             "sales.thread_agent_golden",
+        ),
+        # Ticket 32: the golden mails (each kind, in the customers' three
+        # languages) drafted, every figure among the facts, and stating the
+        # figures the mail is for (the PO and each date it answers with); the
+        # grader's own condition: no draft kept naming an amount, an address
+        # or a figure the facts lack. Proposed by the agent.
+        ModelStep.REPLY_DRAFT: StepBar(
+            0.85, "all.complete", REPLY_DRAFT, "sales_reply_draft", "sales.reply_draft_golden"
         ),
     }
 )

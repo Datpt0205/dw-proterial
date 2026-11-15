@@ -1100,6 +1100,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/reply-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Reply Draft */
+        get: operations["order_reply_draft_api_v1_sales_orders__case_id__reply_draft_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/resend-cross-check": {
         parameters: {
             query?: never;
@@ -4448,7 +4465,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent";
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -5815,6 +5832,55 @@ export interface components {
             rows_expected: number;
             /** Rows Got */
             rows_got: number;
+        };
+        /**
+         * ReplyDraftView
+         * @description The model's wording, or why there is none; always marked as the model's
+         *     on the page, beside the template's draft of ``kind`` where it has one.
+         */
+        ReplyDraftView: {
+            /** Body */
+            body?: string | null;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Figures Checked
+             * @default 0
+             */
+            figures_checked: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "question_answer" | "change_can_do_draft" | "change_options_draft" | "confirmation_draft";
+            /** Language */
+            language: string;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /** Refusal */
+            refusal?: ("figure" | "amount" | "address") | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "refused" | "unavailable" | "off";
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To
+             * @default []
+             */
+            to: string[];
+            /**
+             * Unsupported
+             * @default []
+             */
+            unsupported: string[];
         };
         /**
          * ReplyQuote
@@ -9495,6 +9561,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_reply_draft_api_v1_sales_orders__case_id__reply_draft_get: {
+        parameters: {
+            query: {
+                kind: "question_answer" | "change_can_do_draft" | "change_options_draft" | "confirmation_draft";
+                message_id?: string | null;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyDraftView"];
                 };
             };
             /** @description Validation Error */

@@ -108,3 +108,51 @@ moved.
 - **Only where mail is processed.** The worker builds the turn where it
   reaches the deployment's model server (`onprem_chat_models`); the API
   processes no mail and builds none.
+
+## Applied to ticket 32 (2026-11-15, by the agent, Đạt away)
+
+Decision 2's second use, drafting a reply. What this adds is recorded here,
+because no rule above moved.
+
+- **One call, no tools.** The draft is worded from facts code gathered, and
+  code's check reads those facts alone (`figure_check`): a figure a tool
+  found would be dropped by that check anyway, so a turn with tools would
+  add calls, spend and an injection surface and nothing the draft may say.
+  Decision 4's fallback is then simply "no draft". The toolset stays the
+  reading's.
+- **Four kinds** (`application/reply_drafts.py`, prompt
+  `sales.reply_draft@1.0.0`): an answer to a customer's reply on the order
+  read `asks` (no template exists: the model's wording is the only draft,
+  or Sales answers), 6-DW4 and 6-DW3 (ADR 0010, ticket 29) and the
+  confirmation (ADR 0011; 6.3 when the loop sends it again). The last three
+  are offered exactly while the template draft of the same kind is
+  (`ORDER_GATES`, their one owner), beside it, never in its place: with the
+  step off, the template path is unchanged.
+- **The example is the tenant's own letter** of that kind, from its mail copy
+  (`sales_emails`, through `ArtifactCopyPort`), placeholders kept, its line
+  template left out (the confirmation's line names a price). The question's
+  letter is new in `sales_emails@1.4.0` (`question_answer`); no draft is drawn
+  from it. Where deployed, copy marked mock is refused as for a template.
+- **No amount in any draft.** None of the four is "about a price" here: no
+  unit price, total, currency or percent is a fact of any kind, the
+  confirmation's included (its prices reach the customer in the template's
+  draft and the processed Excel, drawn under `sales.price.read`), and the
+  check drops a draft naming one. A customer's question about a price is a
+  person's. A price-bearing wording would be a new kind with its own scope.
+- **The check**: every figure of subject and body among the facts (a figure
+  only the customer's question holds is not a fact: echoing their asked date
+  as if confirmed is dropped), no amount, no e-mail address or link. A
+  dropped draft says why and which figures; the person has the template's
+  draft, or nothing. Recipients are the customer's contacts in master data,
+  as every customer draft's; the model's answer has no field for one.
+- **`names_amount` no longer reads "đồng" alone as money** (platform
+  `figure_check`): only after a number ("1.000 đồng", "5 triệu đồng").
+  Measured: every Vietnamese 6-DW3 writes "đồng ý" (agree), and a cable
+  maker writes "lõi đồng" (copper core); both were dropped as amounts.
+- **Gated like every step**: `ModelStep.REPLY_DRAFT`, the switch
+  `model_assist.reply_draft` (off in every platform version and where a
+  version does not say; placed on O10 of the process page), bar 0.85 on
+  `all.complete` (a draft kept and stating the PO and each date it answers
+  with), held only while no kept draft names an amount or an address.
+  Proposed by the agent. Migration `3aca293b2c92` admits the step in both
+  step CHECKs. Nothing is stored and nothing is sent; no activity row.

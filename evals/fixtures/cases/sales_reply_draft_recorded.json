@@ -1,0 +1,61 @@
+{
+  "_comment": "The local model's answers (onprem profile) to sales.reply_draft, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
+  "answers": {
+    "11ff3451f237ba9c3114661e": {
+      "subject": "ご注文確認 NRV-PO-26-0457（改訂 0）",
+      "body": "Norvanta Automotive Components Vietnam Co., Ltd.\n御中\n\nご注文 NRV-PO-26-0457（改訂 0、2026/09/24 付）を、弊社受注番号 SO26-1001 にて確認いたしました。\n\nライン 1: NV-HW22-BK (HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122) 12,200 m、2026/12/04 納品\nライン 2: NV-CB4-22-GY (MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406) 3,600 m、2026/12/04 納品\nライン 3: NV-CB7-20-OR (MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M) 3,000 m、2026/12/04 納品\n\n担当: Nguyễn Văn An\n確認: Hoàng Thị Diệu\n\nよろしくお願いいたします。"
+    },
+    "128623421608ae28fae7a6fa": {
+      "subject": "ご注文 NRV-PO-26-0457 についてのご回答",
+      "body": "Norvanta Automotive Components Vietnam Co., Ltd.\n御中\n\nご注文 NRV-PO-26-0457 についてお問い合わせいただき、ありがとうございます。\n\nご質問の 2 行目（NV-CB4-22-GY）につきまして、12,200 m の納品は 2026/12/04 に予定されています。\n\nよろしくお願いいたします。"
+    },
+    "1ed7d152d1aa65d4137a12de": {
+      "subject": "Re: your order NRV-PO-26-0457",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nThank you for your question about order NRV-PO-26-0457.\n\nLine 1 (NV-HW22-BK): 12200 m will be delivered on 04 Dec 2026.\nLine 2 (NV-CB4-22-GY): 3600 m will be delivered on 04 Dec 2026.\nLine 3 (NV-CB7-20-OR): 3000 m will be delivered on 04 Dec 2026.\n\nBest regards."
+    },
+    "1ff339936063dcd42625d4ea": {
+      "subject": "Order confirmation NRV-PO-26-0457 (revision 0)",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nWe confirm your order NRV-PO-26-0457 (revision 0, dated 24 Sep 2026), our sales order SO26-1001:\n\nLine 1: NV-HW22-BK - HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122, quantity 12200 m, delivery date 04 Dec 2026.\nLine 2: NV-CB4-22-GY - MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406, quantity 3600 m, delivery date 04 Dec 2026.\nLine 3: NV-CB7-20-OR - MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M, quantity 3000 m, delivery date 04 Dec 2026.\n\nPrepared by: Nguyễn Văn An\nChecked by: Hoàng Thị Diệu\n\nBest regards."
+    },
+    "24390e9db9e83d1d5eede238": {
+      "subject": "Xác nhận thay đổi đơn hàng NRV-PO-26-0457",
+      "body": "Kính gửi Norvanta Automotive Components Vietnam Co., Ltd.,\n\nVề đề nghị thay đổi đơn hàng NRV-PO-26-0457 (số đơn bán SO26-1001), chúng tôi đáp ứng được như quý khách đề nghị:\n\nHàng NV-CB4-22-GY: 3600 m giao ngày 20/11/2026.\n\nMong quý khách xác nhận để chúng tôi cập nhật đơn hàng.\n\nTrân trọng."
+    },
+    "35afcc8a5b465af5e0e67d6c": {
+      "subject": "Xác nhận đơn hàng NRV-PO-26-0457 (lần sửa 0)",
+      "body": "Kính gửi Norvanta Automotive Components Vietnam Co., Ltd.,\n\nChúng tôi xác nhận đơn hàng NRV-PO-26-0457 (lần sửa 0, ngày 24/09/2026), số đơn bán SO26-1001:\n\nDòng 1: NV-HW22-BK - HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122, số lượng 12200 m, giao ngày 04/12/2026.\nDòng 2: NV-CB4-22-GY - MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406, số lượng 3600 m, giao ngày 04/12/2026.\nDòng 3: NV-CB7-20-OR - MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M, số lượng 3000 m, giao ngày 04/12/2026.\n\nNgười phụ trách: Nguyễn Văn An\nNgười kiểm tra: Hoàng Thị Diệu\n\nTrân trọng."
+    },
+    "3a5bee4033a85923f8bc3d4d": {
+      "subject": "Về đề nghị thay đổi đơn hàng NRV-PO-26-0457",
+      "body": "Kính gửi Norvanta Automotive Components Vietnam Co., Ltd.,\n\nVề đề nghị thay đổi đơn hàng NRV-PO-26-0457 (số đơn bán SO26-1001), chúng tôi chưa đáp ứng được đúng như đề nghị. Khả năng giao của chúng tôi như sau:\n\nHàng NV-CB4-22-GY: Quý khách yêu cầu 3600 m vào ngày 20/11/2026, nhưng chúng tôi chỉ có thể giao 3600 m vào ngày 25/11/2026.\n\nMong quý khách cho biết đồng ý phương án trên, hay giữ nguyên đơn hàng như cũ.\n\nTrân trọng."
+    },
+    "5b306be25e550dc9999e6358": {
+      "subject": "Re: your order NRV-PO-26-0457",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nThank you for your question about order NRV-PO-26-0457.\n\nLine 2 (NV-CB4-22-GY) of 3600 m will be delivered on 04 Dec 2026.\n\nBest regards."
+    },
+    "799b16532d555db6db72f616": {
+      "subject": "ご注文 NRV-PO-26-0457 変更のご提案につきまして",
+      "body": "Norvanta Automotive Components Vietnam Co., Ltd.\n御中\n\nご注文 NRV-PO-26-0457（弊社受注番号 SO26-1001）の変更につきまして、ご希望の納期での対応が難しく、以下のとおりご提案いたします。\n\n行 2：\n  ご希望：数量 3600 m、納期 2026/11/20\n  ご提案：数量 3600 m、納期 2026/11/25\n\nご提案にご同意いただけるか、元のご注文のままとされるか、ご指示ください。\n\nよろしくお願いいたします。"
+    },
+    "8fc59565ae41140706379f05": {
+      "subject": "Your requested change to order NRV-PO-26-0457",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nRegarding your requested change to order NRV-PO-26-0457 (our sales order SO26-1001), we cannot deliver exactly as asked. We can offer:\n\nLine 2: Customer item NV-CB4-22-GY. You asked for 3600 m on 20 Nov 2026. We can deliver 3600 m on 25 Nov 2026.\n\nPlease let us know whether you accept this, or keep the order as it was.\n\nBest regards."
+    },
+    "b545c4170567de0674be2d77": {
+      "subject": "Change to order NRV-PO-26-0457 confirmed",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nRegarding your requested change to order NRV-PO-26-0457 (our sales order SO26-1001), we can deliver as you asked:\n\nLine 2: NV-CB4-22-GY - 3600 m on 20 Nov 2026\n\nPlease confirm, and we will update the order.\n\nBest regards."
+    },
+    "c06a74e7508ab5b63f5ced76": {
+      "subject": "Re: your order NRV-PO-26-0457",
+      "body": "Dear Norvanta Automotive Components Vietnam Co., Ltd.,\n\nThank you for your question about order NRV-PO-26-0457.\n\nSales will check and reply soon regarding the lot number for line 2.\n\nBest regards."
+    },
+    "cbaa3ff3af3c97cc94994264": {
+      "subject": "Trả lời về đơn hàng NRV-PO-26-0457",
+      "body": "Kính gửi Norvanta Automotive Components Vietnam Co., Ltd.\n\nCảm ơn quý khách đã hỏi về đơn hàng NRV-PO-26-0457.\n\nDòng 2 của đơn hàng (mã NV-CB4-22-GY, số lượng 3600 m) sẽ được giao vào ngày 04/12/2026.\n\nTrân trọng."
+    },
+    "d3f651c4a0c8b5b4a51e9775": {
+      "subject": "ご注文 NRV-PO-26-0457 変更のご回答",
+      "body": "Norvanta Automotive Components Vietnam Co., Ltd.\n御中\n\nご注文 NRV-PO-26-0457（弊社受注番号 SO26-1001）の変更につきまして、ご希望どおり対応可能です。\n\n変更内容：\n行 2: NV-CB4-22-GY\n  数量 3600 m の納品は 2026/11/20 にて承ります。\n\nご確認のほど、よろしくお願いいたします。"
+    }
+  }
+}

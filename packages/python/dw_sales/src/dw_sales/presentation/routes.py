@@ -78,6 +78,7 @@ from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, Uplo
 from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
+from dw_sales.application.reply_drafts import ReplyDraftView, ReplyKind
 from dw_sales.application.routed_mail import HandledRequest, HandledView
 from dw_sales.application.rule_drafts import RuleDraftView
 from dw_sales.application.rules import (
@@ -1007,6 +1008,24 @@ def build_router(
     )
     async def quote_reminder(case_id: uuid.UUID, context: Ctx, svc: Svc) -> CustomerReminderView:
         return await svc.customer_reminders.draft(context, CaseKind.QUOTE, case_id)
+
+    # A mail to the customer about an order worded by the model, beside the
+    # template's draft (ticket 32): every figure among the facts code gives,
+    # no amount, the customer's contacts as recipients, nothing sent or
+    # stored. An answer to a question names the customer's mail.
+    @router.get(
+        "/orders/{case_id}/reply-draft",
+        response_model=ReplyDraftView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def order_reply_draft(
+        case_id: uuid.UUID,
+        kind: Annotated[ReplyKind, Query()],
+        context: Ctx,
+        svc: Svc,
+        message_id: Annotated[str | None, Query(pattern=r"^[!-~]{1,512}$")] = None,
+    ) -> ReplyDraftView:
+        return await svc.reply_drafts.draft(context, case_id, kind, message_id=message_id)
 
     @router.get("/my-work", response_model=Page[WorkItem])
     async def my_work(

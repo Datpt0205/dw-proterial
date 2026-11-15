@@ -24,10 +24,14 @@ _PARTS = re.compile(r"[./,\-]")
 # What an amount looks like in any of the customers' languages: a percent, a
 # currency code or symbol. A mail to a customer no approval looked at carries
 # none (sales items 11 and the customer reminder): a "5%" passes a figure check
-# whenever a date holds a 5.
+# whenever a date holds a 5. Vietnamese "đồng" is the currency only after a
+# number ("1.000 đồng", "5 triệu đồng"): alone it is also "agree" ("đồng ý"),
+# "copper" and "same", which every Vietnamese answer to a change writes
+# (sales ticket 32, measured on the local model's drafts).
 _AMOUNT: Final = re.compile(
     # `\uff05` is the full-width percent sign a Japanese mail may use.
-    r"[%\uff05$¥€₫]|\b(?:USD|VND|JPY|EUR|SGD|THB|CNY|đồng)\b|円|ドル",
+    r"[%\uff05$¥€₫]|\b(?:USD|VND|JPY|EUR|SGD|THB|CNY)\b"
+    r"|\d[\d.,]*\s*(?:(?:nghìn|ngàn|triệu|tỷ|tỉ)\s+)?đồng\b|円|ドル",
     re.IGNORECASE,
 )
 

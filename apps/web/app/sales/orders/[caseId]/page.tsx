@@ -14,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
-import type { SalesSchemas, SourceRegion } from "@dw/api-client";
+import type { ReplyKind, SalesSchemas, SourceRegion } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
@@ -56,6 +56,7 @@ import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
+import { AgentReply, AGENT_KINDS } from "./agent-reply";
 import { AgreementPanel } from "./agreement";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -524,6 +525,11 @@ function OrderDetail() {
         renderReason="Bạn không có quyền soạn tệp của đơn hàng (cần vai Sales phụ trách)."
         language={customer?.language}
         list={artifacts}
+        besideDraft={(k) =>
+          AGENT_KINDS.has(k) ? (
+            <AgentReply caseId={data.case_id} kind={k as ReplyKind} />
+          ) : null
+        }
       />
 
       {data.changes.length ? (
@@ -583,6 +589,15 @@ function OrderDetail() {
         replies={data.replies}
         sent={data.thread_sent}
         before={data.thread_before}
+        answer={(reply) =>
+          reply.intents.some((i) => i.intent === "asks") ? (
+            <AgentReply
+              caseId={data.case_id}
+              kind="question_answer"
+              messageId={reply.message_id}
+            />
+          ) : null
+        }
       />
 
       <Collapse

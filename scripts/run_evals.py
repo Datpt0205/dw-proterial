@@ -177,6 +177,7 @@ RECORDED_BY_PROMPT = {
     "sales.reply_intent": _CASES / "sales_reply_recorded.json",
     "sales.request_handoff": _CASES / "sales_handoff_recorded.json",
     "sales.po_layout_proposal": _CASES / "sales_layout_recorded.json",
+    "sales.reply_draft": _CASES / "sales_reply_draft_recorded.json",
 }
 # A step that reads with tools records whole turns, every assistant message of
 # each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).

@@ -26,9 +26,20 @@ def test_a_name_with_a_digit_passes_only_when_the_caller_names_it() -> None:
     assert unsupported("DW2 giảm 7", SOURCE, names={"DW2"}) == {"7"}
 
 
-@pytest.mark.parametrize("text", ["giảm 5%", "100 USD", "5" + chr(0xFF05), "1.000 đồng", "¥300"])
+@pytest.mark.parametrize(
+    "text",
+    ["giảm 5%", "100 USD", "5" + chr(0xFF05), "1.000 đồng", "5 triệu đồng", "¥300", "300円"],
+)
 def test_an_amount_is_named_in_any_of_the_languages(text: str) -> None:
     assert names_amount(text)
+
+
+@pytest.mark.parametrize(
+    "text", ["Mong quý khách đồng ý phương án trên", "cáp lõi đồng mạ thiếc", "đồng thời"]
+)
+def test_dong_without_a_number_is_a_word_not_an_amount(text: str) -> None:
+    """ "đồng" alone is "agree", "copper" or "same" (sales ticket 32)."""
+    assert not names_amount(text)
 
 
 def test_a_date_or_a_code_is_no_amount() -> None:
