@@ -1,6 +1,6 @@
 {
   "dataset_id": "platform_smoke",
-  "dataset_version": "1.2.0",
+  "dataset_version": "1.3.0",
   "worker_id": "dw.platform",
   "cases": [
     {
@@ -29,6 +29,24 @@
       "expected_ref": "evals/expected/pf_cross_tenant.json",
       "grader": "knowledge.cross_tenant_rejected",
       "tags": ["security"]
+    },
+    {
+      "case_id": "pf-retrieval-hybrid-floor",
+      "category": "normal",
+      "description": "Tìm kiếm lai (vector + BM25, gộp RRF) đạt sàn recall@5, nDCG@5 và p95 trên bộ câu hỏi có nhãn; mỗi tài liệu tính một lần",
+      "input_ref": "evals/fixtures/cases/pf_retrieval.json",
+      "expected_ref": "evals/expected/pf_retrieval.json",
+      "grader": "knowledge.retrieval_quality",
+      "tags": ["knowledge", "retrieval"]
+    },
+    {
+      "case_id": "pf-sec-retrieval-ranking-isolated",
+      "category": "cross_tenant_attack",
+      "description": "Tài liệu của tenant khác chứa đúng mã PO, mã hàng của câu hỏi: không bao giờ được trả về và không làm đổi thứ hạng của tenant này",
+      "input_ref": "evals/fixtures/cases/pf_retrieval.json",
+      "expected_ref": "evals/expected/pf_retrieval_isolation.json",
+      "grader": "knowledge.ranking_isolated",
+      "tags": ["security", "knowledge", "retrieval"]
     },
     {
       "case_id": "pf-sec-missing-evidence-memory",

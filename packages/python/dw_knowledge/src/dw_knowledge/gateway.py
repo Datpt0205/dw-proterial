@@ -7,8 +7,10 @@ search → evidence pack with provenance.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -172,6 +174,37 @@ def build_trusted_filter(context: AccessContext, domain: str) -> TrustedSearchFi
     )
 
 
+class _QueryVectors:
+    """The last few query vectors, by tenant, workspace and text (an LRU).
+
+    A person asking again, or two steps of one run asking the same thing, need
+    not wait on the embedder twice. Keyed by tenant and workspace although the
+    vector is the same for anyone: a hit is faster than a miss, so a cache
+    shared across tenants would tell one tenant what another just asked. Bounded
+    by count, so it costs a few megabytes at bge-m3's width and never grows.
+    The embedder is fixed for the gateway's life, so a vector never goes stale.
+    """
+
+    def __init__(self, size: int) -> None:
+        self._size = size
+        self._vectors: OrderedDict[tuple[uuid.UUID, uuid.UUID, str], tuple[float, ...]] = (
+            OrderedDict()
+        )
+
+    def get(self, key: tuple[uuid.UUID, uuid.UUID, str]) -> list[float] | None:
+        vector = self._vectors.get(key)
+        if vector is None:
+            return None
+        self._vectors.move_to_end(key)
+        return list(vector)
+
+    def put(self, key: tuple[uuid.UUID, uuid.UUID, str], vector: Sequence[float]) -> None:
+        self._vectors[key] = tuple(vector)
+        self._vectors.move_to_end(key)
+        while len(self._vectors) > self._size:
+            self._vectors.popitem(last=False)
+
+
 def _joined(
     document_id: uuid.UUID, title: str, contents: list[str], max_chars: int
 ) -> DocumentText:
@@ -210,11 +243,21 @@ class KnowledgeGateway:
     # Over-fetch this many x top_k for the reranker to reorder (recall->precision).
     rerank_fetch_multiplier: int = 4
     telemetry: TelemetryPort = field(default_factory=NullTelemetry)
+    # A question is one line, so its embedding is quick or the embedder is in
+    # trouble; past this the search fails fast instead of waiting out the
+    # embedder's own timeout, which is sized for a reindex's batches (120 s on
+    # the on-prem profile). The model is kept loaded there (infra/onprem).
+    query_embedding_timeout_seconds: float = 5.0
+    query_vector_cache_size: int = 1024
     _ready: bool = field(default=False, init=False)
+    _query_vectors: _QueryVectors = field(init=False)
+
+    def __post_init__(self) -> None:
+        self._query_vectors = _QueryVectors(self.query_vector_cache_size)
 
     async def ensure_ready(self) -> None:
         if not self._ready:
-            await self.vector_index.ensure_ready(self.embeddings.dimension)
+            await self.vector_index.ensure_ready(self.embeddings.dimension, self.embeddings.model)
             self._ready = True
 
     # ------------------------------------------------------------ ingestion --
@@ -593,14 +636,17 @@ class KnowledgeGateway:
 
     # ------------------------------------------------------------ retrieval --
     async def search(self, query: SearchQuery, context: AccessContext) -> list[EvidenceChunk]:
+        # Once per process: the index must be the one this embedder's model
+        # filled before a vector from it is compared with anything there.
+        await self.ensure_ready()
         trusted_filter = build_trusted_filter(context, query.domain)
-        vector = (await self.embeddings.embed([query.text]))[0]
-        # Over-fetch when a reranker is present: dense recall then cross-encoder precision.
+        vector = await self._query_vector(query.text, context)
+        # Over-fetch when a reranker is present: hybrid recall then cross-encoder precision.
         fetch_k = query.top_k * self.rerank_fetch_multiplier if self.reranker else query.top_k
         # The document narrowing goes to the index with the trusted filter, so
         # it is applied before top-k and only ever intersects with it.
         hits = await self.vector_index.search(
-            vector, trusted_filter, fetch_k, query.filters, query.document_ids
+            vector, trusted_filter, fetch_k, query.filters, query.document_ids, text=query.text
         )
 
         rerank_scores: dict[str, float] = {}
@@ -618,9 +664,9 @@ class KnowledgeGateway:
 
         evidence: list[EvidenceChunk] = []
         for hit in hits:
-            # The reranker's score when it ranked, the vector's when it was
-            # skipped: two scales, both in [0, 1]. A min_relevance above zero
-            # would filter the two differently.
+            # The reranker's score when it ranked, the fused relevance when it
+            # was skipped: two scales, both in [0, 1]. A min_relevance above
+            # zero would filter the two differently.
             score = rerank_scores.get(str(hit.chunk_id), hit.score)
             if score < query.min_relevance:
                 continue
@@ -641,11 +687,30 @@ class KnowledgeGateway:
             )
         return evidence
 
+    async def _query_vector(self, text: str, context: AccessContext) -> list[float]:
+        key = (context.tenant_id, context.workspace_id, text)
+        cached = self._query_vectors.get(key)
+        if cached is not None:
+            return cached
+        try:
+            async with asyncio.timeout(self.query_embedding_timeout_seconds):
+                [vector] = await self.embeddings.embed([text])
+        except TimeoutError as exc:
+            raise InfrastructureError(
+                "query embedding timed out",
+                details={
+                    "error": "TimeoutError",
+                    "timeout_seconds": self.query_embedding_timeout_seconds,
+                },
+            ) from exc
+        self._query_vectors.put(key, vector)
+        return vector
+
 
 async def _rerank_or_none(
     reranker: RerankPort, telemetry: TelemetryPort, query: SearchQuery, hits: Sequence[VectorHit]
 ) -> list[RerankResult] | None:
-    """The reranker's order, or None to keep the vector order.
+    """The reranker's order, or None to keep the fused order.
 
     Reranking buys precision; it is not what makes retrieval correct. A hosted
     reranker that is down or answers nonsense therefore costs ranking quality,

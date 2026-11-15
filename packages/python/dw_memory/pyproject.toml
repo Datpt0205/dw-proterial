@@ -11,7 +11,7 @@ dependencies = [
     # borrowed through dw-knowledge: memory owns its own index, and a
     # dependency reached through another package is one nobody sees when they
     # ask what this one needs.
-    "qdrant-client>=1.12,<1.15",
+    "qdrant-client>=1.20,<1.21",
     # The retention policy is a YAML artifact this package loads itself.
     "pyyaml>=6,<7",
     "pydantic>=2.10,<3",

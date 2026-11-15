@@ -101,7 +101,7 @@ class CapturingIndex:
     captured_documents: list[tuple[uuid.UUID, ...]] = field(default_factory=list)
     hits: list[VectorHit] = field(default_factory=list)
 
-    async def ensure_ready(self, vector_dimension: int) -> None: ...
+    async def ensure_ready(self, vector_dimension: int, embedding_model: str) -> None: ...
 
     async def upsert(self, chunks) -> None: ...
 
@@ -113,7 +113,9 @@ class CapturingIndex:
 
     async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None: ...
 
-    async def search(self, vector, trusted_filter, top_k, extra_filters=(), document_ids=()):
+    async def search(
+        self, vector, trusted_filter, top_k, extra_filters=(), document_ids=(), *, text
+    ):
         self.captured.append(trusted_filter)
         self.captured_filters.append(tuple(extra_filters))
         self.captured_documents.append(tuple(document_ids))
@@ -127,6 +129,10 @@ class FakeEmbedding:
     @property
     def dimension(self) -> int:
         return 4
+
+    @property
+    def model(self) -> str:
+        return "fake-4"
 
     async def embed(self, texts):
         return [[1.0, 0.0, 0.0, 0.0] for _ in texts]

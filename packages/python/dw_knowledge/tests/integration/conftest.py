@@ -72,9 +72,18 @@ async def gateway(urls: RuntimeUrls) -> AsyncIterator[KnowledgeGateway]:
     )
     await built.ensure_ready()
     yield built
-    await qdrant.delete_collection(collection)
+    await drop_served(qdrant, collection)
     await qdrant.close()
     await engine.dispose()
+
+
+async def drop_served(client: AsyncQdrantClient, name: str) -> None:
+    """Delete what `name` serves: since ticket 45 it is an alias, and deleting a
+    collection by its alias's name deletes nothing (measured, 1.20.1)."""
+    for alias in (await client.get_aliases()).aliases:
+        if alias.alias_name == name:
+            await client.delete_collection(alias.collection_name)
+    await client.delete_collection(name)
 
 
 @pytest.fixture

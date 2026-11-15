@@ -133,6 +133,15 @@ async def test_a_width_mismatch_refuses_rather_than_dropping_everyones_vectors(
         await wider.ensure_ready()
 
 
+async def test_the_tenant_field_is_the_tenant_index(ranker: QdrantMemoryRanker) -> None:
+    """As in the knowledge collection (Qdrant review F8): Qdrant then keeps a
+    tenant's points together and plans each search around that condition."""
+    info = await ranker.client.get_collection(ranker.collection)
+
+    tenant = info.payload_schema["tenant_id"].params
+    assert tenant is not None and getattr(tenant, "is_tenant", None) is True
+
+
 # ------------------------------------------------- only what SQL recalled --
 
 

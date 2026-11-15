@@ -46,20 +46,20 @@ def _filter() -> TrustedSearchFilter:
 async def test_tombstone_excludes_then_reindex_restores() -> None:
     index = InMemoryVectorIndexAdapter()
     await index.upsert([_chunk()])
-    assert await index.search((1.0, 0.0, 0.0), _filter(), 5)  # found
+    assert await index.search((1.0, 0.0, 0.0), _filter(), 5, text="q")  # found
 
     await index.tombstone_document(DOC, tenant_id=TENANT, workspace_id=WS)  # soft delete
-    assert not await index.search((1.0, 0.0, 0.0), _filter(), 5)  # excluded
+    assert not await index.search((1.0, 0.0, 0.0), _filter(), 5, text="q")  # excluded
 
     await index.upsert([_chunk()])  # re-ingest reactivates
-    assert await index.search((1.0, 0.0, 0.0), _filter(), 5)  # found again
+    assert await index.search((1.0, 0.0, 0.0), _filter(), 5, text="q")  # found again
 
 
 async def test_hard_delete_removes_permanently() -> None:
     index = InMemoryVectorIndexAdapter()
     await index.upsert([_chunk()])
     await index.delete_document(DOC)
-    assert not await index.search((1.0, 0.0, 0.0), _filter(), 5)
+    assert not await index.search((1.0, 0.0, 0.0), _filter(), 5, text="q")
 
 
 async def test_another_tenants_tombstone_hides_nothing() -> None:
@@ -70,4 +70,4 @@ async def test_another_tenants_tombstone_hides_nothing() -> None:
     await index.tombstone_document(DOC, tenant_id=uuid.uuid4(), workspace_id=WS)
     await index.tombstone_document(DOC, tenant_id=TENANT, workspace_id=uuid.uuid4())
 
-    assert await index.search((1.0, 0.0, 0.0), _filter(), 5)
+    assert await index.search((1.0, 0.0, 0.0), _filter(), 5, text="q")

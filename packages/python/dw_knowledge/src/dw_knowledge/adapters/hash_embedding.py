@@ -26,6 +26,10 @@ class HashEmbeddingAdapter:
     def dimension(self) -> int:
         return self._dimension
 
+    @property
+    def model(self) -> str:
+        return f"hash-{self._dimension}"
+
     def _embed_one(self, content: str) -> list[float]:
         vector = [0.0] * self._dimension
         for token in _TOKEN_PATTERN.findall(content.lower()):

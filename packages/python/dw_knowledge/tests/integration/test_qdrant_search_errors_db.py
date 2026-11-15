@@ -36,14 +36,15 @@ async def test_an_absent_collection_is_empty_and_a_refused_query_raises(
     present = f"dw_knowledge_test_{uuid.uuid4().hex[:8]}"
     try:
         absent = QdrantVectorIndexAdapter(client=qdrant, collection=f"dw_absent_{present}")
-        assert await absent.search([0.1, 0.2, 0.3], _FILTER, top_k=3) == []
+        assert await absent.search([0.1, 0.2, 0.3], _FILTER, top_k=3, text="q") == []
 
         index = QdrantVectorIndexAdapter(client=qdrant, collection=present)
-        await index.ensure_ready(3)
+        await index.ensure_ready(3, "probe-3")
         # A vector of the wrong width: Qdrant answers 400, which is a broken
         # caller, not an empty corpus.
         with pytest.raises(InfrastructureError, match="vector search failed"):
-            await index.search([0.1, 0.2], _FILTER, top_k=3)
+            await index.search([0.1, 0.2], _FILTER, top_k=3, text="q")
     finally:
-        await qdrant.delete_collection(present)
+        # `present` is the alias; the collection behind it is named by model.
+        await qdrant.delete_collection(f"{present}__probe_3__1")
         await qdrant.close()

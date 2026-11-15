@@ -14,7 +14,7 @@ one chunk.
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -55,23 +55,33 @@ class OpenAICompatibleEmbeddingAdapter:
     requested_dimensions: int | None = None
     timeout: float = 120.0
     batch_size: int = DEFAULT_BATCH
+    # One client for the adapter's life, made on first use: a client per call
+    # paid a new connection (and TLS handshake, against a gateway) on every
+    # question, which is most of a one-line query's embedding time. One per
+    # process is bounded, so nothing has to close it before the process ends.
+    _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
     @property
     def dimension(self) -> int:
         return self._dimension
+
+    def _http(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url.rstrip("/"),
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=self.timeout,
+            )
+        return self._client
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
         out: list[list[float]] = []
         try:
-            async with httpx.AsyncClient(
-                base_url=self.base_url.rstrip("/"),
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=self.timeout,
-            ) as client:
-                for batch in self._batches(texts):
-                    out.extend(await self._embed_batch(client, batch))
+            client = self._http()
+            for batch in self._batches(texts):
+                out.extend(await self._embed_batch(client, batch))
         except httpx.HTTPError as exc:
             raise InfrastructureError(
                 "embedding request failed",

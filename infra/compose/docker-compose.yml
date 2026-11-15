@@ -114,7 +114,7 @@ services:
 
   qdrant:
     logging: *default-logging
-    image: qdrant/qdrant:v1.13.4
+    image: qdrant/qdrant:v1.20.1
     profiles: ["infra", "full"]
     volumes:
       - qdrant-data:/qdrant/storage

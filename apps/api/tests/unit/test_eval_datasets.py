@@ -39,7 +39,7 @@ def _load_script() -> ModuleType:  # scripts/ is loaded by path, as make runs it
 
 
 def test_the_platform_dataset_is_found() -> None:
-    assert {p.name for p in DATASETS} >= {"platform@1.2.0.json"}
+    assert {p.name for p in DATASETS} >= {"platform@1.3.0.json"}
 
 
 @pytest.mark.parametrize("path", DATASETS, ids=lambda p: p.stem)

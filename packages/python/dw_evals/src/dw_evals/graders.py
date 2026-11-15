@@ -182,6 +182,122 @@ def grade_cross_tenant_rejected(
     return GradeResult.ok(tenant=str(trusted.tenant_id))
 
 
+def _labelled_context(input_data: dict[str, Any], tenant: str) -> Any:
+    """A verified caller in one of a labelled set's tenants."""
+    from dw_platform.application.access_context import AccessContext
+
+    ids = input_data["tenants"][tenant]
+    return AccessContext(
+        tenant_id=uuid.UUID(ids["tenant_id"]),
+        workspace_id=uuid.UUID(ids["workspace_id"]),
+        principal_id=_FIXED_CASE,
+        roles=frozenset({"member"}),
+        plan_id="starter",
+    )
+
+
+def _hash_embeddings() -> Any:
+    """The hash embedder, through the one builder every process uses: its
+    vectors carry no meaning, so the evals below gate ranking, fusion and
+    filters, not an embedding model."""
+    from dw_knowledge.adapters.embedding_factory import build_embeddings
+
+    return build_embeddings("hash", None, base_url=None, api_key=None, profile_id="eval")
+
+
+def grade_retrieval_quality(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Hybrid retrieval reaches the floor on a labelled set: recall@k and
+    nDCG@k over documents counted once, and a p95 per query.
+
+    Runs the in-memory index, which ranks as the Qdrant adapter asks Qdrant to
+    (`dw_knowledge.hybrid`), with the hash embedder, so CI needs no service and
+    no model: it gates the ranking, the fusion and the filters, not how good an
+    embedding model is. The same set runs against a real Qdrant in
+    `dw_knowledge/tests/integration/test_retrieval_eval_qdrant.py`.
+    """
+    import asyncio
+
+    from dw_knowledge.adapters.memory_index import InMemoryVectorIndexAdapter
+    from dw_knowledge.retrieval_eval import (
+        LabelledSet,
+        RetrievalFloor,
+        evaluate_retrieval,
+        index_search,
+    )
+
+    labelled = LabelledSet.from_mapping(input_data)
+    floor = RetrievalFloor.from_mapping(expected)
+    context = _labelled_context(input_data, "own")
+
+    async def run() -> Any:
+        index, embeddings = InMemoryVectorIndexAdapter(), _hash_embeddings()
+        await labelled.load_into(index, embeddings)
+        return await evaluate_retrieval(
+            index_search(index, embeddings, context), labelled.cases, top_k=floor.top_k
+        )
+
+    report = asyncio.run(run())
+    measured = {
+        f"recall@{report.top_k}": round(report.mean_recall, 3),
+        f"ndcg@{report.top_k}": round(report.mean_ndcg, 3),
+        "mrr": round(report.mrr, 3),
+        "p95_ms": round(report.p95_ms, 2),
+        "misses": [case.query for case in report.cases if case.recall < 1.0],
+    }
+    shortfalls = report.shortfalls(floor)
+    if shortfalls:
+        return GradeResult.fail("; ".join(shortfalls), **measured)
+    return GradeResult.ok(**measured)
+
+
+def grade_ranking_isolated(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Another tenant's documents, worded like this tenant's questions and full
+    of the same codes, are never retrieved and do not move its ranking: the
+    BM25 statistics are this caller's own corpus, so its scores are the same
+    with the other tenant's text indexed and without it."""
+    import asyncio
+
+    from dw_knowledge.adapters.memory_index import InMemoryVectorIndexAdapter
+    from dw_knowledge.gateway import build_trusted_filter
+    from dw_knowledge.retrieval_eval import LabelledSet, labelled_document_id
+
+    labelled = LabelledSet.from_mapping(input_data)
+    context = _labelled_context(input_data, "own")
+    others = {
+        labelled_document_id(doc.key)
+        for doc in labelled.documents
+        if doc.tenant_id != context.tenant_id
+    }
+
+    async def rankings(*, with_others: bool) -> list[list[tuple[uuid.UUID, float]]]:
+        index, embeddings = InMemoryVectorIndexAdapter(), _hash_embeddings()
+        await labelled.load_into(
+            index, embeddings, tenant_id=None if with_others else context.tenant_id
+        )
+        out = []
+        for case in labelled.cases:
+            [vector] = await embeddings.embed([case.query])
+            hits = await index.search(
+                vector, build_trusted_filter(context, case.domain), 20, text=case.query
+            )
+            out.append([(hit.document_id, hit.score) for hit in hits])
+        return out
+
+    alone = asyncio.run(rankings(with_others=False))
+    beside = asyncio.run(rankings(with_others=True))
+    leaked = sorted({str(doc) for ranking in beside for doc, _ in ranking if doc in others})
+    moved = alone != beside
+    if len(leaked) != expected["other_tenant_documents_retrieved"]:
+        return GradeResult.fail("another tenant's documents were retrieved", leaked=leaked)
+    if moved != expected["ranking_moved_by_other_tenant"]:
+        return GradeResult.fail("another tenant's documents moved this tenant's ranking")
+    return GradeResult.ok(queries=len(alone), other_tenant_documents=len(others))
+
+
 # ----------------------------------------------------------------- memory ---
 def grade_memory_policy(
     ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
@@ -225,6 +341,8 @@ GRADERS: dict[str, Grader] = {
     "runtime.prompt_injection": grade_prompt_injection,
     "runtime.side_effect_approval": grade_side_effect_approval,
     "knowledge.cross_tenant_rejected": grade_cross_tenant_rejected,
+    "knowledge.retrieval_quality": grade_retrieval_quality,
+    "knowledge.ranking_isolated": grade_ranking_isolated,
     "memory.write_policy": grade_memory_policy,
 }
 """The platform's own graders. A bounded context's live in its own package and

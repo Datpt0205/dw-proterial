@@ -55,7 +55,7 @@ def _filter(domain: str) -> TrustedSearchFilter:
 
 
 async def _domains_visible_to(index: InMemoryVectorIndexAdapter, domain: str) -> set[str]:
-    hits = await index.search(VECTOR, _filter(domain), 50)
+    hits = await index.search(VECTOR, _filter(domain), 50, text="q")
     return {hit.content.rsplit(" ", 1)[-1] for hit in hits}
 
 
