@@ -102,3 +102,17 @@ recorded here rather than in a new ADR, because no rule above moved.
 - **Kept**: an example never sent is dropped by the next request of its
   workspace after 30 days; a sent one stays, for its approval shows its
   replay.
+
+## Amended 2026-11-16 (Đạt), under ADR 0014
+
+One worked example under-specifies a customer: the first PO it did not show
+is filled wrongly or not at all ("cứ chăm chăm vào ví dụ thì sau này gặp
+trường hợp khác rất dễ sai"). The SalesOrder becomes a skill with tools
+(ticket 41): the customer's way in words with several worked pairs, the
+model filling each PO with read-only tools and naming each cell's source,
+and code tracing every cell on every PO (its anchor, the lookup redone, the
+computation redone, a constant the skill names); a cell it cannot trace is
+flagged, never written. Decisions 3 to 6 hold: the replay now runs on all of
+the customer's pairs, the head approves, and a person approves the file
+before Bravo. The rules above stay as the fallback until the skill passes
+its bar on Strata.
