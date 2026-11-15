@@ -22,7 +22,9 @@ item descriptions outside its vocabulary (ticket 28), the intent of a
 message no reader accepted (ticket 31) and of a customer's reply in a case's
 thread (ticket 32), each for a tenant whose rules turn it on. Without one, no
 model is called at all; a reply is still attached to its case by its thread
-headers.
+headers. Given ``agent_turns`` too, a thread message is read with DW1's
+read-only tools first where a tenant turns that on (tickets 30 and 31): the
+tools are registered on it here and the turn built once, at startup.
 """
 
 from __future__ import annotations
@@ -33,11 +35,13 @@ from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_agent_runtime.adapters.agent_turn import AgentTurnKit
 from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
+from dw_agent_runtime.model.readiness import StepModelPort
 from dw_agent_runtime.ports import ModelGateway, WorkflowRunnerPort
 from dw_agent_runtime.registry import (
     ConfigError,
@@ -126,6 +130,13 @@ from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, SourceCachePort
 from dw_sales.application.telemetry import SpanPort
+from dw_sales.application.thread_agent import CEILING, THREAD_AGENT, ThreadAgent
+from dw_sales.application.thread_tools import (
+    ThreadContext,
+    ThreadContextPort,
+    ThreadTools,
+    registered_tools,
+)
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
@@ -213,6 +224,9 @@ def build_dw1(
     requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
     one_call_model: ModelGateway | None = None,
+    # What the thread agent's turn is built with (tickets 30 and 31): only a
+    # process that processes mail and reaches the deployment's model server.
+    agent_turns: AgentTurnKit | None = None,
     # Where deployed, nothing fictional answers (audit findings 1 and 11):
     # said by each composition root, never assumed.
     deployed: bool,
@@ -356,6 +370,17 @@ def build_dw1(
         ),
         threads=ThreadLinks(uow, mail),
         replies=None if interpretation is None else ReplyReader(interpretation),
+        thread_agent=(
+            None
+            if agent_turns is None
+            else thread_agent(
+                agent_turns,
+                worker_file,
+                ThreadTools(order_cases, catalog, tenant_rules),
+                ThreadContext(uow, mail),
+                step_model(configs, worker.default_model_profile),
+            )
+        ),
         handoffs=(
             None if interpretation is None else HandoffReader(interpretation, catalog, order_cases)
         ),
@@ -631,6 +656,23 @@ def build_followup_lane(
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
     lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer)
     return lane, SqlFollowupScopes(session_factory)
+
+
+def thread_agent(
+    kit: AgentTurnKit,
+    worker_file: Path,
+    tools: ThreadTools,
+    context: ThreadContextPort,
+    models: StepModelPort,
+) -> ThreadAgent:
+    """The thread agent (tickets 30 and 31): DW1's read-only tools registered
+    on ``kit`` with their specs' policy, and the turn of DW1's worker (its
+    toolset, its profile's chat route) under the step's prompt and ceiling,
+    built once."""
+    worker, _ = parse_worker_file(worker_file)
+    for tool in registered_tools(tools, kit.definition):
+        kit.register(tool)
+    return ThreadAgent(kit.turn(worker, THREAD_AGENT, CEILING), context, models)
 
 
 def model_requests(

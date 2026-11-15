@@ -20,24 +20,32 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from dw_agent_runtime.adapters.agent_turn import AgentTurnKit
 from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.model_stack import (
     ModelProviderConfig,
     ModelStack,
     build_model_stack,
+    onprem_chat_models,
 )
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardStore
+from dw_agent_runtime.adapters.tool_execution_store import SqlToolExecutionStore
 from dw_agent_runtime.allowance import DailyAllowance
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
+from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.copy import load_runtime_copy
 from dw_agent_runtime.model.gateway import RoutingModelGateway
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_agent_runtime.model.single_call import SingleCallModelGateway
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
+from dw_agent_runtime.tool_specs import ToolSpecRegistry
+from dw_agent_runtime.tools import ToolRegistry
+from dw_agent_runtime.toolsets import ToolsetRegistry
 from dw_kernel.net_guard import ensure_allowed_outbound_url
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.api_parsers import (
@@ -280,6 +288,9 @@ def build_model_stack_for(
 # both processes' runs are held to, and the release a run records. A test
 # holds the two pins together (`test_worker_sales_settings.py`).
 WORKER_RUN_POLICY = REPO_ROOT / "configs" / "policies" / "worker_runs@1.0.0.yaml"
+# The words a tool's description and a failed tool call are framed in, as the
+# API frames them (`dw_api.bootstrap.paths.RUNTIME_COPY_CONFIG`).
+RUNTIME_COPY = REPO_ROOT / "configs" / "copy" / "runtime@1.7.0.yaml"
 _RELEASE_MANIFEST_REF = REPO_ROOT / "contracts" / "release" / "manifest.ref"
 
 
@@ -307,6 +318,10 @@ class WorkflowRuntime:
     # drafted from an outbox event): the plan's daily allowance checked by
     # the runner's own rule before the call, the ledger entry freed after.
     one_call: SingleCallModelGateway
+    # What a context builds an agent turn with (a reading with read-only
+    # tools, dw_sales ADR 0012): None without a model server of the
+    # deployment's own, whose chat route is the only one a turn talks to.
+    agent_turns: AgentTurnKit | None = None
 
 
 def build_workflow_runtime(
@@ -330,6 +345,9 @@ def build_workflow_runtime(
     """
     stack = build_model_stack_for(settings, sessions, clock=clock, telemetry=telemetry)
     uow_factory = SqlPlatformUnitOfWorkFactory(sessions)
+    # ONE approval policy for the process: the runner stamps its version on
+    # every run, and a tool executor decides with the same one.
+    approval_policy = AutonomyApprovalPolicy()
     run_store = SqlWorkerRunStore(
         sessions,
         stale_run_after_seconds=load_worker_run_policy(WORKER_RUN_POLICY).stale_run_after_seconds,
@@ -346,7 +364,7 @@ def build_workflow_runtime(
         id_generator=ids,
         allowance=PlanEntitlementService(DEFAULT_PLANS),
         budget=stack.budget,
-        approval_policy=AutonomyApprovalPolicy(),
+        approval_policy=approval_policy,
         release_manifest_ref=release_manifest_ref(),
         telemetry=telemetry,
         spend_store=SqlSpendGuardStore(session_factory=sessions),
@@ -366,4 +384,34 @@ def build_workflow_runtime(
             clock=clock,
         )
     )
-    return WorkflowRuntime(graphs, workers, runner, approval_flow, stack.gateway, one_call)
+    chat_models = onprem_chat_models(model_provider_config(settings), stack.gateway.profiles)
+    agent_turns = None
+    if chat_models is not None:
+        copy = load_runtime_copy(RUNTIME_COPY)
+        tools = ToolRegistry()
+        tool_specs = ToolSpecRegistry(copy=copy)
+        tool_specs.load_directory(REPO_ROOT / "configs" / "tools")
+        toolsets = ToolsetRegistry()
+        toolsets.load_directory(REPO_ROOT / "configs" / "toolsets")
+        agent_turns = AgentTurnKit(
+            chat_models=chat_models,
+            tools=tools,
+            executor=ToolExecutor(
+                registry=tools,
+                execution_store=SqlToolExecutionStore(sessions),
+                uow_factory=uow_factory,
+                clock=clock,
+                id_generator=ids,
+                approval_policy=approval_policy,
+                telemetry=telemetry,
+            ),
+            tool_specs=tool_specs,
+            toolsets=toolsets,
+            prompts=stack.gateway.prompts,
+            copy=copy,
+            budget=stack.budget,
+            profiles=stack.gateway.profiles,
+        )
+    return WorkflowRuntime(
+        graphs, workers, runner, approval_flow, stack.gateway, one_call, agent_turns
+    )

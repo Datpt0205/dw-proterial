@@ -6,7 +6,12 @@ import { MailOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { StatusTag } from "@dw/ui";
 import { formatDateTime } from "../../../lib/dates";
-import { label, REPLY_STEP, THREAD_INTENT } from "../_lib/labels";
+import {
+  AGENT_FALLBACK,
+  label,
+  REPLY_STEP,
+  THREAD_INTENT,
+} from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 
 type Reply = SalesSchemas["CaseReplyView"];
@@ -129,6 +134,7 @@ function ReplyRow({ reply }: { reply: Reply }) {
           }
         />
       </Space>
+      <FallbackNote fallback={reply.fallback} />
       <Quotes intents={reply.intents} who="khách" />
       <ProposalNote proposal={reply.proposal} />
     </div>
@@ -154,6 +160,7 @@ function SentRow({ sent }: { sent: Sent }) {
           <ReadingTag outcome={sent.outcome} intents={sent.intents} off="" />
         ) : null}
       </Space>
+      <FallbackNote fallback={sent.fallback} />
       <Quotes intents={sent.intents} who="Sales" />
       <ProposalNote proposal={sent.proposal} />
     </div>
@@ -174,6 +181,17 @@ function Quotes({ intents, who }: { intents: readonly Intent[]; who: string }) {
         )),
       )}
     </ul>
+  );
+}
+
+/** The thread agent was asked first and gave no reading: why, in one line. */
+function FallbackNote({ fallback }: { fallback?: Reply["fallback"] }) {
+  if (!fallback) return null;
+  return (
+    <Typography.Text type="secondary" role="note">
+      DW1 tra cứu thêm không xong ({label(AGENT_FALLBACK, fallback)}): đọc
+      một lần như bình thường.
+    </Typography.Text>
   );
 }
 

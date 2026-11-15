@@ -82,10 +82,17 @@ DEFAULT_SUMMARY_DAYS: Final = 7
 TOP_REASONS: Final = 5
 # Steps whose produced values are on the message's disposition, not the case.
 _ON_DISPOSITION: Final = frozenset(
-    {ModelStep.MESSAGE_INTENT, ModelStep.REPLY_INTENT, ModelStep.REQUEST_HANDOFF}
+    {
+        ModelStep.MESSAGE_INTENT,
+        ModelStep.REPLY_INTENT,
+        ModelStep.THREAD_AGENT,
+        ModelStep.REQUEST_HANDOFF,
+    }
 )
 # Steps whose product is a route (code routes from the kind read).
-_ROUTING: Final = frozenset({ModelStep.MESSAGE_INTENT, ModelStep.REPLY_INTENT})
+_ROUTING: Final = frozenset(
+    {ModelStep.MESSAGE_INTENT, ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT}
+)
 
 
 # -------------------------------------------------------------------- views --
@@ -319,7 +326,10 @@ def _disposition_produced(
         return [
             plain(n, v) for n, v in (("kind", reading.kind), ("language", reading.language)) if v
         ]
-    if row.step is ModelStep.REPLY_INTENT and disposition.reply is not None:
+    if (
+        row.step in (ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT)
+        and disposition.reply is not None
+    ):
         reply = disposition.reply.reading
         return [] if reply is None else [plain("intent", kind) for kind in reply.kinds]
     if row.step is ModelStep.REQUEST_HANDOFF and disposition.handoff is not None:

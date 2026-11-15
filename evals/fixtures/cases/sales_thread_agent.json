@@ -1,0 +1,5 @@
+{
+  "golden_ref": "evals/fixtures/cases/sales_reply_golden.json",
+  "threads_ref": "evals/fixtures/cases/sales_thread_agent_threads.json",
+  "security_ref": "evals/fixtures/cases/sales_thread_agent_security.json"
+}

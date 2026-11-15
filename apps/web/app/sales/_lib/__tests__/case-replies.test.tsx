@@ -151,6 +151,18 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
   );
 
   it(
+    "a reply the thread agent could not read says why, and shows the one-call reading (tickets 30, 31)",
+    async () => {
+      shown = waiting([reply({ fallback: "calls" })]);
+      page();
+
+      expect(await screen.findByText(/quá số lượt tra cứu/)).toBeTruthy();
+      expect(screen.getByText("Mô hình đọc: Không đồng ý")).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
     "a reply nobody read proposes nothing, and the step is still Sales' to take",
     async () => {
       shown = waiting([

@@ -178,12 +178,21 @@ RECORDED_BY_PROMPT = {
     "sales.request_handoff": _CASES / "sales_handoff_recorded.json",
     "sales.po_layout_proposal": _CASES / "sales_layout_recorded.json",
 }
+# A step that reads with tools records whole turns, every assistant message of
+# each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).
+RECORDED_TURNS_BY_PROMPT = {
+    "sales.thread_agent": _CASES / "sales_thread_agent_recorded.json",
+}
 
 
 def live_model_for(profile: str) -> object:
     import os
 
-    from dw_agent_runtime.adapters.model_stack import ModelProviderConfig, build_model_adapters
+    from dw_agent_runtime.adapters.model_stack import (
+        ModelProviderConfig,
+        build_model_adapters,
+        onprem_chat_models,
+    )
     from dw_agent_runtime.model.gateway import InMemoryUsageRecorder, RoutingModelGateway
     from dw_agent_runtime.model.profiles import ModelProfileRegistry
     from dw_agent_runtime.model.prompts import PromptRegistry
@@ -211,7 +220,14 @@ def live_model_for(profile: str) -> object:
         usage_recorder=InMemoryUsageRecorder(),
         default_profile=profiles.resolve(profile).profile_id,
     )
-    return Observed(interpretation_for(gateway, REPO_ROOT / "configs", profile))
+    # The same server's chat route, for a step that reads with tools (the
+    # thread agent, tickets 30 and 31); None where the profile has no
+    # on-premises server.
+    chats = onprem_chat_models(config, profiles)
+    return Observed(
+        interpretation_for(gateway, REPO_ROOT / "configs", profile),
+        chat=None if chats is None else chats.resolve(profile),
+    )
 
 
 def live_shortfalls(model: object) -> list[str]:
@@ -229,6 +245,9 @@ def record_answers(model: object) -> int:
 
     count = 0
     for prompt_id, answers in getattr(model, "recorded", {}).items():
+        if prompt_id in RECORDED_TURNS_BY_PROMPT:
+            count += _record_turns(RECORDED_TURNS_BY_PROMPT[prompt_id], prompt_id, answers)
+            continue
         if prompt_id not in RECORDED_BY_PROMPT:
             # DW2's smoke replays answers keyed by the mail, written by hand.
             raise SystemExit(f"--record: {prompt_id} has no recorded-answers file")
@@ -257,6 +276,22 @@ def record_answers(model: object) -> int:
     text = json.dumps(held, ensure_ascii=False, indent=2) + chr(10)
     RECORDED.write_bytes(text.encode("utf-8"))
     return count + len(answers)
+
+
+def _record_turns(path: Path, prompt_id: str, turns: dict[str, Any]) -> int:
+    import json
+
+    held = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    held["_comment"] = (
+        f"The local model's turns (onprem profile, chat route) under {prompt_id}: every "
+        "assistant message of each turn, tool calls included, by the turn's rendered prompt "
+        "(hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them "
+        "through the shipped tools, executor and agent, so CI scores the same turns without a "
+        "model. Fictional text."
+    )
+    held["transcripts"] = dict(sorted({**held.get("transcripts", {}), **turns}.items()))
+    path.write_bytes((json.dumps(held, ensure_ascii=False, indent=2) + chr(10)).encode("utf-8"))
+    return len(turns)
 
 
 def measured_step(dataset_id: str) -> tuple[Any, Any, Any] | None:
@@ -352,6 +387,8 @@ def _summary(details: dict[str, object]) -> str:
         "vi_en",
         "by_language",
         "latency",
+        "turn_latency",
+        "tools",
         "bar",
         "seen",
         "reason",

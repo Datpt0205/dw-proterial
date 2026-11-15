@@ -272,6 +272,18 @@ export const THREAD_INTENT = {
   unclear: "Chưa rõ",
 } as const;
 
+/**
+ * Why the thread agent gave no reading of its own (tickets 30 and 31): a
+ * ceiling of its turn, or no usable answer. The reading shown is then the
+ * one-call reading's, or none.
+ */
+export const AGENT_FALLBACK = {
+  calls: "quá số lượt tra cứu",
+  spend: "quá giới hạn đọc",
+  time: "quá thời gian",
+  unavailable: "không có câu trả lời dùng được",
+} as const;
+
 /** The existing step a thread message proposes; Sales confirms it (tickets 32, 26). */
 export const REPLY_STEP = {
   settle_spec: "Ghi khách đã đồng ý spec",

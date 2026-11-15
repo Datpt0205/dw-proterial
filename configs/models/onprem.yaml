@@ -1,6 +1,6 @@
 schema_version: "1.0"
 profile_id: onprem
-routing_policy_version: "1.1.0"
+routing_policy_version: "1.2.0"
 # A model server the deployment runs itself, for a step whose input must not
 # leave it: DW1 reading a customer's item description (dw_sales ADR 0005).
 # Reached as provider `onprem`, at DW_ONPREM_MODEL_BASE_URL (Ollama, vLLM or
@@ -39,6 +39,21 @@ reasoning:
   model: qwen3.5-9b-dw
   timeout_seconds: 180
   reasoning_effort: none
+# 1.2.0: the tool-calling route, for a reading that looks things up with
+# read-only tools before it answers (dw_sales ADR 0012; the thread agent,
+# tickets 30 and 31). The same model and server as the structured route,
+# thinking off, no fallback: a turn that cannot reach it falls back to the
+# step's one-call reading, then to a person. Measured 2026-11-15 on Ollama
+# (qwen3.5-9b-dw, GTX 1080 8 GB): OpenAI-style tool calls over
+# /v1/chat/completions, about 3 s per warm call. The turn's own ceiling on
+# calls, tokens and time is the step's (`dw_sales.application.thread_agent`).
+chat:
+  provider: onprem
+  model: qwen3.5-9b-dw
+  timeout_seconds: 120
+  reasoning_effort: none
+  temperature: 0.0
+  max_input_tokens: 6000
 # 1.1.0: the deployment's own server embeds too, so an on-premises deployment
 # (infra/onprem) runs knowledge and memory with no call out of the plant. The
 # builder (`dw_knowledge.adapters.embedding_factory`) sends a route with

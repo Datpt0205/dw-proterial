@@ -39,10 +39,17 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Final, Self
 
+from langchain_core.language_models import BaseChatModel
+
 from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import parse_worker_file
-from dw_agent_runtime.testing.memory_runtime import MemoryApprovals, MemoryRuntime
+from dw_agent_runtime.testing.memory_runtime import (
+    MemoryApprovals,
+    MemoryRuntime,
+    MemoryToolExecutions,
+)
+from dw_agent_runtime.testing.memory_turns import memory_turn_kit
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.pagination import Page, PageRequest
@@ -57,7 +64,7 @@ from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.artifact_files import ArtifactFiles
-from dw_sales.adapters.assembly import model_requests, step_model
+from dw_sales.adapters.assembly import model_requests, step_model, thread_agent
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
@@ -121,6 +128,7 @@ from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
+from dw_sales.application.thread_tools import ThreadContext, ThreadTools
 from dw_sales.application.threads import ThreadIndex, ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.activity import StepOutcome
@@ -264,6 +272,10 @@ class Caller:
             roles=frozenset(),
             scopes=self.scopes,
             plan_id="professional",
+            # A tenant's ceiling as the platform stores one it never lowered
+            # (`platform.tenants.max_autonomy_level`, default A4): DW1 then
+            # runs at its own A1, where a read-only tool runs unasked.
+            max_autonomy_level="A4",
         )
 
 
@@ -1168,6 +1180,9 @@ class World:
     # (ticket 25: whose mail is Sales', and whether its intents are read).
     intake: OrderIntake
     directory: Directory
+    # The thread agent's tool calls (tickets 30 and 31), where a chat model
+    # was given: every execution the turn's executor recorded.
+    tool_executions: MemoryToolExecutions = field(default_factory=MemoryToolExecutions)
 
     async def decide_layout(
         self,
@@ -1444,6 +1459,7 @@ def open_world(
     scanner: MalwareScanPort | None = None,
     reader: ReaderTransport | None = None,
     measured: bool = True,
+    chat_model: BaseChatModel | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1462,7 +1478,12 @@ def open_world(
 
     ``reader`` reads every file: the readers in this process unless a test
     hands in its own (`InProcessReaderTransport`, through the same wire as
-    the reader sandbox)."""
+    the reader sandbox).
+
+    ``chat_model`` is what the thread agent's turn talks to (tickets 30 and
+    31): with one, its tools are registered and its turn built as the
+    worker builds them (`assembly.thread_agent`), over the shipped specs,
+    toolset and prompt, the executions kept in ``tool_executions``."""
     telemetry = telemetry or NullTelemetry()
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
@@ -1505,8 +1526,10 @@ def open_world(
     worker_file = repo_root / "configs" / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     readiness, measurements = measured_gate(
-        repo_root, *((bound_to,) if model is not None and measured else ())
+        repo_root,
+        *((bound_to,) if (model is not None or chat_model is not None) and measured else ()),
     )
+    executions = MemoryToolExecutions()
     layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
         catalog=catalog,
@@ -1535,6 +1558,24 @@ def open_world(
         intents=None if model is None else IntentReader(model, catalog, store),
         threads=ThreadLinks(store, mailbox),
         replies=None if model is None else ReplyReader(model),
+        thread_agent=(
+            None
+            if chat_model is None
+            else thread_agent(
+                memory_turn_kit(
+                    repo_root / "configs",
+                    chat_model,
+                    uow_factory=runtime.uow_factory,
+                    clock=clock,
+                    ids=ids,
+                    executions=executions,
+                ),
+                worker_file,
+                ThreadTools(store, catalog, order_rules),
+                ThreadContext(store, mailbox),
+                step_model(repo_root / "configs", worker.default_model_profile),
+            )
+        ),
         handoffs=None if model is None else HandoffReader(model, catalog, store),
         layouts=store,
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
@@ -1642,6 +1683,7 @@ def open_world(
         uploads,
         intake,
         directory,
+        executions,
     )
 
 

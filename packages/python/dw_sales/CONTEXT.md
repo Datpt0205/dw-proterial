@@ -207,6 +207,15 @@ API and the plan use the English terms. The spec is
   table from who wrote it, the case's kind and status and an intent gives
   the step it proposes, for a person to take; Sales asking the customer
   proposes that the case waits on them (dw_sales ADR 0010, ticket 26).
+- **Thread agent** (Mô hình đọc thư có tra cứu): the thread intents of a
+  message read by a local model that may first look up, with read-only
+  tools bound by code to the thread's one customer, the thread's earlier
+  messages, its cases, a case by number, the conversion list, a lead time
+  or PC's answer. Its answer is checked as the one-call reading's is; over
+  its ceiling (calls, tokens, time) or with no usable answer, the one-call
+  reading reads the message, else Sales, and the reading says why. Off
+  until a tenant turns it on and its live eval meets the bar (dw_sales ADR
+  0012, tickets 30 and 31).
 - **Change request** (Yêu cầu điều chỉnh): what a customer asked to change
   on an order, in a mail's words or table: per line, the field, the value
   the case holds and the value asked, each with where the mail says it.

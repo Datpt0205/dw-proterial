@@ -58,6 +58,7 @@ from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
+from dw_sales.application.thread_agent import THREAD_AGENT
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 
 __all__ = [
@@ -131,6 +132,19 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             CHANGE_REQUEST,
             "sales_change_request",
             "sales.change_request_golden",
+        ),
+        # Tickets 30 and 31 (dw_sales ADR 0012 decision 5): the golden thread
+        # messages other than conditional ones and non-answers read as
+        # exactly their intents with tools, at the one-call reading's bar; and
+        # the grader's own conditions: no false `accepts`, no turn over its
+        # call ceiling, and no tool answering for another customer. Proposed
+        # by the agent; the attested measurement is on the plant's model.
+        ModelStep.THREAD_AGENT: StepBar(
+            0.85,
+            "bar_set.intent_accuracy",
+            THREAD_AGENT,
+            "sales_thread_agent",
+            "sales.thread_agent_golden",
         ),
     }
 )

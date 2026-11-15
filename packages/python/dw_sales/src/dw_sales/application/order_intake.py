@@ -19,9 +19,10 @@ them and code resolves them against the sender's customer (`named_cases`,
 where the tenant's rules turn the intent step on); naming none of them, or with
 no model, it is routed `reply_to_case` with those cases for Sales to pick
 (`thread_cases`), never a guess. Where the tenant's rules turn it on, a local
-model reads the reply's thread intents (`ReplyReader`, ticket 26); the case
-and the step are code's. A message Sales sent never reaches this intake
-(`outgoing.py`, ticket 25).
+model reads the reply's thread intents (`ReplyReader`, ticket 26), or, where
+they turn that on, reads them with read-only tools first and falls back to the
+one call (`ThreadAgent`, tickets 30 and 31); the case and the step are code's.
+A message Sales sent never reaches this intake (`outgoing.py`, ticket 25).
 **A tenant's own PO layouts read first.** A customer's form a person mapped and
 another approved (ticket 30) is read with that layout, the tenant's data;
 otherwise with the platform's. The first POs a new layout reads keep every
@@ -81,6 +82,7 @@ unreadable file is routed; the password is never held here.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -91,6 +93,8 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.agent_turn import TurnCeilingReachedError
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_kernel.errors import ConflictError
 from dw_platform.application.malware import (
     AttachmentInfectedError,
@@ -126,6 +130,7 @@ from dw_sales.application.ports import (
 )
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
+from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.threads import ThreadedCase, named_cases
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
@@ -182,7 +187,7 @@ from dw_sales.domain.orders import (
     ValueCorrection,
 )
 from dw_sales.domain.po_groups import ReadFile, one_per_po
-from dw_sales.domain.reply_intent import CaseReply, ReplyReading
+from dw_sales.domain.reply_intent import AgentFallback, Author, CaseReply, ReplyReading
 from dw_sales.domain.revision_hints import name_revision
 
 
@@ -195,6 +200,8 @@ class MessageKind(StrEnum):
     CASE_REPLY = "case_reply"
     OTHER = "other"
 
+
+_LOG = logging.getLogger("dw_sales.model")
 
 # Handed to the quotation flow, which gives them their disposition.
 QUOTATION_KINDS = frozenset({MessageKind.QUOTE_REQUEST, MessageKind.DESIGN_REPLY})
@@ -364,6 +371,11 @@ class OrderIntake:
     # A model reading of such a reply, for a tenant whose rules turn it on.
     # None: no model is wired, and the reply is attached unread.
     replies: ReplyReader | None = None
+    # The same reading with read-only tools first (tickets 30 and 31), for a
+    # tenant whose rules turn it on; over its ceiling or with no usable
+    # answer, `replies` reads it, else a person. None: no tool-calling model
+    # is wired in this process.
+    thread_agent: ThreadAgent | None = None
     # A model pre-filling a routed message's hand-off to PC or QA (ticket 33),
     # for a tenant whose rules turn it on. None: no model is wired, and the
     # message is routed with no hand-off, as before.
@@ -417,10 +429,18 @@ class OrderIntake:
         """Whether a thread message's intents are read for this tenant now:
         a model and a thread log wired, the step on in its rules and measured
         at its bar (ticket 26). The mailbox lane asks it before taking up a
-        message Sales sent, which costs a run."""
-        if self.threads is None or self.replies is None:
+        message Sales sent, which costs a run. Either reading counts: the
+        thread agent's (tickets 30 and 31) or the one call's."""
+        if self.threads is None:
             return False
-        return await self._model_step(scope, await self.rules.rules(scope), ModelStep.REPLY_INTENT)
+        rules = await self.rules.rules(scope)
+        return (
+            self.thread_agent is not None
+            and await self._model_step(scope, rules, ModelStep.THREAD_AGENT)
+        ) or (
+            self.replies is not None
+            and await self._model_step(scope, rules, ModelStep.REPLY_INTENT)
+        )
 
     async def read_sent(
         self, scope: SalesScope, message: InboundMessage, *, run: RunContext
@@ -431,16 +451,17 @@ class OrderIntake:
         else of it is read: no customer, no document, no value."""
         if not await self.reads_thread_intents(scope):
             return None
-        assert self.threads is not None and self.replies is not None  # said above
+        assert self.threads is not None  # said above
         cases = await self.threads.sent_cases(scope, message)
         if not cases:
             return None
-        rules = await self.rules.rules(scope)
-        return await self.replies.read(
-            newest_part(message),
+        return await self._read_thread(
+            scope,
+            message,
             author="sales",
             about=" ".join(case.question for case in cases),
-            rules_version=rules.version,
+            cases=cases,
+            rules=await self.rules.rules(scope),
             run=run,
         )
 
@@ -715,20 +736,19 @@ class OrderIntake:
         """A reply attached to the case its thread names, with a model's
         reading of it where the tenant's rules, a wired model and a DW1 run
         allow. Nothing on the case changes: Sales confirms any step."""
-        rules = await self.rules.rules(scope)
-        reading = None
-        if (
-            self.replies is not None
-            and run is not None
-            and await self._model_step(scope, rules, ModelStep.REPLY_INTENT)
-        ):
-            reading = await self.replies.read(
-                newest_part(message),
+        reading = (
+            None
+            if run is None
+            else await self._read_thread(
+                scope,
+                message,
                 author="customer",
                 about=thread.question,
-                rules_version=rules.version,
+                cases=(thread,),
+                rules=await self.rules.rules(scope),
                 run=run,
             )
+        )
         disposition = MessageDisposition(
             message_id=message.message_id,
             kind=DispositionKind.ATTACHED_TO_CASE,
@@ -738,6 +758,65 @@ class OrderIntake:
             reply=CaseReply(linked_to=thread.linked_to, reading=reading),
         )
         return IntakeOutcome(message.message_id, MessageKind.CASE_REPLY, disposition)
+
+    async def _read_thread(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        *,
+        author: Author,
+        about: str,
+        cases: Sequence[ThreadedCase],
+        rules: OrderRules,
+        run: RunContext,
+    ) -> ReplyReading | None:
+        """A thread message's intents, read by the steps the tenant's rules
+        turn on and their bars allow: the thread agent first (tickets 30 and
+        31), then the one-call reading (ticket 26). Where the agent was asked
+        and gave no reading, the one-call reading is stamped with why
+        (`ReplyReading.fallback`), or, with that step off too, an unread
+        reading is, for Sales. None: neither step runs."""
+        fallback: AgentFallback | None = None
+        if self.thread_agent is not None and await self._model_step(
+            scope, rules, ModelStep.THREAD_AGENT
+        ):
+            try:
+                return await self.thread_agent.read(
+                    scope,
+                    message,
+                    author=author,
+                    about=about,
+                    cases=cases,
+                    rules_version=rules.version,
+                    run=run,
+                )
+            except TurnCeilingReachedError as exc:
+                fallback = exc.ceiling
+            except ModelUnavailableError:
+                fallback = "unavailable"
+            # Ids and the reason only: never the message.
+            _LOG.info(
+                "thread agent gave no reading of %s for tenant %s: %s",
+                message.message_id,
+                scope.tenant_id.value,
+                fallback,
+            )
+        if self.replies is not None and await self._model_step(
+            scope, rules, ModelStep.REPLY_INTENT
+        ):
+            reading = await self.replies.read(
+                newest_part(message),
+                author=author,
+                about=about,
+                rules_version=rules.version,
+                run=run,
+            )
+            if fallback is None:
+                return reading
+            return ReplyReading.model_validate({**reading.model_dump(), "fallback": fallback})
+        if fallback is not None and self.thread_agent is not None:
+            return self.thread_agent.unavailable(rules.version, fallback)
+        return None
 
     async def _with_handoff(
         self,

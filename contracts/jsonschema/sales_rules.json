@@ -1318,6 +1318,11 @@
             "title": "Rfq Extraction",
             "type": "boolean"
           },
+          "thread_agent": {
+            "default": false,
+            "title": "Thread Agent",
+            "type": "boolean"
+          },
           "unread_retry_hours": {
             "maximum": 168,
             "minimum": 0,

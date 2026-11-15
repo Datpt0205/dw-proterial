@@ -216,7 +216,16 @@ def _reading_row(
     )
 
 
-def _from_disposition(disposition: MessageDisposition) -> list[_Stamped]:
+def _reply_step(reading: ReplyReading, steps_by_prompt: Mapping[str, ModelStep]) -> ModelStep:
+    """The step a thread message's reading is: the thread agent's when its
+    prompt is (tickets 30 and 31), the one-call reading's otherwise."""
+    step = steps_by_prompt.get(reading.prompt)
+    return step if step is ModelStep.THREAD_AGENT else ModelStep.REPLY_INTENT
+
+
+def _from_disposition(
+    disposition: MessageDisposition, steps_by_prompt: Mapping[str, ModelStep]
+) -> list[_Stamped]:
     lane, case_id = disposition.case_kind, disposition.case_id
     found: list[_Stamped] = []
     intent = disposition.reading
@@ -238,7 +247,7 @@ def _from_disposition(disposition: MessageDisposition) -> list[_Stamped]:
         read = reply.outcome == "read"
         found.append(
             _Stamped(
-                ModelStep.REPLY_INTENT,
+                _reply_step(reply, steps_by_prompt),
                 reply.prompt,
                 reply.model_profile,
                 "accepted" if read else "unavailable",
@@ -377,17 +386,41 @@ def outcomes_of(
     ``calls`` (matched to a step by prompt). A step whose calls ran and that
     stamped nothing is a row of its own (``steps_by_prompt`` names it): not
     used, or not answered."""
-    stamped = _from_disposition(disposition)
+    stamped = _from_disposition(disposition, steps_by_prompt)
     for case in cases:
         stamped += _from_case(disposition, case)
     timings = _timings(calls)
+    reason = disposition.reason.value if disposition.reason is not None else NOT_USED
+    stamped += _unclaimed(
+        stamped,
+        timings,
+        steps_by_prompt,
+        reason,
+        lane=disposition.case_kind,
+        case_id=disposition.case_id,
+    )
+    return _rows(disposition.message_id, stamped, timings, at, new_id)
+
+
+def _unclaimed(
+    stamped: Sequence[_Stamped],
+    timings: Mapping[str, _Timing],
+    steps_by_prompt: Mapping[str, ModelStep],
+    reason: str,
+    *,
+    lane: CaseKind | None,
+    case_id: uuid.UUID | None,
+) -> list[_Stamped]:
+    """A row for each step whose calls ran and that stamped nothing: the
+    calls answered and nothing was used (``reason``), or none answered (a
+    thread agent's turn that fell back included)."""
     claimed = {s.prompt for s in stamped}
+    found: list[_Stamped] = []
     for prompt, unclaimed in timings.items():
         step = steps_by_prompt.get(prompt)
         if prompt in claimed or step is None:
             continue
-        reason = disposition.reason.value if disposition.reason is not None else NOT_USED
-        stamped.append(
+        found.append(
             _Stamped(
                 step,
                 prompt,
@@ -395,11 +428,11 @@ def outcomes_of(
                 "refused" if unclaimed.answered else "unavailable",
                 automatic=False,
                 reason_code=_code(reason) if unclaimed.answered else None,
-                lane=disposition.case_kind or _STEP_LANE.get(step),
-                case_id=disposition.case_id,
+                lane=lane or _STEP_LANE.get(step),
+                case_id=case_id,
             )
         )
-    return _rows(disposition.message_id, stamped, timings, at, new_id)
+    return found
 
 
 def sent_outcomes(
@@ -407,26 +440,30 @@ def sent_outcomes(
     reading: ReplyReading | None,
     calls: Sequence[ModelCall],
     *,
+    steps_by_prompt: Mapping[str, ModelStep],
     at: AwareDatetime,
     new_id: Callable[[], uuid.UUID],
 ) -> tuple[StepOutcome, ...]:
-    """The row for a message Sales sent (ticket 25): its thread intents'
-    reading, the one model step such a message takes, or none when it was not
-    read. It names no case: the cases a sent message is on are read where
-    its thread is (`threads.case_thread`), never stamped."""
+    """The rows for a message Sales sent (ticket 25): its thread intents'
+    reading, by the thread agent or one call, and a thread agent's turn that
+    fell back to the one call; none when it was not read. It names no case:
+    the cases a sent message is on are read where its thread is
+    (`threads.case_thread`), never stamped."""
     if reading is None:
         return ()
     read = reading.outcome == "read"
     stamped = [
         _Stamped(
-            ModelStep.REPLY_INTENT,
+            _reply_step(reading, steps_by_prompt),
             reading.prompt,
             reading.model_profile,
             "accepted" if read else "unavailable",
             automatic=read,
         )
     ]
-    return _rows(message_id, stamped, _timings(calls), at, new_id)
+    timings = _timings(calls)
+    stamped += _unclaimed(stamped, timings, steps_by_prompt, NOT_USED, lane=None, case_id=None)
+    return _rows(message_id, stamped, timings, at, new_id)
 
 
 def _rows(

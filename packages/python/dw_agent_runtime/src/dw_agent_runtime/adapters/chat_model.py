@@ -74,22 +74,55 @@ class OpenAICompatibleChatModelFactory:
                 "chat route provider is not OpenAI-compatible",
                 details={"profile_id": profile_id, "provider": route.provider},
             )
-        responses = route.provider == Provider.OPENAI_RESPONSES
-        return ChatOpenAI(
+        return _chat_openai(
+            route,
             base_url=self.base_url,
             api_key=self.api_key,
-            model=route.model,
-            temperature=route.temperature,
-            timeout=route.timeout_seconds,
-            use_responses_api=responses,
-            # The two dialects spell reasoning differently, and they cannot both
-            # be sent: `langchain_openai` folds `reasoning_effort` into
-            # `reasoning` only when `reasoning` is absent. Sending both leaves
-            # `reasoning_effort` as a top-level key on a Responses request, where
-            # it is not a parameter, and the effort never reaches `reasoning`.
-            reasoning=_reasoning_block(route) if responses else None,
-            reasoning_effort=None if responses else route.reasoning_effort,
+            responses=route.provider == Provider.OPENAI_RESPONSES,
         )
+
+
+@dataclass(frozen=True)
+class OnPremChatModelFactory:
+    """The chat route of a profile served by the deployment's own model server
+    (provider ``onprem``, dw_sales ADR 0005): the same OpenAI-compatible
+    dialect, at the server's own endpoint rather than the gateway's.
+
+    A route on any other provider is refused: a step on an on-premises profile
+    is one whose input may not leave the deployment, and a chat route that
+    pointed at the gateway would send it there."""
+
+    profiles: ModelProfileRegistry
+    # Already through the outbound guard (`model_stack.onprem_chat_models`).
+    base_url: str
+    api_key: str
+
+    def resolve(self, profile_id: str) -> BaseChatModel:
+        route = chat_route(self.profiles, profile_id)
+        if route.provider != Provider.ONPREM:
+            raise ConfigError(
+                "chat route provider is not the on-premises server",
+                details={"profile_id": profile_id, "provider": route.provider},
+            )
+        return _chat_openai(route, base_url=self.base_url, api_key=self.api_key, responses=False)
+
+
+def _chat_openai(route: ModelRoute, *, base_url: str, api_key: str, responses: bool) -> ChatOpenAI:
+    return ChatOpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        model=route.model,
+        temperature=route.temperature,
+        timeout=route.timeout_seconds,
+        use_responses_api=responses,
+        # The two dialects spell reasoning differently, and they cannot both
+        # be sent: `langchain_openai` folds `reasoning_effort` into
+        # `reasoning` only when `reasoning` is absent. Sending both leaves
+        # `reasoning_effort` as a top-level key on a Responses request, where
+        # it is not a parameter, and the effort never reaches `reasoning`.
+        reasoning=_reasoning_block(route) if responses else None,
+        reasoning_effort=None if responses else route.reasoning_effort,
+    )
 
 
 def _reasoning_block(route: ModelRoute) -> dict[str, str] | None:

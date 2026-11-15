@@ -133,6 +133,7 @@ class ModelStep(StrEnum):
     LAYOUT_PROPOSAL = "layout_proposal"
     PO_BODY_EXTRACTION = "po_body_extraction"
     CHANGE_REQUEST = "change_request"
+    THREAD_AGENT = "thread_agent"
 
 
 class ModelAssist(BaseModel):
@@ -177,6 +178,13 @@ class ModelAssist(BaseModel):
     # code finds and parses; Sales confirms each line. Off where a version
     # does not say: the platform's versions do not, so it ships off.
     change_request: bool = False
+    # A local model reads a thread message's intents as `reply_intent` does,
+    # and may first look up the thread's earlier messages, its cases, the
+    # conversion list, a lead time or PC's answer with read-only tools bound
+    # to the thread's customer (dw_sales ADR 0012, tickets 30 and 31). Over
+    # its ceiling, or with no usable answer, the one-call reading reads it.
+    # Off where a version does not say: the platform's versions do not.
+    thread_agent: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

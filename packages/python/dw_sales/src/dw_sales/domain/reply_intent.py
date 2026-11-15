@@ -120,6 +120,9 @@ class ReadIntent(BaseModel):
 
 
 ReplyOutcome = Literal["read", "unavailable"]
+# Why the thread agent (dw_sales ADR 0012) gave no reading of its own: a
+# ceiling of its turn (calls, spend, time) or no usable answer.
+AgentFallback = Literal["calls", "spend", "time", "unavailable"]
 
 
 class ReplyReading(BaseModel):
@@ -137,6 +140,10 @@ class ReplyReading(BaseModel):
     rules: str = Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")
     outcome: ReplyOutcome
     intents: tuple[ReadIntent, ...] = Field(default=(), max_length=MAX_INTENTS)
+    # Set where the thread agent was asked first and fell back, and why: the
+    # reading is then the one-call reading's, or, with that one off too, no
+    # reading (``unavailable``), for Sales (ticket 31). None otherwise.
+    fallback: AgentFallback | None = None
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:

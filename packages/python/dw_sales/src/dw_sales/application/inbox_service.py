@@ -449,6 +449,7 @@ class InboxProcessing:
                     message.message_id,
                     reading,
                     model_calls(),
+                    steps_by_prompt=STEPS_BY_PROMPT,
                     at=self.clock.now(),
                     new_id=self.ids.new_uuid,
                 )

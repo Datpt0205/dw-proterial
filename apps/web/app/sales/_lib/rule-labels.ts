@@ -229,6 +229,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "model_assist.reply_intent": {
       label: "Đọc thư trả lời của khách trong hồ sơ",
     },
+    "model_assist.thread_agent": {
+      label: "Đọc thư trong hồ sơ, tra cứu thêm khi cần",
+      help: "Trước khi đọc, mô hình được tra thư trước, hồ sơ, mã convert, lead time và trả lời của PC, chỉ của chính khách đó. Không đọc được thì dùng bước đọc thư trả lời, rồi đến Sales.",
+    },
     "model_assist.request_handoff": {
       label: "Soạn nháp chuyển giao cho PC/QA từ thư",
     },

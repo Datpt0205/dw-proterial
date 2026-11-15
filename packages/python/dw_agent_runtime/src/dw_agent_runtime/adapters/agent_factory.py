@@ -41,7 +41,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, ModelRequest
@@ -64,8 +64,10 @@ from dw_agent_runtime.adapters.recalled_memory import MemoryRecallPort, Recalled
 from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
 from dw_agent_runtime.adapters.sub_agents import SubAgentSpec, sub_agent_middleware
 from dw_agent_runtime.adapters.system_prompt import WorkerSystemPrompt
+from dw_agent_runtime.adapters.turn_ceiling import TurnCeilingMiddleware
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.agent_turn import TurnCeiling
 from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -151,6 +153,10 @@ class AgentSpec:
     # Only read when `recall` is set. Passed rather than taken from a module
     # global so a test can pin the moment a validity window is judged against.
     clock: Callable[[], datetime] | None = None
+    # A turn's own bound on model calls and input tokens, for an agent that
+    # answers one reading per invocation (`agent_turn.BoundedAgentTurn`). None
+    # for a conversation, which the run's ceiling and `recursion_limit` bound.
+    ceiling: TurnCeiling | None = None
 
 
 def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
@@ -207,6 +213,9 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         # The only ceiling on the path that can loop. Without it an agent run is
         # bounded by `recursion_limit`, which counts steps and not money.
         RunBudgetMiddleware(spec.budget, spec.profiles, spec.profile_id),
+        # A turn's own ceiling, only when asked: outside the retry below, so a
+        # refusal is never retried, and after the run's, which stops the run.
+        *([TurnCeilingMiddleware(spec.ceiling)] if spec.ceiling is not None else []),
         # Last, so it sits closest to the model: a retry re-runs only the call
         # that failed. A failed attempt produces no response and therefore no
         # usage, so the ceiling above is not charged for one.
@@ -244,14 +253,17 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
 def build_agent(
     spec: AgentSpec,
     *,
-    checkpointer: BaseCheckpointSaver[Any] | None = None,
+    checkpointer: BaseCheckpointSaver[Any] | Literal[False] | None = None,
     store: BaseStore | None = None,
 ) -> Any:
     """Assemble a platform agent from one worker's spec.
 
     Returns the compiled graph `create_agent` produces. The checkpointer is
     optional because a graph a runner hosts is compiled by the runner, which
-    passes its own; one built for a test or a one-shot call has none.
+    passes its own; one built for a test or a one-shot call has none. ``False``
+    is LangGraph's "none, not even the caller's": an agent invoked inside
+    another graph's node otherwise runs as its subgraph and checkpoints into
+    the host run's thread (`agent_turn.AgentTurnKit` passes it).
     """
     offered = list(spec.offered)
     return create_agent(

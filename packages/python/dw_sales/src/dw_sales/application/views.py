@@ -118,6 +118,7 @@ from dw_sales.domain.quotes import (
     suggest_price,
 )
 from dw_sales.domain.reply_intent import (
+    AgentFallback,
     Author,
     CaseReply,
     ProposedStep,
@@ -1247,6 +1248,9 @@ class CaseReplyView(BaseModel):
     # Who picked the case among those the reply's thread holds (ticket 24);
     # None where code linked it.
     picked_by: uuid.UUID | None = None
+    # Why the thread agent gave no reading of its own, where it was asked
+    # first (tickets 30 and 31): the reading is then the one call's, or none.
+    fallback: AgentFallback | None = None
 
 
 class SentMessageView(BaseModel):
@@ -1266,6 +1270,8 @@ class SentMessageView(BaseModel):
     intents: list[IntentView]
     prompt: str | None
     proposal: ProposedStep | None
+    # As on a reply: why the thread agent fell back, where it was asked.
+    fallback: AgentFallback | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1335,6 +1341,7 @@ def case_talk(
                 prompt=reply.reading.prompt if reply.reading else None,
                 proposal=proposed(entry.disposition.message_id),
                 picked_by=reply.picked_by,
+                fallback=reply.reading.fallback if reply.reading else None,
             )
             for entry, reply in replies
         ],
@@ -1357,6 +1364,7 @@ def _sent_view(
         intents=_intents(reading),
         prompt=reading.prompt if reading else None,
         proposal=proposed(message.message_id),
+        fallback=reading.fallback if reading else None,
     )
 
 

@@ -31,6 +31,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_agent_runtime.adapters.chat_model import OnPremChatModelFactory
 from dw_agent_runtime.adapters.mock_model import MockModelAdapter
 from dw_agent_runtime.adapters.openai_compatible import OpenAICompatibleAdapter
 from dw_agent_runtime.adapters.openai_responses import OpenAIResponsesAdapter
@@ -142,6 +143,25 @@ def build_model_adapters(
     if config.is_deployed and not {Provider.OPENAI_COMPATIBLE, Provider.ONPREM} & adapters.keys():
         raise RuntimeError(f"the {config.profile} profile requires a real model provider")
     return adapters
+
+
+def onprem_chat_models(
+    config: ModelProviderConfig, profiles: ModelProfileRegistry
+) -> OnPremChatModelFactory | None:
+    """The tool-calling path to the deployment's own model server, for a step
+    that reads with tools (dw_sales ADR 0012); None without such a server.
+    Behind the same outbound guard as the ``onprem`` adapter above."""
+    if not config.onprem_base_url:
+        return None
+    return OnPremChatModelFactory(
+        profiles=profiles,
+        base_url=ensure_allowed_outbound_url(
+            config.onprem_base_url,
+            allow_private=config.allow_private_endpoints,
+            allowed_hosts=config.outbound_allowed_hosts,
+        ),
+        api_key=config.onprem_api_key or "onprem",
+    )
 
 
 @dataclass(frozen=True)

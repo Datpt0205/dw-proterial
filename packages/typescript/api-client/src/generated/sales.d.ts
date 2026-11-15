@@ -2428,6 +2428,8 @@ export interface components {
          *     case reader as the inbox shows the whole mail.
          */
         CaseReplyView: {
+            /** Fallback */
+            fallback?: ("calls" | "spend" | "time" | "unavailable") | null;
             /** Intents */
             intents: components["schemas"]["IntentView"][];
             /** Linked To */
@@ -4446,7 +4448,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request";
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -5837,6 +5839,8 @@ export interface components {
          *     answer, so the message proposes nothing and Sales reads it.
          */
         ReplyReading: {
+            /** Fallback */
+            fallback?: ("calls" | "spend" | "time" | "unavailable") | null;
             /**
              * Intents
              * @default []
@@ -6235,6 +6239,8 @@ export interface components {
          *     on them. Its subject is Sales' own words.
          */
         SentMessageView: {
+            /** Fallback */
+            fallback?: ("calls" | "spend" | "time" | "unavailable") | null;
             /** Intents */
             intents: components["schemas"]["IntentView"][];
             /** Message Id */
