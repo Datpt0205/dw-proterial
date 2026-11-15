@@ -1,24 +1,29 @@
 """Load the on-premises model before anyone needs it.
 
-The first call after a model server starts loads the model: 582 s for qwen and
-68 s for bge-m3 from a Docker Desktop volume (infra/onprem/README.md,
-2026-10-19), longer than a step's route timeout, so the first person of the
+The first call after a model server starts, or after it unloaded an idle
+model, loads the model: 582 s for Qwen3.5-9B and 68 s for bge-m3 on Ollama
+from a Docker Desktop volume (infra/onprem/README.md, 2026-10-19), about 32 s
+for Qwen3.8-Flash-Next on Strata after idle (Giang's home lab, 2026-11-16).
+The first is longer than a step's route timeout, so the first person of the
 day gets "not understood" and a chat that says nothing for minutes. A health
 check does not tell: `ollama list` answers while nothing is loaded.
 
     python scripts/warm_model.py                  # once, after `up`
     python scripts/warm_model.py --every 300      # and again whenever it drops
 
-Every model the profile routes to gets the smallest call it can answer, chat
-and embedding alike; the profile file owns which those are. Once is enough
-while the server holds it (`OLLAMA_KEEP_ALIVE=-1`), but a host restart or a
-crash of the server unloads it with nothing else noticing, which is what
-`--every` is for: the on-prem overlay runs it as the `model-warm` service, so
-a reboot at night is warm by morning.
+It speaks only the OpenAI-compatible API every such server has, at
+DW_ONPREM_MODEL_BASE_URL with DW_ONPREM_MODEL_API_KEY when set, so it warms
+whichever server the profile is served by. Every model the profile routes to
+gets the smallest call it can answer, chat and embedding alike; the profile
+file owns which those are. Once is enough while the server holds it, but a
+host restart, a crash, or a server that unloads an idle model drops it with
+nothing else noticing, which is what `--every` is for: the on-prem overlay
+runs it as the `model-warm` service, so a reboot at night is warm by morning.
 
 On Ollama it also asks where the model landed. Its first GPU discovery can
 time out and leave it serving on CPU behind a passing healthcheck, ten times
-slower, so that is an exit code and a line in the log, not a hope.
+slower, so that is an exit code and a line in the log, not a hope. Any other
+server has no such endpoint, and that check says nothing there.
 
 Exit codes: 0 warm, 1 a model did not load, 2 not configured.
 """
