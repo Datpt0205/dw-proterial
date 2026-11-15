@@ -92,7 +92,7 @@ class _RecordingIndex:
     def __init__(self) -> None:
         self.deleted: list[uuid.UUID] = []
 
-    async def ensure_ready(self, vector_dimension: int) -> None: ...
+    async def ensure_ready(self, vector_dimension: int, embedding_model: str) -> None: ...
 
     async def upsert(self, chunks: Sequence[IndexableChunk]) -> None: ...
 
@@ -112,6 +112,8 @@ class _RecordingIndex:
         top_k: int,
         extra_filters: Sequence[tuple[str, str]] = (),
         document_ids: Sequence[uuid.UUID] = (),
+        *,
+        text: str,
     ) -> list[VectorHit]:
         return []
 

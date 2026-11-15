@@ -1,0 +1,297 @@
+{
+  "_about": "Synthetic. A labelled retrieval set for the knowledge gateway's hybrid search (Sales ticket 45). Order, stock, quote, paint and invoice documents written alike, so the words of a query match many of them and only the exact code (PO number, item code, RAL colour, invoice number) names the one that answers it. Tenant `other` holds documents worded like the queries and full of the same codes: they must never be retrieved, and must not move `own`'s ranking.",
+  "tenants": {
+    "own": {
+      "tenant_id": "a1a1a1a1-0000-4000-8000-000000000001",
+      "workspace_id": "a1a1a1a1-0000-4000-8000-000000000002"
+    },
+    "other": {
+      "tenant_id": "b2b2b2b2-0000-4000-8000-000000000001",
+      "workspace_id": "b2b2b2b2-0000-4000-8000-000000000002"
+    }
+  },
+  "documents": [
+    {
+      "key": "ship-0457",
+      "tenant": "own",
+      "chunks": [
+        "Phiếu xuất kho số 88: đơn hàng PO-2026-0457 của khách Hòa Phát, 120 cái khung nhôm đóng 6 thùng gỗ, giao ngày 10/11 bằng xe tải 51C-123.45 từ kho Bình Dương.",
+        "Phiếu xuất kho số 88, phần ký nhận: thủ kho Lan, tài xế Minh, bảo vệ kiểm đếm đủ 6 thùng lúc 14:30."
+      ]
+    },
+    {
+      "key": "order-0412",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0412 của khách Hòa Phát giao ngày 12/11 tại kho Bình Dương, khách hàng nhận tại cổng số 2."
+      ]
+    },
+    {
+      "key": "order-0413",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0413 của khách Minh An giao ngày 14/11 tại kho Bình Dương, khách hàng nhận tại cổng số 1."
+      ]
+    },
+    {
+      "key": "order-0414",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0414 của khách Tân Phú giao ngày 15/11 tại kho Long An, khách hàng nhận tại cổng số 3."
+      ]
+    },
+    {
+      "key": "order-0415",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0415 của khách Đại Nam giao ngày 16/11 tại kho Bình Dương, khách hàng nhận tại cổng số 2."
+      ]
+    },
+    {
+      "key": "order-0416",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0416 của khách Hòa Phát giao ngày 18/11 tại kho Long An, khách hàng nhận tại cổng số 1."
+      ]
+    },
+    {
+      "key": "order-0418",
+      "tenant": "own",
+      "chunks": [
+        "Đơn hàng PO-2026-0418 của khách Minh An giao ngày 20/11 tại kho Bình Dương, khách hàng nhận tại cổng số 2."
+      ]
+    },
+    {
+      "key": "stock-hmb45x2",
+      "tenant": "own",
+      "chunks": [
+        "Mã hàng HMB-45X2 còn 75 cái trong kho Bình Dương theo kiểm kê tháng 11, kệ C3, lô sản xuất tháng 9, đã kiểm chất lượng, đặt thêm khi còn dưới 20 cái."
+      ]
+    },
+    {
+      "key": "stock-hmb45x1",
+      "tenant": "own",
+      "chunks": [
+        "Mã hàng HMB-45X1 còn 40 cái trong kho Bình Dương, đặt thêm khi còn dưới 20 cái."
+      ]
+    },
+    {
+      "key": "stock-hmb45x3",
+      "tenant": "own",
+      "chunks": [
+        "Mã hàng HMB-45X3 còn 12 cái trong kho Bình Dương, đặt thêm khi còn dưới 20 cái."
+      ]
+    },
+    {
+      "key": "stock-hmb45x4",
+      "tenant": "own",
+      "chunks": [
+        "Mã hàng HMB-45X4 còn 66 cái trong kho Long An, đặt thêm khi còn dưới 20 cái."
+      ]
+    },
+    {
+      "key": "quote-118",
+      "tenant": "own",
+      "chunks": [
+        "Báo giá RFQ-2026-118 cho khách Đại Nam: 300 bản lề inox 304, đơn giá theo bảng giá quý 4, hiệu lực 30 ngày.",
+        "RFQ-2026-118, điều kiện kèm theo: giao hàng từng đợt 100 cái, kiểm tra mẫu trước đợt đầu."
+      ]
+    },
+    {
+      "key": "quote-110",
+      "tenant": "own",
+      "chunks": [
+        "Báo giá RFQ-2026-110 cho khách Hòa Phát: bản lề sắt sơn tĩnh điện, giá cho khách theo bảng giá."
+      ]
+    },
+    {
+      "key": "quote-111",
+      "tenant": "own",
+      "chunks": [
+        "Báo giá RFQ-2026-111 cho khách Minh An: tay nắm nhôm, giá cho khách theo bảng giá."
+      ]
+    },
+    {
+      "key": "quote-112",
+      "tenant": "own",
+      "chunks": [
+        "Báo giá RFQ-2026-112 cho khách Tân Phú: khóa tủ điện, giá cho khách theo bảng giá."
+      ]
+    },
+    {
+      "key": "paint-7035",
+      "tenant": "own",
+      "chunks": [
+        "Màu sơn RAL 7035 xám nhạt dùng cho tủ điện của dự án nhà máy Đồng Nai, sơn tĩnh điện độ dày 60 micromet, kiểm tra độ bám dính theo từng lô."
+      ]
+    },
+    {
+      "key": "paint-9016",
+      "tenant": "own",
+      "chunks": [
+        "Màu sơn RAL 9016 dùng cho tủ điện trong nhà, sơn tĩnh điện hai lớp."
+      ]
+    },
+    {
+      "key": "paint-7032",
+      "tenant": "own",
+      "chunks": [
+        "Màu sơn RAL 7032 dùng cho tủ điện ngoài trời, sơn tĩnh điện hai lớp."
+      ]
+    },
+    {
+      "key": "paint-5015",
+      "tenant": "own",
+      "chunks": [
+        "Màu sơn RAL 5015 dùng cho tủ điện phòng sạch, sơn tĩnh điện hai lớp."
+      ]
+    },
+    {
+      "key": "invoice-1523",
+      "tenant": "own",
+      "chunks": [
+        "Hóa đơn số 0001523 ký hiệu 1C26TAA của khách Tân Phú, xuất ngày 05/11 cho 120 khung nhôm, thuế suất 8%, thanh toán chuyển khoản trong 30 ngày."
+      ]
+    },
+    {
+      "key": "invoice-1520",
+      "tenant": "own",
+      "chunks": [
+        "Hóa đơn số 0001520 cho khách Hòa Phát, thanh toán chuyển khoản trong 30 ngày."
+      ]
+    },
+    {
+      "key": "invoice-1521",
+      "tenant": "own",
+      "chunks": [
+        "Hóa đơn số 0001521 cho khách Minh An, thanh toán chuyển khoản trong 30 ngày."
+      ]
+    },
+    {
+      "key": "terms-payment",
+      "tenant": "own",
+      "chunks": [
+        "Điều khoản thanh toán cho khách hàng mới: đặt cọc 30%, phần còn lại thanh toán trong 30 ngày sau khi nhận hàng."
+      ]
+    },
+    {
+      "key": "packing-export",
+      "tenant": "own",
+      "chunks": [
+        "Quy trình đóng gói hàng xuất khẩu: thùng gỗ hun trùng, có dấu ISPM 15, chèn xốp các góc.",
+        "Quy trình đóng gói hàng xuất khẩu, kiểm tra cuối: chụp ảnh từng thùng và dán nhãn hai mặt."
+      ]
+    },
+    {
+      "key": "warranty",
+      "tenant": "own",
+      "chunks": [
+        "Chính sách bảo hành khung nhôm: 24 tháng cho lỗi sơn và mối hàn, không áp dụng khi lắp sai hướng dẫn."
+      ]
+    },
+    {
+      "key": "other-0457",
+      "tenant": "other",
+      "chunks": [
+        "Đơn hàng PO-2026-0457 PO-2026-0457 của khách giao ngày nào: PO-2026-0457 giao ngày 09/11."
+      ]
+    },
+    {
+      "key": "other-hmb45x2",
+      "tenant": "other",
+      "chunks": [
+        "Mã hàng HMB-45X2 HMB-45X2 còn bao nhiêu trong kho: HMB-45X2 còn 3 cái."
+      ]
+    },
+    {
+      "key": "other-7035",
+      "tenant": "other",
+      "chunks": [
+        "Màu sơn RAL 7035 dùng cho tủ điện nào: RAL 7035 RAL 7035 cho mọi tủ điện."
+      ]
+    },
+    {
+      "key": "other-118",
+      "tenant": "other",
+      "chunks": [
+        "Báo giá RFQ-2026-118 RFQ-2026-118 cho khách: giá RFQ-2026-118 đã gửi."
+      ]
+    },
+    {
+      "key": "other-1523",
+      "tenant": "other",
+      "chunks": [
+        "Hóa đơn số 0001523 0001523 của khách: 0001523 đã thanh toán."
+      ]
+    },
+    {
+      "key": "other-terms",
+      "tenant": "other",
+      "chunks": [
+        "Điều khoản thanh toán cho khách hàng mới: trả trước toàn bộ."
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "text": "đơn hàng PO-2026-0457 của khách giao ngày nào",
+      "relevant": [
+        "ship-0457"
+      ]
+    },
+    {
+      "text": "PO-2026-0457 đã xuất kho chưa",
+      "relevant": [
+        "ship-0457"
+      ]
+    },
+    {
+      "text": "mã hàng HMB-45X2 còn bao nhiêu trong kho",
+      "relevant": [
+        "stock-hmb45x2"
+      ]
+    },
+    {
+      "text": "báo giá RFQ-2026-118 cho khách",
+      "relevant": [
+        "quote-118"
+      ]
+    },
+    {
+      "text": "màu sơn RAL 7035 dùng cho tủ điện nào",
+      "relevant": [
+        "paint-7035"
+      ]
+    },
+    {
+      "text": "hóa đơn số 0001523 của khách",
+      "relevant": [
+        "invoice-1523"
+      ]
+    },
+    {
+      "text": "điều khoản thanh toán cho khách hàng mới",
+      "relevant": [
+        "terms-payment"
+      ]
+    },
+    {
+      "text": "quy trình đóng gói hàng xuất khẩu",
+      "relevant": [
+        "packing-export"
+      ]
+    },
+    {
+      "text": "chính sách bảo hành khung nhôm",
+      "relevant": [
+        "warranty"
+      ]
+    },
+    {
+      "text": "đơn hàng PO-2026-0414 giao ở kho nào",
+      "relevant": [
+        "order-0414"
+      ]
+    }
+  ]
+}

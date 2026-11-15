@@ -94,8 +94,10 @@ async def test_filter_narrows_to_one_account() -> None:
     index = InMemoryVectorIndexAdapter()
     await index.upsert([_chunk(account_id=ACCOUNT_A), _chunk(account_id=ACCOUNT_B)])
 
-    unfiltered = await index.search((1.0, 0.0, 0.0), _trusted(), 10)
-    filtered = await index.search((1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),))
+    unfiltered = await index.search((1.0, 0.0, 0.0), _trusted(), 10, text="q")
+    filtered = await index.search(
+        (1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),), text="q"
+    )
 
     assert len(unfiltered) == 2
     assert len(filtered) == 1
@@ -114,6 +116,7 @@ async def test_filters_combine_as_and_not_or() -> None:
         _trusted(),
         10,
         (("account_id", ACCOUNT_A), ("source_type", "news_article")),
+        text="q",
     )
     assert len(hits) == 1
 
@@ -123,7 +126,9 @@ async def test_filter_cannot_reach_another_tenant() -> None:
     index = InMemoryVectorIndexAdapter()
     await index.upsert([_chunk(account_id=ACCOUNT_A, tenant_id=OTHER_TENANT)])
 
-    hits = await index.search((1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),))
+    hits = await index.search(
+        (1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),), text="q"
+    )
 
     assert hits == []
 
@@ -137,9 +142,9 @@ async def test_filtering_never_returns_more_than_not_filtering() -> None:
             _chunk(account_id=ACCOUNT_A, tenant_id=OTHER_TENANT),
         ]
     )
-    baseline = await index.search((1.0, 0.0, 0.0), _trusted(), 10)
+    baseline = await index.search((1.0, 0.0, 0.0), _trusted(), 10, text="q")
     for key, value in (("account_id", ACCOUNT_A), ("source_type", "web_page")):
-        narrowed = await index.search((1.0, 0.0, 0.0), _trusted(), 10, ((key, value),))
+        narrowed = await index.search((1.0, 0.0, 0.0), _trusted(), 10, ((key, value),), text="q")
         assert len(narrowed) <= len(baseline)
         assert {h.chunk_id for h in narrowed} <= {h.chunk_id for h in baseline}
 
@@ -151,6 +156,8 @@ async def test_chunk_without_metadata_is_excluded_by_a_filter() -> None:
     index_chunk = IndexableChunk(**{**plain.__dict__, "extra_payload": ()})
     await index.upsert([index_chunk])
 
-    hits = await index.search((1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),))
+    hits = await index.search(
+        (1.0, 0.0, 0.0), _trusted(), 10, (("account_id", ACCOUNT_A),), text="q"
+    )
 
     assert hits == []

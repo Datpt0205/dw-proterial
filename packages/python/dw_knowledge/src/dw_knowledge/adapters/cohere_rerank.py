@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -33,11 +33,26 @@ class CohereCompatibleRerankAdapter:
     base_url: str
     api_key: str
     model: str
-    # The whole call's deadline, not httpx's per-phase one: a search waits on it.
+    # The whole call's deadline, not httpx's per-phase one: a search waits on
+    # it, and past it the gateway keeps the fused order.
     timeout: float = 10.0
     # None is httpx's own network transport; a probe or a test passes its own.
-    # Each call's client closes it, so a passed one serves a single call.
     transport: httpx.AsyncBaseTransport | None = None
+    # One client for the adapter's life, made on first use, rather than a
+    # connection (and a TLS handshake) paid inside every search's deadline.
+    _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
+
+    def _http(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url.rstrip("/"),
+                # No key, no header: a reranker on the deployment's own
+                # network takes none (infra/onprem).
+                headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},
+                timeout=self.timeout,
+                transport=self.transport,
+            )
+        return self._client
 
     async def rerank(
         self, query: str, candidates: Sequence[RerankCandidate], top_k: int
@@ -55,18 +70,8 @@ class CohereCompatibleRerankAdapter:
             # httpx's timeout bounds each phase (connect, write, every read)
             # on its own; a provider that drips bytes could hold a search far
             # past it. This bounds the call as a whole.
-            async with (
-                asyncio.timeout(self.timeout),
-                httpx.AsyncClient(
-                    base_url=self.base_url.rstrip("/"),
-                    # No key, no header: a reranker on the deployment's own
-                    # network takes none (infra/onprem).
-                    headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},
-                    timeout=self.timeout,
-                    transport=self.transport,
-                ) as client,
-            ):
-                response = await client.post("/rerank", json=payload)
+            async with asyncio.timeout(self.timeout):
+                response = await self._http().post("/rerank", json=payload)
                 response.raise_for_status()
                 rows = response.json()["results"]
                 scored = [(int(row["index"]), float(row["relevance_score"])) for row in rows]

@@ -3,20 +3,29 @@
 Documents and chunks in Postgres are the source of truth; vectors are derived.
 Re-deriving them is what makes changing the embedding model possible at all.
 
-It builds into a TARGET collection and never touches the one currently serving.
-The previous version dropped the live collection first and then re-embedded, so
-the outage lasted as long as the rebuild - which, against a remote embedding API,
-is the whole point at which retrieval is most obviously broken. Build v2, point
-readers at it, keep v1 until the new one has been watched for a while.
+It is also the restore path: Qdrant holds nothing Postgres cannot rebuild, so a
+lost volume, a Qdrant upgrade across minors (a snapshot restores only into the
+same or the next minor) and a new embedding model all end here.
+
+QDRANT_COLLECTION names an alias (Sales ticket 45). This builds a NEW collection
+named by the embedding model, `<alias>__<model>__<UTC stamp>`, while the alias
+keeps serving the old one, then moves the alias in one atomic call. Readers
+never see a half-built index and nothing restarts. The old collection is kept
+and printed: until it is deleted, moving back is one call.
 
 Run INSIDE the api container, which has the wired gateway and the gateway key:
 
     docker compose --env-file .env -f infra/compose/docker-compose.yml \
-        exec -T -e DW_REINDEX_TARGET=dw_knowledge_v2 api \
-        python - < scripts/knowledge_reindex.py
+        exec -T api python - < scripts/knowledge_reindex.py
 
-Then set QDRANT_COLLECTION=dw_knowledge_v2 for the api and worker and restart
-them. Delete the old collection only after that has run long enough to trust.
+Move the alias back (or onto any build) without rebuilding:
+
+    ... exec -T -e DW_REINDEX_SERVE=<collection> api python - < scripts/knowledge_reindex.py
+
+A deployment from before aliases has a real collection under the alias's name.
+The rebuild still runs; moving the alias then refuses, because Qdrant cannot
+give an alias the name of a collection. Delete that collection and serve the
+build with DW_REINDEX_SERVE.
 """
 
 from __future__ import annotations
@@ -24,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -35,24 +45,28 @@ async def main() -> None:
     from dw_knowledge.adapters.qdrant_index import QdrantVectorIndexAdapter
     from dw_knowledge.ports import IndexableChunk
 
-    target = os.environ.get("DW_REINDEX_TARGET", "").strip()
-    if not target:
-        print("DW_REINDEX_TARGET must name the collection to build into", file=sys.stderr)
-        raise SystemExit(2)
-
     container = bootstrap.build_container()
     gateway = container.knowledge_gateway
     assert gateway is not None, "knowledge gateway is not wired"
     live: Any = gateway.vector_index
-    if getattr(live, "collection", None) == target:
-        # Writing into the collection being served would mix two vector spaces
-        # in one place, and there is no way to tell them apart afterwards.
-        print(f"DW_REINDEX_TARGET must differ from the live collection ({target})", file=sys.stderr)
+    if not isinstance(live, QdrantVectorIndexAdapter):
+        print("the gateway is not wired to Qdrant; there is nothing to rebuild", file=sys.stderr)
         raise SystemExit(2)
 
+    serve_only = os.environ.get("DW_REINDEX_SERVE", "").strip()
+    if serve_only:
+        previous = await live.serve(serve_only)
+        print(f"{live.collection} now serves {serve_only}; it served {previous}")
+        return
+
     embeddings = gateway.embeddings
+    # A new collection every run: writing into the one being served would mix
+    # two vector spaces in one place, with no way to tell them apart afterwards.
+    started = datetime.now(UTC)
+    target = await live.create_build(
+        embeddings.dimension, embeddings.model, started.strftime("%Y%m%d%H%M%S")
+    )
     index = QdrantVectorIndexAdapter(client=live.client, collection=target)
-    await index.ensure_ready(embeddings.dimension)
     print(f"building {target} at dimension {embeddings.dimension}")
 
     async with gateway.session_factory() as session:
@@ -141,8 +155,11 @@ async def main() -> None:
                 total += len(rows)
                 print(" -", document.title, ":", len(rows), "chunks")
 
-    print(f"TOTAL points written to {target}: {total}")
-    print("Now set QDRANT_COLLECTION and restart; drop the old collection later.")
+    seconds = (datetime.now(UTC) - started).total_seconds()
+    print(f"TOTAL points written to {target}: {total} in {seconds:.0f} s")
+    previous = await live.serve(target)
+    print(f"{live.collection} now serves {target}; it served {previous}.")
+    print("Delete the old collection once the new one has been watched long enough.")
 
 
 asyncio.run(main())

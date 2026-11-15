@@ -125,7 +125,14 @@ class VectorHit:
 class VectorIndexPort(Protocol):
     """Vector store adapter (Qdrant). Search REQUIRES a trusted filter."""
 
-    async def ensure_ready(self, vector_dimension: int) -> None: ...
+    async def ensure_ready(self, vector_dimension: int, embedding_model: str) -> None:
+        """Make the index ready for vectors of this width from this model.
+
+        Refuses an index built for another width or another model rather than
+        recreating it: either would drop every tenant's vectors, and a model
+        swapped at the same width turns retrieval into noise without failing.
+        """
+        ...
 
     async def upsert(self, chunks: Sequence[IndexableChunk]) -> None: ...
 
@@ -156,8 +163,17 @@ class VectorIndexPort(Protocol):
         top_k: int,
         extra_filters: Sequence[tuple[str, str]] = (),
         document_ids: Sequence[UUID] = (),
+        *,
+        text: str,
     ) -> list[VectorHit]:
-        """``extra_filters`` and ``document_ids`` narrow further; they never
+        """Hybrid: ``vector`` ranks by meaning and ``text`` by BM25 over the
+        chunk text, fused by reciprocal rank (`dw_knowledge.hybrid`). Both
+        rankings run under every constraint below, and the BM25 statistics
+        are computed over what ``trusted_filter`` admits and nothing more, so
+        another tenant's documents neither appear nor weigh. A hit's score is
+        the fused relevance on [0, 1].
+
+        ``extra_filters`` and ``document_ids`` narrow further; they never
         relax ``trusted_filter``.
 
         Adapters must apply all of them as conjunctions, and before ``top_k``:
@@ -174,6 +190,13 @@ class EmbeddingPort(Protocol):
 
     @property
     def dimension(self) -> int: ...
+
+    @property
+    def model(self) -> str:
+        """Which model makes these vectors. The vector index is named by it,
+        because two models at one width are two spaces a width check cannot
+        tell apart."""
+        ...
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
 

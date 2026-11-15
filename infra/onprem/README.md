@@ -17,7 +17,8 @@ can happen on another machine.
 - **Profile.** API and worker run on the `onprem` profile (`configs/models/onprem.yaml`).
 - **No outside access.** No gateway, no API key and no Zalo.
 - **Allow-list.** `model` and `rerank` are the only private hosts API and worker may call (`DW_*_OUTBOUND_ALLOWED_HOSTS`).
-- **Vector collection.** Qdrant uses its own collection, `dw_knowledge_bge_m3`, because bge-m3 vectors are 1024 wide.
+- **Vector collection.** Qdrant uses its own collection, `dw_knowledge_bge_m3`, because bge-m3 vectors are 1024 wide. Since Sales ticket 45 that name is an alias over `dw_knowledge_bge_m3__bge_m3_567m__<build>`; `scripts/knowledge_reindex.py` rebuilds it from Postgres and moves the alias, which is also how it is restored (Qdrant holds nothing Postgres cannot rebuild).
+- **Qdrant's volume** sits on the Linux VM's own virtual disk, never on a Windows share, the SMB mail drop or a WSL mount: Qdrant needs POSIX block storage and warns that such mounts lose data ([installation](https://qdrant.tech/documentation/installation/)).
 
 ## Bring it up
 

@@ -16,7 +16,7 @@ dependencies = [
     # Object storage for knowledge documents and feedback attachments
     # (bootstrap/storage.py) — backbone infra, not a business context's.
     "minio>=7.2,<8",
-    "qdrant-client>=1.12,<1.15",
+    "qdrant-client>=1.20,<1.21",
     # Ops hardening Phase 5: the redis readiness probe (dw_api/health.py)
     # imports the client directly for its type. Declared explicitly rather
     # than left to resolve transitively through dw-platform's cache adapter —

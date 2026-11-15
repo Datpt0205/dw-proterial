@@ -57,6 +57,11 @@ a generator whose steps nobody can read is a different kind of unchecked claim.
 - PostgreSQL is the system of record.
 - Qdrant retrieval always receives trusted tenant/workspace/ACL filters from
   backend context; filter injection happens only inside the knowledge gateway.
+  The one searcher outside it is the memory ranker
+  (`dw_memory.adapters.qdrant_ranker`): SQL picks its candidates under RLS, and
+  Qdrant only orders those ids, under tenant, workspace and worker conditions.
+  Search is hybrid (dense + BM25, fused by RRF, Sales ticket 45), and the BM25
+  statistics are scoped to what the trusted filter admits.
 - Redis/Valkey is never a source of truth.
 - Side effects require policy evaluation, idempotency and audit; critical
   effects require approval.

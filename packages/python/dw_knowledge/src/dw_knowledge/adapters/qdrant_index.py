@@ -3,10 +3,26 @@
 Search is impossible without a TrustedSearchFilter — the filter argument is not
 optional and the tenant/workspace conditions are always appended here from it,
 never from caller-supplied values.
+
+Search is hybrid (Sales ticket 45): the dense vector and BM25 over the chunk
+text, each under the same filter, fused by reciprocal rank in one Query API
+call. The BM25 statistics are scoped to what that filter admits, because by
+default Qdrant computes them over the whole shard, and there another tenant's
+words move this tenant's scores (measured on 1.20.1, 2026-11-15: a tenant's
+score for one query fell from 2.95 to 1.76 when another tenant added 80 points,
+and stayed 2.95 with the corpus scoped). A score that moves with another
+tenant's text is also a probe of what that text contains.
+
+The name readers and writers use is an alias. Behind it is a collection named
+by the embedding model that filled it (`<alias>__<model>__<build>`), so a
+process embedding with another model refuses to search it, and a rebuild
+(`scripts/knowledge_reindex.py`) fills a new collection and moves the alias in
+one atomic call.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -17,9 +33,10 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 
 from dw_kernel.errors import InfrastructureError
 from dw_knowledge.contracts import DEFAULT_COLLECTION, SHARED_DOMAIN
+from dw_knowledge.hybrid import RRF_K, prefetch_limit, relevance_from_fused
 from dw_knowledge.ports import IndexableChunk, TrustedSearchFilter, VectorHit
 
-__all__ = ["DEFAULT_COLLECTION", "QdrantVectorIndexAdapter"]
+__all__ = ["DEFAULT_COLLECTION", "QdrantVectorIndexAdapter", "build_prefix"]
 
 # account_id is indexed alongside the security fields because intel narrows
 # nearly every search to one account; an unindexed payload filter costs a full
@@ -36,7 +53,35 @@ _KEYWORD_PAYLOAD_INDEXES = (
     # A search that names documents narrows by it before top-k, as do the
     # per-document delete and tombstone.
     "source_document_id",
+    # Every search ORs the caller's own points with global ones by it.
+    "scope",
 )
+
+# The payload field BM25 ranks: the chunk text, already stored for citation.
+_TEXT_FIELD = "content"
+# The `word` tokenizer, not `multilingual`: measured on 1.20.1 (2026-11-15),
+# `multilingual` drops tokens made only of digits, so `PO-2026-0457` indexed as
+# `po` alone and every PO number matched every other. `word` keeps `2026` and
+# `0457`; Vietnamese is space-delimited, and Japanese, which `word` leaves as
+# whole runs, is the dense leg's to find.
+_TEXT_INDEX = models.TextIndexParams(
+    type=models.TextIndexType.TEXT,
+    tokenizer=models.TokenizerType.WORD,
+    lowercase=True,
+    scoring=True,
+)
+
+# The first collection behind an alias has a fixed build name, so two processes
+# starting at once create the same collection rather than two: creating an
+# alias that exists silently repoints it (measured, 1.20.1), and two first
+# builds would leave one process writing where nobody reads.
+FIRST_BUILD = "1"
+
+
+def build_prefix(alias: str, embedding_model: str) -> str:
+    """Every collection built for this alias from this model starts with this."""
+    model = re.sub(r"[^a-z0-9]+", "_", embedding_model.lower()).strip("_")
+    return f"{alias}__{model}__"
 
 
 @dataclass
@@ -44,22 +89,29 @@ class QdrantVectorIndexAdapter:
     """Implements ``VectorIndexPort``."""
 
     client: AsyncQdrantClient
+    # The alias every read and write goes through (see the module docstring).
     collection: str = DEFAULT_COLLECTION
 
-    async def ensure_ready(self, vector_dimension: int) -> None:
-        """Create the collection if it is absent, then reconcile its payload indexes.
+    async def ensure_ready(self, vector_dimension: int, embedding_model: str) -> None:
+        """Serve a collection for this width and model, then reconcile its indexes.
 
-        A dimension mismatch raises instead of recreating. Recreating drops every
-        tenant's vectors, and it would be triggered by nothing more than a config
-        value: during a rolling deploy, two processes reading different
-        dimensions delete each other's collection in a loop rather than in a
-        window. Changing the embedding width is a migration - a new collection
-        name, then a reindex - not a side effect of a restart.
+        A mismatch raises instead of recreating. Recreating drops every
+        tenant's vectors, and it would be triggered by nothing more than a
+        config value: during a rolling deploy, two processes reading different
+        settings delete each other's collection in a loop rather than in a
+        window. Changing the embedding model is a rebuild into a new collection
+        and a move of the alias (`scripts/knowledge_reindex.py`), not a side
+        effect of a restart.
+
+        A collection that holds the alias's own name was made before aliases
+        and says nothing about its model; only its width is checked.
         """
-        existing = await self._existing_dimension()
-        if existing is None:
-            await self._create_collection(vector_dimension)
-        elif existing != vector_dimension:
+        served = await self._served()
+        if served is None:
+            served = await self.create_build(vector_dimension, embedding_model, FIRST_BUILD)
+            await self._alias(served)
+        existing = await self._dimension_of(served)
+        if existing != vector_dimension:
             raise InfrastructureError(
                 "Qdrant collection was built for a different embedding width",
                 details={
@@ -68,30 +120,103 @@ class QdrantVectorIndexAdapter:
                     "embedding_dimension": vector_dimension,
                 },
             )
+        if served != self.collection and not served.startswith(
+            build_prefix(self.collection, embedding_model)
+        ):
+            raise InfrastructureError(
+                "Qdrant collection was built by a different embedding model",
+                details={
+                    "collection": self.collection,
+                    "served": served,
+                    "embedding_model": embedding_model,
+                },
+            )
         # Reconciled on every call, not only after a create: a payload index
         # added to this adapter later would otherwise never exist on a
         # collection that already does, and an unindexed keyword filter is a
-        # full scan of the tenant's points.
-        await self._ensure_payload_indexes()
+        # full scan of the tenant's points. Qdrant builds a new text index from
+        # the payload it already holds.
+        await self._ensure_payload_indexes(served)
 
-    async def _existing_dimension(self) -> int | None:
-        """The collection's vector width, or None when it does not exist yet."""
+    async def create_build(self, vector_dimension: int, embedding_model: str, build: str) -> str:
+        """Create a collection for this alias and model, indexed; returns its name.
+
+        Not served until `serve` points the alias at it, so a rebuild fills it
+        while searches still read the one before.
+        """
+        name = f"{build_prefix(self.collection, embedding_model)}{build}"
+        if not await self._exists(name):
+            await self._create_collection(name, vector_dimension)
+        await self._ensure_payload_indexes(name)
+        return name
+
+    async def serve(self, build: str) -> str | None:
+        """Point the alias at `build` in one atomic call; returns what it served."""
+        previous = await self._served()
+        if previous == self.collection:
+            raise InfrastructureError(
+                "a collection holds the alias name; delete it, then serve the build",
+                details={"collection": self.collection, "build": build},
+            )
+        await self._alias(build)
+        return previous
+
+    async def _served(self) -> str | None:
+        """The collection behind the name, or None when nothing answers to it."""
         try:
-            if not await self.client.collection_exists(self.collection):
-                return None
-            info = await self.client.get_collection(self.collection)
-            size = getattr(info.config.params.vectors, "size", None)
+            for alias in (await self.client.get_aliases()).aliases:
+                if alias.alias_name == self.collection:
+                    return str(alias.collection_name)
+            exists = await self.client.collection_exists(self.collection)
         except Exception as exc:
             raise InfrastructureError(
                 "failed to read the Qdrant collection",
                 details={"collection": self.collection, "error": type(exc).__name__},
             ) from exc
+        return self.collection if exists else None
+
+    async def _exists(self, name: str) -> bool:
+        try:
+            return bool(await self.client.collection_exists(name))
+        except Exception as exc:
+            raise InfrastructureError(
+                "failed to read the Qdrant collection",
+                details={"collection": name, "error": type(exc).__name__},
+            ) from exc
+
+    async def _alias(self, build: str) -> None:
+        """Create or move the alias; Qdrant applies it atomically."""
+        try:
+            await self.client.update_collection_aliases(
+                change_aliases_operations=[
+                    models.CreateAliasOperation(
+                        create_alias=models.CreateAlias(
+                            collection_name=build, alias_name=self.collection
+                        )
+                    )
+                ]
+            )
+        except Exception as exc:
+            raise InfrastructureError(
+                "failed to point the Qdrant alias",
+                details={"collection": self.collection, "error": type(exc).__name__},
+            ) from exc
+
+    async def _dimension_of(self, name: str) -> int | None:
+        try:
+            info = await self.client.get_collection(name)
+            size = getattr(info.config.params.vectors, "size", None)
+        except Exception as exc:
+            raise InfrastructureError(
+                "failed to read the Qdrant collection",
+                details={"collection": name, "error": type(exc).__name__},
+            ) from exc
         return int(size) if size is not None else None
 
-    async def _create_collection(self, vector_dimension: int) -> None:
+    async def _create_collection(self, name: str, vector_dimension: int) -> None:
         try:
             await self.client.create_collection(
-                collection_name=self.collection,
+                collection_name=name,
                 vectors_config=models.VectorParams(
                     size=vector_dimension, distance=models.Distance.COSINE
                 ),
@@ -103,16 +228,19 @@ class QdrantVectorIndexAdapter:
                 ),
             )
         except Exception as exc:
+            # Another process starting at the same moment created it first.
+            if await self._exists(name):
+                return
             raise InfrastructureError(
                 "failed to create the Qdrant collection",
-                details={"collection": self.collection, "error": type(exc).__name__},
+                details={"collection": name, "error": type(exc).__name__},
             ) from exc
 
-    async def _ensure_payload_indexes(self) -> None:
+    async def _ensure_payload_indexes(self, name: str) -> None:
         """Idempotent - Qdrant treats a repeated create as an update."""
         try:
             await self.client.create_payload_index(
-                self.collection,
+                name,
                 field_name="tenant_id",
                 field_schema=models.KeywordIndexParams(
                     type=models.KeywordIndexType.KEYWORD, is_tenant=True
@@ -120,19 +248,22 @@ class QdrantVectorIndexAdapter:
             )
             for field in _KEYWORD_PAYLOAD_INDEXES:
                 await self.client.create_payload_index(
-                    self.collection,
+                    name,
                     field_name=field,
                     field_schema=models.PayloadSchemaType.KEYWORD,
                 )
             await self.client.create_payload_index(
-                self.collection,
+                name,
                 field_name="is_deleted",
                 field_schema=models.PayloadSchemaType.BOOL,
+            )
+            await self.client.create_payload_index(
+                name, field_name=_TEXT_FIELD, field_schema=_TEXT_INDEX
             )
         except Exception as exc:
             raise InfrastructureError(
                 "failed to prepare Qdrant payload indexes",
-                details={"collection": self.collection, "error": type(exc).__name__},
+                details={"collection": name, "error": type(exc).__name__},
             ) from exc
 
     async def upsert(self, chunks: Sequence[IndexableChunk]) -> None:
@@ -254,73 +385,52 @@ class QdrantVectorIndexAdapter:
         top_k: int,
         extra_filters: Sequence[tuple[str, str]] = (),
         document_ids: Sequence[uuid.UUID] = (),
+        *,
+        text: str,
     ) -> list[VectorHit]:
-        # Mandatory constraints come EXCLUSIVELY from the trusted filter.
-        conditions: list[models.FieldCondition] = [
-            models.FieldCondition(
-                key="classification",
-                match=models.MatchAny(any=list(trusted_filter.allowed_classifications)),
-            ),
-            models.FieldCondition(
-                key="acl_principals",
-                match=models.MatchAny(any=list(trusted_filter.acl_principals)),
-            ),
-        ]
-        # Always emitted. Skipping it when the caller asked for "shared" made
-        # that value mean "every domain", so the default query read every corpus
-        # the tenant owns - including files a user attached to one CRM record.
-        conditions.append(
-            models.FieldCondition(
-                key="domain",
-                match=models.MatchAny(any=sorted({trusted_filter.domain, SHARED_DOMAIN})),
-            )
-        )
         # Business narrowing joins the same `must` list, so it can only ever
         # intersect with the mandatory constraints - never replace one.
-        conditions.extend(
+        narrowing = [
             models.FieldCondition(key=key, match=models.MatchValue(value=value))
             for key, value in extra_filters
-        )
+        ]
         # Asking for particular documents is the same kind of narrowing, and it
         # has to happen here rather than on the hits: `limit` below is applied
         # to whatever this filter admits.
         if document_ids:
-            conditions.append(
+            narrowing.append(
                 models.FieldCondition(
                     key="source_document_id",
                     match=models.MatchAny(any=[str(d) for d in document_ids]),
                 )
             )
-        # Tenant isolation OR global (legal) scope: a point is visible if it is in
-        # the caller's tenant+workspace, OR it is a cross-tenant global document.
-        own_tenant = models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="tenant_id",
-                    match=models.MatchValue(value=str(trusted_filter.tenant_id)),
-                ),
-                models.FieldCondition(
-                    key="workspace_id",
-                    match=models.MatchValue(value=str(trusted_filter.workspace_id)),
-                ),
-            ]
-        )
-        scope_or_tenant = [
-            own_tenant,
-            models.FieldCondition(key="scope", match=models.MatchValue(value="global")),
-        ]
+        retrieval = _visible(trusted_filter, narrowing)
+        # The BM25 statistics: everything this caller may read in this domain,
+        # and nothing else. Wider than `retrieval` (narrowing to one document
+        # should not make every word in it rare), never wider than the trusted
+        # filter, so a score is a function of text the caller could read
+        # anyway. Set on the prefetch itself: measured on 1.20.1, an `idf` on
+        # the outer query's params does not reach the prefetches.
+        corpus = _visible(trusted_filter, [])
+        depth = prefetch_limit(top_k)
         try:
             response = await self.client.query_points(
                 self.collection,
-                query=list(vector),
-                query_filter=models.Filter(
-                    must=list(conditions),
-                    should=scope_or_tenant,  # at least one → (own tenant) OR (global)
-                    # Soft-deleted / superseded points are never retrieved.
-                    must_not=[
-                        models.FieldCondition(key="is_deleted", match=models.MatchValue(value=True))
-                    ],
-                ),
+                # Every leg carries the whole filter: a prefetch without it
+                # would rank every tenant's points, and the fusion could only
+                # filter what it was handed.
+                prefetch=[
+                    models.Prefetch(query=list(vector), filter=retrieval, limit=depth),
+                    models.Prefetch(
+                        query=models.TextQuery(text=text),
+                        using=_TEXT_FIELD,
+                        filter=retrieval,
+                        limit=depth,
+                        params=models.SearchParams(idf=models.IdfCorpusParams(corpus=corpus)),
+                    ),
+                ],
+                query=models.RrfQuery(rrf=models.Rrf(k=RRF_K)),
+                query_filter=retrieval,
                 limit=top_k,
                 with_payload=True,
             )
@@ -343,7 +453,7 @@ class QdrantVectorIndexAdapter:
                 VectorHit(
                     chunk_id=_uuid(payload.get("chunk_id")),
                     document_id=_uuid(payload.get("source_document_id")),
-                    score=float(point.score),
+                    score=relevance_from_fused(float(point.score)),
                     content=str(payload.get("content", "")),
                     classification=str(payload.get("classification", "internal")),
                     source_version=str(payload.get("source_version", "1")),
@@ -370,6 +480,57 @@ class QdrantVectorIndexAdapter:
             return not await self.client.collection_exists(self.collection)
         except Exception:
             return False
+
+
+def _visible(
+    trusted_filter: TrustedSearchFilter, narrowing: Sequence[models.FieldCondition]
+) -> models.Filter:
+    """What the trusted filter admits, narrowed further by `narrowing`.
+
+    Mandatory constraints come EXCLUSIVELY from the trusted filter.
+    """
+    conditions: list[models.FieldCondition] = [
+        models.FieldCondition(
+            key="classification",
+            match=models.MatchAny(any=list(trusted_filter.allowed_classifications)),
+        ),
+        models.FieldCondition(
+            key="acl_principals",
+            match=models.MatchAny(any=list(trusted_filter.acl_principals)),
+        ),
+        # Always emitted. Skipping it when the caller asked for "shared" made
+        # that value mean "every domain", so the default query read every corpus
+        # the tenant owns - including files a user attached to one CRM record.
+        models.FieldCondition(
+            key="domain",
+            match=models.MatchAny(any=sorted({trusted_filter.domain, SHARED_DOMAIN})),
+        ),
+        *narrowing,
+    ]
+    # Tenant isolation OR global (legal) scope: a point is visible if it is in
+    # the caller's tenant+workspace, OR it is a cross-tenant global document.
+    own_tenant = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="tenant_id",
+                match=models.MatchValue(value=str(trusted_filter.tenant_id)),
+            ),
+            models.FieldCondition(
+                key="workspace_id",
+                match=models.MatchValue(value=str(trusted_filter.workspace_id)),
+            ),
+        ]
+    )
+    return models.Filter(
+        must=list(conditions),
+        # at least one → (own tenant) OR (global)
+        should=[
+            own_tenant,
+            models.FieldCondition(key="scope", match=models.MatchValue(value="global")),
+        ],
+        # Soft-deleted / superseded points are never retrieved.
+        must_not=[models.FieldCondition(key="is_deleted", match=models.MatchValue(value=True))],
+    )
 
 
 def _uuid(value: object) -> uuid.UUID:

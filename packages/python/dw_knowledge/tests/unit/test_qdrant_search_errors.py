@@ -61,7 +61,7 @@ class FailingSearch:
 
 async def _search(client: FailingSearch) -> list[Any]:
     adapter = QdrantVectorIndexAdapter(client=cast(AsyncQdrantClient, client), collection="c")
-    return list(await adapter.search([0.1, 0.2], _FILTER, top_k=5))
+    return list(await adapter.search([0.1, 0.2], _FILTER, top_k=5, text="q"))
 
 
 async def test_an_absent_collection_is_an_empty_result() -> None:

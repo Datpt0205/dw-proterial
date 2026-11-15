@@ -88,7 +88,15 @@ class QdrantMemoryRanker:
             await self.client.create_payload_index(
                 collection_name=self.collection,
                 field_name=name,
-                field_schema=models.PayloadSchemaType.KEYWORD,
+                # The tenant field is the tenant index, as in the knowledge
+                # collection: Qdrant then keeps each tenant's points together
+                # and plans every search around that one condition. Repeated on
+                # an existing collection, the create updates the index.
+                field_schema=(
+                    models.KeywordIndexParams(type=models.KeywordIndexType.KEYWORD, is_tenant=True)
+                    if name == "tenant_id"
+                    else models.PayloadSchemaType.KEYWORD
+                ),
                 wait=True,
             )
         self._ready = True
