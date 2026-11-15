@@ -2269,6 +2269,13 @@
               }
             ],
             "title": "Proposal"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
           }
         },
         "required": [
@@ -10335,7 +10342,8 @@
           "po_body_extraction",
           "change_request",
           "thread_agent",
-          "reply_draft"
+          "reply_draft",
+          "skill_intents"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -16690,6 +16698,16 @@
             "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
             "title": "Rules",
             "type": "string"
+          },
+          "skills": {
+            "default": [],
+            "items": {
+              "pattern": "^sales_skill_[a-z0-9_]{1,52}@\\d+\\.\\d+\\.\\d+$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Skills",
+            "type": "array"
           }
         },
         "required": [
@@ -18314,6 +18332,13 @@
             "title": "Received At",
             "type": "string"
           },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -18691,6 +18716,181 @@
           "uploaded_at"
         ],
         "title": "SignedCopyView",
+        "type": "object"
+      },
+      "SkillProposal": {
+        "additionalProperties": false,
+        "description": "What a person proposes: the skill's new words and a version number of\nthe tenant's own.",
+        "properties": {
+          "description": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "instructions": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Instructions",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "description",
+          "instructions"
+        ],
+        "title": "SkillProposal",
+        "type": "object"
+      },
+      "SkillVersionView": {
+        "description": "A tenant's version of a skill, as the skills list shows it.",
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "proposed_by": {
+            "format": "uuid",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "name",
+          "ref",
+          "status",
+          "proposed_by",
+          "decided_by",
+          "description",
+          "instructions",
+          "approval_id"
+        ],
+        "title": "SkillVersionView",
+        "type": "object"
+      },
+      "SkillView": {
+        "description": "A skill as it applies to the tenant now.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "platform",
+              "tenant"
+            ],
+            "title": "Layer",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "platform_ref": {
+            "title": "Platform Ref",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ref",
+          "layer",
+          "description",
+          "instructions",
+          "platform_ref"
+        ],
+        "title": "SkillView",
+        "type": "object"
+      },
+      "SkillsView": {
+        "properties": {
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/SkillView"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SkillVersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "skills",
+          "versions"
+        ],
+        "title": "SkillsView",
         "type": "object"
       },
       "SodRuleView": {
@@ -34453,6 +34653,97 @@
           }
         },
         "summary": "Submit Salesorder Example",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/skills": {
+      "get": {
+        "operationId": "skills_in_force_api_v1_sales_skills_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Skills In Force",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/skills/{name}/versions": {
+      "post": {
+        "operationId": "propose_skill_api_v1_sales_skills__name__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillProposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillVersionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Skill",
         "tags": [
           "sales"
         ]

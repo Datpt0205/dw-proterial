@@ -115,6 +115,12 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
   "sales.artifact.uploaded": { label: "Tải lên tệp", color: "default" },
   "sales.rules.proposed": { label: "Đề xuất quy tắc", color: "processing" },
   "sales.rules.approved": { label: "Duyệt quy tắc", color: "success" },
+  "sales.skills.proposed": {
+    label: "Đề xuất kỹ năng DW1",
+    color: "processing",
+  },
+  "sales.skills.approved": { label: "Duyệt kỹ năng DW1", color: "success" },
+  "sales.skills.rejected": { label: "Từ chối kỹ năng DW1", color: "warning" },
   "sales.followup.sent": { label: "Gửi nhắc việc", color: "default" },
   "sales.worker.paused": { label: "Tạm dừng DW1", color: "warning" },
   "sales.worker.resumed": { label: "Chạy lại DW1", color: "processing" },

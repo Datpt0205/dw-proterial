@@ -1323,6 +1323,11 @@
             "title": "Rfq Extraction",
             "type": "boolean"
           },
+          "skill_intents": {
+            "default": false,
+            "title": "Skill Intents",
+            "type": "boolean"
+          },
           "thread_agent": {
             "default": false,
             "title": "Thread Agent",

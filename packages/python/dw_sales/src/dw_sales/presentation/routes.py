@@ -92,6 +92,7 @@ from dw_sales.application.salesorder_learning import SalesOrderExampleView
 from dw_sales.application.screening_followups import FollowupDraftView
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
+from dw_sales.application.skills import SkillProposal, SkillsView, SkillVersionView
 from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.thread_summaries import ThreadSummaryView
 from dw_sales.application.views import (
@@ -1928,6 +1929,31 @@ def build_router(
         key: RuleKey, body: RuleProposalBody, context: Ctx, svc: Svc, idem: Idem
     ) -> RuleVersionView:
         return await idem.record(await svc.rules.propose(context, key, body.document))
+
+    # ----------------------------------------- DW1's skills (ticket 40) --
+    # Each skill as the tenant holds it now and every version of its, to
+    # whoever proposes rules; a version proposed opens a `sales.skills`
+    # approval the head decides on /approvals, never its proposer, the head's
+    # own proposal included (dw_sales ADR 0014). A name the platform ships no
+    # skill of is not found.
+
+    @router.get(
+        "/skills",
+        response_model=SkillsView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def skills_in_force(context: Ctx, svc: Svc) -> SkillsView:
+        return await svc.skills.list(context)
+
+    @router.post(
+        "/skills/{name}/versions",
+        response_model=SkillVersionView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def propose_skill(
+        name: str, body: SkillProposal, context: Ctx, svc: Svc, idem: Idem
+    ) -> SkillVersionView:
+        return await idem.record(await svc.skills.propose(context, name, body))
 
     # "Tạo từ tệp mẫu": a company's template, kept for the worker to draft a
     # version of the key from (202). A draft is a start for the editor, never

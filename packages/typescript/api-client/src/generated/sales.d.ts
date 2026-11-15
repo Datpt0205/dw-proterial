@@ -1944,6 +1944,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Skills In Force */
+        get: operations["skills_in_force_api_v1_sales_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/skills/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Skill */
+        post: operations["propose_skill_api_v1_sales_skills__name__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/worker/pause": {
         parameters: {
             query?: never;
@@ -2473,6 +2507,8 @@ export interface components {
             prompt: string | null;
             /** Proposal */
             proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec" | "record_accepted" | "record_declined") | null;
+            /** Skills */
+            skills?: string[];
         };
         /**
          * CatalogImportView
@@ -4483,7 +4519,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft";
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -5955,6 +5991,11 @@ export interface components {
             route: string;
             /** Rules */
             rules: string;
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
         };
         /**
          * RequestReading
@@ -6352,6 +6393,8 @@ export interface components {
              * Format: date-time
              */
             received_at: string;
+            /** Skills */
+            skills?: string[];
             /** Subject */
             subject: string;
         };
@@ -6495,6 +6538,80 @@ export interface components {
              * Format: uuid
              */
             uploaded_by: string;
+        };
+        /**
+         * SkillProposal
+         * @description What a person proposes: the skill's new words and a version number of
+         *     the tenant's own.
+         */
+        SkillProposal: {
+            /** Description */
+            description: string;
+            /** Instructions */
+            instructions: string;
+            /** Version */
+            version: string;
+        };
+        /**
+         * SkillVersionView
+         * @description A tenant's version of a skill, as the skills list shows it.
+         */
+        SkillVersionView: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Description */
+            description: string;
+            /** Instructions */
+            instructions: string;
+            /** Name */
+            name: string;
+            /**
+             * Proposed By
+             * Format: uuid
+             */
+            proposed_by: string;
+            /** Ref */
+            ref: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "rejected" | "superseded";
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /**
+         * SkillView
+         * @description A skill as it applies to the tenant now.
+         */
+        SkillView: {
+            /** Description */
+            description: string;
+            /** Instructions */
+            instructions: string;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "platform" | "tenant";
+            /** Name */
+            name: string;
+            /** Platform Ref */
+            platform_ref: string;
+            /** Ref */
+            ref: string;
+        };
+        /** SkillsView */
+        SkillsView: {
+            /** Skills */
+            skills: components["schemas"]["SkillView"][];
+            /** Versions */
+            versions: components["schemas"]["SkillVersionView"][];
         };
         /**
          * SourceAnchor
@@ -11337,6 +11454,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleVersionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skills_in_force_api_v1_sales_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillsView"];
+                };
+            };
+        };
+    };
+    propose_skill_api_v1_sales_skills__name__versions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillProposal"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionView"];
                 };
             };
             /** @description Validation Error */

@@ -51,6 +51,7 @@ from dw_sales.application.runs import (
     DecisionGiven,
     Dw1Task,
 )
+from dw_sales.application.skills import SKILLS_APPROVAL
 from dw_sales.application.support import DW1_WORKER_ID
 
 GRAPH_VERSION = "1.0.0"
@@ -181,6 +182,7 @@ def register(
     layouts: ApprovalDecisionGuard,
     rules: ApprovalDecisionGuard,
     catalog: ApprovalDecisionGuard,
+    skills: ApprovalDecisionGuard,
     worker_file: Path,
 ) -> WorkerDefinition:
     """DW1 on a runtime: its graph, its worker, and its approvals' rules.
@@ -197,7 +199,9 @@ def register(
       run) by ``layouts`` (`LayoutDecisions.check`), a rule version's
       (`sales.rules`, no run) by ``rules`` (`RuleDecisions.check`) and a
       master-data import's (`sales.catalog`, no run, ticket 41) by
-      ``catalog`` (`CatalogDecisions.check`), each the longer prefix.
+      ``catalog`` (`CatalogDecisions.check`) and a skill version's
+      (`sales.skills`, no run, ticket 40) by ``skills``
+      (`SkillDecisions.check`), each the longer prefix.
     """
     graphs.register(DW1_WORKER_ID, GRAPH_VERSION, lambda: build_graph(steps))
     loaded = workers.load_file(worker_file).definition
@@ -211,4 +215,5 @@ def register(
     approvals.decision_guards[LAYOUT_APPROVAL] = layouts
     approvals.decision_guards[RULES_APPROVAL] = rules
     approvals.decision_guards[CATALOG_APPROVAL] = catalog
+    approvals.decision_guards[SKILLS_APPROVAL] = skills
     return loaded

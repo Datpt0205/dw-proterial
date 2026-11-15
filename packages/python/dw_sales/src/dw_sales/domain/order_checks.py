@@ -135,6 +135,7 @@ class ModelStep(StrEnum):
     CHANGE_REQUEST = "change_request"
     THREAD_AGENT = "thread_agent"
     REPLY_DRAFT = "reply_draft"
+    SKILL_INTENTS = "skill_intents"
 
 
 class ModelAssist(BaseModel):
@@ -192,6 +193,13 @@ class ModelAssist(BaseModel):
     # drops a draft with a figure no fact holds or any amount, and chooses
     # the recipients; a person sends it. Off where a version does not say.
     reply_draft: bool = False
+    # DW1's agent reads a thread message's intents with its skills (dw_sales
+    # ADR 0014, ticket 40): it loads the skill that fits from a catalogue of
+    # the company's own words, may look things up with the same read-only
+    # tools, and is checked as the one-call reading is. Without a reading,
+    # the thread agent reads it where that is on, else the one call, else a
+    # person. Off where a version does not say: the platform's versions do not.
+    skill_intents: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

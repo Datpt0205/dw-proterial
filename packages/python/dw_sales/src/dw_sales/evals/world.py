@@ -64,7 +64,7 @@ from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.artifact_files import ArtifactFiles
-from dw_sales.adapters.assembly import model_requests, step_model, thread_agent
+from dw_sales.adapters.assembly import model_requests, skill_agent, step_model, thread_agent
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
@@ -74,6 +74,7 @@ from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, r
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
+from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
@@ -126,6 +127,7 @@ from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSe
 from dw_sales.application.runs import subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement, skill_book
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
 from dw_sales.application.thread_tools import ThreadContext, ThreadTools
@@ -1183,6 +1185,8 @@ class World:
     # The thread agent's tool calls (tickets 30 and 31), where a chat model
     # was given: every execution the turn's executor recorded.
     tool_executions: MemoryToolExecutions = field(default_factory=MemoryToolExecutions)
+    # What carries out a decided skill version (ticket 40), as the worker does.
+    skill_settlement: SkillSettlement | None = None
 
     async def decide_layout(
         self,
@@ -1241,6 +1245,31 @@ class World:
         """Each `sales.rules.decided` the decisions announced, carried out."""
         await self._settle(RULES_DECIDED, self.rule_settlement)
 
+    async def decide_skill(
+        self,
+        caller: Caller,
+        version_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A decision on the approval a skill version's proposal opened, as
+        the API's `POST /approvals/{id}/decisions` makes it; then carried out
+        as the worker carries it out (ticket 40)."""
+        version = await self.store.rule_versions.for_tenant(scope.tenant_id.value).get(version_id)
+        if version is None or version.approval_id is None:
+            raise LookupError(f"no skill version {version_id} waits on an approval")
+        await self.runtime.approval_flow.decide(
+            approval_id=version.approval_id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+        )
+        assert self.skill_settlement is not None
+        await self._settle(SKILLS_DECIDED, self.skill_settlement)
+
     async def read_imports(self) -> list[str]:
         """Each `sales.catalog.imported` an upload announced, read as the
         worker's handler reads it (`dw_worker.consumers.sales_catalog`)."""
@@ -1284,7 +1313,9 @@ class World:
         await self._settle(CATALOG_DECIDED, self.catalog_settlement)
 
     async def _settle(
-        self, event_type: str, settlement: LayoutSettlement | RuleSettlement | CatalogSettlement
+        self,
+        event_type: str,
+        settlement: LayoutSettlement | RuleSettlement | CatalogSettlement | SkillSettlement,
     ) -> None:
         """Each event of ``event_type`` handed to its settlement with the
         envelope's tenancy and the decider, as the worker's handler hands it
@@ -1515,6 +1546,9 @@ def open_world(
         store.rule_versions.seed_approved(bound_to.tenant_id.value, own)
     book = rule_book(policies, store.rule_versions)
     order_rules = RuleBookOrderRules(book)
+    # DW1's skills, the platform's with the bound tenant's own versions (ticket 40).
+    dw1_skills = load_dw1_skills(repo_root / "configs" / "skills" / "dw1")
+    skills = skill_book(dw1_skills, store.rule_versions)
     catalog = SnapshotSalesCatalog(
         MemoryApprovedLists(catalog_store),
         mock,
@@ -1545,6 +1579,19 @@ def open_world(
             else model_requests(model, catalog, order_rules, readers.texts, readiness)
         ),
     )
+    thread_tools = ThreadTools(store, catalog, order_rules)
+    kit = (
+        None
+        if chat_model is None
+        else memory_turn_kit(
+            repo_root / "configs",
+            chat_model,
+            uow_factory=runtime.uow_factory,
+            clock=clock,
+            ids=ids,
+            executions=executions,
+        )
+    )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
@@ -1560,20 +1607,26 @@ def open_world(
         replies=None if model is None else ReplyReader(model),
         thread_agent=(
             None
-            if chat_model is None
+            if kit is None
             else thread_agent(
-                memory_turn_kit(
-                    repo_root / "configs",
-                    chat_model,
-                    uow_factory=runtime.uow_factory,
-                    clock=clock,
-                    ids=ids,
-                    executions=executions,
-                ),
+                kit,
                 worker_file,
-                ThreadTools(store, catalog, order_rules),
+                thread_tools,
                 ThreadContext(store, mailbox),
                 step_model(repo_root / "configs", worker.default_model_profile),
+            )
+        ),
+        skill_agent=(
+            None
+            if kit is None
+            else skill_agent(
+                kit,
+                worker_file,
+                thread_tools,
+                ThreadContext(store, mailbox),
+                step_model(repo_root / "configs", worker.default_model_profile),
+                dw1_skills,
+                skills,
             )
         ),
         handoffs=None if model is None else HandoffReader(model, catalog, store),
@@ -1608,6 +1661,7 @@ def open_world(
         files=readers.source,
         source_cache=NoSourceCache(),
         book=book,
+        skills=skills,
         directory=directory,
         holders=directory,
         notifications=notifications,
@@ -1647,6 +1701,7 @@ def open_world(
         layouts=assembly.layout_decisions,
         rules=assembly.rule_decisions,
         catalog=assembly.catalog_decisions,
+        skills=assembly.skill_decisions,
         worker_file=worker_file,
     )
     return World(
@@ -1684,6 +1739,7 @@ def open_world(
         intake,
         directory,
         executions,
+        SkillSettlement(store, skills, clock, ids),
     )
 
 

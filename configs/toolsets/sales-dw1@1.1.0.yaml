@@ -1,0 +1,25 @@
+schema_version: "1.0"
+# DW1's toolset (configs/workers/sales.yaml pins it): read-only tools for
+# reading a thread message (dw_sales ADR 0012, tickets 30 and 31), and since
+# 1.1.0 the tool that loads one of DW1's skills (dw_sales ADR 0014, ticket
+# 40), offered only to a turn served skills (`AgentTurnKit.turn`): the thread
+# agent's turn is offered exactly 1.0.0's six. Every one is side effect
+# `none`: a turn that reads customer mail gets no outbound tool (platform ADR
+# 0007, SEC02), and `test_dw1_runtime.py` holds every pin here to that.
+toolset_id: sales-dw1
+version: "1.1.0"
+tools:
+  - name: sales.thread_messages
+    version: "1.0.0"
+  - name: sales.case_snapshot
+    version: "1.0.0"
+  - name: sales.case_by_number
+    version: "1.0.0"
+  - name: sales.conversion_lookup
+    version: "1.0.0"
+  - name: sales.lead_time
+    version: "1.0.0"
+  - name: sales.pc_status
+    version: "1.0.0"
+  - name: sales.read_skill
+    version: "1.0.0"

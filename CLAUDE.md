@@ -197,8 +197,11 @@ adapter. Constructor injection — no service locator, no mutable global client.
 
 One deployment serves many customers whose processes differ, and it does that
 without a branch per customer. Every versioned artifact — prompt, tool spec,
-toolset, model profile — resolves through `dw_kernel.overlay.TenantOverlay`:
-the tenant's own version if it has one, the platform's otherwise.
+toolset, model profile, an agent's skill — resolves through
+`dw_kernel.overlay.TenantOverlay`: the tenant's own version if it has one, the
+platform's otherwise. A skill (`configs/skills/<agent>/<name>/SKILL.md`) is
+words a model loads, never a tool, scope or number; a tenant's version of one
+is a rule version decided by a second person (dw_sales ADR 0014).
 
 - `tenant_id=None` is the platform layer: what ships in `configs/`.
 - A concrete tenant id is an override, loaded at runtime from storage, never

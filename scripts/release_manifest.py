@@ -122,6 +122,29 @@ def _copy_bundles() -> list[dict[str, str]]:
     return bundles
 
 
+def _skills() -> list[dict[str, str]]:
+    """Every agent's conduct (`AGENT.md`) and skill (`<name>/SKILL.md`) under
+    configs/skills, pinned by its frontmatter's name and version and by its
+    content (dw_sales ADR 0014): a skill's words reach a model as a prompt's
+    do, so changing them has to move the manifest ref."""
+    pinned = []
+    for path in sorted((REPO_ROOT / "configs" / "skills").rglob("*.md")):
+        if path.name not in ("AGENT.md", "SKILL.md"):
+            continue
+        text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+        head = yaml.safe_load(match.group(1)) if match else {}
+        pinned.append(
+            {
+                "path": path.relative_to(REPO_ROOT).as_posix(),
+                "name": str(head.get("name", "")),
+                "version": str((head.get("metadata") or {}).get("version", "")),
+                "checksum": _checksum(path),
+            }
+        )
+    return pinned
+
+
 def _tool_specs() -> list[dict[str, str]]:
     """Every tool spec a host can load, pinned by content.
 
@@ -296,6 +319,7 @@ def build_manifest() -> dict[str, Any]:
         "workers": _workers(),
         "prompt_bundles": _prompt_bundles(),
         "copy_bundles": _copy_bundles(),
+        "skills": _skills(),
         "tool_specs": _tool_specs(),
         "toolsets": _toolsets(),
         "rubrics": _rubrics(),

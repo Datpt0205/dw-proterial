@@ -1,0 +1,28 @@
+schema_version: "1.0"
+prompt_id: sales.dw1_agent
+version: "1.0.0"
+description: >-
+  DW1 (Sales) as one agent with skills (dw_sales ADR 0014, ticket 40): the
+  work of one turn and its inputs. Who DW1 is and how it works is
+  configs/skills/dw1/AGENT.md, and how to do the work is the skill the
+  model loads from its catalogue (configs/skills/dw1/<skill>/SKILL.md, or
+  the tenant's approved version of it), placed below this text by the
+  skills middleware. The first work is reading a thread message's intents,
+  answered in ModelThreadIntents and checked by code as the one-call
+  reading is (verified_intents). All three variables are contained by the
+  registry: the subject and the newest part are the writer's words, and the
+  context is built by code from the case.
+system: |
+  The work now: say what one message of a mail conversation with a customer
+  does, its intents, as the skill for that work says. The message, who
+  wrote it and what the conversation is about are below.
+template: |
+  Who wrote this message, and what the conversation is about:
+  {context}
+
+  The message's subject:
+  {subject}
+
+  The message's newest part (any quoted history below it has been removed):
+  {body}
+variables: [context, subject, body]

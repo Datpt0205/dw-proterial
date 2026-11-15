@@ -42,6 +42,7 @@ const MODEL_STEPS: Record<ModelStep, null> = {
   change_request: null,
   thread_agent: null,
   reply_draft: null,
+  skill_intents: null,
 };
 export const MODEL_STEP_IDS = Object.keys(MODEL_STEPS) as ModelStep[];
 

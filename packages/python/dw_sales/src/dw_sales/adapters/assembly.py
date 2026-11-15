@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_agent_runtime.adapters.agent_turn import AgentTurnKit
 from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
+from dw_agent_runtime.adapters.skills import TurnSkills
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -87,6 +88,7 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
+from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.brief_writing import BriefWriter
@@ -127,10 +129,24 @@ from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.salesorder_learning import SalesOrderLearning
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.skills import (
+    READ_SKILL,
+    READ_SKILL_VERSION,
+    Dw1Skills,
+    SkillSettlement,
+    skill_book,
+)
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, SourceCachePort
 from dw_sales.application.telemetry import SpanPort
-from dw_sales.application.thread_agent import CEILING, THREAD_AGENT, ThreadAgent
+from dw_sales.application.thread_agent import (
+    CEILING,
+    DW1_AGENT,
+    SKILL_CEILING,
+    THREAD_AGENT,
+    SkillSetPort,
+    ThreadAgent,
+)
 from dw_sales.application.thread_tools import (
     ThreadContext,
     ThreadContextPort,
@@ -336,6 +352,11 @@ def build_dw1(
         )
     )
     readiness = model_readiness(configs, session_factory)
+    # DW1's skills (ticket 40): the platform's in `configs/skills/dw1`, a
+    # tenant's own approved version of one in `platform.rule_versions`.
+    dw1_skills = load_dw1_skills(configs / "skills" / "dw1")
+    skills = skill_book(dw1_skills, SqlRuleVersionLookup(session_factory))
+    thread_tools = ThreadTools(order_cases, catalog, tenant_rules)
     # What DW1's model steps did: the activity routes, the process page's
     # share and the case lists' drill-down read it.
     step_activity = SqlStepActivityReader(session_factory)
@@ -376,9 +397,24 @@ def build_dw1(
             else thread_agent(
                 agent_turns,
                 worker_file,
-                ThreadTools(order_cases, catalog, tenant_rules),
+                thread_tools,
                 ThreadContext(uow, mail),
                 step_model(configs, worker.default_model_profile),
+            )
+        ),
+        # DW1's agent with its skills (ticket 40), on the same kit: the
+        # platform's skills with the tenant's approved versions of them.
+        skill_agent=(
+            None
+            if agent_turns is None
+            else skill_agent(
+                agent_turns,
+                worker_file,
+                thread_tools,
+                ThreadContext(uow, mail),
+                step_model(configs, worker.default_model_profile),
+                dw1_skills,
+                skills,
             )
         ),
         handoffs=(
@@ -416,6 +452,7 @@ def build_dw1(
         # serving no source view keeps nothing.
         source_cache=source_cache or NoSourceCache(),
         book=book,
+        skills=skills,
         directory=directory,
         holders=holders,
         notifications=notifications,
@@ -457,6 +494,7 @@ def build_dw1(
         layouts=assembly.layout_decisions,
         rules=assembly.rule_decisions,
         catalog=assembly.catalog_decisions,
+        skills=assembly.skill_decisions,
         worker_file=worker_file,
     )
     catalog_parsing = CatalogParsing(
@@ -633,6 +671,26 @@ def build_rule_settlement(
     )
 
 
+def build_skill_settlement(
+    *,
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> SkillSettlement:
+    """What carries out a decided skill version approval
+    (`sales.skills.decided`, ticket 40), for the worker's outbox handler. The
+    version and the approval are rows of the approval's own tenant; the
+    platform's skill files say which numbers it ships."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    dw1_skills = load_dw1_skills(configs / "skills" / "dw1")
+    return SkillSettlement(
+        uow, skill_book(dw1_skills, SqlRuleVersionLookup(session_factory)), clock, ids
+    )
+
+
 def build_followup_lane(
     *,
     configs: Path,
@@ -670,9 +728,42 @@ def thread_agent(
     toolset, its profile's chat route) under the step's prompt and ceiling,
     built once."""
     worker, _ = parse_worker_file(worker_file)
+    _register_dw1_tools(kit, tools)
+    return ThreadAgent(kit.turn(worker, THREAD_AGENT, CEILING), context, models)
+
+
+def skill_agent(
+    kit: AgentTurnKit,
+    worker_file: Path,
+    tools: ThreadTools,
+    context: ThreadContextPort,
+    models: StepModelPort,
+    skills: Dw1Skills,
+    book: SkillSetPort,
+) -> ThreadAgent:
+    """DW1's agent with its skills (ticket 40, dw_sales ADR 0014): the thread
+    reader's tools and binding, plus the skill loader, on a turn under
+    `DW1_AGENT` that carries DW1's conduct and the catalogue of the skills
+    ``book`` resolves for each run's tenant, built once."""
+    worker, _ = parse_worker_file(worker_file)
+    _register_dw1_tools(kit, tools)
+    turn = kit.turn(
+        worker,
+        DW1_AGENT,
+        SKILL_CEILING,
+        skills=TurnSkills(read_tool=READ_SKILL, agent=skills.agent),
+    )
+    return ThreadAgent(turn, context, models, skills=book)
+
+
+def _register_dw1_tools(kit: AgentTurnKit, tools: ThreadTools) -> None:
+    """DW1's read-only tools and its skill loader on ``kit``, each with its
+    spec's policy, once: both readers are built over one kit."""
+    if READ_SKILL in kit.skill_readers:
+        return
     for tool in registered_tools(tools, kit.definition):
         kit.register(tool)
-    return ThreadAgent(kit.turn(worker, THREAD_AGENT, CEILING), context, models)
+    kit.register_skill_reader(kit.definition(READ_SKILL, READ_SKILL_VERSION))
 
 
 def model_requests(

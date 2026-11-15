@@ -217,10 +217,12 @@ def _reading_row(
 
 
 def _reply_step(reading: ReplyReading, steps_by_prompt: Mapping[str, ModelStep]) -> ModelStep:
-    """The step a thread message's reading is: the thread agent's when its
-    prompt is (tickets 30 and 31), the one-call reading's otherwise."""
+    """The step a thread message's reading is: the thread agent's or DW1's
+    agent with skills' when its prompt is (tickets 30, 31 and 40), the
+    one-call reading's otherwise."""
     step = steps_by_prompt.get(reading.prompt)
-    return step if step is ModelStep.THREAD_AGENT else ModelStep.REPLY_INTENT
+    agents = (ModelStep.THREAD_AGENT, ModelStep.SKILL_INTENTS)
+    return step if step in agents else ModelStep.REPLY_INTENT
 
 
 def _from_disposition(

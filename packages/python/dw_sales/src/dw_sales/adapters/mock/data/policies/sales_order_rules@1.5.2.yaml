@@ -8,8 +8,9 @@ policy_version: "1.5.2"
 # description_attributes (ticket 28), message_intent (ticket 31),
 # rfq_extraction (ticket 29), reply_intent (ticket 32), request_handoff
 # (ticket 33), layout_proposal (ticket 30), po_body_extraction (AI item
-# 4), change_request (ticket 27), thread_agent (tickets 30 and 31) and
-# reply_draft (ticket 32), for the unit tests and evals
+# 4), change_request (ticket 27), thread_agent (tickets 30 and 31),
+# reply_draft (ticket 32) and skill_intents (ticket 40), for the unit tests
+# and evals
 # that run a model over a recorded answer, and the API's integration suite
 # over stand-in measurements (dw_sales ADR 0005). `make demo-reset` installs
 # 1.5.4 instead (`no_model/`): this version with every step off, since a
@@ -168,6 +169,9 @@ model_assist:
   # A local model words a mail to the customer beside the template's draft,
   # every figure checked by code (ticket 32).
   reply_draft: true
+  # DW1's agent reads a thread message with its skills first (ticket 40),
+  # falling back to the thread agent, then reply_intent's one call.
+  skill_intents: true
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

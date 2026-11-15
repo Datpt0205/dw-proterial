@@ -86,12 +86,18 @@ _ON_DISPOSITION: Final = frozenset(
         ModelStep.MESSAGE_INTENT,
         ModelStep.REPLY_INTENT,
         ModelStep.THREAD_AGENT,
+        ModelStep.SKILL_INTENTS,
         ModelStep.REQUEST_HANDOFF,
     }
 )
 # Steps whose product is a route (code routes from the kind read).
 _ROUTING: Final = frozenset(
-    {ModelStep.MESSAGE_INTENT, ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT}
+    {
+        ModelStep.MESSAGE_INTENT,
+        ModelStep.REPLY_INTENT,
+        ModelStep.THREAD_AGENT,
+        ModelStep.SKILL_INTENTS,
+    }
 )
 
 
@@ -327,7 +333,7 @@ def _disposition_produced(
             plain(n, v) for n, v in (("kind", reading.kind), ("language", reading.language)) if v
         ]
     if (
-        row.step in (ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT)
+        row.step in (ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT, ModelStep.SKILL_INTENTS)
         and disposition.reply is not None
     ):
         reply = disposition.reply.reading

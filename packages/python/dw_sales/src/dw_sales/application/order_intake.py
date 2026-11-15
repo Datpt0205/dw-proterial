@@ -376,6 +376,11 @@ class OrderIntake:
     # answer, `replies` reads it, else a person. None: no tool-calling model
     # is wired in this process.
     thread_agent: ThreadAgent | None = None
+    # DW1's agent with its skills (ticket 40, dw_sales ADR 0014), asked before
+    # the thread agent, for a tenant whose rules turn it on; without a
+    # reading of its own, the thread agent reads it, else the one call, else
+    # a person. None: no tool-calling model is wired in this process.
+    skill_agent: ThreadAgent | None = None
     # A model pre-filling a routed message's hand-off to PC or QA (ticket 33),
     # for a tenant whose rules turn it on. None: no model is wired, and the
     # message is routed with no hand-off, as before.
@@ -434,12 +439,19 @@ class OrderIntake:
         if self.threads is None:
             return False
         rules = await self.rules.rules(scope)
+        for agent, step in self._agents():
+            if agent is not None and await self._model_step(scope, rules, step):
+                return True
+        return self.replies is not None and await self._model_step(
+            scope, rules, ModelStep.REPLY_INTENT
+        )
+
+    def _agents(self) -> tuple[tuple[ThreadAgent | None, ModelStep], ...]:
+        """The readers with tools, in the order asked: DW1's agent with its
+        skills (ticket 40), then the thread agent (tickets 30 and 31)."""
         return (
-            self.thread_agent is not None
-            and await self._model_step(scope, rules, ModelStep.THREAD_AGENT)
-        ) or (
-            self.replies is not None
-            and await self._model_step(scope, rules, ModelStep.REPLY_INTENT)
+            (self.skill_agent, ModelStep.SKILL_INTENTS),
+            (self.thread_agent, ModelStep.THREAD_AGENT),
         )
 
     async def read_sent(
@@ -771,17 +783,19 @@ class OrderIntake:
         run: RunContext,
     ) -> ReplyReading | None:
         """A thread message's intents, read by the steps the tenant's rules
-        turn on and their bars allow: the thread agent first (tickets 30 and
-        31), then the one-call reading (ticket 26). Where the agent was asked
-        and gave no reading, the one-call reading is stamped with why
-        (`ReplyReading.fallback`), or, with that step off too, an unread
-        reading is, for Sales. None: neither step runs."""
+        turn on and their bars allow: DW1's agent with its skills first
+        (ticket 40), then the thread agent (tickets 30 and 31), then the
+        one-call reading (ticket 26). Where an agent was asked and gave no
+        reading, the one-call reading is stamped with why (the last agent's,
+        `ReplyReading.fallback`), or, with that step off too, an unread
+        reading is, for Sales. None: no step runs."""
         fallback: AgentFallback | None = None
-        if self.thread_agent is not None and await self._model_step(
-            scope, rules, ModelStep.THREAD_AGENT
-        ):
+        asked: ThreadAgent | None = None
+        for agent, step in self._agents():
+            if agent is None or not await self._model_step(scope, rules, step):
+                continue
             try:
-                return await self.thread_agent.read(
+                return await agent.read(
                     scope,
                     message,
                     author=author,
@@ -794,9 +808,11 @@ class OrderIntake:
                 fallback = exc.ceiling
             except ModelUnavailableError:
                 fallback = "unavailable"
+            asked = agent
             # Ids and the reason only: never the message.
             _LOG.info(
-                "thread agent gave no reading of %s for tenant %s: %s",
+                "%s gave no reading of %s for tenant %s: %s",
+                step.value,
                 message.message_id,
                 scope.tenant_id.value,
                 fallback,
@@ -814,8 +830,8 @@ class OrderIntake:
             if fallback is None:
                 return reading
             return ReplyReading.model_validate({**reading.model_dump(), "fallback": fallback})
-        if fallback is not None and self.thread_agent is not None:
-            return self.thread_agent.unavailable(rules.version, fallback)
+        if fallback is not None and asked is not None:
+            return asked.unavailable(rules.version, fallback)
         return None
 
     async def _with_handoff(

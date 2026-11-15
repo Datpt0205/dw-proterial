@@ -1,0 +1,339 @@
+{
+  "_comment": "Thread messages whose meaning is WITHHELD from the prompt (ticket 40, dw_sales ADR 0014 decision 4): each is a short answer to an earlier message from Sales that only the tool sales.thread_messages returns (the second option, yes please, the latter, a date asked for or a date confirmed). W03 and W04 say the same sentence after two different questions (only the sign-off differs, so each turn is recorded apart), so only the earlier message says which intent it is. `gold` follows the skill's own definitions (reply_intent@2.0.0's word for word); `tools` is the look-up a careful reader makes, and the share of these turns that made it is graded. Every company, person, code and number here is fictional; the customer and items are the mock sample set's.",
+  "views": {
+    "nrv_order": {
+      "kind": "order",
+      "numbers": [
+        "NRV-PO-26-0457"
+      ],
+      "status": "confirmation_sent",
+      "lines": [
+        {
+          "line_no": 1,
+          "customer_item_code": "NV-HW22-BK",
+          "prv_code": "HW-1004",
+          "quantity": "1200",
+          "unit": "m",
+          "requested_date": "2026-11-20",
+          "confirmed_dates": [
+            "2026-11-24"
+          ],
+          "pc_deliveries": []
+        },
+        {
+          "line_no": 2,
+          "customer_item_code": "NV-CB4-22-GY",
+          "prv_code": "CB-2007",
+          "quantity": "600",
+          "unit": "m",
+          "requested_date": "2026-11-20",
+          "confirmed_dates": [
+            "2026-11-27"
+          ],
+          "pc_deliveries": []
+        },
+        {
+          "line_no": 3,
+          "customer_item_code": "NV-CB4-075-BK",
+          "prv_code": "CB-2006",
+          "quantity": "300",
+          "unit": "m",
+          "requested_date": "2026-11-25",
+          "confirmed_dates": [
+            "2026-12-02"
+          ],
+          "pc_deliveries": []
+        }
+      ],
+      "waiting_on_pc_since": null
+    },
+    "nrv_correction": {
+      "kind": "order",
+      "numbers": [
+        "NRV-PO-26-0457"
+      ],
+      "status": "correction_requested",
+      "lines": [
+        {
+          "line_no": 1,
+          "customer_item_code": "NV-HW22-BK",
+          "prv_code": "HW-1004",
+          "quantity": "1200",
+          "unit": "m",
+          "requested_date": "2026-11-20",
+          "confirmed_dates": [],
+          "pc_deliveries": []
+        },
+        {
+          "line_no": 2,
+          "customer_item_code": "NV-CB4-22-GY",
+          "prv_code": "CB-2007",
+          "quantity": "600",
+          "unit": "m",
+          "requested_date": "2026-11-20",
+          "confirmed_dates": [],
+          "pc_deliveries": []
+        }
+      ],
+      "waiting_on_pc_since": null
+    }
+  },
+  "messages": [
+    {
+      "id": "W01",
+      "lang": "en",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_correction"
+      ],
+      "status": "correction_requested",
+      "asked_about": "correction",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: PO NRV-PO-26-0457 needs a correction",
+      "body": "Hi An,\n\nThe second option, please.\n\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "PO NRV-PO-26-0457 needs a correction",
+          "text": "Line 2 of your PO NRV-PO-26-0457 is priced differently from our quotation. Could you either send us a revised PO, or confirm that we should keep the PO as it is?"
+        }
+      ],
+      "gold": [
+        "rejects"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W02",
+      "lang": "vi",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_correction"
+      ],
+      "status": "correction_requested",
+      "asked_about": "correction",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: PO NRV-PO-26-0457 cần sửa",
+      "body": "Chào An,\nChị chọn cách thứ nhất nhé.\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "PO NRV-PO-26-0457 cần sửa",
+          "text": "Giá dòng 2 trong PO NRV-PO-26-0457 khác với báo giá bên em gửi. Chị gửi lại PO đã sửa, hoặc xác nhận giữ nguyên PO giúp em nhé."
+        }
+      ],
+      "gold": [
+        "sends_po"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W03",
+      "lang": "en",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Order confirmation NRV-PO-26-0457",
+      "body": "Hi An,\n\nFor line 3 we need 28/11.\n\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "Order confirmation NRV-PO-26-0457",
+          "text": "Before we confirm your PO NRV-PO-26-0457, could you tell us which delivery date you need for line 3?"
+        }
+      ],
+      "gold": [
+        "adds_info"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W04",
+      "lang": "en",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Order confirmation NRV-PO-26-0457",
+      "body": "Hi An,\n\nFor line 3 we need 28/11.\n\nBest regards,\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "Order confirmation NRV-PO-26-0457",
+          "text": "We confirm line 3 of your PO NRV-PO-26-0457 for delivery on 02/12."
+        }
+      ],
+      "gold": [
+        "requests_change"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W05",
+      "lang": "ja",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: 注文請書 NRV-PO-26-0457",
+      "body": "An様\n\nはい、お願いします。\n\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "注文請書 NRV-PO-26-0457",
+          "text": "NRV-PO-26-0457の2行目は、お電話でお話しした通りキャンセルしてよろしいでしょうか。"
+        }
+      ],
+      "gold": [
+        "accepts"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W06",
+      "lang": "vi",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Xác nhận đơn hàng NRV-PO-26-0457",
+      "body": "Chào An,\nĐược em nhé.\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "Xác nhận đơn hàng NRV-PO-26-0457",
+          "text": "Dòng 2 của PO NRV-PO-26-0457 bên em đề xuất đổi màu vỏ sang xám thay cho đen, chị xem có được không ạ?"
+        }
+      ],
+      "gold": [
+        "accepts"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W07",
+      "lang": "en",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Order confirmation NRV-PO-26-0457",
+      "body": "Hi An,\n\nOnly if line 1 still arrives on 24/11.\n\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "Order confirmation NRV-PO-26-0457",
+          "text": "Our planning team proposes to deliver line 2 of NRV-PO-26-0457 on 05/12 instead of 27/11. Is this acceptable?"
+        }
+      ],
+      "gold": [
+        "requests_change"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    },
+    {
+      "id": "W08",
+      "lang": "en",
+      "author": "customer",
+      "customer": "NRV",
+      "views": [
+        "nrv_order"
+      ],
+      "status": "confirmation_sent",
+      "asked_about": "order",
+      "number": "NRV-PO-26-0457",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Order confirmation NRV-PO-26-0457",
+      "body": "Hi An,\n\nPlease do the latter.\n\nHana",
+      "earlier": [
+        {
+          "author": "sales",
+          "received_on": "2026-11-09",
+          "subject": "Order confirmation NRV-PO-26-0457",
+          "text": "Shall we keep line 3 of NRV-PO-26-0457 as ordered, or would you like to cancel it?"
+        }
+      ],
+      "gold": [
+        "cancels"
+      ],
+      "tools": [
+        "sales.thread_messages"
+      ],
+      "tags": [
+        "withheld"
+      ]
+    }
+  ]
+}

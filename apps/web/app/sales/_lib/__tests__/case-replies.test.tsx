@@ -163,6 +163,26 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
   );
 
   it(
+    "a reply DW1's agent read with a skill names the skill version it loaded (ticket 40)",
+    async () => {
+      shown = waiting([
+        reply({
+          prompt: "sales.dw1_agent@1.0.0",
+          skills: ["sales_skill_thread_intents@1.1.0"],
+        }),
+      ]);
+      page();
+
+      expect(
+        await screen.findByText(
+          "Đọc theo kỹ năng: sales_skill_thread_intents@1.1.0",
+        ),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
     "a reply nobody read proposes nothing, and the step is still Sales' to take",
     async () => {
       shown = waiting([

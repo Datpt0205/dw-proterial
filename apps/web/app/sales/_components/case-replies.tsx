@@ -144,6 +144,7 @@ function ReplyRow({ reply, answer }: { reply: Reply; answer: ReactNode }) {
         />
       </Space>
       <FallbackNote fallback={reply.fallback} />
+      <SkillsNote skills={reply.skills} />
       <Quotes intents={reply.intents} who="khách" />
       <ProposalNote proposal={reply.proposal} />
       {answer}
@@ -171,6 +172,7 @@ function SentRow({ sent }: { sent: Sent }) {
         ) : null}
       </Space>
       <FallbackNote fallback={sent.fallback} />
+      <SkillsNote skills={sent.skills} />
       <Quotes intents={sent.intents} who="Sales" />
       <ProposalNote proposal={sent.proposal} />
     </div>
@@ -201,6 +203,19 @@ function FallbackNote({ fallback }: { fallback?: Reply["fallback"] }) {
     <Typography.Text type="secondary" role="note">
       DW1 tra cứu thêm không xong ({label(AGENT_FALLBACK, fallback)}): đọc một
       lần như bình thường.
+    </Typography.Text>
+  );
+}
+
+/**
+ * The skill versions DW1's agent loaded to read the message (ticket 40):
+ * which version of the company's words read it, never a step to take.
+ */
+function SkillsNote({ skills }: { skills?: readonly string[] }) {
+  if (!skills?.length) return null;
+  return (
+    <Typography.Text type="secondary">
+      Đọc theo kỹ năng: {skills.join(", ")}
     </Typography.Text>
   );
 }

@@ -29,7 +29,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import PriceView
@@ -1251,6 +1251,9 @@ class CaseReplyView(BaseModel):
     # Why the thread agent gave no reading of its own, where it was asked
     # first (tickets 30 and 31): the reading is then the one call's, or none.
     fallback: AgentFallback | None = None
+    # The skill versions DW1's agent loaded to read it (ticket 40): the
+    # tenant's own or the platform's, each ``<key>@<version>``.
+    skills: list[str] = Field(default_factory=list)
 
 
 class SentMessageView(BaseModel):
@@ -1272,6 +1275,8 @@ class SentMessageView(BaseModel):
     proposal: ProposedStep | None
     # As on a reply: why the thread agent fell back, where it was asked.
     fallback: AgentFallback | None = None
+    # As on a reply: the skill versions DW1's agent loaded to read it.
+    skills: list[str] = Field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1342,6 +1347,7 @@ def case_talk(
                 proposal=proposed(entry.disposition.message_id),
                 picked_by=reply.picked_by,
                 fallback=reply.reading.fallback if reply.reading else None,
+                skills=list(reply.reading.skills) if reply.reading else [],
             )
             for entry, reply in replies
         ],
@@ -1365,6 +1371,7 @@ def _sent_view(
         prompt=reading.prompt if reading else None,
         proposal=proposed(message.message_id),
         fallback=reading.fallback if reading else None,
+        skills=list(reading.skills) if reading else [],
     )
 
 

@@ -133,6 +133,7 @@ from dw_sales.adapters.assembly import (
     build_followup_lane,
     build_layout_settlement,
     build_rule_settlement,
+    build_skill_settlement,
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
@@ -157,6 +158,7 @@ from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
+from dw_sales.application.skills import SKILLS_DECIDED
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -849,6 +851,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 ids=ids,
             ),
             applied="rules decision applied",
+        )
+        # A tenant's version of one of DW1's skills (Sales ticket 40): a
+        # run-less `sales.skills` approval, carried out the same way.
+        handlers[SKILLS_DECIDED] = build_decided_handler(
+            build_skill_settlement(
+                configs=REPO_ROOT / "configs",
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                clock=clock,
+                ids=ids,
+            ),
+            applied="skill decision applied",
         )
         # A master-data import (Sales ticket 41): a run-less `sales.catalog`
         # approval, carried out the same way.

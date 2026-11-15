@@ -216,6 +216,19 @@ API and the plan use the English terms. The spec is
   reading reads the message, else Sales, and the reading says why. Off
   until a tenant turns it on and its live eval meets the bar (dw_sales ADR
   0012, tickets 30 and 31).
+- **Skill** (Kỹ năng): words that say how DW1 does one kind of work, in
+  deepagents' `SKILL.md` shape: a name, a description DW1 chooses it by,
+  then the instructions. The platform ships each with DW1's conduct
+  (`AGENT.md`); a company may hold its own version of one, proposed by
+  whoever proposes rules and approved by the head, never by its proposer.
+  A skill adds no tool, scope, recipient or number. A reading stamps the
+  skill versions it loaded (dw_sales ADR 0014, ticket 40).
+- **DW1's agent with skills** (DW1 đọc theo kỹ năng): the thread agent
+  served the skills its company holds; it loads the one that fits and is
+  checked as the one-call reading is. Without a reading of its own, the
+  thread agent reads the message where that is on, else the one call, else
+  Sales. Off until a tenant turns it on and its live eval meets the bar
+  (`skill_intents`, ticket 40).
 - **AI-worded reply** (Bản AI soạn): a mail to the customer about an order
   that a local model words beside the template's draft, never in its place:
   the answer to a customer's reply read `asks` (which has no template), PC's

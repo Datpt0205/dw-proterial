@@ -51,16 +51,16 @@ What is true of the code today:
    (never the proposer), stamped on every case that used it.
 3. **Code guards; it does not route.** Code no longer chooses which skill
    reads a mail. Code still owns, and a skill can change none of:
-   - the tenant, workspace and customer every tool is bound to;
-   - the typed output each skill must produce, quotes located in the mail,
-     every figure checked against a fact (`figure_check`);
-   - every effect: a case moved, a recipient chosen, a Bravo file, an
-     approval. The agent proposes; a person confirms;
-   - conversation tracking by Message-ID / In-Reply-To / References (ADR
-     0009). It is one deterministic function, not a branch, and a model's
-     guess is worse than it.
-   A skill adds no tool, scope, recipient or number (ADR 0012 decision 3
-   holds inside this).
+    - the tenant, workspace and customer every tool is bound to;
+    - the typed output each skill must produce, quotes located in the mail,
+      every figure checked against a fact (`figure_check`);
+    - every effect: a case moved, a recipient chosen, a Bravo file, an
+      approval. The agent proposes; a person confirms;
+    - conversation tracking by Message-ID / In-Reply-To / References (ADR
+      0009). It is one deterministic function, not a branch, and a model's
+      guess is worse than it.
+      A skill adds no tool, scope, recipient or number (ADR 0012 decision 3
+      holds inside this).
 4. **Measured first, old steps kept as the fallback.** Each skill keeps its
    step's eval set, with added cases where the facts a skill needs are
    withheld from the prompt, so that only fetching them gets the answer right,
@@ -90,3 +90,81 @@ What is true of the code today:
 - The skill store's shape (one row per skill version per tenant, the
   replay's example set) and who may write a skill (PIC and head, as ADR 0012
   says, or the admin only).
+
+## Applied to ticket 40 (2026-11-16, by the agent, Đạt away)
+
+Decisions 1, 2, 4 and 5 for the first skill, reading a thread message's
+intents. Decision 3 holds as written; what the decisions did not settle was
+settled so, and is recorded here because no rule above moved.
+
+- **Files.** `configs/skills/dw1/AGENT.md` (DW1's conduct) and
+  `configs/skills/dw1/thread-intents/SKILL.md` (deepagents' format: name,
+  description, `metadata.version`, then the instructions; the intents'
+  definitions are `reply_intent@2.0.0`'s word for word, a test holds it).
+  The release manifest pins each by name, version and checksum
+  (`skills`). The turn's own prompt, `sales.dw1_agent@1.0.0`, carries only
+  the work and its inputs, contained by the registry. `AGENT.md` is the
+  platform's only for now: a tenant edits skills, not the conduct.
+- **The store is the rules' own.** A tenant's version of a skill is a row of
+  `platform.rule_versions` under `sales_skill_<name>` (migration
+  `80584b911796` admits the key): one row per tenant, skill and version,
+  with its words, status, proposer and decider, under the table's RLS
+  (tenant, ENABLEd and FORCEd), grants and checks, which the platform's
+  tests already assert. Scope: the tenant's, as a rule's and a prompt's;
+  a skill reads every workspace's mail alike. A second table of the same
+  shape would have been a second engine to keep honest.
+- **Proposed and decided like a learned rule.** Whoever holds
+  `sales.rules.propose` proposes (`POST /sales/skills/{name}/versions`);
+  the head (`sales.rules.approve`) decides on a `sales.skills` approval,
+  never the proposer, and never applied directly, the head's own proposal
+  included (the platform's `RuleVersionEngine`, `RuleDecisionGuard`,
+  `RuleVersionSettlement`; the worker carries out `sales.skills.decided`).
+  Only a skill the platform ships may be versioned: a tenant's wholly new
+  skill is not served yet.
+- **Served from the run, loaded by a tool.** Code resolves the run's
+  tenant's skills (`SkillBook.skill_set`, through `TenantOverlay`: the
+  tenant's approved version, else the platform's, never sideways) and
+  serves them around the turn (`dw_agent_runtime.model.skills.serving`).
+  deepagents' `SkillsMiddleware` builds the catalogue from a backend that
+  answers from that set only; its own words name `read_file`, a builtin the
+  platform never installs, so the catalogue's words are the platform's and
+  a skill is loaded with `sales.read_skill@1.0.0` through `ToolExecutor`,
+  answered from the served set, refused for a run of another tenant or
+  workspace. `sales-dw1@1.1.0` pins it; it is offered only to a turn served
+  skills, so the thread agent is offered exactly its six. A reading stamps
+  the skill versions it loaded (`ReplyReading.skills`), shown on the reply.
+- **A step of its own.** `ModelStep.SKILL_INTENTS`, switch
+  `model_assist.skill_intents` (off in every platform version), bar 0.85 on
+  the bar set's intent accuracy, held with no false `accepts` and no tool
+  answering for another customer, as the thread agent's. Asked first; with
+  no reading of its own the thread agent reads where that is on, then the
+  one call, then a person; off, nothing of it runs (a test compares the
+  reading with one made with no agent wired). Its ceiling: five calls,
+  24,000 input tokens, 120 seconds (one call more than the thread agent's,
+  to load the skill). The bar measures the platform's skill; a tenant's
+  version is read by its head before it applies.
+- **Not built yet:** the replay of a proposed version on the tenant's
+  example mails, with and without it (it needs the model, so the worker),
+  and the rules-area page that lists skills, shows a version and its
+  replay, and sends it for approval. Ticket 40's follow-up.
+- **Measured on Strata, 2026-11-16 (Qwen3.8-Flash-Next Q2_0, Giang's home
+  lab, not attested)**: 0.183 on the bar's set (the one call 0.796, the
+  thread agent 0.85), 0.175 on all 80. The model loaded the skill in every
+  turn and then looked something up in every turn, 276 look-ups in 80 turns
+  (the thread agent: 57 in 72), repeating `sales.case_snapshot` and
+  `sales.thread_messages` until 63 turns reached the five-call ceiling and
+  fell back. No false `accepts`, no tool answered for another customer, and
+  every withheld message was looked up with the right tool. One wording
+  change aimed at that (look up at most once, never twice; "never call the
+  same tool twice" in `AGENT.md`) made it worse (0.083, 74 turns at the
+  ceiling) and was not kept. On this model the step stays off and the
+  one-call reading reads, as decision 4 says; the open question is below.
+
+
+## Amended 2026-11-16 by dw_sales ADR 0015 decision 5
+
+The skill a mail needs is chosen by one constrained, scored call (a
+JSON-schema enum of the tenant's skills, scored by the token
+probabilities), not by the agent's free choice: measured on Strata in
+ticket 40, the free choice looped (0.183). Skills stay tenant-edited text;
+tools stay for the facts a reading lacks.

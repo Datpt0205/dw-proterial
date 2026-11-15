@@ -1,0 +1,21 @@
+schema_version: "1.0"
+# Loads one of DW1's skills (dw_sales ADR 0014, ticket 40): the instructions
+# of a skill the turn's catalogue lists, from the set code resolved for the
+# run's tenant and served around the turn (`dw_agent_runtime.adapters.skills`).
+# Offered only to a turn served skills. Reads only; it adds no tool, scope or
+# data: a name the set lacks is not found.
+name: sales.read_skill
+version: "1.0.0"
+summary: "The full instructions of one skill in your skills list, by its name."
+when_to_use: "Before you do a piece of work, to load the skill whose description fits it."
+when_not_to_use: "A skill you already loaded in this turn, or a name the skills list does not show."
+returns: "name, found, and the skill's instructions when found."
+required_scopes: [sales.inbox.process]
+# Reads only: nothing is written, sent or approved (dw_sales ADR 0012).
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+# The tenant's own words about its work.
+data_classification: [internal]

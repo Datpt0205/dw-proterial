@@ -830,6 +830,41 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "3b4da0003add62b4783f1c3cdf1fae861414f586908014eff9cf67f2d991b78d",
+      "dataset_id": "sales_skill_intents",
+      "files": [
+        {
+          "checksum": "3b054d55c5bfe735fc7919b3cef6758bb35e41ff9dd4b0c989eff5227bb9bd2c",
+          "path": "evals/expected/sales_skill_intents.json"
+        },
+        {
+          "checksum": "bf0e3ee1fcd349cab2bb4cb5ad5820265dad387b46b6b78c208384370183c180",
+          "path": "evals/expected/sales_skill_intents_golden.json"
+        },
+        {
+          "checksum": "6aeaac77c7f39fe3426ad54ab0ca5d51cd8e0f28f552900aa558530d5d871857",
+          "path": "evals/fixtures/cases/sales_reply_golden.json"
+        },
+        {
+          "checksum": "d60aae572d4e34bf70ca1a2fd7ad3df3804b89466dd00b797cf0efb630b7001d",
+          "path": "evals/fixtures/cases/sales_skill_intents.json"
+        },
+        {
+          "checksum": "08700bdf6d87178c1399dcda3911419e474d2df90df24a0136ecb51547bb610d",
+          "path": "evals/fixtures/cases/sales_skill_intents_withheld.json"
+        },
+        {
+          "checksum": "832745599bf9c00b1a94235a8c848ed5246b0b87ddd75daa0cb744c4f43e1985",
+          "path": "evals/fixtures/cases/sales_thread_agent_security.json"
+        },
+        {
+          "checksum": "1599b55f24ec68f9393a20d031331edb2eac82dc1a9e1af9a9c431b38ce3feab",
+          "path": "evals/fixtures/cases/sales_thread_agent_threads.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "6ff2fc7f3c2d2706cb63f9ed645b117146fbeeff463d740b5dc83fc13e2138d3",
       "dataset_id": "sales_thread_agent",
       "files": [
@@ -876,7 +911,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "6a096bdba431a2715e8e599cd0954a8b5c656d55",
+  "git_sha": "df11cb3542b6e82457da2cbbe12e18131423ac49",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1256,6 +1291,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "f9cd858e46f9c68849ab1fe312f8c8936054782144ed3af644c47e3458bfe381",
+      "prompt_id": "sales.dw1_agent",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "70b956d776f29d398e0f79a298ca4655b3c94cebc26571f6466259cfede0d621",
       "prompt_id": "sales.finding_explanation",
       "version": "1.0.0"
@@ -1353,6 +1393,20 @@
   ],
   "rubrics": [],
   "schema_version": "1.0",
+  "skills": [
+    {
+      "checksum": "aa431d0c3c88ed226130f9451161197eb8019d7b365f65c5e0004b77220a9e8a",
+      "name": "dw1",
+      "path": "configs/skills/dw1/AGENT.md",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "8990690b840ddd97972f46959398dea0c5a623dd666b1cde86c5f9d8e9b649d3",
+      "name": "thread-intents",
+      "path": "configs/skills/dw1/thread-intents/SKILL.md",
+      "version": "1.0.0"
+    }
+  ],
   "tool_specs": [
     {
       "approval_policy": "never",
@@ -1391,6 +1445,13 @@
     },
     {
       "approval_policy": "never",
+      "checksum": "376fc672a7958b8e36b851b9d60e27e8bcbf2c375226eee62be1b07163e0a453",
+      "name": "sales.read_skill",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
       "checksum": "04e76f9d479e5a3eb60ff6ec12c5562fad82701318421a9a1bade8fa8c1d255c",
       "name": "sales.thread_messages",
       "side_effect_level": "none",
@@ -1410,6 +1471,20 @@
       ],
       "toolset_id": "sales-dw1",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "10f02169e3a969f2fc3d04953bb323ae2dbef96f2bc636aeb7a69507878f9994",
+      "tools": [
+        "sales.thread_messages@1.0.0",
+        "sales.case_snapshot@1.0.0",
+        "sales.case_by_number@1.0.0",
+        "sales.conversion_lookup@1.0.0",
+        "sales.lead_time@1.0.0",
+        "sales.pc_status@1.0.0",
+        "sales.read_skill@1.0.0"
+      ],
+      "toolset_id": "sales-dw1",
+      "version": "1.1.0"
     }
   ],
   "workers": [
@@ -1432,8 +1507,8 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.2.0",
-      "toolset_version": "1.0.0",
+      "prompt_bundle_version": "1.3.0",
+      "toolset_version": "1.1.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"
     }
