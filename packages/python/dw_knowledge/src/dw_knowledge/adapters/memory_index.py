@@ -45,8 +45,17 @@ class InMemoryVectorIndexAdapter:
             del self._chunks[key]
         self._tombstoned.discard(document_id)
 
-    async def tombstone_document(self, document_id: uuid.UUID) -> None:
-        self._tombstoned.add(document_id)
+    async def tombstone_document(
+        self, document_id: uuid.UUID, *, tenant_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> None:
+        # As Qdrant's filter does: only that tenant's and workspace's points.
+        if any(
+            c.document_id == document_id
+            and c.tenant_id == tenant_id
+            and c.workspace_id == workspace_id
+            for c in self._chunks.values()
+        ):
+            self._tombstoned.add(document_id)
 
     async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None:
         for key in [k for k, c in self._chunks.items() if c.tenant_id == tenant_id]:

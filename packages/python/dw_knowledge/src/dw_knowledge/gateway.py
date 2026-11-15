@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_kernel.errors import InfrastructureError, PermissionDeniedError
+from dw_kernel.errors import InfrastructureError, NotFoundError, PermissionDeniedError
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge import tables
@@ -369,7 +369,9 @@ class KnowledgeGateway:
 
         # Superseded versions are kept but tombstoned so search skips them.
         for old_id in superseded_ids:
-            await self.vector_index.tombstone_document(old_id)
+            await self.vector_index.tombstone_document(
+                old_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id
+            )
         # Rebuild THIS version's vectors (delete stale then upsert deterministic points).
         await self.vector_index.delete_document(document_id)
         if leaves:
@@ -557,22 +559,37 @@ class KnowledgeGateway:
         """
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
-            await session.execute(
-                sa.update(tables.documents)
-                .where(tables.documents.c.id == document_id)
-                .values(
-                    status="deleted",
-                    is_current=False,
-                    deleted_at=self.clock.now(),
-                    deleted_by=context.principal_id,
+            # Only the caller's own workspace's document: row security holds the
+            # tenant, this holds the workspace. A shared ("global") document is
+            # deleted by the workspace that owns it, never by a reader of it.
+            deleted = (
+                await session.execute(
+                    sa.update(tables.documents)
+                    .where(
+                        tables.documents.c.id == document_id,
+                        tables.documents.c.workspace_id == context.workspace_id,
+                    )
+                    .values(
+                        status="deleted",
+                        is_current=False,
+                        deleted_at=self.clock.now(),
+                        deleted_by=context.principal_id,
+                    )
+                    .returning(tables.documents.c.id)
                 )
-            )
+            ).first()
+            if deleted is None:
+                raise NotFoundError("document not found")
             await session.execute(
                 sa.update(tables.chunks)
                 .where(tables.chunks.c.document_id == document_id)
                 .values(status="deleted", deleted_at=self.clock.now())
             )
-        await self.vector_index.tombstone_document(document_id)
+        # The vector index follows what SQL actually deleted, held to the same
+        # tenant and workspace (Qdrant review, 2026-11-17).
+        await self.vector_index.tombstone_document(
+            document_id, tenant_id=context.tenant_id, workspace_id=context.workspace_id
+        )
 
     # ------------------------------------------------------------ retrieval --
     async def search(self, query: SearchQuery, context: AccessContext) -> list[EvidenceChunk]:

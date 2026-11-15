@@ -133,9 +133,14 @@ class VectorIndexPort(Protocol):
         """HARD-remove all points of a document (same-version reindex / purge)."""
         ...
 
-    async def tombstone_document(self, document_id: UUID) -> None:
+    async def tombstone_document(
+        self, document_id: UUID, *, tenant_id: UUID, workspace_id: UUID
+    ) -> None:
         """SOFT-delete: mark a document's points is_deleted=true so search skips
-        them, but keep them for traceability until a retention purge."""
+        them, but keep them for traceability until a retention purge.
+
+        Only the points of that tenant's and workspace's document: a caller
+        who knows another tenant's document id must hide nothing of it."""
         ...
 
     async def delete_by_tenant(self, tenant_id: UUID) -> None:
