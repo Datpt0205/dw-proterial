@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -32,6 +32,8 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.application.process_settings import (
     BASELINE_ONLY,
     EDGES,
+    HEAD_SETTINGS,
+    HEAD_SETTINGS_MAX,
     LANE_SETTINGS,
     LOCKED,
     NOT_ON_PAGE,
@@ -39,6 +41,7 @@ from dw_sales.application.process_settings import (
     STEP_SCOPES,
     STEP_SETTINGS,
     STEP_USES,
+    Audience,
     EdgeAction,
     EdgeGuard,
     LiveShareView,
@@ -46,6 +49,8 @@ from dw_sales.application.process_settings import (
     Placement,
     ProcessSettingsService,
     ProcessSettingsView,
+    SubflowKey,
+    audience,
     lock,
     model_steps,
     within,
@@ -55,7 +60,7 @@ from dw_sales.domain import orders, quotes
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.process import WIV_STEPS, Coverage, StepId
+from dw_sales.domain.process import BA_STEPS, WIV_STEPS, Coverage, StepId
 from dw_sales.evals.graders import GIANG, READER
 from dw_sales.evals.world import ALPHA, NOW, Caller, measured_gate
 from dw_sales.testing.role_catalog import CatalogRow, StaticRoleCatalog
@@ -538,3 +543,132 @@ async def test_each_model_step_carries_its_share_of_the_last_7_days() -> None:
     # One read for the page, over the caller's own workspace.
     ((scope, start, end, lane),) = activity.asked
     assert (scope, start, end, lane) == (ALPHA, NOW - timedelta(days=7), NOW, None)
+
+
+# ------------------------------- the BA's codes and the flows beside (35) --
+
+
+def _places(view: ProcessSettingsView, kind: CaseKind) -> set[str]:
+    """Every place of a lane the served view draws: its statuses and each step
+    of its flows beside them, ``<flow>.<step>``."""
+    (lane,) = [lane for lane in view.lanes if lane.kind is kind]
+    return {node.status for node in lane.nodes} | {
+        f"{flow.key.value}.{step.step}" for flow in lane.subflows for step in flow.steps
+    }
+
+
+async def test_every_ba_code_is_on_a_place_the_map_draws_and_served_there() -> None:
+    """`BA_STEPS` is new data keyed by place: a status renamed, or a flow
+    step removed, fails here instead of losing its codes silently."""
+    view = await _view()
+    for procedure, places in BA_STEPS.items():
+        kind = PROCEDURE_KIND[procedure]
+        drawn = _places(view, kind)
+        assert set(places) <= drawn, set(places) - drawn
+        codes = [b.code for steps in places.values() for b in steps]
+        assert len(codes) == len(set(codes)), "a code is on two places"
+    (order,) = [lane for lane in view.lanes if lane.kind is CaseKind.ORDER]
+    served = {n.status: [b.code for b in n.ba_steps] for n in order.nodes}
+    assert served["cross_checked"] == ["5-KC"]
+    assert served["confirmed"] == []  # the BA has no step for the customer's agreement
+    flows = {f.key: f for f in order.subflows}
+    assert flows[SubflowKey.THREAD].steps[0].ba_steps[0].code == "0-KH"
+
+
+async def test_the_flows_beside_the_statuses_are_read_from_the_domain() -> None:
+    """The update loop's steps, moves and statuses are the domain's own: the
+    accessor is the table `_loop_with` enforces."""
+    view = await _view()
+    (order,) = [lane for lane in view.lanes if lane.kind is CaseKind.ORDER]
+    (quote,) = [lane for lane in view.lanes if lane.kind is CaseKind.QUOTE]
+    assert quote.subflows == []
+    flows = {f.key: f for f in order.subflows}
+    assert list(flows) == list(SubflowKey)
+    update = flows[SubflowKey.UPDATE]
+    assert [s.step for s in update.steps] == list(get_args(orders.UpdateStep))
+    moves = orders.update_loop_moves()
+    assert set(moves) == set(get_args(orders.UpdateStep))
+    for step in update.steps:
+        assert set(step.next) == moves[step.step] - {step.step}
+        assert set(step.statuses) == {s.value for s in orders.update_loop_statuses()[step.step]}
+    assert {s.step: s.next for s in update.steps}["waiting_customer"] == [
+        "ask_pc",
+        "bravo_update",
+    ]
+    (thread,) = flows[SubflowKey.THREAD].steps
+    assert thread.statuses == []  # before any case exists
+    (pc,) = flows[SubflowKey.PC_REQUEST].steps
+    assert pc.statuses == [s.value for s in orders.OrderStatus if s in orders.changeable_statuses()]
+
+
+def test_the_update_loop_moves_only_along_its_table() -> None:
+    """The guard the map's table stands for: a step off the table is refused."""
+    request = uuid.uuid4()
+    loop = orders.UpdateLoop(
+        request_id=request,
+        step="ask_pc",
+        since=NOW,
+        lines=(
+            orders.LoopLine(
+                line_no=1,
+                changes=(
+                    orders.AppliedChange(
+                        request_id=request,
+                        field="requested_date",
+                        value="2026-12-01",
+                        by=GIANG.user_id,
+                        at=NOW,
+                    ),
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="does not move from ask_pc to answer_customer"):
+        orders._loop_with(loop, step="answer_customer")
+    assert orders._loop_with(loop, step="waiting_pc").step == "waiting_pc"
+
+
+# ------------------------------------------ the head's short list (35) --
+
+
+def test_the_heads_list_fits_one_screen_and_each_has_one_sentence() -> None:
+    assert 0 < len(HEAD_SETTINGS) <= HEAD_SETTINGS_MAX
+    placements = [h.placement for h in HEAD_SETTINGS]
+    assert len(placements) == len(set(placements))
+    for head in HEAD_SETTINGS:
+        sentence = head.sentence
+        assert sentence and sentence[0].isupper() and sentence.endswith("."), head
+        assert ". " not in sentence[:-1], f"more than one sentence: {sentence}"
+
+
+def test_each_head_setting_is_a_placed_unlocked_field_of_its_schema() -> None:
+    """A head edits it where it is placed, so it must be placed; a locked one
+    could not be edited from their screen at all."""
+    for head in HEAD_SETTINGS:
+        p = head.placement
+        assert p.path in _SCHEMA_PATHS[p.key], p
+        assert any(q.key is p.key and within(p.path, q.path) for q in _placed()), p
+        assert lock(p) is None, p
+        assert p.key not in LEARNED_ONLY, p
+
+
+def test_a_setting_off_the_heads_list_is_the_admins_a_new_one_included() -> None:
+    """Fail closed: every placement has an audience, and only the list puts
+    one on the head's screen; a field nobody listed is under "Nâng cao"."""
+    listed = {h.placement for h in HEAD_SETTINGS}
+    for p in _placed():
+        assert audience(p) is (Audience.HEAD if p in listed else Audience.ADMIN), p
+    assert audience(Placement(RuleKey.ORDER_RULES, "a_field_added_later")) is Audience.ADMIN
+    for p in listed:
+        assert audience(p) is Audience.HEAD
+
+
+async def test_the_heads_list_is_served_in_order_without_a_key_the_caller_may_not_read() -> None:
+    shown = (await _view(GIANG)).head_settings
+    assert [(s.key, s.path, s.sentence) for s in shown] == [
+        (h.placement.key, h.placement.path, h.sentence) for h in HEAD_SETTINGS
+    ]
+    hidden = (await _view(IT)).head_settings
+    assert hidden, "the follow-ups are not price-bearing"
+    assert all(s.key not in PRICE_BEARING for s in hidden)
+    assert len(hidden) < len(shown)

@@ -17,7 +17,7 @@ import { PROCESS } from "./process-fixture";
 import { EDGE_ACTION, EDGE_GUARD } from "../labels";
 import { layoutLane, type Lane } from "../process-graph";
 import { laneGeometry, pathOf } from "../process-geometry";
-import type { PlatformDocument, RuleVersion } from "../rules";
+import { RULE_KEY, type PlatformDocument, type RuleVersion } from "../rules";
 
 type View = SalesSchemas["ProcessSettingsView"];
 type RulesView = SalesSchemas["RulesInForceView"];
@@ -184,6 +184,7 @@ function withoutPrices(view: View): View {
       Object.entries(view.lane_settings).map(([k, v]) => [k, v.filter(keep)]),
     ),
     process_settings: view.process_settings.filter(keep),
+    head_settings: view.head_settings.filter(keep),
   };
 }
 
@@ -292,7 +293,7 @@ describe("the DW1 process page (2026-10-22)", () => {
             ...order,
             nodes: [
               ...order.nodes,
-              { status: "on_hold", steps: [], holder: "sales" },
+              { status: "on_hold", steps: [], holder: "sales", ba_steps: [] },
             ],
             edges: [
               ...order.edges,
@@ -561,19 +562,19 @@ describe("the DW1 process page (2026-10-22)", () => {
   );
 
   it(
-    "draws each status as a tile: an icon for whose turn, its name, step codes and one AI line; the rest in its details",
+    "draws each status as a tile: an icon for whose turn, its name, step codes, the BA's codes and one AI line; the rest in its details",
     async () => {
       wide();
       renderPage();
       const review = await status("Chờ PIC tự kiểm");
       expect(review.getAttribute("data-turn")).toBe("person");
-      expect(review.textContent).toBe("Chờ PIC tự kiểmO6");
+      expect(review.textContent).toBe("Chờ PIC tự kiểmO6BA 3");
       const received = await status("Đã nhận");
       expect(received.getAttribute("data-turn")).toBe("dw");
-      expect(received.textContent).toBe("Đã nhậnO1AI bật · đạt");
+      expect(received.textContent).toBe("Đã nhậnO1BA 0-SP · 1AI bật · đạt");
       expect((await status("Đã đóng")).getAttribute("data-turn")).toBe("done");
       expect((await status("Đã nhập Bravo")).textContent).toBe(
-        "Đã nhập BravoO3O7AI bật · đạt",
+        "Đã nhập BravoO3O7BA 5-BRAI bật · đạt",
       );
       // The icons' meaning is said once, in words, above the canvas.
       for (const words of ["DW1 xử lý", "Đến lượt người làm", "Đã xong"])
@@ -697,7 +698,7 @@ describe("the DW1 process page (2026-10-22)", () => {
             ...order,
             nodes: [
               ...order.nodes,
-              { status: "on_hold", steps: [], holder: "sales" },
+              { status: "on_hold", steps: [], holder: "sales", ba_steps: [] },
             ],
             edges: [
               ...order.edges,
@@ -1363,6 +1364,237 @@ describe("/sales/rules after the editor moved out", () => {
       expect(drawer("Đề xuất phiên bản mới: Chỉ tiêu KPI")).toBeTruthy();
       // The whole key, so JSON too.
       expect(screen.getByText("JSON nâng cao")).toBeTruthy();
+    },
+    SLOW,
+  );
+});
+
+describe("ticket 35: the BA's codes, the flows beside, the head's short list", () => {
+  const ORDER = PROCESS.lanes[0]!;
+  const UPDATE = ORDER.subflows.find((f) => f.key === "update")!;
+
+  it(
+    "writes each status's BA codes as served, a code the server adds included",
+    async () => {
+      api.rulesProcess.mockResolvedValueOnce({
+        ...PROCESS,
+        lanes: [
+          {
+            ...ORDER,
+            nodes: ORDER.nodes.map((n) =>
+              n.status === "confirmed"
+                ? {
+                    ...n,
+                    ba_steps: [{ code: "9.9", label: "Bước BA mới thêm" }],
+                  }
+                : n,
+            ),
+          },
+          PROCESS.lanes[1]!,
+        ],
+      });
+      renderPage();
+      const checked = await status("Đã kiểm tra");
+      for (const words of ["2.1A", "Kiểm giá theo LME", "3.1"])
+        expect(within(checked).getByText(words)).toBeTruthy();
+      const confirmed = await status("Khách đã đồng ý");
+      expect(within(confirmed).getByText("9.9")).toBeTruthy();
+      expect(within(confirmed).getByText("Bước BA mới thêm")).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "on a wide screen, a tile carries its codes alone",
+    async () => {
+      wide();
+      renderPage();
+      await status("Đã kiểm chéo");
+      expect(
+        document.querySelector('[data-ba="cross_checked"]')?.textContent,
+      ).toBe("BA 5-KC");
+      expect(
+        document.querySelector('[data-ba="change_review"]')?.textContent,
+      ).toBe("BA 6.2B");
+    },
+    SLOW,
+  );
+
+  it(
+    "opens the thread before the PO, the wait on PC, a change by mail and the update loop on click",
+    async () => {
+      renderPage();
+      await status("Đã nhận");
+      // A status names the flows that run while a case is in it.
+      expect(
+        within(await status("Chờ PIC tự kiểm")).getByText(
+          "Trong lúc này có thể: Hỏi PC ngày giao, trước khi nhập Bravo, Khách xin thay đổi qua thư",
+        ),
+      ).toBeTruthy();
+      for (const title of [
+        "Trước khi có PO: trao đổi trong luồng thư",
+        "Hỏi PC ngày giao, trước khi nhập Bravo",
+        "Khách xin thay đổi qua thư",
+        "Vòng cập nhật đơn đã nhập Bravo",
+      ])
+        expect(screen.getByText(title)).toBeTruthy();
+      // Detail on click.
+      expect(
+        document.querySelector('[data-subflow-step="thread.before_po"]'),
+      ).toBeNull();
+      fireEvent.click(
+        screen.getByText("Trước khi có PO: trao đổi trong luồng thư"),
+      );
+      const before = document.querySelector(
+        '[data-subflow-step="thread.before_po"]',
+      ) as HTMLElement;
+      expect(within(before).getByText("0-KH")).toBeTruthy();
+      expect(within(before).getByText("Trước khi có hồ sơ")).toBeTruthy();
+      fireEvent.click(screen.getByText("Vòng cập nhật đơn đã nhập Bravo"));
+      const waiting = document.querySelector(
+        '[data-subflow-step="update.waiting_customer"]',
+      ) as HTMLElement;
+      expect(
+        within(waiting).getByText(
+          "Tiếp theo: Chờ hỏi PC, Chờ duyệt và nhập tệp cập nhật Bravo",
+        ),
+      ).toBeTruthy();
+      expect(
+        within(waiting).getByText(
+          "Hồ sơ đang ở: Đã gửi xác nhận, chờ khách, Khách đã đồng ý",
+        ),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "draws a step and a move the server adds to a flow without a change here",
+    async () => {
+      api.rulesProcess.mockResolvedValueOnce({
+        ...PROCESS,
+        lanes: [
+          {
+            ...ORDER,
+            subflows: ORDER.subflows.map((f) =>
+              f.key === "update"
+                ? {
+                    ...f,
+                    steps: [
+                      ...UPDATE.steps.map((s) =>
+                        s.step === "bravo_update"
+                          ? { ...s, next: ["waiting_noec"] }
+                          : s,
+                      ),
+                      {
+                        step: "waiting_noec",
+                        statuses: ["change_review"],
+                        next: [],
+                        ba_steps: [{ code: "6.9", label: "Chờ NOEC" }],
+                      },
+                    ],
+                  }
+                : f,
+            ),
+          },
+          PROCESS.lanes[1]!,
+        ],
+      });
+      renderPage();
+      await status("Đã nhận");
+      fireEvent.click(screen.getByText("Vòng cập nhật đơn đã nhập Bravo"));
+      const added = document.querySelector(
+        '[data-subflow-step="update.waiting_noec"]',
+      ) as HTMLElement;
+      expect(within(added).getByText("waiting_noec")).toBeTruthy();
+      expect(within(added).getByText("6.9")).toBeTruthy();
+      const before = document.querySelector(
+        '[data-subflow-step="update.bravo_update"]',
+      ) as HTMLElement;
+      expect(within(before).getByText("Tiếp theo: waiting_noec")).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "lists the head's settings on one screen, each with its sentence, what applies and the default",
+    async () => {
+      api.rulePlatformDocuments.mockImplementation(async (key: string) =>
+        key === "sales_followups"
+          ? [
+              {
+                ...PLATFORM.sales_followups![0]!,
+                document: {
+                  ...FOLLOWUPS_DOC,
+                  waiting_pc: {
+                    enabled: true,
+                    remind: { after_hours: 24, notify: ["pic"] },
+                  },
+                  morning_brief: { enabled: true, at: "07:30" },
+                },
+              },
+            ]
+          : (PLATFORM[key] ?? []),
+      );
+      renderPage();
+      const card = (await screen.findByText("Thiết lập chính")).closest(
+        ".ant-card",
+      ) as HTMLElement;
+      const rows = within(card).getAllByRole("row").slice(1);
+      expect(rows.length).toBe(PROCESS.head_settings.length);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.length).toBeLessThanOrEqual(10);
+      PROCESS.head_settings.forEach((h, i) => {
+        const sentence = within(rows[i]!).getByText(h.sentence);
+        expect(sentence.getAttribute("data-head")).toBe(`${h.key}:${h.path}`);
+        expect(h.sentence.trim().length).toBeGreaterThan(10);
+      });
+      const row = (id: string) =>
+        rows.find((r) => r.querySelector(`[data-head="${id}"]`))!;
+      const pc = row("sales_followups:waiting_pc.remind.after_hours");
+      await waitFor(() =>
+        expect(within(pc).getAllByText("24 giờ").length).toBe(2),
+      );
+      const brief = row("sales_followups:morning_brief.at");
+      expect(within(brief).getAllByText("07:30").length).toBe(2);
+      // A key the company's rules list does not name reads as not read, never
+      // as a value.
+      expect(
+        within(row("sales_quote_rules:validity_days")).getAllByText(
+          "Chưa đọc được",
+        ).length,
+      ).toBe(2);
+      // Everything else is not on the head's screen: it is under "Nâng cao".
+      expect(within(card).queryByText(/Giờ làm việc|Bắt đầu/)).toBeNull();
+      expect(screen.getByText(/^Nâng cao: /)).toBeTruthy();
+      api.rulePlatformDocuments.mockImplementation(
+        async (key: string) => PLATFORM[key] ?? [],
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "edits the head's list in the drawer every status opens, one key at a time",
+    async () => {
+      renderPage();
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Sửa thiết lập chính" }),
+      );
+      expect(nav.push).toHaveBeenCalledWith("/sales/rules/process?node=head", {
+        scroll: false,
+      });
+      const keys = new Set(PROCESS.head_settings.map((h) => h.key));
+      for (const key of keys)
+        expect(
+          await screen.findByRole("button", {
+            name: `Xem và đề xuất thay đổi: ${RULE_KEY[key]}`,
+          }),
+        ).toBeTruthy();
+      expect(
+        screen.getAllByRole("button", { name: /^Xem và đề xuất thay đổi: / })
+          .length,
+      ).toBe(keys.size);
     },
     SLOW,
   );

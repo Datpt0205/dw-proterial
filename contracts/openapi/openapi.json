@@ -1490,6 +1490,24 @@
         "title": "AutomationStep",
         "type": "string"
       },
+      "BaStepView": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "BaStepView",
+        "type": "object"
+      },
       "Body_submit_feedback_api_v1_feedback_post": {
         "properties": {
           "images": {
@@ -6834,6 +6852,29 @@
           "line_no"
         ],
         "title": "HandoffLine",
+        "type": "object"
+      },
+      "HeadSettingView": {
+        "description": "A setting of the head's short list: where it is, and its sentence.",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sentence": {
+            "title": "Sentence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "path",
+          "sentence"
+        ],
+        "title": "HeadSettingView",
         "type": "object"
       },
       "HealthResponse": {
@@ -13964,19 +14005,34 @@
             },
             "title": "Stateless Steps",
             "type": "array"
+          },
+          "subflows": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessSubflowView"
+            },
+            "title": "Subflows",
+            "type": "array"
           }
         },
         "required": [
           "kind",
           "nodes",
           "edges",
-          "stateless_steps"
+          "stateless_steps",
+          "subflows"
         ],
         "title": "ProcessLaneView",
         "type": "object"
       },
       "ProcessNodeView": {
         "properties": {
+          "ba_steps": {
+            "items": {
+              "$ref": "#/components/schemas/BaStepView"
+            },
+            "title": "Ba Steps",
+            "type": "array"
+          },
           "holder": {
             "anyOf": [
               {
@@ -14010,13 +14066,21 @@
         "required": [
           "status",
           "steps",
-          "holder"
+          "holder",
+          "ba_steps"
         ],
         "title": "ProcessNodeView",
         "type": "object"
       },
       "ProcessSettingsView": {
         "properties": {
+          "head_settings": {
+            "items": {
+              "$ref": "#/components/schemas/HeadSettingView"
+            },
+            "title": "Head Settings",
+            "type": "array"
+          },
           "lane_settings": {
             "additionalProperties": {
               "items": {
@@ -14054,6 +14118,7 @@
         },
         "required": [
           "lanes",
+          "head_settings",
           "steps",
           "lane_settings",
           "process_settings"
@@ -14104,6 +14169,26 @@
           "actors"
         ],
         "title": "ProcessStepView",
+        "type": "object"
+      },
+      "ProcessSubflowView": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/SubflowKey"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/SubflowStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "steps"
+        ],
+        "title": "ProcessSubflowView",
         "type": "object"
       },
       "ProcessingJobView": {
@@ -19406,6 +19491,54 @@
           "latency"
         ],
         "title": "StepSummaryView",
+        "type": "object"
+      },
+      "SubflowKey": {
+        "description": "A flow beside a lane's statuses: a case waits or loops in it while its\nstatus stays where it is (ticket 35).",
+        "enum": [
+          "thread",
+          "pc_request",
+          "change_request",
+          "update"
+        ],
+        "title": "SubflowKey",
+        "type": "string"
+      },
+      "SubflowStepView": {
+        "properties": {
+          "ba_steps": {
+            "items": {
+              "$ref": "#/components/schemas/BaStepView"
+            },
+            "title": "Ba Steps",
+            "type": "array"
+          },
+          "next": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next",
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Statuses",
+            "type": "array"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "statuses",
+          "next",
+          "ba_steps"
+        ],
+        "title": "SubflowStepView",
         "type": "object"
       },
       "SubmissionView": {

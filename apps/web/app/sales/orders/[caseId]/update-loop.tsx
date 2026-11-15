@@ -8,7 +8,7 @@ import { InfoTip, StatusTag } from "@dw/ui";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
-import { ARTIFACT_KIND, label } from "../../_lib/labels";
+import { ARTIFACT_KIND, SUBFLOW_STEP, label } from "../../_lib/labels";
 import type { Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
@@ -29,11 +29,13 @@ const NO_SCOPE =
   "Bạn không có quyền ghi trên đơn hàng (cần vai Sales phụ trách).";
 
 /** The one step the loop waits on, in the BA's words (ticket 29). */
+// The loop's own steps read the process map's words (one owner); the rest
+// name what the Bravo-update step waits on in detail.
 const AWAITS: Record<Awaits, string> = {
-  ask_pc: "Chờ hỏi PC",
-  waiting_pc: "Chờ PC trả lời",
-  answer_customer: "Chờ gửi khách trả lời",
-  waiting_customer: "Chờ khách quyết định",
+  ask_pc: SUBFLOW_STEP["update.ask_pc"],
+  waiting_pc: SUBFLOW_STEP["update.waiting_pc"],
+  answer_customer: SUBFLOW_STEP["update.answer_customer"],
+  waiting_customer: SUBFLOW_STEP["update.waiting_customer"],
   approve_update: "Chờ duyệt tệp cập nhật Bravo",
   bravo_entry: "Chờ nhập Bravo",
   cross_check: "Chờ kiểm chéo",

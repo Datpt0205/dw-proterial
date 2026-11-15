@@ -668,6 +668,33 @@ export const CASE_KIND = {
   quote: "Báo giá",
 } as const;
 
+/**
+ * The flows beside a lane's statuses (`SubflowKey`, ticket 35): a case waits
+ * or loops in one while its status stays where it is.
+ */
+export const SUBFLOW: Record<SalesSchemas["SubflowKey"], string> = {
+  thread: "Trước khi có PO: trao đổi trong luồng thư",
+  pc_request: "Hỏi PC ngày giao, trước khi nhập Bravo",
+  change_request: "Khách xin thay đổi qua thư",
+  update: "Vòng cập nhật đơn đã nhập Bravo",
+};
+
+/**
+ * A step of one of those flows, keyed `<flow>.<step>`; the update loop's in
+ * the words its panel on the order uses (`update-loop.tsx`). A step the API
+ * adds shows as its code until it has words here.
+ */
+export const SUBFLOW_STEP = {
+  "thread.before_po": "Khách trao đổi, chưa có hồ sơ",
+  "pc_request.waiting_pc": "Chờ PC trả ngày giao",
+  "change_request.confirm_lines": "PIC xác nhận từng dòng khách xin đổi",
+  "update.ask_pc": "Chờ hỏi PC",
+  "update.waiting_pc": "Chờ PC trả lời",
+  "update.answer_customer": "Chờ gửi khách trả lời",
+  "update.waiting_customer": "Chờ khách quyết định",
+  "update.bravo_update": "Chờ duyệt và nhập tệp cập nhật Bravo",
+} as const;
+
 /** The files DW1 renders (ticket 06's artifact table), by kind. */
 export const ARTIFACT_KIND = {
   bravo_upload: "Tệp nhập Bravo (mẫu giả lập)",

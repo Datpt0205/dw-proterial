@@ -1814,6 +1814,21 @@ _LOOP_STATUSES: Final[Mapping[str, frozenset[OrderStatus]]] = MappingProxyType(
         "bravo_update": frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED}),
     }
 )
+# Where each step of the update loop may go next (ticket 29), the one owner:
+# the case's methods move the loop only along it (`_loop_with`), and the
+# process map draws it (ticket 35). Staying put is a move too where a step
+# repeats (PC asked again). The loop begins at `ask_pc` (`loop_change`) and
+# ends off this table: the customer keeps the PO as it was, or the order,
+# updated in Bravo, is confirmed again.
+_LOOP_NEXT: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "ask_pc": frozenset({"waiting_pc"}),
+        "waiting_pc": frozenset({"waiting_pc", "answer_customer"}),
+        "answer_customer": frozenset({"waiting_customer"}),
+        "waiting_customer": frozenset({"ask_pc", "bravo_update"}),
+        "bravo_update": frozenset(),
+    }
+)
 
 _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
     {
@@ -1856,6 +1871,23 @@ def order_moves() -> Mapping[OrderStatus, frozenset[OrderStatus]]:
     """Every move an order case may make, read-only: `_NEXT` itself, for a
     reader that draws the process (`application.process_settings`)."""
     return _NEXT
+
+
+def update_loop_moves() -> Mapping[str, frozenset[str]]:
+    """Where each step of the update loop may go next, read-only: `_LOOP_NEXT`
+    itself, for the reader that draws the process."""
+    return _LOOP_NEXT
+
+
+def update_loop_statuses() -> Mapping[str, frozenset[OrderStatus]]:
+    """The statuses an order is in at each step of the update loop, read-only."""
+    return _LOOP_STATUSES
+
+
+def changeable_statuses() -> frozenset[OrderStatus]:
+    """Where a customer's change is taken at once and PC is asked before the
+    order is in Bravo (tickets 27, 07), read-only."""
+    return _CHANGEABLE
 
 
 def transition(current: OrderStatus, target: OrderStatus) -> OrderStatus:
@@ -3577,7 +3609,11 @@ def _without[V: (ValueCorrection, AppliedChange)](values: Iterable[V], field: st
 
 
 def _loop_with(loop: UpdateLoop, **changes: object) -> UpdateLoop:
-    """``loop`` with ``changes``, validated again (`model_copy` would skip it)."""
+    """``loop`` with ``changes``, validated again (`model_copy` would skip it);
+    a new step only along `_LOOP_NEXT`."""
+    step = changes.get("step", loop.step)
+    if step != loop.step and step not in _LOOP_NEXT[loop.step]:
+        raise ValueError(f"the update loop does not move from {loop.step} to {step}")
     return UpdateLoop.model_validate({**dict(loop), **changes})
 
 

@@ -2298,6 +2298,13 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** BaStepView */
+        BaStepView: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+        };
         /** BravoEntryBody */
         BravoEntryBody: {
             /** Case Version */
@@ -3689,6 +3696,17 @@ export interface components {
             new_quantity?: string | null;
             quantity?: components["schemas"]["Located"] | null;
             reference: components["schemas"]["Located"];
+        };
+        /**
+         * HeadSettingView
+         * @description A setting of the head's short list: where it is, and its sentence.
+         */
+        HeadSettingView: {
+            key: components["schemas"]["RuleKey"];
+            /** Path */
+            path: string;
+            /** Sentence */
+            sentence: string;
         };
         /**
          * Hidden
@@ -5329,9 +5347,13 @@ export interface components {
             nodes: components["schemas"]["ProcessNodeView"][];
             /** Stateless Steps */
             stateless_steps: string[];
+            /** Subflows */
+            subflows: components["schemas"]["ProcessSubflowView"][];
         };
         /** ProcessNodeView */
         ProcessNodeView: {
+            /** Ba Steps */
+            ba_steps: components["schemas"]["BaStepView"][];
             /** Holder */
             holder: ("dw" | "sales" | "design" | "approver" | "customer") | null;
             /** Status */
@@ -5341,6 +5363,8 @@ export interface components {
         };
         /** ProcessSettingsView */
         ProcessSettingsView: {
+            /** Head Settings */
+            head_settings: components["schemas"]["HeadSettingView"][];
             /** Lane Settings */
             lane_settings: {
                 [key: string]: components["schemas"]["SettingView"][];
@@ -5364,6 +5388,12 @@ export interface components {
             /** Step Id */
             step_id: string;
             uses: components["schemas"]["UsesView"];
+        };
+        /** ProcessSubflowView */
+        ProcessSubflowView: {
+            key: components["schemas"]["SubflowKey"];
+            /** Steps */
+            steps: components["schemas"]["SubflowStepView"][];
         };
         /**
          * ProcessingJobView
@@ -6679,6 +6709,24 @@ export interface components {
             to_person: components["schemas"]["LinkedCount"];
             /** Top Reasons */
             top_reasons: components["schemas"]["ReasonCount"][];
+        };
+        /**
+         * SubflowKey
+         * @description A flow beside a lane's statuses: a case waits or loops in it while its
+         *     status stays where it is (ticket 35).
+         * @enum {string}
+         */
+        SubflowKey: "thread" | "pc_request" | "change_request" | "update";
+        /** SubflowStepView */
+        SubflowStepView: {
+            /** Ba Steps */
+            ba_steps: components["schemas"]["BaStepView"][];
+            /** Next */
+            next: string[];
+            /** Statuses */
+            statuses: string[];
+            /** Step */
+            step: string;
         };
         /** SubmissionView */
         SubmissionView: {

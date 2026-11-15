@@ -10,7 +10,15 @@ import {
 } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Alert, Button, Grid, Skeleton, Tabs, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Collapse,
+  Grid,
+  Skeleton,
+  Tabs,
+  Typography,
+} from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
@@ -22,6 +30,7 @@ import {
   ORDER_STATE,
   QUOTE_STATE,
   STEP_COVERAGE,
+  SUBFLOW,
   TIME_BUCKET,
 } from "../../_lib/labels";
 import {
@@ -43,6 +52,8 @@ import {
   ProcessSettingsDrawer,
   type SettingsTarget,
 } from "../../_components/process-settings-drawer";
+import { HeadSettings } from "../../_components/head-settings";
+import { ProcessSubflows } from "../../_components/process-subflows";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
 
@@ -85,6 +96,14 @@ type Actor = SalesSchemas["ActorView"];
  * read, and who acts on them. The model steps come only to a caller who may
  * read the order rules that switch them; for anyone else the server sends
  * none and the page draws none.
+ *
+ * Ticket 35 (2026-11-16): each status and each step of the flows beside the
+ * statuses (the talk before the PO, the wait on PC, a change asked by mail,
+ * the update loop) carries the BA's step codes, all served; the flows open
+ * on click under the map. The Sales head's short list ("Thiết lập chính",
+ * the server's `HEAD_SETTINGS`) comes first, one sentence each; every other
+ * setting is under "Nâng cao" or on its status, where it was. Grouping only:
+ * proposing and approving a change is the same for every setting.
  */
 export default function ProcessPage() {
   return (
@@ -145,6 +164,8 @@ function useOpenItem() {
 }
 
 const PROCESS = "process";
+/** The head's short list, opened in the same drawer as a status. */
+const HEAD = "head";
 // A button whose words may run past a phone's width: it wraps, left aligned,
 // instead of pushing the page sideways (ui-quality §12).
 const WRAPPING = "h-auto! justify-start! whitespace-normal! py-2! text-start";
@@ -215,6 +236,16 @@ function resolve(
   steps: Map<string, Step>,
   id: string,
 ): SettingsTarget | null {
+  if (id === HEAD)
+    return {
+      title: "Thiết lập chính",
+      steps: [],
+      settings: view.head_settings.map((h) => ({
+        key: h.key,
+        path: h.path,
+        lock: null,
+      })),
+    };
   if (id === PROCESS)
     return {
       title: "Thiết lập chung của quy trình",
@@ -361,17 +392,49 @@ function Process() {
   return (
     <div className="space-y-4">
       {header}
-      <Button
-        block
-        className={WRAPPING}
-        data-node={PROCESS}
-        onClick={() => item.open(PROCESS)}
-      >
-        <span>
-          Thiết lập chung của quy trình · {view.process_settings.length} thiết
-          lập
-        </span>
-      </Button>
+      <HeadSettings
+        settings={view.head_settings}
+        rules={rules}
+        onEdit={() => item.open(HEAD)}
+      />
+      <Collapse
+        items={[
+          {
+            key: "advanced",
+            label: "Nâng cao: thiết lập của cả quy trình và từng luồng",
+            forceRender: true,
+            children: (
+              <div className="flex flex-col gap-2">
+                <Button
+                  block
+                  className={WRAPPING}
+                  data-node={PROCESS}
+                  onClick={() => item.open(PROCESS)}
+                >
+                  <span>
+                    Thiết lập chung của quy trình ·{" "}
+                    {view.process_settings.length} thiết lập
+                  </span>
+                </Button>
+                {view.lanes.map((lane) => (
+                  <Button
+                    key={lane.kind}
+                    block
+                    className={WRAPPING}
+                    data-node={lane.kind}
+                    onClick={() => item.open(lane.kind)}
+                  >
+                    <span>
+                      Thiết lập của cả luồng {CASE_KIND[lane.kind]} ·{" "}
+                      {(view.lane_settings[lane.kind] ?? []).length} thiết lập
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            ),
+          },
+        ]}
+      />
       <Tabs
         activeKey={active}
         onChange={item.setLane}
@@ -383,7 +446,6 @@ function Process() {
               lane={lane}
               layout={layouts.get(lane.kind)!}
               steps={steps}
-              laneSettings={view.lane_settings[lane.kind] ?? []}
               wide={Boolean(screens.lg)}
               hrefOf={item.hrefOf}
               onOpen={item.open}
@@ -425,7 +487,6 @@ function LaneView({
   lane,
   layout,
   steps,
-  laneSettings,
   wide,
   hrefOf,
   onOpen,
@@ -435,7 +496,6 @@ function LaneView({
   lane: Lane;
   layout: LaneLayout;
   steps: Map<string, Step>;
-  laneSettings: Setting[];
   wide: boolean;
   hrefOf: (id: string) => string;
   onOpen: (id: string) => void;
@@ -472,6 +532,12 @@ function LaneView({
             ai: aiSummary(distinctModels(own)),
             back: words(layout.back[node.status]),
             exits: words(layout.exitsFrom[node.status]),
+            ba: node.ba_steps,
+            flows: lane.subflows
+              .filter((f) =>
+                f.steps.some((s) => s.statuses.includes(node.status)),
+              )
+              .map((f) => SUBFLOW[f.key] ?? f.key),
           },
         ];
       }),
@@ -492,6 +558,10 @@ function LaneView({
       ) : (
         <ProcessList layout={layout} cards={cards} onOpen={onOpen} />
       )}
+      <ProcessSubflows
+        subflows={lane.subflows}
+        statusLabel={(s) => statusLabel(lane.kind, s)}
+      />
       {lane.stateless_steps.length ? (
         <section className="space-y-2">
           <Typography.Title level={5} className="mb-0!">
@@ -521,17 +591,6 @@ function LaneView({
           </div>
         </section>
       ) : null}
-      <Button
-        block
-        className={WRAPPING}
-        data-node={lane.kind}
-        onClick={() => onOpen(lane.kind)}
-      >
-        <span>
-          Thiết lập của cả luồng {CASE_KIND[lane.kind]} · {laneSettings.length}{" "}
-          thiết lập
-        </span>
-      </Button>
     </div>
   );
 }

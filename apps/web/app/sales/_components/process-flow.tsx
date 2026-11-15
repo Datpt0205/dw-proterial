@@ -70,6 +70,7 @@ import {
   type MoveWords,
 } from "../_lib/process-geometry";
 import {
+  baCodes,
   openHere,
   StatusFacts,
   StepTags,
@@ -257,8 +258,13 @@ function StatusTile({
                 </span>
               ) : null}
             </span>
+            {card.ba.length ? (
+              <span className="order-3" data-ba={card.status}>
+                BA {baCodes(card.ba)}
+              </span>
+            ) : null}
             {card.ai.length ? (
-              <span className="order-3 flex flex-wrap gap-1">
+              <span className="order-4 flex flex-wrap gap-1">
                 {card.ai.map((a) => (
                   <AiStateTag key={a.state} state={a.state} short />
                 ))}
