@@ -73,7 +73,13 @@ def test_every_mutation_checks_its_scope_before_it_claims_the_key(route: APIRout
 
 
 def test_every_case_mutation_names_the_version_it_was_decided_on() -> None:
-    case_routes = [r for r in _routes() if "POST" in r.methods and "{case_id}" in r.path]
+    # A question in a case's conversation (ticket 46) changes nothing on the
+    # case: it is the only POST under {case_id} that is not a decision on it.
+    case_routes = [
+        r
+        for r in _routes()
+        if "POST" in r.methods and "{case_id}" in r.path and "/assistant/" not in r.path
+    ]
     assert case_routes
     for route in case_routes:
         (body,) = route.dependant.body_params

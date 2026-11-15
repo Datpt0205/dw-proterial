@@ -80,7 +80,7 @@
   ],
   "eval_datasets": [
     {
-      "checksum": "2c3569c4af18d9543cbb0223b5dd1c59bf2e4932260ec193975baa1ac38d9d9d",
+      "checksum": "39a0a0fd9dc4cbe58c7db7984089d83b500ed967eaada3814f883ed244ebb351",
       "dataset_id": "platform_smoke",
       "files": [
         {
@@ -94,6 +94,14 @@
         {
           "checksum": "bfac67f934e229b65b45e6649b6c6a757ff89720825bb9c88eb5da4cd7ef5385",
           "path": "evals/expected/pf_prompt_injection.json"
+        },
+        {
+          "checksum": "9da061e03405f03195ac071d4ce6a6f4dce21757216e5b751ade46b4781120b5",
+          "path": "evals/expected/pf_retrieval.json"
+        },
+        {
+          "checksum": "4a421102d5e58b2a1beedac556c6036b0d9fe2e0145cf9daf6fd803f3bf3bce2",
+          "path": "evals/expected/pf_retrieval_isolation.json"
         },
         {
           "checksum": "a3c106478e77e15664bf1c7ec214cf9c4938f7a6d41b9a7e2f4c4e4a984fd70c",
@@ -112,11 +120,15 @@
           "path": "evals/fixtures/cases/pf_prompt_injection.json"
         },
         {
+          "checksum": "8dc2c70373a55c659c805e651bcb7b0ea5dbb1f7cc46305a40c4c4b017c95109",
+          "path": "evals/fixtures/cases/pf_retrieval.json"
+        },
+        {
           "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
           "path": "evals/fixtures/cases/pf_side_effect.json"
         }
       ],
-      "version": "1.2.0"
+      "version": "1.3.0"
     },
     {
       "checksum": "166f36fc74e80c8d56b63825082d98323b9dbe680f0175c6f61e18afeea7dac9",
@@ -448,6 +460,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "85342eb9bfa7753f2de384619510972bc97d65fbd88c9420fe811e4a9dbf7d26",
+      "dataset_id": "sales_description_examples",
+      "files": [
+        {
+          "checksum": "18584d5d10a8b6442b2a51506ce64eb87d35f1d5e69b9417facc24b6b01fb6e2",
+          "path": "evals/expected/sales_desc_examples.json"
+        },
+        {
+          "checksum": "40da87097e837c6bed4d5942d0e605e94a1bcd8d1003145df55842322d7e46b0",
+          "path": "evals/fixtures/cases/sales_desc_examples.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
       "dataset_id": "sales_descriptions",
       "files": [
@@ -652,7 +679,7 @@
           "path": "evals/expected/sales_pc_dates.json"
         },
         {
-          "checksum": "33132238c108055a81c5a92570797e443a6c43a0346f47471b3974f486b24f45",
+          "checksum": "870376738d03215f6c1c2fb9936f58e3e7d116260aac8ecb4b08ed0e1d1bc57e",
           "path": "evals/fixtures/cases/sales_pc_dates.json"
         }
       ],
@@ -838,7 +865,7 @@
           "path": "evals/expected/sales_skill_intents.json"
         },
         {
-          "checksum": "bf0e3ee1fcd349cab2bb4cb5ad5820265dad387b46b6b78c208384370183c180",
+          "checksum": "db08bf285e3ef79999562776be8b940d2164cd2c5bc1486dc77cefa2c0d1dda7",
           "path": "evals/expected/sales_skill_intents_golden.json"
         },
         {
@@ -911,7 +938,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "7aa9011648caf19362c30d0d9ba3bc7b4524cc34",
+  "git_sha": "f87510b7e083cab38180b9913f97c5235b84b833",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -941,9 +968,9 @@
       "routing_policy_version": "1.0.0"
     },
     {
-      "checksum": "3233f5498f19413d36705177858e7fd79a46af6cefb076eb34ce5d78b6833805",
+      "checksum": "468c03bd950ddfad02761bedd0e1da425586578ea5dda0cf36a1469e15c7b16d",
       "profile_id": "onprem",
-      "routing_policy_version": "1.3.0"
+      "routing_policy_version": "1.4.0"
     },
     {
       "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",
@@ -1087,6 +1114,11 @@
       "checksum": "32508c7c8747d2ac7eeb908b90931cdb4f2147a5ddd2fd34e57c9120c01906e2",
       "policy_id": "sales_followups",
       "version": "1.4.0"
+    },
+    {
+      "checksum": "67cc087776e7edab47cd4878b00f9df4ab8289f90adf254687b6a5fe9307812b",
+      "policy_id": "sales_followups",
+      "version": "1.5.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
@@ -1291,6 +1323,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "4ac601a30aa8dce671ae5758087cc78e715ce38a5d311030ae3576bc416ea55b",
+      "prompt_id": "sales.description_attributes",
+      "version": "1.1.0"
+    },
+    {
       "checksum": "a9abcc70c6ea7804773f809b707fcae9dc1be3e4eddaaf473bf4c3c99b863331",
       "prompt_id": "sales.design_text_reply",
       "version": "1.0.0"
@@ -1299,6 +1336,11 @@
       "checksum": "f9cd858e46f9c68849ab1fe312f8c8936054782144ed3af644c47e3458bfe381",
       "prompt_id": "sales.dw1_agent",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "217a63be306d01adb3a1059092bee5544d01de52e90259bc448c47cfcfd616b4",
+      "prompt_id": "sales.dw1_agent",
+      "version": "1.1.0"
     },
     {
       "checksum": "70b956d776f29d398e0f79a298ca4655b3c94cebc26571f6466259cfede0d621",
@@ -1386,6 +1428,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "a0a21c6ca8ecf74447b12d5fbaaf41550be4b958b9209b077133afc71901bd27",
+      "prompt_id": "sales.skill_pick",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "fb246acb4d6a75060b736ec14e97ae208c9475a06233ae8bd69c534be3422ef8",
       "prompt_id": "sales.thread_agent",
       "version": "1.0.0"
@@ -1400,10 +1447,10 @@
   "schema_version": "1.0",
   "skills": [
     {
-      "checksum": "aa431d0c3c88ed226130f9451161197eb8019d7b365f65c5e0004b77220a9e8a",
+      "checksum": "ee488f9942221b816f9687249ea14ab03877f28bb3498189b4f24c7604c9ea93",
       "name": "dw1",
       "path": "configs/skills/dw1/AGENT.md",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "8990690b840ddd97972f46959398dea0c5a623dd666b1cde86c5f9d8e9b649d3",
@@ -1512,7 +1559,7 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.3.0",
+      "prompt_bundle_version": "1.4.0",
       "toolset_version": "1.1.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"
