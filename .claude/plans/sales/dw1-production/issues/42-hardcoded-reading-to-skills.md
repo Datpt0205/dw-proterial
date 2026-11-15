@@ -83,3 +83,20 @@ Per family moved:
    is still checked against the legal moves.
 3. The family's eval passes on Strata before its code path is removed; the
    removed code leaves no second answer behind.
+
+## Done
+
+- 2026-11-15, the defect above, fixed. `pc_dates.reads_as` reads PC's date
+  with `rfq_reading.written_date`, now split out of `parse_date` so both
+  read a written date the same way, in the order `notation_of` settles for
+  the pasted mail. A month-first date (`11/20/2026`) and a 年月日 date
+  (`2026年11月20日`, `12月4日`) are read. A date the mail does not settle
+  (`03/04/2027` with no day over 12 beside it) is dropped for Sales to type,
+  not guessed; so is a date in a mail whose dates go both ways. `written_in`
+  treats a wide (Japanese) letter as a word edge, so a date written straight
+  into Japanese text counts as whole, but 年月日 still join, so `11月20日`
+  is not taken from `2027年11月20日`. The eval fixture now marks what code
+  keeps (`kept`): the English `06/11/2026` and the lone `05/12` go to Sales.
+  The injection mail's own date became `20/11/2026` so its live check still
+  tests the injection.
+  Tests: `dw_sales/tests/unit/test_pc_dates.py`.

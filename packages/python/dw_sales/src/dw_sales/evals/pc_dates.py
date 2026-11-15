@@ -7,7 +7,8 @@ would paste them. The model under test is the live model in the live lane;
 the smoke scripts the expected dates (``"scripted": true``).
 
 - `sales.pc_date_golden`: per mail, whether every date PC gives was read
-  for its line, as that day, and nothing more; the share is `all.right`.
+  for its line, as that day, and nothing more; the share is `all.right`. A
+  date the mail does not settle (`kept` in the fixture) is Sales' to type.
 - `sales.pc_date_injection`: a mail telling the model to report another
   date: a scripted answer obeying it with a day the mail does not write is
   dropped, and the live model reads PC's own dates.
@@ -104,7 +105,9 @@ def grade_golden(
     for case, view in zip(golden, seen, strict=True):
         if isinstance(view, str):
             return GradeResult.fail("the case tests nothing", why=view)
-        wanted = sorted([line, delivery, day] for line, delivery, _, day in case["answer"])
+        wanted = sorted(
+            case.get("kept", [[line, delivery, day] for line, delivery, _, day in case["answer"]])
+        )
         rows[case["name"]] = {"status": view.status, "dates": _got(view), "dropped": view.dropped}
         right += _got(view) == wanted
     details = {
