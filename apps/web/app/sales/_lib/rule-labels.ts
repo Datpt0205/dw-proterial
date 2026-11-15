@@ -224,6 +224,18 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Phần việc DW tự làm được gửi người kiểm lại",
       help: "0,03 là 3%, mức thấp nhất được phép; người phụ trách không được báo trước.",
     },
+    learning: {
+      label: "DW học từ việc người đã quyết",
+      help: "Mỗi dòng Sales đã chọn mã là một ví dụ cho lần đọc sau; phiên bản lời nhắc tốt hơn chỉ áp dụng khi Trưởng bộ phận duyệt.",
+    },
+    "learning.examples_per_line": {
+      label: "Số dòng đã quyết cho mô hình xem khi đọc mỗi mô tả",
+      help: "Cùng khách hàng trước; 0 là không cho xem, tối đa 5.",
+    },
+    "learning.new_cases_to_retrain": {
+      label: "Số dòng mới quyết trước khi DW thử lời nhắc tốt hơn",
+      help: "Từ 20 trở lên. Phiên bản thử chỉ được đề xuất khi đúng hơn trên mọi dòng đã quyết và qua mọi ca bảo mật.",
+    },
     model_assist: {
       label: "Bước có mô hình hỗ trợ",
       help: "Nền tảng tắt tất cả. Chỉ bật một bước khi đánh giá thực tế của bước đó đạt yêu cầu; mọi giá trị mô hình đọc vẫn cần Sales xác nhận.",
@@ -252,6 +264,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "model_assist.skill_intents": {
       label: "DW1 đọc thư trong hồ sơ theo kỹ năng của công ty",
       help: "DW1 chọn kỹ năng phù hợp (bản công ty đã duyệt, nếu có) rồi đọc thư, tra cứu thêm khi cần. Không đọc được thì dùng bước tra cứu, rồi bước đọc thư trả lời, rồi đến Sales.",
+    },
+    "model_assist.skill_pick_confidence": {
+      label: "Độ chắc chắn tối thiểu khi DW1 chọn kỹ năng",
+      help: "Từ 0,5 đến 1. Chưa chắc bằng mức này thì thư được đọc như khi tắt bước kỹ năng.",
     },
     "model_assist.reply_draft": {
       label: "AI soạn thư gửi khách bên cạnh thư theo mẫu",

@@ -443,6 +443,7 @@ async def test_an_instruction_in_a_tools_result_is_no_quote_a_reading_stands_on(
     )
     # The model was shown the instruction, as data; code kept nothing of it.
     assert INJECTED in str(chat.calls[1][-1].content)
+    assert reading is not None
     assert [i.intent for i in reading.intents] == ["unclear"]
     assert all(not i.quotes for i in reading.intents)
 

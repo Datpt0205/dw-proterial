@@ -1265,6 +1265,33 @@ export class SalesApi {
     );
   }
 
+  // ---- DW1's skills (ticket 40) -----------------------------------------------
+
+  /**
+   * Each skill as the tenant holds it now, and every version of its, a
+   * proposed one with the worker's replay once it has run.
+   */
+  skills() {
+    return this.get<"/api/v1/sales/skills">("/api/v1/sales/skills");
+  }
+
+  /**
+   * Proposes a version of the skill ``name``. It opens a `sales.skills`
+   * approval the head decides on `/approvals`, never the proposer, and only
+   * once the worker's replay of it is stored.
+   */
+  proposeSkill(
+    name: string,
+    body: Body<"/api/v1/sales/skills/{name}/versions">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/skills/{name}/versions">(
+      `/api/v1/sales/skills/${enc(name)}/versions`,
+      body,
+      key,
+    );
+  }
+
   /** The JSON Schema a proposal of the key is validated by (ticket 40). */
   ruleSchema(ruleKey: SalesSchemas["RuleKey"]) {
     return this.get<"/api/v1/sales/rules/{key}/schema">(

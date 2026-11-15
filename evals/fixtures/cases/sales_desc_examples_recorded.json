@@ -1,0 +1,98 @@
+{
+  "_comment": "The local model's answers to sales.description_attributes@1.1.0 for ticket 43's example graders, per condition (shown no example, or shown decided lines) and description, recorded on the developer machine's Ollama qwen3.5-9b-dw (the onprem profile pointed at it); the smoke replays them. null: the line was left out or the call gave no usable answer. Fictional text.",
+  "answers": {
+    "without": {
+      "DĐ AWG18 LX đen": {
+        "colour_span": "đen",
+        "colour": "black",
+        "gauge_span": "AWG18"
+      },
+      "DĐ AWG20 LX xanh lá": {
+        "colour_span": "xanh lá",
+        "colour": "green",
+        "gauge_span": "AWG20"
+      },
+      "LW AWG18 R TC RL": {
+        "conductor_span": "TC",
+        "conductor": "tinned_copper",
+        "gauge_span": "AWG18"
+      },
+      "LW AWG24 K TC RL": {
+        "conductor_span": "TC",
+        "conductor": "tinned_copper",
+        "colour_span": "K",
+        "colour": "black",
+        "packaging_span": "RL",
+        "packaging": "reel",
+        "gauge_span": "AWG24"
+      },
+      "MC 2C 0.5SQ AF BLK RL": {
+        "family_span": "MC",
+        "family": "multi_core_cable",
+        "colour_span": "BLK",
+        "colour": "black",
+        "packaging_span": "RL",
+        "packaging": "reel",
+        "cores_span": "2C",
+        "gauge_span": "0.5SQ"
+      },
+      "MC 6C 0.5SQ BR BLK": {
+        "family_span": "MC",
+        "family": "multi_core_cable",
+        "colour_span": "BLK",
+        "colour": "black",
+        "cores_span": "6C",
+        "gauge_span": "0.5SQ"
+      }
+    },
+    "with": {
+      "DĐ AWG18 LX đen": {
+        "colour_span": "đen",
+        "colour": "black",
+        "gauge_span": "AWG18"
+      },
+      "DĐ AWG20 LX xanh lá": {
+        "colour_span": "xanh lá",
+        "colour": "green",
+        "gauge_span": "AWG20"
+      },
+      "HUW AWG22 RED TC": {
+        "family_span": "HUW",
+        "family": "hook_up_wire",
+        "conductor_span": "TC",
+        "conductor": "tinned_copper",
+        "colour_span": "RED",
+        "colour": "red",
+        "gauge_span": "AWG22"
+      },
+      "Hàng như đơn trước": {},
+      "LW AWG18 R TC RL": {},
+      "LW AWG24 K TC RL": {
+        "colour_span": "K",
+        "colour": "black",
+        "packaging_span": "RL",
+        "packaging": "reel",
+        "gauge_span": "AWG24"
+      },
+      "MC 2C 0.5SQ AF BLK RL": {
+        "family_span": "MC",
+        "family": "multi_core_cable",
+        "colour_span": "BLK",
+        "colour": "black",
+        "packaging_span": "RL",
+        "packaging": "reel",
+        "cores_span": "2C",
+        "gauge_span": "0.5SQ"
+      },
+      "MC 6C 0.5SQ BR BLK": {
+        "family": "multi_core_cable",
+        "stranding": "stranded",
+        "conductor": "tinned_copper",
+        "shield": "braid",
+        "colour": "black",
+        "cores_span": "6C",
+        "gauge_span": "0.5SQ"
+      }
+    }
+  }
+}

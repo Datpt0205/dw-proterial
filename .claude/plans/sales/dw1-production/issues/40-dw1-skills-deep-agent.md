@@ -1,6 +1,6 @@
 # 40 — DW1 as one deep agent: AGENT.md, tenant-edited SKILL.md, the first skill measured on Strata
 
-Status: in progress (2026-11-16): 1, 2, 3, 5, 6 and the approval flow done; the replay and the skills page left (below). The step stays off: 0.183 on Strata.
+Status: done (2026-11-16): the scored skill pick, the replay and the skills page built; the step stays off (0.800 on Strata's bar set: level with the one call's 0.796, under the 0.85 bar). What is left below is follow-up, not this ticket.
 Blocked by: none (33 and 34 are rebuilt on top of this)
 Category: enhancement
 
@@ -77,16 +77,77 @@ Built under dw_sales ADR 0014 ("Applied to ticket 40" records each decision).
   wording change against the looping was tried and made it worse (0.083);
   not kept. The step stays off.
 
+## Done (2026-11-16, the follow-up)
+
+Under dw_sales ADR 0015 decision 5 (the skill is picked by one scored call).
+
+- **The scored pick**: `application/skill_pick.py` (`SkillPicker`, prompt
+  `sales.skill_pick@1.0.0`): ONE structured call whose schema is an enum of
+  the skills served to the run's tenant plus `none`, scored by the name's
+  token probabilities; code reads a name the set does not serve, `none`, a
+  pick with no confidence or below `model_assist.skill_pick_confidence`
+  (tenant config, default 0.9, 0.5..1) as no pick, and the message is then
+  read exactly as with the step off (`ThreadAgent.read` returns None,
+  `OrderIntake._read_thread` moves on). The picked skill's words go into the
+  one reading turn, `sales.dw1_agent@1.1.0` (DW1's conduct, `AGENT.md`
+  1.1.0, and the skill, both contained like every input: no shipped prompt
+  takes a raw variable); no catalogue and no loading tool, the look-up tools stay
+  under `SKILL_CEILING`. The pick's call is timed in the activity record.
+- **Measured on Strata, live, once** (2026-11-16, Qwen3.8-Flash-Next Q2_0,
+  not attested; `evals/reports/live-onprem/sales_skill_intents@1.0.0.json`):
+  bar set **0.800** (the one call 0.796, the thread agent 0.85, the free
+  choice 0.183), 0.75 on all 80; the skill alone where picked 0.797. Picks:
+  thread-intents for all 80, confidence p50 0.98, min 0.70, one below the
+  floor. **One false accept** (RP16). 3.09 model calls per message (one
+  pick, 2.1 turn calls), 90 look-ups in 80 turns, 3 at the ceiling (63
+  before); per message p50 4.4 s, p95 6.1 s (pick p50 1.04 s). Withheld:
+  6/8 looked up with the right tool. No tool answered for another customer.
+  The looping is gone; the bar is not met. The step stays off. (A first run
+  the same day, with the conduct as a raw variable, read 0.683 with two
+  false accepts; the prompt was changed to contain it and measured again.)
+- **The eval** records the pick (which skill, how sure, per message), scores
+  the step as deployed (the skill's reading where picked, the one call's
+  where not) and the skill alone; `bounded` adds the four unsure picks
+  (none, below the floor, no confidence, a name not served), each read as
+  off. Recorded picks `sales_skill_pick_recorded.json` (answers and
+  confidences; `run_evals.py --record` writes `confidences`), turns
+  re-recorded, the 1.0.0 transcripts dropped.
+- **The replay**: `application/skill_replay.py` (`SkillReplayer`), the
+  worker's `sales_skill_replay` lane every five minutes over the workspaces
+  with Sales cases (`consumers/sales_skill_replay.py`): each proposed skill
+  version of the scope's tenant with no replay is read on example mails with
+  the proposal and with the skills in force, by DW1's agent with skills as it
+  runs, each reading its own run (the lane's actor, `sales.inbox.process`
+  only, freed from the spend ledger after), and stored with its audit row:
+  `sales.skill_replays` (migration `e1b1e0cadb66`, from 43's `137ec1972538`;
+  tenant-only RLS like `rule_versions`, ENABLE+FORCE, SELECT/INSERT only,
+  CHECKs, unique per version, cascades with it). Examples: the 60 golden
+  replies of `sales_reply@2.0.0` and the thread agent's 4 injections
+  (`adapters/skill_examples.py`, the fixtures the worker image ships); the
+  security cases (injections, conditional and non-answer replies) fail on a
+  read `accepts`. **The head may approve only a replayed version**
+  (`SkillDecisions`: `skill_not_replayed`); rejecting needs none.
+- **The skills page** `/sales/rules/skills` (linked from Quy tắc): each
+  skill (platform or the company's, its words on click), the company's
+  versions with status, the replay ("Đúng X/N với bản đề xuất · Y/N với bản
+  đang dùng", incomplete and failed security cases said plainly), "Đề xuất
+  sửa" (`POST /sales/skills/{name}/versions`, the idempotency key per press),
+  "Mở phê duyệt". `SalesApi.skills()` / `.proposeSkill()`.
+
 ## Left (follow-up)
 
-- **The replay** of a proposed skill version on the tenant's example mails,
-  with and without it (needs the model: a worker job), shown to the head
-  before deciding (ADR 0014 decision 2). Until it exists, the head decides
-  on the words alone, through `/approvals`.
-- **The skills page** under the rules area (list skills, view the text,
-  propose an edit, see the replay, send for approval): antd only, less
-  text, detail on click. The API it needs exists.
+- **Why the reading is 0.80, not 0.85**: the skill's turn reads as the one
+  call does (0.797 vs 0.796) and gave one false accept (RP16); the look-ups
+  no longer loop. Compare per message (`missed` in the report) before
+  another wording.
+- The replay reads the platform's example mails only: nobody labels a reply
+  reading yet (ticket 43 lists reply intents among the steps no person
+  confirms). The stored `source` names it, so the tenant's own cases are a
+  second source, not a change of meaning.
+- `sales.read_skill@1.0.0` is still registered and pinned by
+  `sales-dw1@1.1.0` but offered to no turn (the free choice is gone): drop
+  it with the next toolset version.
 - A tenant's wholly new skill (a name the platform does not ship), and a
   tenant's own `AGENT.md`.
-- Why the agent loops on Strata, before the next measurement: the thread
-  agent without skills does not (57 look-ups in 72 turns).
+- The release manifest needs regenerating (`make release-manifest`) once
+  tickets 40 and 43 are both in: new prompts, `AGENT.md` 1.1.0.

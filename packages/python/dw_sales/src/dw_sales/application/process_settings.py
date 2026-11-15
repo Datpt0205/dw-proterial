@@ -171,6 +171,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.reply_intent",
                     "model_assist.thread_agent",
                     "model_assist.skill_intents",
+                    "model_assist.skill_pick_confidence",
                     "model_assist.request_handoff",
                     "model_assist.change_request",
                 ),
@@ -600,6 +601,10 @@ PROCESS_SETTINGS: Final[tuple[Placement, ...]] = _in(
     "autonomy.applies_itself_error",
     "autonomy.hand_off_error",
     "autonomy.audit_share",
+    # How the readings learn from decided lines (ticket 43): the examples a
+    # reading is shown, and when a better prompt is tried; every reading's.
+    "learning.examples_per_line",
+    "learning.new_cases_to_retrain",
 )
 
 

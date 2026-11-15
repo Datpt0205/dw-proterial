@@ -30,16 +30,19 @@ holds its own version of a skill in its data.
   to their lengths and nothing else. What a turn may call, whom it reads for
   and what a reading may say stay code's (`thread_tools`, `verified_intents`).
 
-What this does not do yet (ticket 40's follow-up): replay a proposed version
-on the tenant's example mails with and without it, which needs the model and
-so the worker, and the page that shows the replay to the head.
+- **Replayed before it is decided.** The worker replays each proposal on
+  example mails, with it and with the skills in force
+  (`skill_replay.SkillReplayer`), and stores the counts beside it
+  (`SkillReplay`); the skills list shows them, and the head may approve only
+  a version whose replay is stored (`SkillDecisions`). Rejecting needs none.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, Literal
+from datetime import datetime
+from typing import Final, Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,7 +50,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.skills import Skill, SkillSet
-from dw_kernel.errors import NotFoundError
+from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -63,11 +66,13 @@ from dw_platform.application.rule_versions import (
     RuleVersionEngine,
     RuleVersionLookupPort,
     RuleVersionSettlement,
+    asked_of,
 )
 from dw_platform.domain.approval import ApprovalRequest, decided_event_type
-from dw_sales.application.access import Gate, SalesScopes
+from dw_platform.domain.audit import AuditEvent
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.ports import MemberDirectoryPort
+from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.rules import ProposerNames, rule_work
 
 __all__ = [
@@ -79,6 +84,8 @@ __all__ = [
     "SkillBook",
     "SkillDecisions",
     "SkillDocument",
+    "SkillReplay",
+    "SkillReplayStorePort",
     "SkillSettlement",
     "SkillsService",
     "skill_key",
@@ -192,6 +199,56 @@ def skill_book(skills: Dw1Skills, stored: RuleVersionLookupPort) -> SkillBook:
     )
 
 
+# ------------------------------------------------------------- replays --
+
+ReplaySource = Literal["platform_examples"]
+ReplayOutcome = Literal["replayed", "incomplete"]
+
+
+class SkillReplay(BaseModel):
+    """What one replay of a proposed version found, stored beside it
+    (`skill_replay`)."""
+
+    model_config = _FROZEN
+
+    version_id: UUID
+    replayed_at: datetime
+    # Which example mails were read: the platform's, while no tenant's own
+    # reply readings are labelled (ticket 43).
+    source: ReplaySource
+    # ``incomplete``: some reading got no usable answer, so the counts are
+    # partial.
+    outcome: ReplayOutcome
+    # The example mails read (security-only cases excluded), and how many of
+    # them were read as exactly their expected intents with the proposal and
+    # with the skills in force.
+    messages: int = Field(ge=0)
+    right_with: int = Field(ge=0)
+    right_without: int = Field(ge=0)
+    # Readings, of either side, that got no usable answer.
+    unanswered: int = Field(ge=0)
+    # The security cases the proposal failed, by example id.
+    security_failed: tuple[str, ...] = ()
+
+
+class SkillReplayStorePort(Protocol):
+    """The replays stored beside proposals, in one tenant's scope."""
+
+    async def stored(
+        self, scope: SalesScope, version_ids: Sequence[UUID]
+    ) -> Mapping[UUID, SkillReplay]: ...
+
+    async def store(self, scope: SalesScope, replay: SkillReplay, audit: AuditEvent) -> bool:
+        """The replay and its audit row, in one transaction; False, and
+        neither written, where the version already has one (another
+        workspace's lane got there first)."""
+        ...
+
+
+# Refused: approving a version the worker has not replayed yet.
+NOT_REPLAYED: Final = "skill_not_replayed"
+
+
 # --------------------------------------------------------------- views --
 
 
@@ -210,6 +267,8 @@ class SkillVersionView(BaseModel):
     instructions: str
     # The platform approval it is decided on (`POST /approvals/{id}/decisions`).
     approval_id: UUID | None
+    # What the worker's replay found; None until it has run.
+    replay: SkillReplay | None = None
 
 
 class SkillView(BaseModel):
@@ -244,7 +303,7 @@ class SkillProposal(BaseModel):
     instructions: str = Field(min_length=1, max_length=INSTRUCTIONS_LIMIT)
 
 
-def _version_view(version: RuleVersion) -> SkillVersionView:
+def _version_view(version: RuleVersion, replay: SkillReplay | None = None) -> SkillVersionView:
     document = SkillDocument.model_validate(dict(version.document))
     return SkillVersionView(
         version_id=version.version_id,
@@ -256,6 +315,7 @@ def _version_view(version: RuleVersion) -> SkillVersionView:
         description=document.description,
         instructions=document.instructions,
         approval_id=version.approval_id,
+        replay=replay,
     )
 
 
@@ -272,6 +332,7 @@ class SkillsService:
     clock: UtcClock
     ids: IdGenerator
     directory: MemberDirectoryPort
+    replays: SkillReplayStorePort
 
     @property
     def _engine(self) -> RuleVersionEngine:
@@ -305,7 +366,13 @@ class SkillsService:
                 )
             )
         versions = await self._engine.list_all(context, keys=keys)
-        return SkillsView(skills=skills, versions=[_version_view(v) for v in versions])
+        replays = await self.replays.stored(
+            sales_scope(context), [v.version_id for v in versions if v.status == "proposed"]
+        )
+        return SkillsView(
+            skills=skills,
+            versions=[_version_view(v, replays.get(v.version_id)) for v in versions],
+        )
 
     async def propose(
         self, context: AccessContext, name: str, proposal: SkillProposal
@@ -338,10 +405,14 @@ class SkillsService:
 class SkillDecisions:
     """The platform's `ApprovalDecisionGuard` for `sales.skills`: the
     decider holds the stamp, is not the proposer, and the version still
-    waits on this approval (`RuleDecisionGuard` with this registry)."""
+    waits on this approval (`RuleDecisionGuard` with this registry); and an
+    approval only once the worker's replay of the version is stored, so the
+    head has seen what it changes (ADR 0014 decision 2). A rejection needs
+    no replay."""
 
     uow: SalesUnitOfWorkFactory
     book: SkillBook
+    replays: SkillReplayStorePort
 
     async def check(
         self, request: ApprovalRequest, decision: ProposedDecision, context: AccessContext
@@ -349,6 +420,15 @@ class SkillDecisions:
         await RuleDecisionGuard(REGISTRY, rule_work(self.uow), self.book).check(
             request, decision, context
         )
+        if not decision.approve:
+            return
+        version_id = asked_of(REGISTRY, request).version_id
+        if version_id not in await self.replays.stored(sales_scope(context), [version_id]):
+            raise ConflictError(
+                "Phiên bản kỹ năng chưa được chạy thử trên thư mẫu: chờ kết quả chạy thử"
+                " rồi duyệt (vẫn có thể từ chối).",
+                details={"version_id": str(version_id), "rule": NOT_REPLAYED},
+            )
 
 
 @dataclass(frozen=True)

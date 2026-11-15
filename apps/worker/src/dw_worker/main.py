@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import signal
 from collections.abc import Awaitable, Callable
@@ -46,6 +47,7 @@ from dw_connectors.ports import ChatSenderPort
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
+from dw_knowledge.examples import ExampleGateway
 from dw_knowledge.retention import VERSIONS_LANE as KNOWLEDGE_VERSIONS_LANE
 from dw_knowledge.retention import SqlKnowledgeRetention, SqlSupersededVersionRetention
 from dw_memory.policy import MemoryWritePolicy
@@ -138,12 +140,14 @@ from dw_sales.adapters.assembly import (
     build_dw1,
     build_followup_lane,
     build_layout_settlement,
+    build_prompt_settlement,
     build_rule_settlement,
     build_skill_settlement,
     build_threshold_lane,
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.labelled_cases import RETENTION_KEY as LABELLED_CASES_KEY
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseRetention
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import (
@@ -157,6 +161,7 @@ from dw_sales.adapters.reader_client import (
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
+from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
@@ -164,9 +169,12 @@ from dw_sales.application.mail_drop import MAIL_DROP_LANE
 from dw_sales.application.outbound_mail import SALES_OUTBOUND_LANE
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
+from dw_sales.application.prompt_optimiser import OPTIMISER_LANE, SecurityCase, security_cases
+from dw_sales.application.prompt_versions import PROMPTS_DECIDED
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
+from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
 from dw_worker.composition import (
     REPO_ROOT,
@@ -224,6 +232,12 @@ from dw_worker.consumers.sales_followups import (
 from dw_worker.consumers.sales_followups import build_sales_followups_consumer
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
+from dw_worker.consumers.sales_learning import (
+    EXAMPLES_INTERVAL_SECONDS,
+    OPTIMISER_INTERVAL_SECONDS,
+    build_sales_examples_consumer,
+    build_sales_prompt_optimiser_consumer,
+)
 from dw_worker.consumers.sales_mail_drop import INTERVAL_SECONDS as SALES_MAIL_DROP_INTERVAL_SECONDS
 from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
 from dw_worker.consumers.sales_outbound import INTERVAL_SECONDS as SALES_OUTBOUND_INTERVAL_SECONDS
@@ -238,6 +252,10 @@ from dw_worker.consumers.sales_rule_drafts import (
     build_rule_draft_sweep_consumer,
 )
 from dw_worker.consumers.sales_salesorder_examples import build_example_handler
+from dw_worker.consumers.sales_skill_replay import (
+    INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -293,6 +311,44 @@ def _build_memory_vectors(settings: WorkerSettings) -> QdrantMemoryRanker | None
         client=AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key),
         embedder=build_embeddings(settings),
     )
+
+
+def _build_examples(settings: WorkerSettings) -> ExampleGateway:
+    """The examples index DW1's readings are shown decided lines from
+    (Sales ticket 43): written by the `sales_examples` lane, searched by the
+    drain's readings, purged by its retention and by offboarding. One
+    instance for all, so the collection written is the one searched and
+    purged. Qdrant where the deployment has one; in memory otherwise, which
+    serves only this process (the one that reads mail)."""
+    if not settings.qdrant_url:
+        from dw_knowledge.adapters.memory_examples import InMemoryExampleIndex
+
+        return ExampleGateway(index=InMemoryExampleIndex(), embeddings=build_embeddings(settings))
+    from qdrant_client import AsyncQdrantClient
+
+    from dw_knowledge.adapters.qdrant_examples import QdrantExampleIndex
+
+    return ExampleGateway(
+        index=QdrantExampleIndex(
+            client=AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+        ),
+        embeddings=build_embeddings(settings),
+    )
+
+
+# The description step's security cases, which the worker image ships
+# (`infra/docker/worker.Dockerfile` copies `evals/fixtures`): a prompt version
+# that fails one is never proposed (Sales ticket 43 part 3).
+_DESCRIPTION_SECURITY = (
+    REPO_ROOT / "evals" / "fixtures" / "cases" / "sales_descriptions_security.json"
+)
+
+
+def _description_security() -> tuple[SecurityCase, ...]:
+    """None where the file is absent: the optimiser then proposes nothing."""
+    if not _DESCRIPTION_SECURITY.is_file():
+        return ()
+    return security_cases(json.loads(_DESCRIPTION_SECURITY.read_text(encoding="utf-8")))
 
 
 def build_channel_decision_command(
@@ -426,6 +482,7 @@ def build_sales(
     clock: UtcClock,
     ids: IdGenerator,
     telemetry: TelemetryPort,
+    examples: ExampleGateway | None = None,
 ) -> tuple[Dw1Mount, SalesScope] | None:
     """DW1 over the workspace its mock mailbox is bound to, or None where no
     mailbox is (a deployed profile without SALES_DEMO_*, or with the mock
@@ -497,6 +554,10 @@ def build_sales(
         # The API's cache: a case DW1 opens here has its pages read into it
         # ahead of the person who opens them there.
         source_cache=ValkeyCache.from_url(settings.redis_url) if settings.redis_url else None,
+        # The decided lines shown to readings, and the security cases a
+        # proposed prompt version must pass (ticket 43).
+        examples=examples,
+        security=_description_security(),
     )
     return mount, scope
 
@@ -820,6 +881,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # from the labelled cases, wherever DW1 is, over every workspace with a
     # Sales case.
     sales_auto_apply_consumer: Callable[[], Awaitable[None]] | None = None
+    # What DW1 learns from what people decided (Sales ticket 43): the decided
+    # lines indexed for readings to be shown, and a better prompt version
+    # proposed to the head.
+    sales_examples_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_prompt_optimiser_consumer: Callable[[], Awaitable[None]] | None = None
+    # The replay of a proposed DW1 skill version (Sales ticket 40), for the
+    # head to see before deciding.
+    sales_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
@@ -904,6 +973,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 ids=ids,
             ),
             applied="skill decision applied",
+        )
+        # A tenant's version of the description reading's prompt, proposed by
+        # the optimiser lane (Sales ticket 43): a run-less `sales.prompts`
+        # approval, carried out the same way.
+        handlers[PROMPTS_DECIDED] = build_decided_handler(
+            build_prompt_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                clock=clock,
+                ids=ids,
+            ),
+            applied="prompt decision applied",
         )
         # A master-data import (Sales ticket 41): a run-less `sales.catalog`
         # approval, carried out the same way.
@@ -1042,6 +1124,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     SqlChannelUpdateQueue(sessions), inbound
                 )
         if settings.s3_endpoint_url:
+            # The decided lines' vectors (Sales ticket 43): one gateway for the
+            # lane that writes them, the readings that search them, and the
+            # retention and offboarding that delete them.
+            examples = _build_examples(settings)
             offboarding_exports_retention = OffboardingExportRetention(
                 exports=build_export_bucket(settings),
                 audit=SqlOffboardingExportAudit(
@@ -1068,12 +1154,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     vector_index=build_vector_index(settings),
                     memory_vectors=memory_vectors,
                     clock=clock,
+                    example_vectors=examples,
                 )
             )
             purchasing_automation_consumer = build_purchasing_automation(
                 settings, sessions, clock=clock, ids=ids, telemetry=telemetry
             )
-            sales = build_sales(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
+            sales = build_sales(
+                settings, sessions, clock=clock, ids=ids, telemetry=telemetry, examples=examples
+            )
             if sales is not None:
                 mount, mailbox = sales
                 assert mount.drain is not None and mount.queue is not None  # requester_access
@@ -1117,6 +1206,23 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_auto_apply_consumer = build_sales_auto_apply_consumer(
                     thresholds, threshold_scopes
                 )
+                if mount.examples is not None:
+                    sales_examples_consumer = build_sales_examples_consumer(
+                        mount.examples,
+                        threshold_scopes,
+                        examples.prune,
+                        lambda: retention_policy.audit.cutoff_for(
+                            LABELLED_CASES_KEY, now=clock.now()
+                        ),
+                    )
+                if mount.prompt_optimiser is not None:
+                    sales_prompt_optimiser_consumer = build_sales_prompt_optimiser_consumer(
+                        mount.prompt_optimiser, threshold_scopes
+                    )
+                if mount.skill_replay is not None:
+                    sales_skill_replay_consumer = build_sales_skill_replay_consumer(
+                        mount.skill_replay, threshold_scopes
+                    )
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
@@ -1243,6 +1349,28 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             AUTO_APPLY_LANE,
             sales_auto_apply_consumer,
             interval_seconds=SALES_AUTO_APPLY_INTERVAL_SECONDS,
+        )
+
+    # And what it learns from what people decided (ticket 43): the decided
+    # lines indexed, and a better prompt version proposed to the head; both
+    # only write the index or a proposal, so no ReapTarget.
+    if sales_examples_consumer is not None:
+        registry.register(
+            EXAMPLES_LANE, sales_examples_consumer, interval_seconds=EXAMPLES_INTERVAL_SECONDS
+        )
+    if sales_prompt_optimiser_consumer is not None:
+        registry.register(
+            OPTIMISER_LANE,
+            sales_prompt_optimiser_consumer,
+            interval_seconds=OPTIMISER_INTERVAL_SECONDS,
+        )
+    # And a proposed skill version replayed for the head (ticket 40): it
+    # only stores a replay, so no ReapTarget.
+    if sales_skill_replay_consumer is not None:
+        registry.register(
+            SKILL_REPLAY_LANE,
+            sales_skill_replay_consumer,
+            interval_seconds=SALES_SKILL_REPLAY_INTERVAL_SECONDS,
         )
 
     # And the months of its step rows past their term (slice 3), hourly like

@@ -100,8 +100,9 @@ class BucketPort(Protocol):
 
 
 class VectorPurgePort(Protocol):
-    """Structurally `dw_knowledge.ports.VectorIndexPort.delete_by_tenant`, and
-    `dw_memory.ranking.MemoryVectorPurgePort.delete_by_tenant`."""
+    """Structurally `dw_knowledge.ports.VectorIndexPort.delete_by_tenant`,
+    `dw_memory.ranking.MemoryVectorPurgePort.delete_by_tenant` and
+    `dw_knowledge.examples.ExampleGateway.delete_by_tenant`."""
 
     async def delete_by_tenant(self, tenant_id: UUID) -> None: ...
 
@@ -169,6 +170,10 @@ class TenantOffboardingLane:
     # default: `None` is the composition root saying there is no vector store.
     memory_vectors: VectorPurgePort | None
     clock: UtcClock
+    # The examples index's collection (Sales ticket 43): a vector per line a
+    # person decided, embedded from the customer's description. None where
+    # the composition root builds no examples index.
+    example_vectors: VectorPurgePort | None = None
 
     async def run(self, tenant_id: UUID) -> None:
         rows = await self.store.export_rows(tenant_id)
@@ -198,6 +203,8 @@ class TenantOffboardingLane:
         await self.vector_index.delete_by_tenant(tenant_id)
         if self.memory_vectors is not None:
             await self.memory_vectors.delete_by_tenant(tenant_id)
+        if self.example_vectors is not None:
+            await self.example_vectors.delete_by_tenant(tenant_id)
 
         await self.store.mark_status(tenant_id, "completed", export_key=export_key)
 

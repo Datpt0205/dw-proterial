@@ -26,6 +26,7 @@ from dw_sales.application.access import SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.case_store import Stored
 from dw_sales.application.labelled_cases import StepLabels, label_summary
+from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.labelled_cases import (
@@ -226,7 +227,7 @@ async def test_confirming_a_model_read_candidate_writes_exactly_one_labelled_cas
     )
     assert (label.customer_code, label.decided_by, label.field) == ("KMH", AN.user_id, "prv_code")
     assert (label.prompt, label.model_profile, label.rules) == (
-        "sales.description_attributes@1.0.0",
+        str(DESCRIPTION_ATTRIBUTES),
         "onprem",
         "sales_order_rules@1.5.2",
     )

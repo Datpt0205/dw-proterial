@@ -27,20 +27,24 @@ until both say so, every thread message is read by one call (ADR 0012
 decision 5).
 
 **DW1's agent with skills** (dw_sales ADR 0014, ticket 40) is this reader with
-a skill set (`skills`): the turn is `DW1_AGENT`'s, its system message carries
-DW1's conduct and the skills catalogue, and code serves it the skills resolved
-for the run's tenant (`model.skills.serving`, `skills.SkillBook`). The model
-loads the skill that fits; the reading is checked exactly as above and stamps
-the skill versions it loaded (`ReplyReading.skills`). Its own switch,
-`model_assist.skill_intents`, and its own bar: off and below it, nothing of
-this runs.
+skills (`skills`). Code resolves the skills the run's tenant holds
+(`skills.SkillBook`), one scored call picks the one that fits
+(`skill_pick.SkillPicker`, ADR 0015 decision 5), and the turn under
+`DW1_AGENT` reads the message with DW1's conduct and that skill's words in its
+prompt: no catalogue and no loading tool, so no loop for choosing (measured
+on Strata, a turn left to load its own skill looped, 0.183). The look-up
+tools stay, for what the skill says a message leans on. No skill picked, or
+one less sure than the tenant's floor: no reading of the step's own, and the
+message is read as if the step were off. A reading is checked exactly as
+above and stamps the skill version it read with (`ReplyReading.skills`). Its
+own switch, `model_assist.skill_intents`, and its own bar: off and below it,
+nothing of this runs.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -52,13 +56,14 @@ from dw_agent_runtime.model.interpretation import (
     cut_to_tokens,
 )
 from dw_agent_runtime.model.readiness import StepModelPort
-from dw_agent_runtime.model.skills import SkillSet, serving
+from dw_agent_runtime.model.skills import SkillSet
 from dw_kernel.errors import NotFoundError
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.model_calls import record_model_call
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import reading_context
+from dw_sales.application.skill_pick import SkillPicker
 from dw_sales.application.thread_tools import ThreadContextPort, bound_to
 from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.activity import ModelCall
@@ -84,11 +89,11 @@ CEILING: Final = TurnCeiling(max_model_calls=4, max_input_tokens=16_000, max_sec
 # and the prompt, the tools' descriptions and what they return share it.
 BODY_TOKENS: Final = 2500
 # DW1's agent with skills (ticket 40): its prompt (`configs/prompts/sales/
-# dw1_agent@1.0.0.yaml`), and its ceiling. One call more than the thread
-# agent's, the one that loads the skill, and the tokens for the skill's
-# instructions, which every later call of the turn carries again: about
-# 1,300 tokens for the first skill. 120 seconds for five calls.
-DW1_AGENT: Final = PromptRef("sales.dw1_agent", "1.0.0")
+# dw1_agent@1.1.0.yaml`, the picked skill's words in it), and its ceiling,
+# unchanged since 1.0.0: one call more than the thread agent's, and the
+# tokens for DW1's conduct and the skill's instructions, which every call of
+# the turn carries: about 1,700 tokens for the first skill. 120 seconds.
+DW1_AGENT: Final = PromptRef("sales.dw1_agent", "1.1.0")
 SKILL_CEILING: Final = TurnCeiling(max_model_calls=5, max_input_tokens=24_000, max_seconds=120.0)
 
 
@@ -100,6 +105,17 @@ class SkillSetPort(Protocol):
 
 
 @dataclass(frozen=True)
+class TurnSkillChoice:
+    """What DW1's agent with skills reads with (ticket 40): the skills the
+    run's tenant holds, the scored call that picks one, and DW1's conduct
+    (`AGENT.md`, the platform's text) that every turn's prompt carries."""
+
+    book: SkillSetPort
+    picker: SkillPicker
+    agent: str
+
+
+@dataclass(frozen=True)
 class ThreadAgent:
     """Reads a thread message's intents in a bounded agent turn."""
 
@@ -107,9 +123,10 @@ class ThreadAgent:
     context: ThreadContextPort
     # The model the tenant's steps run on now, for the timing record.
     models: StepModelPort
-    # The skills served to each turn, resolved for its run (ticket 40). None:
-    # the thread agent of tickets 30 and 31, which is served none.
-    skills: SkillSetPort | None = None
+    # The skill picked for each turn, from those resolved for its run
+    # (ticket 40). None: the thread agent of tickets 30 and 31, which reads
+    # with none.
+    skills: TurnSkillChoice | None = None
 
     async def read(
         self,
@@ -121,11 +138,15 @@ class ThreadAgent:
         cases: Sequence[ThreadedCase],
         rules_version: str,
         run: RunContext,
-    ) -> ReplyReading:
-        """The message's reading as code accepts it. Raises
-        `TurnCeilingReachedError` over a ceiling and `ModelUnavailableError`
-        for no usable answer, a thread whose cases are not one customer's
-        included: the caller falls back (module docstring)."""
+        pick_floor: float = 1.0,
+    ) -> ReplyReading | None:
+        """The message's reading as code accepts it; None where this reader
+        has skills and none was picked at ``pick_floor`` or above (the
+        tenant's `skill_pick_confidence`): the caller reads it as if the step
+        were off. Raises `TurnCeilingReachedError` over a ceiling and
+        `ModelUnavailableError` for no usable answer, a thread whose cases
+        are not one customer's included: the caller falls back (module
+        docstring)."""
         binding = await self.context.binding(scope, message, cases)
         if binding is None:
             raise ModelUnavailableError("the thread's cases are not one customer's")
@@ -135,16 +156,19 @@ class ThreadAgent:
             "subject": part.subject,
             "body": cut_to_tokens(part.body, BODY_TOKENS),
         }
-        loaded: list[str] = []
+        used: tuple[str, ...] = ()
+        if self.skills is not None:
+            # Resolved for the run's tenant, never the message's.
+            held = await self.skills.book.skill_set(run)
+            picked = await self.skills.picker.pick(held, inputs, floor=pick_floor, run=run)
+            if picked.skill is None:
+                return None
+            inputs = {**inputs, "agent": self.skills.agent, "skill": picked.skill.body}
+            used = (picked.skill.ref,)
         started = time.perf_counter()
         answered = False
         try:
-            with ExitStack() as turn:
-                if self.skills is not None:
-                    # Resolved for the run's tenant, never the message's.
-                    held = turn.enter_context(serving(await self.skills.skill_set(run)))
-                    loaded = held.loaded
-                turn.enter_context(bound_to(binding))
+            with bound_to(binding):
                 answer = await self.turn.read(inputs, ModelThreadIntents, run=run)
             answered = True
         finally:
@@ -161,7 +185,7 @@ class ThreadAgent:
             **self._fields(rules_version),
             outcome="read",
             intents=verified_intents(part.text, answer),
-            skills=tuple(loaded),
+            skills=used,
         )
 
     def unavailable(self, rules_version: str, fallback: AgentFallback) -> ReplyReading:

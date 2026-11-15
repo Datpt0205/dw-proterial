@@ -168,3 +168,21 @@ JSON-schema enum of the tenant's skills, scored by the token
 probabilities), not by the agent's free choice: measured on Strata in
 ticket 40, the free choice looped (0.183). Skills stay tenant-edited text;
 tools stay for the facts a reading lacks.
+
+## Applied 2026-11-16: the scored pick, the replay (ticket 40's follow-up, by the agent)
+
+- **The pick** is one structured call (`sales.skill_pick@1.0.0`, an enum of
+  the served skills plus `none`, scored by token probabilities); code reads
+  an unserved name, `none`, no confidence or less than the tenant's
+  `model_assist.skill_pick_confidence` (default 0.9) as no pick, and the
+  message is read as with the step off. The picked skill's words are in the
+  one reading turn (`sales.dw1_agent@1.1.0`, `AGENT.md` 1.1.0); no catalogue,
+  no loading tool. Measured on Strata: 0.800 on the bar's set (one call
+  0.796, bar 0.85), one false accept, 3 turns at the ceiling instead of 63.
+  The step stays off.
+- **The replay** (decision 2) runs in the worker on the platform's example
+  mails, with and without the proposal, and is stored beside it
+  (`sales.skill_replays`); the head may approve a version only once its
+  replay is stored, and a failed security case is said plainly on the
+  skills page. The tenant's own labelled reply readings would come first,
+  but none are labelled yet (ticket 43).

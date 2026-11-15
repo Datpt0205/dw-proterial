@@ -122,6 +122,8 @@ _SALES_TABLES = (
     # Migration efc46a50e75e (ticket 44): each step's threshold for what
     # applies itself.
     "sales.step_thresholds",
+    # Migration e1b1e0cadb66 (ticket 40): a proposed skill version's replay.
+    "sales.skill_replays",
 )
 
 
@@ -229,6 +231,8 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {"labelled_cases", "labelled_cases_default"} <= labelled
     for table in labelled:
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+    # A proposed skill version's replay (ticket 40): a fact about one version.
+    assert {verb for tbl, verb in held if tbl == "skill_replays"} == {"SELECT", "INSERT"}
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:

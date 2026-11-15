@@ -36,6 +36,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
 )
 from dw_agent_runtime.model.prompts import PromptRegistry
+from dw_agent_runtime.model.scoring import Scored
 from dw_evals.graders import Grader, GraderContext, GradeResult
 
 
@@ -67,6 +68,25 @@ class Recorded:
     route: str = "structured_extraction"
     max_input_tokens: int = 6000
     calls: list[tuple[PromptRef, RunContext, dict[str, str]]] = field(default_factory=list)
+    # A scored call's confidences, by `answer_key`, as the live lane recorded
+    # them (`Observed.confidences`); a key with none replays a call that gave
+    # no token probabilities.
+    confidences: Mapping[str, Mapping[str, float] | None] = field(default_factory=dict)
+
+    async def interpret_scored[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> Scored[OutputT]:
+        """`interpret`, with the confidences recorded for the same inputs."""
+        answer = await self.interpret(
+            prompt, inputs, schema, run=run, max_output_tokens=max_output_tokens
+        )
+        return Scored(answer, self.confidences.get(answer_key(prompt, inputs)))
 
     async def interpret[OutputT: BaseModel](
         self,
@@ -118,6 +138,36 @@ class ByPrompt:
         )
 
 
+@dataclass
+class ScriptedPick:
+    """A scored door that picks ``name`` (the first name the schema allows
+    when None) with ``confidence``, whatever it is asked: the skill pick of
+    a world or a harness whose model under test is the reading turn."""
+
+    name: str | None = None
+    confidence: float | None = 1.0
+    model_profile: str = "onprem"
+    calls: int = 0
+
+    async def interpret_scored[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> Scored[OutputT]:
+        self.calls += 1
+        allowed = schema.model_json_schema()["properties"]["skill"]["enum"]
+        name = allowed[0] if self.name is None else self.name
+        # Not validated: a pick of a name the set does not serve is what code
+        # must refuse on its own (`SkillPicker`).
+        answer = schema.model_construct(skill=name)
+        confidences = None if self.confidence is None else {"skill": self.confidence}
+        return Scored(answer, confidences)
+
+
 def load_answers(path: Path) -> dict[str, Mapping[str, Any] | None]:
     """The answers a recorded file holds (``{"answers": {key: answer}}``)."""
     if not path.exists():
@@ -142,6 +192,10 @@ class Observed:
     answers: dict[str, dict[str, Any] | None] = field(default_factory=dict)
     # Every other step's: prompt id -> answer key -> answer.
     recorded: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # A scored call's confidences (ticket 40's skill pick): prompt id ->
+    # answer key -> each value's probability, None without token
+    # probabilities.
+    confidences: dict[str, dict[str, Any]] = field(default_factory=dict)
     calls: list[tuple[PromptRef, RunContext, dict[str, str]]] = field(default_factory=list)
     # The calls that gave an answer in the schema; the rest were unavailable.
     answered: int = 0
@@ -191,6 +245,36 @@ class Observed:
         else:
             self.recorded.setdefault(prompt.prompt_id, {})[key] = answer.model_dump(mode="json")
         return answer
+
+    async def interpret_scored[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> Scored[OutputT]:
+        """`interpret`, scored by the model under test, its confidences kept
+        beside the answer for `--record`."""
+        self.calls.append((prompt, run, dict(inputs)))
+        started = time.perf_counter()
+        key = answer_key(prompt, inputs)
+        try:
+            scored: Scored[OutputT] = await self.inner.interpret_scored(
+                prompt, inputs, schema, run=run, max_output_tokens=max_output_tokens
+            )
+        except ModelUnavailableError:
+            self.recorded.setdefault(prompt.prompt_id, {})[key] = None
+            raise
+        finally:
+            self.seconds.setdefault(prompt.prompt_id, []).append(time.perf_counter() - started)
+        self.answered += 1
+        self.recorded.setdefault(prompt.prompt_id, {})[key] = scored.answer.model_dump(mode="json")
+        self.confidences.setdefault(prompt.prompt_id, {})[key] = (
+            None if scored.confidences is None else dict(scored.confidences)
+        )
+        return scored
 
     def _lines(self, inputs: Mapping[str, str], answer: BaseModel) -> None:
         sent = json.loads(inputs["lines"])

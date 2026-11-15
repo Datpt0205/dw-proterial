@@ -24,6 +24,7 @@ from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
+from dw_sales.application.prompt_versions import PROMPT_KEY
 from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
@@ -134,7 +135,10 @@ async def test_the_platform_rule_versions_admit_every_sales_key(catalog: AsyncCo
     # And each of DW1's platform skills, whose tenant versions the same
     # table holds (ticket 40).
     skills = set(load_dw1_skills(_CONFIGS / "skills" / "dw1").skills)
-    assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey) | skills
+    # And the description reading's prompt, whose tenant versions the
+    # optimiser proposes (ticket 43).
+    prompts = {PROMPT_KEY}
+    assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey) | skills | prompts
 
 
 @pytest.mark.parametrize("name", sorted(_SETS))

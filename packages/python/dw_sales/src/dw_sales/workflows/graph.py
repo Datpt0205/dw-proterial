@@ -44,6 +44,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.catalog_imports import CATALOG_APPROVAL
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.layouts import LAYOUT_APPROVAL
+from dw_sales.application.prompt_versions import PROMPTS_APPROVAL
 from dw_sales.application.rules import RULES_APPROVAL
 from dw_sales.application.runs import (
     APPROVAL_PREFIX,
@@ -183,6 +184,7 @@ def register(
     rules: ApprovalDecisionGuard,
     catalog: ApprovalDecisionGuard,
     skills: ApprovalDecisionGuard,
+    prompts: ApprovalDecisionGuard,
     worker_file: Path,
 ) -> WorkerDefinition:
     """DW1 on a runtime: its graph, its worker, and its approvals' rules.
@@ -201,7 +203,9 @@ def register(
       master-data import's (`sales.catalog`, no run, ticket 41) by
       ``catalog`` (`CatalogDecisions.check`) and a skill version's
       (`sales.skills`, no run, ticket 40) by ``skills``
-      (`SkillDecisions.check`), each the longer prefix.
+      (`SkillDecisions.check`) and a prompt version's (`sales.prompts`, no
+      run, proposed by the optimiser lane, ticket 43) by ``prompts``
+      (`PromptDecisions.check`), each the longer prefix.
     """
     graphs.register(DW1_WORKER_ID, GRAPH_VERSION, lambda: build_graph(steps))
     loaded = workers.load_file(worker_file).definition
@@ -216,4 +220,5 @@ def register(
     approvals.decision_guards[RULES_APPROVAL] = rules
     approvals.decision_guards[CATALOG_APPROVAL] = catalog
     approvals.decision_guards[SKILLS_APPROVAL] = skills
+    approvals.decision_guards[PROMPTS_APPROVAL] = prompts
     return loaded

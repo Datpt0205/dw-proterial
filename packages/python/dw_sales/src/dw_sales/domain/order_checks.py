@@ -194,12 +194,17 @@ class ModelAssist(BaseModel):
     # the recipients; a person sends it. Off where a version does not say.
     reply_draft: bool = False
     # DW1's agent reads a thread message's intents with its skills (dw_sales
-    # ADR 0014, ticket 40): it loads the skill that fits from a catalogue of
-    # the company's own words, may look things up with the same read-only
-    # tools, and is checked as the one-call reading is. Without a reading,
-    # the thread agent reads it where that is on, else the one call, else a
-    # person. Off where a version does not say: the platform's versions do not.
+    # ADR 0014, ticket 40): one scored call picks the skill that fits from the
+    # company's own skills (ADR 0015 decision 5), then one turn reads the
+    # message as that skill says, with the same read-only tools, checked as
+    # the one-call reading is. Without a reading, the thread agent reads it
+    # where that is on, else the one call, else a person. Off where a version
+    # does not say: the platform's versions do not.
     skill_intents: bool = False
+    # How sure the model must be of the skill it picked before that skill
+    # reads the message; less sure, the message is read as if the step were
+    # off.
+    skill_pick_confidence: float = Field(default=0.9, ge=0.5, le=1.0)
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use
@@ -228,6 +233,22 @@ class Autonomy(BaseModel):
     # unannounced, to confirm: never below the platform's 3%, since the
     # audit is what keeps the measured rate honest.
     audit_share: float = Field(default=0.03, ge=0.03, le=1.0)
+
+
+class Learning(BaseModel):
+    """How DW1's readings learn from what people decided (dw_sales ADR 0015
+    decision 5, ticket 43). Numbers only: what is shown and what is proposed
+    is code's to choose, and a proposed prompt version is the head's to
+    approve."""
+
+    model_config = _FROZEN
+
+    # How many lines people already decided a reading of item descriptions is
+    # shown for each line it reads, the same customer's first. 0 shows none.
+    examples_per_line: int = Field(default=3, ge=0, le=5)
+    # How many newly decided lines a step needs before DW1 tries a better
+    # version of its prompt on all of them, for the head to approve.
+    new_cases_to_retrain: int = Field(default=50, ge=20, le=5000)
 
 
 class LayoutOnboarding(BaseModel):
@@ -284,6 +305,9 @@ class OrderRules(BaseModel):
     # share (dw_sales ADR 0015, ticket 44). The defaults above where a version
     # does not say, as none of the platform's versions does.
     autonomy: Autonomy = Field(default_factory=Autonomy)
+    # How readings learn from decided cases (ticket 43). The defaults where a
+    # version does not say, as none of the platform's versions does.
+    learning: Learning = Field(default_factory=Learning)
 
     @model_validator(mode="before")
     @classmethod

@@ -103,11 +103,12 @@ from dw_platform.application.malware import (
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.autonomy import AutonomyGate
+from dw_sales.application.examples import Lookup
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.message_intent import IntentReader
-from dw_sales.application.model_reading import DescriptionReader
+from dw_sales.application.model_reading import DescriptionReader, Showing
 from dw_sales.application.order_ports import (
     READ_AS,
     DesignSenderPort,
@@ -803,7 +804,7 @@ class OrderIntake:
             if agent is None or not await self._model_step(scope, rules, step):
                 continue
             try:
-                return await agent.read(
+                agents_reading = await agent.read(
                     scope,
                     message,
                     author=author,
@@ -811,7 +812,13 @@ class OrderIntake:
                     cases=cases,
                     rules_version=rules.version,
                     run=run,
+                    pick_floor=rules.model_assist.skill_pick_confidence,
                 )
+                if agents_reading is None:
+                    # No skill picked surely enough (ticket 40): read as if
+                    # the step were off, and say nothing of it.
+                    continue
+                return agents_reading
             except TurnCeilingReachedError as exc:
                 fallback = exc.ceiling
             except ModelUnavailableError:
@@ -1189,7 +1196,7 @@ class OrderIntake:
                 unread.append(po_line)
         read = await self._gated(
             scope,
-            await self._read(scope, unread, item_rows, rules, run),
+            await self._read(scope, unread, item_rows, rules, run, customer.code),
             rules,
             item=f"{message.message_id}:{document.attachment_id or '-'}",
         )
@@ -1523,16 +1530,20 @@ class OrderIntake:
         items: Sequence[Item],
         rules: OrderRules,
         run: RunContext | None,
+        customer_code: str,
     ) -> dict[int, MappedLine]:
         """The lines a model read (dw_sales ADR 0005), by line number: only
         where the tenant's rules turn it on and its live eval met the bar, a
         model is wired, and a DW1 run is doing the processing. Otherwise none,
-        and every line keeps the mapping code gave it."""
+        and every line keeps the mapping code gave it. The reading is shown
+        the tenant's decided lines most like these, the case's customer's
+        first, as many as its rules say (ticket 43)."""
         if not lines or self.descriptions is None or run is None:
             return {}
         if not await self._model_step(scope, rules, ModelStep.DESCRIPTION_ATTRIBUTES):
             return {}
-        return await self.descriptions.read(lines, items, run=run)
+        showing = Showing(Lookup(customer_code, rules.learning.examples_per_line))
+        return await self.descriptions.read(lines, items, run=run, showing=showing)
 
     async def _gated(
         self, scope: SalesScope, read: dict[int, MappedLine], rules: OrderRules, *, item: str

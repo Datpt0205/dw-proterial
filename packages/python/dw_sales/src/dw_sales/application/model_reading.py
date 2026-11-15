@@ -8,7 +8,10 @@ DW1's here is:
 
 - `DescriptionReader`: the description lines DW1's own vocabulary could not
   read, sent to the model ten at a time and verified by
-  `domain.description_reading` before any candidate is computed.
+  `domain.description_reading` before any candidate is computed; shown, as
+  untrusted input like the lines themselves, the tenant's decided lines most
+  like them (ticket 43: `application.examples`) and the demonstrations of the
+  tenant's approved prompt version (`application.prompt_versions`).
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Any, Final, Protocol
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import (
@@ -25,6 +28,9 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     ScoredInterpretationPort,
 )
+from dw_kernel.ids import TenantId, WorkspaceId
+from dw_sales.application.examples import MAX_SHOWN, ExampleFinder, Lookup
+from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import Item
 from dw_sales.domain.description_reading import (
     MAX_LINES_PER_READING,
@@ -38,9 +44,10 @@ from dw_sales.domain.description_reading import (
 from dw_sales.domain.order_checks import MappedLine, map_read_line
 
 # The prompt DW1 reads descriptions with. Its file is
-# `configs/prompts/sales/description_attributes@1.0.0.yaml`; a test holds the
+# `configs/prompts/sales/description_attributes@1.1.0.yaml`; a test holds the
 # two together, and a new wording is a new version here and a new file there.
-DESCRIPTION_ATTRIBUTES: Final = PromptRef("sales.description_attributes", "1.0.0")
+# 1.1.0 (ticket 43) adds `examples`: decided lines shown beside the lines read.
+DESCRIPTION_ATTRIBUTES: Final = PromptRef("sales.description_attributes", "1.1.0")
 # Generous for one line's reading (about 120 tokens measured), and a cap on
 # what a confused model can spend.
 _OUTPUT_TOKENS_PER_LINE: Final = 300
@@ -57,27 +64,135 @@ class Described(Protocol):
     def description(self) -> str: ...
 
 
+class Shown(Protocol):
+    """A decided line a reading is shown: what the customer wrote and the
+    item a person kept for it (a `DescriptionExample`, or a demonstration of
+    the tenant's prompt version)."""
+
+    @property
+    def description(self) -> str: ...
+
+    @property
+    def prv_code(self) -> str: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Demonstrations:
+    """The demonstrations a tenant's prompt version shows every reading, and
+    the version they belong to (None: the platform's, which shows none)."""
+
+    version: str | None
+    shown: tuple[Shown, ...] = ()
+
+
+class DemonstrationsPort(Protocol):
+    """The demonstrations in force for the run's tenant
+    (`application.prompt_versions.PromptBook`)."""
+
+    async def demonstrations(self, scope: SalesScope) -> Demonstrations: ...
+
+
+def prompt_stamp(version: str | None) -> str:
+    """What a reading is stamped with: the prompt, and the tenant's prompt
+    version where one is in force. The prompt version stays the file's; the
+    tenant's version joins the id, so a threshold set on readings with one
+    set of demonstrations never gates readings with another (ADR 0015: a new
+    prompt or example set applies nothing by itself until re-measured)."""
+    if version is None:
+        return str(DESCRIPTION_ATTRIBUTES)
+    tenant = version.replace(".", "_")
+    return f"{DESCRIPTION_ATTRIBUTES.prompt_id}.tenant_{tenant}@{DESCRIPTION_ATTRIBUTES.version}"
+
+
+def shown_lines(shown: Sequence[Shown], items: Sequence[Item]) -> list[dict[str, Any]]:
+    """The examples as the prompt shows them: each description with the
+    attributes of the item a person kept, from the item master, so the model
+    sees what the customer's words meant and never a product code. A line
+    whose item is not in the list any more is left out (its answer no longer
+    passes code's own check), and so is a description shown already."""
+    by_code = {item.prv_code: item for item in items}
+    seen: set[str] = set()
+    found: list[dict[str, Any]] = []
+    for line in shown:
+        item = by_code.get(line.prv_code)
+        key = line.description.strip().casefold()
+        if item is None or key in seen:
+            continue
+        seen.add(key)
+        stated = item.attributes.model_dump(mode="json", exclude={"standard"}, exclude_none=True)
+        if item.family is not None:
+            stated = {"family": item.family, **stated}
+        found.append({"description": line.description, "item": stated})
+        if len(found) == MAX_SHOWN:
+            break
+    return found
+
+
+@dataclass(frozen=True, slots=True)
+class Showing:
+    """What one `DescriptionReader.read` shows beside the lines: where to
+    look for decided lines, and, for a replay, the demonstrations to show in
+    place of the tenant's (`prompt_optimiser`)."""
+
+    lookup: Lookup
+    demonstrations: Demonstrations | None = None
+
+
 @dataclass(frozen=True)
 class DescriptionReader:
     """Reads the descriptions DW1's vocabulary could not, through a model, and
     maps each line by what code accepts of the reading."""
 
     model: InterpretationPort
+    # The tenant's decided lines most like the ones read (ticket 43); None:
+    # none shown.
+    examples: ExampleFinder | None = None
+    # The tenant's approved prompt version's demonstrations; None: the
+    # platform's, which shows none.
+    prompts: DemonstrationsPort | None = None
 
     async def read(
-        self, lines: Sequence[Described], items: Sequence[Item], *, run: RunContext
+        self,
+        lines: Sequence[Described],
+        items: Sequence[Item],
+        *,
+        run: RunContext,
+        showing: Showing | None = None,
     ) -> dict[int, MappedLine]:
         """Each line's mapping by its reading: a candidate or an ambiguous set
         where the verified attributes fit, unmapped otherwise, and never
-        exact. Every line sent comes back, with what the reading did stamped."""
+        exact. Every line sent comes back, with what the reading did stamped.
+
+        Examples are looked for in the run's scope, never a caller's."""
+        scope = SalesScope(TenantId(run.tenant_id), WorkspaceId(run.workspace_id))
+        demonstrations = await self._demonstrations(scope, showing)
         mapped: dict[int, MappedLine] = {}
         for start in range(0, len(lines), MAX_LINES_PER_READING):
             batch = lines[start : start + MAX_LINES_PER_READING]
-            mapped |= await self._batch(batch, items, run)
+            shown: list[Shown] = list(demonstrations.shown)
+            if self.examples is not None and showing is not None:
+                shown += await self.examples.find(
+                    scope, [line.description for line in batch], showing.lookup
+                )
+            mapped |= await self._batch(
+                batch, items, run, shown_lines(shown, items), demonstrations.version
+            )
         return mapped
 
+    async def _demonstrations(self, scope: SalesScope, showing: Showing | None) -> Demonstrations:
+        if showing is not None and showing.demonstrations is not None:
+            return showing.demonstrations
+        if self.prompts is None:
+            return Demonstrations(None)
+        return await self.prompts.demonstrations(scope)
+
     async def _batch(
-        self, batch: Sequence[Described], items: Sequence[Item], run: RunContext
+        self,
+        batch: Sequence[Described],
+        items: Sequence[Item],
+        run: RunContext,
+        examples: list[dict[str, Any]],
+        version: str | None,
     ) -> dict[int, MappedLine]:
         inputs = {
             # Code-built JSON inside the untrusted block: a description cannot
@@ -87,6 +202,9 @@ class DescriptionReader:
                 ensure_ascii=False,
             ),
             "vocabulary": json.dumps(vocabulary(), ensure_ascii=False),
+            # Decided lines, as untrusted as the lines: a customer wrote each
+            # description, and a person's choice is shown as attributes only.
+            "examples": json.dumps(examples, ensure_ascii=False),
         }
         budget = _OUTPUT_TOKENS_PER_LINE * len(batch) + 100
         scores: Mapping[str, float] | None = None
@@ -114,8 +232,9 @@ class DescriptionReader:
         except ModelUnavailableError:
             answer = None
         readings = _by_line(answer, {line.line_no for line in batch})
+        stamp = prompt_stamp(version)
         if readings is None:
-            unavailable = self._stamp("unavailable")
+            unavailable = self._stamp(stamp, "unavailable")
             return {line.line_no: map_read_line(None, unavailable, items) for line in batch}
         result: dict[int, MappedLine] = {}
         for line in batch:
@@ -123,15 +242,16 @@ class DescriptionReader:
             if isinstance(verdict, Verified):
                 assert answer is not None  # a verdict comes from an answer
                 confidence = _confidence(answer, line.line_no, verdict, scores)
-                read = self._stamp("read", spans=verdict, confidence=confidence)
+                read = self._stamp(stamp, "read", spans=verdict, confidence=confidence)
                 result[line.line_no] = map_read_line(verdict, read, items)
             else:
-                refused = self._stamp("not_understood", reason=verdict)
+                refused = self._stamp(stamp, "not_understood", reason=verdict)
                 result[line.line_no] = map_read_line(None, refused, items)
         return result
 
     def _stamp(
         self,
+        prompt: str,
         outcome: str,
         *,
         spans: Verified | None = None,
@@ -140,7 +260,7 @@ class DescriptionReader:
     ) -> DescriptionReading:
         return DescriptionReading.model_validate(
             {
-                "prompt": str(DESCRIPTION_ATTRIBUTES),
+                "prompt": prompt,
                 "model_profile": self.model.model_profile,
                 "route": self.model.route,
                 "outcome": outcome,
