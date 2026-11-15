@@ -171,4 +171,6 @@ async def test_an_order_failing_export_control_is_held_until_the_export_control_
         disposition="accepted",
         reason="Đã nhận NOC và ESF năm nay",
     )
-    assert (await world.confirm(AN, crossed.case_id, CONFIRMED_ON)).status.value == "confirmed"
+    assert (
+        await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
+    ).status.value == "confirmation_sent"

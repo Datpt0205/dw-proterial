@@ -34,7 +34,9 @@ AN_ID, DIEU_ID = uuid.UUID(int=0xA1), uuid.UUID(int=0xD1)
 T1 = T0 + timedelta(hours=3)
 # Far after every sample's arrival: only the loop can load the order.
 LATER = T0 + timedelta(days=3650)
-_IN_BRAVO = "('confirmed', 'change_review', 'uploaded_to_bravo', 'cross_checked')"
+_IN_BRAVO = (
+    "('confirmation_sent', 'confirmed', 'change_review', 'uploaded_to_bravo', 'cross_checked')"
+)
 
 
 def _m01(order_run: OrderRun) -> OrderCase:
@@ -71,7 +73,7 @@ async def test_the_loop_reads_back_and_the_lane_reads_each_wait_from_it(
     case = _m01(small_run)
     walk = _confirmed(case)
     confirmed = walk[-1]
-    assert confirmed.status is OrderStatus.CONFIRMED
+    assert confirmed.status is OrderStatus.CONFIRMATION_SENT
     an = Actor(user_id=AN_ID)
     line = confirmed.lines[0]
     change = AppliedChange(

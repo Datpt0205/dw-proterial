@@ -41,6 +41,8 @@ POLICY_FILE = REPO / "configs" / "policies" / "sales_followups@1.1.0.yaml"
 # 1.1.0 predates the wait on PC (ticket 07): its section is 1.3.0's, as a
 # tenant's version written before it reads it (`read_over`).
 PC_FILE = REPO / "configs" / "policies" / "sales_followups@1.3.0.yaml"
+# And the implied acceptance's (ticket 28), 1.4.0's.
+IMPLIED_FILE = REPO / "configs" / "policies" / "sales_followups@1.4.0.yaml"
 # Monday 19 October 2026, 08:00 in Ho Chi Minh City (UTC+7).
 MONDAY_8 = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -51,6 +53,8 @@ def _document() -> dict[str, Any]:
     loaded = yaml.safe_load(POLICY_FILE.read_bytes())
     assert isinstance(loaded, dict)
     loaded.setdefault("waiting_pc", yaml.safe_load(PC_FILE.read_bytes())["waiting_pc"])
+    implied = yaml.safe_load(IMPLIED_FILE.read_bytes())["implied_acceptance"]
+    loaded.setdefault("implied_acceptance", implied)
     return loaded
 
 
@@ -108,7 +112,8 @@ def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.3.0"
+    assert policy.ref == "sales_followups@1.4.0"
+    assert policy.implied_acceptance.enabled
     assert policy.waiting_pc.enabled
     assert policy.waiting_pc.remind.after_hours == 24
     assert policy.waiting_pc.remind.notify == ("pic",)
@@ -210,7 +215,9 @@ def test_an_order_unconfirmed_a_day_goes_to_the_head() -> None:
     assert [d.notify for d in escalated] == [("head",)]
 
 
-@pytest.mark.parametrize("status", ["confirmed", "closed", "correction_requested"])
+@pytest.mark.parametrize(
+    "status", ["confirmation_sent", "confirmed", "closed", "correction_requested"]
+)
 def test_an_order_confirmed_closed_or_waiting_on_the_customer_is_not_unconfirmed(
     status: str,
 ) -> None:
@@ -344,6 +351,7 @@ def test_followups_name_the_stage_they_are_owed_at() -> None:
         "waiting_customer",
         "waiting_pc",
         "your_turn",
+        "implied_acceptance",
     }
 
 

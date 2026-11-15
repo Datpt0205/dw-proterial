@@ -67,17 +67,21 @@ export function isOpen(finding: Finding): boolean {
   return finding.disposition.kind === "open";
 }
 
+/** The confirmation has left: sent, agreed or not yet (ticket 28). */
+export const CONFIRMATION_LEFT = ["confirmation_sent", "confirmed"];
+
 /**
- * Why export control holds the order short of `confirmed`, as
+ * Why export control holds the order short of its confirmation, as
  * `OrderCase.confirm` refuses it: NOC/ESF still open (`awaiting_ack`), or
  * present at all under the case's stamped `block_confirmation`
- * (`blocked_by_rule`). Null once nothing is held, or once the case is
- * confirmed or closed and confirmation is no longer ahead of it.
+ * (`blocked_by_rule`). Null once nothing is held, or once the confirmation
+ * has left or the case is closed and it is no longer ahead of it.
  */
 export type ExportControlHold = "awaiting_ack" | "blocked_by_rule";
 
 export function exportControlHold(order: Order): ExportControlHold | null {
-  if (order.status === "confirmed" || order.status === "closed") return null;
+  if (CONFIRMATION_LEFT.includes(order.status) || order.status === "closed")
+    return null;
   const noc = order.findings.filter((f) => f.code === "missing_noc_esf");
   if (noc.some(isOpen)) return "awaiting_ack";
   if (noc.length && order.export_control_mode === "block_confirmation")

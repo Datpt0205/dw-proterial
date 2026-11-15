@@ -83,7 +83,7 @@ async def _confirmed(world: World) -> uuid.UUID:
     await world.walk_to_uploaded(AN, case_id)
     await world.cross_check(DIEU, case_id)
     case = await world.confirm(AN, case_id, HELD)
-    assert case.status is OrderStatus.CONFIRMED
+    assert case.status is OrderStatus.CONFIRMATION_SENT
     assert case.line(2).effective.requested_date == HELD
     return case_id
 
@@ -168,7 +168,7 @@ async def test_a_change_on_a_confirmed_order_joins_the_loop_and_changes_nothing_
     ((line_no, change),) = [(x.line_no, c) for x in loop.lines for c in x.changes]
     assert (line_no, change.field, change.value) == (2, "requested_date", "2026-11-20")
     # The order itself waits on PC and the customer before it changes.
-    assert after.status is OrderStatus.CONFIRMED
+    assert after.status is OrderStatus.CONFIRMATION_SENT
     assert after.lines == before.lines
     # 6-DW2 is ticket 07's request with the value asked, for a person to copy.
     assert draft.template_ref == "sales_handoffs@1.1.0#pc_request"
@@ -299,7 +299,7 @@ async def test_a_pull_in_walks_back_to_confirmed_with_every_draft_and_approval_r
     assert all_rows - rows == len(before.lines) - 1
     assert uploaded.status is OrderStatus.UPLOADED_TO_BRAVO
     # Confirmed again: the loop ends, the line holds the new date.
-    assert confirmed.status is OrderStatus.CONFIRMED and confirmed.update_loop is None
+    assert confirmed.status is OrderStatus.CONFIRMATION_SENT and confirmed.update_loop is None
     assert confirmed.line(2).confirmed_delivery_dates == (ASKED,)
     assert confirmed.line(1).effective == before.line(1).effective
     actions = _actions(world, case_id)
@@ -313,7 +313,7 @@ async def test_a_pull_in_walks_back_to_confirmed_with_every_draft_and_approval_r
         "sales.order.update_approved",
         "sales.order.bravo_recorded",
         "sales.order.cross_checked",
-        "sales.order.confirmed",
+        "sales.order.confirmation_sent",
     ]
     start = actions.index(walk[0])
     assert [a for a in actions[start:] if a in walk] == walk
@@ -364,7 +364,7 @@ async def test_a_customer_keeping_the_original_po_leaves_the_order_as_it_was() -
         requests = await world.services.change_requests.for_case(AN.context(), case_id)
 
     after = world.order(case_id)
-    assert after.update_loop is None and after.status is OrderStatus.CONFIRMED
+    assert after.update_loop is None and after.status is OrderStatus.CONFIRMATION_SENT
     assert after.lines == before.lines
     assert [line.deliveries for line in after.lines] == [line.deliveries for line in before.lines]
     assert after.model_dump(exclude=_LOOP_FIELDS) == before.model_dump(exclude=_LOOP_FIELDS)

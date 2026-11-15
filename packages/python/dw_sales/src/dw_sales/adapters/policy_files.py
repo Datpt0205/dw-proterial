@@ -123,7 +123,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
     file names still points at.
     """
     current = SalesPolicies(
-        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.13.0.yaml"),
+        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.14.0.yaml"),
         quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
@@ -131,7 +131,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         documents=load_copy(copy_dir / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
         upload=load_bravo_upload(policies_dir / "sales_bravo_upload@2.1.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.1.0.yaml", HandoffCopy),
-        followups=load_followups(policies_dir / "sales_followups@1.3.0.yaml"),
+        followups=load_followups(policies_dir / "sales_followups@1.4.0.yaml"),
         salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
         released={},
     )

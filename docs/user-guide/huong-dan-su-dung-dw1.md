@@ -222,8 +222,12 @@ Sau khi đơn đã được kiểm chéo:
 
 1. Bấm **Đã gửi xác nhận**.
 2. Nhập ngày xác nhận cho từng dòng. Cột "DW1 gợi ý" chỉ là đề xuất; người dùng sửa theo ngày thật. Nếu PC đã trả lời ngày giao bằng thư, mở **Dán thư trả lời của PC để DW1 điền ngày**, dán nội dung thư rồi bấm **DW1 đọc ngày**: DW1 điền ngày PC cho từng dòng vào cột Ngày xác nhận (chỉ ngày có nguyên văn trong thư và đúng dòng PC nêu); kiểm lại từng ngày trước khi ghi. Thư dán vào không được lưu.
-3. Bấm **Ghi đã gửi xác nhận**. Thư nháp xác nhận ghi tên người chuẩn bị và người kiểm chéo.
+3. Bấm **Ghi đã gửi xác nhận**. Hồ sơ chuyển **Đã gửi xác nhận, chờ khách**. Thư nháp xác nhận ghi tên người chuẩn bị và người kiểm chéo, kèm tệp PO gốc của khách và tệp Excel đã xử lý.
 4. Soạn **Thư xác nhận PO (nháp)** rồi bấm **Gửi cho khách từ hộp thư của bạn** như với báo giá, hoặc tải .eml và tự gửi.
+
+Nếu bạn đã tự gửi xác nhận từ Outlook kèm tệp Excel DW1 tạo cho đơn, nút **Đã gửi xác nhận** được đánh dấu "Đề xuất từ luồng thư": ghi như trên, thời điểm gửi lấy từ thư đó.
+
+Khi khách trả lời, ở khung **Khách xác nhận đơn** bấm **Khách đã đồng ý** hoặc **Khách từ chối** (đơn chuyển sang xem thay đổi). Với khách có số ngày im lặng được coi là đồng ý (đặt trong quy tắc kiểm tra PO), DW1 báo bạn khi quá hạn; bấm **Khách im lặng quá hạn → ghi đồng ý ngầm**. DW1 không tự ghi.
 
 ## Kiểm chéo đơn của người khác
 

@@ -45,7 +45,8 @@ export const ORDER_STATE = {
   prepared: "PIC đã tự kiểm",
   uploaded_to_bravo: "Đã nhập Bravo",
   cross_checked: "Đã kiểm chéo",
-  confirmed: "Đã xác nhận",
+  confirmation_sent: "Đã gửi xác nhận, chờ khách",
+  confirmed: "Khách đã đồng ý",
   change_review: "Xem thay đổi PO",
   closed: "Đã đóng",
 } as const;
@@ -279,6 +280,8 @@ export const REPLY_STEP = {
   await_revised_po: "Chờ PO đã sửa: DW1 đọc khi PO đến",
   request_correction: "Ghi hồ sơ đang chờ khách trả lời",
   discuss_spec: "Ghi hồ sơ đang chờ khách thống nhất spec",
+  record_accepted: "Ghi khách đã đồng ý xác nhận đơn",
+  record_declined: "Ghi khách từ chối xác nhận đơn",
 } as const;
 
 /** A change request's state (ticket 27, CONTEXT.md "Change request"). */
@@ -394,6 +397,9 @@ export const CASE_EVENT = {
   "order.cross_check_resent": "Gửi kiểm chéo lại",
   "order.decision_not_applied": "Quyết định không áp dụng được",
   "order.confirmed": "Gửi xác nhận cho khách",
+  "order.confirmation_sent": "Ghi đã gửi xác nhận cho khách",
+  "order.customer_agreed": "Ghi khách đã đồng ý xác nhận",
+  "order.customer_declined": "Ghi khách từ chối xác nhận",
   "order.closed": "Đóng hồ sơ",
   "order.reassigned": "Giao cho người khác",
   "order.change_confirmed": "Xác nhận thay đổi khách xin",
@@ -509,6 +515,8 @@ export const EDGE_ACTION: Record<SalesSchemas["EdgeAction"], string> = {
   cross_check: "Kiểm chéo",
   return: "Trả lại",
   confirm: "Gửi xác nhận cho khách",
+  record_agreement: "Ghi khách đồng ý (bằng lời hoặc im lặng quá hạn)",
+  record_decline: "Ghi khách từ chối xác nhận",
   apply_change: "Áp dụng thay đổi PO",
   draft_ycbg: "Soạn YCBG",
   record_ycbg: "Ghi số YCBG trên Bravo",
@@ -535,6 +543,7 @@ export const EDGE_GUARD: Record<SalesSchemas["EdgeGuard"], string> = {
   export_control_hold: "Không bị giữ vì kiểm soát xuất khẩu",
   pc_confirmed_date: "PC đã xác nhận ngày",
   request_findings: "Đã trả lời cờ của yêu cầu",
+  implied_days: "Đồng ý ngầm: khách có số ngày và đã quá hạn",
 };
 
 /** Who takes a move: DW1, Sales, or someone outside whose mail DW1 reads. */

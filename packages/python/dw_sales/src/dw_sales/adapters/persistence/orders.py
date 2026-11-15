@@ -105,6 +105,8 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
         ),
         "pc_request": case.pc_request.model_dump(mode="json") if case.pc_request else None,
         "update_loop": case.update_loop.model_dump(mode="json") if case.update_loop else None,
+        "confirmation": case.confirmation.model_dump(mode="json") if case.confirmation else None,
+        "agreement": case.agreement.model_dump(mode="json") if case.agreement else None,
     }
 
 
@@ -417,6 +419,8 @@ _CASE_FIELDS = (
     "unapplied_decision",
     "pc_request",
     "update_loop",
+    "confirmation",
+    "agreement",
 )
 
 

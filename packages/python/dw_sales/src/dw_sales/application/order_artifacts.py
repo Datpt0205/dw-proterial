@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
@@ -23,6 +24,7 @@ from dw_sales.application.artifact_content import (
     BravoUploadLayout,
     DocumentTemplate,
     EmailTemplate,
+    FileAttachment,
     Sheet,
     UploadField,
     Value,
@@ -615,7 +617,10 @@ def _disposition_text(doc: Bound[DocumentTemplate], finding: Finding) -> str:
 def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
     """O10: the confirmation to the customer, naming the PIC who prepared it and
     the colleague who cross-checked it, with the date Sales confirmed per line,
-    or per schedule for a line the PO splits (ticket 35)."""
+    or per schedule for a line the PO splits (ticket 35). It goes back with
+    the customer's own PO files, byte for byte (DW1 stamps nothing), and the
+    processed Excel, the paste sheet the order was entered from (spec 11-13,
+    ticket 28)."""
     case = d.case
     _require_channel(d, "email")
     bound, draft = d.customer_email("confirmation_draft")
@@ -647,7 +652,19 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
             else bound.word("no_cross_check")
         ),
     }
-    return (d.eml(bound.ref, filled(bound, draft, values)),)
+    (processed,) = _paste_sheet(d, case.lines)
+    excel = FileAttachment(
+        f"{_file_stem(case.effective_header.po_no)}-xu-ly.xlsx",
+        processed.content_type,
+        processed.data,
+    )
+    message = replace(filled(bound, draft, values), attachments=(*d.po_files, excel))
+    return (d.eml(bound.ref, message),)
+
+
+def _file_stem(po_no: str) -> str:
+    """A PO number as a file name: letters, digits and dashes only."""
+    return re.sub(r"[^A-Za-z0-9-]", "-", po_no) or "PO"
 
 
 def change_can_do_draft(d: OrderDrafting) -> tuple[Rendered, ...]:

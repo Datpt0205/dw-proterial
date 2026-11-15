@@ -120,7 +120,13 @@ from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import PC_DELIVERIES_MAX, CloseReason, CustomerAnswer, Note
+from dw_sales.domain.orders import (
+    PC_DELIVERIES_MAX,
+    AgreementHow,
+    CloseReason,
+    CustomerAnswer,
+    Note,
+)
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
 
@@ -442,6 +448,17 @@ class LineDate(BaseModel):
 
 class ConfirmBody(VersionBody):
     delivery_dates: list[LineDate] = Field(min_length=1, max_length=9999)
+    # The sent copy on the case's thread the PIC records it from (ticket 28):
+    # the server finds it again and refuses any other.
+    sent_message_id: _MessageId | None = None
+
+
+class AgreementBody(VersionBody):
+    """How the customer agreed to the confirmation (ticket 28), and their
+    reply on the case when the person records it from one."""
+
+    how: AgreementHow
+    message_id: _MessageId | None = None
 
 
 class CloseBody(VersionBody):
@@ -1408,12 +1425,39 @@ def build_router(
     async def confirm(
         case_id: uuid.UUID, body: ConfirmBody, context: Ctx, svc: Svc, idem: Idem
     ) -> CaseChangeView:
-        change = await svc.order_commands.confirm(
+        change = await svc.confirmations.sent(
             context,
             case_id,
             case_version=body.case_version,
             delivery_dates={d.line_no: d.dates for d in body.delivery_dates},
+            sent_message_id=body.sent_message_id,
         )
+        return await idem.record(change)
+
+    # The customer's answer to the confirmation, as a person records it
+    # (ticket 28, dw_sales ADR 0011).
+    @router.post(
+        "/orders/{case_id}/agreement", response_model=CaseChangeView, dependencies=prepare_scope
+    )
+    async def record_agreement(
+        case_id: uuid.UUID, body: AgreementBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.confirmations.agreed(
+            context,
+            case_id,
+            case_version=body.case_version,
+            how=body.how,
+            message_id=body.message_id,
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/decline", response_model=CaseChangeView, dependencies=prepare_scope
+    )
+    async def record_decline(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.confirmations.declined(context, case_id, case_version=body.case_version)
         return await idem.record(change)
 
     @router.post(

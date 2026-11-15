@@ -113,7 +113,8 @@ ORDER_STATE: Final[dict[str, str]] = {
     "prepared": "PIC đã tự kiểm",
     "uploaded_to_bravo": "Đã nhập Bravo",
     "cross_checked": "Đã kiểm chéo",
-    "confirmed": "Đã xác nhận",
+    "confirmation_sent": "Đã gửi xác nhận, chờ khách",
+    "confirmed": "Khách đã đồng ý",
     "change_review": "Xem thay đổi PO",
     "closed": "Đã đóng",
 }

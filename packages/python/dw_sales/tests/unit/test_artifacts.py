@@ -170,7 +170,7 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
-FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.3.0.yaml")
+FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.4.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
     emails=load_copy(COPY / "sales_emails@1.3.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
@@ -2439,3 +2439,31 @@ async def test_a_customers_approved_salesorder_rules_fill_its_upload_file_by_cod
     # Another tenant draws the layout alone.
     other = await book.artifact_copy(OTHER, [])
     assert other.salesorder.of(case.customer_code) is None
+
+
+async def test_the_confirmation_goes_back_with_the_customers_own_po_and_the_processed_excel() -> (
+    None
+):
+    """Spec 11-13 (ticket 28): the confirmation carries the customer's own PO
+    file, byte for byte (DW1 stamps nothing), and the processed Excel: the
+    paste sheet the order was entered from."""
+    case = await _confirmed_m01()
+    world = World()
+    svc = replace(service(world), inbox=MockInbox.load(SCOPE))
+    (view,) = await render(world, case, "confirmation_draft", svc=svc)
+    data = world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)]
+    files = {
+        part.get_filename(): part.get_payload(decode=True) for part in _eml(data).iter_attachments()
+    }
+    original = await MockInbox.load(SCOPE).read_attachment(
+        SCOPE, case.message_id, case.document.attachment_id or ""
+    )
+    assert original is not None
+    po = files.pop(original.attachment.name)
+    assert isinstance(po, bytes) and hashlib.sha256(po).hexdigest() == original.attachment.sha256
+    ((name, excel),) = files.items()
+    assert name is not None and name.endswith("-xu-ly.xlsx")
+    assert isinstance(excel, bytes)
+    header, *rows = _sheet_rows(excel)
+    assert header == [c.header for c in ARTIFACT_COPY.upload.columns]
+    assert len(rows) == len(case.lines)

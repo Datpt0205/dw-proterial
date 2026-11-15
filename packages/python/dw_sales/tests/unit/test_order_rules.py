@@ -129,6 +129,8 @@ def test_the_platform_confirms_only_a_new_layouts_first_po() -> None:
     repo = Path(__file__).resolve().parents[5]
     rules = load_sales_policies(repo / "configs/policies", repo / "configs/copy").order_rules
     assert (rules.version, rules.layout_onboarding.uncertain_first_pos) == (
-        "sales_order_rules@1.13.0",
+        "sales_order_rules@1.14.0",
         1,
     )
+    # No customer agrees by silence until Proterial names their days (ticket 28).
+    assert rules.implied_acceptance == {}

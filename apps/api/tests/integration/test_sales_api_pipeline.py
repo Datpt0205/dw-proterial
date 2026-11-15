@@ -9,6 +9,8 @@ import pytest
 from sales_api_harness import AN, BAO, BETA, BINH, DIEU, GIANG, HA, KHOA, Api, user_id
 from sales_flow import order_of, replied, submitted, uploaded
 
+from dw_sales.domain.orders import OrderStatus
+
 pytestmark = pytest.mark.integration
 
 
@@ -37,12 +39,12 @@ async def test_the_board_lays_out_cases_by_status_with_each_persons_step(api: Ap
     # with whose turn it is and the surveyed steps it stands for.
     order_columns = [c["status"] for c in boards["an"]["columns"] if c["kind"] == "order"]
     assert order_columns[:3] == ["received", "checked", "in_review"]
-    assert len(order_columns) == 10
+    assert len(order_columns) == len(OrderStatus)
     review = _column(boards["an"], "order", "in_review")
     assert review["holder"] == "sales"
     assert review["steps"] == ["O6"]
     assert _column(boards["an"], "quote", "pending_approval")["holder"] == "approver"
-    assert _column(boards["an"], "order", "confirmed")["holder"] is None
+    assert _column(boards["an"], "order", "confirmation_sent")["holder"] is None
 
     order = _card(boards["an"], up["case_id"])
     assert order["status"] == "uploaded_to_bravo"

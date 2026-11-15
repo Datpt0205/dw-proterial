@@ -224,7 +224,7 @@ async def test_a_fixture_po_leaves_no_document_value_in_spans_logs_or_errors(
         await world.walk_to_uploaded(AN, case_id)
         await world.cross_check(DIEU, case_id)
         confirmed = await world.confirm(AN, case_id, date(2026, 11, 27))
-        assert confirmed.status.value == "confirmed"
+        assert confirmed.status.value == "confirmation_sent"
         shown = await client.get(f"/api/v1/sales/orders/{case_id}")
         assert shown.status_code == 200
 

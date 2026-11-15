@@ -230,7 +230,7 @@ def test_an_order_walks_wiv_03_012_with_a_new_case_version_at_every_step() -> No
         S.PREPARED,
         S.UPLOADED_TO_BRAVO,
         S.CROSS_CHECKED,
-        S.CONFIRMED,
+        S.CONFIRMATION_SENT,
     ]
     assert [c.case_version for c in steps] == [2, 3, 4, 5, 6, 7]
     assert (confirmed.prepared_by, confirmed.bravo_recorded_by, confirmed.cross_checked_by) == (
@@ -253,11 +253,12 @@ def test_cross_check_required_decides_whether_an_upload_goes_straight_to_confirm
         with pytest.raises(ConflictError, match="cross-checked before it is confirmed"):
             uploaded.confirm(AN, T0, _dates(uploaded))
         assert (
-            uploaded.cross_check(DIEU, T0).confirm(AN, T0, _dates(uploaded)).status is S.CONFIRMED
+            uploaded.cross_check(DIEU, T0).confirm(AN, T0, _dates(uploaded)).status
+            is S.CONFIRMATION_SENT
         )
     else:
         confirmed = uploaded.confirm(AN, T0, _dates(uploaded))
-        assert (confirmed.status, confirmed.cross_checked_by) == (S.CONFIRMED, None)
+        assert (confirmed.status, confirmed.cross_checked_by) == (S.CONFIRMATION_SENT, None)
 
 
 def test_a_case_stamped_before_the_rule_existed_waits_on_its_cross_check() -> None:
@@ -508,7 +509,7 @@ def test_confirmation_is_refused_while_missing_noc_esf_is_open() -> None:
         crossed.confirm(AN, T0, _dates(crossed))
     acknowledged = _accept(crossed, "missing_noc_esf:-", EXPORT_PIC)
     assert acknowledged.status is S.CROSS_CHECKED
-    assert acknowledged.confirm(AN, T0, _dates(acknowledged)).status is S.CONFIRMED
+    assert acknowledged.confirm(AN, T0, _dates(acknowledged)).status is S.CONFIRMATION_SENT
 
 
 def test_block_confirmation_refuses_even_an_acknowledged_missing_noc_esf() -> None:
@@ -543,7 +544,7 @@ def test_a_revision_holds_confirmation_again_after_missing_noc_esf_was_accepted(
     with pytest.raises(ConflictError, match="missing_noc_esf is not acknowledged"):
         again.confirm(AN, T0, _dates(again))
     released = _accept(again, "missing_noc_esf:-", EXPORT_PIC)
-    assert released.confirm(AN, T0, _dates(released)).status is S.CONFIRMED
+    assert released.confirm(AN, T0, _dates(released)).status is S.CONFIRMATION_SENT
 
 
 def test_a_short_lead_time_needs_a_pc_date_before_confirmation() -> None:
@@ -558,7 +559,7 @@ def test_a_short_lead_time_needs_a_pc_date_before_confirmation() -> None:
     with pytest.raises(ConflictError, match="not short"):
         crossed.record_pc_confirmation(1, AN, T0)
     agreed = crossed.record_pc_confirmation(2, AN, T0)
-    assert agreed.confirm(AN, T0, _dates(agreed)).status is S.CONFIRMED
+    assert agreed.confirm(AN, T0, _dates(agreed)).status is S.CONFIRMATION_SENT
 
 
 # ---------------------------------------------------------- edits and Bravo --

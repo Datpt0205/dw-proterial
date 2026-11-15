@@ -129,7 +129,7 @@ describe("the pipeline board", () => {
     expect(within(review).getByText("Sales quyết định · O6")).toBeTruthy();
     // An empty column is still drawn, so the pipeline keeps its shape.
     expect(
-      screen.getByRole("group", { name: "Đã xác nhận: 0 hồ sơ" }),
+      screen.getByRole("group", { name: "Khách đã đồng ý: 0 hồ sơ" }),
     ).toBeTruthy();
     // One lane at a time: the quotes wait behind their switch, counted on it.
     expect(

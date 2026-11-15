@@ -538,6 +538,29 @@ export class SalesApi {
     );
   }
 
+  /** The customer agreed to the confirmation, in words or by silence past
+   * their days, as a person records it (ticket 28). */
+  recordAgreement(
+    caseId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/agreement">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/agreement">(
+      `/api/v1/sales/orders/${enc(caseId)}/agreement`,
+      body,
+      key,
+    );
+  }
+
+  /** The customer did not agree to the confirmation (ticket 28). */
+  recordDecline(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/decline">(
+      `/api/v1/sales/orders/${enc(caseId)}/decline`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   close(
     caseId: string,
     body: Body<"/api/v1/sales/orders/{case_id}/close">,

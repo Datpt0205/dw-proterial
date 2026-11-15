@@ -84,9 +84,12 @@ from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     AMOUNT_FIELDS,
+    AgreementHow,
     AskCustomer,
     ChangedField,
     CorrectedBySales,
+    CountedFrom,
+    DayCount,
     Derivation,
     DispositionKind,
     Finding,
@@ -655,6 +658,90 @@ UpdateAwaits = Literal[
 ]
 
 
+class ImpliedTermView(BaseModel):
+    """A customer's days of silence that count as agreement, as the rules
+    stamped on the case gave them when the confirmation left (ticket 28)."""
+
+    model_config = _VIEW
+
+    days: int
+    day_count: DayCount
+    counted_from: CountedFrom
+
+
+class ConfirmationView(BaseModel):
+    """The confirmation that left (ticket 28): when (the clock of silence),
+    the sent copy it was recorded from, and, for a customer with days of
+    silence, the term and the instant it counts as agreement. None of the
+    two: never by silence."""
+
+    model_config = _VIEW
+
+    sent_at: datetime
+    message_id: str | None
+    term: ImpliedTermView | None
+    implied_from: datetime | None
+
+
+class AgreementView(BaseModel):
+    """How the customer agreed, as a person recorded it (ticket 28): in
+    words, from their reply and its located sentences when recorded from
+    one, or by silence."""
+
+    model_config = _VIEW
+
+    how: AgreementHow
+    by: uuid.UUID
+    at: datetime
+    message_id: str | None
+    quotes: list[str]
+
+
+class ConfirmationCopyView(BaseModel):
+    """A message Sales sent on the case's thread carrying the processed
+    Excel DW1 made at this case version (by sha256), while the confirmation
+    is ahead of the order: it proposes "Ghi đã gửi xác nhận", from that
+    mail's time (ticket 28). A suggestion: the PIC records it."""
+
+    model_config = _VIEW
+
+    message_id: str
+    received_at: datetime
+    subject: str
+
+
+def confirmation_view(case: OrderCase) -> ConfirmationView | None:
+    sent = case.confirmation
+    if sent is None:
+        return None
+    term = sent.term
+    return ConfirmationView(
+        sent_at=sent.sent_at,
+        message_id=sent.message_id,
+        term=(
+            ImpliedTermView(
+                days=term.days, day_count=term.day_count, counted_from=term.counted_from
+            )
+            if term is not None
+            else None
+        ),
+        implied_from=sent.implied_from,
+    )
+
+
+def agreement_view(case: OrderCase) -> AgreementView | None:
+    agreed = case.agreement
+    if agreed is None:
+        return None
+    return AgreementView(
+        how=agreed.how,
+        by=agreed.by,
+        at=agreed.at,
+        message_id=agreed.message_id,
+        quotes=list(agreed.quotes),
+    )
+
+
 class UpdateLoopView(BaseModel):
     """A customer's change on an order in Bravo (ticket 29): its step, since
     when, code's verdict on PC's answer (6-DW4 ``can_do`` or 6-DW3
@@ -1055,6 +1142,12 @@ class OrderCaseView(BaseModel):
     returned_at: datetime | None
     confirmed_by: uuid.UUID | None
     confirmed_at: datetime | None
+    # What left and how the customer agreed (ticket 28).
+    confirmation: ConfirmationView | None = None
+    agreement: AgreementView | None = None
+    # A sent copy on the thread carrying this version's processed Excel,
+    # proposing "Ghi đã gửi xác nhận" while the confirmation is ahead.
+    confirmation_copy: ConfirmationCopyView | None = None
     close_reason: str | None
     closed_by: uuid.UUID | None
     closed_at: datetime | None
@@ -1267,6 +1360,18 @@ def _sent_view(
     )
 
 
+# The key a message's intents are read against while a customer's change
+# runs in the update loop: no row of `INTENT_STEPS` names it, so nothing is
+# proposed then (the customer's answer is the loop's, ticket 29).
+IN_UPDATE_LOOP: Final = "in_update_loop"
+
+
+def talk_status(case: OrderCase) -> str:
+    """The status a message on ``case`` proposes a step from: its own, or
+    `IN_UPDATE_LOOP` while a customer's change runs in the loop."""
+    return case.status.value if case.update_loop is None else IN_UPDATE_LOOP
+
+
 def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummaryView:
     open_findings = [f for f in case.findings if f.is_open]
     return OrderSummaryView(
@@ -1358,13 +1463,16 @@ def order_case(
     thread: CaseThread | None = None,
     sent: Mapping[str, SentRead] | None = None,
     change_requests: Sequence[ChangeRequest] = (),
+    confirmation_copy: InboundMessage | None = None,
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
     reads as checked. ``cross_checker``: the caller holds the cross-check
-    scope, and is told which values nobody opened."""
+    scope, and is told which values nobody opened. ``confirmation_copy``:
+    the sent copy that proposes the confirmation sent
+    (`confirmations.confirmation_copy`)."""
     document = case.document
-    talk = case_talk(CaseKind.ORDER, case.case_id, case.status.value, replies, thread, sent)
+    talk = case_talk(CaseKind.ORDER, case.case_id, talk_status(case), replies, thread, sent)
     checked = preparer_checked(case, servings)
     unapplied = case.unapplied_decision
     total = document.total
@@ -1437,6 +1545,17 @@ def order_case(
         returned_at=case.returned_at,
         confirmed_by=case.confirmed_by,
         confirmed_at=case.confirmed_at,
+        confirmation=confirmation_view(case),
+        agreement=agreement_view(case),
+        confirmation_copy=(
+            ConfirmationCopyView(
+                message_id=confirmation_copy.message_id,
+                received_at=confirmation_copy.received_at,
+                subject=confirmation_copy.subject,
+            )
+            if confirmation_copy is not None
+            else None
+        ),
         close_reason=case.close_reason.value if case.close_reason else None,
         closed_by=case.closed_by,
         closed_at=case.closed_at,

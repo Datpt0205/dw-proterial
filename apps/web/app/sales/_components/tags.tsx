@@ -80,6 +80,7 @@ const ORDER_LOOK: Record<string, Look> = {
   prepared: ["pri", i.sync],
   uploaded_to_bravo: ["pri", i.sync],
   cross_checked: ["ok", i.check],
+  confirmation_sent: ["geek", i.clock],
   confirmed: ["ok", i.check],
   change_review: ["warn", i.warn],
   closed: ["gray", i.stop],

@@ -125,7 +125,7 @@ WIV_STEPS: Final[tuple[ProcessStep, ...]] = (
     _o(7, _YES, ("prepared", "uploaded_to_bravo"), ("coverage_statement",)),
     _o(8, _YES, ("correction_requested",), ("correction_draft",)),
     _o(9, _YES, ("cross_checked",), ("cross_check_sheet",)),
-    _o(10, _YES, ("confirmed",), ("confirmation_draft",)),
+    _o(10, _YES, ("confirmation_sent", "confirmed"), ("confirmation_draft",)),
     _o(11, _OUT, ()),
     _q(1, _YES, ("received",)),
     _q(2, _YES, ("ycbg_drafted", "ycbg_recorded"), ("ycbg_draft",)),

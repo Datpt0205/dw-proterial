@@ -29,6 +29,7 @@ from dw_sales.application.artifact_content import (
     DocumentTemplate,
     EmailDraft,
     EmailTemplate,
+    FileAttachment,
     SalesDocumentCopy,
     SalesEmailCopy,
     Value,
@@ -147,6 +148,9 @@ class Drafting[CaseT]:
     scope: SalesScope
     # The signed paper copy of a quote, scanned and uploaded, when it has one.
     signed_copy: bytes | None = None
+    # The customer's own PO files of an order's current revision, byte for
+    # byte as they sent them: the confirmation goes back with them (ticket 28).
+    po_files: tuple[FileAttachment, ...] = ()
     deployed: bool = False
     # The master data the customer's SalesOrder rules look up (ticket 38):
     # read for a customer whose rules name a lookup, empty otherwise.

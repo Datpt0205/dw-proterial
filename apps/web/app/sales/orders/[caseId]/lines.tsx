@@ -359,9 +359,13 @@ export function LinesTable({
                       {formatDateTime(line.pc_confirmed_at)}
                     </Typography.Text>
                   ) : waiting.has(line.line_no) &&
-                    !["closed", "confirmed", "received", "checked"].includes(
-                      order.status,
-                    ) ? (
+                    ![
+                      "closed",
+                      "confirmation_sent",
+                      "confirmed",
+                      "received",
+                      "checked",
+                    ].includes(order.status) ? (
                     <GuardedButton
                       size="small"
                       inlineReason={false}

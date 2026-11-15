@@ -56,7 +56,10 @@ const GROUP = {
     "change_review",
   ],
   customer: ["correction_requested"],
-  done: ["confirmed", "closed"],
+  // The confirmation left: Sales' part is done, whether the customer has
+  // agreed yet or not (ticket 28); with no days of silence it may wait on
+  // them for good, so it is not counted as waiting.
+  done: ["confirmation_sent", "confirmed", "closed"],
 } as const;
 const TABS = ["open", "customer", "done", "all"] as const;
 type Tab = (typeof TABS)[number];
