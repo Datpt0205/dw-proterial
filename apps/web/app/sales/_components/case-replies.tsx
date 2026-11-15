@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Card, Space, Typography } from "antd";
 import { MailOutlined } from "@ant-design/icons";
@@ -34,11 +35,15 @@ export function CaseReplies({
   sent = [],
   before = [],
   beforeTitle = "Trao đổi trước PO",
+  answer,
 }: {
   replies: readonly Reply[];
   sent?: readonly Sent[];
   before?: readonly Earlier[];
   beforeTitle?: string;
+  /** What the page offers under a customer's reply (the model's answer to a
+   * question, ticket 32), or null. */
+  answer?: (reply: Reply) => ReactNode;
 }) {
   if (!replies.length && !before.length && !sent.length) return null;
   return (
@@ -61,7 +66,11 @@ export function CaseReplies({
         ) : null}
         {talk(replies, sent).map((item) =>
           item.kind === "reply" ? (
-            <ReplyRow key={item.reply.message_id} reply={item.reply} />
+            <ReplyRow
+              key={item.reply.message_id}
+              reply={item.reply}
+              answer={answer?.(item.reply) ?? null}
+            />
           ) : (
             <SentRow key={item.sent.message_id} sent={item.sent} />
           ),
@@ -115,7 +124,7 @@ function MessageLink({ id }: { id: string }) {
   );
 }
 
-function ReplyRow({ reply }: { reply: Reply }) {
+function ReplyRow({ reply, answer }: { reply: Reply; answer: ReactNode }) {
   return (
     <div className="space-y-1">
       <Space wrap size="small">
@@ -137,6 +146,7 @@ function ReplyRow({ reply }: { reply: Reply }) {
       <FallbackNote fallback={reply.fallback} />
       <Quotes intents={reply.intents} who="khách" />
       <ProposalNote proposal={reply.proposal} />
+      {answer}
     </div>
   );
 }
@@ -189,8 +199,8 @@ function FallbackNote({ fallback }: { fallback?: Reply["fallback"] }) {
   if (!fallback) return null;
   return (
     <Typography.Text type="secondary" role="note">
-      DW1 tra cứu thêm không xong ({label(AGENT_FALLBACK, fallback)}): đọc
-      một lần như bình thường.
+      DW1 tra cứu thêm không xong ({label(AGENT_FALLBACK, fallback)}): đọc một
+      lần như bình thường.
     </Typography.Text>
   );
 }

@@ -7,8 +7,9 @@ ticket 15's header path, and `rule_drafts` for a layout drafted from a
 company's template, `rule_words` for one changed in words, and
 `salesorder_rules` for a customer's SalesOrder rules learned from a worked
 example and proven by replay, `change_requests` for ticket 27's change
-asked in a reply's words, and `thread_agent` for tickets 30 and 31's thread
-message read with read-only tools)."""
+asked in a reply's words, `thread_agent` for tickets 30 and 31's thread
+message read with read-only tools, and `reply_drafts` for ticket 32's mail to
+a customer worded beside the template's draft)."""
 
 from dw_sales.evals.assistant import GRADERS as ASSISTANT_GRADERS
 from dw_sales.evals.catalog_columns import GRADERS as COLUMN_GRADERS
@@ -28,6 +29,7 @@ from dw_sales.evals.pc_dates import GRADERS as PC_DATE_GRADERS
 from dw_sales.evals.po_body import GRADERS as PO_BODY_GRADERS
 from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
+from dw_sales.evals.reply_drafts import GRADERS as REPLY_DRAFT_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
@@ -68,6 +70,7 @@ GRADERS = {
         **REMINDER_GRADERS,
         **ASSISTANT_GRADERS,
         **THREAD_AGENT_GRADERS,
+        **REPLY_DRAFT_GRADERS,
     }.items()
 }
 

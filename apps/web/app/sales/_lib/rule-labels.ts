@@ -233,6 +233,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Đọc thư trong hồ sơ, tra cứu thêm khi cần",
       help: "Trước khi đọc, mô hình được tra thư trước, hồ sơ, mã convert, lead time và trả lời của PC, chỉ của chính khách đó. Không đọc được thì dùng bước đọc thư trả lời, rồi đến Sales.",
     },
+    "model_assist.reply_draft": {
+      label: "AI soạn thư gửi khách bên cạnh thư theo mẫu",
+      help: "Trả lời câu khách hỏi về đơn, thư báo PC đáp ứng hoặc phương án khác, thư xác nhận đơn. Mọi con số phải có trong hồ sơ, không có số tiền; người nhận do hệ thống chọn; Sales đọc rồi tự gửi.",
+    },
     "model_assist.request_handoff": {
       label: "Soạn nháp chuyển giao cho PC/QA từ thư",
     },

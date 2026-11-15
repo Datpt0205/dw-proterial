@@ -216,6 +216,15 @@ API and the plan use the English terms. The spec is
   reading reads the message, else Sales, and the reading says why. Off
   until a tenant turns it on and its live eval meets the bar (dw_sales ADR
   0012, tickets 30 and 31).
+- **AI-worded reply** (Bản AI soạn): a mail to the customer about an order
+  that a local model words beside the template's draft, never in its place:
+  the answer to a customer's reply read `asks` (which has no template), PC's
+  answer to their change (6-DW4, 6-DW3) and the confirmation. Code gives
+  every fact (never an amount) and the tenant's own letter of the kind as
+  the example; a draft with a figure no fact holds, an amount, an address
+  or a link is dropped and says why; the recipients are the customer's
+  contacts; a person sends it. Off until a tenant turns it on and its live
+  eval meets the bar (dw_sales ADR 0012, ticket 32).
 - **Change request** (Yêu cầu điều chỉnh): what a customer asked to change
   on an order, in a mail's words or table: per line, the field, the value
   the case holds and the value asked, each with where the mail says it.

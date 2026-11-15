@@ -64,6 +64,7 @@ from dw_sales.application.process_settings import ProcessSettingsService, RoleCa
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.reply_drafts import ReplyDrafts
 from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
@@ -131,6 +132,9 @@ class SalesServices:
     screening_followups: ScreeningFollowups
     # A reminder to a customer DW1 waits on, drafted (DW01 function 4).
     customer_reminders: CustomerReminders
+    # A mail to the customer about an order worded by the model, beside the
+    # template's draft, every figure checked (ticket 32).
+    reply_drafts: ReplyDrafts
     # Status questions answered from live data, in sessions (ADR 0007).
     assistant: AssistantService
     # Design's reply written in the mail, read and confirmed (AI item 6).
@@ -324,6 +328,20 @@ def assemble(
         ),
         customer_reminders=CustomerReminders(
             uow, gate, catalog, one_call, clock, ids, worker_id, worker_version, book
+        ),
+        reply_drafts=ReplyDrafts(
+            uow,
+            gate,
+            catalog,
+            directory,
+            book,
+            intake.rules,
+            intake.model_steps,
+            one_call,
+            ids,
+            worker_id,
+            worker_version,
+            deployed,
         ),
         assistant=AssistantService(
             assistant,

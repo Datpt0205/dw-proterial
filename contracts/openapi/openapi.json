@@ -10293,7 +10293,8 @@
           "layout_proposal",
           "po_body_extraction",
           "change_request",
-          "thread_agent"
+          "thread_agent",
+          "reply_draft"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -16356,6 +16357,129 @@
           "differences_total"
         ],
         "title": "Replay",
+        "type": "object"
+      },
+      "ReplyDraftView": {
+        "description": "The model's wording, or why there is none; always marked as the model's\non the page, beside the template's draft of ``kind`` where it has one.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "figures_checked": {
+            "default": 0,
+            "title": "Figures Checked",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "question_answer",
+              "change_can_do_draft",
+              "change_options_draft",
+              "confirmation_draft"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "figure",
+                  "amount",
+                  "address"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          },
+          "status": {
+            "enum": [
+              "drafted",
+              "refused",
+              "unavailable",
+              "off"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "to": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          },
+          "unsupported": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "kind",
+          "status",
+          "language"
+        ],
+        "title": "ReplyDraftView",
         "type": "object"
       },
       "ReplyItem": {
@@ -31079,6 +31203,81 @@
           }
         },
         "summary": "Prepare",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/reply-draft": {
+      "get": {
+        "operationId": "order_reply_draft_api_v1_sales_orders__case_id__reply_draft_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "question_answer",
+                "change_can_do_draft",
+                "change_options_draft",
+                "confirmation_draft"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "message_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[!-~]{1,512}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Reply Draft",
         "tags": [
           "sales"
         ]

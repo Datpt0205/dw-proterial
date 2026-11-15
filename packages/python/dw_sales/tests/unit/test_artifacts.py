@@ -172,7 +172,7 @@ PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
 FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.4.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
-    emails=load_copy(COPY / "sales_emails@1.3.0.yaml", SalesEmailCopy),
+    emails=load_copy(COPY / "sales_emails@1.4.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
@@ -1563,7 +1563,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
     assert refused.value.details == {
         "kind": "send_draft",
         "language": "ja",
-        "copy": "sales_emails@1.3.0",
+        "copy": "sales_emails@1.4.0",
         "reason": "template_missing",
     }
     assert not world.objects and not world.artifacts
@@ -2133,6 +2133,8 @@ def test_every_customer_draft_has_every_language_and_every_internal_one_vietname
         "send_draft",
         "change_can_do_draft",
         "change_options_draft",
+        # The example of the model's answer to a customer's question (ticket 32).
+        "question_answer",
     }
     emails = ARTIFACT_COPY.emails.emails
     for kind in customer:

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Card, Space, Table, Typography } from "antd";
 import { StatusTag } from "@dw/ui";
 import { DownloadOutlined, FileAddOutlined } from "@ant-design/icons";
@@ -78,6 +84,7 @@ export function ArtifactsPanel({
   renderReason,
   language,
   list,
+  besideDraft,
 }: {
   kind: "order" | "quote";
   caseId: string;
@@ -89,6 +96,9 @@ export function ArtifactsPanel({
   language?: string | null;
   /** The page's one copy of the file list (`useCaseArtifacts`). */
   list: CaseArtifacts;
+  /** What the page shows beside a kind it may draw now (the model's wording
+   * of an order's mail, ticket 32), or null. */
+  besideDraft?: (artifactKind: string) => ReactNode;
 }) {
   const name = usePeople();
   const { paused } = useSalesFrame();
@@ -102,6 +112,9 @@ export function ArtifactsPanel({
     artifacts.filter((a) => a.case_version === caseVersion).map((a) => a.kind),
   );
   const toRender = (list.data?.available ?? []).filter((k) => !current.has(k));
+  const beside = (list.data?.available ?? [])
+    .map((k) => [k, besideDraft?.(k) ?? null] as const)
+    .filter(([, node]) => node !== null);
   // "Gửi cho khách" for the lane's send draft, once it may be drafted.
   const sendKind = SENDABLE[kind];
   const showSend =
@@ -250,6 +263,17 @@ export function ArtifactsPanel({
               },
             ]}
           />
+          {beside.map(([k, node]) => (
+            <section
+              key={k}
+              aria-label={`Bản AI soạn: ${label(ARTIFACT_KIND, k)}`}
+            >
+              <Typography.Text strong>
+                {label(ARTIFACT_KIND, k)}
+              </Typography.Text>
+              {node}
+            </section>
+          ))}
           {showSend ? (
             <OutboundSend kind={kind} caseId={caseId} draft={sendDraft} />
           ) : null}

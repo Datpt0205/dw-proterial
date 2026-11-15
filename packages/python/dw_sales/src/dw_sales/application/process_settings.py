@@ -211,7 +211,8 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             _step(StepId.O9, _in(_ORDER, "cross_check_required")),
             # Confirmation and the export-control hold; then each customer's
             # days of silence that count as agreement, and telling the PIC
-            # when they pass (ticket 28).
+            # when they pass (ticket 28); the model's wording of the mails to
+            # the customer beside the template's drafts (ticket 32).
             _step(
                 StepId.O10,
                 _in(
@@ -220,6 +221,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "export_control.denial_list_max_age_days",
                     "fiscal_year_start_month",
                     "implied_acceptance",
+                    "model_assist.reply_draft",
                 ),
                 _severities("missing_noc_esf"),
                 _in(_FOLLOWUPS, "implied_acceptance"),

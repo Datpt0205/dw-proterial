@@ -134,6 +134,7 @@ class ModelStep(StrEnum):
     PO_BODY_EXTRACTION = "po_body_extraction"
     CHANGE_REQUEST = "change_request"
     THREAD_AGENT = "thread_agent"
+    REPLY_DRAFT = "reply_draft"
 
 
 class ModelAssist(BaseModel):
@@ -185,6 +186,12 @@ class ModelAssist(BaseModel):
     # its ceiling, or with no usable answer, the one-call reading reads it.
     # Off where a version does not say: the platform's versions do not.
     thread_agent: bool = False
+    # A local model words the mail to a customer, offered beside the
+    # template's draft: an answer to a customer's question, PC's answer to
+    # their change, the confirmation (ticket 32). Code gives every fact,
+    # drops a draft with a figure no fact holds or any amount, and chooses
+    # the recipients; a person sends it. Off where a version does not say.
+    reply_draft: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

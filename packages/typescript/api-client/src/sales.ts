@@ -60,6 +60,8 @@ export type Words = SalesSchemas["Words"];
 /** Every currency the Sales API names (one enum in OpenAPI). */
 export type SalesCurrency = SalesSchemas["OrderCaseView"]["currency"];
 export type Artifact = SalesSchemas["ArtifactView"];
+export type ReplyDraft = SalesSchemas["ReplyDraftView"];
+export type ReplyKind = ReplyDraft["kind"];
 export type SalesOrderExample = SalesSchemas["SalesOrderExampleView"];
 /**
  * The platform approval a case waits on. The decision is made there
@@ -758,6 +760,17 @@ export class SalesApi {
       : this.get<"/api/v1/sales/quotes/{case_id}/customer-reminder">(
           `/api/v1/sales/quotes/${enc(caseId)}/customer-reminder`,
         );
+  }
+
+  /** A mail to the customer about an order, worded by the model beside the
+   * template's draft (ticket 32): every figure checked by code, recipients
+   * code's; nothing is sent or stored. An answer names the customer's mail. */
+  replyDraft(caseId: string, kind: ReplyKind, messageId?: string) {
+    const query = new URLSearchParams({ kind });
+    if (messageId !== undefined) query.set("message_id", messageId);
+    return this.get<"/api/v1/sales/orders/{case_id}/reply-draft">(
+      `/api/v1/sales/orders/${enc(caseId)}/reply-draft?${query}`,
+    );
   }
 
   /** Q12's question to the customer, drafted by the model (AI item 11). */

@@ -1,6 +1,6 @@
 # 34 — Skills: a tenant teaches DW1 a kind of mail in words
 
-Status: ready-for-agent (behind 30's gate)
+Status: ready-for-agent (behind 30's gate); held 2026-11-16 until Đạt decides dw_sales ADR 0014 (deep agent with tenant skills), under which it is rebuilt
 Blocked by: 33
 Category: enhancement
 

@@ -223,6 +223,36 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
   );
 });
 
+describe("the model's answer to a customer's question (ticket 32)", () => {
+  it(
+    "is offered under a reply read as asking, and under nothing else",
+    async () => {
+      shown = {
+        ...waiting([
+          reply({
+            message_id: "R2",
+            intents: [
+              { intent: "asks", quotes: ["When is line 2 delivered?"] },
+            ],
+            proposal: null,
+          }),
+        ]),
+        thread_sent: [sent()],
+      };
+      page();
+
+      expect(
+        await screen.findByText("“When is line 2 delivered?”"),
+      ).toBeTruthy();
+      // One button: the customer's question, not the mail Sales sent.
+      expect(
+        screen.getAllByRole("button", { name: "Bản AI soạn" }),
+      ).toHaveLength(1);
+    },
+    SLOW,
+  );
+});
+
 describe("a mail Sales sent in the case's thread (tickets 25 and 26)", () => {
   it(
     "is marked as Sales', shows what it asked and marks, never presses, the wait on the customer",
