@@ -66,8 +66,28 @@ case only: nothing learns from it.
   thresholds and audits) build this after ticket 40, on the research note's
   method.
 
+## Method (from the research note, 2026-11-16)
+
+`docs/research/2026-11-16-less-human-review.md`: the threshold is set by
+conformal risk control on the tenant's labelled results, so the error rate
+among what applies itself stays at or below α even if the model's
+confidence is poorly calibrated (a weak score only lowers the share that
+applies itself). Confidence from token probabilities and agreement across
+samples (Strata returns both cheaply, measured). Three tiers: T0 reading,
+classifying, linking, unsent drafts; T1 an internal hand-off or a move into
+someone's queue, at a stricter α; T2 anything sent, any Bravo write, prices,
+dates, approvals, never automatic. Certifying α with no errors takes about
+59 accepted cases for 5%, 149 for 2%, 299 for 1%; until a step has them it
+runs in shadow mode (decides and logs, applies nothing). Any new model,
+prompt, skill or example set turns automatic application off until
+re-measured. The missing data today is the model's proposal stored beside
+what the person kept: ticket 43 starts there.
+
 ## Open
 
-- Đạt: the target error rate per tier (proposed default: none applies until
-  set; then for example 1% for reading and linking, 2% for drafts).
-- The audit share per step (proposed: 10% at first, lower once stable).
+- Đạt: α per tier (the note suggests 5% for T0, 1–2% for T1, T2 never);
+  which effects are T0 and which T1; the audit share (2–5% blind sample)
+  and who audits; shadow mode until each step has its labelled cases.
+- Whether the skill is chosen by one constrained, scored call rather than
+  the agent's free choice (amends ADR 0014; ticket 40 measured the free
+  choice looping on Strata: 0.183).
