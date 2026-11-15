@@ -26,8 +26,10 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_
 from dw_platform.retention_policy import RetentionPolicy
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import scope_values
+from dw_sales.application.autonomy import VersionKey
 from dw_sales.application.labelled_cases import MAX_READ, StepLabels
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.autonomy import LabelledScore
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.labelled_cases import LabelledCase
 from dw_sales.domain.order_checks import ModelStep
@@ -60,6 +62,9 @@ labelled_cases = sa.Table(
     sa.Column("model_profile", sa.Text),
     sa.Column("rules", sa.Text),
     sa.Column("decided_by", UUID(as_uuid=True), nullable=False),
+    # Ticket 44 (migration efc46a50e75e).
+    sa.Column("confidence", sa.Float),
+    sa.Column("gate", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 _L = labelled_cases
@@ -93,6 +98,8 @@ def _values(scope: SalesScope, case: LabelledCase) -> dict[str, object]:
         "model_profile": case.model_profile,
         "rules": case.rules,
         "decided_by": case.decided_by,
+        "confidence": case.confidence,
+        "gate": case.gate,
     }
 
 
@@ -116,6 +123,8 @@ def _case(row: RowMapping) -> LabelledCase:
         model_profile=row["model_profile"],
         rules=row["rules"],
         decided_by=row["decided_by"],
+        confidence=row["confidence"],
+        gate=row["gate"],
     )
 
 
@@ -168,6 +177,24 @@ class SqlLabelledCaseReader:
                 found = ModelStep(step)
                 counted[found] = counted.get(found, StepLabels()).counted(verdict, count)
         return counted
+
+    async def gated(self, scope: SalesScope) -> Mapping[VersionKey, Sequence[LabelledScore]]:
+        """Implements `GatedLabelsPort`: the confidence, verdict and gate of
+        every case of a gated result, by step, prompt and model profile.
+        Three short columns per case, read whole: a threshold is set from all
+        of them, and they are bounded by the table's 365-day term."""
+        query = sa.select(
+            _L.c.step, _L.c.prompt, _L.c.model_profile, _L.c.confidence, _L.c.verdict, _L.c.gate
+        ).where(_L.c.gate.is_not(None), _L.c.model_profile.is_not(None))
+        found: dict[VersionKey, list[LabelledScore]] = {}
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            for step, prompt, profile, confidence, verdict, gate in (
+                await session.execute(query)
+            ).all():
+                found.setdefault((ModelStep(step), prompt, profile), []).append(
+                    LabelledScore(confidence=confidence, verdict=verdict, gate=gate)
+                )
+        return found
 
 
 @dataclass(frozen=True)

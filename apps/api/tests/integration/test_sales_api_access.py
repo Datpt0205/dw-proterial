@@ -39,8 +39,8 @@ _PARAMS = {
     # A Q12 screening row's question to the customer (AI item 11).
     "customer_code": "NRV",
     "prv_code": "CB-2006",
-    # A status-assistant session (dw_sales ADR 0007).
-    "session_id": str(uuid.uuid4()),
+    # A case's status-assistant conversation (dw_sales ADR 0007, ticket 46).
+    "kind": "order",
 }
 
 

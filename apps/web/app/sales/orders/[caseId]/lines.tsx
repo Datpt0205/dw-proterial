@@ -7,6 +7,7 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   EyeOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
 import type { SalesSchemas, Words } from "@dw/api-client";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
@@ -153,6 +154,22 @@ export function LinesTable({
     } else setError(result.error);
   };
 
+  // "Hoàn tác" (ticket 44): the code DW applied by itself, back to a
+  // candidate for a person to confirm; the server records the undo.
+  const undo = async (line: Line) => {
+    const body = { case_version: order.case_version };
+    const result = await run(
+      `undo/${line.line_no}`,
+      body,
+      (key) => salesApi().undoMapping(order.case_id, line.line_no, body, key),
+      `Đã hoàn tác mã DW tự chọn cho dòng ${line.line_no}`,
+    );
+    if (result.ok) {
+      setError(null);
+      onChanged();
+    } else setError(result.error);
+  };
+
   return (
     <div className="space-y-2">
       <ActionError error={error} />
@@ -231,7 +248,30 @@ export function LinesTable({
                 {line.basis.description_reading?.outcome === "read" ? (
                   <ReadByTag by="model" />
                 ) : null}
-                {line.mapping.confirmed_by ? (
+                {line.mapping.applied_by_dw ? (
+                  <Space size={4} wrap>
+                    <StatusTag
+                      tone="geek"
+                      icon={<RobotOutlined aria-hidden />}
+                      tip="DW chọn mã này vì độ tin cậy vượt ngưỡng đo được trên các lần người đã kiểm. Sai thì bấm Hoàn tác."
+                    >
+                      DW đã tự làm
+                    </StatusTag>
+                    {editable ? (
+                      <GuardedButton
+                        size="small"
+                        inlineReason={false}
+                        loading={pending === `undo/${line.line_no}`}
+                        reason={
+                          canPrepare ? null : "Bạn không có quyền sửa mã PRV."
+                        }
+                        onClick={() => undo(line)}
+                      >
+                        Hoàn tác
+                      </GuardedButton>
+                    ) : null}
+                  </Space>
+                ) : line.mapping.confirmed_by ? (
                   <Typography.Text>
                     {name(line.mapping.confirmed_by)}
                   </Typography.Text>

@@ -34,6 +34,7 @@ from dw_sales.application.activity_ports import (
     StepActivityReadPort,
     activity_cases,
 )
+from dw_sales.application.autonomy import applied_by
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.confirmations import confirmation_copy
 from dw_sales.application.local_time import LocalZonePort
@@ -68,7 +69,7 @@ from dw_sales.application.views import (
 )
 from dw_sales.domain.catalog import ConvertEntry
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.labelled_cases import mapping_label, po_value_label
+from dw_sales.domain.labelled_cases import mapping_label, po_value_label, undo_label
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -246,6 +247,27 @@ class OrderCommands:
                 case_id=case_id,
             )
         return order_change(confirmed)
+
+    async def undo_applied_mapping(
+        self, context: AccessContext, case_id: uuid.UUID, line_no: int, *, case_version: int
+    ) -> CaseChangeView:
+        """Sales undoes the PRV code DW applied by itself (ticket 44): the line
+        is a candidate to confirm again, and the undo is a labelled case, the
+        applied code rejected, which the step's threshold and audits learn
+        from. Taken by whoever may confirm the line (`sales.order.prepare`)."""
+        await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
+        actor, now, scope = order_actor(context, self.gate), self.clock.now(), sales_scope(context)
+        async with self.uow(scope) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+            same_version(case_id, case.case_version, case_version)
+            undone = case.undo_applied_mapping(line_no, applied_by=applied_by())
+            event = person_event("order.mapping_undone", context, now, field="prv_code")
+            await save_order(work, context, self.ids, case, undone, event)
+            await work.labelled_cases.append(
+                [undo_label(case, line_no, new_id=self.ids.new_uuid, at=now, by=actor.user_id)]
+            )
+            await work.commit()
+        return order_change(undone)
 
     async def correct_value(
         self,

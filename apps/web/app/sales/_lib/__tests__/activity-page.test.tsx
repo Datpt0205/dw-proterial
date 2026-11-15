@@ -13,6 +13,8 @@ import { AN } from "./fixtures";
 
 type Summary = SalesSchemas["ActivitySummaryView"];
 type Labels = SalesSchemas["LabelSummaryView"];
+type Autonomy = SalesSchemas["AutonomySummaryView"];
+type StepAutonomy = SalesSchemas["StepAutonomyView"];
 type StepSummary = SalesSchemas["StepSummaryView"];
 type ModelStep = SalesSchemas["ModelStep"];
 type Lane = SalesSchemas["CaseKind"] | null;
@@ -165,11 +167,62 @@ const LABELS: Labels = {
   ],
 };
 
+const stepAutonomy = (over: Partial<StepAutonomy>): StepAutonomy => ({
+  step: "description_attributes",
+  tier: "applies_itself",
+  mode: "measuring",
+  target: 0.05,
+  needed: 59,
+  threshold: null,
+  cases: 0,
+  audits: 0,
+  audited_error: null,
+  computed_at: null,
+  applied: 0,
+  audited: 0,
+  shadow: 0,
+  to_person: 0,
+  ...over,
+});
+
+const AUTONOMY: Autonomy = {
+  days: 30,
+  steps: [
+    stepAutonomy({
+      mode: "applying",
+      threshold: 0.93,
+      cases: 80,
+      audits: 4,
+      audited_error: 0,
+      applied: 12,
+      audited: 1,
+      to_person: 5,
+    }),
+    // A step a person always approves, and one with nothing yet: left out.
+    stepAutonomy({
+      step: "change_request",
+      tier: "person_approves",
+      mode: "never",
+      target: null,
+      needed: null,
+    }),
+    stepAutonomy({ step: "message_intent" }),
+  ],
+};
+
 const api = {
+  // No case holds an answer the person has not seen (ticket 46).
+  assistantUnread: vi.fn(async (): Promise<string[]> => []),
   activity: vi.fn(async (query: { from?: string; to?: string; lane?: Lane }) =>
     summary(query.from!, query.to!, query.lane ?? null),
   ),
   activityLabels: vi.fn(async (): Promise<Labels> => LABELS),
+  // Nothing applied by itself unless a test says so: the step names would
+  // otherwise appear twice on the page.
+  activityAutonomy: vi.fn(async (): Promise<Autonomy> => ({
+    days: 30,
+    steps: [],
+  })),
   orders: vi.fn(async (...args: unknown[]) => (void args, [])),
   quotes: vi.fn(async (...args: unknown[]) => (void args, [])),
   customers: vi.fn(async () => ({ items: [] })),
@@ -381,6 +434,29 @@ describe("Hoạt động DW1 (slice 3)", () => {
       fireEvent.click(within(tr).getByRole("button"));
       expect(
         await within(checked).findByText("Giữ nguyên 6 · Sửa 1 · Từ chối 1"),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "shows what DW applied by itself per step, the numbers behind it on click",
+    async () => {
+      api.activityAutonomy.mockResolvedValueOnce(AUTONOMY);
+      renderAt("/sales/activity");
+      const section = await screen.findByRole("region", { name: "DW tự làm" });
+      const step = await within(section).findByText(
+        "Đọc mô tả hàng chưa có trong convert list",
+      );
+      const tr = step.closest("tr") as HTMLElement;
+      expect(within(tr).getByText("Đang tự làm")).toBeTruthy();
+      // Expand, step, mode, applied, to a person (the audited included).
+      expect(cell(tr, 3).textContent).toBe("12");
+      expect(cell(tr, 4).textContent).toBe("6");
+      expect(within(section).getAllByRole("row")).toHaveLength(2);
+      fireEvent.click(within(tr).getByRole("button"));
+      expect(
+        await within(section).findByText(/80\/59 kết quả đã kiểm/),
       ).toBeTruthy();
     },
     SLOW,

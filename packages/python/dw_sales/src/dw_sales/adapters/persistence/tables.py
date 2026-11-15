@@ -676,6 +676,11 @@ assistant_sessions = sa.Table(
     sa.Column("title", sa.Text, nullable=False),
     sa.Column("created_at", _TS, nullable=False),
     sa.Column("last_turn_at", _TS, nullable=False),
+    # The case the conversation is bound to (ticket 46), both or neither;
+    # neither: the person's one general conversation.
+    sa.Column("case_kind", sa.Text),
+    sa.Column("case_id", UUID(as_uuid=True)),
+    sa.Column("last_read_at", _TS),
 )
 
 assistant_turns = sa.Table(

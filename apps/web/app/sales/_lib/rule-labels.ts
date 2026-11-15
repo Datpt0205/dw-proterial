@@ -208,6 +208,22 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "4: năm tài chính 2026 từ tháng 4/2026 đến tháng 3/2027. ESF được đối chiếu theo năm tài chính của ngày PO.",
       unit: "tháng",
     },
+    autonomy: {
+      label: "DW tự làm",
+      help: "Bước đọc, phân loại, ghép mã và chuyển việc nội bộ được DW tự làm khi đo được tỷ lệ sai dưới mức này; công ty chỉ được siết chặt hơn mức của nền tảng.",
+    },
+    "autonomy.applies_itself_error": {
+      label: "Tỷ lệ sai tối đa khi DW tự đọc, phân loại, ghép mã",
+      help: "0,05 là 5%, mức cao nhất được phép.",
+    },
+    "autonomy.hand_off_error": {
+      label: "Tỷ lệ sai tối đa khi DW tự chuyển việc nội bộ",
+      help: "0,02 là 2%, mức cao nhất được phép.",
+    },
+    "autonomy.audit_share": {
+      label: "Phần việc DW tự làm được gửi người kiểm lại",
+      help: "0,03 là 3%, mức thấp nhất được phép; người phụ trách không được báo trước.",
+    },
     model_assist: {
       label: "Bước có mô hình hỗ trợ",
       help: "Nền tảng tắt tất cả. Chỉ bật một bước khi đánh giá thực tế của bước đó đạt yêu cầu; mọi giá trị mô hình đọc vẫn cần Sales xác nhận.",

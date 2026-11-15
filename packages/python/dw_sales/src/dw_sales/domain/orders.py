@@ -2467,6 +2467,35 @@ class OrderCase(BaseModel):
             findings=_in_line_order((*kept, *rechecked)),
         )
 
+    def undo_applied_mapping(self, line_no: int, *, applied_by: ActorId) -> OrderCase:
+        """The PRV code DW applied by itself to a line, undone (dw_sales ADR
+        0015, ticket 44): the line is a candidate for a person to confirm
+        again, as it was before. Only a code ``applied_by`` (the lane that
+        applies) confirmed, after code's gate let it (``gate`` "applied"), on
+        a line with that one candidate. Its findings stand: they were checked
+        against that same candidate when the case was read, and again when
+        it was applied."""
+        line = self.line(line_no)
+        mapping = line.mapping
+        reading = line.basis.description_reading
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        if (
+            mapping.status is not MappingStatus.CANDIDATE_CONFIRMED
+            or mapping.confirmed_by != applied_by
+            or mapping.candidates != (mapping.prv_code,)
+            or reading is None
+            or reading.gate != "applied"
+        ):
+            raise ConflictError("the line holds no code DW applied by itself", details=details)
+        undone = line.model_copy(
+            update={
+                "mapping": LineMapping(
+                    status=MappingStatus.CANDIDATE, candidates=mapping.candidates
+                )
+            }
+        )
+        return self._edited(lines=tuple(undone if x.line_no == line_no else x for x in self.lines))
+
     def corrected(self, key: str, correction: ValueCorrection, actor: Actor) -> Corrected:
         """The case's values with ``correction`` too, for its checks to run on.
 

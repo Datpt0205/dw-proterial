@@ -796,6 +796,8 @@ def _service(
         FixedClock(AT),
         platform_zone(),
         MemoryStore(),
+        MemoryStore(),
+        PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.13.0.yaml")),
     )
 
 

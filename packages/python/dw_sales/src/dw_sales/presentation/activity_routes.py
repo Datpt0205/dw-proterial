@@ -3,8 +3,9 @@
 Read-only, over `ActivityService`, which decides who may read and what a
 response carries (`dw_sales.application.activity`): one case's entries with
 `sales.case.read`, a price left out for a caller without `sales.price.read`;
-the summary, and what people kept of each step's proposals (ticket 43,
-counts only), with `sales.overview.read` or `sales.rules.propose`. Every route
+the summary, what people kept of each step's proposals (ticket 43, counts
+only) and what applied itself (ticket 44, counts and rates), with
+`sales.overview.read` or `sales.rules.propose`. Every route
 depends on the verified access context first, as the Sales router's do; none
 takes a support context (fail closed until a support case needs them). With
 no data source configured, each answers 503 as the Sales router does.
@@ -23,6 +24,7 @@ from fastapi import APIRouter, Depends, Query
 from dw_kernel.errors import InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.activity import ActivityService, ActivitySummaryView, CaseActivityView
+from dw_sales.application.autonomy import AutonomySummaryView
 from dw_sales.application.labelled_cases import LabelSummaryView
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.presentation.routes import NOT_CONFIGURED
@@ -65,5 +67,9 @@ def build_activity_router(
     @router.get("/activity/labels", response_model=LabelSummaryView)
     async def activity_labels(context: Ctx, svc: Svc) -> LabelSummaryView:
         return await svc.labels(context)
+
+    @router.get("/activity/autonomy", response_model=AutonomySummaryView)
+    async def activity_autonomy(context: Ctx, svc: Svc) -> AutonomySummaryView:
+        return await svc.autonomy(context)
 
     return router

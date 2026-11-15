@@ -20,6 +20,7 @@ import { useCustomerName } from "../_lib/customers";
 import { label, ORDER_STATE } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
+import { useUnreadCases } from "../_lib/unread";
 import {
   useActivityFilter,
   useListView,
@@ -86,6 +87,7 @@ function Orders() {
   const phone = usePhoneColumns();
   const table = usePhoneTable();
   const customerName = useCustomerName();
+  const unread = useUnreadCases();
   const view = useListView(TABS, "open", SORTS, "newest");
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
   // server narrows it, by the filter the count was served with.
@@ -321,6 +323,7 @@ function Orders() {
                 render: (_, o) => (
                   <RowTitle
                     href={`/sales/orders/${o.case_id}`}
+                    unread={unread.has(o.case_id)}
                     title={
                       customerName(o.customer_code)
                         ? `${customerName(o.customer_code)} · ${o.lines} dòng`

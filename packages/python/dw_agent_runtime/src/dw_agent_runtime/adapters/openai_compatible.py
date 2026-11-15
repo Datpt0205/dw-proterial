@@ -16,6 +16,7 @@ import httpx
 from dw_agent_runtime.model.gateway import ModelUsage
 from dw_agent_runtime.model.profiles import ModelRoute, Provider
 from dw_agent_runtime.model.prompts import RenderedPrompt
+from dw_agent_runtime.model.scoring import TokenLogprob
 from dw_agent_runtime.model.streaming import StreamedAnswer
 from dw_kernel.errors import InfrastructureError
 from dw_kernel.resilience import CircuitBreaker
@@ -49,6 +50,40 @@ class OpenAICompatibleAdapter:
         *,
         max_output_tokens: int | None,
     ) -> tuple[dict[str, object], ModelUsage, str | None]:
+        parsed, usage, reasoning, _tokens = await self._complete(
+            prompt, json_schema, route, max_output_tokens=max_output_tokens, logprobs=False
+        )
+        return parsed, usage, reasoning
+
+    async def complete_json_scored(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+    ) -> tuple[dict[str, object], ModelUsage, str | None, tuple[TokenLogprob, ...] | None]:
+        """Implements `ScoringProviderAdapter`: `complete_json`, asking for each
+        token's log-probability where the route says its server returns them
+        (`ModelRoute.logprobs`). None when it was not asked, or the server sent
+        none: the answer is the same either way."""
+        return await self._complete(
+            prompt,
+            json_schema,
+            route,
+            max_output_tokens=max_output_tokens,
+            logprobs=route.logprobs,
+        )
+
+    async def _complete(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+        logprobs: bool,
+    ) -> tuple[dict[str, object], ModelUsage, str | None, tuple[TokenLogprob, ...] | None]:
         body = _build_request_body(
             prompt,
             json_schema,
@@ -56,6 +91,8 @@ class OpenAICompatibleAdapter:
             structured_mode=self.structured_mode,
             max_output_tokens=max_output_tokens,
         )
+        if logprobs:
+            body["logprobs"] = True
 
         if self.breaker is not None:
             self.breaker.before_call()
@@ -86,7 +123,8 @@ class OpenAICompatibleAdapter:
             self.breaker.record_success()
 
         try:
-            message = data["choices"][0]["message"]
+            choice = data["choices"][0]
+            message = choice["message"]
             parsed = _extract_json_object(str(message.get("content") or ""))
             usage_data = data.get("usage", {})
         except (KeyError, IndexError, ValueError, json.JSONDecodeError) as exc:
@@ -102,7 +140,8 @@ class OpenAICompatibleAdapter:
             input_tokens=int(usage_data.get("prompt_tokens", 0)),
             output_tokens=int(usage_data.get("completion_tokens", 0)),
         )
-        return parsed, usage, str(reasoning) if reasoning else None
+        tokens = _token_logprobs(choice, str(message.get("content") or "")) if logprobs else None
+        return parsed, usage, str(reasoning) if reasoning else None, tokens
 
     async def stream_json(
         self,
@@ -229,6 +268,28 @@ def _build_request_body(
         reasoning_family = route.model.startswith(("gpt-5", "o1", "o3", "o4"))
         body["max_completion_tokens" if reasoning_family else "max_tokens"] = max_output_tokens
     return body
+
+
+def _token_logprobs(choice: dict[str, object], content: str) -> tuple[TokenLogprob, ...] | None:
+    """The answer's tokens with their log-probabilities, as chat-completions
+    returns them (``choices[0].logprobs.content``, each ``{token, logprob}``),
+    or None when the server sent none, or sent tokens that do not spell the
+    answer: a score of other text would be a score of nothing."""
+    logprobs = choice.get("logprobs")
+    entries = logprobs.get("content") if isinstance(logprobs, dict) else None
+    if not isinstance(entries, list) or not entries:
+        return None
+    tokens: list[TokenLogprob] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        token, logprob = entry.get("token"), entry.get("logprob")
+        if not isinstance(token, str) or not isinstance(logprob, int | float):
+            return None
+        tokens.append(TokenLogprob(token, min(0.0, float(logprob))))
+    if "".join(t.text for t in tokens) != content:
+        return None
+    return tuple(tokens)
 
 
 def _extract_json_object(content: str) -> dict[str, object]:

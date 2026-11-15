@@ -50,7 +50,10 @@ const mail = (id: string, owner: string): WorkItem => ({
   owner,
 });
 let items: WorkItem[] = [];
+let unread: string[] = [];
 const api = {
+  // No case holds an answer the person has not seen unless a test says so (ticket 46).
+  assistantUnread: vi.fn(async (): Promise<string[]> => unread),
   myWork: vi.fn(async () => items),
   orders: vi.fn(async () => []),
   quotes: vi.fn(async () => []),
@@ -68,6 +71,7 @@ const desk = window.matchMedia;
 afterEach(() => {
   cleanup();
   items = [];
+  unread = [];
   scopes = ["sales.case.read"];
   window.matchMedia = desk;
 });
@@ -95,6 +99,26 @@ function page() {
     </UiProvider>,
   );
 }
+
+describe("a case with an answer not seen (ticket 46)", () => {
+  it("is marked in its row, from one read for the whole list", async () => {
+    const order: WorkItem = {
+      ...mail("ca5e0000-0000-4000-8000-000000000001", AN),
+      kind: "order",
+      status: "in_review",
+      action: "self_check",
+    };
+    items = [order, mail("m-1", AN)];
+    unread = [order.id, "m-1"];
+    page();
+    const marks = await screen.findAllByRole("img", {
+      name: "Có trả lời của DW1 chưa xem",
+    });
+    // The order's; a mail is no case, whatever id a read returns.
+    expect(marks).toHaveLength(1);
+    expect(api.assistantUnread).toHaveBeenCalledTimes(1);
+  }, 20_000);
+});
 
 describe("a routed mail on Việc cần làm (2026-10-27)", () => {
   it("names its owner as the inbox does: a person, or the team", async () => {

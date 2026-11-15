@@ -1,7 +1,19 @@
-"""Status questions answered from live data, in sessions (dw_sales ADR 0007).
+"""Status questions answered from live data (dw_sales ADR 0007), in one
+conversation per case and one general conversation per person (ticket 46).
 
-`POST /sales/assistant/ask` takes a question and, optionally, the session it
-continues. Per turn:
+A **case conversation** (`/sales/assistant/cases/{kind}/{case_id}/...`) is
+bound by code to the case the route names, checked on every use against what
+the caller may read (the case list's own gate and record visibility): a case
+they may not read is not found, and so is another person's conversation on
+it. Its answers rest on that case alone; a question about another case or
+about the person's work is pointed to the general conversation, never
+answered from what it asks for. The **general conversation**
+(`/sales/assistant/ask`) answers the person's work and offers a case it names
+as a link to that case's conversation, resolved among the cases the caller
+may read, never with the case's own data. No conversation is found by an id a
+client sends.
+
+Per turn:
 
 1. **The model reads the question** (`sales.question_intent@1.0.0`) into a
    `QuestionIntent`, shown the session's last turns and the case it is on as
@@ -16,12 +28,15 @@ continues. Per turn:
    the facts and it names no amount, and otherwise answers in its own
    sentence. Facts never hold an amount. As it streams, each word is held
    to that same check before it leaves (`dw_agent_runtime.model.streaming`).
-4. **The turn is kept** in the caller's own session (RLS by tenant,
-   workspace and user; `sales.prune_assistant_sessions()` after 30 days).
+4. **The turn is kept** in the caller's own conversation (RLS by tenant,
+   workspace and user; `sales.prune_assistant_sessions()` after 30 days),
+   which is opened with its first turn. Once the answer has reached the
+   person, the conversation is marked seen; one kept and never delivered is
+   the unread mark the case lists show.
 
-The session's focus, the case the conversation is on, is structured state:
-the kind and id code resolved, re-checked against what the caller may see on
-every turn.
+The general conversation's focus, the case it last linked, is structured
+state: the kind and id code resolved, re-checked against what the caller may
+see on every turn. A case conversation's focus is its case.
 """
 
 from __future__ import annotations
@@ -31,7 +46,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, aclosing
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Final, Literal, Protocol
 from zoneinfo import ZoneInfo
 
@@ -65,10 +80,13 @@ from dw_sales.application.quotes_service import QuoteQueries
 from dw_sales.application.views import OrderSummaryView, QuoteSummaryView
 from dw_sales.domain.assistant import (
     ACTION,
+    CASE_CATALOG,
     CATALOG,
+    ELSEWHERE,
     HISTORY_TURNS,
     ORDER_STATE,
     QUOTE_STATE,
+    CaseKey,
     CaseRef,
     QuestionIntent,
     QuestionKind,
@@ -94,6 +112,11 @@ _ANSWER_OUTPUT: Final = 500
 _LISTED: Final = 10
 _WORK_PAGE: Final = 50
 _TITLE_CHARS: Final = 80
+# The assistant page lists at most this many case conversations (ticket 46).
+RECENT_CASES: Final = 10
+# The unread marks one read returns; a person's conversations are pruned
+# after 30 days, so this is a ceiling, not a page.
+_UNREAD: Final = 200
 _RESOURCE: Final = "sales_assistant"
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -111,23 +134,34 @@ class ModelAnswer(BaseModel):
 
 
 class AssistantStorePort(Protocol):
-    """The caller's own sessions: the adapter binds tenant, workspace and
-    user, so another person's session is not found."""
+    """The caller's own conversations: the adapter binds tenant, workspace and
+    user, so another person's conversation is not found."""
 
-    async def session(self, session_id: uuid.UUID) -> Session | None: ...
+    async def conversation(self, case_id: uuid.UUID | None) -> Session | None:
+        """The caller's conversation on ``case_id``; None: their general one."""
+        ...
 
-    async def sessions(self, limit: int) -> Sequence[Session]:
-        """The caller's sessions, the most recently used first."""
+    async def recent(self, limit: int) -> Sequence[Session]:
+        """The caller's case conversations, the most recently talked about first."""
+        ...
+
+    async def unread(self, limit: int) -> Sequence[Session]:
+        """The caller's case conversations with an answer kept after they
+        last saw it."""
         ...
 
     async def turns(self, session_id: uuid.UUID) -> Sequence[Turn]:
-        """A session's turns, oldest first."""
+        """A conversation's turns, oldest first."""
         ...
 
     async def open(self, session: Session) -> None: ...
 
     async def add(self, turn: Turn) -> None:
-        """Keep ``turn`` and move its session's last use to its time."""
+        """Keep ``turn`` and move its conversation's last use to its time."""
+        ...
+
+    async def seen(self, session_id: uuid.UUID, at: datetime) -> None:
+        """The person has seen the conversation as of ``at``."""
         ...
 
 
@@ -159,23 +193,30 @@ class TurnView(BaseModel):
     answered_by: Literal["model", "code"]
 
 
-class SessionView(BaseModel):
+class ConversationView(BaseModel):
+    """A conversation as its person sees it; before its first turn, empty."""
+
     model_config = ConfigDict(frozen=True)
 
-    session_id: uuid.UUID
-    title: str
-    created_at: str
-    last_turn_at: str
-
-
-class SessionDetailView(SessionView):
+    # The case it is bound to, as the case's page calls it; None: the
+    # person's general conversation.
+    case: CaseRefView | None
     turns: list[TurnView]
+
+
+class CaseConversationView(BaseModel):
+    """A case talked about, on the assistant page's short list."""
+
+    model_config = ConfigDict(frozen=True)
+
+    case: CaseRefView
+    last_turn_at: str
+    unread: bool
 
 
 class AnswerView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    session_id: uuid.UUID
     turn: TurnView
 
 
@@ -195,12 +236,9 @@ def _turn_view(turn: Turn) -> TurnView:
     )
 
 
-def _session_view(session: Session) -> SessionView:
-    return SessionView(
-        session_id=session.session_id,
-        title=session.title,
-        created_at=session.created_at.isoformat(),
-        last_turn_at=session.last_turn_at.isoformat(),
+def _conversation_view(case: CaseRef | None, turns: Sequence[Turn]) -> ConversationView:
+    return ConversationView(
+        case=_ref_view(case) if case else None, turns=[_turn_view(t) for t in turns]
     )
 
 
@@ -322,59 +360,98 @@ class AssistantService:
     worker_id: str
     worker_version: str
 
-    async def sessions(self, context: AccessContext, limit: int = 30) -> list[SessionView]:
+    async def conversation(
+        self, context: AccessContext, case: CaseKey | None = None
+    ) -> ConversationView:
+        """The caller's conversation on ``case`` (their general one for None);
+        empty before its first turn, nothing to create. Reading a case's
+        conversation is seeing it: its unread mark goes."""
+        await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
+        bound = await self._bound(context, case) if case is not None else None
+        ref = bound.ref if bound is not None else None
+        async with self.store(context) as store:
+            session = _held(await store.conversation(ref.case_id if ref else None), context, ref)
+            if session is None:
+                return _conversation_view(ref, ())
+            turns = await store.turns(session.session_id)
+            if ref is not None and session.unread:
+                await store.seen(session.session_id, self.clock.now())
+        return _conversation_view(ref, turns)
+
+    async def recent(self, context: AccessContext) -> list[CaseConversationView]:
+        """The cases the caller talked about most recently, at most
+        `RECENT_CASES`, each still among the cases they may read and named
+        as its page names it now."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
         async with self.store(context) as store:
-            return [_session_view(s) for s in await store.sessions(limit)]
+            sessions = await store.recent(RECENT_CASES)
+        kinds = {s.case.kind for s in sessions if s.case is not None}
+        readable = await self._readable(context, kinds)
+        return [
+            CaseConversationView(
+                case=_ref_view(readable[s.case.case_id]),
+                last_turn_at=s.last_turn_at.isoformat(),
+                unread=s.unread,
+            )
+            for s in sessions
+            if s.case is not None and s.case.case_id in readable
+        ]
 
-    async def session(self, context: AccessContext, session_id: uuid.UUID) -> SessionDetailView:
-        await self.gate.require(
-            context, SalesScopes.CASE_READ, resource_type=_RESOURCE, resource_id=str(session_id)
-        )
+    async def unread(self, context: AccessContext) -> list[uuid.UUID]:
+        """The cases whose conversation holds an answer the caller has not
+        seen: one read of their own conversations, for the marks on the case
+        lists, which already hold only cases the caller may read."""
+        await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
         async with self.store(context) as store:
-            session = await self._own(store, context, session_id)
-            turns = await store.turns(session_id)
-        return SessionDetailView(
-            **_session_view(session).model_dump(), turns=[_turn_view(t) for t in turns]
-        )
+            sessions = await store.unread(_UNREAD)
+        return [s.case.case_id for s in sessions if s.case is not None]
 
     async def ask(
-        self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
+        self, context: AccessContext, question: str, case: CaseKey | None = None
     ) -> AnswerView:
-        """`stream`'s turn, whole: one path, so neither can drift from the other."""
-        async with aclosing(self.stream(context, question, session_id)) as events:
+        """`stream`'s turn, whole: one path, so neither can drift from the
+        other. Read to its end: the answer returned is the answer seen."""
+        view: AnswerView | None = None
+        async with aclosing(self.stream(context, question, case)) as events:
             async for event in events:
                 if isinstance(event, ChatDone):
-                    return event.view
-        raise AssertionError("a turn always ends in ChatDone")
+                    view = event.view
+        if view is None:
+            raise AssertionError("a turn always ends in ChatDone")
+        return view
 
     async def stream(
-        self, context: AccessContext, question: str, session_id: uuid.UUID | None = None
+        self, context: AccessContext, question: str, case: CaseKey | None = None
     ) -> AsyncGenerator[ChatEvent[AnswerView], None]:
-        """A turn as it happens. Whatever refuses the caller raises before the
-        first event, while the route can still answer with a status."""
+        """A turn as it happens. Whatever refuses the caller (the scope, a case
+        they may not read) raises before the first event, while the route can
+        still answer with a status."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
+        bound = await self._bound(context, case) if case is not None else None
+        ref = bound.ref if bound is not None else None
         now = self.clock.now()
+        async with self.store(context) as store:
+            session = _held(await store.conversation(ref.case_id if ref else None), context, ref)
+            earlier: Sequence[Turn] = await store.turns(session.session_id) if session else ()
         opened: Session | None = None
-        earlier: Sequence[Turn] = ()
-        if session_id is None:
+        if session is None:
             # Opened with its first turn, in one transaction.
             session = opened = Session(
                 session_id=self.ids.new_uuid(),
                 user_id=context.principal_id,
-                title=question.strip()[:_TITLE_CHARS],
+                title=(ref.label if ref else question.strip())[:_TITLE_CHARS],
                 created_at=now,
                 last_turn_at=now,
+                case=ref,
             )
-        else:
-            async with self.store(context) as store:
-                session = await self._own(store, context, session_id)
-                earlier = await store.turns(session_id)
-        focus = earlier[-1].focus if earlier else None
+        focus = ref or (earlier[-1].focus if earlier else None)
         yield ChatStep(key="read", title="Đang đọc câu hỏi")
         intent = await self._intent(context, question, earlier, focus)
         yield ChatStep(key="look", title="Đang tra trong phạm vi bạn được xem")
-        found = await self._find(context, intent, focus)
+        if bound is not None:
+            found = _in_case(intent, bound)
+        else:
+            found = await self._find(context, intent, focus)
         answer: str = found.sentence
         by: Literal["model", "code"] = "code"
         async with aclosing(self._worded(context, question, found)) as wording:
@@ -392,25 +469,51 @@ class AssistantService:
             reference=intent.reference if intent else None,
             answer=answer,
             cites=found.cites,
-            # A turn about nothing in particular keeps the conversation's case.
-            focus=found.focus or focus,
+            # A case conversation is always on its case; a general turn about
+            # nothing in particular keeps the case it last linked.
+            focus=ref or found.focus or focus,
             answered_by=by,
         )
         async with self.store(context) as store:
             if opened is not None:
                 await store.open(opened)
             await store.add(turn)
-        yield ChatDone(AnswerView(session_id=session.session_id, turn=_turn_view(turn)))
+        yield ChatDone(AnswerView(turn=_turn_view(turn)))
+        # Reached only once the answer has been handed on: a person who left
+        # before it arrived finds the case marked unread.
+        async with self.store(context) as store:
+            await store.seen(session.session_id, self.clock.now())
 
-    async def _own(
-        self, store: AssistantStorePort, context: AccessContext, session_id: uuid.UUID
-    ) -> Session:
-        session = await store.session(session_id)
-        # The adapter's RLS keeps another person's session out; this says so
-        # again where the service decides.
-        if session is None or session.user_id != context.principal_id:
-            raise NotFoundError("no such session", details={"session_id": str(session_id)})
-        return session
+    async def _bound(self, context: AccessContext, case: CaseKey) -> _Bound:
+        """The case a conversation is bound to, among the cases the caller may
+        read through the case list's own gate and record visibility; not
+        found otherwise, the same as a case that never existed."""
+        zone = await self.overview.time_zone(sales_scope(context))
+        if case.kind is CaseKind.ORDER:
+            for order in await self.orders.summaries(context):
+                if order.case_id == case.case_id:
+                    facts = order_facts(order, zone)
+                    return _Bound(_order_ref(order), order.po_no, facts, order_sentence(facts))
+        else:
+            for quote in await self.quotes.summaries(context):
+                if quote.case_id == case.case_id:
+                    facts = quote_facts(quote, zone)
+                    return _Bound(_quote_ref(quote), quote.rfq_no, facts, quote_sentence(facts))
+        raise NotFoundError(
+            "no such case", details={"kind": case.kind.value, "case_id": str(case.case_id)}
+        )
+
+    async def _readable(
+        self, context: AccessContext, kinds: set[CaseKind]
+    ) -> dict[uuid.UUID, CaseRef]:
+        """The cases of ``kinds`` the caller may read, by id, as their pages
+        name them."""
+        refs: dict[uuid.UUID, CaseRef] = {}
+        if CaseKind.ORDER in kinds:
+            refs |= {o.case_id: _order_ref(o) for o in await self.orders.summaries(context)}
+        if CaseKind.QUOTE in kinds:
+            refs |= {q.case_id: _quote_ref(q) for q in await self.quotes.summaries(context)}
+        return refs
 
     def _run(self, context: AccessContext, trace: str) -> Any:
         return caller_run(
@@ -472,6 +575,9 @@ class AssistantService:
     async def _order(
         self, context: AccessContext, intent: QuestionIntent, focus: CaseRef | None
     ) -> _Found:
+        """The order a general question names, as a link to its conversation
+        (ticket 46): found among the orders the caller may read, answered
+        with none of its data."""
         orders = await self.orders.summaries(context)
         if intent.reference is not None:
             matches = [o for o in orders if same_reference(intent.reference, o.po_no)]
@@ -482,10 +588,7 @@ class AssistantService:
         if not matches:
             return _not_found("PO", intent.reference)
         # A PO sent twice is two cases; the latest is the one in play.
-        order = max(matches, key=lambda o: o.received_at)
-        facts = order_facts(order, await self.overview.time_zone(sales_scope(context)))
-        ref = _order_ref(order)
-        return _Found(order_sentence(facts), facts, (ref,), ref)
+        return _linked(_order_ref(max(matches, key=lambda o: o.received_at)))
 
     async def _quote(
         self, context: AccessContext, intent: QuestionIntent, focus: CaseRef | None
@@ -499,10 +602,7 @@ class AssistantService:
             return _Found("Bạn hỏi yêu cầu báo giá nào? Hãy ghi số yêu cầu.")
         if not matches:
             return _not_found("yêu cầu báo giá", intent.reference)
-        quote = max(matches, key=lambda q: q.received_at)
-        facts = quote_facts(quote, await self.overview.time_zone(sales_scope(context)))
-        ref = _quote_ref(quote)
-        return _Found(quote_sentence(facts), facts, (ref,), ref)
+        return _linked(_quote_ref(max(matches, key=lambda q: q.received_at)))
 
     async def _work(self, context: AccessContext, kind: QuestionKind) -> _Found:
         today = local_day(self.clock.now(), await self.overview.time_zone(sales_scope(context)))
@@ -587,6 +687,51 @@ class AssistantService:
             ASSISTANT_ANSWER, inputs, ModelAnswer, run=run, max_output_tokens=_ANSWER_OUTPUT
         )
         yield answer.answer
+
+
+@dataclass(frozen=True)
+class _Bound:
+    """The case a conversation is bound to: what it is called, its number as
+    a person would write it, and code's facts and sentence about it."""
+
+    ref: CaseRef
+    number: str | None
+    facts: dict[str, Any]
+    sentence: str
+
+
+def _in_case(intent: QuestionIntent | None, bound: _Bound) -> _Found:
+    """A case conversation's answer: the bound case's facts, or a pointer
+    elsewhere. Nothing here looks another case up, whatever the question
+    names, so nothing of another case or customer can reach the answer."""
+    if intent is None:
+        return _Found(f"DW1 chưa hiểu câu hỏi lúc này. {CASE_CATALOG}")
+    match intent.kind:
+        case QuestionKind.OUT_OF_SCOPE:
+            return _Found(f"Câu này ngoài những gì DW1 trả lời ở đây. {CASE_CATALOG}")
+        case QuestionKind.MY_WORK | QuestionKind.OVERDUE:
+            return _Found(ELSEWHERE)
+        case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
+            if intent.reference is not None and not same_reference(intent.reference, bound.number):
+                return _Found(f"Cuộc trò chuyện này chỉ về {bound.ref.label}. {ELSEWHERE}")
+            return _Found(bound.sentence, bound.facts, (bound.ref,), bound.ref)
+
+
+def _held(session: Session | None, context: AccessContext, ref: CaseRef | None) -> Session | None:
+    """The store's RLS keeps another person's conversation out; this says so
+    again where the service decides, so a policy dropped by mistake still
+    shows nobody another person's turns."""
+    if session is None:
+        return None
+    on = session.case.case_id if session.case is not None else None
+    if session.user_id != context.principal_id or on != (ref.case_id if ref else None):
+        raise NotFoundError("no such conversation")
+    return session
+
+
+def _linked(ref: CaseRef) -> _Found:
+    """A case the general conversation names: a link, none of its data."""
+    return _Found(f"{ref.label}: hỏi trong cuộc trò chuyện của hồ sơ này.", None, (ref,), ref)
 
 
 def _not_found(what: str, reference: str | None) -> _Found:

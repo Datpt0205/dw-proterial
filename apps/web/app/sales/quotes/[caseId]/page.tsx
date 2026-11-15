@@ -64,6 +64,7 @@ import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
+import { WithCaseChat } from "../../_components/case-chat";
 import {
   SourceDrawer,
   type SourceTarget,
@@ -78,9 +79,13 @@ import { PricingForm } from "./pricing";
 import { SendPanel, SIGNABLE } from "./send-panel";
 
 export default function QuotePage() {
+  const { caseId } = useParams<{ caseId: string }>();
   return (
     <ScopeGate scope={SCOPE.caseRead}>
-      <QuoteDetail />
+      {/* The case is its conversation (ticket 46). */}
+      <WithCaseChat onCase={{ kind: "quote", caseId }}>
+        <QuoteDetail />
+      </WithCaseChat>
     </ScopeGate>
   );
 }

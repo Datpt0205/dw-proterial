@@ -82,6 +82,7 @@ export function order(overrides: Partial<Order> = {}): Order {
       confirmed_by: null,
       confirmed_at: null,
       hand_entered: false,
+      applied_by_dw: false,
     },
     basis: {
       convert_prv_code: "HW-1001",

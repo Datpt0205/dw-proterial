@@ -1,6 +1,6 @@
 # 46 — One conversation per case, on the case page; one general one per person
 
-Status: ready-for-agent (after 43–44; the Qdrant review of 2026-11-17 first)
+Status: in progress (slice built 2026-11-16; left: T0 buttons from the chat, Playwright at 390 px; see "Done")
 Blocked by: 40 (skills), 44 (tiers)
 Category: enhancement
 
@@ -43,3 +43,59 @@ page, and its focus case is state inside a session.
 3. A question in the general conversation about a case links to it and
    reads it with the caller's own permissions.
 4. Another person's conversation on the same case is not found.
+
+## Done
+
+Slice built 2026-11-16 (recorded in dw_sales ADR 0007, addendum of
+2026-11-16; glossary "Assistant session").
+
+- **Store, one owner** (`sales.assistant_sessions`, migration `bfe2d1aeadcd`
+  from 44's `efc46a50e75e`): `case_kind`/`case_id` (both or neither,
+  CHECKed), `last_read_at` (`dw_app` may UPDATE it and `last_turn_at` only);
+  partial unique indexes `uq_assistant_sessions_one_per_case` and
+  `uq_assistant_sessions_one_general`; each person's older free sessions
+  deleted, their latest kept as the general one. RLS, retention (30 days)
+  and the turns are unchanged.
+- **Service** (`application/assistant.py`): `CaseKey` from the route;
+  `_bound` finds the case among the order or quote list's own reads (gate and
+  record visibility) on every read and turn, else not found before the first
+  event; a case conversation answers from its case's facts only and points
+  another number or the person's work to the general one (`ELSEWHERE`); the
+  general conversation answers a named case with a link only (`_linked`);
+  `recent` (ten, re-checked as readable), `unread` (one indexed read); seen
+  after the stream's last frame and on reading the case's conversation;
+  `_held` refuses a store's row of another person or case.
+- **Routes**: `GET /assistant/conversation`, `POST /assistant/ask[/stream]`
+  (general), `GET /assistant/cases/{kind}/{case_id}`,
+  `POST /assistant/cases/{kind}/{case_id}/ask[/stream]`,
+  `GET /assistant/cases` (recent), `GET /assistant/unread`. The session
+  routes and `session_id` are gone.
+- **Web**: `_components/assistant-conversation.tsx` (the one chat, on
+  `AssistantChat`), `_components/case-chat.tsx` (`WithCaseChat` on the order
+  and quote case pages: open beside the case from `lg`, a button and a bottom
+  sheet below, read only once opened), the assistant page (general
+  conversation, ten recent cases with the unread mark), the mark on
+  `RowTitle` in the order and quote lists and "Việc cần làm"
+  (`_lib/unread.ts`, one read per list).
+- **Tests**: `test_assistant.py` (acceptance 1 by a pasted instruction a
+  model obeys and by a wording naming another PO; 2: an empty conversation
+  shown, nothing created; 3: the link, and a restricted caller told not
+  found; 4: another person sees none of it; another tenant, a restricted
+  caller, a missing case and a wrong kind are not found before the first
+  event; unread until read), `test_assistant_sessions_db.py` (uniqueness,
+  CHECK, unread query, `case_id` never updated, prune), the eval graders
+  (`sales_assistant@1.0.0` unchanged as data, its injection grader now words
+  in the PO's own conversation), web `assistant-page`, `case-chat`,
+  `my-work-owner` (the mark).
+
+Left:
+
+- Starting a T0 action from the chat through the case's own buttons is not
+  built: the chat starts nothing (the buttons sit beside it on the page).
+- The answers stay ADR 0007's catalog for the bound case (status, dates,
+  flags); "explain the thread / the PO as read" through ticket 31's tools is
+  not wired (those steps are off on the plant's model).
+- Playwright at desktop and 390 px was not run (no local stack up); the
+  layouts are held by `case-chat.test.tsx` at 1280 and 390 px.
+- The unread mark only shows when a turn is kept and its answer never
+  delivered; it matters once an answer can arrive while the person is away.

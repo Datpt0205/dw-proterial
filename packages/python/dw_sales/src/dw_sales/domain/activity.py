@@ -39,7 +39,7 @@ from typing import Final, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from dw_sales.domain.description_reading import DescriptionReading
+from dw_sales.domain.description_reading import DescriptionReading, GateRoute
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import MappingStatus, OrderCase
@@ -132,9 +132,14 @@ class StepOutcome(BaseModel):
     model: str | None = Field(min_length=1, max_length=200)
     calls: int = Field(ge=0, le=1000)
     duration_ms: int | None = Field(ge=0)
+    # What code's gate did with the item's result (ticket 44): a code, never
+    # a score. None for an item no gate saw.
+    gate: GateRoute | None = None
 
     @model_validator(mode="after")
     def _says_what_happened(self) -> Self:
+        if self.gate is not None and self.result != "accepted":
+            raise ValueError("only a result code took is gated")
         if self.case_id is not None and self.lane is None:
             raise ValueError("a row on a case names the case's kind")
         if self.automatic and (self.result != "accepted" or self.reason_code is not None):
@@ -172,6 +177,7 @@ class _Stamped:
     case_id: uuid.UUID | None = None
     line_no: int | None = None
     refusals: Mapping[str, int] = field(default_factory=dict)
+    gate: GateRoute | None = None
 
 
 def _code(value: str) -> str:
@@ -213,6 +219,7 @@ def _reading_row(
         lane=lane,
         case_id=case_id,
         line_no=line_no,
+        gate=reading.gate,
     )
 
 
@@ -500,6 +507,7 @@ def _rows(
                 model=timing.model if timing is not None else None,
                 calls=timing.calls if first and timing is not None else 0,
                 duration_ms=timing.duration_ms if first and timing is not None else None,
+                gate=item.gate,
             )
         )
     return tuple(rows)

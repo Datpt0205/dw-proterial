@@ -24,6 +24,7 @@ from typing import Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.scoring import Scored
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +114,25 @@ class InterpretationPort(Protocol):
         run: RunContext,
         max_output_tokens: int,
     ) -> OutputT: ...
+
+
+@runtime_checkable
+class ScoredInterpretationPort(Protocol):
+    """`InterpretationPort.interpret`, with how sure the model was of each
+    value it wrote (`dw_agent_runtime.model.scoring`): from the call's token
+    probabilities where the route's server returns them, None otherwise.
+    A step that may apply its result by itself asks this (dw_sales ADR 0015);
+    no confidence means nothing applies itself."""
+
+    async def interpret_scored[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> Scored[OutputT]: ...
 
 
 @runtime_checkable

@@ -70,6 +70,11 @@ export type SalesOrderExample = SalesSchemas["SalesOrderExampleView"];
 export type PendingDecision = SalesSchemas["PendingDecisionView"];
 /** A message's processing job (ticket 25): "DW xử lý" queues it, the worker runs it. */
 export type ProcessingJob = SalesSchemas["ProcessingJobView"];
+/** The case a conversation is bound to, as its page's route names it (ticket 46). */
+export interface AssistantCase {
+  kind: "order" | "quote";
+  caseId: string;
+}
 /**
  * A case list narrowed to the cases a count on the activity page stands for
  * (`ActivityFilter`): the server checks it whole and refuses (422) one that
@@ -191,6 +196,13 @@ export class SalesApi {
   activityLabels() {
     return this.get<"/api/v1/sales/activity/labels">(
       "/api/v1/sales/activity/labels",
+    );
+  }
+
+  /** Per model step, what applied itself and at what measured error (ticket 44). */
+  activityAutonomy() {
+    return this.get<"/api/v1/sales/activity/autonomy">(
+      "/api/v1/sales/activity/autonomy",
     );
   }
 
@@ -441,6 +453,20 @@ export class SalesApi {
     );
   }
 
+  /** "Hoàn tác": the PRV code DW applied by itself, undone (ticket 44). */
+  undoMapping(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/undo">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/undo">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/mapping/undo`,
+      body,
+      key,
+    );
+  }
+
   recordPcDate(
     caseId: string,
     lineNo: number,
@@ -623,34 +649,50 @@ export class SalesApi {
     );
   }
 
-  /** A status question, in a session or opening one, as it happens: what DW1
-   * is doing, then its answer word by word, each word checked before it
-   * leaves the server. */
+  /** A status question, as it happens: what DW1 is doing, then its answer
+   * word by word, each word checked before it leaves the server. With
+   * `onCase`, in the caller's conversation on that case (ticket 46);
+   * without, in their general one. */
   assistantStream(
     question: string,
-    sessionId: string | null,
+    onCase: AssistantCase | null,
     idempotencyKey: string,
     onEvent: (event: ChatStreamEvent) => void,
     signal?: AbortSignal,
   ) {
+    const path = onCase
+      ? `/api/v1/sales/assistant/cases/${onCase.kind}/${enc(onCase.caseId)}/ask/stream`
+      : "/api/v1/sales/assistant/ask/stream";
     return this.client.chatStream<SalesSchemas["AnswerView"]>(
-      "/api/v1/sales/assistant/ask/stream",
-      { body: { question, session_id: sessionId }, idempotencyKey, signal },
+      path,
+      { body: { question }, idempotencyKey, signal },
       onEvent,
     );
   }
 
-  /** The caller's own assistant sessions, the most recently used first. */
-  assistantSessions() {
-    return this.get<"/api/v1/sales/assistant/sessions">(
-      "/api/v1/sales/assistant/sessions",
+  /** The caller's conversation on a case, or their general one; reading a
+   * case's conversation clears its unread mark. */
+  assistantConversation(onCase: AssistantCase | null) {
+    return onCase
+      ? this.get<"/api/v1/sales/assistant/cases/{kind}/{case_id}">(
+          `/api/v1/sales/assistant/cases/${onCase.kind}/${enc(onCase.caseId)}`,
+        )
+      : this.get<"/api/v1/sales/assistant/conversation">(
+          "/api/v1/sales/assistant/conversation",
+        );
+  }
+
+  /** The cases the caller talked about most recently (at most ten). */
+  assistantCases() {
+    return this.get<"/api/v1/sales/assistant/cases">(
+      "/api/v1/sales/assistant/cases",
     );
   }
 
-  /** One of the caller's sessions with its turns, oldest first. */
-  assistantSession(sessionId: string) {
-    return this.get<"/api/v1/sales/assistant/sessions/{session_id}">(
-      `/api/v1/sales/assistant/sessions/${enc(sessionId)}`,
+  /** The cases whose conversation holds an answer the caller has not seen. */
+  assistantUnread() {
+    return this.get<"/api/v1/sales/assistant/unread">(
+      "/api/v1/sales/assistant/unread",
     );
   }
 

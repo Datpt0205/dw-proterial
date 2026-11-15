@@ -1,6 +1,8 @@
-"""The status assistant's sessions (migration e0940c90ce04, dw_sales ADR 0007)
-against a real database, as `dw_app`: a person's own under RLS, a turn only in
-its person's session, appended, and gone thirty days after the last turn."""
+"""The status assistant's conversations (migrations e0940c90ce04 and
+bfe2d1aeadcd; dw_sales ADR 0007, ticket 46) against a real database, as
+`dw_app`: a person's own under RLS, one per case and one general per person,
+found by the case, a turn only in its person's conversation, appended, the
+unread mark, and gone thirty days after the last turn."""
 
 from __future__ import annotations
 
@@ -54,8 +56,13 @@ def _context(scope: SalesScope, user: uuid.UUID) -> AccessContext:
     )
 
 
-def _session(user: uuid.UUID, at: datetime = T0) -> Session:
-    return Session(uuid.uuid4(), user, "PO NRV-PO-26-0457?", at, at)
+REF = CaseRef(CaseKind.ORDER, CASE, "PO NRV-PO-26-0457")
+
+
+def _session(user: uuid.UUID, at: datetime = T0, case: CaseRef | None = REF) -> Session:
+    """A conversation on ``case``; None: the person's general one."""
+    title = case.label if case else "Tôi còn việc gì?"
+    return Session(uuid.uuid4(), user, title, at, at, case=case)
 
 
 def _turn(session: Session, seq: int = 1, at: datetime = T0) -> Turn:
@@ -84,16 +91,78 @@ async def test_a_session_is_kept_whole_and_read_back_by_its_person_alone(
         await store.open(session)
         await store.add(_turn(session))
     async with stores(_context(world.alpha, an)) as store:
-        assert (await store.session(session.session_id)) is not None
+        found = await store.conversation(CASE)
+        assert found is not None and (found.session_id, found.case) == (session.session_id, REF)
+        assert await store.conversation(None) is None
         (turn,) = await store.turns(session.session_id)
         assert turn.focus == CaseRef(CaseKind.ORDER, CASE, "PO NRV-PO-26-0457")
         assert turn.cites == (turn.focus,) and turn.kind is QuestionKind.ORDER_STATUS
     # Another person of the same workspace, another workspace, another tenant.
     for scope, user in ((world.alpha, binh), (world.alpha_other, an), (world.beta, other)):
         async with stores(_context(scope, user)) as store:
-            assert await store.session(session.session_id) is None
+            assert await store.conversation(CASE) is None
             assert await store.turns(session.session_id) == []
-            assert await store.sessions(10) == []
+            assert await store.recent(10) == [] and await store.unread(10) == []
+
+
+async def test_one_conversation_per_person_and_case_and_one_general(
+    world: World, migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    an, binh = await _person(migrator), await _person(migrator)
+    stores = SqlAssistantStoreFactory(app_sessions)
+    async with stores(_context(world.alpha, an)) as store:
+        await store.open(_session(an))
+        await store.open(_session(an, case=None))
+    # Another person opens their own on the same case.
+    async with stores(_context(world.alpha, binh)) as store:
+        await store.open(_session(binh))
+    for case in (REF, None):
+        with pytest.raises(DBAPIError, match="uq_assistant_sessions_one_"):
+            async with stores(_context(world.alpha, an)) as store:
+                await store.open(_session(an, case=case))
+    # Both or neither of the case's kind and id.
+    with pytest.raises(DBAPIError, match="ck_assistant_sessions_case"):
+        async with tenant_session(
+            app_sessions, TenantScope.from_access_context(_context(world.alpha, an))
+        ) as db:
+            scope = world.alpha
+            await db.execute(
+                sa.text(
+                    "INSERT INTO sales.assistant_sessions (id, tenant_id, workspace_id, user_id,"
+                    " title, created_at, last_turn_at, case_kind)"
+                    " VALUES (:i, :t, :w, :u, 'x', now(), now(), 'order')"
+                ),
+                {
+                    "i": uuid.uuid4(),
+                    "t": scope.tenant_id.value,
+                    "w": scope.workspace_id.value,
+                    "u": an,
+                },
+            )
+
+
+async def test_an_answer_after_the_person_last_saw_it_is_unread_until_seen(
+    world: World, migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    an = await _person(migrator)
+    stores = SqlAssistantStoreFactory(app_sessions)
+    other = CaseRef(CaseKind.QUOTE, uuid.UUID(int=0xC1), "Yêu cầu báo giá X")
+    on_case, on_other, general = _session(an), _session(an, case=other), _session(an, case=None)
+    async with stores(_context(world.alpha, an)) as store:
+        for session in (on_case, on_other, general):
+            await store.open(session)
+            await store.add(_turn(session))
+        await store.seen(on_other.session_id, T0 + timedelta(seconds=1))
+        await store.seen(general.session_id, T0 - timedelta(seconds=1))
+    async with stores(_context(world.alpha, an)) as store:
+        # The general conversation carries no mark and is no case talked about.
+        assert [s.case for s in await store.unread(10)] == [REF]
+        assert {s.case for s in await store.recent(10)} == {REF, other}
+        await store.seen(on_case.session_id, T0 + timedelta(seconds=1))
+    async with stores(_context(world.alpha, an)) as store:
+        assert await store.unread(10) == []
+        await store.add(_turn(on_case, seq=2, at=T0 + timedelta(minutes=1)))
+        assert [s.case for s in await store.unread(10)] == [REF]
 
 
 async def test_the_policy_alone_keeps_another_persons_rows_out(
@@ -141,6 +210,8 @@ async def test_a_turn_never_lands_in_another_persons_session(
         "UPDATE sales.assistant_turns SET answer = 'đã sửa'",
         "DELETE FROM sales.assistant_sessions",
         "UPDATE sales.assistant_sessions SET title = 'đã sửa'",
+        # The case a conversation is bound to never moves.
+        "UPDATE sales.assistant_sessions SET case_id = gen_random_uuid()",
     ],
 )
 async def test_a_turn_is_never_rewritten_and_a_session_only_moves_its_last_use(
@@ -166,14 +237,16 @@ async def test_a_session_goes_thirty_days_after_its_last_turn_with_its_turns(
     an = await _person(migrator)
     stores = SqlAssistantStoreFactory(app_sessions)
     now = datetime.now(UTC)
-    old, recent = _session(an, now - timedelta(days=31)), _session(an, now - timedelta(days=29))
+    other = CaseRef(CaseKind.ORDER, uuid.UUID(int=0xC2), "PO VLX-PO-2609-0118")
+    old = _session(an, now - timedelta(days=31))
+    recent = _session(an, now - timedelta(days=29), case=other)
     async with stores(_context(world.alpha, an)) as store:
         for session in (old, recent):
             await store.open(session)
             await store.add(_turn(session, at=session.last_turn_at))
     await SqlAssistantRetention(app_sessions).prune()
     async with stores(_context(world.alpha, an)) as store:
-        assert [s.session_id for s in await store.sessions(10)] == [recent.session_id]
+        assert [s.session_id for s in await store.recent(10)] == [recent.session_id]
         assert await store.turns(old.session_id) == []
     async with migrator.connect() as conn:
         left = await conn.execute(

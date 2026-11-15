@@ -49,6 +49,13 @@ class ModelRoute(BaseModel):
     # is worth paying for only where a human watches the answer being written.
     reasoning_summary: Literal["auto", "concise", "detailed"] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    # Structured routes on the chat-completions dialect only: the route's
+    # server returns each token's log-probability when asked (`logprobs:
+    # true`), so a step can score its answer in the same call
+    # (`dw_agent_runtime.model.scoring`, dw_sales ADR 0015). Off unless the
+    # server was measured to return them: a server that ignores the key gives
+    # no score, and then nothing a step read applies itself.
+    logprobs: bool = False
     # Embedding routes only: the vector width to build the index at. Required
     # there because it decides the Qdrant collection's shape, and a shape is not
     # something to discover at runtime from whatever the provider returned.

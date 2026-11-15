@@ -1148,6 +1148,35 @@
   },
   "sales_order_rules": {
     "$defs": {
+      "Autonomy": {
+        "additionalProperties": false,
+        "description": "How much error a step that applies its result by itself may make\n(dw_sales ADR 0015, decided 2026-11-16; ticket 44). The tier of each step\nis code's (`dw_sales.domain.autonomy.STEP_TIERS`); these are the\ntenant's numbers for each tier that may apply itself. A tenant may only\ntighten them: the upper bounds are the platform's defaults, so loosening\none is a platform change.",
+        "properties": {
+          "applies_itself_error": {
+            "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 0.05,
+            "title": "Applies Itself Error",
+            "type": "number"
+          },
+          "audit_share": {
+            "default": 0.03,
+            "maximum": 1.0,
+            "minimum": 0.03,
+            "title": "Audit Share",
+            "type": "number"
+          },
+          "hand_off_error": {
+            "default": 0.02,
+            "exclusiveMinimum": 0.0,
+            "maximum": 0.02,
+            "title": "Hand Off Error",
+            "type": "number"
+          }
+        },
+        "title": "Autonomy",
+        "type": "object"
+      },
       "ExportControlRule": {
         "additionalProperties": false,
         "properties": {
@@ -1445,6 +1474,9 @@
     "additionalProperties": false,
     "description": "`sales_order_rules`: the fine print of the order checks, versioned.\n\nEvery finding code has a severity, and a policy that leaves one out is\nrefused: a code with no severity would be a check whose result blocks\nnothing, which reads as a safeguard and is not one.",
     "properties": {
+      "autonomy": {
+        "$ref": "#/$defs/Autonomy"
+      },
       "cross_check_required": {
         "title": "Cross Check Required",
         "type": "boolean"

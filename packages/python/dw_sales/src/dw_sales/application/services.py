@@ -25,6 +25,7 @@ from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
+from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.catalog_imports import (
     CatalogDecisions,
@@ -248,6 +249,9 @@ def assemble(
         release_manifest_ref,
         SalesSpans(telemetry),
         sources,
+        # What code's gate let apply itself (ticket 44): nothing unless the
+        # intake's gate stamps a line so.
+        auto_apply=AutoApply(intake, clock, ids),
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
     orders = OrderQueries(uow, gate, pending, step_activity, book, threads, directory)

@@ -69,8 +69,9 @@ _PARAMS = {
     "snapshot_id": str(uuid.uuid4()),
     # A rule version drafted from a company's template ("Tạo từ tệp mẫu").
     "draft_id": str(uuid.uuid4()),
-    # The status assistant's sessions (dw_sales ADR 0007): never a support route.
-    "session_id": str(uuid.uuid4()),
+    # The status assistant's conversation on a case (dw_sales ADR 0007, ticket
+    # 46): never a support route.
+    "kind": "order",
     # Export control, WIV-03-032 (2026-10-28).
     "customer_code": "VLX",
     "step": "noc",
