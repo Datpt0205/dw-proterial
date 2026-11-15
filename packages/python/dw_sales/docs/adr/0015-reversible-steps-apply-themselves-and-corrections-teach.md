@@ -83,11 +83,41 @@ prompt, skill or example set turns automatic application off until
 re-measured. The missing data today is the model's proposal stored beside
 what the person kept: ticket 43 starts there.
 
+## Decided 2026-11-16 (Đạt: "cứ làm theo đề xuất")
+
+With his conditions: DW must take work off people, never add errors for
+people to catch; follow the state of the art; let the model improve itself
+from real runs where it can; keep latency.
+
+1. **α per tier** as the note suggests, tenant configuration with these
+   platform defaults: T0 5%, T1 2%, T2 never automatic. A tenant may only
+   tighten them on the head's screen; loosening is a platform change.
+2. **Tiers**: T0 reading, classifying, linking a mail to a case, unsent
+   drafts, reminders; T1 an internal hand-off (PC, QA, Design) or a move into
+   someone's queue; T2 anything sent, any Bravo write, prices, dates given to
+   a customer, approvals.
+3. **Audits**: a 3% blind sample of what applied itself (more while a step
+   is new), audited by the PIC who owns the case; an audited error rate above
+   α stops the step.
+4. **Shadow mode** until a step has the labelled cases its α needs (59 at
+   5%, 149 at 2%): it decides and logs, applies nothing.
+5. **The skill is chosen by one constrained, scored call** (a JSON-schema
+   enum of the tenant's skills, with the token probabilities as its score),
+   not by the agent's free choice: amends ADR 0014 decision 1. Tools stay
+   for the facts a reading lacks.
+6. **Self-improvement from real runs**: every confirmation and correction
+   is a labelled case (ticket 43); similar corrected cases are retrieved as
+   examples; an offline optimiser (GEPA/MIPROv2 class) proposes new
+   prompt/skill versions weekly, replayed on every labelled case and approved
+   by the head; thresholds are re-set nightly from the labelled cases.
+7. **Latency**: nothing slow sits on the path a mail takes. Retrieval of
+   examples is one vector search, top few, in the tenant's own collection;
+   extra samples are drawn only for a borderline result (adaptive), in
+   parallel (Strata serves concurrent requests, measured); optimisation and
+   threshold setting run in the worker, off the request path. A step whose
+   p95 grows beyond its budget is reported like a failed bar.
+
 ## Open
 
-- Đạt: α per tier (the note suggests 5% for T0, 1–2% for T1, T2 never);
-  which effects are T0 and which T1; the audit share (2–5% blind sample)
-  and who audits; shadow mode until each step has its labelled cases.
-- Whether the skill is chosen by one constrained, scored call rather than
-  the agent's free choice (amends ADR 0014; ticket 40 measured the free
-  choice looping on Strata: 0.183).
+- Decided above. Left: the latency budget per step (proposed: p95 at most
+  twice its measured one-call p95 on Strata).
