@@ -200,6 +200,33 @@ async def test_a_memory_vector_purge_that_fails_is_reported_not_completed() -> N
     assert "completed" not in statuses
 
 
+async def test_the_examples_index_is_purged_with_the_tenant() -> None:
+    """Sales ticket 43: a vector per decided line, embedded from a customer's
+    description, leaves with its tenant; a purge that fails is no completion."""
+    examples = _FakeVectorIndex()
+    store = _FakeStore(claimed=[TENANT])
+    lane = replace(
+        _lane(store, _FakeBucket("a"), _FakeBucket("e"), _FakeBucket("f")),
+        example_vectors=examples,
+    )
+    await lane.run(TENANT)
+    assert examples.calls == [TENANT]
+
+    @dataclass
+    class _DownExamples:
+        async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None:
+            raise RuntimeError("qdrant xuống")
+
+    failing = _FakeStore(claimed=[TENANT])
+    down = replace(
+        _lane(failing, _FakeBucket("a"), _FakeBucket("e"), _FakeBucket("f")),
+        example_vectors=_DownExamples(),
+    )
+    await build_offboarding_consumer(down)()
+    statuses = [c[2] for c in failing.calls if c[0] == "mark_status"]
+    assert statuses[-1] == "failed" and "completed" not in statuses
+
+
 def test_json_default_handles_every_type_a_row_can_hold() -> None:
     assert _json_default(uuid.UUID(int=1)) == str(uuid.UUID(int=1))
     assert _json_default(datetime(2026, 1, 1, tzinfo=UTC)) == "2026-01-01T00:00:00+00:00"

@@ -18980,6 +18980,75 @@
         "title": "SkillProposal",
         "type": "object"
       },
+      "SkillReplay": {
+        "additionalProperties": false,
+        "description": "What one replay of a proposed version found, stored beside it\n(`skill_replay`).",
+        "properties": {
+          "messages": {
+            "minimum": 0.0,
+            "title": "Messages",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "replayed",
+              "incomplete"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "replayed_at": {
+            "format": "date-time",
+            "title": "Replayed At",
+            "type": "string"
+          },
+          "right_with": {
+            "minimum": 0.0,
+            "title": "Right With",
+            "type": "integer"
+          },
+          "right_without": {
+            "minimum": 0.0,
+            "title": "Right Without",
+            "type": "integer"
+          },
+          "security_failed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Security Failed",
+            "type": "array"
+          },
+          "source": {
+            "const": "platform_examples",
+            "title": "Source",
+            "type": "string"
+          },
+          "unanswered": {
+            "minimum": 0.0,
+            "title": "Unanswered",
+            "type": "integer"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "replayed_at",
+          "source",
+          "outcome",
+          "messages",
+          "right_with",
+          "right_without",
+          "unanswered"
+        ],
+        "title": "SkillReplay",
+        "type": "object"
+      },
       "SkillVersionView": {
         "description": "A tenant's version of a skill, as the skills list shows it.",
         "properties": {
@@ -19027,6 +19096,16 @@
           "ref": {
             "title": "Ref",
             "type": "string"
+          },
+          "replay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillReplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "status": {
             "enum": [

@@ -80,7 +80,12 @@ from dw_sales.application.salesorder_learning import (
 )
 from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
-from dw_sales.application.skills import SkillBook, SkillDecisions, SkillsService
+from dw_sales.application.skills import (
+    SkillBook,
+    SkillDecisions,
+    SkillReplayStorePort,
+    SkillsService,
+)
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.thread_summaries import ThreadSummaries
@@ -188,8 +193,10 @@ def assemble(
     files: SourceViewPort,
     source_cache: SourceCachePort,
     book: TenantRuleBook,
-    # DW1's skills, the platform's and the tenant's versions (ticket 40).
+    # DW1's skills, the platform's and the tenant's versions (ticket 40),
+    # and the worker's replays of proposed versions.
     skills: SkillBook,
+    skill_replays: SkillReplayStorePort,
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
@@ -376,7 +383,7 @@ def assemble(
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
-        skills=SkillsService(uow, gate, skills, clock, ids, directory),
+        skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays),
         today=TodayService(gate, clock, notices, reminder_marks, book),
         gate=gate,
     )
@@ -387,5 +394,5 @@ def assemble(
         layout_decisions=LayoutDecisions(uow, clock),
         rule_decisions=RuleDecisions(uow, book, readiness),
         catalog_decisions=CatalogDecisions(catalog_uow),
-        skill_decisions=SkillDecisions(uow, skills),
+        skill_decisions=SkillDecisions(uow, skills, skill_replays),
     )

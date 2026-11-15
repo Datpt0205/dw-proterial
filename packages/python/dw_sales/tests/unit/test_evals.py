@@ -27,6 +27,9 @@ from dw_sales.adapters.readers import excel
 from dw_sales.application import access, order_artifacts
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals import GRADERS
+from dw_sales.evals.examples import graders as example_graders
+
+from .test_examples import FakeIndex
 
 pytestmark = pytest.mark.unit
 
@@ -61,7 +64,8 @@ def test_every_sales_grader_is_run_by_a_sales_dataset() -> None:
     used: set[str] = set()
     for dataset in (DATASET, *MODEL_STEPS):
         used |= {c.grader for c in load_dataset(dataset).cases}
-    assert used == set(GRADERS)
+    # Ticket 43's run over an examples index the eval root composes.
+    assert used == set(GRADERS) | set(example_graders(FakeIndex))
 
 
 def test_every_grader_is_keyed_under_the_context() -> None:

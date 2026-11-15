@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | + SSE chat, warm 11-06      |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps     |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X    |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 07,17-22,24-32,35,36,38,40½,43½,44-48 |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 07,17-22,24-32,35,36,38,40,43-48 |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | No Zalo at Proterial 11-11  |
 | Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | rebuild spec 11-13 (T2–T24) |
 

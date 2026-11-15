@@ -169,6 +169,7 @@ function Rules() {
       <PageHeader
         breadcrumb={salesCrumbs("Quy tắc")}
         title="Quy tắc của công ty"
+        actions={<Link href="/sales/rules/skills">Kỹ năng của DW1</Link>}
         subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? " · Bản bạn sửa được áp dụng ngay" : ""}`}
         help={
           appliesAtOnce

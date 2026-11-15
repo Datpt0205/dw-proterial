@@ -38,7 +38,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_agent_runtime.adapters.agent_turn import AgentTurnKit
 from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
-from dw_agent_runtime.adapters.skills import TurnSkills
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -71,6 +70,7 @@ from dw_sales.adapters.persistence.catalog import (
 )
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseReader
+from dw_sales.adapters.persistence.labelled_examples import SqlDescriptionExamples
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
@@ -82,6 +82,7 @@ from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotati
 from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.adapters.persistence.reminder_marks import SqlReminderMarkStoreFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
+from dw_sales.adapters.persistence.skill_replays import SqlSkillReplays
 from dw_sales.adapters.persistence.step_thresholds import SqlStepThresholds
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
@@ -91,6 +92,7 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
+from dw_sales.adapters.skill_examples import FixtureReplayExamples
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
@@ -98,6 +100,7 @@ from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.examples import ExampleFinder, ExampleIndexLane, ExampleIndexPort
 from dw_sales.application.followups import BriefWriterPort, FollowupLane, PushNoticePort
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
@@ -125,6 +128,12 @@ from dw_sales.application.processing import (
     ProcessingQueuePort,
     RequesterAccessPort,
 )
+from dw_sales.application.prompt_optimiser import PromptOptimiser, SecurityCase
+from dw_sales.application.prompt_versions import (
+    PromptDecisions,
+    PromptSettlement,
+    prompt_book,
+)
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
@@ -133,6 +142,8 @@ from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.salesorder_learning import SalesOrderLearning
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.skill_pick import PickModelPort, SkillPicker
+from dw_sales.application.skill_replay import SkillReplayer
 from dw_sales.application.skills import (
     READ_SKILL,
     READ_SKILL_VERSION,
@@ -150,6 +161,7 @@ from dw_sales.application.thread_agent import (
     THREAD_AGENT,
     SkillSetPort,
     ThreadAgent,
+    TurnSkillChoice,
 )
 from dw_sales.application.thread_tools import (
     ThreadContext,
@@ -213,6 +225,17 @@ class Dw1Mount:
     # "Gửi cho khách": the lane writing jobs to the outbox share and reading
     # its receipts; built with the drain, given the share.
     outbound: OutboundLane | None = None
+    # What fills the examples index from the decided lines (ticket 43): built
+    # where an index is given.
+    examples: ExampleIndexLane | None = None
+    # What proposes a better prompt version from the decided lines (ticket
+    # 43 part 3): built with the drain, where a model, an index and the
+    # step's security cases are given.
+    prompt_optimiser: PromptOptimiser | None = None
+    # What replays a proposed skill version on example mails, with and
+    # without it, for the head to see (ticket 40): built where DW1's agent
+    # with skills is, a model and the agent turns wired.
+    skill_replay: SkillReplayer | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -260,6 +283,12 @@ def build_dw1(
     # itself, its outbox folders, only in the worker, which alone writes them.
     outbox_enabled: bool = False,
     outbox_dir: Path | None = None,
+    # The examples index (ticket 43): the knowledge gateway's, given by a
+    # process that reads mail and reaches one; None shows no example.
+    examples: ExampleIndexPort | None = None,
+    # The description step's security cases, which a proposed prompt version
+    # must pass (ticket 43 part 3); none, and nothing is proposed.
+    security: tuple[SecurityCase, ...] = (),
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -349,6 +378,11 @@ def build_dw1(
     worker_file = configs / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     order_cases = SqlOrderCaseLookup(session_factory)
+    # A tenant's approved version of the description reading's prompt, and
+    # the decided lines shown beside each reading (ticket 43).
+    prompts = prompt_book(SqlRuleVersionLookup(session_factory))
+    decided_lines = SqlDescriptionExamples(session_factory)
+    finder = None if examples is None else ExampleFinder(examples, decided_lines)
     # Each call timed, on the model it ran on, for the step rows (slice 3).
     interpretation = (
         None
@@ -371,6 +405,22 @@ def build_dw1(
     # share and the case lists' drill-down read it.
     step_activity = SqlStepActivityReader(session_factory)
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    # DW1's agent with its skills (ticket 40): the intake reads with it, the
+    # worker's replay lane replays proposed skill versions with it.
+    dw1_agent = (
+        None
+        if agent_turns is None or model is None
+        else skill_agent(
+            agent_turns,
+            worker_file,
+            thread_tools,
+            ThreadContext(uow, mail),
+            step_model(configs, worker.default_model_profile),
+            dw1_skills,
+            skills,
+            interpretation_for(model, configs, worker.default_model_profile),
+        )
+    )
     layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
         catalog=catalog,
@@ -395,7 +445,11 @@ def build_dw1(
         new_case_id=ids.new_uuid,
         quote_forms=readers.forms,
         zones=book,
-        descriptions=None if interpretation is None else DescriptionReader(interpretation),
+        descriptions=(
+            None
+            if interpretation is None
+            else DescriptionReader(interpretation, examples=finder, prompts=prompts)
+        ),
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
         ),
@@ -414,19 +468,7 @@ def build_dw1(
         ),
         # DW1's agent with its skills (ticket 40), on the same kit: the
         # platform's skills with the tenant's approved versions of them.
-        skill_agent=(
-            None
-            if agent_turns is None
-            else skill_agent(
-                agent_turns,
-                worker_file,
-                thread_tools,
-                ThreadContext(uow, mail),
-                step_model(configs, worker.default_model_profile),
-                dw1_skills,
-                skills,
-            )
-        ),
+        skill_agent=dw1_agent,
         handoffs=(
             None if interpretation is None else HandoffReader(interpretation, catalog, order_cases)
         ),
@@ -464,6 +506,7 @@ def build_dw1(
         source_cache=source_cache or NoSourceCache(),
         book=book,
         skills=skills,
+        skill_replays=SqlSkillReplays(session_factory, audit),
         directory=directory,
         holders=holders,
         notifications=notifications,
@@ -508,6 +551,7 @@ def build_dw1(
         rules=assembly.rule_decisions,
         catalog=assembly.catalog_decisions,
         skills=assembly.skill_decisions,
+        prompts=PromptDecisions(uow, prompts),
         worker_file=worker_file,
     )
     catalog_parsing = CatalogParsing(
@@ -547,6 +591,7 @@ def build_dw1(
             uow, inbox, assembly.services.processing, lane_access, clock, directory, intake
         )
     )
+    indexing = None if examples is None else ExampleIndexLane(decided_lines, examples)
     if requester_access is None:
         return Dw1Mount(
             services=assembly.services,
@@ -554,6 +599,7 @@ def build_dw1(
             catalog_parsing=catalog_parsing,
             activity=activity,
             mail_drop=dropped,
+            examples=indexing,
         )
     queue = SqlProcessingQueue(session_factory)
     drain = ProcessingDrain(
@@ -606,6 +652,44 @@ def build_dw1(
         ),
         activity=activity,
         mail_drop=dropped,
+        examples=indexing,
+        skill_replay=(
+            None
+            if dw1_agent is None or agent_turns is None
+            else SkillReplayer(
+                uow=uow,
+                replays=SqlSkillReplays(session_factory, audit),
+                agent=dw1_agent,
+                book=skills,
+                rules=tenant_rules,
+                # The worker image ships `evals/fixtures` beside `configs`.
+                examples=FixtureReplayExamples.load(configs.parent),
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+                forget_run=agent_turns.budget.forget,
+            )
+        ),
+        prompt_optimiser=(
+            None
+            if interpretation is None or finder is None or not security
+            else PromptOptimiser(
+                examples=decided_lines,
+                reader=DescriptionReader(interpretation, examples=finder, prompts=prompts),
+                book=prompts,
+                rules=tenant_rules,
+                gate=readiness,
+                catalog=catalog,
+                uow=uow,
+                directory=directory,
+                security=security,
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+            )
+        ),
         outbound=(
             None
             if outbox_dir is None
@@ -713,6 +797,21 @@ def build_skill_settlement(
     )
 
 
+def build_prompt_settlement(
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> PromptSettlement:
+    """What carries out a decided prompt version approval (`sales.prompts`,
+    ticket 43), for the worker's outbox handler. The version and the approval
+    are rows of the approval's own tenant."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    return PromptSettlement(uow, prompt_book(SqlRuleVersionLookup(session_factory)), clock, ids)
+
+
 def build_followup_lane(
     *,
     configs: Path,
@@ -788,20 +887,19 @@ def skill_agent(
     models: StepModelPort,
     skills: Dw1Skills,
     book: SkillSetPort,
+    pick: PickModelPort,
 ) -> ThreadAgent:
-    """DW1's agent with its skills (ticket 40, dw_sales ADR 0014): the thread
-    reader's tools and binding, plus the skill loader, on a turn under
-    `DW1_AGENT` that carries DW1's conduct and the catalogue of the skills
-    ``book`` resolves for each run's tenant, built once."""
+    """DW1's agent with its skills (ticket 40, dw_sales ADR 0014): the
+    skill ``book`` resolves for each run's tenant picked by one scored call
+    on ``pick`` (ADR 0015 decision 5), then read with the thread reader's
+    tools and binding on a turn under `DW1_AGENT` that carries DW1's conduct
+    and the picked skill's words, built once. No catalogue and no loading
+    tool: the turn is not served skills (`AgentTurnKit.turn`)."""
     worker, _ = parse_worker_file(worker_file)
     _register_dw1_tools(kit, tools)
-    turn = kit.turn(
-        worker,
-        DW1_AGENT,
-        SKILL_CEILING,
-        skills=TurnSkills(read_tool=READ_SKILL, agent=skills.agent),
-    )
-    return ThreadAgent(turn, context, models, skills=book)
+    turn = kit.turn(worker, DW1_AGENT, SKILL_CEILING)
+    choice = TurnSkillChoice(book=book, picker=SkillPicker(pick, models), agent=skills.agent)
+    return ThreadAgent(turn, context, models, skills=choice)
 
 
 def _register_dw1_tools(kit: AgentTurnKit, tools: ThreadTools) -> None:

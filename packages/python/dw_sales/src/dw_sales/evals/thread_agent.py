@@ -73,6 +73,7 @@ from dw_sales.application.access import SalesScopes
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import REPLY_INTENT
+from dw_sales.application.skill_pick import PickModelPort
 from dw_sales.application.skills import skill_book
 from dw_sales.application.thread_agent import CEILING, THREAD_AGENT, ThreadAgent
 from dw_sales.application.thread_tools import (
@@ -97,7 +98,7 @@ from dw_sales.domain.order_checks import ModelStep, OrderRules
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.reply_intent import Author, ReplyReading, proposed_step
 from dw_sales.evals.intents import _demo_rules
-from dw_sales.evals.recorded import latency
+from dw_sales.evals.recorded import ScriptedPick, latency
 from dw_sales.evals.replies import (
     _CASES,
     _SCOPED,
@@ -356,6 +357,9 @@ class Harness:
     agent: ThreadAgent
     bindings: _Bindings
     executions: MemoryToolExecutions
+    # The messages DW1's agent with skills picked no skill for (ticket 40):
+    # deployed, the step is skipped for them and the next reading reads.
+    unpicked: set[str] = field(default_factory=set)
 
     @classmethod
     def build(
@@ -365,10 +369,12 @@ class Harness:
         orders: Any = None,
         *,
         skills: MemoryRuleVersions | None = None,
+        pick: PickModelPort | None = None,
     ) -> Harness:
         """Given ``skills`` (the tenants' skill versions), DW1's agent with
         its skills (ticket 40) in place of the thread agent, over the same
-        tools, executor and binding."""
+        tools, executor and binding, its skill picked by ``pick`` (sure of
+        the first skill when None)."""
         configs = repo_root / _CONFIGS
         clock, ids = FixedClock(NOW), Uuid4Generator()
         runtime = MemoryRuntime.build(clock=clock, ids=ids)
@@ -396,6 +402,7 @@ class Harness:
                 step_model(configs, "onprem"),
                 dw1,
                 skill_book(dw1, skills),
+                pick or ScriptedPick(),
             )
         return cls(agent, bindings, executions)
 
@@ -407,13 +414,14 @@ class Harness:
         author: Author,
         about: str,
         run: RunContext | None = None,
+        pick_floor: float = 0.9,
     ) -> tuple[ReplyReading, RunContext]:
         """The message's reading, or the stamp of a turn that fell back."""
         message = _message_of(spec)
         self.bindings.held[message.message_id] = binding
         run = run or run_for(binding.scope)
         try:
-            reading = await self.agent.read(
+            read = await self.agent.read(
                 binding.scope,
                 message,
                 author=author,
@@ -421,7 +429,13 @@ class Harness:
                 cases=(),
                 rules_version=RULES,
                 run=run,
+                pick_floor=pick_floor,
             )
+            # No skill picked surely enough: the step gave no reading of its
+            # own, shown here as a person's and listed (ticket 40).
+            if read is None:
+                self.unpicked.add(message.message_id)
+            reading = read if read is not None else self.agent.unavailable(RULES, "unavailable")
         except TurnCeilingReachedError as exc:
             reading = self.agent.unavailable(RULES, exc.ceiling)
         except ModelUnavailableError:

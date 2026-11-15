@@ -68,6 +68,7 @@ from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests, skill_agent, step_model, thread_agent
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
+from dw_sales.adapters.memory_skill_replays import MemorySkillReplays
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
 from dw_sales.adapters.order_rules import load_tenant_order_rules
@@ -124,12 +125,14 @@ from dw_sales.application.order_ports import PoUpload
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import ClaimedJob, ProcessingDrain
+from dw_sales.application.prompt_versions import PromptDecisions, prompt_book
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
 from dw_sales.application.runs import subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.skill_pick import PickModelPort
 from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement, skill_book
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
@@ -148,6 +151,7 @@ from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
+from dw_sales.evals.recorded import ScriptedPick
 from dw_sales.evals.today_memory import MemoryReminderMarks
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
@@ -940,6 +944,8 @@ class MemoryStore:
         self.approvals = approvals or MemoryApprovals(FixedClock(NOW))
         # A tenant's own rule versions: per tenant, not per workspace (ticket 19).
         self.rule_versions = MemoryRuleVersions()
+        # The worker's replays of proposed skill versions, per tenant (ticket 40).
+        self.skill_replays = MemorySkillReplays()
 
     def state(self, scope: SalesScope) -> _ScopeState:
         return self.states.setdefault(scope, _ScopeState())
@@ -1610,6 +1616,7 @@ def open_world(
     reader: ReaderTransport | None = None,
     measured: bool = True,
     chat_model: BaseChatModel | None = None,
+    skill_pick: PickModelPort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1746,6 +1753,9 @@ def open_world(
                 step_model(repo_root / "configs", worker.default_model_profile),
                 dw1_skills,
                 skills,
+                # DW1's skill pick (ticket 40): sure of the first skill unless
+                # a test hands in its own.
+                skill_pick or ScriptedPick(),
             )
         ),
         handoffs=None if model is None else HandoffReader(model, catalog, store),
@@ -1784,6 +1794,7 @@ def open_world(
         source_cache=NoSourceCache(),
         book=book,
         skills=skills,
+        skill_replays=store.skill_replays,
         directory=directory,
         holders=directory,
         notifications=notifications,
@@ -1826,6 +1837,7 @@ def open_world(
         rules=assembly.rule_decisions,
         catalog=assembly.catalog_decisions,
         skills=assembly.skill_decisions,
+        prompts=PromptDecisions(store, prompt_book(store.rule_versions)),
         worker_file=worker_file,
     )
     return World(

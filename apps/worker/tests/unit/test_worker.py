@@ -340,6 +340,27 @@ def test_dw1s_thresholds_are_set_wherever_dw1_runs_every_hour() -> None:
     assert "sales_auto_apply" not in build_registry(deployed).all()
 
 
+def test_dw1s_decided_lines_are_indexed_wherever_dw1_runs_and_optimised_only_with_a_model() -> None:
+    """Sales ticket 43: the decided lines are indexed for the readings to be
+    shown wherever DW1 is wired, every five minutes; the prompt optimiser
+    replays them on the model, so it runs daily and only where this process
+    reaches a model server of its own (none here); neither on a database
+    alone, nor where a deployed profile has no DW1."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    lanes = {"sales_examples", "sales_prompt_optimiser"}
+    assert lanes.isdisjoint(build_registry(bare_settings(database_url=db)).all())
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    registry = build_registry(switched_off)
+    assert "sales_examples" in registry.all()
+    assert registry.interval_for("sales_examples", 1.0) == 300.0
+    assert "sales_prompt_optimiser" not in registry.all()
+
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert lanes.isdisjoint(build_registry(deployed).all())
+
+
 def test_dw1s_rule_drafts_are_swept_wherever_dw1_drafts_them() -> None:
     """ "Tạo từ tệp mẫu": a draft its event lost, or one nobody asks after for
     30 days, is dealt with by a lane of its own, under the name the drafting

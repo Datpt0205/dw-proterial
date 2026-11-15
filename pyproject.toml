@@ -474,6 +474,7 @@ source_modules = [
     "dw_knowledge.contracts",
     "dw_knowledge.ports",
     "dw_knowledge.gateway",
+    "dw_knowledge.examples",
     "dw_knowledge.chunking",
     "dw_knowledge.tables",
     "dw_memory",

@@ -6,19 +6,23 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
+from dw_platform.domain.audit import lane_audit_event
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.skills import (
+    NOT_REPLAYED,
     SkillDocument,
     SkillProposal,
+    SkillReplay,
     skill_book,
     skill_key,
     skill_name,
@@ -62,7 +66,7 @@ def _run(scope: object = ALPHA) -> RunContext:
 
 def test_the_platform_skills_are_named_by_their_folder_and_versioned() -> None:
     skills = load_dw1_skills(SKILLS)
-    assert skills.agent_ref == "dw1@1.0.0" and skills.agent.strip()
+    assert skills.agent_ref == "dw1@1.1.0" and skills.agent.strip()
     (only,) = skills.skills.values()
     assert (only.name, only.ref) == (NAME, "sales_skill_thread_intents@1.0.0")
     assert skill_name(skill_key(NAME)) == NAME
@@ -150,9 +154,63 @@ async def test_the_proposer_cannot_approve_their_own_skill() -> None:
     assert listed.skills[0].layer == "platform"
 
 
+async def _replayed(world: World, version_id: uuid.UUID) -> SkillReplay:
+    """The worker's replay of ``version_id``, stored as its lane stores one."""
+    replay = SkillReplay(
+        version_id=version_id,
+        replayed_at=datetime(2026, 11, 16, 9, 0, tzinfo=UTC),
+        source="platform_examples",
+        outcome="replayed",
+        messages=60,
+        right_with=50,
+        right_without=48,
+        unanswered=0,
+        security_failed=("RP31",),
+    )
+    audit = lane_audit_event(
+        lane="sales_skill_replay",
+        event_id=uuid.uuid4(),
+        tenant_id=ALPHA.tenant_id,
+        workspace_id=ALPHA.workspace_id,
+        action="sales.skills.replayed",
+        resource_type="sales_skill_version",
+        resource_id=str(version_id),
+        occurred_at=replay.replayed_at,
+    )
+    assert await world.store.skill_replays.store(ALPHA, replay, audit)
+    return replay
+
+
+async def test_the_head_approves_only_a_replayed_version_and_sees_its_replay() -> None:
+    """ADR 0014 decision 2: the head sees the replay before deciding. Until
+    the worker has stored it, an approval is refused at the decision (not
+    only hidden on the page); a rejection is not."""
+    world = _world()
+    proposed = await world.services.skills.propose(AN.context(), NAME, _proposal("1.1.0"))
+    with pytest.raises(ConflictError) as refused:
+        await world.decide_skill(HUONG, proposed.version_id, approve=True, comment="Đồng ý")
+    assert refused.value.details["rule"] == NOT_REPLAYED
+    (waiting,) = (await world.services.skills.list(GIANG.context())).versions
+    assert (waiting.status, waiting.replay) == ("proposed", None)
+    replay = await _replayed(world, proposed.version_id)
+    (waiting,) = (await world.services.skills.list(GIANG.context())).versions
+    assert waiting.replay == replay
+    # Another tenant sees nothing of it.
+    assert await world.store.skill_replays.stored(BETA, [proposed.version_id]) == {}
+
+
+async def test_a_version_not_replayed_can_still_be_rejected() -> None:
+    world = _world()
+    proposed = await world.services.skills.propose(AN.context(), NAME, _proposal("1.1.0"))
+    await world.decide_skill(HUONG, proposed.version_id, approve=False, comment="Không")
+    (version,) = (await world.services.skills.list(GIANG.context())).versions
+    assert version.status == "rejected"
+
+
 async def test_another_head_approves_and_the_tenants_reading_uses_it() -> None:
     world = _world()
     proposed = await world.services.skills.propose(AN.context(), NAME, _proposal("1.1.0"))
+    await _replayed(world, proposed.version_id)
     await world.decide_skill(HUONG, proposed.version_id, approve=True, comment="Đồng ý")
     listed = await world.services.skills.list(GIANG.context())
     assert [(s.ref, s.layer) for s in listed.skills] == [

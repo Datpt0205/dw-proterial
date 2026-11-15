@@ -19,10 +19,16 @@ import pytest
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext
 from dw_evals.runner import load_dataset
-from dw_sales.evals import GRADERS
+from dw_sales.evals import GRADERS as SALES_GRADERS
+from dw_sales.evals.examples import graders as example_graders
 from dw_sales.evals.recorded import Observed, Recorded, load_answers
 
+from .test_examples import FakeIndex
+
 pytestmark = pytest.mark.unit
+
+# Ticket 43's graders over an examples index the eval root composes.
+GRADERS = {**SALES_GRADERS, **example_graders(FakeIndex)}
 
 REPO = Path(__file__).resolve().parents[5]
 DATASETS = REPO / "evals" / "datasets"
@@ -51,6 +57,7 @@ MODEL_STEPS = [
     "sales_thread_agent@1.0.0",
     "sales_skill_intents@1.0.0",
     "sales_reply_draft@1.0.0",
+    "sales_description_examples@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

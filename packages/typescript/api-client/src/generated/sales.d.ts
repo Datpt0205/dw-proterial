@@ -6790,6 +6790,46 @@ export interface components {
             version: string;
         };
         /**
+         * SkillReplay
+         * @description What one replay of a proposed version found, stored beside it
+         *     (`skill_replay`).
+         */
+        SkillReplay: {
+            /** Messages */
+            messages: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "replayed" | "incomplete";
+            /**
+             * Replayed At
+             * Format: date-time
+             */
+            replayed_at: string;
+            /** Right With */
+            right_with: number;
+            /** Right Without */
+            right_without: number;
+            /**
+             * Security Failed
+             * @default []
+             */
+            security_failed: string[];
+            /**
+             * Source
+             * @constant
+             */
+            source: "platform_examples";
+            /** Unanswered */
+            unanswered: number;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /**
          * SkillVersionView
          * @description A tenant's version of a skill, as the skills list shows it.
          */
@@ -6811,6 +6851,7 @@ export interface components {
             proposed_by: string;
             /** Ref */
             ref: string;
+            replay?: components["schemas"]["SkillReplay"] | null;
             /**
              * Status
              * @enum {string}

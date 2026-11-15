@@ -37,6 +37,7 @@ from dw_sales.application.autonomy import (
     applied_by,
 )
 from dw_sales.application.case_store import Stored
+from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.autonomy import StepThreshold, Tier, in_audit_sample
 from dw_sales.domain.labelled_cases import LabelledCase
@@ -54,7 +55,7 @@ pytestmark = pytest.mark.unit
 
 AT = datetime(2026, 11, 16, 3, 0, tzinfo=UTC)
 STEP = ModelStep.DESCRIPTION_ATTRIBUTES
-PROMPT = "sales.description_attributes@1.0.0"
+PROMPT = str(DESCRIPTION_ATTRIBUTES)
 LANE_ACTOR = system_actor(AUTO_APPLY_LANE)
 
 

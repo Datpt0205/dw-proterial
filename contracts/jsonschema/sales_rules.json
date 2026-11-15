@@ -1316,6 +1316,28 @@
         "title": "LayoutOnboarding",
         "type": "object"
       },
+      "Learning": {
+        "additionalProperties": false,
+        "description": "How DW1's readings learn from what people decided (dw_sales ADR 0015\ndecision 5, ticket 43). Numbers only: what is shown and what is proposed\nis code's to choose, and a proposed prompt version is the head's to\napprove.",
+        "properties": {
+          "examples_per_line": {
+            "default": 3,
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Examples Per Line",
+            "type": "integer"
+          },
+          "new_cases_to_retrain": {
+            "default": 50,
+            "maximum": 5000,
+            "minimum": 20,
+            "title": "New Cases To Retrain",
+            "type": "integer"
+          }
+        },
+        "title": "Learning",
+        "type": "object"
+      },
       "LmeBandRule": {
         "additionalProperties": false,
         "properties": {
@@ -1379,6 +1401,13 @@
             "default": false,
             "title": "Skill Intents",
             "type": "boolean"
+          },
+          "skill_pick_confidence": {
+            "default": 0.9,
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Skill Pick Confidence",
+            "type": "number"
           },
           "thread_agent": {
             "default": false,
@@ -1523,6 +1552,9 @@
       },
       "layout_onboarding": {
         "$ref": "#/$defs/LayoutOnboarding"
+      },
+      "learning": {
+        "$ref": "#/$defs/Learning"
       },
       "lme_band": {
         "$ref": "#/$defs/LmeBandRule"

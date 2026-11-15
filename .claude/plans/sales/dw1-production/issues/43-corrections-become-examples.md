@@ -1,6 +1,6 @@
 # 43 — Every correction becomes an example; prompts and skills re-optimised on them
 
-Status: in progress (2026-11-15): part 1, the labelled-cases store and its writers, done; parts 2 (dynamic few-shot) and 3 (scheduled optimisation) open
+Status: in progress (2026-11-16): parts 1, 2 (dynamic few-shot, `description_attributes`) and 3 (the optimiser, smallest version) built; left: the head's page for a proposed prompt version, a second step, a measured gain (none reliable on the dev model), re-attesting the step on prompt 1.1.0 on the plant
 Blocked by: 40
 Category: enhancement
 
@@ -88,3 +88,113 @@ retrieval waits on the Qdrant review, and the optimiser after it.
   and PC dates readings (not `ModelStep`s, and their proposal is never
   stored), reply drafts (nothing records used or discarded), and a person
   superseding a layout DW1 learned by itself.
+
+### Part 2, dynamic few-shot (2026-11-16)
+
+- **The step**: `description_attributes`. It has the most labelled cases (one
+  per line Sales settles, `po_body_extraction` one per field typed over), its
+  input is one short line (cheap to embed and to show), and its eval scores
+  the gold code per line.
+- **The index** (`dw_knowledge.examples.ExampleGateway`, the knowledge
+  gateway's second door): one Qdrant collection `dw_examples__<model>__1`
+  (`adapters/qdrant_examples.py`; `adapters/memory_examples.py` for tests,
+  evals and a worker with no Qdrant). A point is a vector and the filter
+  fields only (tenant `is_tenant`, workspace, step, subject = customer,
+  group = order case, decided_at): no text. The filter (tenant, workspace,
+  step) is built in the gateway from the caller's scope (the run's); the
+  customer's cases first, then the tenant's, one batched round trip; a
+  held-out order never. Dense only (BM25 needs stored text). Bounded by a 2 s
+  timeout; every failure raises to the caller.
+- **What an example is** (`dw_sales.application.examples`): a labelled case
+  of the step whose newest decision on its line kept a code (confirmed or
+  corrected; never a rejection, never an unconfirmed answer), its description
+  read back from the order line under RLS (`SqlDescriptionExamples`, joined
+  through the revision the case names); a code no longer in the item list is
+  not shown. Shown as the description and the kept item's attributes from the
+  item master, never the code (`model_reading.shown_lines`), at most 12 per
+  call.
+- **The reading** (`DescriptionReader`, prompt
+  `sales.description_attributes@1.1.0`, variable `examples`, contained like
+  `lines`; no `raw_variables`): the order's customer and the tenant's k
+  (`sales_order_rules.learning.examples_per_line`, default 3, 0 off; placed
+  on the process page). Any failure (embedder, index, read) is a reading
+  without examples, logged by error type. `prompt_bundle_version` 1.4.0.
+- **Filled by the worker**: lane `sales_examples` (every 5 min, every
+  workspace with Sales cases), keyset from the last indexed case, skipping
+  what the index holds; then drops points older than the labelled cases'
+  retention cutoff. Offboarding deletes a tenant's points
+  (`TenantOffboardingLane.example_vectors`). Wired in the worker only (the
+  process that reads mail); the API's readings show none.
+- **Latency**: one `similar` call for ten lines (20 searches in one batch) on
+  the local Qdrant 1.20, 2 x 1,000 points at 1024 wide: p50 32 ms, p95 46 ms,
+  max 60 ms (hash embedder: the index's share only; bge-m3's own was not
+  measurable here, no server).
+- **Eval** `evals/datasets/sales_description_examples@1.0.0.json` (graders in
+  `dw_sales.evals.examples`, the index composed at `scripts/run_evals.py`):
+  six held-out lines in three customers' own shorthand, read without and with
+  examples; every reading shown its customer's decided line (1.0); injection
+  inside an example's text (escaped in its block, the named code never a
+  candidate); a line stating nothing beside its customer's examples stays
+  with a person; another tenant's decided lines (one with the very words of a
+  held-out line) never shown, at the index or at the reading. **Gain: none
+  reliable.** On the dev model (Ollama qwen3.5-9b-dw, the onprem profile
+  pointed at it): gold among candidates 0/6 without examples in every run;
+  with them 0/6 on the first wording of 1.1.0, then 1/6 and 0/6 on the
+  final one. Shown an item's attributes, the model copied them without spans
+  and code refused them (`no_attribute`, `text_uncovered`): no wrong code,
+  no gain. The recorded answers (`sales_desc_examples_recorded.json`) are
+  the last 0/6 run. The step's own golden set on 1.1.0 (examples empty), same
+  dev model, run back to back with 1.0.0: VI/EN gold among candidates
+  0.756 on both (34 of 45 read, none wrong; bar 0.70 met), so the new
+  wording costs nothing with no example to show. (The 0.933 of the older
+  live report was another day's run of the same model.)
+
+### Part 3, the optimiser (2026-11-16)
+
+- **Lane** `sales_prompt_optimiser` (daily, every workspace with Sales cases,
+  only where the worker reaches a model server):
+  `dw_sales.application.prompt_optimiser.PromptOptimiser`. Runs only where
+  the step runs (rules and bar), with the step's eval security cases loaded
+  (`evals/fixtures/cases/sales_descriptions_security.json`, shipped in the
+  worker image), no proposal waiting, and at least
+  `learning.new_cases_to_retrain` (default 50, at least 20) lines decided
+  since the last proposal.
+- **Method**: MIPROv2's bootstrapped demonstrations only, no instruction
+  rewrite (no model writes words a reading then obeys); no DSPy. Two
+  candidate sets of at most 6 distinct lines: the newest per customer, and
+  the lines the version in force reads wrong. Each replayed on every decided
+  line (at most 1,000), one call per order, never shown its own order's
+  lines, graded right / listed / missed; and on every security case of the
+  step's eval.
+- **Proposed only if** no line reads worse, more read right in total, and
+  every security case holds; a replay with any unanswered call proposes
+  nothing. Proposed as a rule version of `sales_prompt_description_attributes`
+  (migration `137ec1972538` widens `ck_rule_versions_key`) on a
+  `sales.prompts` approval (`dw_sales.application.prompt_versions`): proposer
+  the lane's system actor, decided by a holder of `sales.rules.approve` who is
+  not the proposer (`PromptDecisions`, registered in `graph.register`),
+  carried out by the worker (`PROMPTS_DECIDED`). The document holds the
+  demonstrations (description and kept code) and the replay counts.
+- **Resolved per run** (`PromptBook`, `TenantOverlay` through `RuleBook`): the
+  tenant's approved demonstrations are shown before the nearest examples. A
+  reading under a tenant version is stamped
+  `sales.description_attributes.tenant_<version>@1.1.0`, so a threshold set
+  under one set of demonstrations never gates another (ADR 0015: re-measure).
+- Acceptance 4 holds: a new decided line is indexed and shown, and counts
+  towards the next proposal, with no code change.
+
+### Left
+
+- The head's page for a proposed prompt version (its demonstrations and
+  replay counts): today the generic approvals inbox shows the reason only.
+- A measured gain: the example form (description + the kept item's
+  attributes) taught the dev model little; showing the confirmed reading's
+  own spans as the example (a confirmed line's reading is a right answer
+  word by word) is the next thing to try, then measure on Strata.
+- **After deploy**: the step's bar is per prompt version, so
+  `description_attributes` is not ready on 1.1.0 until the live lane is
+  attested again on the plant model (`run_evals.py --dataset
+  evals/datasets/sales_descriptions@1.0.0.json --live onprem --attest`).
+- A second step (`po_body_extraction`), and stamping which examples a
+  reading was shown (`examples_as_of`).
+

@@ -46,6 +46,16 @@ API and the plan use the English terms. The spec is
   by reference. Written by the step's own service with the decision
   (dw_sales ADR 0015 decision 5, ticket 43). The share kept as proposed is
   the step's accuracy on real work; the cases set its threshold and teach it.
+- **Decided line** (Dòng người đã quyết): a labelled case of the description
+  reading whose newest decision on its line kept a code, with the line's
+  description read back from its order. Shown to the next readings most
+  like it, the same customer's first, as an example: the description and the
+  kept item's attributes, never the code (ticket 43).
+- **Prompt version** (Phiên bản lời nhắc): a tenant's version of a model
+  step's prompt: the demonstrations every reading of the step is shown,
+  proposed by DW1's optimiser only when it reads no decided line worse,
+  more right, and passes the step's security cases; approved by the head,
+  never by its proposer, never applied directly (ticket 43).
 - **Delivery schedule** (Đợt giao): one delivery of a PO line's quantity, a
   quantity on a requested date, with where the PO prints it. A line printing
   one quantity and one date has one; a line the PO splits over several dates

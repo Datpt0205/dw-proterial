@@ -70,6 +70,21 @@ def grader_table() -> dict[str, Grader]:
     from dw_sales.evals import GRADERS as SALES_GRADERS
 
     tables.append(SALES_GRADERS)
+
+    # Sales ticket 43: the description reading shown decided lines, found by
+    # the knowledge gateway's examples index, which Sales does not import;
+    # composed here, in memory over the deterministic embedder, the filter
+    # and order Qdrant serves (`dw_knowledge.adapters.memory_examples`).
+    from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
+    from dw_knowledge.adapters.memory_examples import InMemoryExampleIndex
+    from dw_knowledge.examples import ExampleGateway
+    from dw_sales.evals.examples import graders as example_graders
+
+    tables.append(
+        example_graders(
+            lambda: ExampleGateway(index=InMemoryExampleIndex(), embeddings=HashEmbeddingAdapter())
+        )
+    )
     return merge_graders(*tables)
 
 
@@ -178,6 +193,8 @@ RECORDED_BY_PROMPT = {
     "sales.request_handoff": _CASES / "sales_handoff_recorded.json",
     "sales.po_layout_proposal": _CASES / "sales_layout_recorded.json",
     "sales.reply_draft": _CASES / "sales_reply_draft_recorded.json",
+    # DW1's skill pick (ticket 40): its answers and their confidences.
+    "sales.skill_pick": _CASES / "sales_skill_pick_recorded.json",
 }
 # A step that reads with tools records whole turns, every assistant message of
 # each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).
@@ -263,6 +280,10 @@ def record_answers(model: object) -> int:
             "code without a model. null: the call gave no usable answer. Fictional text."
         )
         held["answers"] = dict(sorted({**held.get("answers", {}), **answers}.items()))
+        # A scored step's confidences, by the same key (ticket 40's pick).
+        scored = getattr(model, "confidences", {}).get(prompt_id)
+        if scored:
+            held["confidences"] = dict(sorted({**held.get("confidences", {}), **scored}.items()))
         path.write_bytes((json.dumps(held, ensure_ascii=False, indent=2) + chr(10)).encode("utf-8"))
         count += len(answers)
     answers = dict(getattr(model, "answers", {}))

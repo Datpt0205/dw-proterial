@@ -389,6 +389,7 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.reply_intent"): model,
         (RuleKey.ORDER_RULES, "model_assist.thread_agent"): model,
         (RuleKey.ORDER_RULES, "model_assist.skill_intents"): model,
+        (RuleKey.ORDER_RULES, "model_assist.skill_pick_confidence"): model,
         (RuleKey.ORDER_RULES, "model_assist.request_handoff"): model,
         (RuleKey.ORDER_RULES, "model_assist.change_request"): model,
         (RuleKey.ORDER_RULES, "model_assist.description_attributes"): model,
