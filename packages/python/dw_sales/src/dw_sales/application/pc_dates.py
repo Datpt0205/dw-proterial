@@ -10,10 +10,12 @@ PC gives, copied as the mail writes it.
 
 - **Code checks** each date: the words are in the pasted text as written,
   whole (not inside a longer date),
-  they read as that very day (day before month, as a Vietnamese mail writes
-  it, or an ISO date; a day and month alone take the year the model gave),
+  they read as that very day (as every Sales reader reads a written date,
+  `rfq_reading.written_date`: a numeric date in the order the mail's own
+  dates settle, `dw_platform.domain.notation`, and one they do not settle,
+  ``03/04``, as no day; a day and month alone take the year the model gave),
   and the line and delivery are the case's. A date that fails is dropped
-  and counted.
+  and counted, and Sales types it.
 - **Nothing is recorded**: the dates fill the confirmation's fields, and
   Sales still confirms each line and presses "Ghi đã gửi xác nhận", the one
   door that records them. Nothing is stored of the pasted text.
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -48,11 +51,13 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
+from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesCatalogPort
 from dw_sales.application.support import same_version, stored_order
 from dw_sales.domain.orders import OrderCase
+from dw_sales.domain.rfq_reading import written_date
 
 # The prompt the dates are read with. Its file is
 # `configs/prompts/sales/pc_dates@1.0.0.yaml`; a test holds the two together,
@@ -110,33 +115,38 @@ class PcDatesView(BaseModel):
     model_profile: str | None = None
 
 
-_NUMERIC: Final = re.compile(r"^\s*(\d{1,4})[./-](\d{1,2})(?:[./-](\d{2,4}))?\s*$")
-
-
-def reads_as(text: str, day: date) -> bool:
-    """Whether ``text`` writes ``day``: ISO (year first), or day before month
-    with or without the year (a two-digit year is this century's)."""
-    found = _NUMERIC.match(text)
+def reads_as(text: str, day: date, notation: Notation) -> bool:
+    """Whether ``text`` writes ``day`` (`rfq_reading.written_date`), a
+    numeric date in the order ``notation``, the mail's own, settles; a day
+    and month alone take ``day``'s year."""
+    found = written_date(text, notation)
     if found is None:
         return False
-    first, second, third = found.groups()
-    if len(first) == 4:
-        if third is None:
-            return False
-        year, month, dom = int(first), int(second), int(third)
-    else:
-        dom, month = int(first), int(second)
-        year = day.year if third is None else int(third) + (2000 if len(third) == 2 else 0)
-    return (year, month, dom) == (day.year, day.month, day.day)
+    year, month, dom = found
+    return (day.year if year is None else year, month, dom) == (day.year, day.month, day.day)
+
+
+def _joins(char: str) -> bool:
+    """Whether ``char`` beside a date or a number makes it part of a longer
+    one: a digit, a narrow letter, ``_``, ``/``, ``-``, or the 年月日 of a
+    longer date. A wide letter does not: Japanese writes no space between
+    words, and "2026年11月20日出荷" holds its date whole."""
+    if char.isdigit() or char in "_/-年月日":
+        return True
+    return char.isalpha() and unicodedata.east_asian_width(char) not in ("W", "F")
 
 
 def written_in(words: str, text: str) -> bool:
     """Whether ``text`` writes ``words`` whole: "1/11/2026" is not written
-    by "01/11/2026", nor "05/11" by "05/11/2026"; a full stop ending the
-    sentence is no part of the date."""
-    before = r"(?<![\w/-])(?<!\d\.)"
-    after = r"(?![\w/-])(?!\.\d)"
-    return re.search(before + re.escape(words) + after, text) is not None
+    by "01/11/2026", nor "05/11" by "05/11/2026", nor "11月20日" by
+    "2027年11月20日"; a full stop ending the sentence is no part of the date."""
+    for found in re.finditer(rf"(?<!\d\.)(?={re.escape(words)}(?!\.\d))", text):
+        start, end = found.start(), found.start() + len(words)
+        if not (start > 0 and _joins(text[start - 1])) and not (
+            end < len(text) and _joins(text[end])
+        ):
+            return True
+    return False
 
 
 def deliveries(case: OrderCase) -> dict[int, int]:
@@ -150,6 +160,7 @@ def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDa
     a line and delivery of the case; and how many were dropped. A line and
     delivery named twice keeps neither: the mail did not settle it."""
     counts = deliveries(case)
+    notation = notation_of(text)
     seen: dict[tuple[int, int], int] = {}
     for item in answer.dates:
         seen[(item.line_no, item.delivery)] = seen.get((item.line_no, item.delivery), 0) + 1
@@ -164,7 +175,7 @@ def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDa
         if item.delivery <= counts.get(item.line_no, 0)
         and seen[(item.line_no, item.delivery)] == 1
         and written_in(item.date_text, text)
-        and reads_as(item.date_text, item.date)
+        and reads_as(item.date_text, item.date, notation)
     ]
     return kept, len(answer.dates) - len(kept)
 

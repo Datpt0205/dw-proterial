@@ -320,6 +320,25 @@ def parse_date(span: str, received_on: date, notation: Notation = UNSTATED) -> d
     decide, else it is not read (``05/11/2026`` is 5 November to one writer
     and 11 May to another). Without a year, the one that puts it on or after
     the day the mail arrived less a month."""
+    found = written_date(span, notation)
+    if found is None:
+        return None
+    year, month, day = found
+    try:
+        if year is not None:
+            return date(year, month, day)
+        guess = date(received_on.year, month, day)
+        if guess < received_on - timedelta(days=31):
+            guess = date(received_on.year + 1, month, day)
+        return guess
+    except ValueError:
+        return None
+
+
+def written_date(span: str, notation: Notation = UNSTATED) -> tuple[int | None, int, int] | None:
+    """The year (None where the span writes none), month and day ``span``
+    writes, in the forms and the numeric order `parse_date` reads; None
+    where it reads none. Not checked to be a day of the calendar."""
     text = _DATE_PREFIX.sub("", " ".join(normalised(span).lower().split()))
     found: tuple[int | None, int, int] | None = None
     if match := _ISO.fullmatch(text):
@@ -354,18 +373,7 @@ def parse_date(span: str, received_on: date, notation: Notation = UNSTATED) -> d
         if named is not None:
             year = match.group(3)
             found = (int(year) if year else None, named, int(match.group(2)))
-    if found is None:
-        return None
-    year, month, day = found
-    try:
-        if year is not None:
-            return date(year, month, day)
-        guess = date(received_on.year, month, day)
-        if guess < received_on - timedelta(days=31):
-            guess = date(received_on.year + 1, month, day)
-        return guess
-    except ValueError:
-        return None
+    return found
 
 
 _DOCUMENT_NO: TypeAdapter[str] = TypeAdapter(DocumentNo)

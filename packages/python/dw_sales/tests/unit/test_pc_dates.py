@@ -15,6 +15,7 @@ from dw_agent_runtime.model.interpretation import (
     estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, PermissionDeniedError
+from dw_platform.domain.notation import UNSTATED, notation_of
 from dw_sales.application.pc_dates import MAX_TEXT, PC_DATES, PROMPT_TOKENS, reads_as
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, READER
@@ -108,13 +109,76 @@ async def test_a_line_named_twice_keeps_neither_date() -> None:
     assert (view.status, view.dropped) == ("nothing", 2)
 
 
-def test_a_date_reads_as_the_day_it_writes_day_before_month() -> None:
-    assert reads_as("30/10/2026", date(2026, 10, 30))
-    assert reads_as("2026-10-30", date(2026, 10, 30))
-    assert reads_as("30.10.26", date(2026, 10, 30))
-    assert reads_as("05/11", date(2026, 11, 5))
-    assert not reads_as("05/11", date(2026, 5, 11))
-    assert not reads_as("30 tháng 10", date(2026, 10, 30))
+def test_a_date_reads_as_the_day_it_writes_in_the_order_the_mail_settles() -> None:
+    day_first = notation_of(MAIL)
+    assert reads_as("30/10/2026", date(2026, 10, 30), day_first)
+    assert reads_as("2026-10-30", date(2026, 10, 30), UNSTATED)
+    assert reads_as("30.10.26", date(2026, 10, 30), UNSTATED)
+    assert reads_as("05/11", date(2026, 11, 5), day_first)
+    assert not reads_as("05/11", date(2026, 5, 11), day_first)
+    # Written out, a date is read as every Sales reader reads it.
+    assert reads_as("30 tháng 10", date(2026, 10, 30), UNSTATED)
+    month_first = notation_of("Ships 11/15/2026.")
+    assert reads_as("11/05", date(2026, 11, 5), month_first)
+    assert not reads_as("11/05", date(2026, 5, 11), month_first)
+    assert reads_as("2026年11月20日", date(2026, 11, 20), UNSTATED)
+    assert reads_as("12月4日", date(2026, 12, 4), UNSTATED)
+    assert not reads_as("12月4日", date(2026, 4, 12), UNSTATED)
+
+
+@pytest.mark.parametrize("day", [date(2027, 4, 3), date(2027, 3, 4)])
+def test_a_date_the_mail_does_not_settle_reads_as_no_day(day: date) -> None:
+    """03/04 is 3 April to one writer and 4 March to another: with no date
+    in the mail to settle it, neither is read, and it is left for Sales."""
+    assert not reads_as("03/04/2027", day, notation_of("Dòng 1 giao 03/04/2027."))
+    # Dates written both ways settle nothing.
+    assert not reads_as("03/04/2027", day, notation_of("25/11/2026, 11/15/2026, 03/04/2027"))
+
+
+async def test_a_month_first_mail_is_read_month_first() -> None:
+    mail = "Hi Vy, line 1 ships 11/20/2026 and line 2 on 12/04/2026.\nPC"
+    answer = {
+        "dates": [
+            {"line_no": 1, "delivery": 1, "date_text": "11/20/2026", "date": "2026-11-20"},
+            {"line_no": 2, "delivery": 1, "date_text": "12/04/2026", "date": "2026-12-04"},
+        ]
+    }
+    world, case = await _order(Answering(answer))
+    view = await _read(world, case, text=mail)
+    assert view.dropped == 0
+    assert [(d.line_no, d.date) for d in view.dates] == [
+        (1, date(2026, 11, 20)),
+        (2, date(2026, 12, 4)),
+    ]
+
+
+async def test_a_japanese_mail_is_read_by_its_year_month_and_day() -> None:
+    mail = "ヴィ様\n1行目は2026年11月20日出荷可能です。2行目は12月4日になります。\nPC"
+    answer = {
+        "dates": [
+            {"line_no": 1, "delivery": 1, "date_text": "2026年11月20日", "date": "2026-11-20"},
+            {"line_no": 2, "delivery": 1, "date_text": "12月4日", "date": "2026-12-04"},
+        ]
+    }
+    world, case = await _order(Answering(answer))
+    view = await _read(world, case, text=mail)
+    assert view.dropped == 0
+    assert [(d.line_no, d.date) for d in view.dates] == [
+        (1, date(2026, 11, 20)),
+        (2, date(2026, 12, 4)),
+    ]
+
+
+async def test_a_date_the_mail_does_not_settle_goes_to_sales_unread() -> None:
+    mail = "Dòng 1 giao được ngày 03/04/2027.\nPC"
+    guesses = [
+        {"line_no": 1, "delivery": 1, "date_text": "03/04/2027", "date": day}
+        for day in ("2027-04-03", "2027-03-04")
+    ]
+    for guess in guesses:
+        world, case = await _order(Answering({"dates": [guess]}))
+        view = await _read(world, case, text=mail)
+        assert (view.status, view.dates, view.dropped) == ("nothing", [], 1)
 
 
 async def test_only_who_prepares_the_order_asks_and_only_at_the_version_they_saw() -> None:
@@ -172,6 +236,10 @@ def test_a_date_counts_only_when_the_mail_writes_it_whole() -> None:
     assert written_in("05/11", "dòng 2 ngày 05/11.")
     assert not written_in("1/11/2026", "giao 01/11/2026")
     assert not written_in("05/11", "giao 05/11/2026")
+    # Japanese writes no space between words: the date is whole beside them,
+    # but not beside the year it leaves out.
+    assert written_in("2026年11月20日", "1行目は2026年11月20日出荷可能です")
+    assert not written_in("11月20日", "1行目は2027年11月20日出荷可能です")
 
 
 def test_a_full_stop_ending_the_sentence_is_no_part_of_the_date() -> None:
