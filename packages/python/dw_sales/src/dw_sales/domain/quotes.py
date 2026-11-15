@@ -1036,6 +1036,16 @@ class ValueConfirmation(BaseModel):
     by: uuid.UUID
     at: AwareDatetime
 
+    @property
+    def as_read(self) -> bool:
+        """Whether the value kept is the value read, compared as the field's
+        type (``1000`` typed for ``1000.0`` read is the same quantity): what
+        a labelled case counts as confirmed (ticket 43)."""
+        try:
+            return bool(_typed_value(self.field, self.read) == _typed_value(self.field, self.value))
+        except (ValidationError, ValueError, ArithmeticError):
+            return False
+
 
 class FindingCorrected(BaseModel):
     """Sales typed the answer: the customer's missing values, asked for in

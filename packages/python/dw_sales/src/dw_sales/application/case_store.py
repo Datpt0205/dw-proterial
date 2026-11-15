@@ -44,6 +44,7 @@ from dw_sales.domain.reply_intent import ReplyReading
 if TYPE_CHECKING:
     from dw_sales.application.activity_ports import StepActivityLogPort
     from dw_sales.application.followups import FollowupStorePort
+    from dw_sales.application.labelled_cases import LabelledCaseLogPort
     from dw_sales.application.overview_ports import OverviewReadPort
     from dw_sales.application.rules import RuleVersionStorePort
 
@@ -708,6 +709,11 @@ class SalesUnitOfWork(Protocol):
     # What customers asked to change on their orders by mail (ticket 27).
     @property
     def change_requests(self) -> ChangeRequestStorePort: ...
+
+    # What a person kept of a model's proposal (ticket 43), written with the
+    # decision it records.
+    @property
+    def labelled_cases(self) -> LabelledCaseLogPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

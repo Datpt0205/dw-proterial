@@ -137,6 +137,7 @@ from dw_sales.adapters.assembly import (
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseRetention
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import (
     ClientDocumentText,
@@ -243,7 +244,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.11.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.12.0.yaml"
 # How long a processing job may run before the reaper takes it for a dead
 # worker's (Sales ticket 25). A job is one message: its scan, a few files read
 # in the reader sandbox (each killed at its own wall clock) and a model call or
@@ -789,6 +790,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # What DW1's model steps did (slice 3): the months of `sales.step_outcomes`
     # past the policy file's term, dropped wherever DW1 is.
     sales_step_outcomes_retention: RetentionPrunePort | None = None
+    # What people kept of the model's proposals (ticket 43): the months of
+    # `sales.labelled_cases` past their term.
+    sales_labelled_cases_retention: RetentionPrunePort | None = None
     # The status assistant's sessions (ADR 0007): thirty days after their
     # last turn, the database's constant (`sales.prune_assistant_sessions()`).
     sales_assistant_retention: RetentionPrunePort | None = None
@@ -1067,6 +1071,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
+                sales_labelled_cases_retention = SqlLabelledCaseRetention(
+                    session_factory=sessions, policy=retention_policy, clock=clock
+                )
                 sales_assistant_retention = SqlAssistantRetention(session_factory=sessions)
                 # A master-data upload's file, read in the reader sandbox
                 # (ticket 41). Only where DW1 is built: an upload needs the
@@ -1186,6 +1193,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "sales_step_outcomes_retention",
             build_retention_consumer(sales_step_outcomes_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+
+    # And the months of its labelled cases past their term (ticket 43).
+    if sales_labelled_cases_retention is not None:
+        registry.register(
+            "sales_labelled_cases_retention",
+            build_retention_consumer(sales_labelled_cases_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
 

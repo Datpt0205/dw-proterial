@@ -66,6 +66,7 @@ from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.support import decided
 from dw_sales.domain.catalog import Customer
+from dw_sales.domain.labelled_cases import layout_label
 from dw_sales.domain.layouts import (
     NO_FIRM_ROW,
     ExportMapping,
@@ -673,6 +674,10 @@ class LayoutService:
             await work.audit.append(
                 _audit(self.ids, self.clock, context, "sales.layout.proposed", layout)
             )
+            # The model's pre-filled mapping beside the one proposed (ticket 43).
+            label = layout_label(layout.prefill, layout, new_id=self.ids.new_uuid)
+            if label is not None:
+                await work.labelled_cases.append([label])
             await work.commit()
         return layout_view(layout)
 

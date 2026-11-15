@@ -795,6 +795,7 @@ def _service(
         reader,
         FixedClock(AT),
         platform_zone(),
+        MemoryStore(),
     )
 
 

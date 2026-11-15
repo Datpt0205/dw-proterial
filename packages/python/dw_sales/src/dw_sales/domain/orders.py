@@ -482,6 +482,13 @@ def _with_values[M: BaseModel](
     return type(model).model_validate({**dict(model), **typed})
 
 
+def value_with_correction[M: BaseModel](model: M, correction: ValueCorrection) -> M:
+    """``model`` (a PO line or header as read) holding ``correction``'s value,
+    validated as its field's type: what a labelled case compares the value
+    read with (ticket 43)."""
+    return _with_values(model, [correction])
+
+
 def _keeps_identity(before: BaseModel, after: BaseModel, owner: str) -> None:
     for field in _IDENTITY_FIELDS & type(before).model_fields.keys():
         if getattr(before, field) != getattr(after, field):

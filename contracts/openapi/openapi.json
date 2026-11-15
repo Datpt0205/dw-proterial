@@ -7803,6 +7803,24 @@
         "title": "LabelCellView",
         "type": "object"
       },
+      "LabelSummaryView": {
+        "additionalProperties": false,
+        "description": "Per step, the cases people decided on its proposals (ticket 43).",
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepLabelView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "LabelSummaryView",
+        "type": "object"
+      },
       "LabelledAnchor": {
         "description": "Where one value was read, named by the field (and line) it fills.",
         "properties": {
@@ -19517,6 +19535,52 @@
         "title": "StepId",
         "type": "string"
       },
+      "StepLabelView": {
+        "additionalProperties": false,
+        "description": "One step's line on the head's view.",
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "integer"
+          },
+          "confirmed_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Share"
+          },
+          "corrected": {
+            "title": "Corrected",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "total",
+          "confirmed",
+          "corrected",
+          "rejected",
+          "confirmed_share"
+        ],
+        "title": "StepLabelView",
+        "type": "object"
+      },
       "StepLevelView": {
         "description": "One step's switch as the settings page shows it: the level set, the\nlevel it runs at now, why they differ, and how far it may go.",
         "properties": {
@@ -27590,6 +27654,27 @@
           }
         },
         "summary": "Activity Summary",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/activity/labels": {
+      "get": {
+        "operationId": "activity_labels_api_v1_sales_activity_labels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Activity Labels",
         "tags": [
           "sales"
         ]
