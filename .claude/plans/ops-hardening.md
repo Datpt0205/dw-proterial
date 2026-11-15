@@ -86,6 +86,16 @@ context. All five are done and on `main`. The full narrative is at
               path;
             - DW's names in Cato's DNS and routes, as for Bravo.
 
+        **Decided 11-16 (Đạt): the host is Windows Server 2025 with Desktop
+        Experience (the UI), not Ubuntu.** It settles the version owed below.
+        DW's Linux images still need a Linux kernel there, so DW runs in (a), a
+        Hyper-V VM with Ubuntu, or (b), WSL2 (GPU in WSL is documented for
+        Server 2025); a native Windows install stays not proposed (`reader` is
+        Linux-only). New question: does Strata run on Windows? If it does, it
+        can use the GPU on the host and the DW VM reaches it over the host's
+        network, so the VM needs no DDA at all; if not, Strata goes in the VM
+        with the GPU by DDA (IOMMU on the Z890 board, unmeasured).
+
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
         the GPU by DDA.** Still owed: the Windows Server version (2025
