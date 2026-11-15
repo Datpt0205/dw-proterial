@@ -99,7 +99,9 @@ class _RecordingIndex:
     async def delete_document(self, document_id: uuid.UUID) -> None:
         self.deleted.append(document_id)
 
-    async def tombstone_document(self, document_id: uuid.UUID) -> None: ...
+    async def tombstone_document(
+        self, document_id: uuid.UUID, *, tenant_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> None: ...
 
     async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None: ...
 

@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 import pytest
 
+from dw_kernel.errors import NotFoundError
 from dw_knowledge.contracts import SearchQuery
 from dw_knowledge.gateway import IngestDocumentCommand, KnowledgeGateway
 from dw_platform.application.access_context import AccessContext
@@ -241,3 +242,57 @@ async def test_naming_another_tenants_document_returns_nothing(
         make_context(TENANT_B, WORKSPACE_B),
     )
     assert results == [], "a named document id must not cross the tenant fence"
+
+
+async def test_another_tenants_delete_hides_nothing(
+    gateway: KnowledgeGateway, make_context: ContextFactory
+) -> None:
+    """A delete is held to the caller's tenant in Qdrant too, not only in SQL.
+
+    Row security turns tenant B's update of tenant A's document into no row
+    at all; the tombstone in the vector index must follow that, or B hides
+    A's document from A by knowing its id (Qdrant review, 2026-11-17).
+    """
+    context_a = make_context(TENANT_A, WORKSPACE_A)
+    ingested = await gateway.ingest_document(
+        IngestDocumentCommand(title="Bí mật Alpha", content=SECRET_TEXT), context_a
+    )
+
+    with pytest.raises(NotFoundError):
+        await gateway.soft_delete_document(
+            ingested.document_id, make_context(TENANT_B, WORKSPACE_B)
+        )
+
+    results = await gateway.search(SearchQuery(text=SECRET_TEXT), context_a)
+    assert results, "tenant B's delete must not hide tenant A's document"
+
+
+async def test_another_workspaces_delete_hides_nothing(
+    gateway: KnowledgeGateway, make_context: ContextFactory
+) -> None:
+    """The same inside one tenant: workspace A2 cannot delete A's document."""
+    context_a = make_context(TENANT_A, WORKSPACE_A)
+    ingested = await gateway.ingest_document(
+        IngestDocumentCommand(title="Bí mật workspace A", content=SECRET_TEXT), context_a
+    )
+
+    with pytest.raises(NotFoundError):
+        await gateway.soft_delete_document(
+            ingested.document_id, make_context(TENANT_A, uuid.UUID(int=0xAA02))
+        )
+
+    results = await gateway.search(SearchQuery(text=SECRET_TEXT), context_a)
+    assert results, "another workspace's delete must not hide this workspace's document"
+
+
+async def test_the_owner_deletes_its_document(
+    gateway: KnowledgeGateway, make_context: ContextFactory
+) -> None:
+    context_a = make_context(TENANT_A, WORKSPACE_A)
+    ingested = await gateway.ingest_document(
+        IngestDocumentCommand(title="Bí mật Alpha", content=SECRET_TEXT), context_a
+    )
+
+    await gateway.soft_delete_document(ingested.document_id, context_a)
+
+    assert await gateway.search(SearchQuery(text=SECRET_TEXT), context_a) == []

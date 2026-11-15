@@ -48,7 +48,7 @@ async def test_tombstone_excludes_then_reindex_restores() -> None:
     await index.upsert([_chunk()])
     assert await index.search((1.0, 0.0, 0.0), _filter(), 5)  # found
 
-    await index.tombstone_document(DOC)  # soft delete
+    await index.tombstone_document(DOC, tenant_id=TENANT, workspace_id=WS)  # soft delete
     assert not await index.search((1.0, 0.0, 0.0), _filter(), 5)  # excluded
 
     await index.upsert([_chunk()])  # re-ingest reactivates
@@ -60,3 +60,14 @@ async def test_hard_delete_removes_permanently() -> None:
     await index.upsert([_chunk()])
     await index.delete_document(DOC)
     assert not await index.search((1.0, 0.0, 0.0), _filter(), 5)
+
+
+async def test_another_tenants_tombstone_hides_nothing() -> None:
+    """A tombstone names the owner: another tenant's or workspace's hides nothing."""
+    index = InMemoryVectorIndexAdapter()
+    await index.upsert([_chunk()])
+
+    await index.tombstone_document(DOC, tenant_id=uuid.uuid4(), workspace_id=WS)
+    await index.tombstone_document(DOC, tenant_id=TENANT, workspace_id=uuid.uuid4())
+
+    assert await index.search((1.0, 0.0, 0.0), _filter(), 5)
