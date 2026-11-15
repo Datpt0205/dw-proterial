@@ -28,6 +28,7 @@ from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import WaitingCase
+from dw_sales.domain.orders import OrderStatus
 
 _D = tables.followup_deliveries
 _O = tables.order_cases
@@ -63,6 +64,19 @@ def _loop_since(step: str) -> sa.ColumnElement[datetime]:
     return sa.case((loop["step"].astext == step, _at(loop["since"].astext)), else_=sa.null())
 
 
+def _implied_from() -> sa.ColumnElement[datetime]:
+    """When the customer's silence counts as agreement, while the order waits
+    on their answer to its confirmation; NULL for a customer with no days,
+    or once the order is anywhere else (ticket 28)."""
+    return sa.case(
+        (
+            _O.c.status == OrderStatus.CONFIRMATION_SENT.value,
+            _at(_O.c.confirmation["implied_from"].astext),
+        ),
+        else_=sa.null(),
+    )
+
+
 def _day(text: str | None) -> date | None:
     return None if text is None else date.fromisoformat(text)
 
@@ -80,6 +94,7 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         due=_day(row["due"]),
         pc_asked_at=row["pc_asked_at"],
         customer_asked_at=row["customer_asked_at"],
+        implied_from=row["implied_from"],
     )
 
 
@@ -109,12 +124,17 @@ class SqlFollowupStore:
             ),
             # The start of the update loop's wait on the customer (ticket 29).
             _loop_since("waiting_customer").label("customer_asked_at"),
+            # When the customer's silence counts as agreement (ticket 28).
+            _implied_from().label("implied_from"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),
                 _O.c.received_at >= received_since,
-                # An update loop runs on an order already confirmed (ticket 29).
+                # An update loop runs on an order whose confirmation left
+                # (ticket 29).
                 _O.c.update_loop.isnot(None),
+                # A confirmation whose customer agrees by silence (ticket 28).
+                _implied_from().isnot(None),
             )
         )
         rfq_no = _Q.c.body[("request", "document", "rfq_no", "value")].astext
@@ -132,6 +152,7 @@ class SqlFollowupStore:
             sa.func.coalesce(_entered(CaseKind.QUOTE, _Q), _Q.c.received_at).label("since"),
             sa.null().label("pc_asked_at"),
             sa.null().label("customer_asked_at"),
+            sa.null().label("implied_from"),
         ).where(
             sa.or_(
                 _Q.c.status.in_(sorted(statuses.get(CaseKind.QUOTE, frozenset()))),

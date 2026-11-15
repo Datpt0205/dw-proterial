@@ -231,13 +231,26 @@ API and the plan use the English terms. The spec is
   PIC then approves the exact **Bravo update file** ("Tệp cập nhật Bravo":
   the changed lines' paste-sheet rows), by its id and hash; a person enters
   it, it is cross-checked as the case's rules say by someone who made none
-  of it (whoever approved the file is a maker), and the order is confirmed
-  again, which ends the loop. `confirmed` stands for ADR 0011's
-  `confirmation_sent` until ticket 28 splits it (ticket 29).
+  of it (whoever approved the file is a maker), and its confirmation is
+  sent again, which ends the loop. The loop runs on an order whose
+  confirmation left, `confirmation_sent` or `confirmed` (tickets 29, 28).
+- **Confirmation sent** (Đã gửi xác nhận, chờ khách): the PIC recorded the
+  order's confirmation sent ("Ghi đã gửi xác nhận", with each line's
+  confirmed dates), from now, or from the time of a **sent copy** on the
+  case's thread that carries the processed Excel DW1 made at the case's
+  version (matched by sha256), which only proposes it. Then the customer
+  agrees (`confirmed`, "Khách đã đồng ý") **in words** (`accepted`, from
+  their reply when recorded from one) or **by silence** (`implied`), or does
+  not ("Khách từ chối": the order goes to `change_review`). A person records
+  each (dw_sales ADR 0011, ticket 28).
 - **Implied acceptance** (Đồng ý ngầm): a customer's silence after a
   confirmation, taken as agreement once that customer's number of days has
-  passed, recorded by a person. A customer with no number never has it
-  (dw_sales ADR 0011).
+  passed, recorded by a person. The days, how they are counted (calendar, or
+  business days Monday to Friday) and from which day (the confirmation sent,
+  or the PO date) are the customer's entry in the order rules
+  (`implied_acceptance`), read from the rules stamped on the case when the
+  confirmation leaves. A customer with no entry never has it; the follow-up
+  lane tells the PIC once the days pass (dw_sales ADR 0011).
 - **Confirmed sender** (Người gửi đã xác nhận): an address no customer's
   contacts list, which Sales confirmed as one customer's, with who and on
   which mail. Bravo's contacts come first; a confirmed sender never
@@ -470,18 +483,19 @@ other customers' prices, LME and the copper component.
 The transitions are owned by `OrderCase` and `QuoteCase` in
 `dw_sales.domain`; this file is the one list of names and labels.
 
-| State                  | Label            |
-| ---------------------- | ---------------- |
-| `received`             | Đã nhận          |
-| `checked`              | Đã kiểm tra      |
-| `in_review`            | Chờ PIC tự kiểm  |
-| `correction_requested` | Chờ khách sửa PO |
-| `prepared`             | PIC đã tự kiểm   |
-| `uploaded_to_bravo`    | Đã nhập Bravo    |
-| `cross_checked`        | Đã kiểm chéo     |
-| `confirmed`            | Đã xác nhận      |
-| `change_review`        | Xem thay đổi PO  |
-| `closed`               | Đã đóng          |
+| State                  | Label                      |
+| ---------------------- | -------------------------- |
+| `received`             | Đã nhận                    |
+| `checked`              | Đã kiểm tra                |
+| `in_review`            | Chờ PIC tự kiểm            |
+| `correction_requested` | Chờ khách sửa PO           |
+| `prepared`             | PIC đã tự kiểm             |
+| `uploaded_to_bravo`    | Đã nhập Bravo              |
+| `cross_checked`        | Đã kiểm chéo               |
+| `confirmation_sent`    | Đã gửi xác nhận, chờ khách |
+| `confirmed`            | Khách đã đồng ý            |
+| `change_review`        | Xem thay đổi PO            |
+| `closed`               | Đã đóng                    |
 
 Close reasons: `duplicate` (PO trùng), `not_an_order` (Không phải đơn hàng),
 `superseded` (Đã có bản thay thế), `cannot_supply` (Không cung cấp được).

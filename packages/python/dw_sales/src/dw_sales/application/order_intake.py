@@ -88,6 +88,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
@@ -168,6 +169,7 @@ from dw_sales.domain.orders import (
     Corrected,
     Finding,
     FindingCode,
+    ImpliedTerm,
     LineCheck,
     OrderCase,
     OrderLine,
@@ -1393,6 +1395,18 @@ class OrderIntake:
         if not await self._model_step(scope, rules, ModelStep.DESCRIPTION_ATTRIBUTES):
             return {}
         return await self.descriptions.read(lines, items, run=run)
+
+    async def implied_term(
+        self, scope: SalesScope, case: OrderCase
+    ) -> tuple[ImpliedTerm | None, ZoneInfo]:
+        """The customer's days of silence that count as agreement, as the
+        rules stamped on the case give them (ticket 28), and the tenant's time
+        zone they are counted in. None where the customer has none, or the
+        stamped rules no longer load: never implied (fail closed)."""
+        stamped = case.rules_version
+        rules = None if stamped is None else await self.rules.rules_at(scope, stamped)
+        term = None if rules is None else rules.implied_acceptance.get(case.customer_code)
+        return term, await self.zones.time_zone(scope)
 
     async def _case_rules(
         self, scope: SalesScope, case: OrderCase, details: dict[str, object]

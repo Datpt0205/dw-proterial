@@ -59,7 +59,7 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
     crossed = await cross_checked(dieu, up)
     assert crossed["cross_checked_by"] == str(user_id(DIEU))
     confirmed = await decide(an, crossed, "confirm", {"delivery_dates": dates(crossed)})
-    assert confirmed["status"] == "confirmed"
+    assert confirmed["status"] == "confirmation_sent"
     assert {line["confirmed_delivery_date"] for line in confirmed["lines"]} == {"2026-11-27"}
 
     rows = await _audit(migrator, case["case_id"])
@@ -69,7 +69,7 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
         "sales.order.prepared",
         "sales.order.bravo_recorded",
         "sales.order.cross_checked",
-        "sales.order.confirmed",
+        "sales.order.confirmation_sent",
     ]
     # DW1's own steps are the worker's, on An's request; the rest are people's.
     assert rows[0]["details"]["actor_kind"] == "worker"  # type: ignore[index]
@@ -319,7 +319,7 @@ async def test_m03_is_held_at_confirmation_until_the_export_control_pic_accepts_
         {"disposition": "accepted", "reason": "Đã nhận NOC và ESF năm nay"},
     )
     confirmed = await decide(an, accepted, "confirm", {"delivery_dates": dates(accepted)})
-    assert confirmed["status"] == "confirmed"
+    assert confirmed["status"] == "confirmation_sent"
 
 
 async def test_a_refused_decision_writes_neither_the_case_nor_an_audit_row(

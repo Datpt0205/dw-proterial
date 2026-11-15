@@ -29,6 +29,10 @@ on a case changes because a reminder went out. The person decides.
   for every line asked (the case then names no request, and nothing is owed);
   and an order whose customer's change was asked of PC (ticket 29), until
   PC's answer is recorded for every changed line.
+- ``implied_acceptance``: an order whose confirmation left and whose
+  customer has days of silence in the order rules (ticket 28, dw_sales ADR
+  0011), once those days have passed with no answer recorded: the PIC is told
+  once, and records the customer's agreement (or not). DW1 never records it.
 
 **One wait, one reminder per stage.** A stage is due when its threshold has
 passed; it is sent once per (case, follow-up, stage, wait), the wait being
@@ -85,6 +89,8 @@ class Followup(StrEnum):
     # The case has come to a person's turn: told at once, not after a wait
     # (2026-10-28: "nếu dừng thì có noti cho họ thấy chưa").
     YOUR_TURN = "your_turn"
+    # A customer's days of silence after a confirmation have passed (ticket 28).
+    IMPLIED_ACCEPTANCE = "implied_acceptance"
 
 
 class Stage(StrEnum):
@@ -228,6 +234,21 @@ class WaitingPcRule(BaseModel):
     )
 
 
+class ImpliedAcceptanceRule(BaseModel):
+    """A customer's days of silence after the confirmation have passed (the
+    days are the customer's, in the order rules): tell the PIC once, who
+    records the agreement. DW1 never records it."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(
+        description=(
+            "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là "
+            "đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO)."
+        )
+    )
+
+
 class YourTurnRule(BaseModel):
     """A case DW1 has done its part on, now waiting on a person: tell them at
     once. The assignee for a step on their own case, the head for one decided
@@ -362,6 +383,9 @@ class SalesFollowups(BaseModel):
     quote_deadline: QuoteDeadlineRule = Field(description="Hạn báo giá sắp đến.")
     waiting_customer: WaitingCustomerRule = Field(description="Hồ sơ đang chờ khách hàng.")
     waiting_pc: WaitingPcRule = Field(description="Hồ sơ đang chờ PC trả ngày giao.")
+    implied_acceptance: ImpliedAcceptanceRule = Field(
+        description="Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
+    )
     your_turn: YourTurnRule = Field(description="Hồ sơ đến lượt người xử lý.")
 
     @property
@@ -401,6 +425,10 @@ class WaitingCase:
     # When Sales recorded the answer to a customer's change sent, while the
     # update loop waits on the customer (ticket 29); None otherwise.
     customer_asked_at: datetime | None = None
+    # When the customer's silence after the confirmation counts as agreement
+    # (`ConfirmationSent.implied_from`), while the order waits on their
+    # answer; None for a customer with no days, or any other status.
+    implied_from: datetime | None = None
 
 
 # The statuses each follow-up watches.
@@ -515,8 +543,20 @@ def owed(
     design = policy.quote_waiting_design
     deadline = policy.quote_deadline
     customer = policy.waiting_customer
+    implied = policy.implied_acceptance
     for case in cases:
         order = case.kind is CaseKind.ORDER
+        if (
+            implied.enabled
+            and order
+            and case.status == OrderStatus.CONFIRMATION_SENT
+            and case.implied_from is not None
+            and now >= case.implied_from
+        ):
+            # Told once, to the PIC, as the days run out: the PIC records it.
+            found.append(
+                Due(case, Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY, case.implied_from, ("pic",))
+            )
         if orders.enabled and order and case.status in _ORDER_UNCONFIRMED:
             found += _after(
                 case,

@@ -34,6 +34,7 @@ from dw_sales.application.catalog_imports import (
 )
 from dw_sales.application.change_reading import ChangeReader
 from dw_sales.application.change_requests import ChangeRequests
+from dw_sales.application.confirmations import Confirmations
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.design_text_reading import DesignTextReplies
@@ -142,6 +143,8 @@ class SalesServices:
     change_requests: ChangeRequests
     # A customer's change on an order in Bravo, through PC and back (ticket 29).
     update_loops: UpdateLoops
+    # The confirmation sent, then the customer's agreement (ticket 28).
+    confirmations: Confirmations
     gate: Gate
 
 
@@ -258,6 +261,7 @@ def assemble(
             quotation,
             scanner,
             deployed,
+            inbox,
         ),
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),
@@ -297,6 +301,7 @@ def assemble(
         ),
         pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
         update_loops=UpdateLoops(uow, gate, clock, ids, intake, book, book),
+        confirmations=Confirmations(uow, gate, clock, ids, intake, pending, threads, directory),
         change_requests=ChangeRequests(
             uow,
             gate,

@@ -129,9 +129,9 @@ new version of this note.
 What decisions 3 and 5 did not settle, settled here; each can be reversed by
 a new version of this note.
 
-- **Where the loop runs**: on an order Sales has confirmed (`confirmed`,
-  which stands for ADR 0011's `confirmation_sent` until ticket 28 splits
-  it). A change line confirmed between the Bravo entry and the confirmation
+- **Where the loop runs**: on an order whose confirmation left
+  (`confirmation_sent`, or `confirmed` once the customer agreed: ticket 28
+  split them, ADR 0011). A change line confirmed between the Bravo entry and the confirmation
   is refused (`change_status`) and stays open on the request until the order
   is confirmed. The loop is state on the case (`OrderCase.update_loop`,
   migration `0d1d0e4eb203`), so every step takes a case version.

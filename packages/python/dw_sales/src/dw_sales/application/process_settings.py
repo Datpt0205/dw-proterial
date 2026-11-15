@@ -208,7 +208,9 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             _step(StepId.O8, _in(_FOLLOWUPS, "waiting_customer")),
             # Whether a second person cross-checks the Bravo entry.
             _step(StepId.O9, _in(_ORDER, "cross_check_required")),
-            # Confirmation and the export-control hold.
+            # Confirmation and the export-control hold; then each customer's
+            # days of silence that count as agreement, and telling the PIC
+            # when they pass (ticket 28).
             _step(
                 StepId.O10,
                 _in(
@@ -216,8 +218,10 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "export_control_mode",
                     "export_control.denial_list_max_age_days",
                     "fiscal_year_start_month",
+                    "implied_acceptance",
                 ),
                 _severities("missing_noc_esf"),
+                _in(_FOLLOWUPS, "implied_acceptance"),
             ),
             _step(StepId.O11),
             # Reading the RFQ (a quote step whose switch lives in the order rules).
@@ -369,6 +373,10 @@ class EdgeAction(StrEnum):
     # The checker or the approver sends the case back.
     RETURN = "return"
     CONFIRM = "confirm"
+    # A person records the customer's agreement to the confirmation, in
+    # words or by silence past their days, or that they declined it (ticket 28).
+    RECORD_AGREEMENT = "record_agreement"
+    RECORD_DECLINE = "record_decline"
     APPLY_CHANGE = "apply_change"
     DRAFT_YCBG = "draft_ycbg"
     RECORD_YCBG = "record_ycbg"
@@ -400,8 +408,8 @@ class EdgeGuard(StrEnum):
     APPROVAL = "approval"
     # Nobody who made the case decides it.
     MAKER_CHECKER = "maker_checker"
-    # Straight to confirmed only when the rules stamped on the case need no
-    # cross-check.
+    # Straight to the confirmation only when the rules stamped on the case
+    # need no cross-check.
     CROSS_CHECK_NOT_REQUIRED = "cross_check_not_required"
     # `missing_noc_esf` acknowledged, and absent under `block_confirmation`.
     EXPORT_CONTROL_HOLD = "export_control_hold"
@@ -409,6 +417,9 @@ class EdgeGuard(StrEnum):
     PC_CONFIRMED_DATE = "pc_confirmed_date"
     # The request's own findings are answered.
     REQUEST_FINDINGS = "request_findings"
+    # Agreement by silence only for a customer with days in the order rules,
+    # once they have passed (ticket 28).
+    IMPLIED_DAYS = "implied_days"
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,7 +460,7 @@ _ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
     (_O.UPLOADED_TO_BRAVO, _O.CROSS_CHECKED): _edge(
         _A.CROSS_CHECK, "sales", _G.APPROVAL, _G.MAKER_CHECKER
     ),
-    (_O.UPLOADED_TO_BRAVO, _O.CONFIRMED): _edge(
+    (_O.UPLOADED_TO_BRAVO, _O.CONFIRMATION_SENT): _edge(
         _A.CONFIRM,
         "sales",
         _G.CROSS_CHECK_NOT_REQUIRED,
@@ -458,10 +469,14 @@ _ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
     ),
     (_O.UPLOADED_TO_BRAVO, _O.IN_REVIEW): _edge(_A.RETURN, "sales", _G.APPROVAL, _G.MAKER_CHECKER),
     (_O.UPLOADED_TO_BRAVO, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
-    (_O.CROSS_CHECKED, _O.CONFIRMED): _edge(
+    (_O.CROSS_CHECKED, _O.CONFIRMATION_SENT): _edge(
         _A.CONFIRM, "sales", _G.EXPORT_CONTROL_HOLD, _G.PC_CONFIRMED_DATE
     ),
     (_O.CROSS_CHECKED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CONFIRMATION_SENT, _O.CONFIRMED): _edge(_A.RECORD_AGREEMENT, "sales", _G.IMPLIED_DAYS),
+    # A revision there moves the same way (`revise`); the decline is the
+    # move this status adds.
+    (_O.CONFIRMATION_SENT, _O.CHANGE_REVIEW): _edge(_A.RECORD_DECLINE, "sales"),
     (_O.CONFIRMED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
     (_O.CHANGE_REVIEW, _O.UPLOADED_TO_BRAVO): _edge(
         _A.APPLY_CHANGE, "sales", _G.BLOCKING_FINDINGS, _G.ENTRY_COMPARED

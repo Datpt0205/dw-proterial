@@ -56,6 +56,7 @@ import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
+import { AgreementPanel } from "./agreement";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
@@ -208,14 +209,16 @@ function OrderDetail() {
     : data.status === "closed"
       ? `Hồ sơ đã đóng${data.close_reason ? `: ${label(CLOSE_REASON, data.close_reason)}` : ""}.`
       : data.status === "confirmed"
-        ? "Đơn đã xác nhận."
-        : data.status === "correction_requested"
-          ? "Đang chờ khách gửi PO đã sửa."
-          : data.status === "uploaded_to_bravo"
-            ? "Đang chờ kiểm chéo: người kiểm chéo không phải người đã làm hồ sơ."
-            : data.assigned_to
-              ? `Đến lượt ${name(data.assigned_to)}.`
-              : "Hồ sơ chưa giao cho ai.";
+        ? "Khách đã đồng ý xác nhận đơn."
+        : data.status === "confirmation_sent"
+          ? "Đã gửi xác nhận, chờ khách trả lời."
+          : data.status === "correction_requested"
+            ? "Đang chờ khách gửi PO đã sửa."
+            : data.status === "uploaded_to_bravo"
+              ? "Đang chờ kiểm chéo: người kiểm chéo không phải người đã làm hồ sơ."
+              : data.assigned_to
+                ? `Đến lượt ${name(data.assigned_to)}.`
+                : "Hồ sơ chưa giao cho ai.";
 
   const openSource = (field: string, lineNo: number | null) => {
     const anchor = anchorOf(data, field, lineNo);
@@ -234,7 +237,7 @@ function OrderDetail() {
   );
   const openCount = data.findings.filter(isOpen).length;
   const blocking = data.findings.filter((f) => isOpen(f) && f.blocking).length;
-  // The case refuses `confirmed` while export control holds it (contract
+  // The case refuses the confirmation while export control holds it (contract
   // acceptance row 3); the page says so before anyone reaches the button.
   const hold = exportControlHold(data);
 
@@ -492,6 +495,8 @@ function OrderDetail() {
         artifacts={artifacts}
         onChanged={reload}
       />
+
+      <AgreementPanel order={data} viewer={viewer} onChanged={reload} />
 
       <Card
         size="small"

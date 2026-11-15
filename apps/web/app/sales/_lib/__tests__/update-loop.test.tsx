@@ -117,12 +117,12 @@ afterEach(() => {
 
 describe("Vòng cập nhật (ticket 29)", () => {
   it("draws nothing on an order with no change in Bravo", () => {
-    const { container } = page(order({ status: "confirmed" }));
+    const { container } = page(order({ status: "confirmation_sent" }));
     expect(container.textContent).toBe("");
   });
 
   it("shows the step it waits on and records PC asked", async () => {
-    page(order({ status: "confirmed", update_loop: loop() }));
+    page(order({ status: "confirmation_sent", update_loop: loop() }));
     expect(screen.getByText("Chờ hỏi PC")).toBeTruthy();
     // Held beside asked; the draft opens on click.
     expect(screen.getByText(/04\/12\/2026/)).toBeTruthy();
@@ -140,7 +140,7 @@ describe("Vòng cập nhật (ticket 29)", () => {
   it("disables asking PC while a line of the request is undecided", () => {
     page(
       order({
-        status: "confirmed",
+        status: "confirmation_sent",
         update_loop: loop(),
         change_requests: [
           {
@@ -157,7 +157,7 @@ describe("Vòng cập nhật (ticket 29)", () => {
   it("offers the customer's three answers once the answer was sent", () => {
     page(
       order({
-        status: "confirmed",
+        status: "confirmation_sent",
         update_loop: loop({
           step: "waiting_customer",
           awaits: "waiting_customer",
@@ -210,7 +210,7 @@ describe("Vòng cập nhật (ticket 29)", () => {
 
   it("says why a reader cannot move the loop", () => {
     SCOPES = ["sales.case.read"];
-    page(order({ status: "confirmed", update_loop: loop() }));
+    page(order({ status: "confirmation_sent", update_loop: loop() }));
     expect(button("Ghi đã hỏi PC").disabled).toBe(true);
   });
 });

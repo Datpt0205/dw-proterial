@@ -496,6 +496,13 @@ def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str,
                 f"{hours} giờ chưa ghi được ngày PC trả lời. DW1 không gửi thư cho PC: "
                 "bạn quyết định có nhắc PC hay không.",
             )
+        case Followup.IMPLIED_ACCEPTANCE, _:
+            return (
+                f"PO {ref}: khách im lặng quá hạn",
+                f"Khách {customer} chưa trả lời xác nhận PO {ref}, đã quá số ngày được coi là "
+                f"đồng ý (từ {since}). DW1 không tự ghi: mở hồ sơ để ghi khách đồng ý ngầm, "
+                "hoặc hỏi lại khách.",
+            )
         case Followup.WAITING_CUSTOMER, _ if case.customer_asked_at is not None:
             hours = policy.waiting_customer.remind.after_hours
             return (

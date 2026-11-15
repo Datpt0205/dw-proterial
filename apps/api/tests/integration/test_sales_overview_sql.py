@@ -179,7 +179,7 @@ async def test_the_sql_figures_are_the_python_figures(demo: Api) -> None:
 
     assert _differences(_comparable(sql), _comparable(python)) == []
     # The comparison has something to compare: every kind of figure is there.
-    assert sql.statuses[CaseKind.ORDER][OrderStatus.CONFIRMED.value] == 1
+    assert sql.statuses[CaseKind.ORDER][OrderStatus.CONFIRMATION_SENT.value] == 1
     assert sql.statuses[CaseKind.QUOTE]["approved"] == 1
     assert sql.decided_inbox_ids == {"M01", "M03", "M10"}
     assert sql.routed_to_sales >= 1

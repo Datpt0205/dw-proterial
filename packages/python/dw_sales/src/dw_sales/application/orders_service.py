@@ -20,9 +20,9 @@ in a request names either.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from typing import Literal
 
 from dw_kernel.errors import DomainError
@@ -35,6 +35,7 @@ from dw_sales.application.activity_ports import (
     activity_cases,
 )
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.confirmations import confirmation_copy
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
@@ -127,6 +128,7 @@ class OrderQueries:
             servings = await work.served.servings(CaseKind.ORDER, case_id)
             sent = {s.message_id: s for s in await work.sent.list_all()}
             requests = await work.change_requests.for_case(case_id)
+            artifacts = await work.artifacts.for_case(CaseKind.ORDER, case_id)
         thread = await case_thread(
             self.threads,
             scope,
@@ -154,6 +156,7 @@ class OrderQueries:
             thread=thread,
             sent=sent,
             change_requests=requests,
+            confirmation_copy=confirmation_copy(stored.case, thread.sent, artifacts),
         )
 
 
@@ -318,24 +321,6 @@ class OrderCommands:
             "order.prepared",
             lambda case, actor, at: case.prepare(actor, at),
             served_gate=True,
-        )
-
-    async def confirm(
-        self,
-        context: AccessContext,
-        case_id: uuid.UUID,
-        *,
-        case_version: int,
-        delivery_dates: Mapping[int, Sequence[date]],
-    ) -> CaseChangeView:
-        """Step 10, with the dates Sales confirms for every line: one per
-        delivery schedule (ticket 35)."""
-        return await self._decide(
-            context,
-            case_id,
-            case_version,
-            "order.confirmed",
-            lambda case, actor, at: case.confirm(actor, at, delivery_dates),
         )
 
     async def close(

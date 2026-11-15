@@ -353,6 +353,93 @@
         "title": "AddSupportStaffRequest",
         "type": "object"
       },
+      "AgreementBody": {
+        "additionalProperties": false,
+        "description": "How the customer agreed to the confirmation (ticket 28), and their\nreply on the case when the person records it from one.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "how": {
+            "enum": [
+              "accepted",
+              "implied"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~]{1,512}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          }
+        },
+        "required": [
+          "case_version",
+          "how"
+        ],
+        "title": "AgreementBody",
+        "type": "object"
+      },
+      "AgreementView": {
+        "description": "How the customer agreed, as a person recorded it (ticket 28): in\nwords, from their reply and its located sentences when recorded from\none, or by silence.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "how": {
+            "enum": [
+              "accepted",
+              "implied"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "quotes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "how",
+          "by",
+          "at",
+          "message_id",
+          "quotes"
+        ],
+        "title": "AgreementView",
+        "type": "object"
+      },
       "Amount": {
         "anyOf": [
           {
@@ -2136,7 +2223,9 @@
                   "resume_review",
                   "await_revised_po",
                   "request_correction",
-                  "discuss_spec"
+                  "discuss_spec",
+                  "record_accepted",
+                  "record_declined"
                 ],
                 "type": "string"
               },
@@ -3556,6 +3645,18 @@
             "minItems": 1,
             "title": "Delivery Dates",
             "type": "array"
+          },
+          "sent_message_id": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~]{1,512}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Message Id"
           }
         },
         "required": [
@@ -3634,6 +3735,31 @@
         "title": "Confirmation",
         "type": "object"
       },
+      "ConfirmationCopyView": {
+        "description": "A message Sales sent on the case's thread carrying the processed\nExcel DW1 made at this case version (by sha256), while the confirmation\nis ahead of the order: it proposes \"Ghi đã gửi xác nhận\", from that\nmail's time (ticket 28). A suggestion: the PIC records it.",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "received_at",
+          "subject"
+        ],
+        "title": "ConfirmationCopyView",
+        "type": "object"
+      },
       "ConfirmationMail": {
         "description": "A verified mail from the supplier of one of a case's orders that names\nthe order, not read yet: what a buyer presses \"DW2 đọc\" on.",
         "properties": {
@@ -3667,6 +3793,57 @@
           "received_at"
         ],
         "title": "ConfirmationMail",
+        "type": "object"
+      },
+      "ConfirmationView": {
+        "description": "The confirmation that left (ticket 28): when (the clock of silence),\nthe sent copy it was recorded from, and, for a customer with days of\nsilence, the term and the instant it counts as agreement. None of the\ntwo: never by silence.",
+        "properties": {
+          "implied_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied From"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpliedTermView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sent_at",
+          "message_id",
+          "term",
+          "implied_from"
+        ],
+        "title": "ConfirmationView",
         "type": "object"
       },
       "ConfirmedLine": {
@@ -5501,6 +5678,8 @@
           "cross_check",
           "return",
           "confirm",
+          "record_agreement",
+          "record_decline",
           "apply_change",
           "draft_ycbg",
           "record_ycbg",
@@ -5529,7 +5708,8 @@
           "cross_check_not_required",
           "export_control_hold",
           "pc_confirmed_date",
-          "request_findings"
+          "request_findings",
+          "implied_days"
         ],
         "title": "EdgeGuard",
         "type": "string"
@@ -6756,6 +6936,38 @@
           "email"
         ],
         "title": "IdentityRefView",
+        "type": "object"
+      },
+      "ImpliedTermView": {
+        "description": "A customer's days of silence that count as agreement, as the rules\nstamped on the case gave them when the confirmation left (ticket 28).",
+        "properties": {
+          "counted_from": {
+            "enum": [
+              "confirmation_sent",
+              "po_date"
+            ],
+            "title": "Counted From",
+            "type": "string"
+          },
+          "day_count": {
+            "enum": [
+              "calendar",
+              "business"
+            ],
+            "title": "Day Count",
+            "type": "string"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "day_count",
+          "counted_from"
+        ],
+        "title": "ImpliedTermView",
         "type": "object"
       },
       "InboxItem": {
@@ -10706,6 +10918,16 @@
       },
       "OrderCaseView": {
         "properties": {
+          "agreement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgreementView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "assigned_to": {
             "anyOf": [
               {
@@ -10874,6 +11096,26 @@
               }
             ],
             "title": "Closed By"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmation_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmationCopyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "confirmed_at": {
             "anyOf": [
@@ -17794,7 +18036,9 @@
                   "resume_review",
                   "await_revised_po",
                   "request_correction",
-                  "discuss_spec"
+                  "discuss_spec",
+                  "record_accepted",
+                  "record_declined"
                 ],
                 "type": "string"
               },
@@ -28652,6 +28896,77 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/agreement": {
+      "post": {
+        "operationId": "record_agreement_api_v1_sales_orders__case_id__agreement_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgreementBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Agreement",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/artifacts": {
       "get": {
         "operationId": "order_artifacts_api_v1_sales_orders__case_id__artifacts_get",
@@ -29667,6 +29982,77 @@
           }
         },
         "summary": "Order Reminder",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/decline": {
+      "post": {
+        "operationId": "record_decline_api_v1_sales_orders__case_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Decline",
         "tags": [
           "sales"
         ]

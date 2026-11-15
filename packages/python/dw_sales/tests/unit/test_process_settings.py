@@ -215,11 +215,16 @@ async def test_each_edge_is_served_with_its_action_who_takes_it_and_its_guards()
         for lane in (await _view()).lanes
         for edge in lane.edges
     }
-    confirm = edges[(CaseKind.ORDER, "uploaded_to_bravo", "confirmed")]
+    confirm = edges[(CaseKind.ORDER, "uploaded_to_bravo", "confirmation_sent")]
     assert confirm.action is EdgeAction.CONFIRM and confirm.actor == "sales"
     assert {EdgeGuard.CROSS_CHECK_NOT_REQUIRED, EdgeGuard.EXPORT_CONTROL_HOLD} <= set(
         confirm.guards
     )
+    # The customer's agreement is a person's to record; by silence only past
+    # the customer's days (ticket 28).
+    agreed = edges[(CaseKind.ORDER, "confirmation_sent", "confirmed")]
+    assert agreed.action is EdgeAction.RECORD_AGREEMENT and agreed.actor == "sales"
+    assert EdgeGuard.IMPLIED_DAYS in agreed.guards
     cross = edges[(CaseKind.ORDER, "uploaded_to_bravo", "cross_checked")]
     assert {EdgeGuard.APPROVAL, EdgeGuard.MAKER_CHECKER} <= set(cross.guards)
     assert edges[(CaseKind.ORDER, "received", "checked")].actor == "dw"
@@ -255,6 +260,8 @@ async def test_every_step_is_on_a_node_or_listed_as_stateless_exactly_once() -> 
 async def test_a_done_status_waits_on_nobody() -> None:
     nodes = {(lane.kind, n.status): n for lane in (await _view()).lanes for n in lane.nodes}
     assert nodes[(CaseKind.ORDER, "confirmed")].holder is None
+    # The confirmation left: Sales' part is done until the customer answers.
+    assert nodes[(CaseKind.ORDER, "confirmation_sent")].holder is None
     assert nodes[(CaseKind.QUOTE, "pending_approval")].holder == "approver"
 
 

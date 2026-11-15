@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState, type ReactNode } from "react";
 import {
   Alert,
@@ -113,8 +114,14 @@ export function OrderActions({
 
   // The step the newest message in the case's thread proposes (tickets 32,
   // 26): marked, never pressed for Sales.
+  // A sent copy carrying this version's processed Excel proposes the
+  // confirmation sent (ticket 28), from that mail's time.
   const proposal = suggestedStep(order.replies, order.thread_sent);
-  const suggested = proposal ? (SUGGESTED[proposal] ?? null) : null;
+  const suggested = order.confirmation_copy
+    ? "confirm"
+    : proposal
+      ? (SUGGESTED[proposal] ?? null)
+      : null;
 
   const resumeReview = async () =>
     done(
@@ -183,6 +190,13 @@ export function OrderActions({
             </GuardedButton>
             {suggested === action ? (
               <StatusTag tone="warn">Đề xuất từ luồng thư</StatusTag>
+            ) : null}
+            {action === "confirm" && order.confirmation_copy ? (
+              <Link
+                href={`/sales/inbox?message=${encodeURIComponent(order.confirmation_copy.message_id)}`}
+              >
+                Xem trong thư
+              </Link>
             ) : null}
           </Space>
         ))}
@@ -580,6 +594,7 @@ function ConfirmDrawer({
 }: DialogProps) {
   const [form] = Form.useForm<Record<string, unknown>>();
   const [failed, setFailed] = useState(0);
+  const copy = order.confirmation_copy;
   const initial: Record<string, unknown> = {};
   for (const l of order.lines) {
     const split = deliveriesOf(l);
@@ -624,6 +639,13 @@ function ConfirmDrawer({
         </Space>
       }
     >
+      {copy ? (
+        <Alert
+          type="info"
+          showIcon
+          title={`Sales đã gửi xác nhận lúc ${formatDateTime(copy.received_at)}: thư có tệp Excel của phiên bản này. Thời điểm gửi tính từ thư đó.`}
+        />
+      ) : null}
       <Typography.Paragraph>
         Nhập ngày giao Sales xác nhận cho từng dòng; dòng PO chia nhiều đợt giao
         được xác nhận từng đợt. Ngày DW1 gợi ý (ngày nhận PO cộng lead time
@@ -668,6 +690,7 @@ function ConfirmDrawer({
             fromPickerDay(values[name] as PickerDay) ?? "";
           const body = {
             case_version: order.case_version,
+            ...(copy ? { sent_message_id: copy.message_id } : {}),
             delivery_dates: order.lines.map((l) => {
               const split = deliveriesOf(l);
               return split

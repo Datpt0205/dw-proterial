@@ -585,6 +585,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/agreement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Agreement */
+        post: operations["record_agreement_api_v1_sales_orders__case_id__agreement_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/artifacts": {
         parameters: {
             query?: never;
@@ -818,6 +835,23 @@ export interface paths {
         get: operations["order_reminder_api_v1_sales_orders__case_id__customer_reminder_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Decline */
+        post: operations["record_decline_api_v1_sales_orders__case_id__decline_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2039,6 +2073,49 @@ export interface components {
             /** Scopes */
             scopes: string[];
         };
+        /**
+         * AgreementBody
+         * @description How the customer agreed to the confirmation (ticket 28), and their
+         *     reply on the case when the person records it from one.
+         */
+        AgreementBody: {
+            /** Case Version */
+            case_version: number;
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "accepted" | "implied";
+            /** Message Id */
+            message_id?: string | null;
+        };
+        /**
+         * AgreementView
+         * @description How the customer agreed, as a person recorded it (ticket 28): in
+         *     words, from their reply and its located sentences when recorded from
+         *     one, or by silence.
+         */
+        AgreementView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "accepted" | "implied";
+            /** Message Id */
+            message_id: string | null;
+            /** Quotes */
+            quotes: string[];
+        };
         Amount: string | components["schemas"]["Hidden"];
         /**
          * AnchorRef
@@ -2369,7 +2446,7 @@ export interface components {
             /** Prompt */
             prompt: string | null;
             /** Proposal */
-            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec") | null;
+            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec" | "record_accepted" | "record_declined") | null;
         };
         /**
          * CatalogImportView
@@ -2770,6 +2847,45 @@ export interface components {
             case_version: number;
             /** Delivery Dates */
             delivery_dates: components["schemas"]["LineDate"][];
+            /** Sent Message Id */
+            sent_message_id?: string | null;
+        };
+        /**
+         * ConfirmationCopyView
+         * @description A message Sales sent on the case's thread carrying the processed
+         *     Excel DW1 made at this case version (by sha256), while the confirmation
+         *     is ahead of the order: it proposes "Ghi đã gửi xác nhận", from that
+         *     mail's time (ticket 28). A suggestion: the PIC records it.
+         */
+        ConfirmationCopyView: {
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Subject */
+            subject: string;
+        };
+        /**
+         * ConfirmationView
+         * @description The confirmation that left (ticket 28): when (the clock of silence),
+         *     the sent copy it was recorded from, and, for a customer with days of
+         *     silence, the term and the instant it counts as agreement. None of the
+         *     two: never by silence.
+         */
+        ConfirmationView: {
+            /** Implied From */
+            implied_from: string | null;
+            /** Message Id */
+            message_id: string | null;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
+            term: components["schemas"]["ImpliedTermView"] | null;
         };
         /**
          * Constant
@@ -3228,13 +3344,13 @@ export interface components {
          * @description What makes a case move: the domain method that moves it.
          * @enum {string}
          */
-        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
+        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
         /**
          * EdgeGuard
          * @description What the domain refuses a move without.
          * @enum {string}
          */
-        EdgeGuard: "blocking_findings" | "ask_customer" | "entry_compared" | "approval" | "maker_checker" | "cross_check_not_required" | "export_control_hold" | "pc_confirmed_date" | "request_findings";
+        EdgeGuard: "blocking_findings" | "ask_customer" | "entry_compared" | "approval" | "maker_checker" | "cross_check_not_required" | "export_control_hold" | "pc_confirmed_date" | "request_findings" | "implied_days";
         /**
          * EvidenceView
          * @description What Sales weighs for one line (step 7). Only for `sales.price.read`;
@@ -3566,6 +3682,25 @@ export interface components {
              * @constant
              */
             hidden: true;
+        };
+        /**
+         * ImpliedTermView
+         * @description A customer's days of silence that count as agreement, as the rules
+         *     stamped on the case gave them when the confirmation left (ticket 28).
+         */
+        ImpliedTermView: {
+            /**
+             * Counted From
+             * @enum {string}
+             */
+            counted_from: "confirmation_sent" | "po_date";
+            /**
+             * Day Count
+             * @enum {string}
+             */
+            day_count: "calendar" | "business";
+            /** Days */
+            days: number;
         };
         /** InboxMessageView */
         InboxMessageView: {
@@ -4344,6 +4479,7 @@ export interface components {
         };
         /** OrderCaseView */
         OrderCaseView: {
+            agreement?: components["schemas"]["AgreementView"] | null;
             /** Assigned To */
             assigned_to: string | null;
             /** Attachment Id */
@@ -4385,6 +4521,8 @@ export interface components {
             closed_at: string | null;
             /** Closed By */
             closed_by: string | null;
+            confirmation?: components["schemas"]["ConfirmationView"] | null;
+            confirmation_copy?: components["schemas"]["ConfirmationCopyView"] | null;
             /** Confirmed At */
             confirmed_at: string | null;
             /** Confirmed By */
@@ -6106,7 +6244,7 @@ export interface components {
             /** Prompt */
             prompt: string | null;
             /** Proposal */
-            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec") | null;
+            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po" | "request_correction" | "discuss_spec" | "record_accepted" | "record_declined") | null;
             /**
              * Received At
              * Format: date-time
@@ -8206,6 +8344,44 @@ export interface operations {
             };
         };
     };
+    record_agreement_api_v1_sales_orders__case_id__agreement_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgreementBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_artifacts_api_v1_sales_orders__case_id__artifacts_get: {
         parameters: {
             query?: never;
@@ -8740,6 +8916,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerReminderView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_decline_api_v1_sales_orders__case_id__decline_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
                 };
             };
             /** @description Validation Error */

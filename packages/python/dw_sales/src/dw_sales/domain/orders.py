@@ -28,11 +28,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Final, Literal, NamedTuple, Self
+from zoneinfo import ZoneInfo
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
@@ -375,6 +376,90 @@ class UpdateLoop(BaseModel):
 
     def line(self, line_no: int) -> LoopLine | None:
         return next((x for x in self.lines if x.line_no == line_no), None)
+
+
+# ------------------------------------- the customer's agreement (ticket 28) --
+
+# dw_sales ADR 0011: the confirmation leaves (`confirmation_sent`), then the
+# customer agrees in words (`accepted`) or by staying silent past their days
+# (`implied`), and a person records which. DW1 never moves the case itself.
+AgreementHow = Literal["accepted", "implied"]
+# How a customer's days of silence are counted: every day, or Monday to
+# Friday only (no tenant holiday calendar exists yet), and from which day.
+DayCount = Literal["calendar", "business"]
+CountedFrom = Literal["confirmation_sent", "po_date"]
+# Mon-Fri, `date.weekday()` order: Saturday is 5.
+_FIRST_WEEKEND_DAY: Final = 5
+
+
+class ImpliedTerm(BaseModel):
+    """A customer's silence that counts as agreement: after this many days,
+    counted this way, from that day (the order rules' `implied_acceptance`,
+    one per customer, none by default)."""
+
+    model_config = _FROZEN
+
+    days: int = Field(ge=1, le=60)
+    day_count: DayCount = "calendar"
+    counted_from: CountedFrom = "confirmation_sent"
+
+    def implied_from(self, sent_at: datetime, po_date: date, zone: ZoneInfo) -> datetime:
+        """The first instant silence counts as agreement: midnight, local
+        time, after the last day the customer has. The start day itself is
+        not counted; a business day is Monday to Friday."""
+        day = po_date if self.counted_from == "po_date" else sent_at.astimezone(zone).date()
+        counted = 0
+        while counted < self.days:
+            day += timedelta(days=1)
+            if self.day_count == "calendar" or day.weekday() < _FIRST_WEEKEND_DAY:
+                counted += 1
+        return datetime.combine(day + timedelta(days=1), time(0), tzinfo=zone)
+
+
+class ConfirmationSent(BaseModel):
+    """The confirmation that left (ADR 0011): when (the clock of implied
+    acceptance), the sent copy it was recorded from when a person recorded
+    it from one, and, where the customer has days of silence in the rules
+    stamped on the case, the term and the instant silence counts as
+    agreement. No term: never implied, whatever the wait."""
+
+    model_config = _FROZEN
+
+    sent_at: AwareDatetime
+    message_id: str | None = Field(default=None, pattern=r"^[!-~]{1,512}$")
+    term: ImpliedTerm | None = None
+    implied_from: AwareDatetime | None = None
+
+    @model_validator(mode="after")
+    def _implied_with_its_term(self) -> Self:
+        if (self.term is None) != (self.implied_from is None):
+            raise ValueError("an implied acceptance names its term, and only then its instant")
+        return self
+
+
+class CustomerAgreement(BaseModel):
+    """The customer agreed to the confirmation, as a person recorded it:
+    in words (`accepted`, from one of their replies on the case when the
+    person recorded it from one, with the sentences DW1 located there), or by
+    silence past their days (`implied`)."""
+
+    model_config = _FROZEN
+
+    how: AgreementHow
+    by: ActorId
+    at: AwareDatetime
+    message_id: str | None = Field(default=None, pattern=r"^[!-~]{1,512}$")
+    quotes: tuple[Annotated[str, Field(min_length=1, max_length=400)], ...] = Field(
+        default=(), max_length=3
+    )
+
+    @model_validator(mode="after")
+    def _silence_quotes_nothing(self) -> Self:
+        if self.how == "implied" and (self.message_id is not None or self.quotes):
+            raise ValueError("silence names no reply")
+        if self.quotes and self.message_id is None:
+            raise ValueError("a quote names the reply it is from")
+        return self
 
 
 def _require_corrections(
@@ -1663,6 +1748,9 @@ class OrderStatus(StrEnum):
     PREPARED = "prepared"
     UPLOADED_TO_BRAVO = "uploaded_to_bravo"
     CROSS_CHECKED = "cross_checked"
+    # The confirmation left and the order waits on the customer's answer;
+    # then the customer agreed, in words or by silence (dw_sales ADR 0011).
+    CONFIRMATION_SENT = "confirmation_sent"
     CONFIRMED = "confirmed"
     CHANGE_REVIEW = "change_review"
     CLOSED = "closed"
@@ -1675,8 +1763,9 @@ class CloseReason(StrEnum):
     CANNOT_SUPPLY = "cannot_supply"
 
 
-# warn: an acknowledged `missing_noc_esf` lets the order be confirmed.
-# block_confirmation: its presence refuses `confirmed` even when acknowledged.
+# warn: an acknowledged `missing_noc_esf` lets the confirmation be sent.
+# block_confirmation: its presence refuses `confirmation_sent` even when
+# acknowledged.
 ExportControlMode = Literal["warn", "block_confirmation"]
 
 _S = OrderStatus
@@ -1687,8 +1776,17 @@ BEFORE_UPLOAD: Final = frozenset(
 )
 # The order is in Bravo: a new revision is a change to apply there.
 IN_BRAVO: Final = frozenset(
-    {_S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED, _S.CONFIRMED, _S.CHANGE_REVIEW}
+    {
+        _S.UPLOADED_TO_BRAVO,
+        _S.CROSS_CHECKED,
+        _S.CONFIRMATION_SENT,
+        _S.CONFIRMED,
+        _S.CHANGE_REVIEW,
+    }
 )
+# The confirmation has left (ADR 0011): its stamp stands, and the customer's
+# answer, in words or by silence, is what the order waits on until agreed.
+CONFIRMATION_LEFT: Final = frozenset({_S.CONFIRMATION_SENT, _S.CONFIRMED})
 # Where lines, mappings and dispositions are decided.
 _EDITABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED, _S.CHANGE_REVIEW})
 # Where a change the customer asked by mail is taken (ticket 27): the PIC
@@ -1696,23 +1794,23 @@ _EDITABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED, _S.CHANGE_REVIEW})
 # update loop's (dw_sales ADR 0010 decision 3).
 _CHANGEABLE: Final = frozenset({_S.IN_REVIEW, _S.PREPARED})
 # Where the export-control PIC may acknowledge `missing_noc_esf` without
-# moving the case: it blocks only `confirmed` (spec decision 9).
+# moving the case: it blocks only the confirmation (spec decision 9).
 _ACKNOWLEDGEABLE: Final = frozenset(
     {_S.IN_REVIEW, _S.PREPARED, _S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED, _S.CHANGE_REVIEW}
 )
 # Where each step of the update loop stands (ticket 29). It starts on an order
-# Sales has confirmed to the customer: `confirmed` stands for ADR 0011's
-# `confirmation_sent` until ticket 28 splits it. Talking with PC and the
-# customer leaves the order as it is; once the customer accepts, the change
-# is applied and the order is reviewed, entered in Bravo, cross-checked as
-# its rules say, and confirmed again, which ends the loop. A move anywhere
-# else (a new revision, a return from the cross-check) ends it too.
+# whose confirmation has left, whether the customer has agreed to it yet or
+# not (ticket 28). Talking with PC and the customer leaves the order as it
+# is; once the customer accepts, the change is applied and the order is
+# reviewed, entered in Bravo, cross-checked as its rules say, and its
+# confirmation sent again, which ends the loop. A move anywhere else (a new
+# revision, a return from the cross-check) ends it too.
 _LOOP_STATUSES: Final[Mapping[str, frozenset[OrderStatus]]] = MappingProxyType(
     {
-        "ask_pc": frozenset({_S.CONFIRMED}),
-        "waiting_pc": frozenset({_S.CONFIRMED}),
-        "answer_customer": frozenset({_S.CONFIRMED}),
-        "waiting_customer": frozenset({_S.CONFIRMED}),
+        "ask_pc": CONFIRMATION_LEFT,
+        "waiting_pc": CONFIRMATION_LEFT,
+        "answer_customer": CONFIRMATION_LEFT,
+        "waiting_customer": CONFIRMATION_LEFT,
         "bravo_update": frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED}),
     }
 )
@@ -1732,11 +1830,21 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
         _S.PREPARED: frozenset(
             {_S.PREPARED, _S.UPLOADED_TO_BRAVO, _S.IN_REVIEW, _S.CHECKED, _S.CLOSED}
         ),
-        # -> confirmed only when the rules stamped on the case need no cross-check.
+        # -> confirmation_sent only when the rules stamped on the case need no
+        # cross-check.
         _S.UPLOADED_TO_BRAVO: frozenset(
-            {_S.UPLOADED_TO_BRAVO, _S.CROSS_CHECKED, _S.CONFIRMED, _S.IN_REVIEW, _S.CHANGE_REVIEW}
+            {
+                _S.UPLOADED_TO_BRAVO,
+                _S.CROSS_CHECKED,
+                _S.CONFIRMATION_SENT,
+                _S.IN_REVIEW,
+                _S.CHANGE_REVIEW,
+            }
         ),
-        _S.CROSS_CHECKED: frozenset({_S.CROSS_CHECKED, _S.CONFIRMED, _S.CHANGE_REVIEW}),
+        _S.CROSS_CHECKED: frozenset({_S.CROSS_CHECKED, _S.CONFIRMATION_SENT, _S.CHANGE_REVIEW}),
+        # -> confirmed: the customer agreed (ADR 0011); -> change_review: they
+        # declined it, or a revision or an accepted change arrived.
+        _S.CONFIRMATION_SENT: frozenset({_S.CONFIRMED, _S.CHANGE_REVIEW}),
         _S.CONFIRMED: frozenset({_S.CHANGE_REVIEW}),
         _S.CHANGE_REVIEW: frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO}),
         _S.CLOSED: frozenset(),
@@ -1778,8 +1886,13 @@ class Coverage(BaseModel):
 
 # Stamps that belong to a step, by the first status that has them.
 _PREPARED_ON: Final = frozenset({_S.PREPARED}) | IN_BRAVO
-_CROSS_CHECKED_ON: Final = frozenset({_S.CROSS_CHECKED, _S.CONFIRMED})
+_CROSS_CHECKED_ON: Final = frozenset({_S.CROSS_CHECKED}) | CONFIRMATION_LEFT
 MAKER_CHECKER_RULE: Final = "tách nhiệm, WIV-03-012 bước 9"
+# Why the customer's answer to the confirmation is not recorded now: their
+# change is in the update loop, whose own answer it is.
+_ANSWER_IN_THE_LOOP: Final = (
+    "khách đang xin thay đổi đơn: câu trả lời của khách ghi ở vòng cập nhật"
+)
 # The refusal a maker reads, from the domain or from the stored constraint.
 MAKER_CHECKER_REFUSAL: Final = (
     f"người đã làm một phần hồ sơ này không tự kiểm chéo được ({MAKER_CHECKER_RULE})"
@@ -1851,9 +1964,14 @@ class OrderCase(BaseModel):
     returned_reason: Note | None = None
     returned_by: ActorId | None = None
     returned_at: AwareDatetime | None = None
-    # Step 10.
+    # Step 10: who recorded the confirmation sent (with each line's
+    # confirmed dates) and when; kept while the customer's answer is awaited
+    # and once they agreed. `confirmation` is what left and its clock.
     confirmed_by: ActorId | None = None
     confirmed_at: AwareDatetime | None = None
+    confirmation: ConfirmationSent | None = None
+    # The customer agreed to it, as a person recorded (ADR 0011).
+    agreement: CustomerAgreement | None = None
     close_reason: CloseReason | None = None
     closed_by: ActorId | None = None
     closed_at: AwareDatetime | None = None
@@ -1978,7 +2096,14 @@ class OrderCase(BaseModel):
             self.cross_checked_by,
             self.cross_checked_at,
         )
-        require(status is _S.CONFIRMED, "confirmation", self.confirmed_by, self.confirmed_at)
+        require(
+            status in CONFIRMATION_LEFT,
+            "confirmation",
+            self.confirmed_by,
+            self.confirmed_at,
+            self.confirmation,
+        )
+        require(status is _S.CONFIRMED, "customer agreement", self.agreement)
 
     # ------------------------------------------------------------ reading --
 
@@ -1989,6 +2114,14 @@ class OrderCase(BaseModel):
         the narrow reading (failure-modes #7). `confirm`, `awaiting()` and the
         order list read this, so no two screens disagree about one order."""
         return self.status is _S.UPLOADED_TO_BRAVO and self.cross_check_required is not False
+
+    @property
+    def awaits_confirmation(self) -> bool:
+        """In Bravo, past its cross-check (or with none required), and its
+        confirmation not sent yet: where `confirm` may move it."""
+        return (
+            self.status in (_S.CROSS_CHECKED, _S.UPLOADED_TO_BRAVO) and not self.awaits_cross_check
+        )
 
     @property
     def header(self) -> PoHeader:
@@ -2680,7 +2813,7 @@ class OrderCase(BaseModel):
                 "the line's requested date is not short",
                 details={"case_id": str(self.case_id), "line": line_no},
             )
-        if self.status in (_S.CLOSED, _S.CONFIRMED, _S.RECEIVED, _S.CHECKED):
+        if self.status in {_S.CLOSED, _S.RECEIVED, _S.CHECKED} | CONFIRMATION_LEFT:
             raise ConflictError(
                 f"a PC date is not recorded in {self.status}",
                 details={"case_id": str(self.case_id), "status": self.status.value},
@@ -2813,19 +2946,20 @@ class OrderCase(BaseModel):
         return _with_values(self.line(loop_line.line_no).effective, loop_line.changes)
 
     def loop_change(self, line_no: int, change: AppliedChange, actor: Actor) -> OrderCase:
-        """A change the customer asked, confirmed by the PIC on an order Sales
-        has confirmed to the customer (ADR 0010 decision 3): it joins the
+        """A change the customer asked, confirmed by the PIC on an order whose
+        confirmation has left, agreed yet or not (ADR 0010 decision 3,
+        ticket 28): it joins the
         update loop, which waits to be asked of PC, and the order itself does
         not change until the customer accepts PC's answer (`take_update`).
 
         Refused in any other status: before Bravo a change is taken at once
         (`take_change`); between the Bravo entry and the confirmation the
-        PIC confirms the order first. Refused for a line printing its
+        PIC sends the confirmation first. Refused for a line printing its
         schedules, for a change of another request while one is in the loop
         (`update_busy`), and once PC has been asked (`update_step`): the
         request's lines are all decided before PC is asked."""
         details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
-        if self.status is not _S.CONFIRMED:
+        if self.status not in CONFIRMATION_LEFT:
             raise ConflictError(
                 f"a change asked by mail is not taken in {self.status}",
                 details={**details, "status": self.status.value, "rule": "change_status"},
@@ -3073,18 +3207,25 @@ class OrderCase(BaseModel):
         return loop
 
     def confirm(
-        self, actor: Actor, at: datetime, delivery_dates: Mapping[int, Sequence[date]]
+        self,
+        actor: Actor,
+        at: datetime,
+        delivery_dates: Mapping[int, Sequence[date]],
+        confirmation: ConfirmationSent | None = None,
     ) -> OrderCase:
-        """-> confirmed, with the dates Sales confirms for every line (step 10):
-        one per delivery, so a line split over several schedules gets one per
-        schedule, in their order (ticket 35), and any other line one.
+        """-> confirmation_sent, with the dates Sales confirms for every line
+        (step 10): one per delivery, so a line split over several schedules
+        gets one per schedule, in their order (ticket 35), and any other line
+        one; and what left (``confirmation``: when, from which sent copy, and
+        the customer's term of silence, `confirmation_sent`; none named: sent
+        at ``at``, never agreed by silence).
 
         From ``cross_checked``; from ``uploaded_to_bravo`` only when the rules
         stamped on the case need no cross-check. Refused while
         `missing_noc_esf` is open, or present at all under
         ``block_confirmation``, and while a short lead time has no PC date.
         """
-        status = transition(self.status, _S.CONFIRMED)
+        status = transition(self.status, _S.CONFIRMATION_SENT)
         details: dict[str, object] = {"case_id": str(self.case_id)}
         if self.awaits_cross_check:
             raise ConflictError(
@@ -3121,7 +3262,98 @@ class OrderCase(BaseModel):
             )
             for line in self.lines
         )
-        return self._next(status, lines=lines, confirmed_by=actor.user_id, confirmed_at=at)
+        return self._next(
+            status,
+            lines=lines,
+            confirmed_by=actor.user_id,
+            confirmed_at=at,
+            confirmation=confirmation or ConfirmationSent(sent_at=at),
+        )
+
+    def confirmation_sent(
+        self,
+        sent_at: datetime,
+        term: ImpliedTerm | None,
+        zone: ZoneInfo,
+        *,
+        message_id: str | None = None,
+    ) -> ConfirmationSent:
+        """What left, as `confirm` records it: sent at ``sent_at`` (the sent
+        copy's time, or when the PIC recorded it), and, where the customer
+        has a ``term`` of silence, the instant it counts as agreement, in the
+        tenant's ``zone``. No term: never implied (ADR 0011)."""
+        return ConfirmationSent(
+            sent_at=sent_at,
+            message_id=message_id,
+            term=term,
+            implied_from=(
+                None
+                if term is None
+                else term.implied_from(sent_at, self.effective_header.po_date, zone)
+            ),
+        )
+
+    def agreed(
+        self,
+        how: AgreementHow,
+        actor: Actor,
+        at: datetime,
+        *,
+        message_id: str | None = None,
+        quotes: Sequence[str] = (),
+    ) -> OrderCase:
+        """confirmation_sent -> confirmed: the customer agreed, as a person
+        records it (ADR 0011). ``accepted``: in words, from one of their
+        replies when the person recorded it from one. ``implied``: only once
+        the customer's term of silence, stamped when the confirmation left,
+        has run out at ``at``; never for a customer with no term.
+
+        Refused while a customer's change runs in the update loop: their
+        answer there is the loop's (`loop_answered`)."""
+        details: dict[str, object] = {"case_id": str(self.case_id), "how": how}
+        status = transition(self.status, _S.CONFIRMED)
+        if self.update_loop is not None:
+            raise ConflictError(_ANSWER_IN_THE_LOOP, details={**details, "rule": "update_running"})
+        sent = self.confirmation
+        assert sent is not None  # stamped with confirmation_sent
+        if how == "implied":
+            if sent.implied_from is None:
+                raise ConflictError(
+                    "khách này không có số ngày im lặng được coi là đồng ý",
+                    details={**details, "rule": "no_implied_term"},
+                )
+            if at < sent.implied_from:
+                raise ConflictError(
+                    "chưa hết số ngày khách được trả lời",
+                    details={**details, "rule": "implied_too_early"},
+                )
+        agreement = CustomerAgreement(
+            how=how, by=actor.user_id, at=at, message_id=message_id, quotes=tuple(quotes)
+        )
+        return self._next(status, agreement=agreement)
+
+    def declined(self) -> OrderCase:
+        """confirmation_sent -> change_review: the customer did not agree to
+        the confirmation (ADR 0011, as a person records it). The order is
+        reviewed as a change in Bravo is, its cross-check and confirmation
+        cleared; it is then entered, cross-checked as its rules say, and its
+        confirmation sent again. Refused while a customer's change runs in
+        the update loop, whose answer is its own."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status is not _S.CONFIRMATION_SENT:
+            raise ConflictError(
+                f"a confirmation is not declined in {self.status}",
+                details={**details, "status": self.status.value, "rule": "not_awaiting_customer"},
+            )
+        if self.update_loop is not None:
+            raise ConflictError(_ANSWER_IN_THE_LOOP, details={**details, "rule": "update_running"})
+        return self._next(
+            transition(self.status, _S.CHANGE_REVIEW),
+            cross_checked_by=None,
+            cross_checked_at=None,
+            confirmed_by=None,
+            confirmed_at=None,
+        )
 
     def revise(self, revision: OrderCase) -> OrderCase:
         """The customer's next revision of this PO joins this case and supersedes it.
@@ -3302,13 +3534,20 @@ class OrderCase(BaseModel):
             # Nor on PC, once its answer can no longer be taken here (ticket
             # 07): in Bravo, PC's dates are the update loop's (ticket 29).
             changes.setdefault("pc_request", None)
+        if status not in CONFIRMATION_LEFT:
+            # What left and the customer's answer belong to that confirmation:
+            # a revision, a decline or an accepted change clears them.
+            changes.setdefault("confirmation", None)
+        if status is not _S.CONFIRMED:
+            changes.setdefault("agreement", None)
         loop = self.update_loop
         if loop is not None and (
             status not in _LOOP_STATUSES[loop.step]
-            or (status is _S.CONFIRMED and self.status is not _S.CONFIRMED)
+            or (status is _S.CONFIRMATION_SENT and self.status not in CONFIRMATION_LEFT)
         ):
-            # The update loop ends where its step does not stand: the order
-            # confirmed again, a new revision, a return from the cross-check.
+            # The update loop ends where its step does not stand: the
+            # confirmation sent again, a new revision, a return from the
+            # cross-check.
             changes.setdefault("update_loop", None)
         # Validated again: `model_copy(update=...)` would skip the invariants.
         return OrderCase.model_validate(

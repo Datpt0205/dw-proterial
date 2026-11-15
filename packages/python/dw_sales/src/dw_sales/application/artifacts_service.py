@@ -56,7 +56,13 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.malware import MalwareScanPort
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.artifact_content import EML, PDF, XLSX, ArtifactWriterPort
+from dw_sales.application.artifact_content import (
+    EML,
+    PDF,
+    XLSX,
+    ArtifactWriterPort,
+    FileAttachment,
+)
 from dw_sales.application.case_store import (
     ArtifactRecord,
     SalesUnitOfWork,
@@ -86,6 +92,7 @@ from dw_sales.application.order_artifacts import (
 )
 from dw_sales.application.ports import (
     ArtifactBytesPort,
+    InboxPort,
     MemberDirectoryPort,
     SalesCatalogPort,
     SalesScope,
@@ -113,6 +120,7 @@ from dw_sales.application.worker_service import require_running
 from dw_sales.domain.catalog import ConfirmationChannel, Customer
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
+    CONFIRMATION_LEFT,
     CloseReason,
     FindingCode,
     MappingStatus,
@@ -175,7 +183,9 @@ def _unmapped_without_code(case: OrderCase, *_: object) -> bool:
 # Once prepared, the upload file holds while the order is in Bravo; a return
 # from the cross-check reopens the self-check, and a revision of an order in
 # Bravo is a change applied there (`change_summary`), never a new upload file.
-_UPLOADABLE: Final = frozenset({_O.PREPARED, _O.UPLOADED_TO_BRAVO, _O.CROSS_CHECKED, _O.CONFIRMED})
+_UPLOADABLE: Final = (
+    frozenset({_O.PREPARED, _O.UPLOADED_TO_BRAVO, _O.CROSS_CHECKED}) | CONFIRMATION_LEFT
+)
 
 
 def _answers(case: OrderCase, verdict: str) -> bool:
@@ -208,10 +218,10 @@ ORDER_GATES: Final[Mapping[str, ArtifactGate[OrderCase]]] = {
         True, lambda c, *_: c.status is _O.UPLOADED_TO_BRAVO, _order(cross_check_sheet)
     ),
     "confirmation_draft": ArtifactGate(
-        True, lambda c, *_: c.status is _O.CONFIRMED, _order(confirmation_draft), "email"
+        True, lambda c, *_: c.status in CONFIRMATION_LEFT, _order(confirmation_draft), "email"
     ),
     "portal_checklist": ArtifactGate(
-        True, lambda c, *_: c.status is _O.CONFIRMED, _order(portal_checklist), "portal"
+        True, lambda c, *_: c.status in CONFIRMATION_LEFT, _order(portal_checklist), "portal"
     ),
     "correction_request": ArtifactGate(
         True, lambda c, *_: c.status is _O.CORRECTION_REQUESTED, _order(correction_request)
@@ -416,6 +426,9 @@ class ArtifactService:
     scanner: MalwareScanPort
     # Where deployed, a file is never drawn from copy marked mock (audit 11).
     deployed: bool = False
+    # The mailbox, for the customer's own PO files the confirmation goes back
+    # with (ticket 28); None: the draft carries the processed Excel alone.
+    inbox: InboxPort | None = None
 
     # ------------------------------------------------------------- orders --
 
@@ -610,6 +623,7 @@ class ArtifactService:
                         writer=self.writer,
                         scope=scope,
                         signed_copy=await self._signed_bytes(work, scope, case),
+                        po_files=await self._po_files(scope, case, kind),
                         deployed=self.deployed,
                         lookups=await self._lookups(scope, copy, customer),
                     )
@@ -722,6 +736,32 @@ class ArtifactService:
         return Download(record, data)
 
     # ------------------------------------------------------------ helpers --
+
+    async def _po_files(
+        self, scope: SalesScope, case: _Case, kind: str
+    ) -> tuple[FileAttachment, ...]:
+        """The customer's own PO files of an order's current revision, as they
+        sent them, for the confirmation draft only: the PO and its print copy.
+        A PO written in the mail has none; a file the mailbox no longer holds
+        is left out rather than guessed."""
+        if kind != "confirmation_draft" or not isinstance(case, OrderCase) or self.inbox is None:
+            return ()
+        document = case.document
+        ids = [document.attachment_id]
+        if document.print_copy is not None:
+            ids.append(document.print_copy.attachment_id)
+        files = []
+        for attachment_id in ids:
+            if attachment_id is None:
+                continue
+            content = await self.inbox.read_attachment(scope, case.message_id, attachment_id)
+            if content is not None:
+                files.append(
+                    FileAttachment(
+                        content.attachment.name, content.attachment.media_type, content.data
+                    )
+                )
+        return tuple(files)
 
     async def _signed_bytes(
         self, work: SalesUnitOfWork, scope: SalesScope, case: _Case

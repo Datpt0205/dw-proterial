@@ -221,6 +221,12 @@ ProposedStep = Literal[
     # QuoteCase.discuss_spec: design_replied -> spec_discussion, the case
     # waits on the customer.
     "discuss_spec",
+    # OrderCase.agreed(accepted): confirmation_sent -> confirmed, the
+    # customer agreed to the confirmation in words (ticket 28).
+    "record_accepted",
+    # OrderCase.declined: confirmation_sent -> change_review, the customer
+    # did not agree to the confirmation (ticket 28, dw_sales ADR 0011).
+    "record_declined",
 ]
 
 # Where an intent may lead, by who wrote the message and the case's kind and
@@ -237,6 +243,10 @@ INTENT_STEPS: Final[Mapping[tuple[Author, str, str, ThreadIntent], ProposedStep]
             ("customer", "order", "correction_requested", "rejects"): "resume_review",
             ("customer", "order", "correction_requested", "accepts"): "resume_review",
             ("customer", "order", "correction_requested", "sends_po"): "await_revised_po",
+            # The customer's answer to the confirmation (ADR 0011): a person
+            # records it beside the quoted sentences, never DW1.
+            ("customer", "order", "confirmation_sent", "accepts"): "record_accepted",
+            ("customer", "order", "confirmation_sent", "rejects"): "record_declined",
             # Sales asked the customer, by mail: the case waits on them, the
             # wait the `waiting_customer` follow-up watches.
             ("sales", "order", "in_review", "asks"): "request_correction",

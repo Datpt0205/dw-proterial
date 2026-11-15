@@ -68,6 +68,18 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
   },
   "sales.order.cross_checked": { label: "Kiểm chéo đơn", color: "success" },
   "sales.order.confirmed": { label: "Xác nhận đơn", color: "success" },
+  "sales.order.confirmation_sent": {
+    label: "Gửi xác nhận đơn",
+    color: "success",
+  },
+  "sales.order.customer_agreed": {
+    label: "Khách đồng ý xác nhận đơn",
+    color: "success",
+  },
+  "sales.order.customer_declined": {
+    label: "Khách từ chối xác nhận đơn",
+    color: "warning",
+  },
   "sales.order.correction_requested": {
     label: "Yêu cầu khách sửa PO",
     color: "warning",

@@ -63,7 +63,11 @@ _MC = tables.message_cases
 _E = tables.case_events
 
 # The statuses no work list step is on: the bounds of the partial indexes.
-SETTLED_ORDERS: Final = (OrderStatus.CONFIRMED, OrderStatus.CLOSED)
+SETTLED_ORDERS: Final = (
+    OrderStatus.CONFIRMATION_SENT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.CLOSED,
+)
 SETTLED_QUOTES: Final = (QuoteStatus.MASTER_LIST_RECORDED, QuoteStatus.DECLINED)
 _TEXT_ARRAY = ARRAY(sa.Text)
 

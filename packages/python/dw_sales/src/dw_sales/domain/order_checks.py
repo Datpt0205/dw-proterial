@@ -30,6 +30,7 @@ from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
     Customer,
+    CustomerCode,
     Item,
     LmeBand,
     LmeMonth,
@@ -47,6 +48,7 @@ from dw_sales.domain.orders import (
     ExportControlMode,
     Finding,
     FindingCode,
+    ImpliedTerm,
     ItemBasis,
     LeadTimeSource,
     LineBasis,
@@ -227,6 +229,13 @@ class OrderRules(BaseModel):
     # never by the domain (dw_sales ADR 0009 decision 5, ticket 20). Empty
     # where a version written before 1.13.0 does not say.
     shared_mail_domains: tuple[str, ...] = Field(default=(), max_length=200)
+    # Per customer, the days of silence after a confirmation that count as
+    # their agreement (dw_sales ADR 0011, ticket 28): a person records it once
+    # they pass, never DW1. A customer not listed never agrees by silence;
+    # empty where a version written before 1.14.0 does not say.
+    implied_acceptance: Mapping[CustomerCode, ImpliedTerm] = Field(
+        default_factory=dict, max_length=2000
+    )
 
     @model_validator(mode="before")
     @classmethod

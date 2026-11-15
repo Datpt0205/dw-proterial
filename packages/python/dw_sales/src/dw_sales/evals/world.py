@@ -129,7 +129,7 @@ from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDispo
 from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import OrderCase
+from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
@@ -690,11 +690,19 @@ class _Followups:
             case = stored.case
             status = case.status.value
             received = case.received_at if isinstance(case, OrderCase) else case.request.received_at
+            implied_from = (
+                case.confirmation.implied_from
+                if isinstance(case, OrderCase)
+                and case.status is OrderStatus.CONFIRMATION_SENT
+                and case.confirmation is not None
+                else None
+            )
             looping = isinstance(case, OrderCase) and case.update_loop is not None
             if (
                 status not in statuses.get(kind, frozenset())
                 and received < received_since
                 and not looping
+                and implied_from is None
             ):
                 continue
             entered = [
@@ -732,6 +740,7 @@ class _Followups:
                     due=due,
                     pc_asked_at=pc_asked_at,
                     customer_asked_at=customer_asked_at,
+                    implied_from=implied_from,
                 )
             )
         return found
@@ -1396,7 +1405,7 @@ class World:
 
     async def confirm(self, pic: Caller, case_id: uuid.UUID, day: date) -> OrderCase:
         case = self.order(case_id)
-        await self.services.order_commands.confirm(
+        await self.services.confirmations.sent(
             pic.context(),
             case_id,
             case_version=case.case_version,

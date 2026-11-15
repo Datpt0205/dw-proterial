@@ -186,6 +186,23 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Tên miền nhiều công ty cùng dùng, như của công ty và các công ty trong tập đoàn. Thư từ đây chỉ nhận ra khách theo địa chỉ người gửi (liên hệ của khách, hoặc địa chỉ Sales đã xác nhận); địa chỉ khác chuyển Sales là chưa xác định được khách hàng.",
       item: "Tên miền",
     },
+    implied_acceptance: {
+      label: "Khách im lặng được coi là đồng ý",
+      help: "Theo từng khách: sau số ngày này mà khách không trả lời xác nhận đơn, DW1 báo Sales phụ trách để ghi khách đồng ý ngầm. Khách không có trong danh sách thì không bao giờ đồng ý ngầm.",
+      item: "Mã khách",
+    },
+    "implied_acceptance.*.days": {
+      label: "Số ngày khách được trả lời",
+      unit: "ngày",
+    },
+    "implied_acceptance.*.day_count": {
+      label: "Cách đếm ngày",
+      help: "Mọi ngày, hoặc chỉ thứ Hai đến thứ Sáu (chưa có lịch nghỉ lễ).",
+    },
+    "implied_acceptance.*.counted_from": {
+      label: "Tính từ",
+      help: "Ngày gửi xác nhận hoặc ngày trên PO; ngày bắt đầu không tính.",
+    },
     fiscal_year_start_month: {
       label: "Tháng bắt đầu năm tài chính",
       help: "4: năm tài chính 2026 từ tháng 4/2026 đến tháng 3/2027. ESF được đối chiếu theo năm tài chính của ngày PO.",
@@ -505,6 +522,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_pc.remind.notify": { label: "Nhắc ai" },
+    implied_acceptance: {
+      label: "Khách im lặng quá hạn xác nhận",
+      help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 báo một lần cho Sales phụ trách. DW1 không tự ghi đồng ý ngầm.",
+    },
+    "implied_acceptance.enabled": { label: "Bật báo khách im lặng quá hạn" },
     morning_brief: {
       label: "Bản tin buổi sáng",
       help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
@@ -601,6 +623,8 @@ const VALUES: Record<string, string> = {
   item_standard: "Lead time chuẩn của mã hàng",
   quotation: "Lead time trong báo giá",
   calendar: "Ngày lịch",
+  business: "Ngày làm việc (thứ Hai đến thứ Sáu)",
+  confirmation_sent: "Ngày gửi xác nhận",
   fixed: "Giá cố định",
   lme_band: "Theo mức LME",
   EXW: "EXW (giao tại xưởng)",

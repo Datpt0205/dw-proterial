@@ -539,6 +539,22 @@
         "title": "BeforeStage",
         "type": "object"
       },
+      "ImpliedAcceptanceRule": {
+        "additionalProperties": false,
+        "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): tell the PIC once, who\nrecords the agreement. DW1 never records it.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO).",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ImpliedAcceptanceRule",
+        "type": "object"
+      },
       "MorningBrief": {
         "additionalProperties": false,
         "description": "One notification per person each working morning: what came in since\nthe last brief and its state, what is due soon, what waits on whom.",
@@ -774,6 +790,10 @@
     "additionalProperties": false,
     "description": "Every timing and switch of DW1's follow-ups and its morning brief.",
     "properties": {
+      "implied_acceptance": {
+        "$ref": "#/$defs/ImpliedAcceptanceRule",
+        "description": "Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
+      },
       "morning_brief": {
         "$ref": "#/$defs/MorningBrief",
         "description": "Bản tóm tắt buổi sáng."
@@ -833,6 +853,7 @@
       "quote_deadline",
       "waiting_customer",
       "waiting_pc",
+      "implied_acceptance",
       "your_turn"
     ],
     "title": "SalesFollowups",
@@ -1151,6 +1172,41 @@
         "title": "FindingCode",
         "type": "string"
       },
+      "ImpliedTerm": {
+        "additionalProperties": false,
+        "description": "A customer's silence that counts as agreement: after this many days,\ncounted this way, from that day (the order rules' `implied_acceptance`,\none per customer, none by default).",
+        "properties": {
+          "counted_from": {
+            "default": "confirmation_sent",
+            "enum": [
+              "confirmation_sent",
+              "po_date"
+            ],
+            "title": "Counted From",
+            "type": "string"
+          },
+          "day_count": {
+            "default": "calendar",
+            "enum": [
+              "calendar",
+              "business"
+            ],
+            "title": "Day Count",
+            "type": "string"
+          },
+          "days": {
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "ImpliedTerm",
+        "type": "object"
+      },
       "IntakeCaps": {
         "additionalProperties": false,
         "description": "How much of a sender's file a reader opens before refusing it (decision 13).",
@@ -1381,6 +1437,16 @@
         "minimum": 1,
         "title": "Fiscal Year Start Month",
         "type": "integer"
+      },
+      "implied_acceptance": {
+        "maxProperties": 2000,
+        "patternProperties": {
+          "^[A-Z][A-Z0-9]{1,15}$": {
+            "$ref": "#/$defs/ImpliedTerm"
+          }
+        },
+        "title": "Implied Acceptance",
+        "type": "object"
       },
       "intake": {
         "$ref": "#/$defs/IntakeCaps"
