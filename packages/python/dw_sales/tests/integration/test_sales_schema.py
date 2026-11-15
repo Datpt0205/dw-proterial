@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncIterator
 from enum import StrEnum
+from pathlib import Path
 from typing import get_args
 
 import pytest
@@ -19,6 +20,7 @@ from pg_test_db import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
@@ -53,6 +55,9 @@ async def _constraint(conn: AsyncConnection, name: str) -> str:
     )
     assert definition is not None, f"no constraint {name}"
     return str(definition)
+
+
+_CONFIGS = Path(__file__).resolve().parents[5] / "configs"
 
 
 def _values(enum: type[StrEnum]) -> set[str]:
@@ -126,7 +131,10 @@ async def test_the_platform_rule_versions_admit_every_sales_key(catalog: AsyncCo
         )
     )
     keys = set(re.findall(r"'([a-z_]+)'::text", str(definition)))
-    assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey)
+    # And each of DW1's platform skills, whose tenant versions the same
+    # table holds (ticket 40).
+    skills = set(load_dw1_skills(_CONFIGS / "skills" / "dw1").skills)
+    assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey) | skills
 
 
 @pytest.mark.parametrize("name", sorted(_SETS))

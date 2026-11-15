@@ -62,6 +62,7 @@ from dw_agent_runtime.adapters.langchain_tools import (
 from dw_agent_runtime.adapters.model_retry import ModelRetryMiddleware
 from dw_agent_runtime.adapters.recalled_memory import MemoryRecallPort, RecalledMemoryMiddleware
 from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
+from dw_agent_runtime.adapters.skills import TurnSkills, skills_middleware
 from dw_agent_runtime.adapters.sub_agents import SubAgentSpec, sub_agent_middleware
 from dw_agent_runtime.adapters.system_prompt import WorkerSystemPrompt
 from dw_agent_runtime.adapters.turn_ceiling import TurnCeilingMiddleware
@@ -157,6 +158,12 @@ class AgentSpec:
     # answers one reading per invocation (`agent_turn.BoundedAgentTurn`). None
     # for a conversation, which the run's ceiling and `recursion_limit` bound.
     ceiling: TurnCeiling | None = None
+    # The skills catalogue, for an agent served skills around each turn
+    # (`model.skills.serving`, dw_sales ADR 0014): deepagents'
+    # `SkillsMiddleware` over the served set, with the agent's conduct above
+    # it. None for an agent that loads no skill: no catalogue, and no
+    # skill-loading tool is offered to it (`agent_turn.AgentTurnKit.turn`).
+    skills: TurnSkills | None = None
 
 
 def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
@@ -200,6 +207,9 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
             if spec.recall is not None
             else []
         ),
+        # The catalogue appends below the worker prompt, which prepends: the
+        # section `system_prompt.py` exists to keep.
+        *([skills_middleware(spec.skills)] if spec.skills is not None else []),
         UnreadableFilesMiddleware(),
         OfferedToolsOnlyMiddleware(offered),
         ScopedToolsMiddleware(offered),

@@ -18,6 +18,7 @@ from dw_sales.application.rules import (
     RuleVersion,
     TenantRuleBook,
 )
+from dw_sales.application.skills import SkillDocument
 from dw_sales.domain.order_checks import OrderRules
 
 # Who proposed and approved a version seeded as the demo tenant's (fictional).
@@ -44,11 +45,11 @@ class MemoryRuleVersions:
         held = self._held.get(scope.tenant_id.value, {}).values()
         return next((v for v in held if v.key == key and v.version == version), None)
 
-    def seed_approved(self, tenant_id: uuid.UUID, policy: Policy) -> None:
-        """``policy`` as a tenant's version in force, as if proposed and
-        approved by two people, the version of its key in force before it
-        superseded: a fixture for a process with no database, never a route
-        around them."""
+    def seed_approved(self, tenant_id: uuid.UUID, policy: Policy | SkillDocument) -> None:
+        """``policy`` (a rule, or a skill of DW1's, ticket 40) as a tenant's
+        version in force, as if proposed and approved by two people, the
+        version of its key in force before it superseded: a fixture for a
+        process with no database, never a route around them."""
         held = self._held.setdefault(tenant_id, {})
         key, _, version = policy.ref.partition("@")
         for version_id, before in held.items():
@@ -57,7 +58,7 @@ class MemoryRuleVersions:
         version_id = uuid.UUID(int=0x19 + len(held))
         held[version_id] = RuleVersion(
             version_id=version_id,
-            key=RuleKey(key),
+            key=key if isinstance(policy, SkillDocument) else RuleKey(key),
             version=version,
             document=policy.model_dump(mode="json", by_alias=True),
             status="approved",

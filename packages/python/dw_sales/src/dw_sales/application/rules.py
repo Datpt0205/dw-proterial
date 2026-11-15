@@ -463,7 +463,7 @@ def _view(version: RuleVersion) -> RuleVersionView:
 # ------------------------------------------------- what the engine is given --
 
 
-def _work(
+def rule_work(
     uow: SalesUnitOfWorkFactory,
 ) -> Callable[[AccessContext], AbstractAsyncContextManager[RuleWork]]:
     """The Sales unit of work as the engine opens it: from the verified
@@ -476,7 +476,7 @@ def _work(
 
 
 @dataclass(frozen=True)
-class _Names:
+class ProposerNames:
     """Implements `ProposerNamesPort` with the member directory."""
 
     directory: MemberDirectoryPort
@@ -551,11 +551,11 @@ class SalesRulesService:
     def _engine(self) -> RuleVersionEngine:
         return RuleVersionEngine(
             REGISTRY,
-            _work(self.uow),
+            rule_work(self.uow),
             self.book,
             self.clock,
             self.ids,
-            _Names(self.directory),
+            ProposerNames(self.directory),
             SalesRuleChecks(self.book, self.readiness),
         )
 
@@ -670,7 +670,7 @@ class RuleDecisions:
         self, request: ApprovalRequest, decision: ProposedDecision, context: AccessContext
     ) -> None:
         await RuleDecisionGuard(
-            REGISTRY, _work(self.uow), self.book, SalesRuleChecks(self.book, self.readiness)
+            REGISTRY, rule_work(self.uow), self.book, SalesRuleChecks(self.book, self.readiness)
         ).check(request, decision, context)
 
 
@@ -689,7 +689,7 @@ class RuleSettlement:
     async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> RuleVersionView:
         settled = await RuleVersionSettlement(
             REGISTRY,
-            _work(self.uow),
+            rule_work(self.uow),
             self.book,
             self.clock,
             self.ids,

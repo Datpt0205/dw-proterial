@@ -59,7 +59,7 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_drafts import REPLY_DRAFT
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
-from dw_sales.application.thread_agent import THREAD_AGENT
+from dw_sales.application.thread_agent import DW1_AGENT, THREAD_AGENT
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 
 __all__ = [
@@ -154,6 +154,20 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         # or a figure the facts lack. Proposed by the agent.
         ModelStep.REPLY_DRAFT: StepBar(
             0.85, "all.complete", REPLY_DRAFT, "sales_reply_draft", "sales.reply_draft_golden"
+        ),
+        # Ticket 40 (dw_sales ADR 0014 decision 4): DW1's agent with its
+        # platform skill reads the bar's set at the thread agent's bar, on the
+        # same metric, so the three readings of one task are compared on one
+        # number; held only with no false `accepts` and no tool answering
+        # with another customer's record. A tenant's own version of the skill
+        # is read by its head before it applies, not by this bar. Proposed by
+        # the agent; the attested measurement is on the plant's model.
+        ModelStep.SKILL_INTENTS: StepBar(
+            0.85,
+            "bar_set.intent_accuracy",
+            DW1_AGENT,
+            "sales_skill_intents",
+            "sales.skill_intents_golden",
         ),
     }
 )

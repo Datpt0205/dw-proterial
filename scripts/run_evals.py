@@ -183,6 +183,8 @@ RECORDED_BY_PROMPT = {
 # each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).
 RECORDED_TURNS_BY_PROMPT = {
     "sales.thread_agent": _CASES / "sales_thread_agent_recorded.json",
+    # DW1's agent with its skills (ticket 40, `dw_sales.evals.skill_intents`).
+    "sales.dw1_agent": _CASES / "sales_skill_intents_recorded.json",
 }
 
 

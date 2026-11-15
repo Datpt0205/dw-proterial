@@ -79,6 +79,7 @@ from dw_sales.application.salesorder_learning import (
 )
 from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
+from dw_sales.application.skills import SkillBook, SkillDecisions, SkillsService
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.thread_summaries import ThreadSummaries
@@ -149,6 +150,8 @@ class SalesServices:
     update_loops: UpdateLoops
     # The confirmation sent, then the customer's agreement (ticket 28).
     confirmations: Confirmations
+    # DW1's skills, and a version of one proposed for the head (ticket 40).
+    skills: SkillsService
     gate: Gate
 
 
@@ -162,6 +165,8 @@ class SalesAssembly:
     rule_decisions: RuleDecisions
     # The decision guard of a master-data import's approval (`sales.catalog`, ticket 41).
     catalog_decisions: CatalogDecisions
+    # The decision guard of a skill version's approval (`sales.skills`, ticket 40).
+    skill_decisions: SkillDecisions
 
 
 def assemble(
@@ -179,6 +184,8 @@ def assemble(
     files: SourceViewPort,
     source_cache: SourceCachePort,
     book: TenantRuleBook,
+    # DW1's skills, the platform's and the tenant's versions (ticket 40).
+    skills: SkillBook,
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
@@ -358,6 +365,7 @@ def assemble(
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
+        skills=SkillsService(uow, gate, skills, clock, ids, directory),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)
@@ -367,4 +375,5 @@ def assemble(
         layout_decisions=LayoutDecisions(uow, clock),
         rule_decisions=RuleDecisions(uow, book, readiness),
         catalog_decisions=CatalogDecisions(catalog_uow),
+        skill_decisions=SkillDecisions(uow, skills),
     )

@@ -1,0 +1,5 @@
+{
+  "_comment": "The recorded turns (onprem profile, Qwen3.8-Flash-Next Q2_0 on Strata in Giang's home lab, chat route, thinking off, prompt sales.dw1_agent@1.0.0 with thread-intents@1.0.0, 2026-11-16; NOT attested) read 0.175 of the 80 golden thread messages as exactly their intents (0.183 of the bar's 60; the bar is 0.85): the model loaded the skill in every turn, then called a tool in every turn, 276 look-ups in 80 turns, and 63 turns reached the five-call ceiling and fell back. No false accepts and no tool answered for another customer; every withheld message was looked up with sales.thread_messages. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill, the tools or the model change.",
+  "min_intent_accuracy": 0.175,
+  "min_expected_tool_called": 1.0
+}

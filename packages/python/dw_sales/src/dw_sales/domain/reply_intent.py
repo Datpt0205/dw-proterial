@@ -123,6 +123,8 @@ ReplyOutcome = Literal["read", "unavailable"]
 # Why the thread agent (dw_sales ADR 0012) gave no reading of its own: a
 # ceiling of its turn (calls, spend, time) or no usable answer.
 AgentFallback = Literal["calls", "spend", "time", "unavailable"]
+# A skill version a reading stamps (`application.skills`).
+SkillRef = Annotated[str, Field(pattern=r"^sales_skill_[a-z0-9_]{1,52}@\d+\.\d+\.\d+$")]
 
 
 class ReplyReading(BaseModel):
@@ -144,6 +146,10 @@ class ReplyReading(BaseModel):
     # reading is then the one-call reading's, or, with that one off too, no
     # reading (``unavailable``), for Sales (ticket 31). None otherwise.
     fallback: AgentFallback | None = None
+    # The skill versions the reading loaded, where DW1's agent read it with
+    # its skills (dw_sales ADR 0014, ticket 40): each ``<key>@<version>``, the
+    # tenant's own or the platform's, in the order loaded. Empty otherwise.
+    skills: tuple[SkillRef, ...] = Field(default=(), max_length=8)
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:

@@ -22,6 +22,7 @@ from langchain_core.messages import AIMessage
 from pydantic import BaseModel
 
 from dw_agent_runtime.adapters.chat_model import MockChatModel
+from dw_agent_runtime.adapters.skills import SkillInput
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_agent_runtime.registry import parse_worker_file
@@ -35,6 +36,7 @@ from dw_sales.adapters.assembly import step_model, thread_agent
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import REPLY_INTENT
+from dw_sales.application.skills import READ_SKILL, READ_SKILL_VERSION
 from dw_sales.application.thread_agent import CEILING, THREAD_AGENT
 from dw_sales.application.thread_tools import (
     CASE_SNAPSHOT,
@@ -66,6 +68,12 @@ CONFIGS = REPO / "configs"
 KEEP = "Please keep the PO as it is."
 NRV_PO, QRL_PO = "NRV-PO-26-0457", "QRL-PO-0926-12"
 TOOL_NAME = {name: name.replace(".", "__") for name in THREAD_TOOLS}
+# Every tool DW1's toolset pins, by its input model: the six thread tools and,
+# since ticket 40, the skill loader.
+INPUTS: dict[str, type[BaseModel]] = {
+    **{name: spec[0] for name, spec in THREAD_TOOLS.items()},
+    READ_SKILL: SkillInput,
+}
 
 
 def _toolset() -> list[dict[str, str]]:
@@ -106,7 +114,7 @@ def test_no_tool_takes_a_customer_tenant_or_workspace_argument() -> None:
     pins = _toolset()
     assert pins
     for pin in pins:
-        input_model = THREAD_TOOLS[pin["name"]][0]
+        input_model = INPUTS[pin["name"]]
         assert bound_arguments(input_model.model_json_schema()) == [], pin["name"]
 
 
@@ -129,7 +137,10 @@ def test_the_walk_fails_on_a_tool_that_takes_one() -> None:
 
 def test_the_toolset_pins_exactly_the_tools_code_registers_each_read_only() -> None:
     pins = _toolset()
-    assert {(p["name"], p["version"]) for p in pins} == {(n, TOOL_VERSION) for n in THREAD_TOOLS}
+    assert {(p["name"], p["version"]) for p in pins} == {
+        *((n, TOOL_VERSION) for n in THREAD_TOOLS),
+        (READ_SKILL, READ_SKILL_VERSION),
+    }
     for pin in pins:
         spec = _spec(pin["name"], pin["version"])
         assert (spec.side_effect_level, spec.approval_policy) == ("none", "never")

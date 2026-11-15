@@ -26,7 +26,7 @@ import asyncio
 import logging
 from collections.abc import Mapping
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents.middleware import ModelRequest
@@ -37,6 +37,7 @@ from pydantic import BaseModel, ValidationError
 from dw_agent_runtime.adapters.agent_factory import AgentSpec, build_agent
 from dw_agent_runtime.adapters.chat_model import ChatModelFactory
 from dw_agent_runtime.adapters.openai_compatible import _extract_json_object
+from dw_agent_runtime.adapters.skills import TurnSkills, skill_reader
 from dw_agent_runtime.contracts import RunContext, ToolDefinition, WorkerDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.model.agent_turn import (
@@ -152,6 +153,9 @@ class AgentTurnKit:
     # The process's one per-run ledger: a turn spends against its run's ceiling.
     budget: RunBudgetLedger
     profiles: ModelProfileRegistry
+    # The tools registered as skill loaders (`register_skill_reader`): offered
+    # only to a turn served skills, never to one that loads none.
+    skill_readers: set[str] = field(default_factory=set)
 
     def definition(self, name: str, version: str) -> ToolDefinition:
         """A tool's definition from its spec in ``configs/tools``: its policy is
@@ -161,20 +165,47 @@ class AgentTurnKit:
     def register(self, tool: RegisteredTool) -> None:
         self.tools.register(tool)
 
+    def register_skill_reader(self, definition: ToolDefinition) -> None:
+        """The skill-loading tool under ``definition`` (`skills.skill_reader`),
+        answered from the set served around each turn."""
+        self.tools.register(skill_reader(definition))
+        self.skill_readers.add(definition.name)
+
     def turn(
-        self, worker: WorkerDefinition, prompt: PromptRef, ceiling: TurnCeiling
+        self,
+        worker: WorkerDefinition,
+        prompt: PromptRef,
+        ceiling: TurnCeiling,
+        *,
+        skills: TurnSkills | None = None,
     ) -> BoundedAgentTurn:
         """A turn of ``worker``'s agent under ``prompt``: the tools its toolset
         pins (`configs/toolsets/<worker_id>@<toolset_version>.yaml`), on the
         chat route of its default profile. Built once, at startup: a pin no
-        tool was registered for fails here, not on the first message."""
+        tool was registered for fails here, not on the first message.
+
+        Given ``skills``, the turn carries the skills catalogue and offers the
+        skill-loading tool it names, which the toolset must pin; without, a
+        skill loader the toolset pins is not offered (a turn that is served no
+        skill has nothing to load)."""
         if worker.toolset_version is None:
             raise ConfigError(
                 "a worker with no toolset has no agent turn",
                 details={"worker_id": worker.worker_id},
             )
         toolset = self.toolsets.resolve(worker.worker_id, worker.toolset_version)
-        offered = self.tools.definitions_for(toolset.pins)
+        offered = [
+            d
+            for d in self.tools.definitions_for(toolset.pins)
+            if skills is not None or d.name not in self.skill_readers
+        ]
+        if skills is not None and not any(
+            d.name == skills.read_tool and d.name in self.skill_readers for d in offered
+        ):
+            raise ConfigError(
+                "a turn served skills needs its skill loader registered and pinned",
+                details={"worker_id": worker.worker_id, "tool": skills.read_tool},
+            )
         spec = AgentSpec(
             model=self.chat_models.resolve(worker.default_model_profile),
             offered=offered,
@@ -190,6 +221,7 @@ class AgentTurnKit:
             profiles=self.profiles,
             profile_id=worker.default_model_profile,
             ceiling=ceiling,
+            skills=skills,
         )
         # No checkpointer, not even the host run's: a turn is one invocation,
         # and run inside a DW node it would otherwise checkpoint the customer's

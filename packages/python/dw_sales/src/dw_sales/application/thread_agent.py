@@ -25,14 +25,24 @@ take. Nothing it outputs applies itself, and no tool writes.
 every platform version, and its live eval's bar (`model_readiness.BARS`):
 until both say so, every thread message is read by one call (ADR 0012
 decision 5).
+
+**DW1's agent with skills** (dw_sales ADR 0014, ticket 40) is this reader with
+a skill set (`skills`): the turn is `DW1_AGENT`'s, its system message carries
+DW1's conduct and the skills catalogue, and code serves it the skills resolved
+for the run's tenant (`model.skills.serving`, `skills.SkillBook`). The model
+loads the skill that fits; the reading is checked exactly as above and stamps
+the skill versions it loaded (`ReplyReading.skills`). Its own switch,
+`model_assist.skill_intents`, and its own bar: off and below it, nothing of
+this runs.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.agent_turn import AgentTurnPort, TurnCeiling
@@ -42,6 +52,7 @@ from dw_agent_runtime.model.interpretation import (
     cut_to_tokens,
 )
 from dw_agent_runtime.model.readiness import StepModelPort
+from dw_agent_runtime.model.skills import SkillSet, serving
 from dw_kernel.errors import NotFoundError
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
@@ -72,6 +83,20 @@ CEILING: Final = TurnCeiling(max_model_calls=4, max_input_tokens=16_000, max_sec
 # The body the turn is sent, at most: the route takes 6,000 tokens a call,
 # and the prompt, the tools' descriptions and what they return share it.
 BODY_TOKENS: Final = 2500
+# DW1's agent with skills (ticket 40): its prompt (`configs/prompts/sales/
+# dw1_agent@1.0.0.yaml`), and its ceiling. One call more than the thread
+# agent's, the one that loads the skill, and the tokens for the skill's
+# instructions, which every later call of the turn carries again: about
+# 1,300 tokens for the first skill. 120 seconds for five calls.
+DW1_AGENT: Final = PromptRef("sales.dw1_agent", "1.0.0")
+SKILL_CEILING: Final = TurnCeiling(max_model_calls=5, max_input_tokens=24_000, max_seconds=120.0)
+
+
+class SkillSetPort(Protocol):
+    """The skills a run's tenant holds now: each platform skill, the
+    tenant's approved version of it where it has one."""
+
+    async def skill_set(self, run: RunContext) -> SkillSet: ...
 
 
 @dataclass(frozen=True)
@@ -82,6 +107,9 @@ class ThreadAgent:
     context: ThreadContextPort
     # The model the tenant's steps run on now, for the timing record.
     models: StepModelPort
+    # The skills served to each turn, resolved for its run (ticket 40). None:
+    # the thread agent of tickets 30 and 31, which is served none.
+    skills: SkillSetPort | None = None
 
     async def read(
         self,
@@ -107,10 +135,16 @@ class ThreadAgent:
             "subject": part.subject,
             "body": cut_to_tokens(part.body, BODY_TOKENS),
         }
+        loaded: list[str] = []
         started = time.perf_counter()
         answered = False
         try:
-            with bound_to(binding):
+            with ExitStack() as turn:
+                if self.skills is not None:
+                    # Resolved for the run's tenant, never the message's.
+                    held = turn.enter_context(serving(await self.skills.skill_set(run)))
+                    loaded = held.loaded
+                turn.enter_context(bound_to(binding))
                 answer = await self.turn.read(inputs, ModelThreadIntents, run=run)
             answered = True
         finally:
@@ -127,6 +161,7 @@ class ThreadAgent:
             **self._fields(rules_version),
             outcome="read",
             intents=verified_intents(part.text, answer),
+            skills=tuple(loaded),
         )
 
     def unavailable(self, rules_version: str, fallback: AgentFallback) -> ReplyReading:

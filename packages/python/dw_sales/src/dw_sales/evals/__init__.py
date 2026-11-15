@@ -36,6 +36,7 @@ from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
 from dw_sales.evals.salesorder_rules import GRADERS as SALESORDER_RULES_GRADERS
 from dw_sales.evals.screening_followups import GRADERS as SCREENING_GRADERS
 from dw_sales.evals.sender_customers import GRADERS as SENDER_GRADERS
+from dw_sales.evals.skill_intents import GRADERS as SKILL_INTENT_GRADERS
 from dw_sales.evals.thread_agent import GRADERS as THREAD_AGENT_GRADERS
 from dw_sales.evals.thread_summaries import GRADERS as THREAD_GRADERS
 
@@ -71,6 +72,7 @@ GRADERS = {
         **ASSISTANT_GRADERS,
         **THREAD_AGENT_GRADERS,
         **REPLY_DRAFT_GRADERS,
+        **SKILL_INTENT_GRADERS,
     }.items()
 }
 
