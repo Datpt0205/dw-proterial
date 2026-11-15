@@ -114,6 +114,9 @@ _SALES_TABLES = (
     "sales.sent_messages",
     # Migration c7d0730fcccd (ticket 27): a customer's change requests.
     "sales.change_requests",
+    # Migration eac4fabdb31a (ticket 43): what a person kept of a model's
+    # proposal.
+    "sales.labelled_cases",
 )
 
 
@@ -208,6 +211,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {prefix, f"{prefix}_default"} <= tables, prefix
         for table in tables:
             assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+    # What a person kept of a model's proposal (ticket 43), every partition:
+    # a decision is a fact about the past.
+    labelled = {tbl for tbl, _ in held if tbl.startswith("labelled_cases")}
+    assert {"labelled_cases", "labelled_cases_default"} <= labelled
+    for table in labelled:
+        assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:

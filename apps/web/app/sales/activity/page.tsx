@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Empty, Progress, Segmented, Table, Tag, Typography } from "antd";
 import type { ActivityQuery, SalesSchemas } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { InfoTip, PageHeader } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import {
   formatDate,
@@ -31,6 +31,8 @@ import { ScopeGate } from "../_components/scope-gate";
 import { useAuth } from "../../../lib/auth/auth-context";
 
 type Summary = SalesSchemas["ActivitySummaryView"];
+type Labels = SalesSchemas["LabelSummaryView"];
+type StepLabels = SalesSchemas["StepLabelView"];
 type StepSummary = SalesSchemas["StepSummaryView"];
 type Filter = SalesSchemas["ActivityFilter"];
 type Lane = "order" | "quote";
@@ -254,7 +256,79 @@ function Activity() {
           ]}
         />
       )}
+      <Checked />
     </div>
+  );
+}
+
+/**
+ * Kết quả người đã kiểm (ticket 43): per model step, how many of its
+ * proposals people confirmed, corrected or rejected, and the share kept as
+ * proposed, the accuracy measured on real work. Counts only; the split
+ * opens on click. A step nobody has checked yet is left out.
+ */
+function Checked() {
+  const labels = useResource<Labels>(
+    "sales/activity/labels",
+    useCallback(() => salesApi().activityLabels(), []),
+  );
+  const steps = (labels.data?.steps ?? []).filter((s) => s.total > 0);
+  return (
+    <section aria-labelledby="checked-title" className="space-y-2">
+      <span className="flex items-center gap-1">
+        <Typography.Title level={5} id="checked-title" className="m-0!">
+          Kết quả người đã kiểm
+        </Typography.Title>
+        <InfoTip label="Kết quả người đã kiểm là gì">
+          Mỗi lần một người xác nhận, sửa hay từ chối một kết quả mô hình đọc.
+          Tỉ lệ giữ nguyên là độ chính xác đo trên việc thật; DW1 dùng các kết
+          quả này để học và để quyết bước nào được tự làm.
+        </InfoTip>
+      </span>
+      {labels.error ? (
+        <LoadError error={labels.error} onRetry={labels.reload} />
+      ) : labels.data && steps.length === 0 ? (
+        <Empty description="Chưa có kết quả nào được người kiểm." />
+      ) : (
+        <Table<StepLabels>
+          rowKey="step"
+          loading={labels.loading}
+          dataSource={steps}
+          pagination={false}
+          scroll={{ x: "max-content" }}
+          locale={{ emptyText: " " }}
+          expandable={{
+            expandedRowRender: (row) => (
+              <span>
+                Giữ nguyên {row.confirmed} · Sửa {row.corrected} · Từ chối{" "}
+                {row.rejected}
+              </span>
+            ),
+          }}
+          columns={[
+            {
+              title: "Bước",
+              key: "step",
+              render: (_, row) => modelStepLabel(row.step),
+            },
+            {
+              title: "Đã kiểm",
+              dataIndex: "total",
+              align: "right",
+            },
+            {
+              title: "Giữ nguyên",
+              key: "share",
+              align: "right",
+              render: (_, row) =>
+                row.confirmed_share === null
+                  ? "Chưa có"
+                  : formatShare(row.confirmed_share),
+            },
+          ]}
+        />
+      )}
+    </section>
   );
 }
 

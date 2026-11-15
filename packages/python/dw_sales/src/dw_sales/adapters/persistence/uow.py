@@ -26,6 +26,7 @@ from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.activity import SqlStepActivityLog
 from dw_sales.adapters.persistence.change_requests import SqlChangeRequests
 from dw_sales.adapters.persistence.followups import SqlFollowupStore
+from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseLog
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
 from dw_sales.adapters.persistence.outbound import SqlOutboundMails
@@ -67,6 +68,8 @@ class SqlSalesUnitOfWork:
     outbound: SqlOutboundMails
     # What customers asked to change on their orders by mail (ticket 27).
     change_requests: SqlChangeRequests
+    # What a person kept of a model's proposal (ticket 43): `LabelledCaseLogPort`.
+    labelled_cases: SqlLabelledCaseLog
     audit: AuditRepositoryPort
 
     def __init__(
@@ -114,6 +117,7 @@ class SqlSalesUnitOfWork:
         self.step_activity = SqlStepActivityLog(session, scope)
         self.outbound = SqlOutboundMails(session, scope)
         self.change_requests = SqlChangeRequests(session, scope)
+        self.labelled_cases = SqlLabelledCaseLog(session, scope)
         self.audit = self._audit(session)
         return self
 

@@ -12,6 +12,7 @@ import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { AN } from "./fixtures";
 
 type Summary = SalesSchemas["ActivitySummaryView"];
+type Labels = SalesSchemas["LabelSummaryView"];
 type StepSummary = SalesSchemas["StepSummaryView"];
 type ModelStep = SalesSchemas["ModelStep"];
 type Lane = SalesSchemas["CaseKind"] | null;
@@ -142,10 +143,33 @@ function summary(from: string, to: string, lane: Lane, busy = true): Summary {
   };
 }
 
+/** What people kept of each step's proposals (ticket 43): one step checked. */
+const LABELS: Labels = {
+  steps: [
+    {
+      step: "change_request",
+      total: 8,
+      confirmed: 6,
+      corrected: 1,
+      rejected: 1,
+      confirmed_share: 0.75,
+    },
+    {
+      step: "message_intent",
+      total: 0,
+      confirmed: 0,
+      corrected: 0,
+      rejected: 0,
+      confirmed_share: null,
+    },
+  ],
+};
+
 const api = {
   activity: vi.fn(async (query: { from?: string; to?: string; lane?: Lane }) =>
     summary(query.from!, query.to!, query.lane ?? null),
   ),
+  activityLabels: vi.fn(async (): Promise<Labels> => LABELS),
   orders: vi.fn(async (...args: unknown[]) => (void args, [])),
   quotes: vi.fn(async (...args: unknown[]) => (void args, [])),
   customers: vi.fn(async () => ({ items: [] })),
@@ -334,6 +358,42 @@ describe("Hoạt động DW1 (slice 3)", () => {
       );
       renderAt("/sales/activity");
       expect(await screen.findByText(/req-summary-1/)).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "shows what people kept of each checked step, the split on click",
+    async () => {
+      renderAt("/sales/activity");
+      const checked = await screen.findByRole("region", {
+        name: "Kết quả người đã kiểm",
+      });
+      const step = await within(checked).findByText(
+        "Đọc thay đổi khách xin bằng lời",
+      );
+      const tr = step.closest("tr") as HTMLElement;
+      // Expand, step, checked, kept as proposed.
+      expect(cell(tr, 2).textContent).toBe("8");
+      expect(cell(tr, 3).textContent).toBe("75%");
+      // A step nobody checked is left out.
+      expect(within(checked).getAllByRole("row")).toHaveLength(2);
+      fireEvent.click(within(tr).getByRole("button"));
+      expect(
+        await within(checked).findByText("Giữ nguyên 6 · Sửa 1 · Từ chối 1"),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "says when nobody has checked a result yet",
+    async () => {
+      api.activityLabels.mockResolvedValueOnce({ steps: [] });
+      renderAt("/sales/activity");
+      expect(
+        await screen.findByText("Chưa có kết quả nào được người kiểm."),
+      ).toBeTruthy();
     },
     SLOW,
   );

@@ -49,6 +49,11 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.activity_ports import HandledBy, StepActivityReadPort, day_window
 from dw_sales.application.case_store import LoggedEvent, SalesUnitOfWorkFactory
+from dw_sales.application.labelled_cases import (
+    LabelledCaseReadPort,
+    LabelSummaryView,
+    label_summary,
+)
 from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.model_readiness import BARS
 from dw_sales.application.process_settings import model_steps
@@ -526,6 +531,8 @@ class ActivityService:
     clock: UtcClock
     # Where the tenant's days are counted (`working_hours.time_zone`, audit 14).
     zones: LocalZonePort
+    # What people kept of each step's proposals (ticket 43).
+    label_reader: LabelledCaseReadPort
 
     async def case_activity(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -562,14 +569,7 @@ class ActivityService:
         end: date | None,
         lane: CaseKind | None,
     ) -> ActivitySummaryView:
-        if not (
-            self.gate.allows(context, SalesScopes.OVERVIEW_READ)
-            or self.gate.allows(context, SalesScopes.RULES_PROPOSE)
-        ):
-            # Refused as the platform refuses, naming the scope that reads it.
-            await self.gate.require(
-                context, SalesScopes.OVERVIEW_READ, resource_type="sales_activity"
-            )
+        await self._require_summary(context)
         now = self.clock.now()
         scope = sales_scope(context)
         zone = await self.zones.time_zone(scope)
@@ -578,3 +578,20 @@ class ActivityService:
         since, until = day_window(first, last, zone)
         rows = await self.reader.between(scope, since, until, lane)
         return activity_summary(rows, start=first, end=last, lane=lane, as_of=now, zone=zone)
+
+    async def labels(self, context: AccessContext) -> LabelSummaryView:
+        """Per step, how many of its proposals people decided and the share
+        they kept as proposed (ticket 43): counts only, read by whoever reads
+        the summary."""
+        await self._require_summary(context)
+        return label_summary(await self.label_reader.counts(sales_scope(context)))
+
+    async def _require_summary(self, context: AccessContext) -> None:
+        if not (
+            self.gate.allows(context, SalesScopes.OVERVIEW_READ)
+            or self.gate.allows(context, SalesScopes.RULES_PROPOSE)
+        ):
+            # Refused as the platform refuses, naming the scope that reads it.
+            await self.gate.require(
+                context, SalesScopes.OVERVIEW_READ, resource_type="sales_activity"
+            )

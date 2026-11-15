@@ -184,6 +184,16 @@ export class SalesApi {
     );
   }
 
+  /**
+   * Per model step, how many of its proposals people decided and the share
+   * they kept as proposed (ticket 43). Counts only.
+   */
+  activityLabels() {
+    return this.get<"/api/v1/sales/activity/labels">(
+      "/api/v1/sales/activity/labels",
+    );
+  }
+
   /** One page of the caller's work, by due date then by when it came in. */
   myWorkPage(cursor: string | null = null, limit = 200) {
     const query = new URLSearchParams({ limit: String(limit) });

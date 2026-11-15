@@ -106,6 +106,7 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoffs import HandoffReader
+from dw_sales.application.labelled_cases import MAX_READ, StepLabels
 from dw_sales.application.layouts import (
     LAYOUT_DECIDED,
     LayoutChecks,
@@ -137,6 +138,7 @@ from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.followups import WaitingCase
+from dw_sales.domain.labelled_cases import LabelledCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase, OrderStatus
@@ -307,6 +309,8 @@ class _ScopeState:
     sent: dict[str, SentRead] = field(default_factory=dict)
     # What customers asked to change on their orders by mail (ticket 27).
     change_requests: dict[uuid.UUID, ChangeRequest] = field(default_factory=dict)
+    # What a person kept of a model's proposal (ticket 43), in the order written.
+    labelled_cases: list[LabelledCase] = field(default_factory=list)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -326,6 +330,7 @@ class _ScopeState:
             outbound=dict(self.outbound),
             sent=dict(self.sent),
             change_requests=dict(self.change_requests),
+            labelled_cases=list(self.labelled_cases),
         )
 
 
@@ -794,6 +799,21 @@ class _StepActivity:
         self._held.extend(rows)
 
 
+class _LabelledCases:
+    """`LabelledCaseLogPort` over one transaction's state: the cases commit or
+    roll back with it, and one already written is refused, as the table's key
+    (`pk_labelled_cases`) refuses it."""
+
+    def __init__(self, held: list[LabelledCase]) -> None:
+        self._held = held
+
+    async def append(self, cases: Sequence[LabelledCase]) -> None:
+        ids = [c.label_id for c in cases]
+        if len(set(ids)) < len(ids) or {c.label_id for c in self._held} & set(ids):
+            raise ConflictError("a labelled case is written once")
+        self._held.extend(cases)
+
+
 class _Outbound:
     """`OutboundMailStorePort` over one transaction's state: one active mail
     per artifact, as `uq_outbound_mails_active_artifact` holds it."""
@@ -862,6 +882,7 @@ class _Work:
         self.step_activity = _StepActivity(state.step_outcomes)
         self.outbound = _Outbound(state.outbound)
         self.change_requests = _ChangeRequests(state.change_requests)
+        self.labelled_cases = _LabelledCases(state.labelled_cases)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
@@ -898,9 +919,9 @@ class _Work:
 
 class MemoryStore:
     """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort`,
-    `QuoteCaseLookupPort`, `LayoutLookupPort`, `ProcessingQueuePort` and
-    `StepActivityReadPort` in memory, per scope: what one scope committed no
-    other scope reads. ``clock`` says when a queued job is due."""
+    `QuoteCaseLookupPort`, `LayoutLookupPort`, `ProcessingQueuePort`,
+    `StepActivityReadPort` and `LabelledCaseReadPort` in memory, per scope:
+    what one scope committed no other scope reads. ``clock`` says when a queued job is due."""
 
     def __init__(
         self, approvals: MemoryApprovals | None = None, clock: FixedClock | None = None
@@ -994,6 +1015,29 @@ class MemoryStore:
             for r in self.state(scope).step_outcomes
             if rows.matches(r) and r.case_id is not None
         )
+
+    async def latest(
+        self,
+        scope: SalesScope,
+        step: ModelStep,
+        *,
+        customer_code: str | None = None,
+        limit: int = MAX_READ,
+    ) -> Sequence[LabelledCase]:
+        """`LabelledCaseReadPort.latest`, ordered as the SQL reader orders."""
+        found = [
+            c
+            for c in self.state(scope).labelled_cases
+            if c.step is step and (customer_code is None or c.customer_code == customer_code)
+        ]
+        found.sort(key=lambda c: (c.decided_at, c.label_id), reverse=True)
+        return found[: min(limit, MAX_READ)]
+
+    async def counts(self, scope: SalesScope) -> Mapping[ModelStep, StepLabels]:
+        counted: dict[ModelStep, StepLabels] = {}
+        for case in self.state(scope).labelled_cases:
+            counted[case.step] = counted.get(case.step, StepLabels()).counted(case.verdict)
+        return counted
 
     async def cases_for_ycbg(self, scope: SalesScope, ycbg_no: str) -> Sequence[QuoteCase]:
         return [

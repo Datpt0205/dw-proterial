@@ -39,6 +39,13 @@ API and the plan use the English terms. The spec is
   value as read, which stays the evidence; the order is entered, uploaded and
   confirmed with the corrected value. A line's number and the PO's number and
   revision are only confirmed as read, never changed.
+- **Labelled case** (Kết quả người đã kiểm): one item a person decided on a
+  model step's proposal: what the step proposed, what the person kept
+  (confirmed as is, corrected to another value, or rejected), who and when,
+  the versions that produced it, and the mail, case and line it was read from
+  by reference. Written by the step's own service with the decision
+  (dw_sales ADR 0015 decision 5, ticket 43). The share kept as proposed is
+  the step's accuracy on real work; the cases set its threshold and teach it.
 - **Delivery schedule** (Đợt giao): one delivery of a PO line's quantity, a
   quantity on a requested date, with where the PO prints it. A line printing
   one quantity and one date has one; a line the PO splits over several dates

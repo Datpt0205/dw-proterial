@@ -74,6 +74,7 @@ from dw_sales.domain.change_requests import (
     table_changes,
 )
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.labelled_cases import change_line_label
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import IN_BRAVO, AppliedChange, OrderCase, OrderStatus
 from dw_sales.domain.rfq_reading import normalised, text_digest
@@ -305,6 +306,7 @@ class ChangeRequests:
                     field=line.field,
                 )
             )
+            await self._label(work, case, after, seq)
             await work.commit()
         return ChangeRequestResult(
             case_version=changed.case_version,
@@ -342,6 +344,7 @@ class ChangeRequests:
                     field=line.field,
                 )
             )
+            await self._label(work, case, after, seq)
             await work.commit()
         return ChangeRequestResult(
             case_version=case.case_version,
@@ -381,6 +384,16 @@ class ChangeRequests:
         nxt = next_to_open(others)
         if nxt is not None:
             await work.change_requests.save(nxt.opened(), expected_version=nxt.version)
+
+    async def _label(
+        self, work: SalesUnitOfWork, case: OrderCase, after: ChangeRequest, seq: int
+    ) -> None:
+        """The line as the model read it beside what the person decided
+        (ticket 43), written with the decision; nothing for a line a table
+        or a person gave."""
+        label = change_line_label(case, after, after.line(seq), new_id=self.ids.new_uuid)
+        if label is not None:
+            await work.labelled_cases.append([label])
 
     async def _require(
         self, context: AccessContext, case_id: uuid.UUID, scope: SalesScopes

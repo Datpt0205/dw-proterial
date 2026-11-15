@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/activity/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity Labels */
+        get: operations["activity_labels_api_v1_sales_activity_labels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/assistant/ask": {
         parameters: {
             query?: never;
@@ -3902,6 +3919,14 @@ export interface components {
             text: string;
         };
         /**
+         * LabelSummaryView
+         * @description Per step, the cases people decided on its proposals (ticket 43).
+         */
+        LabelSummaryView: {
+            /** Steps */
+            steps: components["schemas"]["StepLabelView"][];
+        };
+        /**
          * LabelledAnchor
          * @description Where one value was read, named by the field (and line) it fills.
          */
@@ -6792,6 +6817,23 @@ export interface components {
          */
         StepId: "O1" | "O2" | "O3" | "O4" | "O5" | "O6" | "O7" | "O8" | "O9" | "O10" | "O11" | "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12";
         /**
+         * StepLabelView
+         * @description One step's line on the head's view.
+         */
+        StepLabelView: {
+            /** Confirmed */
+            confirmed: number;
+            /** Confirmed Share */
+            confirmed_share: number | null;
+            /** Corrected */
+            corrected: number;
+            /** Rejected */
+            rejected: number;
+            step: components["schemas"]["ModelStep"];
+            /** Total */
+            total: number;
+        };
+        /**
          * StepModelView
          * @description One model step of a process step, read-only.
          */
@@ -7467,6 +7509,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activity_labels_api_v1_sales_activity_labels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelSummaryView"];
                 };
             };
         };

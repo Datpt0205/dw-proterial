@@ -70,6 +70,7 @@ from dw_sales.adapters.persistence.catalog import (
     SqlCatalogUnitOfWorkFactory,
 )
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
+from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseReader
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
@@ -517,7 +518,14 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
-    activity = ActivityService(uow, assembly.services.gate, step_activity, clock, book)
+    activity = ActivityService(
+        uow,
+        assembly.services.gate,
+        step_activity,
+        clock,
+        book,
+        SqlLabelledCaseReader(session_factory),
+    )
     lane = (
         None
         if lane_access is None

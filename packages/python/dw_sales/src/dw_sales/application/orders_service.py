@@ -68,6 +68,7 @@ from dw_sales.application.views import (
 )
 from dw_sales.domain.catalog import ConvertEntry
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.labelled_cases import mapping_label, po_value_label
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -222,6 +223,13 @@ class OrderCommands:
             )
             event = person_event("order.mapping_confirmed", context, now, field="prv_code")
             await save_order(work, context, self.ids, case, confirmed, event)
+            # What the person kept of a model's reading, if one proposed the
+            # candidates (ticket 43), with the decision.
+            label = mapping_label(
+                case, line_no, prv_code, new_id=self.ids.new_uuid, at=now, by=actor.user_id
+            )
+            if label is not None:
+                await work.labelled_cases.append([label])
             await work.commit()
         # Learned once the case holds it: the customer's next PO with this
         # code maps without asking again (the AI list, item 3).
@@ -268,6 +276,10 @@ class OrderCommands:
                 "order.value_corrected", context, now, finding_key=finding_key, field=field
             )
             await save_order(work, context, self.ids, case, corrected, event)
+            # The value as a model read it beside the one typed (ticket 43).
+            label = po_value_label(case, corrected, finding_key, field, new_id=self.ids.new_uuid)
+            if label is not None:
+                await work.labelled_cases.append([label])
             await work.commit()
         return order_change(corrected)
 

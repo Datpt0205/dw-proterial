@@ -24,7 +24,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -67,6 +67,7 @@ from dw_sales.application.views import (
 )
 from dw_sales.domain.catalog import CopperBasis
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.labelled_cases import LabelledCase, NewId, rfq_value_labels
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import (
     DeclineReason,
@@ -80,6 +81,16 @@ from dw_sales.domain.quotes import (
 )
 
 _QUOTE = "sales_quote_case"
+
+
+class QuoteLabels(Protocol):
+    """The labelled cases a quote decision made (ticket 43), from the case
+    before and after it (`rfq_value_labels`)."""
+
+    def __call__(
+        self, before: QuoteCase, after: QuoteCase, *, new_id: NewId
+    ) -> Sequence[LabelledCase]: ...
+
 
 SpecStep = Literal["start", "settle", "ask_design_again"]
 
@@ -316,6 +327,7 @@ class QuoteCommands:
             finding_key=finding_key,
             field=field if uncertain else None,
             guard=opened if uncertain else None,
+            labels=rfq_value_labels if uncertain else None,
         )
 
     async def ycbg(
@@ -497,6 +509,7 @@ class QuoteCommands:
         field: str | None = None,
         reason_code: str | None = None,
         guard: Callable[[SalesUnitOfWork, QuoteCase], Awaitable[None]] | None = None,
+        labels: QuoteLabels | None = None,
     ) -> CaseChangeView:
         await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         actor, now = quote_actor(context, self.gate), self.clock.now()
@@ -517,6 +530,10 @@ class QuoteCommands:
                 reason_code=reason_code,
             )
             await save_quote(work, context, self.ids, case, after, event)
+            # What the person kept of a model's reading (ticket 43), with the
+            # decision.
+            if labels is not None:
+                await work.labelled_cases.append(labels(case, after, new_id=self.ids.new_uuid))
             await work.commit()
         await withdraw_if_left(self.decisions, context, case, after)
         return quote_change(after)
