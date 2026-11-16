@@ -56,6 +56,12 @@ lowercase). A deactivated leaver's folder is therefore read by no one.
 - **A mailbox with no folder:** a member holding a mail-reading scope whose
   address has no folder in the drop (a typo at account creation, an alias) is
   told to IT once (the drop already lists folders; compare lowercase).
+- **A folder with no member:** a folder holding `.eml` files whose name is no
+  member's address (an account not yet made, or a leaver's) is told to IT once.
+  Its files wait unread (`OwnedFolders` lists them for no lane, and nothing
+  marks them handled), so they are read the minute the account exists; but the
+  30-day cleanup flow (ops-hardening, 11-16) deletes them unread after a month.
+  A leaver's folder is expected here after the handover: the notice says so.
 - **DW2 does not apply managers:** `dw_purchasing` lists ignore
   `AccessContext.visible_owners` (DW1 applies it, `dw_sales.application.visibility`).
   Apply the same rule to DW2's requests by their buyer: own, unassigned,
@@ -77,6 +83,8 @@ lowercase). A deactivated leaver's folder is therefore read by no one.
 6. In a restricted tenant, a DW2 buyer sees only own, unassigned, reports' and
    to-decide requests; an open tenant sees all.
 7. A member with a mail-reading scope and no matching folder is reported once.
+8. A folder of `.eml` files no member owns is reported once; once its owner's
+   account and scope exist, the next tick reads every waiting file.
 
 ## Owed
 
