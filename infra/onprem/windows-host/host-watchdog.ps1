@@ -150,6 +150,24 @@ if ($booting) {
     }
 } else { [void](Report 'tailscale' $true '') }
 
+# --- 4b. The mail-drop session: dwmail signed in, OneDrive running in it --------------
+# (11-mail-sync-session.ps1). OneDrive stopped inside a live session is started
+# again by its logon task; a session that is gone (signed out) cannot come back
+# without a boot, so that is told. Mail is not lost meanwhile: it waits in the
+# Team's folder and is read once OneDrive syncs again.
+if ((Get-LocalUser -Name 'dwmail' -ErrorAction SilentlyContinue) -and -not $booting) {
+    $session = @(Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue | Where-Object UserName -like '*\dwmail')
+    $od = { @(Get-Process OneDrive -IncludeUserName -ErrorAction SilentlyContinue | Where-Object UserName -like '*\dwmail') }
+    if ($session.Count -and -not (& $od).Count) {
+        Start-ScheduledTask -TaskName 'DW-OneDrive-dwmail' -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 15
+        Log "OneDrive was not running in dwmail's session; started it: $([bool](& $od).Count)"
+    }
+    $ok = $session.Count -and (& $od).Count
+    $why = if (-not $session.Count) { "dwmail is not signed in (signed out?), so OneDrive is not syncing the Team's mail folder. Restart the host in a quiet moment: it signs dwmail in by itself." } else { "OneDrive will not start in dwmail's session." }
+    [void](Report 'mail-session' $ok "$why Mail waits in the Team's folder meanwhile; DW reads it once OneDrive syncs again." 2)
+}
+
 # --- 5. Disks keep 15 % free --------------------------------------------------------
 foreach ($d in 'C', 'V', 'B') {
     $v = Get-Volume -DriveLetter $d -ErrorAction SilentlyContinue

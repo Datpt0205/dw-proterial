@@ -381,7 +381,11 @@ context. All five are done and on `main`. The full narrative is at
           down -v` cannot delete them (only FPT's key reaches the VM;
           backups stay the last net); (b) hide Sign out for `dwmail` (per-user
           `NoLogoff`) and have the watchdog alert when its session or OneDrive
-          is gone (mail waits in the Team meanwhile); (c) few Windows admins,
+          is gone (mail waits in the Team meanwhile) **(done 21:16 at Đạt's
+          "làm": NoLogoff=1 in dwmail's hive; OneDrive killed in the live
+          session was started again by the watchdog's next round; dwmail
+          signed out by an admin mailed "PROBLEM: mail-session" after two
+          rounds; a restart signed dwmail in with OneDrive running)**; (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0

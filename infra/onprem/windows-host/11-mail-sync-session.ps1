@@ -69,6 +69,26 @@ Register-ScheduledTask -TaskName 'DW-Lock-dwmail' -Action $a -Trigger $t -Princi
 $a = New-ScheduledTaskAction -Execute 'C:\Program Files\Microsoft OneDrive\OneDrive.exe' -Argument '/background'
 Register-ScheduledTask -TaskName 'DW-OneDrive-dwmail' -Action $a -Trigger $t -Principal $p -Force | Out-Null
 
+# --- no "Sign out" in dwmail's own menus ----------------------------------------------------
+# Signing dwmail out stops OneDrive until the next boot (autologon runs only at
+# boot), so its Start menu and Ctrl+Alt+Del offer no Sign out: per-user policy
+# NoLogoff in dwmail's hive, loaded if dwmail is not signed in. An administrator
+# can still end the session; the watchdog then says so.
+$sid = (Get-LocalUser -Name $user).SID.Value
+$loadedHere = $false
+if (-not (Test-Path "Registry::HKEY_USERS\$sid")) {
+    $profile = (Get-CimInstance Win32_UserProfile | Where-Object SID -eq $sid).LocalPath
+    if ($profile) { reg.exe load "HKU\$sid" "$profile\NTUSER.DAT" | Out-Null; $loadedHere = $true }
+}
+if (Test-Path "Registry::HKEY_USERS\$sid") {
+    $pol = "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+    New-Item -Path $pol -Force | Out-Null
+    Set-ItemProperty -Path $pol -Name NoLogoff -Type DWord -Value 1
+    if ($loadedHere) { [GC]::Collect(); reg.exe unload "HKU\$sid" | Out-Null }
+} else {
+    Write-Warning "dwmail has no profile yet (never signed in): run this again after its first sign-in"
+}
+
 # --- a disconnected session is never ended (OneDrive keeps running) ----------------------
 $ts = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
 New-Item -Path $ts -Force | Out-Null
