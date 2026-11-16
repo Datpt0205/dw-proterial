@@ -15,6 +15,7 @@ demo tenant, so each test starts from an empty `sales` schema, cleared by
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator
 
 import pytest
@@ -33,7 +34,9 @@ from dw_sales.testing.seed_rules import (
     seed_test_measurements,
 )
 
-TEST_DB = "dw_test_sales_api"
+# A session running beside another names its own database (DW_TEST_SALES_API_DB), so
+# neither recreates the one the other is testing in.
+TEST_DB = os.environ.get("DW_TEST_SALES_API_DB", "dw_test_sales_api")
 
 # Everything a test writes: Sales state, DW1's runs, their checkpoints and the
 # approvals they paused on, notifications and spent keys. The audit log is

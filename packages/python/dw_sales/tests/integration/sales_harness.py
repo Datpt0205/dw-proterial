@@ -7,6 +7,7 @@ a name no other suite uses.
 
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -51,7 +52,9 @@ from dw_sales.domain.quotes import (
 )
 from dw_sales.testing.followups import platform_zone
 
-TEST_DB = "dw_test_sales"
+# A session running beside another names its own database (DW_TEST_SALES_DB), so
+# neither recreates the one the other is testing in.
+TEST_DB = os.environ.get("DW_TEST_SALES_DB", "dw_test_sales")
 
 
 @dataclass(frozen=True)

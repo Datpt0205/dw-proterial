@@ -70,6 +70,64 @@ IMPORT_TO_DIST = {
 }
 
 
+# ADR 0026: DW never connects to Bravo's SQL Server, not even read-only;
+# every read goes through the vendor's API (dw_sales ticket 14). A driver for
+# it may not be imported, declared, locked or named in a URL anywhere, tests
+# and `testing` helpers included. Import name -> distribution name.
+SQL_SERVER_DRIVERS = {
+    "pyodbc": "pyodbc",
+    "pymssql": "pymssql",
+    "aioodbc": "aioodbc",
+    "pytds": "python-tds",
+    "mssql_python": "mssql-python",
+    "aiomssql": "aiomssql",
+}
+_SQL_SERVER_URL = "mssql+"
+
+
+def bravo_database_violations(root: Path) -> list[str]:
+    """Every way into a SQL Server database the tree holds (`SQL_SERVER_DRIVERS`)."""
+    found: list[str] = []
+    dists = set(SQL_SERVER_DRIVERS.values())
+    rule = "ADR 0026: DW reads Bravo through its vendor's API, never its database"
+    for base in (root / "packages", root / "apps"):
+        if not base.is_dir():
+            continue
+        for pyproject in base.rglob("pyproject.toml"):
+            if "node_modules" in pyproject.parts:
+                continue
+            for name in sorted(declared_dependencies(pyproject) & dists):
+                found.append(f"{pyproject.relative_to(root)} declares {name!r} ({rule})")
+        for py_file in base.rglob("*.py"):
+            if "node_modules" in py_file.parts:
+                continue
+            text = py_file.read_text(encoding="utf-8", errors="replace")
+            if _SQL_SERVER_URL in text and py_file.name != Path(__file__).name:
+                found.append(f"{py_file.relative_to(root)} names a SQL Server URL ({rule})")
+                continue
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                names = (
+                    [alias.name for alias in node.names]
+                    if isinstance(node, ast.Import)
+                    else [node.module]
+                    if isinstance(node, ast.ImportFrom) and node.module
+                    else []
+                )
+                for module in names:
+                    if module.split(".")[0] in SQL_SERVER_DRIVERS:
+                        found.append(f"{py_file.relative_to(root)} imports {module!r} ({rule})")
+    lock = root / "uv.lock"
+    if lock.exists():
+        for line in lock.read_text(encoding="utf-8").splitlines():
+            if line.startswith("name = ") and line.split('"')[1] in dists:
+                found.append(f"uv.lock locks {line.split(chr(34))[1]!r} ({rule})")
+    return found
+
+
 def declared_dependencies(pyproject: Path) -> set[str]:
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     deps: set[str] = set()
@@ -161,6 +219,7 @@ def main() -> int:
             all_violations.extend(check_package(package_dir))
             checked += 1
 
+    all_violations.extend(bravo_database_violations(REPO_ROOT))
     if all_violations:
         print(f"Declared-dependency check FAILED ({len(all_violations)} violations):")
         for violation in all_violations:

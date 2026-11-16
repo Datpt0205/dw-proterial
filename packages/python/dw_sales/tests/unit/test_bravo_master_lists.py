@@ -22,14 +22,15 @@ from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.order_intake import _convert_entry
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.bravo_exports import find_header
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.descriptions import StatedAttributes, candidates
 from dw_sales.domain.item_names import read_name
 from dw_sales.domain.master_data import (
+    SPECS,
     CatalogList,
     ImportedTable,
     TableRow,
-    header_row,
     parse_rows,
 )
 from dw_sales.domain.order_checks import map_line
@@ -447,22 +448,19 @@ async def _approved(world: World, catalog_list: CatalogList, data: bytes) -> Any
 # ------------------------------------------------------------ the header --
 
 
-def test_the_header_is_found_by_shape_under_a_title_and_its_hints() -> None:
+def test_the_header_is_found_by_its_titles_under_a_title_and_its_hints() -> None:
+    customers = SPECS[CatalogList.CUSTOMERS].columns
     rows = [
         TableRow(row=1, cells=["Danh mục", None, None, None, None, None, "@x.example", "vi/en"]),
-        TableRow(row=2, cells=["Code", "Tên", "Nhóm", "Miền", "Ngôn ngữ", "Email", "PIC", "Id"]),
+        TableRow(row=2, cells=[*B05_HEADERS]),
         TableRow(row=3, cells=["A1", "B", "C", "D", "E", "F", None, 7]),
     ]
-    assert header_row(rows) == 1
+    assert find_header(rows, customers).index == 1
     # The template's own file: its first row is its header.
-    assert header_row(rows[1:]) == 0
+    assert find_header(rows[1:], customers).index == 0
     # A two-column list (LME) whose data rows are text too.
-    assert (
-        header_row(
-            [TableRow(row=1, cells=["Tháng", "Giá"]), TableRow(row=2, cells=["01/2026", "9500"])]
-        )
-        == 0
-    )
+    lme = [TableRow(row=1, cells=["Tháng", "Giá LME"]), TableRow(row=2, cells=["01/2026", "9500"])]
+    assert find_header(lme, SPECS[CatalogList.LME].columns).index == 0
 
 
 # ------------------------------------------------------------ the reader --
