@@ -37,6 +37,9 @@ own file and a row here.
   Q&A and reminders (contract gaps closed). `sales.md` State.
 - **Now:** onsite survey since 11-09 (DW1 90%, DW2 60%; daily status in the
   rollout `.xlsx`, kept out of commits); then UAT (`.claude/plans/hitl-review.md`).
+- **CRITICAL, parked (Đạt, 11-16): RAG on premises** has no PDF/Word/Excel
+  parser and cuts tables (`platform-runtime.md` Open). Infrastructure first;
+  then ask Đạt and do it with the code tickets.
 
 ## Decisions Đạt owes
 

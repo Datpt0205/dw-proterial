@@ -51,8 +51,10 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
-- **2026-11-16, knowledge ingest has no document parser on premises**
-  (found answering Đạt on RAG). `dw_worker.composition.build_parser` adds
+- **CRITICAL, 2026-11-16, knowledge ingest has no document parser on premises**
+  (found answering Đạt on RAG). **Đạt: parked as critical until the plant's
+  infrastructure is done, then done with the code tickets; ask him before
+  starting.** `dw_worker.composition.build_parser` adds
   `GatewayFileParser` (pdf/docx/xlsx/pptx and images sent to a cloud model's
   `input_file`/`input_image`) only with `openai_base_url` + key; the plant has
   neither, so only plaintext/markdown ingests and every other upload fails "no
