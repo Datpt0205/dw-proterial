@@ -236,3 +236,11 @@ Owed before the step can be measured on as built, then switched:
   proposed, or corrects the intents on the reply. Not built here.
 - The step stays off until Đạt switches it, after the wiring above is
   measured once more as built.
+
+**Wired and measured as built (2026-11-16, `0890ea95`):** `skill_agent`
+builds its turn with `thinking=True`, and the live lane gives the thinking
+profile its own model. `--live onprem` on the plant's Strata: bar set
+**0.883**, no false accept, every reading stamped `onprem_thinking`, p50
+3.15 s, p95 4.89 s. Over the bar on four runs of five (0.850 to 0.883). The
+step stays off until Đạt switches it for the tenant (`model_assist.skill_intents`).
+Way 4 still has no source.
