@@ -1,6 +1,6 @@
 # 05 — Mass or pcs, and the request to JP & HQ for a pcs price
 
-Status: ready-for-agent (2026-11-16: B49 `xin giá pcs từ JP` gives the pcs signs, the request template and its recipient, GM/BC Manager)
+Status: ready-for-agent: domain, commands, routes done 2026-11-16; view field, web, mail template, follow-up and the model's proposal owed (see Comments)
 Blocked by: none; open questions for Sales: are SGA/loyalty/profit rates fixed per pcs order, is "JP & HQ" the GM at PRV, the assembly-cable variant
 Category: enhancement
 
@@ -24,3 +24,31 @@ carries the type ("Mass production").
 2. The draft names no figure the facts do not hold.
 
 ## Comments
+
+- 2026-11-16 (dw-proterial-33): done, both acceptances held where the change
+  happens. `QuoteCase.production_type` (mass | pcs, set by a person before
+  pricing, stamped), `pcs_price` (the GM/BC Manager's price per line, as
+  Sales recorded it, every request line once; going back to mass drops it),
+  and `decide_price` refuses a pcs case with none (`require_pcs_price`;
+  acceptance 1, mutation-checked: removing it turns
+  `test_sales_cannot_price_a_pcs_case_until_the_gm_price_is_recorded` red).
+  `pcs_price_request(case)` is B49's cost sheet: the request's lines and the
+  cost lines Raw material, Manufacturing, Transportation, SGA, Loyalty,
+  Profit, Grand total, every amount blank (acceptance 2). Routes:
+  `POST /quotes/{id}/production-type`, `POST /quotes/{id}/pcs-price`
+  (quote.prepare), and `GET /quotes/{id}/pcs-price-request` (case.read: it
+  carries no amount). Stored in the case body: no migration.
+- Owed, safe default meanwhile: (a) `QuoteCaseView` field and the web
+  controls wait for `views.py` and `labels.ts`, held by the other Sales
+  session; until then the type is set through the API only, and a case
+  nobody marks stays priced as today. The recorded GM price in the view
+  must go behind `prices.amounts`, like every amount. (b) The JP & HQ mail
+  from one example (ADR 0006) needs `configs/copy`, the other session's
+  area; the cost sheet is the facts it will carry. (c) The follow-up while
+  waiting lives in `followups.py` (other session). (d) Code or the model
+  proposing the type from history: no signal is measured yet, so a person
+  sets it. (e) `contracts/openapi` regenerates once the other session's
+  uncommitted changes there are committed.
+- Asked of Sales (Decisions Đạt owes): are SGA, loyalty and profit rates
+  fixed per pcs order; is "JP & HQ" the GM at PRV; the assembly-cable
+  variant.

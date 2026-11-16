@@ -1666,6 +1666,104 @@ class Approval(BaseModel):
     document_sha256: Sha256Hex
 
 
+# Mass production, or pieces priced one by one (ticket 05, Box B49): Bravo's
+# SO header carries the type ("Mass production").
+ProductionType = Literal["mass", "pcs"]
+
+
+class PcsPriceLine(BaseModel):
+    """The price GM/BC Manager decided for one requested line, per piece."""
+
+    model_config = _FROZEN
+
+    line_no: LineNo
+    unit_price: UnitPrice
+
+
+class PcsPrice(BaseModel):
+    """The price GM/BC Manager decided on the cost sheet for a pcs request
+    (Box B49: "xin giá JP & HQ" is the GM at PRV deciding), as Sales recorded
+    it, and who recorded it."""
+
+    model_config = _FROZEN
+
+    lines: tuple[PcsPriceLine, ...] = Field(min_length=1)
+    recorded_by: uuid.UUID
+    recorded_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def _distinct_lines(self) -> Self:
+        if not _distinct(line.line_no for line in self.lines):
+            raise ValueError("the GM's price names a line twice")
+        return self
+
+
+class PcsCostRow(BaseModel):
+    """One row of the cost sheet sent to GM/BC Manager: what the request
+    states, and the price cells left blank for the GM (and Purchasing) to
+    fill. Never a figure the case does not hold."""
+
+    model_config = _FROZEN
+
+    line_no: LineNo
+    customer_item_code: str | None
+    description: str
+    quantity: Decimal | None
+    uom: str
+    needed_by: date | None
+    unit_price: None = None
+    total: None = None
+
+
+class PcsCostSheet(BaseModel):
+    """The request to GM/BC Manager for a pcs price (ticket 05): the request's
+    lines, and the cost lines of B49's sheet in its order, every amount
+    blank."""
+
+    model_config = _FROZEN
+
+    customer_code: str
+    rfq_no: str | None
+    rows: tuple[PcsCostRow, ...]
+    cost_lines: tuple[str, ...]
+
+
+# The cost lines of B49's sheet, in its order; the rates (SGA 15 %, loyalty,
+# profit) are the GM's to state, asked of Sales whether they are fixed.
+PCS_COST_LINES: Final = (
+    "Raw material total",
+    "Manufacturing cost",
+    "Transportation costs",
+    "SGA",
+    "Loyalty",
+    "Profit",
+    "Grand total",
+)
+
+
+def pcs_price_request(case: QuoteCase) -> PcsCostSheet:
+    """What is sent to GM/BC Manager for a pcs case: facts only (acceptance 2)."""
+    document = case.request.document
+    return PcsCostSheet(
+        customer_code=case.customer_code,
+        rfq_no=document.rfq_no.value if document.rfq_no is not None else None,
+        rows=tuple(
+            PcsCostRow(
+                line_no=item.line_no,
+                customer_item_code=(
+                    item.customer_item_code.value if item.customer_item_code else None
+                ),
+                description=item.description.value,
+                quantity=item.quantity.value,
+                uom=item.uom.value,
+                needed_by=item.needed_by.value,
+            )
+            for item in sorted(document.items, key=lambda i: i.line_no)
+        ),
+        cost_lines=PCS_COST_LINES,
+    )
+
+
 class Stamp(BaseModel):
     """Who did a step that needs nothing more than who and when."""
 
@@ -1850,6 +1948,11 @@ class QuoteCase(BaseModel):
     # The order case it was opened from, for a PO that came before any
     # quotation (ticket 09); None for a customer's request.
     from_order: FromOrder | None = None
+    # Mass or pcs (ticket 05), as a person set it, and who; None until then.
+    production_type: ProductionType | None = None
+    production_type_set: Stamp | None = None
+    # For a pcs case, the price GM/BC Manager decided, once Sales recorded it.
+    pcs_price: PcsPrice | None = None
 
     @classmethod
     def open(
@@ -2282,6 +2385,50 @@ class QuoteCase(BaseModel):
         """The customer agreed the specification Design replied with."""
         return self._moved(QuoteStatus.DESIGN_REPLIED)
 
+    # ------------------------------------------------------- mass or pcs --
+
+    def set_production_type(
+        self, kind: ProductionType, *, by: uuid.UUID, at: AwareDatetime
+    ) -> QuoteCase:
+        """Mass or pcs, as a person says, before the case is priced. Back to
+        mass, a GM price recorded for pcs no longer holds and goes."""
+        if self.pricing is not None or self.status not in _BEFORE_SENT:
+            raise ConflictError(
+                "mass or pcs is set before the case is priced",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        return self._changed(
+            production_type=kind,
+            production_type_set=Stamp(by=by, at=at),
+            pcs_price=self.pcs_price if kind == "pcs" else None,
+        )
+
+    def record_pcs_price(self, price: PcsPrice) -> QuoteCase:
+        """The GM's price for a pcs case, every line the request has."""
+        if self.production_type != "pcs":
+            raise ConflictError(
+                "a GM price is recorded for a pcs case",
+                details={"case_id": str(self.case_id), "rule": "not_pcs"},
+            )
+        if {line.line_no for line in price.lines} != self.request.document.line_numbers():
+            raise DomainError(
+                "the GM's price names every line of the request once",
+                details={"case_id": str(self.case_id), "field": "lines"},
+            )
+        return self._changed(pcs_price=price)
+
+    @property
+    def waits_on_pcs_price(self) -> bool:
+        """A pcs case with no GM price recorded yet: not Sales' to price."""
+        return self.production_type == "pcs" and self.pcs_price is None
+
+    def require_pcs_price(self) -> None:
+        if self.waits_on_pcs_price:
+            raise ConflictError(
+                "hàng pcs: cần ghi giá GM/BC Manager đã chốt trước khi định giá",
+                details={"case_id": str(self.case_id), "rule": "pcs_price_missing"},
+            )
+
     def decide_price(
         self, decision: PricingDecision, findings: Iterable[QuoteFinding], *, by: uuid.UUID
     ) -> QuoteCase:
@@ -2299,6 +2446,8 @@ class QuoteCase(BaseModel):
                 "a price decision is recorded as its actor's",
                 details={"case_id": str(self.case_id), "field": "decided_by"},
             )
+        # Ticket 05: a pcs case is priced from the GM's price, never before.
+        self.require_pcs_price()
         raised = tuple(findings)
         if any(finding.code not in PRICE_FINDINGS for finding in raised):
             raise ValueError("a price decision raises price findings only")
