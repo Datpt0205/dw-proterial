@@ -69,6 +69,18 @@ Mốc 6 (running many customers) is half done:
   chunks (a table whole, or row groups repeating the header), the section path
   carried into what is embedded, then `retrieval_eval.py` on real documents.
   bge-m3 on CPU in the VM (Strata serves no embeddings).
+  **Added by Đạt (11-16):** (1) multi-vector embedding, images above all; (2)
+  an image is never carried as base64 to be embedded (slow): it is stored and
+  the embedder reads the file itself. To clarify when this starts: whether
+  multi-vector means late interaction (bge-m3 already emits ColBERT vectors
+  beside dense and sparse; Qdrant has multivector/MaxSim, but Ollama serves
+  bge-m3's dense output only) or several vectors per document (text, page
+  image, summary), and which model embeds page images (a ColPali/ColQwen-type
+  visual retriever on the GPU beside Strata, VRAM to measure). For (2): the
+  queue and the API carry an object key in SeaweedFS (tenant/workspace
+  prefix), the embedding service streams the bytes from there; whether
+  Strata's `image_url` takes a presigned http URL instead of a data URL is to
+  measure.
 - **2026-10-25, sign-in accounts an Org Admin creates** (Đạt; spec
   `platform-runtime/member-sign-in-accounts/spec.md`): "Thêm người" on the
   members screen makes the person, the role and a Keycloak account with a
