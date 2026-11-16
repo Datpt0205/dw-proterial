@@ -32,12 +32,12 @@ no longer reads is not used, and the mail is read as with the step off).
 
 from __future__ import annotations
 
-import re
 from typing import Final, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_sales.domain.message_intent import IntentKind, KindName
+from dw_sales.domain.skill_blocks import blocks_of
 
 __all__ = [
     "MAIL_KINDS",
@@ -65,9 +65,8 @@ ReadRoute = IntentKind | Literal["none"]
 # schema of every call.
 MAX_KINDS: Final = 40
 
-_START: Final = re.compile(r"^- kind:[ \t]*(.*)$")
-_FIELD: Final = re.compile(r"^[ \t]+(route|label|means):[ \t]*(.*)$")
-_KEY: Final = re.compile(r"^[ \t]+([A-Za-z_]+):")
+# The lines a kind's block may hold (`skill_blocks`).
+_FIELDS: Final = frozenset({"route", "label", "means"})
 
 
 class MailKind(BaseModel):
@@ -115,34 +114,9 @@ def mail_kinds_of(instructions: str) -> MailKinds:
     """The kinds ``instructions`` name (module docstring). Raises ValueError,
     saying what is wrong in words, for a block that does not read or a set
     that does not hold."""
-    blocks: list[dict[str, str]] = []
-    current: dict[str, str] | None = None
-    last: str | None = None
-    for raw in instructions.replace("\r\n", "\n").split("\n"):
-        line = raw.rstrip()
-        if start := _START.match(line):
-            current = {"name": start.group(1).strip()}
-            blocks.append(current)
-            last = None
-            continue
-        if current is None:
-            continue
-        if not line.strip() or not line[0].isspace():
-            # A blank line or the next paragraph ends the block.
-            current, last = None, None
-            continue
-        if field := _FIELD.match(line):
-            key = field.group(1)
-            if key in current:
-                raise ValueError(f"the kind {current['name']} says {key} twice")
-            current[key] = field.group(2).strip()
-            last = key
-        elif key_like := _KEY.match(line):
-            raise ValueError(f"the kind {current['name']} has an unknown line {key_like.group(1)}")
-        elif last is not None:
-            current[last] = f"{current[last]} {line.strip()}".strip()
-        else:
-            raise ValueError(f"the kind {current['name']} has a line that belongs to nothing")
+    blocks = [
+        {"name": block.pop("kind"), **block} for block in blocks_of(instructions, "kind", _FIELDS)
+    ]
     if not blocks:
         raise ValueError('the skill names no kind: each starts with a line "- kind: <name>"')
     for block in blocks:

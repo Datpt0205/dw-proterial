@@ -6917,6 +6917,19 @@
             "title": "Kind",
             "type": "string"
           },
+          "kind_label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind Label"
+          },
           "lines": {
             "default": [],
             "items": {
@@ -7044,6 +7057,31 @@
             ],
             "title": "Sample Quantity"
           },
+          "skill": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]*@\\d+\\.\\d+\\.\\d+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
+          },
+          "skill_kind": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Kind"
+          },
           "so_no": {
             "anyOf": [
               {
@@ -7055,6 +7093,21 @@
               }
             ],
             "title": "So No"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pc",
+                  "qa"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
           }
         },
         "required": [
@@ -7069,11 +7122,22 @@
         "type": "object"
       },
       "HandoffDraftView": {
-        "description": "A routed message's hand-off as code wrote it from the template, for\nSales to review, edit and send from their own mailbox (ticket 33). ``to``\nnames the team, never an address: Sales picks the recipients.",
+        "description": "A routed message's hand-off as code wrote it from the template, for\nSales to review, edit and send from their own mailbox (ticket 33). ``to``\nnames the team, never an address: Sales picks the recipients.\n``kind_label``: the tenant's hand-off skill's words for its kind, where\nthe skill read it and gives some (ticket 42 family 5).",
         "properties": {
           "body": {
             "title": "Body",
             "type": "string"
+          },
+          "kind_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind Label"
           },
           "subject": {
             "title": "Subject",
@@ -10779,6 +10843,9 @@
           "reply_draft",
           "skill_intents",
           "skill_mail_kinds",
+          "skill_document_forms",
+          "skill_handoffs",
+          "skill_reply_drafts",
           "triage_card"
         ],
         "title": "ModelStep",
@@ -17097,7 +17164,7 @@
         "type": "object"
       },
       "ReplyDraftView": {
-        "description": "The model's wording, or why there is none; always marked as the model's\non the page, beside the template's draft of ``kind`` where it has one.",
+        "description": "The model's wording, or why there is none; always marked as the model's\non the page, beside the template's draft of ``drafted_as`` where it has\none. ``kind`` is the kind asked for: a platform draft, or a kind of the\ntenant's reply-drafts skill worded as ``drafted_as`` (ticket 42 family 5),\nwith the skill's label and version.",
         "properties": {
           "body": {
             "anyOf": [
@@ -17115,20 +17182,37 @@
             "title": "Case Id",
             "type": "string"
           },
-          "figures_checked": {
-            "default": 0,
-            "title": "Figures Checked",
-            "type": "integer"
-          },
-          "kind": {
+          "drafted_as": {
             "enum": [
               "question_answer",
               "change_can_do_draft",
               "change_options_draft",
               "confirmation_draft"
             ],
+            "title": "Drafted As",
+            "type": "string"
+          },
+          "figures_checked": {
+            "default": 0,
+            "title": "Figures Checked",
+            "type": "integer"
+          },
+          "kind": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
             "title": "Kind",
             "type": "string"
+          },
+          "kind_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind Label"
           },
           "language": {
             "title": "Language",
@@ -17144,6 +17228,14 @@
               }
             ],
             "title": "Model Profile"
+          },
+          "others": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReplyKindOffer"
+            },
+            "title": "Others",
+            "type": "array"
           },
           "prompt_ref": {
             "anyOf": [
@@ -17171,6 +17263,17 @@
               }
             ],
             "title": "Refusal"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
           },
           "status": {
             "enum": [
@@ -17213,6 +17316,7 @@
         "required": [
           "case_id",
           "kind",
+          "drafted_as",
           "status",
           "language"
         ],
@@ -17252,6 +17356,34 @@
           "supplier_code"
         ],
         "title": "ReplyItem",
+        "type": "object"
+      },
+      "ReplyKindOffer": {
+        "description": "Another kind of the tenant's reply-drafts skill worded as the same\ndraft (ticket 42 family 5): what the page offers beside it.",
+        "properties": {
+          "kind": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "ReplyKindOffer",
         "type": "object"
       },
       "ReplyQuote": {
@@ -17422,6 +17554,19 @@
             "title": "Calls",
             "type": "integer"
           },
+          "form": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form"
+          },
           "model_profile": {
             "maxLength": 64,
             "minLength": 1,
@@ -17450,6 +17595,18 @@
             "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
             "title": "Rules",
             "type": "string"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
           }
         },
         "required": [
@@ -33504,12 +33661,8 @@
             "name": "kind",
             "required": true,
             "schema": {
-              "enum": [
-                "question_answer",
-                "change_can_do_draft",
-                "change_options_draft",
-                "confirmation_draft"
-              ],
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
               "title": "Kind",
               "type": "string"
             }

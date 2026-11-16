@@ -103,6 +103,7 @@ _ON_DISPOSITION: Final = frozenset(
         ModelStep.THREAD_AGENT,
         ModelStep.SKILL_INTENTS,
         ModelStep.REQUEST_HANDOFF,
+        ModelStep.SKILL_HANDOFFS,
         ModelStep.TRIAGE_CARD,
     }
 )
@@ -296,7 +297,7 @@ def _quote_produced(case: QuoteCase, row: StepOutcome) -> list[ProducedValue]:
         return []
     document = request.document
     produced: list[ProducedValue] = []
-    if row.step is ModelStep.RFQ_EXTRACTION:
+    if row.step in (ModelStep.RFQ_EXTRACTION, ModelStep.SKILL_DOCUMENT_FORMS):
         for name in sorted(document.model_read):
             held = getattr(document, name)
             if held is not None:
@@ -362,7 +363,10 @@ def _disposition_produced(
         card = disposition.triage
         kind = card.kind_label or card.kind
         return [plain(n, v) for n, v in (("kind", kind), ("step", card.step)) if v]
-    if row.step is ModelStep.REQUEST_HANDOFF and disposition.handoff is not None:
+    if (
+        row.step in (ModelStep.REQUEST_HANDOFF, ModelStep.SKILL_HANDOFFS)
+        and disposition.handoff is not None
+    ):
         handoff = disposition.handoff
         produced = [
             plain(n, v) for n, v in (("po_no", handoff.po_no), ("so_no", handoff.so_no)) if v

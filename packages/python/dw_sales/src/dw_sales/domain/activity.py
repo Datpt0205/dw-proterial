@@ -44,7 +44,7 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import MappingStatus, OrderCase
-from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.quotes import QuoteCase, RequestReading
 from dw_sales.domain.reply_intent import ReplyReading
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -78,7 +78,9 @@ _PREFILL_RESULT: Final[Mapping[str, StepResult]] = {
 # a hand-off and a layout are about orders, a request read is a quotation.
 _STEP_LANE: Final[Mapping[ModelStep, CaseKind]] = {
     ModelStep.RFQ_EXTRACTION: CaseKind.QUOTE,
+    ModelStep.SKILL_DOCUMENT_FORMS: CaseKind.QUOTE,
     ModelStep.REQUEST_HANDOFF: CaseKind.ORDER,
+    ModelStep.SKILL_HANDOFFS: CaseKind.ORDER,
     ModelStep.LAYOUT_PROPOSAL: CaseKind.ORDER,
     ModelStep.TRIAGE_CARD: CaseKind.ORDER,
 }
@@ -234,6 +236,12 @@ def _reply_step(reading: ReplyReading, steps_by_prompt: Mapping[str, ModelStep])
     return step if step in agents else ModelStep.REPLY_INTENT
 
 
+def request_step(reading: RequestReading) -> ModelStep:
+    """The step a request's reading is: the document forms' where a skill
+    read it (ticket 42 family 3), ticket 29's otherwise."""
+    return ModelStep.RFQ_EXTRACTION if reading.skill is None else ModelStep.SKILL_DOCUMENT_FORMS
+
+
 def _intent_step(reading: IntentReading) -> ModelStep:
     """The step a message's classification is: the mail kinds' where a skill
     read it (ticket 42), the one call's otherwise."""
@@ -278,7 +286,8 @@ def _from_disposition(
         result = _HANDOFF_RESULT[handoff.outcome]
         found.append(
             _Stamped(
-                ModelStep.REQUEST_HANDOFF,
+                # The hand-off kinds' step where a skill read it (ticket 42).
+                ModelStep.REQUEST_HANDOFF if handoff.skill is None else ModelStep.SKILL_HANDOFFS,
                 handoff.prompt,
                 handoff.model_profile,
                 result,
@@ -352,7 +361,7 @@ def _from_case(
         if request is not None:
             found.append(
                 _Stamped(
-                    ModelStep.RFQ_EXTRACTION,
+                    request_step(request),
                     str(request.prompt),
                     request.model_profile,
                     "accepted",

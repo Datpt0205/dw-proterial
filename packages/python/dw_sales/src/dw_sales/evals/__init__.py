@@ -18,8 +18,10 @@ from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.customer_reminders import GRADERS as REMINDER_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
 from dw_sales.evals.design_text_replies import GRADERS as DESIGN_TEXT_GRADERS
+from dw_sales.evals.document_forms import GRADERS as DOCUMENT_FORM_GRADERS
 from dw_sales.evals.finding_explanations import GRADERS as EXPLANATION_GRADERS
 from dw_sales.evals.graders import GRADERS as ORDER_GRADERS
+from dw_sales.evals.handoff_kinds import GRADERS as HANDOFF_KIND_GRADERS
 from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
 from dw_sales.evals.intents import GRADERS as INTENT_GRADERS
 from dw_sales.evals.layouts import GRADERS as LAYOUT_GRADERS
@@ -31,6 +33,7 @@ from dw_sales.evals.po_body import GRADERS as PO_BODY_GRADERS
 from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.reply_drafts import GRADERS as REPLY_DRAFT_GRADERS
+from dw_sales.evals.reply_kinds import GRADERS as REPLY_KIND_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
@@ -78,6 +81,9 @@ GRADERS = {
         **REPLY_DRAFT_GRADERS,
         **SKILL_INTENT_GRADERS,
         **MAIL_KIND_GRADERS,
+        **HANDOFF_KIND_GRADERS,
+        **REPLY_KIND_GRADERS,
+        **DOCUMENT_FORM_GRADERS,
         **TRIAGE_GRADERS,
     }.items()
 }

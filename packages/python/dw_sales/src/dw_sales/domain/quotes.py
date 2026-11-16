@@ -315,6 +315,11 @@ class RequestReading(BaseModel):
     calls: int = Field(ge=1, le=10)
     # Values the model gave that code did not take, by reason: counts only.
     refused: Mapping[str, int] = Field(default_factory=dict)
+    # Where the tenant's document forms read it (ticket 42 family 3): the
+    # skill version served and the form the file was read as. None: ticket
+    # 29's reading, which knows no form.
+    skill: VersionRef | None = None
+    form: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$", max_length=40)
 
 
 class QuoteRequest(BaseModel):

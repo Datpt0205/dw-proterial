@@ -541,6 +541,25 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "74c0ef7b2e0c974bc5a565bfbdc44f4bdc752d0ca4cf5232aadd8a16f3b9d113",
+      "dataset_id": "sales_document_forms",
+      "files": [
+        {
+          "checksum": "7cf02c2c8d7eb88d56cac0eb8659bdc8c8d0686a4d009f7d8ed24bbdb917e711",
+          "path": "evals/expected/sales_document_forms.json"
+        },
+        {
+          "checksum": "fef9ce5b326cc95261f178ec7ada116930d139f431eacf519b4255807907bb1f",
+          "path": "evals/expected/sales_document_forms_golden.json"
+        },
+        {
+          "checksum": "e0b1243786c317fb4688f52a62a28f2a2a42f52d2b70d3c73b6c5601d8db7220",
+          "path": "evals/fixtures/cases/sales_document_forms.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "3fc923d4362a01ea0fa762c21cc5adcae7294b8dcedcff16d0f2465c68c00ef2",
       "dataset_id": "sales_finding_explanations",
       "files": [
@@ -574,6 +593,33 @@
         {
           "checksum": "149bdaf16442995e157bd5dc2c6d6010204cfafcf56b7d2c215195d53eb1b79b",
           "path": "evals/expected/sales_handoff_notation.json"
+        },
+        {
+          "checksum": "d2b75f8d19b642a2a12cfdb9b6188c82fc36edba448152e0cbb57994980fdb51",
+          "path": "evals/fixtures/cases/sales_handoff.json"
+        },
+        {
+          "checksum": "896c54cd27665f6b392df5e4737ad7f24b35b05d775198724d131e34f6131837",
+          "path": "evals/fixtures/cases/sales_handoff_golden.json"
+        },
+        {
+          "checksum": "eaacda578fd66839628ce387714a3ca4e629c77ec0ef499efef503f20d4fbcad",
+          "path": "evals/fixtures/cases/sales_handoff_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "a3026f172e7020bcadda34e4a951c45174871ac80bfbac89638fba5435b31eda",
+      "dataset_id": "sales_handoff_kinds",
+      "files": [
+        {
+          "checksum": "646677d6a3bed41a9d4a2673629887c3336aeb4f72b23d0c6063ca9677c4256e",
+          "path": "evals/expected/sales_handoff_kinds.json"
+        },
+        {
+          "checksum": "0971e87b3d6931fc9b3a7731af427ff46b4c81bce1b1b8a8cc63c9da3f66d1b7",
+          "path": "evals/expected/sales_handoff_kinds_golden.json"
         },
         {
           "checksum": "d2b75f8d19b642a2a12cfdb9b6188c82fc36edba448152e0cbb57994980fdb51",
@@ -773,6 +819,25 @@
         {
           "checksum": "1626518241308bf0a3848f64065b785ef424c5cf86698f9de4551285b50d8701",
           "path": "evals/fixtures/cases/sales_reply_draft.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "43100133dfb84667165a8e619c636eb8d2d93d336a4cf62ea2163e458daf8e67",
+      "dataset_id": "sales_reply_kinds",
+      "files": [
+        {
+          "checksum": "646677d6a3bed41a9d4a2673629887c3336aeb4f72b23d0c6063ca9677c4256e",
+          "path": "evals/expected/sales_reply_kinds.json"
+        },
+        {
+          "checksum": "4aa0b01059291fda821260bd44de242bb37860e9f0229990fd4ccb5bc35b4a94",
+          "path": "evals/expected/sales_reply_kinds_golden.json"
+        },
+        {
+          "checksum": "d9c67b5f6b69ded21752d15a6f503a71d07d70a0a82bf8350d4548be98d1d8c5",
+          "path": "evals/fixtures/cases/sales_reply_kinds.json"
         }
       ],
       "version": "1.0.0"
@@ -1019,7 +1084,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "996179d2b746a9e8ad81784adab6aa8fcb49f120",
+  "git_sha": "572d374620d31075b7cd73801dbf2a0174c6cb67",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1414,6 +1479,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "651ebd03debd696ac6b25b208d10884191ad9f8af2042d67ef47bf88f85b2526",
+      "prompt_id": "sales.document_forms",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "f9cd858e46f9c68849ab1fe312f8c8936054782144ed3af644c47e3458bfe381",
       "prompt_id": "sales.dw1_agent",
       "version": "1.0.0"
@@ -1426,6 +1496,11 @@
     {
       "checksum": "70b956d776f29d398e0f79a298ca4655b3c94cebc26571f6466259cfede0d621",
       "prompt_id": "sales.finding_explanation",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "1ad766b0cf9d4322373d0fbab8674fd87d0650aae8d91784ea8c03dd7f2ff02a",
+      "prompt_id": "sales.handoff_kinds",
       "version": "1.0.0"
     },
     {
@@ -1482,6 +1557,11 @@
       "checksum": "8b7b9d2223ac5a82213e3dbd14af568cf7f6cab2e4fb8397c04c872265334970",
       "prompt_id": "sales.reply_intent",
       "version": "2.0.0"
+    },
+    {
+      "checksum": "e7551caa4a3736b2da35e6e645af87c0ff5c53a9c8aa3412f1863746f1893566",
+      "prompt_id": "sales.reply_kinds",
+      "version": "1.0.0"
     },
     {
       "checksum": "5f033a5e6738e6892fda8ea499a90475ce2858f03063432808f804a1d9533138",
@@ -1549,9 +1629,27 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "663468140a9627a1613d06e06f4f18447515fe266260abb90f43fa72049bf1c4",
+      "name": "document-forms",
+      "path": "configs/skills/dw1/document-forms/SKILL.md",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "6fe8db3cfb0c68c527711fe68e4c271854db7c1de2f5559906e7f8d014a1ea62",
+      "name": "handoffs",
+      "path": "configs/skills/dw1/handoffs/SKILL.md",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "32fa29716852fc41ff6d9f9fe87676ce0814e9235a4ff0e2f58d8f9ec69eab05",
       "name": "mail-kinds",
       "path": "configs/skills/dw1/mail-kinds/SKILL.md",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "51fd2f6617d4fe02e38c1375b5b02f58a4913b65f8e577d4b90469febf596467",
+      "name": "reply-drafts",
+      "path": "configs/skills/dw1/reply-drafts/SKILL.md",
       "version": "1.0.0"
     },
     {

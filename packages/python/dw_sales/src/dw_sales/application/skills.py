@@ -85,7 +85,10 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.rules import ProposerNames, rule_work
+from dw_sales.domain.document_forms import DOCUMENT_FORMS, document_forms_of
+from dw_sales.domain.handoff_kinds import HANDOFFS, handoff_kinds_of
 from dw_sales.domain.mail_kinds import MAIL_KINDS, ReadRoute, mail_kinds_of
+from dw_sales.domain.reply_kinds import REPLY_DRAFTS, reply_kinds_of
 
 __all__ = [
     "READ_SKILL",
@@ -120,11 +123,23 @@ INSTRUCTIONS_LIMIT: Final = 12_000
 
 # The skills code reads at one fixed step of the classification order (ADR
 # 0014's guards: malware, document, upload, headers, then the model), never
-# offered to a thread message's skill pick: the mail kinds (ticket 42).
-STEP_SKILLS: Final = frozenset({MAIL_KINDS})
+# offered to a thread message's skill pick: the mail kinds (ticket 42); and
+# the hand-offs and reply drafts, each read at its own fixed step (family 5).
+STEP_SKILLS: Final = frozenset({MAIL_KINDS, HANDOFFS, REPLY_DRAFTS}) | {
+    # A customer's file no fixed reader reads (family 3).
+    DOCUMENT_FORMS
+}
 # What code checks of a version's words before it is proposed, per skill: the
 # mail kinds' routes are the platform's legal ones (ticket 42).
-_WORDS_CHECKED: Final[Mapping[str, Callable[[str], object]]] = {MAIL_KINDS: mail_kinds_of}
+_WORDS_CHECKED: Final[Mapping[str, Callable[[str], object]]] = {
+    MAIL_KINDS: mail_kinds_of,
+    # The hand-offs' fields and teams, and the reply drafts' drafts, are the
+    # platform's closed sets (ticket 42 family 5).
+    HANDOFFS: handoff_kinds_of,
+    REPLY_DRAFTS: reply_kinds_of,
+    # The document forms' routes and customers (ticket 42 family 3).
+    DOCUMENT_FORMS: document_forms_of,
+}
 
 _RESOURCE: Final = "sales_skill_version"
 SKILLS_APPROVAL: Final = "sales.skills"

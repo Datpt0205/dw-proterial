@@ -208,6 +208,7 @@ class InboxQueries:
             subject=written.subject,
             body=written.body,
             template_ref=written.template_ref,
+            kind_label=disposition.handoff.kind_label,
         )
 
 

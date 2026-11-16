@@ -58,6 +58,10 @@ from dw_platform.application.drop_folder import OwnedFolders
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
+from dw_sales.adapters.drafting_examples import (
+    FixtureHandoffKindExamples,
+    FixtureReplyKindExamples,
+)
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.order_rules import load_tenant_order_rules
@@ -93,7 +97,11 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.adapters.skill_examples import FixtureMailKindExamples, FixtureReplayExamples
+from dw_sales.adapters.skill_examples import (
+    FixtureDocumentFormExamples,
+    FixtureMailKindExamples,
+    FixtureReplayExamples,
+)
 from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
@@ -102,13 +110,15 @@ from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.customer_notations import NotationRecordPort
+from dw_sales.application.document_forms import DocumentFormReader, DocumentFormReplay
 from dw_sales.application.examples import ExampleFinder, ExampleIndexLane, ExampleIndexPort
 from dw_sales.application.followups import BriefWriterPort, FollowupLane, PushNoticePort
+from dw_sales.application.handoff_kinds import HandoffKindReader, HandoffKindReplay
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
 from dw_sales.application.mail_drop import MailDrop, MailDropNotices
-from dw_sales.application.mail_kinds import MailKindReader, MailKindReplay
+from dw_sales.application.mail_kinds import MailKindReader, MailKindReplay, SkillPort
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
 from dw_sales.application.model_readiness import ModelReadiness
@@ -138,6 +148,7 @@ from dw_sales.application.prompt_versions import (
     prompt_book,
 )
 from dw_sales.application.quotation import QuotationService
+from dw_sales.application.reply_drafts import ReplyKindReplay
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
@@ -436,6 +447,15 @@ def build_dw1(
         )
     )
     layout_checks = LayoutChecks(readers.po, catalog)
+    # Ticket 29's reading of a request, and the tenant's document forms read
+    # first (ticket 42 family 3), on one reader.
+    requests = (
+        None
+        if interpretation is None
+        else model_requests(
+            interpretation, catalog, tenant_rules, readers.texts, readiness, notations, skills
+        )
+    )
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -444,13 +464,7 @@ def build_dw1(
         cases=SqlQuoteCaseLookup(session_factory),
         ledger=catalog,
         policies=book,
-        requests=(
-            None
-            if interpretation is None
-            else model_requests(
-                interpretation, catalog, tenant_rules, readers.texts, readiness, notations
-            )
-        ),
+        requests=requests,
     )
     # A message classified by the tenant's mail kinds (ticket 42), its numbers
     # resolved by the one call's own resolution.
@@ -482,6 +496,8 @@ def build_dw1(
         # A message still routed "other" gets a card on the same reader
         # (ticket 33): the served kinds, the one call, the one resolution.
         triage=None if mail_kinds is None else TriageReader(mail_kinds),
+        # A customer's own request form, by the tenant's document forms.
+        document_forms=None if requests is None else DocumentFormReader(requests.reader, skills),
         threads=ThreadLinks(uow, mail),
         replies=None if interpretation is None else ReplyReader(interpretation),
         thread_agent=(
@@ -502,6 +518,14 @@ def build_dw1(
             None
             if interpretation is None
             else HandoffReader(interpretation, catalog, order_cases, notations)
+        ),
+        # The same hand-off by the tenant's hand-off kinds (ticket 42 family 5).
+        handoff_kinds=(
+            None
+            if interpretation is None
+            else HandoffKindReader(
+                HandoffReader(interpretation, catalog, order_cases, notations), skills
+            )
         ),
         layouts=SqlLayoutLookup(session_factory),
         layout_prefiller=(
@@ -708,6 +732,35 @@ def build_dw1(
                 ),
                 # The mail a mail-kinds version was taught from (ticket 34).
                 inbox=inbox,
+                # The hand-offs and the reply drafts, replayed on the eval
+                # fixtures' mails and drafts (ticket 42 family 5).
+                handoffs=(
+                    None
+                    if interpretation is None
+                    else HandoffKindReplay(
+                        HandoffReader(interpretation, catalog, order_cases, notations),
+                        FixtureHandoffKindExamples.load(configs.parent),
+                    )
+                ),
+                reply_drafts=(
+                    None
+                    if one_call_model is None
+                    else ReplyKindReplay(
+                        interpretation_for(one_call_model, configs, worker.default_model_profile),
+                        FixtureReplyKindExamples.load(configs.parent),
+                    )
+                ),
+                # The document forms, replayed on the request files of the
+                # eval fixtures (ticket 42 family 3).
+                document_forms=(
+                    None
+                    if requests is None
+                    else DocumentFormReplay(
+                        DocumentFormReader(requests.reader, skills),
+                        FixtureDocumentFormExamples.load(configs.parent),
+                        tenant_rules,
+                    )
+                ),
             )
         ),
         salesorder_skill_replay=(
@@ -980,14 +1033,18 @@ def model_requests(
     texts: AttachmentTextPort,
     gate: ModelStepGatePort,
     records: NotationRecordPort,
+    skills: SkillPort | None = None,
 ) -> ModelRequests:
     """The quotation flow's model step over ``model`` (ticket 29): requests
     read from the mail and the attachments' ``texts``, item descriptions as
     ticket 28 reads them, ambiguous values settled by the customer's notation
     ``records`` where a document leaves them open (ticket 37), switched by the
-    tenant's rules and held to the step's bar by ``gate``."""
+    tenant's rules and held to the step's bar by ``gate``; and, where the
+    tenant's ``skills`` are served, its document forms read first (ticket 42
+    family 3)."""
     reader = RfqModelReader(model, texts, catalog, DescriptionReader(model), records)
-    return ModelRequests(reader=reader, rules=rules, gate=gate)
+    forms = None if skills is None else DocumentFormReader(reader, skills)
+    return ModelRequests(reader=reader, rules=rules, gate=gate, forms=forms)
 
 
 def _profiles(configs: Path) -> ModelProfileRegistry:

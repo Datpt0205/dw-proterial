@@ -39,7 +39,7 @@ from dw_sales.application.quote_ports import (
     QuoteCaseLookupPort,
     RfqReaderPort,
 )
-from dw_sales.application.rfq_reading import ModelRequests, NotRead
+from dw_sales.application.rfq_reading import ModelRequests, NotRead, RequestRead
 from dw_sales.domain.catalog import Customer, Item, LmeMonth, customers_named, month_key
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
@@ -726,17 +726,23 @@ class QuotationService:
     async def _model_read(
         self, scope: SalesScope, message: InboundMessage, run: RunContext | None
     ) -> tuple[QuoteRequest, datetime]:
-        """The request as a model reads it (ticket 29), where the tenant's rules
-        turn that on, a model is wired and a DW1 run is opening the case. The
-        customer is the sender domain's, never anything the model read: a
-        sender on no customer's domain (a request forwarded from an internal
-        address) is `customer_unknown`, and no model is asked."""
+        """The request as a model reads it, where the tenant's rules turn that
+        on, a model is wired and a DW1 run is opening the case: first by the
+        tenant's document forms (ticket 42 family 3), then, with nothing read
+        there, as ticket 29 reads it. The customer is the sender domain's,
+        never anything the model read: a sender on no customer's domain (a
+        request forwarded from an internal address) is `customer_unknown`,
+        and no model is asked."""
         message_id = message.message_id
         step = self.requests
         if step is None or run is None:
             raise RequestNotExtractedError(message_id, "no_request_file")
         rules = await step.rules.rules(scope)
-        if not await step.gate.allows(scope, rules, ModelStep.RFQ_EXTRACTION):
+        by_forms = step.forms is not None and await step.gate.allows(
+            scope, rules, ModelStep.SKILL_DOCUMENT_FORMS
+        )
+        by_rfq = await step.gate.allows(scope, rules, ModelStep.RFQ_EXTRACTION)
+        if not by_forms and not by_rfq:
             raise RequestNotExtractedError(message_id, "no_request_file")
         by_domain = await self.catalog.customer_by_sender(scope, message.sender.address)
         customer = by_domain.data
@@ -747,15 +753,20 @@ class QuotationService:
             content = await self.inbox.read_attachment(scope, message_id, attachment.attachment_id)
             if content is not None:
                 contents.append(content)
-        read = await step.reader.read(
-            scope,
-            message,
-            contents,
-            customer,
-            rules,
-            received_on=local_day(message.received_at, await self.policies.time_zone(scope)),
-            run=run,
-        )
+        received_on = local_day(message.received_at, await self.policies.time_zone(scope))
+        read: RequestRead | NotRead | None = None
+        if by_forms:
+            assert step.forms is not None  # said above
+            read = await step.forms.read(
+                scope, message, contents, customer, rules, received_on=received_on, run=run
+            )
+        if read is None:
+            if not by_rfq:
+                # Read by no form, and ticket 29's reading is off: as before.
+                raise RequestNotExtractedError(message_id, "no_request_file")
+            read = await step.reader.read(
+                scope, message, contents, customer, rules, received_on=received_on, run=run
+            )
         if isinstance(read, str):
             raise RequestNotExtractedError(message_id, _NOT_READ[read])
         items = await self.catalog.items(scope)

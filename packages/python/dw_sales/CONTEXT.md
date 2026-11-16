@@ -264,6 +264,34 @@ API and the plan use the English terms. The spec is
   company turns it on (`skill_mail_kinds`) and its live eval meets the bar;
   with no kind read, the message intent's own reading classifies it
   (ticket 42).
+- **Document form** (Mẫu chứng từ của khách): a customer's own request
+  form, named in the company's `document-forms` skill with the customer it
+  belongs to (or any) and, in words, which label or column means which
+  field. A model reads a file the fixed reader does not by the sender's
+  customer's forms only; code finds every value at its cell as for a
+  **model-read request**, flags it for Sales, and a form opens only the
+  quotation flow. A file a form reads makes the mail a quotation request,
+  beside the `RFQ No.` marker. Read where a company turns it on
+  (`skill_document_forms`) and its live eval meets the bar; with nothing
+  read, the request is read as before (ticket 42 family 3).
+- **Hand-off kind** (Loại chuyển giao của công ty): a kind of hand-off to PC
+  or QA a company writes, named in its `handoffs` skill after the **mail
+  kind** it is for: which fields it asks for, one of the three typed sets a
+  hand-off has (`order_lines`, `lot_and_problem`, `sample_items`), the team
+  it goes to (PC or QA, a team never an address) and, in words, what to
+  copy. Code locates, parses and resolves every value as for the platform's
+  kinds; a version naming a recipient, a send, a price, a tool, or a field
+  or team code does not hold is refused when proposed. Read where a company
+  turns it on (`skill_handoffs`) and its live eval meets the bar; otherwise
+  the hand-off is pre-filled as before (ticket 42 family 5).
+- **Reply kind** (Loại thư gửi khách của công ty): a kind of mail to a
+  customer a company writes, named in its `reply-drafts` skill and worded
+  as one of the platform's **AI-worded reply** drafts, which says when it is
+  offered, its facts, its check and its recipients; the skill gives its
+  label and how it is written. Offered beside its draft by its label. Read
+  where a company turns it on (`skill_reply_drafts`) and its live eval meets
+  the bar; otherwise drafts are worded as before and a company's kind is not
+  offered (ticket 42 family 5).
 - **AI-worded reply** (Bản AI soạn): a mail to the customer about an order
   that a local model words beside the template's draft, never in its place:
   the answer to a customer's reply read `asks` (which has no template), PC's

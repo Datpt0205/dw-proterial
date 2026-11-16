@@ -54,12 +54,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_platform.domain.notation import UNSTATED, Notation, settle
 from dw_sales.domain.catalog import DocumentNo
+from dw_sales.domain.message_intent import KindName
 from dw_sales.domain.rfq_reading import METRE_UNIT, parse_number
 from dw_sales.domain.spans import FoldedText, word_char
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 HandoffKind = Literal["delivery_change", "complaint", "sample_request"]
+# Who a hand-off is for: production control or quality assurance. The closed
+# set of recipients a tenant's hand-off kind may name (ticket 42): a team,
+# never an address; Sales picks the people.
+HandoffTeam = Literal["pc", "qa"]
 # A line's value read only by the customer's notation record (ticket 37).
 FromRecord = Literal["quantity", "date"]
 MAX_LINES: Final = 20
@@ -195,6 +200,13 @@ class Handoff(BaseModel):
     # How many spans the model gave that code refused, by field: a count for
     # the evals and the screen, never the text.
     refused: Mapping[str, int] = Field(default_factory=dict)
+    # Read with the tenant's hand-off skill (ticket 42 family 5): the version,
+    # the skill's kind (``kind`` above is the fields it asks for), its words
+    # for Sales and the team it goes to. None, all four: read as before.
+    skill: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]*@\d+\.\d+\.\d+$")
+    skill_kind: KindName | None = None
+    kind_label: str | None = Field(default=None, min_length=1, max_length=60)
+    to: HandoffTeam | None = None
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
@@ -220,6 +232,12 @@ class Handoff(BaseModel):
             raise ValueError("a sample request names no order")
         if self.quantity_from_record and self.sample_quantity is None:
             raise ValueError("a quantity from the record is a quantity read")
+        if (self.skill is None) != (self.skill_kind is None) or (self.skill is None) != (
+            self.to is None
+        ):
+            raise ValueError("a skill's hand-off names its version, its kind and its team")
+        if self.skill is None and self.kind_label is not None:
+            raise ValueError("only a skill's hand-off carries the skill's label")
         return self
 
 

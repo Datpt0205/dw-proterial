@@ -269,6 +269,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Phân loại thư theo các loại thư của công ty",
       help: "Các loại thư và cách hiểu từng loại nằm trong kỹ năng phân loại thư (bản công ty đã duyệt, nếu có); mỗi loại đi theo một tuyến có sẵn. Không phân loại được thì dùng bước phân loại thư, rồi đến Sales.",
     },
+    "model_assist.skill_document_forms": {
+      label: "Đọc mẫu yêu cầu báo giá riêng của khách theo kỹ năng của công ty",
+      help: "Kỹ năng đọc mẫu chứng từ (bản công ty đã duyệt, nếu có) nói mẫu của từng khách: nhãn, cột nào là gì. Mỗi giá trị được dò lại đúng ô và cần Sales xác nhận. Không đọc được thì dùng bước đọc yêu cầu báo giá không theo mẫu, rồi đến Sales.",
+    },
     "model_assist.triage_card": {
       label: "Thẻ gợi ý cho thư chuyển Sales “Khác”",
       help: "DW1 gợi ý thư có vẻ thuộc loại nào, liên quan hồ sơ nào của chính khách gửi, và một bước xử lý. Chỉ là gợi ý: thư giữ nguyên hướng xử lý cho đến khi Sales bấm làm theo hoặc bỏ qua.",
@@ -277,12 +281,20 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Độ chắc chắn tối thiểu khi DW1 chọn kỹ năng",
       help: "Từ 0,5 đến 1. Chưa chắc bằng mức này thì thư được đọc như khi tắt bước kỹ năng.",
     },
+    "model_assist.skill_reply_drafts": {
+      label: "AI soạn thư gửi khách theo các loại thư của công ty",
+      help: "Các loại thư và cách viết từng loại nằm trong kỹ năng soạn thư (bản công ty đã duyệt, nếu có); mỗi loại soạn như một thư có sẵn, cùng kiểm tra và cùng người nhận. Tắt thì dùng bước AI soạn thư.",
+    },
     "model_assist.reply_draft": {
       label: "AI soạn thư gửi khách bên cạnh thư theo mẫu",
       help: "Trả lời câu khách hỏi về đơn, thư báo PC đáp ứng hoặc phương án khác, thư xác nhận đơn. Mọi con số phải có trong hồ sơ, không có số tiền; người nhận do hệ thống chọn; Sales đọc rồi tự gửi.",
     },
     "model_assist.request_handoff": {
       label: "Soạn nháp chuyển giao cho PC/QA từ thư",
+    },
+    "model_assist.skill_handoffs": {
+      label: "Soạn nháp chuyển giao theo các loại chuyển giao của công ty",
+      help: "Các loại chuyển giao (gửi PC hay QA, chép trường nào) nằm trong kỹ năng chuyển giao (bản công ty đã duyệt, nếu có). Không soạn được thì dùng bước soạn nháp chuyển giao, rồi Sales tự điền.",
     },
     "model_assist.layout_proposal": {
       label: "Đề xuất ánh xạ cho mẫu PO mới",

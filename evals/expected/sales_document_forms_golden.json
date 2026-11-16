@@ -1,0 +1,5 @@
+{
+  "_comment": "The recorded readings (onprem profile on Strata, Qwen3.8-Flash-Next Q2_0, 2026-11-16, prompt sales.document_forms@1.0.0; ticket 29's 18 request files by the platform's document-forms skill 1.0.0, the three new customers' forms by the company's version 1.1.0) read 0.893 of the 196 stated values into the right field (files 0.871, new forms 1.0; the new forms by the platform's skill alone 0.939), 0.005 wrong, the rest deferred to a person. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill or the model changes.",
+  "min_right_field": 0.893,
+  "max_wrong": 0.005
+}

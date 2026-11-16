@@ -38,6 +38,7 @@ from typing import Final, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from dw_sales.domain.activity import request_step
 from dw_sales.domain.catalog import CustomerCode
 from dw_sales.domain.change_requests import ChangeLine, ChangeRequest
 from dw_sales.domain.description_reading import GateRoute
@@ -300,7 +301,7 @@ def rfq_value_labels(before: QuoteCase, after: QuoteCase, *, new_id: NewId) -> l
                 LabelledCase(
                     label_id=new_id(),
                     decided_at=confirmation.at,
-                    step=ModelStep.RFQ_EXTRACTION,
+                    step=request_step(reading),
                     lane=CaseKind.QUOTE,
                     case_id=after.case_id,
                     customer_code=after.customer_code,

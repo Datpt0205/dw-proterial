@@ -1,0 +1,101 @@
+{
+  "_comment": "Ticket 42 family 5: what a proposed version of the reply-drafts skill is replayed on (dw_sales.application.reply_drafts.ReplyKindReplay): ticket 32's twelve drafts of the fictional M04 order (NRV-PO-26-0457), four drafts in three languages, each the facts, letter and question code builds for it in the eval world (dw_sales.evals.reply_drafts.golden_drafts), written here once so the worker reads them without the world. Regenerate when reply_facts or the platform's mail copy changes. Fictional throughout.",
+  "examples": [
+    {
+      "id": "RK-question_answer-vi",
+      "drafts": "question_answer",
+      "facts": "{\n \"reply\": \"question_answer\",\n \"language\": \"vi\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24/09/2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"order_status\": \"confirmation_sent\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"requested_date\": \"06/11/2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"requested_date\": \"04/12/2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"requested_date\": \"04/12/2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: Trả lời về đơn hàng ${po_no}\n\nKính gửi ${customer_name},\n\nCảm ơn quý khách đã hỏi về đơn hàng ${po_no}.\n\n${answer}\n\nTrân trọng.",
+      "question": "Anh chị cho biết dòng 2 của đơn này khi nào giao được?",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-confirmation_draft-vi",
+      "drafts": "confirmation_draft",
+      "facts": "{\n \"reply\": \"confirmation_draft\",\n \"language\": \"vi\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24/09/2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"prv_code\": \"HW-1004\",\n   \"description\": \"HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"prv_code\": \"CB-2007\",\n   \"description\": \"MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"prv_code\": \"CB-2008\",\n   \"description\": \"MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"04/12/2026\"\n    }\n   ]\n  }\n ],\n \"prepared_by\": \"Nguyễn Văn An\",\n \"checked_by\": \"Hoàng Thị Diệu\"\n}",
+      "example": "Subject: Xác nhận đơn hàng ${po_no} (lần sửa ${revision})\n\nKính gửi ${customer_name},\n\nChúng tôi xác nhận đơn hàng ${po_no} (lần sửa ${revision}, ngày ${po_date}), số đơn bán ${bravo_so_no}:\n\n${lines}\n\nNgười phụ trách: ${pic}\nNgười kiểm tra: ${checker}\n\nTrân trọng.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_can_do_draft-vi",
+      "drafts": "change_can_do_draft",
+      "facts": "{\n \"reply\": \"change_can_do_draft\",\n \"language\": \"vi\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24/09/2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"20/11/2026\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: Xác nhận thay đổi đơn hàng ${po_no}\n\nKính gửi ${customer_name},\n\nVề đề nghị thay đổi đơn hàng ${po_no} (số đơn bán ${bravo_so_no}), chúng tôi đáp ứng được như quý khách đề nghị:\n\n${lines}\n\nMong quý khách xác nhận để chúng tôi cập nhật đơn hàng.\n\nTrân trọng.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_options_draft-vi",
+      "drafts": "change_options_draft",
+      "facts": "{\n \"reply\": \"change_options_draft\",\n \"language\": \"vi\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24/09/2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"25/11/2026\"\n    }\n   ],\n   \"asked\": {\n    \"quantity\": \"3600\",\n    \"uom\": \"m\",\n    \"date\": \"20/11/2026\"\n   }\n  }\n ]\n}",
+      "example": "Subject: Về đề nghị thay đổi đơn hàng ${po_no}\n\nKính gửi ${customer_name},\n\nVề đề nghị thay đổi đơn hàng ${po_no} (số đơn bán ${bravo_so_no}), chúng tôi chưa đáp ứng được đúng như đề nghị. Khả năng giao của chúng tôi như sau:\n\n${lines}\n\nMong quý khách cho biết đồng ý phương án trên, hay giữ nguyên đơn hàng như cũ.\n\nTrân trọng.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-question_answer-en",
+      "drafts": "question_answer",
+      "facts": "{\n \"reply\": \"question_answer\",\n \"language\": \"en\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24 Sep 2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"order_status\": \"confirmation_sent\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"requested_date\": \"06 Nov 2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"requested_date\": \"04 Dec 2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"requested_date\": \"04 Dec 2026\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: Re: your order ${po_no}\n\nDear ${customer_name},\n\nThank you for your question about order ${po_no}.\n\n${answer}\n\nBest regards.",
+      "question": "Could you tell us when line 2 of this order will be delivered?",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-confirmation_draft-en",
+      "drafts": "confirmation_draft",
+      "facts": "{\n \"reply\": \"confirmation_draft\",\n \"language\": \"en\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24 Sep 2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"prv_code\": \"HW-1004\",\n   \"description\": \"HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"prv_code\": \"CB-2007\",\n   \"description\": \"MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"prv_code\": \"CB-2008\",\n   \"description\": \"MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"04 Dec 2026\"\n    }\n   ]\n  }\n ],\n \"prepared_by\": \"Nguyễn Văn An\",\n \"checked_by\": \"Hoàng Thị Diệu\"\n}",
+      "example": "Subject: Order confirmation ${po_no} (revision ${revision})\n\nDear ${customer_name},\n\nWe confirm your order ${po_no} (revision ${revision}, dated ${po_date}), our sales order ${bravo_so_no}:\n\n${lines}\n\nPrepared by: ${pic}\nChecked by: ${checker}\n\nBest regards.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_can_do_draft-en",
+      "drafts": "change_can_do_draft",
+      "facts": "{\n \"reply\": \"change_can_do_draft\",\n \"language\": \"en\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24 Sep 2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"20 Nov 2026\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: Change to order ${po_no} confirmed\n\nDear ${customer_name},\n\nRegarding your requested change to order ${po_no} (our sales order ${bravo_so_no}), we can deliver as you asked:\n\n${lines}\n\nPlease confirm, and we will update the order.\n\nBest regards.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_options_draft-en",
+      "drafts": "change_options_draft",
+      "facts": "{\n \"reply\": \"change_options_draft\",\n \"language\": \"en\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"24 Sep 2026\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"25 Nov 2026\"\n    }\n   ],\n   \"asked\": {\n    \"quantity\": \"3600\",\n    \"uom\": \"m\",\n    \"date\": \"20 Nov 2026\"\n   }\n  }\n ]\n}",
+      "example": "Subject: Your requested change to order ${po_no}\n\nDear ${customer_name},\n\nRegarding your requested change to order ${po_no} (our sales order ${bravo_so_no}), we cannot deliver exactly as asked. We can offer:\n\n${lines}\n\nPlease let us know whether you accept this, or keep the order as it was.\n\nBest regards.",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-question_answer-ja",
+      "drafts": "question_answer",
+      "facts": "{\n \"reply\": \"question_answer\",\n \"language\": \"ja\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"2026/09/24\",\n \"bravo_so_no\": \"SO26-1001\",\n \"order_status\": \"confirmation_sent\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"requested_date\": \"2026/11/06\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"requested_date\": \"2026/12/04\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"requested_date\": \"2026/12/04\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: ご注文 ${po_no} についてのご回答\n\n${customer_name} 御中\n\nご注文 ${po_no} についてお問い合わせいただき、ありがとうございます。\n\n${answer}\n\nよろしくお願いいたします。",
+      "question": "この注文の2行目はいつ納品されますか。",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-confirmation_draft-ja",
+      "drafts": "confirmation_draft",
+      "facts": "{\n \"reply\": \"confirmation_draft\",\n \"language\": \"ja\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"2026/09/24\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 1,\n   \"customer_item_code\": \"NV-HW22-BK\",\n   \"prv_code\": \"HW-1004\",\n   \"description\": \"HOOK-UP WIRE 1C AWG22 STRANDED TINNED CU NO SHIELD BLACK REEL 610M SPEC SP-1122\",\n   \"quantity\": \"12200\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"12200\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"prv_code\": \"CB-2007\",\n   \"description\": \"MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406\",\n   \"quantity\": \"3600\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  },\n  {\n   \"line_no\": 3,\n   \"customer_item_code\": \"NV-CB7-20-OR\",\n   \"prv_code\": \"CB-2008\",\n   \"description\": \"MULTI-CORE CABLE 7C AWG20 STRANDED TINNED CU BRAID SHIELD ORANGE REEL 300M\",\n   \"quantity\": \"3000\",\n   \"uom\": \"m\",\n   \"confirmed\": [\n    {\n     \"quantity\": \"3000\",\n     \"uom\": \"m\",\n     \"date\": \"2026/12/04\"\n    }\n   ]\n  }\n ],\n \"prepared_by\": \"Nguyễn Văn An\",\n \"checked_by\": \"Hoàng Thị Diệu\"\n}",
+      "example": "Subject: ご注文確認 ${po_no}（改訂 ${revision}）\n\n${customer_name} 御中\n\nご注文 ${po_no}（改訂 ${revision}、${po_date} 付）を、弊社受注番号 ${bravo_so_no} にて確認いたしました。\n\n${lines}\n\n担当: ${pic}\n確認: ${checker}\n\nよろしくお願いいたします。",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_can_do_draft-ja",
+      "drafts": "change_can_do_draft",
+      "facts": "{\n \"reply\": \"change_can_do_draft\",\n \"language\": \"ja\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"2026/09/24\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"2026/11/20\"\n    }\n   ]\n  }\n ]\n}",
+      "example": "Subject: ご注文 ${po_no} 変更のご回答\n\n${customer_name} 御中\n\nご注文 ${po_no}（弊社受注番号 ${bravo_so_no}）の変更のご依頼につきまして、ご希望どおり対応可能です。\n\n${lines}\n\nご確認いただけましたら、受注を更新いたします。\n\nよろしくお願いいたします。",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    },
+    {
+      "id": "RK-change_options_draft-ja",
+      "drafts": "change_options_draft",
+      "facts": "{\n \"reply\": \"change_options_draft\",\n \"language\": \"ja\",\n \"customer_name\": \"Norvanta Automotive Components Vietnam Co., Ltd.\",\n \"po_no\": \"NRV-PO-26-0457\",\n \"revision\": 0,\n \"po_date\": \"2026/09/24\",\n \"bravo_so_no\": \"SO26-1001\",\n \"lines\": [\n  {\n   \"line_no\": 2,\n   \"customer_item_code\": \"NV-CB4-22-GY\",\n   \"deliveries\": [\n    {\n     \"quantity\": \"3600\",\n     \"uom\": \"m\",\n     \"date\": \"2026/11/25\"\n    }\n   ],\n   \"asked\": {\n    \"quantity\": \"3600\",\n    \"uom\": \"m\",\n    \"date\": \"2026/11/20\"\n   }\n  }\n ]\n}",
+      "example": "Subject: ご注文 ${po_no} 変更のご依頼につきまして\n\n${customer_name} 御中\n\nご注文 ${po_no}（弊社受注番号 ${bravo_so_no}）の変更のご依頼につきまして、ご希望どおりの対応が難しく、以下のとおりご提案いたします。\n\n${lines}\n\nご提案にご同意いただけるか、元のご注文のままとされるか、ご指示ください。\n\nよろしくお願いいたします。",
+      "question": "",
+      "po_no": "NRV-PO-26-0457"
+    }
+  ]
+}

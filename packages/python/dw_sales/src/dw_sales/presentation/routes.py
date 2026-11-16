@@ -80,7 +80,7 @@ from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, Uplo
 from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
-from dw_sales.application.reply_drafts import ReplyDraftView, ReplyKind
+from dw_sales.application.reply_drafts import ReplyDraftView
 from dw_sales.application.routed_mail import (
     CardDecisionRequest,
     HandledRequest,
@@ -128,6 +128,7 @@ from dw_sales.domain.change_requests import MAX_LINES
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import PoMapping
 from dw_sales.domain.master_data import CatalogList
+from dw_sales.domain.message_intent import KindName
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import (
     PC_DELIVERIES_MAX,
@@ -1073,7 +1074,9 @@ def build_router(
     # A mail to the customer about an order worded by the model, beside the
     # template's draft (ticket 32): every figure among the facts code gives,
     # no amount, the customer's contacts as recipients, nothing sent or
-    # stored. An answer to a question names the customer's mail.
+    # stored. An answer to a question names the customer's mail. ``kind``: a
+    # platform draft, or a kind of the tenant's reply-drafts skill (ticket 42
+    # family 5), resolved by the server against the version it serves.
     @router.get(
         "/orders/{case_id}/reply-draft",
         response_model=ReplyDraftView,
@@ -1081,7 +1084,7 @@ def build_router(
     )
     async def order_reply_draft(
         case_id: uuid.UUID,
-        kind: Annotated[ReplyKind, Query()],
+        kind: Annotated[KindName, Query()],
         context: Ctx,
         svc: Svc,
         message_id: Annotated[str | None, Query(pattern=r"^[!-~]{1,512}$")] = None,

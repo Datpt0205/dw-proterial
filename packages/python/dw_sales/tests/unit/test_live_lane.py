@@ -61,6 +61,9 @@ MODEL_STEPS = [
     "sales_description_examples@1.0.0",
     "sales_mail_kinds@1.0.0",
     "sales_triage_card@1.0.0",
+    "sales_document_forms@1.0.0",
+    "sales_handoff_kinds@1.0.0",
+    "sales_reply_kinds@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

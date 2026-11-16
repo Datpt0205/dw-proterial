@@ -33,6 +33,12 @@ message routed as before. A budget or quota refusal propagates: the run stops.
 `render` writes the hand-off's subject and body from the versioned template
 (`HandoffCopy`, `configs/copy/sales_handoffs@<version>.yaml`): the template's
 words, the values code kept, and the customer's sentences in quotation marks.
+
+With the tenant's hand-off skill served (ticket 42 family 5,
+`handoff_kinds`), the same reading runs under prompt `sales.handoff_kinds`
+with the skill's words: the kind is the skill's, its fields and its team come
+from the platform's closed sets as the skill maps them, and every check above
+is unchanged.
 """
 
 from __future__ import annotations
@@ -55,12 +61,14 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
+from dw_agent_runtime.model.skills import Skill
 from dw_platform.domain.mail_parts import MessagePart
 from dw_platform.domain.notation import Notation, notation_of, settle
 from dw_sales.application.customer_notations import NotationRecordPort, record_for
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import CatalogNotConnectedError, SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
+from dw_sales.domain.handoff_kinds import HandoffKindSpec
 from dw_sales.domain.handoffs import (
     MAX_ITEMS,
     MAX_QUOTES,
@@ -69,6 +77,7 @@ from dw_sales.domain.handoffs import (
     Handoff,
     HandoffKind,
     HandoffLine,
+    HandoffTeam,
     Located,
     ModelComplaint,
     ModelDeliveryChange,
@@ -90,6 +99,35 @@ REQUEST_HANDOFF: Final = PromptRef("sales.request_handoff", "1.0.0")
 _OUTPUT_TOKENS: Final = 800
 # What the prompt itself costs, held above its rendered size by a test.
 PROMPT_TOKENS: Final = 1800
+# The same copying by the kinds the tenant's hand-off skill names (ticket 42
+# family 5, `configs/prompts/sales/handoff_kinds@1.0.0.yaml`); its cost is
+# held under `PROMPT_TOKENS` without the skill's words, which are counted
+# beside it.
+HANDOFF_KINDS_PROMPT: Final = PromptRef("sales.handoff_kinds", "1.0.0")
+
+
+_TOO_LONG: Final = "too_long"
+
+
+@dataclass(frozen=True, slots=True)
+class Copied:
+    """What a model copied of a mail, located by code, no order resolved:
+    the PO number, the lot, the located sentences or items (casefolded) and
+    how many lines name a located new quantity or date."""
+
+    po_no: str | None
+    lot: str | None
+    quotes: tuple[str, ...]
+    lines: int
+
+
+@dataclass(frozen=True, slots=True)
+class ServedKind:
+    """The tenant's hand-off skill as served, and the kind of it a message
+    is read as (`handoff_kinds`)."""
+
+    skill: Skill
+    kind: HandoffKindSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,31 +168,33 @@ class HandoffReader:
         received_on: date,
         rules_version: str,
         run: RunContext,
+        served: ServedKind | None = None,
     ) -> Handoff:
-        stamp = {
+        """The hand-off of ``kind``'s fields. ``served``: the tenant's
+        hand-off skill and the kind of it read (ticket 42 family 5), whose
+        words are the model's to read by and whose team and label the
+        hand-off carries; None, read as ticket 33 reads it."""
+        stamp: dict[str, object] = {
             "kind": kind,
-            "prompt": str(REQUEST_HANDOFF),
+            "prompt": str(REQUEST_HANDOFF if served is None else HANDOFF_KINDS_PROMPT),
             "model_profile": self.model.model_profile,
             "route": self.model.route,
             "rules": rules_version,
         }
-        if estimated_tokens(part.text) > self.model.max_input_tokens - PROMPT_TOKENS:
-            # Never a cut: spans are located in the whole text, and a line
-            # past a cut would be left out with no one told. A person reads it.
-            return Handoff.model_validate(
-                {**stamp, "outcome": "unavailable", "refused": {"too_long": 1}}
-            )
-        inputs = {"kind": kind, "subject": part.subject, "body": part.body}
-        try:
-            answer = await self.model.interpret(
-                REQUEST_HANDOFF,
-                inputs,
-                MODEL_SCHEMAS[kind],
-                run=run,
-                max_output_tokens=_OUTPUT_TOKENS,
-            )
-        except ModelUnavailableError:
-            return Handoff.model_validate({**stamp, "outcome": "unavailable"})
+        if served is not None:
+            stamp |= {
+                "skill": served.skill.ref,
+                "skill_kind": served.kind.name,
+                "kind_label": served.kind.label,
+                "to": served.kind.to,
+            }
+        answer = await self._answer(part, kind, served, run)
+        if answer is None or answer == _TOO_LONG:
+            # Too long is never a cut: spans are located in the whole text,
+            # and a line past a cut would be left out with no one told.
+            too_long = {"too_long": 1} if answer == _TOO_LONG else {}
+            return Handoff.model_validate({**stamp, "outcome": "unavailable", "refused": too_long})
+        assert isinstance(answer, BaseModel)
         refused: Counter[str] = Counter()
         kept = await self._kept(scope, part.text, customer, answer, received_on, refused)
         located = any(
@@ -169,6 +209,72 @@ class HandoffReader:
                 "refused": dict(refused),
             }
         )
+
+    async def _answer(
+        self, part: MessagePart, kind: HandoffKind, served: ServedKind | None, run: RunContext
+    ) -> BaseModel | Literal["too_long"] | None:
+        """The model's spans for ``kind``'s fields, under the skill where
+        one is ``served``: ``too_long`` for a mail that does not fit whole,
+        None for no usable answer."""
+        inputs = {"kind": kind, "subject": part.subject, "body": part.body}
+        prompt, budget = REQUEST_HANDOFF, PROMPT_TOKENS
+        if served is not None:
+            inputs = {
+                "skill": served.skill.body,
+                "kind": served.kind.name,
+                "fields": served.kind.asks,
+                "subject": part.subject,
+                "body": part.body,
+            }
+            prompt = HANDOFF_KINDS_PROMPT
+            budget = PROMPT_TOKENS + estimated_tokens(served.skill.body)
+        if estimated_tokens(part.text) > self.model.max_input_tokens - budget:
+            return _TOO_LONG
+        try:
+            return await self.model.interpret(
+                prompt,
+                inputs,
+                MODEL_SCHEMAS[kind],
+                run=run,
+                max_output_tokens=_OUTPUT_TOKENS,
+            )
+        except ModelUnavailableError:
+            return None
+
+    async def located(
+        self, part: MessagePart, served: ServedKind, *, run: RunContext
+    ) -> Copied | None:
+        """What the model copies of ``part`` under ``served``, as code
+        locates it with no order resolved: what a replay of a skill version
+        compares (`handoff_kinds.HandoffKindReplay`), which holds none of the
+        tenant's orders. None for no usable answer, or a mail too long."""
+        answer = await self._answer(part, served.kind.shape, served, run)
+        if not isinstance(answer, BaseModel):
+            return None
+        text, ignored = part.text, Counter[str]()
+        po = lot = None
+        quotes: tuple[Located, ...] = ()
+        lines = 0
+        if isinstance(answer, ModelDeliveryChange | ModelComplaint):
+            found = locate_identifier(text, answer.po_no_span)
+            po = parse_document_no(found.text) if found else None
+        if isinstance(answer, ModelComplaint):
+            at = locate(text, answer.lot_no_span, bounded=True)
+            lot = at.text if at else None
+            quotes = _quotes(text, answer.problem_quote_spans, MAX_QUOTES, ignored, "quote")
+        elif isinstance(answer, ModelSampleRequest):
+            quotes = _quotes(text, answer.item_spans, MAX_ITEMS, ignored, "item")
+        elif isinstance(answer, ModelDeliveryChange):
+            lines = sum(
+                1
+                for line in answer.lines
+                if locate(text, line.line_or_item_span, bounded=True)
+                and (
+                    locate(text, line.new_quantity_span, bounded=True)
+                    or locate(text, line.new_date_span, bounded=True)
+                )
+            )
+        return Copied(po, lot, tuple(q.text.casefold() for q in quotes), lines)
 
     async def _kept(
         self,
@@ -398,10 +504,6 @@ def _quotes(
 # ------------------------------------------------------------- the text --
 
 
-# Who a hand-off is for: production control or quality assurance.
-HandoffTeam = Literal["pc", "qa"]
-
-
 # What each template may name. A tenant writes its own version of this copy
 # (ticket 36) and it is filled with `str.format`, so a placeholder is a bare
 # name from these and nothing else: a format spec such as ``{customer:>999999999}``
@@ -527,7 +629,9 @@ def render(
 ) -> RenderedHandoff:
     """The hand-off's subject and body: the template's words around what code
     kept. A value code did not keep is written as the copy's ``unknown``, for
-    Sales to fill; nothing is written that the mail did not say."""
+    Sales to fill; nothing is written that the mail did not say. A skill's
+    kind (ticket 42 family 5) is written with the words of the fields it
+    asks for and goes to the team the skill names."""
     template = copy.templates[handoff.kind]
     unknown = copy.unknown
 
@@ -559,7 +663,7 @@ def render(
         "quantity": _number(sample) if sample else unread(handoff.quantity),
     }
     return RenderedHandoff(
-        to=template.to,
+        to=template.to if handoff.to is None else handoff.to,
         subject=template.subject.format(**values),
         body=template.body.format(**values),
         template_ref=f"{copy.ref}#{handoff.kind}",

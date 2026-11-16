@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, Final, get_args
 
 import pytest
 
@@ -393,13 +393,16 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.skill_mail_kinds"): model,
         (RuleKey.ORDER_RULES, "model_assist.triage_card"): model,
         (RuleKey.ORDER_RULES, "model_assist.request_handoff"): model,
+        (RuleKey.ORDER_RULES, "model_assist.skill_handoffs"): model,
         (RuleKey.ORDER_RULES, "model_assist.change_request"): model,
         (RuleKey.ORDER_RULES, "model_assist.description_attributes"): model,
         (RuleKey.ORDER_RULES, "model_assist.layout_proposal"): model,
         (RuleKey.ORDER_RULES, "model_assist.salesorder_skill"): model,
         (RuleKey.ORDER_RULES, "model_assist.rfq_extraction"): model,
+        (RuleKey.ORDER_RULES, "model_assist.skill_document_forms"): model,
         (RuleKey.ORDER_RULES, "model_assist.po_body_extraction"): model,
         (RuleKey.ORDER_RULES, "model_assist.reply_draft"): model,
+        (RuleKey.ORDER_RULES, "model_assist.skill_reply_drafts"): model,
         (RuleKey.QUOTE_RULES, "design_mailboxes"): LockReason.TRUST,
         (RuleKey.FOLLOWUPS, "working_hours.time_zone"): LockReason.TWO_OWNERS,
     }
@@ -455,7 +458,7 @@ def test_a_steps_model_steps_are_the_switches_placed_on_it_each_once() -> None:
     placed = [m for step in StepId for m in model_steps(step)]
     assert sorted(placed) == sorted(ModelStep)
     assert model_steps(StepId.O2) == (ModelStep.DESCRIPTION_ATTRIBUTES,)
-    assert model_steps(StepId.Q1) == (ModelStep.RFQ_EXTRACTION,)
+    assert model_steps(StepId.Q1) == (ModelStep.RFQ_EXTRACTION, ModelStep.SKILL_DOCUMENT_FORMS)
     assert model_steps(StepId.O6) == ()
 
 
@@ -488,6 +491,20 @@ async def test_uses_are_served_per_step() -> None:
     assert not steps["O9"].uses.layouts and steps["O9"].uses.lists == []
 
 
+# The steps off in the tests' rules (1.5.2): the mail kinds and the card
+# (tickets 42 and 33), the hand-off and reply kinds (ticket 42 family 5).
+_OFF_IN_TESTS: Final = frozenset(
+    {
+        ModelStep.SKILL_MAIL_KINDS,
+        ModelStep.TRIAGE_CARD,
+        ModelStep.SKILL_HANDOFFS,
+        ModelStep.SKILL_REPLY_DRAFTS,
+        # And the document forms (ticket 42 family 3).
+        ModelStep.SKILL_DOCUMENT_FORMS,
+    }
+)
+
+
 async def test_a_switched_on_step_with_no_measurement_is_served_not_in_effect() -> None:
     steps = {step.step_id: step for step in (await _view()).steps}
     served = [m.step for m in steps["O1"].models]
@@ -499,12 +516,13 @@ async def test_a_switched_on_step_with_no_measurement_is_served_not_in_effect() 
         ModelStep.SKILL_MAIL_KINDS,
         ModelStep.TRIAGE_CARD,
         ModelStep.REQUEST_HANDOFF,
+        ModelStep.SKILL_HANDOFFS,
         ModelStep.CHANGE_REQUEST,
     ]
     for model in steps["O1"].models:
         # The mail kinds and the card are off in the tests' rules (tickets
         # 42 and 33, 1.5.2).
-        on = model.step not in (ModelStep.SKILL_MAIL_KINDS, ModelStep.TRIAGE_CARD)
+        on = model.step not in _OFF_IN_TESTS
         assert model.enabled is on and not model.effective and model.latest is None
         assert model.bar == BARS[model.step].bar and model.metric == BARS[model.step].metric
         assert model.prompt == str(BARS[model.step].prompt) and model.model
@@ -518,7 +536,7 @@ async def test_a_switched_on_step_measured_at_its_bar_is_served_in_effect() -> N
     for model in models:
         # Measured at its bar, and off in the tests' rules (tickets 42 and 33,
         # 1.5.2).
-        on = model.step not in (ModelStep.SKILL_MAIL_KINDS, ModelStep.TRIAGE_CARD)
+        on = model.step not in _OFF_IN_TESTS
         assert model.effective is on and model.latest is not None and model.latest.passed
         assert (model.latest.model, model.latest.prompt) == (model.model, model.prompt)
 

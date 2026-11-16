@@ -120,7 +120,7 @@ function serverReasonCodes(): string[] {
   // A request reader's refusal per field: `<field>_<what went wrong>`.
   const rfqFields = [
     ...captures(rfq, /within\([^,()]+,\s*"([a-z_]+)"\)/g, "rfq item fields"),
-    ...captures(rfq, /verdict\.refused,\s*"([a-z_]+)"/g, "rfq header fields"),
+    ...captures(rfq, /\bverdict,\s*"([a-z_]+)"/g, "rfq header fields"),
     "line",
   ];
   return [
@@ -137,7 +137,9 @@ function serverReasonCodes(): string[] {
     ...captures(activity, /_code\([^)]*"([a-z_]+)"\)/g, "layout fallback"),
     ...captures(rfq, /refused\["([a-z_]+)"\]/g, "rfq refusals"),
     ...rfqFields.flatMap((f) =>
-      ["not_found", "repeated", "unparsed"].map((what) => `${f}_${what}`),
+      ["not_found", "repeated", "unparsed", "contradicts_record"].map(
+        (what) => `${f}_${what}`,
+      ),
     ),
     ...captures(handoffs, /refused\["([a-z_]+)"\]/g, "hand-off refusals"),
     ...captures(handoffs, /refused,\s*"([a-z_]+)"\)/g, "hand-off quotes"),

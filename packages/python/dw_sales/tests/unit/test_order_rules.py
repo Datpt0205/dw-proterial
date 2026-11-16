@@ -109,7 +109,15 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
     # The mail kinds and the triage card stay off in 1.5.2 (tickets 42 and
     # 33): the API's integration suite reads residue mail through the one
     # call's recordings.
-    off = {ModelStep.SKILL_MAIL_KINDS, ModelStep.TRIAGE_CARD}
+    # So do the hand-off and reply kinds (ticket 42 family 5).
+    off = {
+        ModelStep.SKILL_MAIL_KINDS,
+        ModelStep.TRIAGE_CARD,
+        ModelStep.SKILL_HANDOFFS,
+        ModelStep.SKILL_REPLY_DRAFTS,
+        # And the document forms (ticket 42 family 3).
+        ModelStep.SKILL_DOCUMENT_FORMS,
+    }
     assert all(steps_on.model_assist.on(step) for step in ModelStep if step not in off)
     assert not any(steps_on.model_assist.on(step) for step in off)
 

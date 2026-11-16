@@ -90,6 +90,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # The same classification as the message intent's, by the company's
         # kinds; where the mail goes is still a route code holds (ticket 42).
         ModelStep.SKILL_MAIL_KINDS: Tier.APPLIES_ITSELF,
+        # The same request reading as ticket 29's, by the company's forms;
+        # every value is still found at its cell and flagged (ticket 42).
+        ModelStep.SKILL_DOCUMENT_FORMS: Tier.APPLIES_ITSELF,
         # A card that suggests; the message moves only when a person takes
         # it (ticket 33).
         ModelStep.TRIAGE_CARD: Tier.APPLIES_ITSELF,
@@ -97,8 +100,13 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         ModelStep.PO_BODY_EXTRACTION: Tier.APPLIES_ITSELF,
         # A draft nobody has sent; sending is a person's.
         ModelStep.REPLY_DRAFT: Tier.APPLIES_ITSELF,
+        # The same draft, worded by the company's kinds (ticket 42 family 5).
+        ModelStep.SKILL_REPLY_DRAFTS: Tier.APPLIES_ITSELF,
         # Work put in PC's, QA's or Design's hands.
         ModelStep.REQUEST_HANDOFF: Tier.HAND_OFF,
+        # The same hand-off, by the company's kinds; its team is still one
+        # code holds (ticket 42 family 5).
+        ModelStep.SKILL_HANDOFFS: Tier.HAND_OFF,
         # A layout, once approved, reads every later PO of the form: an
         # approval (dw_sales ticket 30).
         ModelStep.LAYOUT_PROPOSAL: Tier.PERSON_APPROVES,

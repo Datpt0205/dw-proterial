@@ -285,3 +285,141 @@ skill. No rule above moved.
   cases 1.0), p50 1.65 s, p95 2.12 s; no injection moved a mail or named
   another customer's case. The step stays off until a company's own
   measurement is attested.
+
+
+## Applied 2026-11-16: the document forms (ticket 42 family 3, by the agent)
+
+Decision 3 read for a customer's own request form: which label or column
+of a customer's form means which field is words, a skill; what a form opens
+and every check of every value stay code.
+
+- **The skill** `configs/skills/dw1/document-forms/SKILL.md` names each form
+  in a block written as the mail kinds' are (`- kind:`, `customer:`,
+  `route:`, `means:`; `dw_sales.domain.document_forms`, on the one block
+  reader `domain.skill_blocks`). `customer` is a customer's code or `any`;
+  `route` is one of a closed set holding only `quote_request`, the flow whose
+  request code verifies value by value (a PO is read by its approved layout,
+  never by words). The platform's version names two forms for any customer:
+  the standard English form, in words naming every label the fixed reader
+  reads (a test holds the two together), and a customer's own request sheet
+  in general words. Code reads and checks the blocks when a version is
+  proposed (an unknown route, a customer that is no code, a form named
+  twice refuse it, `skill_words_unreadable`) and whenever it is served.
+- **One customer's forms only.** A reading is shown the guidance and the
+  forms of the sender domain's customer and of any customer, never another
+  customer's words, and its answer's schema is built from those names plus
+  `none`; code reads a name it did not offer as no form, and two forms named
+  for one file as nothing read.
+- **The same request, the same checks.** The model gives ticket 29's spans
+  (`ModelRfqReading`) and code verifies them as ticket 29 does
+  (`verify_rfq`: each span once, whole, in its line's cell; parsed by code;
+  notation by the document, else the customer's record), and one builder
+  makes the request (`RfqModelReader.request_of`): every value flagged
+  `model_read` for Sales. The reading stamps the prompt
+  (`sales.document_forms@1.0.0`), the skill version and the form
+  (`RequestReading.skill`, `form`), and counts under its own step.
+- **Its own step**, `ModelStep.SKILL_DOCUMENT_FORMS`
+  (`model_assist.skill_document_forms`, off everywhere), T0 like ticket 29's,
+  bar 0.85 on `all.right_field` (ticket 29's number on its own metric).
+  Asked in the quotation flow after the fixed reader and before ticket 29's
+  reading; at intake where no reader recognised a file, the sender's domain
+  names a customer and no person uploaded it: a file it reads into a request
+  makes the mail a quotation request, beside the `RFQ No.` marker, which
+  stays. Off, below its bar, the model down, `none`, or nothing verified:
+  read exactly as before.
+- **The replay** reads a proposal and the version in force on ticket 29's
+  request spreadsheets and the forms fixture's files (`DocumentFormReplay`),
+  a file right when every value it states is read as stated; an order and an
+  invoice are security cases that fail when read into a request at all.
+  Like the mail kinds' examples, these are the platform's fictional
+  customers: a company's own example files are the next source.
+- **Measured on Strata** (2026-11-16, qwen3.8-flash-next-q2_0, not
+  attested): 0.893 of 196 stated values right (ticket 29's 18 files by the
+  platform's skill 0.871; three new customers' forms, Vietnamese, Japanese
+  and English, by a company's version 33/33, by the platform's skill alone
+  0.939), 0.005 wrong, the rest deferred; p50 7.15 s, p95 17.97 s per call;
+  the order and the invoice read as no request; an instruction in a cell
+  changed no value. Both paths are kept: the fixed reader reads first, ticket
+  29's reading after a form reads nothing, and a company uses the step only
+  once its own measurement is attested.
+- **Not done**: a quantity whose unit is only in the column's header
+  (`Số lượng (m)`) is still deferred, because `verify_rfq` takes a unit only
+  from the item's own line; reading it from the header cell of the same
+  column would be a change to ticket 29's checks, left for a decision.
+
+
+## Applied 2026-11-16: the hand-off and reply kinds (ticket 42 family 5, by the agent)
+
+Decision 3 read for the hand-off to PC or QA (ticket 33) and the mail to a
+customer the model words (ticket 32): which KINDS a company writes, Sales'
+label for each and how each is copied or written are words, two skills; what
+a kind does stays code, from closed sets.
+
+- **The skills** `configs/skills/dw1/handoffs/SKILL.md` and
+  `configs/skills/dw1/reply-drafts/SKILL.md`, written in the mail kinds'
+  blocks (`domain.skill_blocks`). A hand-off kind (`domain.handoff_kinds`) is
+  named after the mail kind it is for and names `asks`, one of the three
+  typed field sets ticket 33 built (`order_lines`, `lot_and_problem`,
+  `sample_items`), and `to`, one of the teams (`pc`, `qa`: a team, never an
+  address; Sales picks the people). A reply kind (`domain.reply_kinds`) names
+  `drafts`, one of the platform's drafts, which gives it everything that is
+  not words: when it is offered (`ORDER_GATES`), its facts (`reply_facts`,
+  never an amount), its check (`check_reply`) and its recipients (the
+  customer's contacts). Neither skill has a line for a recipient, a send, a
+  price, an amount or a tool: any other key refuses the version when it is
+  proposed (`skill_words_unreadable`) and makes it unused when served. A
+  hand-off kind named after a platform route that takes no hand-off (`po`,
+  `other` ...) is refused. The platform's versions are today's three
+  hand-offs, to the copy's teams, and today's four drafts, each as itself
+  (tests hold both).
+- **Fixed steps, not picks**: both are `STEP_SKILLS`. The hand-off kind is the
+  kind the message's reading stamped, honoured only where that reading's
+  route is the reason the message was routed for (a reading opens no door its
+  route does not), else the platform kind of the reason; never the model's
+  choice. The reply kind is the one a person asked for, resolved by the
+  server against the version it serves.
+- **One call each**, `sales.handoff_kinds@1.0.0` and
+  `sales.reply_kinds@1.0.0`: ticket 33's and ticket 32's prompts with the
+  skill's words contained beside the mail and the facts. The hand-off stamps
+  the skill version, its kind, label and team (`Handoff.skill`,
+  `skill_kind`, `kind_label`, `to`; `kind` stays the fields); its team is the
+  skill's when written. The draft says the kind asked, the draft it was
+  worded as, the label and the version (`ReplyDraftView.drafted_as`,
+  `kind_label`, `skill`), and the skill's other kinds of the same draft,
+  which the page offers by their labels (`others`).
+- **Their own steps**, `ModelStep.SKILL_HANDOFFS` (T1 hand-off, bar 0.85 on
+  `all.right`) and `ModelStep.SKILL_REPLY_DRAFTS` (T0, bar 0.85 on
+  `all.complete`), ticket 33's and 32's bars on their metrics, off
+  everywhere (migration `7c00901ada90` admits the keys and steps). Off, below
+  its bar, the model down or a version that no longer reads: the hand-off is
+  pre-filled by ticket 33's one call exactly as before, the draft worded by
+  ticket 32's, and a company's own kind gets no hand-off and is not offered.
+- **The replays** read a proposal and the version in force on the
+  platform's examples: the hand-offs on ticket 33's golden mails and the new
+  kind's mails, located by code with no order resolved
+  (`HandoffKindReplay`); the reply drafts on ticket 32's twelve drafts' facts
+  (`ReplyKindReplay`, right when every kind of that draft is kept by
+  `check_reply` and states the PO).
+- **Measured on Strata** (2026-11-16, qwen3.8-flash-next-q2_0, not
+  attested). Hand-offs: 0.863 of the 73 fields the 33 golden mails state
+  right, none wrong (bar 0.85; ticket 33's one call replays 0.849), p50
+  4.31 s, p95 27.96 s on a busy server; a first run the same day scored
+  0.849 with two calls failing at the transport. A company's certificate
+  request to QA, added by a version only, pre-filled for both its mails
+  with the PO, the lot and the sentence, routed to QA; no injected
+  instruction or address reached a hand-off. Reply drafts: 10 of 12 kept and
+  complete (0.833, below the 0.85 bar; both drops Japanese figure
+  refusals, as ticket 32's one call recorded); a company's short
+  confirmation worded as the confirmation to the customer's contacts with
+  its label; a version whose words asked for another address, a price and
+  another customer's PO: every scripted draft obeying them dropped, the
+  model's kept draft named none. **Both code paths are kept**: the reply
+  kinds are below their bar, and the hand-off kinds are used by a company
+  only once its own measurement is attested; the one calls stay what every
+  company with ticket 32 or 33 on reads with.
+- **Not done**: a company's new hand-off kind is written with the words of
+  the platform kind whose fields it asks for (`sales_handoffs` copy); its
+  own subject and body would be the copy's to hold, keyed by kind, a change
+  to that copy's schema left for a decision. A Design team as a recipient is
+  not in the closed set: there is no Design recipient in master data for a
+  hand-off, and adding one is code by design.

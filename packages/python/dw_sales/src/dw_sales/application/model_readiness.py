@@ -50,14 +50,15 @@ from dw_agent_runtime.model.readiness import (
 )
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.change_reading import CHANGE_REQUEST
-from dw_sales.application.handoffs import REQUEST_HANDOFF
+from dw_sales.application.document_forms import DOCUMENT_FORMS_PROMPT
+from dw_sales.application.handoffs import HANDOFF_KINDS_PROMPT, REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.mail_kinds import MAIL_KINDS_PROMPT
 from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.reply_drafts import REPLY_DRAFT
+from dw_sales.application.reply_drafts import REPLY_DRAFT, REPLY_KINDS_PROMPT
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
 from dw_sales.application.salesorder_fill import SALESORDER_FILL
@@ -107,6 +108,19 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         ModelStep.RFQ_EXTRACTION: StepBar(
             0.85, "vi_en.right_field", RFQ_EXTRACTION, "sales_rfq", "sales.rfq_golden"
         ),
+        # Ticket 42 family 3: the golden request files, read by the platform's
+        # document forms and a company's forms for its new customers, values
+        # into the right field over every value they state, at ticket 29's
+        # bar so the two readings of one file compare on one number. A
+        # company's own version is replayed and read by its head before it
+        # applies, not by this bar. Proposed by the agent.
+        ModelStep.SKILL_DOCUMENT_FORMS: StepBar(
+            0.85,
+            "all.right_field",
+            DOCUMENT_FORMS_PROMPT,
+            "sales_document_forms",
+            "sales.document_forms_golden",
+        ),
         # Tickets 32 and 26: the golden thread messages other than
         # conditional ones and non-answers read as exactly their intents, and
         # none of those two read as `accepts` (the grader's own condition).
@@ -116,6 +130,18 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         # Ticket 33: the golden fields carried right.
         ModelStep.REQUEST_HANDOFF: StepBar(
             0.85, "all.right", REQUEST_HANDOFF, "sales_handoff", "sales.handoff_golden"
+        ),
+        # Ticket 42 family 5: the same golden mails, each pre-filled by the
+        # platform's hand-off skill's kind for it, at ticket 33's bar on the
+        # same metric, so the two readings of one task compare on one number.
+        # A tenant's own version is replayed and read by its head before it
+        # applies, not by this bar. Proposed by the agent.
+        ModelStep.SKILL_HANDOFFS: StepBar(
+            0.85,
+            "all.right",
+            HANDOFF_KINDS_PROMPT,
+            "sales_handoff_kinds",
+            "sales.handoff_kinds_golden",
         ),
         # Ticket 30: the golden forms' fields mapped right before human edits,
         # and no accepted swap (the grader's own condition).
@@ -172,6 +198,16 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         # or a figure the facts lack. Proposed by the agent.
         ModelStep.REPLY_DRAFT: StepBar(
             0.85, "all.complete", REPLY_DRAFT, "sales_reply_draft", "sales.reply_draft_golden"
+        ),
+        # Ticket 42 family 5: the same drafts, worded by the platform's
+        # reply-drafts skill, at ticket 32's bar on the same metric. Proposed
+        # by the agent.
+        ModelStep.SKILL_REPLY_DRAFTS: StepBar(
+            0.85,
+            "all.complete",
+            REPLY_KINDS_PROMPT,
+            "sales_reply_kinds",
+            "sales.reply_kinds_golden",
         ),
         # Ticket 40 (dw_sales ADR 0014 decision 4): DW1's agent with its
         # platform skill reads the bar's set at the thread agent's bar, on the

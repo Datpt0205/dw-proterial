@@ -22,6 +22,10 @@ import { AgentReply } from "../../orders/[caseId]/agent-reply";
 const DRAFTED = {
   case_id: "c-1",
   kind: "change_can_do_draft",
+  drafted_as: "change_can_do_draft",
+  kind_label: null,
+  skill: null,
+  others: [],
   status: "drafted",
   to: ["hana.westbrook@norvanta.example"],
   language: "en",
@@ -64,7 +68,11 @@ describe("Bản AI soạn (ticket 32)", () => {
   });
 
   it("an answer to a question names the customer's mail", async () => {
-    replyDraft.mockResolvedValue({ ...DRAFTED, kind: "question_answer" });
+    replyDraft.mockResolvedValue({
+      ...DRAFTED,
+      kind: "question_answer",
+      drafted_as: "question_answer",
+    });
     renderIt("question_answer", "R2");
     fireEvent.click(screen.getByRole("button", { name: "Bản AI soạn" }));
     await screen.findByText("Máy viết");
@@ -96,6 +104,8 @@ describe("Bản AI soạn (ticket 32)", () => {
   it("says when the step is off, and that Sales answers a question then", async () => {
     replyDraft.mockResolvedValue({
       ...DRAFTED,
+      kind: "question_answer",
+      drafted_as: "question_answer",
       status: "off",
       subject: null,
       body: null,
@@ -105,6 +115,41 @@ describe("Bản AI soạn (ticket 32)", () => {
     expect(
       await screen.findByText(/chưa bật bước AI soạn thư.*Sales tự trả lời/),
     ).toBeTruthy();
+  });
+
+  it("offers the company's other kinds of the draft by their label (ticket 42)", async () => {
+    replyDraft.mockResolvedValueOnce({
+      ...DRAFTED,
+      kind: "confirmation_draft",
+      drafted_as: "confirmation_draft",
+      skill: "sales_skill_reply_drafts@1.1.0",
+      others: [{ kind: "short_confirmation", label: "Xác nhận ngắn" }],
+    });
+    replyDraft.mockResolvedValueOnce({
+      ...DRAFTED,
+      kind: "short_confirmation",
+      drafted_as: "confirmation_draft",
+      kind_label: "Xác nhận ngắn",
+      skill: "sales_skill_reply_drafts@1.1.0",
+      others: [{ kind: "confirmation_draft", label: null }],
+    });
+    renderIt("confirmation_draft");
+    fireEvent.click(screen.getByRole("button", { name: "Bản AI soạn" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Xác nhận ngắn" }),
+    );
+    expect(
+      await screen.findByText("Xác nhận ngắn", { selector: "strong" }),
+    ).toBeTruthy();
+    expect(replyDraft).toHaveBeenLastCalledWith(
+      "c-1",
+      "short_confirmation",
+      undefined,
+    );
+    // The offer stays the first answer's: the platform's draft is the button above.
+    expect(
+      screen.queryByRole("button", { name: "confirmation_draft" }),
+    ).toBeNull();
   });
 
   it("keeps the button off for someone who does not prepare orders", () => {

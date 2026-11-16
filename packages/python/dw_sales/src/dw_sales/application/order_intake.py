@@ -96,7 +96,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Final
+from typing import Final, Protocol
 from zoneinfo import ZoneInfo
 
 from dw_agent_runtime.contracts import RunContext
@@ -111,6 +111,7 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.autonomy import AutonomyGate
 from dw_sales.application.examples import Lookup
+from dw_sales.application.handoff_kinds import HandoffKindReader
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.local_time import LocalZonePort, local_day
@@ -153,7 +154,7 @@ from dw_sales.domain.dispositions import (
     RoutingReason,
     ThreadCase,
 )
-from dw_sales.domain.handoffs import HandoffKind
+from dw_sales.domain.handoffs import Handoff, HandoffKind
 from dw_sales.domain.layouts import (
     LayoutPrefill,
     LayoutSample,
@@ -357,6 +358,22 @@ class CustomerPoReading:
         return await self.reader.read_with(content, stored.mapping, caps, layout_ref=stored.ref)
 
 
+class FormRecognitionPort(Protocol):
+    """Whether a message's files read into a request by one of the
+    customer's document forms (`document_forms.DocumentFormReader`)."""
+
+    async def recognises(
+        self,
+        scope: SalesScope,
+        contents: Sequence[AttachmentContent],
+        customer: Customer,
+        rules: OrderRules,
+        *,
+        received_on: date,
+        run: RunContext,
+    ) -> bool: ...
+
+
 @dataclass(frozen=True)
 class OrderIntake:
     catalog: SalesCatalogPort
@@ -390,6 +407,12 @@ class OrderIntake:
     # step, for Sales to take or dismiss; where the tenant's rules turn it
     # on. The routing stays as it is. None: no model is wired, and no card.
     triage: TriageReader | None = None
+    # A customer's own request form, read by the forms the tenant's
+    # document-forms skill names for the sender's customer (ticket 42 family
+    # 3): a file it reads into a request makes the mail a quotation request,
+    # beside the ``RFQ No.`` marker (`quote_forms`), never instead of it;
+    # where the tenant's rules turn it on. None: no model is wired.
+    document_forms: FormRecognitionPort | None = None
     # The case a reply's thread headers name (ticket 32). None: no case log is
     # wired (a reader-only test), and no reply is linked.
     threads: ThreadLinkPort | None = None
@@ -410,6 +433,11 @@ class OrderIntake:
     # for a tenant whose rules turn it on. None: no model is wired, and the
     # message is routed with no hand-off, as before.
     handoffs: HandoffReader | None = None
+    # The same hand-off by the kinds the tenant's hand-off skill names (ticket
+    # 42 family 5), asked first where its step runs; with no kind of it for
+    # the message or no usable answer, `handoffs` reads it as before. None:
+    # no model is wired here.
+    handoff_kinds: HandoffKindReader | None = None
     # The PO layouts the tenant approved (ticket 30). None: none are stored in
     # this process (a reader-only test), and the platform's layouts read.
     layouts: LayoutLookupPort | None = None
@@ -544,7 +572,9 @@ class OrderIntake:
             outcome = self._routed(
                 message, kind, reason, sender, classification.detail, classification.candidates
             )
-            outcome = await self._with_handoff(scope, message, outcome, sender, run)
+            outcome = await self._with_handoff(
+                scope, message, outcome, sender, classification.reading, run
+            )
             outcome = await self._with_triage(
                 scope, message, outcome, sender, classification.reading, run
             )
@@ -574,6 +604,12 @@ class OrderIntake:
         sender = await self._customer(scope, message, upload)
         rules = await self.rules.rules(scope)
         by_content = await self._by_content(scope, attached, sender, rules.intake)
+        if (
+            not by_content
+            and upload is None
+            and await self._a_form(scope, message, attached, sender, rules, run)
+        ):
+            by_content = {MessageKind.QUOTE_REQUEST}
         if len(by_content) > 1:
             return Classification(
                 MessageKind.OTHER,
@@ -699,6 +735,39 @@ class OrderIntake:
         if revised:
             kinds.add(MessageKind.REVISED_PO if any(revised) else MessageKind.PO)
         return kinds
+
+    async def _a_form(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        attached: Sequence[_Attached],
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> bool:
+        """Whether the message's files read as a request by one of the
+        tenant's document forms for the sender's customer (ticket 42 family
+        3): asked only where no reader recognised a file, the sender's
+        domain names a customer, a DW1 run is here and the step may run for
+        the tenant now. Nothing read is no form, and the message is
+        classified as before."""
+        contents = [item.content for item in attached if item.content is not None]
+        if (
+            self.document_forms is None
+            or run is None
+            or sender is None
+            or not contents
+            or not await self._model_step(scope, rules, ModelStep.SKILL_DOCUMENT_FORMS)
+        ):
+            return False
+        return await self.document_forms.recognises(
+            scope,
+            contents,
+            sender,
+            rules,
+            received_on=await self._received_on(scope, message.received_at),
+            run=run,
+        )
 
     async def _intent(
         self,
@@ -901,33 +970,79 @@ class OrderIntake:
         message: InboundMessage,
         outcome: IntakeOutcome,
         sender: Customer | None,
+        reading: IntentReading | None,
         run: RunContext | None,
     ) -> IntakeOutcome:
         """The routed outcome with the hand-off a model pre-filled, where the
-        reason takes one, the sender is a customer, the tenant's rules turn
-        the step on, a model is wired and a DW1 run is processing."""
+        sender is a customer, a model is wired, a DW1 run is processing and
+        either the tenant's hand-off kinds name the message's kind (ticket 42
+        family 5, `_skill_handoff`) or the reason takes one of ticket 33's
+        and the tenant's rules turn that step on."""
         disposition = outcome.disposition
         if disposition is None or disposition.reason is None:
             return outcome
+        if sender is None or self.handoffs is None or run is None:
+            return outcome
         kind = HANDOFF_KINDS.get(disposition.reason)
-        if kind is None or sender is None or self.handoffs is None or run is None:
-            return outcome
         rules = await self.rules.rules(scope)
-        if not await self._model_step(scope, rules, ModelStep.REQUEST_HANDOFF):
-            return outcome
-        handoff = await self.handoffs.read(
+        received_on = await self._received_on(scope, message.received_at)
+        handoff = await self._skill_handoff(
+            scope, message, disposition.reason, sender, reading, rules, received_on, run
+        )
+        if handoff is None:
+            if kind is None or not await self._model_step(scope, rules, ModelStep.REQUEST_HANDOFF):
+                return outcome
+            handoff = await self.handoffs.read(
+                scope,
+                newest_part(message),
+                sender,
+                kind,
+                received_on=received_on,
+                rules_version=rules.version,
+                run=run,
+            )
+        # With the reading it may be of (its kind, ticket 42 family 5), which
+        # `_stamped` puts on every routed disposition anyway.
+        read = {} if reading is None else {"reading": reading}
+        stamped = MessageDisposition.model_validate(
+            {**disposition.model_dump(), "handoff": handoff, **read}
+        )
+        return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
+
+    async def _skill_handoff(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        reason: RoutingReason,
+        sender: Customer,
+        reading: IntentReading | None,
+        rules: OrderRules,
+        received_on: date,
+        run: RunContext,
+    ) -> Handoff | None:
+        """The hand-off by the tenant's hand-off kinds, where their step may
+        run: the kind the message's reading stamped, else the platform kind
+        of its reason, and only where the reading routed it here (a reading
+        opens no door code would not). None: as with the step off."""
+        if self.handoff_kinds is None:
+            return None
+        names: list[str] = []
+        routed = None if reading is None else reading.routed
+        if reading is not None and reading.kind and routed and INTENT_ROUTES[routed] is reason:
+            names.append(reading.kind)
+        if reason in HANDOFF_KINDS:
+            names.append(HANDOFF_KINDS[reason])
+        if not names or not await self._model_step(scope, rules, ModelStep.SKILL_HANDOFFS):
+            return None
+        return await self.handoff_kinds.read(
             scope,
             newest_part(message),
             sender,
-            kind,
-            received_on=await self._received_on(scope, message.received_at),
+            names,
+            received_on=received_on,
             rules_version=rules.version,
             run=run,
         )
-        stamped = MessageDisposition.model_validate(
-            {**disposition.model_dump(), "handoff": handoff}
-        )
-        return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
 
     async def _with_triage(
         self,
