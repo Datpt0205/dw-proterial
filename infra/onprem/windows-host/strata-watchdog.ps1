@@ -27,8 +27,15 @@ try {
 if (-not $env:DW_STRATA_API_KEY) { Log 'no DW_STRATA_API_KEY in the machine environment; not starting'; exit 1 }
 
 Log 'health did not answer; launching'
+# --parallel 1: Strata refuses `logprobs` for replies longer than one token when
+# it serves batch slots ("400 ... logprobs is available with parallel only for
+# max_tokens 1", measured 2026-11-16), and DW's structured route asks for
+# logprobs on every call (onprem.yaml 1.4.0, ticket 44). With 3 slots every
+# DW1 reading failed. One slot is also faster per request (~190 tok/s alone vs
+# ~76 tok/s with slots shared); requests queue instead. Owed: Đạt's choice
+# between this and 3 slots without logprobs, after the measurement.
 & $strata launch --family qwen --model q2_0 --data-dir 'V:\Strata' `
-    --context 64k --parallel 3 --vision on `
+    --context 64k --parallel 1 --vision on `
     --access lan --port 8080 --api-key-env DW_STRATA_API_KEY `
     --yes --no-tui *>> (Join-Path $logDir 'launch.log')
 Log "launch exited $LASTEXITCODE"
