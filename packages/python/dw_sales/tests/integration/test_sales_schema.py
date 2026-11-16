@@ -218,11 +218,12 @@ async def test_every_foreign_key_says_what_a_delete_does_and_is_indexed(
 
 
 # Tables whose rows belong to the whole tenant, not to one workspace, with why:
-# policed by tenant alone, unique keys led by `tenant_id` alone. None is left
-# in `sales`: the rule versions and the model-step measurements moved to
-# `platform` (5ef229da512b, 315c7ae4844f). Every Sales table is narrowed by
-# workspace as well.
-_TENANT_WIDE: set[str] = set()
+# policed by tenant alone, unique keys led by `tenant_id` alone. The rule
+# versions and the model-step measurements moved to `platform` (5ef229da512b,
+# 315c7ae4844f). One is left: a skill version is the tenant's, read in every
+# workspace alike, so the replay stored beside it is too (ticket 40,
+# e1b1e0cadb66); its `workspace_id` is the lane's, kept for the cascade.
+_TENANT_WIDE: set[str] = {"skill_replays"}
 
 
 async def test_every_table_is_policed_by_tenant_and_workspace_under_its_own_name(
