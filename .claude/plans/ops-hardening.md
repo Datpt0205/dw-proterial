@@ -385,7 +385,33 @@ context. All five are done and on `main`. The full narrative is at
           "làm": NoLogoff=1 in dwmail's hive; OneDrive killed in the live
           session was started again by the watchdog's next round; dwmail
           signed out by an admin mailed "PROBLEM: mail-session" after two
-          rounds; a restart signed dwmail in with OneDrive running)**; (c) few Windows admins,
+          rounds; a restart signed dwmail in with OneDrive running)**;
+          **Three questions from Đạt (11-16), answered from the code, owed by
+          him, nothing changed yet:** (1) a PIC leaving with open cases: the
+          Team folder is only a drop box (`mail_drop.py` stores each mail in
+          Postgres; nothing reads the folder again) and a reply finds its case
+          by its headers workspace-wide (`threads.py`), never by whose mailbox
+          it reached, so history does not depend on the leaver's mail. What
+          breaks: their flow runs on their account, so mail still sent to them
+          is no longer exported (IT forwards their mailbox to the successor
+          before deleting it); their open cases (per-case reassignment by the
+          head exists, ticket 17; a bulk "hand everything of A to B" does
+          not); deleting their DW account loses the name on history
+          (deactivate instead). Proposed: bulk handover plus an IT leaver
+          runbook (forward mail, hand over in DW, lock DW, then M365); owed:
+          who presses it, the head or IT. (2) managers over their staff: DW1
+          has it (Admin "hierarchy" page sets managers; tenant
+          `record_visibility` open | restricted, restricted = own cases, the
+          unassigned pool and their reports'; actions by the permission sets
+          IT grants); gaps: DW2 does not apply `visible_owners` at all, and
+          the tenant is still `open`; owed: open or restricted for Proterial,
+          and DW2 the same. (3) mail piling up in the Team folder (and on the
+          host's C:, Files On-Demand being off): the files have no use after
+          DW stores them; proposed a daily Power Automate flow by the Team
+          owner deleting files older than 30 days (not 7: an outage longer
+          than the window would delete unread mail); Purview retention needs
+          an M365 admin; DW deleting would need write access it is
+          deliberately denied. (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
