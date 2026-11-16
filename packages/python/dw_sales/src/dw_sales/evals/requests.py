@@ -76,7 +76,7 @@ from dw_sales.application.quotation import RequestNotExtractedError
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION, RequestRead, RfqModelReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.order_checks import ModelStep
-from dw_sales.domain.orders import RegionFlag
+from dw_sales.domain.orders import FlaggedValue, RegionFlag
 from dw_sales.domain.quotes import (
     QuoteCase,
     QuoteFindingCode,
@@ -238,6 +238,9 @@ class Scored:
     # Values only a customer's notation record read, each flagged so.
     by_record: int = 0
     unflagged_record: int = 0
+    # Wrong values a customer's notation record read: the record's own error,
+    # told apart from the model's (ticket 37).
+    wrong_by_record: int = 0
 
 
 def _same(field: str, read: object, gold: object) -> bool:
@@ -274,16 +277,18 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
             deferred=stated,
         )
     document = read.document
-    right = invented = unflagged = wrong = deferred = 0
+    right = invented = unflagged = wrong = deferred = wrong_by_record = 0
     misses: list[str] = []
 
-    def missed(name: str, got: object, want: object) -> None:
-        """A miss: deferred where nothing was read, else wrong."""
-        nonlocal wrong, deferred
+    def missed(name: str, got: object, want: object, by_record: bool = False) -> None:
+        """A miss: deferred where nothing was read, else wrong, and the
+        record's when a notation record read it."""
+        nonlocal wrong, deferred, wrong_by_record
         if got is None:
             deferred += 1
         else:
             wrong += 1
+            wrong_by_record += by_record
         misses.append(name)
 
     header = {
@@ -291,12 +296,13 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
         "quote_due": document.quote_due.value if document.quote_due else None,
         "currency": document.currency.value,
     }
+    header_by_record = _from_record(document.flags)
     for name in _HEADER:
         if _same(name, header[name], gold[name]):
             right += gold[name] is not None
         else:
             invented += gold[name] is None
-            missed(name, header[name], gold[name])
+            missed(name, header[name], gold[name], name in header_by_record)
     model_read = {f.field for f in document.flags if f.flag is RegionFlag.MODEL_READ}
     if model_read != {n for n in _HEADER if header[n] is not None}:
         unflagged += 1
@@ -315,12 +321,13 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
             "quantity": item.quantity.value,
             "needed_by": item.needed_by.value,
         }
+        item_by_record = _from_record(item.flags)
         for name in _FIELDS:
             if _same(name, got[name], want[name]):
                 right += want[name] is not None
             else:
                 invented += want[name] is None
-                missed(f"item{index + 1}:{name}", got[name], want[name])
+                missed(f"item{index + 1}:{name}", got[name], want[name], name in item_by_record)
         by_record += sum(1 for f in item.flags if f.flag is RegionFlag.NOTATION_FROM_RECORD)
         flagged = {f.field for f in item.flags if f.flag is RegionFlag.MODEL_READ}
         if {n for n in _FIELDS if got[n] is not None} - flagged:
@@ -352,7 +359,13 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
         deferred=deferred,
         by_record=by_record,
         unflagged_record=unflagged_record,
+        wrong_by_record=wrong_by_record,
     )
+
+
+def _from_record(flags: Sequence[FlaggedValue]) -> set[str]:
+    """The fields a customer's notation record read."""
+    return {f.field for f in flags if f.flag is RegionFlag.NOTATION_FROM_RECORD}
 
 
 def _share(part: int, whole: int) -> float:
@@ -374,6 +387,7 @@ def summary(scored: Sequence[Scored]) -> dict[str, Any]:
         "wrong": _share(sum(s.wrong for s in scored), stated),
         "deferred": _share(sum(s.deferred for s in scored), stated),
         "by_record": sum(s.by_record for s in scored),
+        "wrong_by_record": sum(s.wrong_by_record for s in scored),
         "invented": sum(s.invented for s in scored),
         "not_read": sum(1 for s in scored if s.not_read is not None),
         "unflagged": sum(s.unflagged for s in scored),
@@ -469,7 +483,12 @@ def grade_notation_records(
     after_rows = [score(s, r) for s, r in zip(golden, within, strict=True)]
     after = summary(after_rows)
     details: dict[str, Any] = {"live": ctx.live_model is not None, "without": before, "with": after}
-    if after["wrong"] > before["wrong"]:
+    # A live run reads each request twice, in calls of their own, so a value
+    # the model reads wrong in one pass and right in the other is the model's
+    # variance, not the record's: only a wrong value a record read is the
+    # record's. A replay is deterministic, so there any extra wrong value is
+    # the code's.
+    if after["wrong_by_record"] or (ctx.live_model is None and after["wrong"] > before["wrong"]):
         return GradeResult.fail("a record read a value wrong", **details)
     if ctx.live_model is None and after["deferred"] >= before["deferred"]:
         return GradeResult.fail("no record settled a deferred value", **details)
@@ -501,11 +520,28 @@ def grade_notation_records(
         others = _records({code: kinds for code, kinds in records.items() if code != own})
         elsewhere = _records({own: records.get(own, {"decimal_mark": ","})}, BETA)
         for label, store in (("another customer", others), ("another tenant", elsewhere)):
-            if _signature(_run(read_request(model, spec, store))) != _signature(alone):
+            read = _run(read_request(model, spec, store))
+            # A record reaches a reading only by settling a value (flagged
+            # so) or contradicting one (refused so). Live, the other pass is
+            # a call of its own, so only those marks tell a leak from the
+            # model's variance; a replay must also read exactly the same.
+            if _record_touched(read) or (
+                ctx.live_model is None and _signature(read) != _signature(alone)
+            ):
                 return GradeResult.fail(
                     f"{label}'s record settled a value", request=spec["id"], **details
                 )
     return GradeResult.ok(**details)
+
+
+def _record_touched(read: RequestRead | str) -> bool:
+    """Whether any notation record settled or contradicted a value."""
+    if isinstance(read, str):
+        return False
+    document = read.document
+    if any(_from_record(flags) for flags in (document.flags, *(i.flags for i in document.items))):
+        return True
+    return any(reason.endswith("contradicts_record") for reason in read.reading.refused)
 
 
 def _case(read: RequestRead, message: InboundMessage, customer: str) -> QuoteCase:

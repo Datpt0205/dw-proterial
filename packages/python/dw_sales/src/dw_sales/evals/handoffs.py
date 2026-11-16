@@ -162,19 +162,21 @@ class Scored:
     # fields the mail states left blank for a person (ticket 37).
     wrong: int = 0
     deferred: int = 0
-    # Values only a customer's notation record read.
+    # Values only a customer's notation record read, and those of them wrong:
+    # the record's own error, told apart from the model's.
     by_record: int = 0
+    wrong_by_record: int = 0
 
 
 def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
     gold: Mapping[str, Any] = spec["gold"]
-    stated = right = invented = wrong = deferred = 0
+    stated = right = invented = wrong = deferred = wrong_by_record = 0
     missed: list[str] = []
 
-    def field(name: str, ok: bool, carried: object = None) -> None:
-        """One stated field: right, else wrong where a value was carried,
-        else deferred."""
-        nonlocal stated, right, wrong, deferred
+    def field(name: str, ok: bool, carried: object = None, by_record: bool = False) -> None:
+        """One stated field: right, else wrong where a value was carried
+        (the record's when a notation record read it), else deferred."""
+        nonlocal stated, right, wrong, deferred, wrong_by_record
         stated += 1
         if ok:
             right += 1
@@ -184,6 +186,7 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
             deferred += 1
         else:
             wrong += 1
+            wrong_by_record += by_record
 
     if gold["po_no"]:
         field("po_no", handoff.po_no == gold["po_no"], handoff.po_no)
@@ -197,6 +200,7 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
                 f"line{wanted['line']}.quantity",
                 got is not None and got.new_quantity == Decimal(wanted["new_quantity"]),
                 None if got is None else got.new_quantity,
+                got is not None and "quantity" in got.from_record,
             )
         elif got is not None and got.new_quantity is not None:
             invented += 1
@@ -205,6 +209,7 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
                 f"line{wanted['line']}.date",
                 got is not None and got.new_date == date.fromisoformat(wanted["new_date"]),
                 None if got is None else got.new_date,
+                got is not None and "date" in got.from_record,
             )
         elif got is not None and got.new_date is not None:
             invented += 1
@@ -225,6 +230,7 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
             "quantity",
             handoff.sample_quantity == Decimal(gold["quantity"]),
             handoff.sample_quantity,
+            handoff.quantity_from_record,
         )
     elif handoff.sample_quantity is not None:
         invented += 1
@@ -241,7 +247,16 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
         wrong=wrong + invented,
         deferred=deferred,
         by_record=by_record + handoff.quantity_from_record,
+        wrong_by_record=wrong_by_record,
     )
+
+
+def record_touched(handoff: Handoff) -> bool:
+    """Whether any notation record settled a value (marked so) or
+    contradicted one (refused or flagged so)."""
+    if handoff.quantity_from_record or any(line.from_record for line in handoff.lines):
+        return True
+    return "contradicts_record" in json.dumps(handoff.model_dump(mode="json"))
 
 
 def _share(part: int, whole: int) -> float:
@@ -260,6 +275,7 @@ def scores(rows: Sequence[Scored]) -> dict[str, Any]:
         "wrong": _share(sum(r.wrong for r in rows), stated),
         "deferred": _share(sum(r.deferred for r in rows), stated),
         "by_record": sum(r.by_record for r in rows),
+        "wrong_by_record": sum(r.wrong_by_record for r in rows),
         "invented": sum(r.invented for r in rows),
         # An empty form: Sales types the whole hand-off, as before.
         "to_a_person": _share(sum(1 for r in rows if r.empty), len(rows)),
@@ -323,7 +339,11 @@ def grade_notation_records(
     before = scores([score(s, h) for s, h in zip(mails, without, strict=True)])
     after = scores([score(s, h) for s, h in zip(mails, within, strict=True)])
     details: dict[str, Any] = {"live": ctx.live_model is not None, "without": before, "with": after}
-    if after["wrong"] > before["wrong"]:
+    # A live run reads each mail twice, in calls of their own, so a value the
+    # model reads wrong in one pass only is the model's variance: only a wrong
+    # value a record read is the record's. A replay is deterministic, so there
+    # any extra wrong value is the code's.
+    if after["wrong_by_record"] or (ctx.live_model is None and after["wrong"] > before["wrong"]):
         return GradeResult.fail("a record read a value wrong", **details)
     if ctx.live_model is None and (
         after["deferred"] >= before["deferred"] or not after["by_record"]
@@ -348,7 +368,14 @@ def grade_notation_records(
         )
         for label, store in (("another customer", others), ("another tenant", elsewhere)):
             got = _run(read_mail(model, spec, records=store))[0]
-            if got.model_dump(mode="json") != alone.model_dump(mode="json"):
+            # A record reaches a hand-off only by settling a value or
+            # contradicting one, each marked. Live, the other pass is a call
+            # of its own (a timeout, the model's variance), so only those
+            # marks tell a leak; a replay must also read exactly the same.
+            if record_touched(got) or (
+                ctx.live_model is None
+                and got.model_dump(mode="json") != alone.model_dump(mode="json")
+            ):
                 return GradeResult.fail(
                     f"{label}'s record settled a value", mail=spec["id"], **details
                 )
