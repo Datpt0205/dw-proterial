@@ -178,6 +178,7 @@ class AgentTurnKit:
         ceiling: TurnCeiling,
         *,
         skills: TurnSkills | None = None,
+        thinking: bool = False,
     ) -> BoundedAgentTurn:
         """A turn of ``worker``'s agent under ``prompt``: the tools its toolset
         pins (`configs/toolsets/<worker_id>@<toolset_version>.yaml`), on the
@@ -187,7 +188,11 @@ class AgentTurnKit:
         Given ``skills``, the turn carries the skills catalogue and offers the
         skill-loading tool it names, which the toolset must pin; without, a
         skill loader the toolset pins is not offered (a turn that is served no
-        skill has nothing to load)."""
+        skill has nothing to load).
+
+        With ``thinking``, the turn runs on the default profile's
+        `thinking_profile` where it names one (a step measured to need it),
+        else on the default profile; the turn says which it ran on."""
         if worker.toolset_version is None:
             raise ConfigError(
                 "a worker with no toolset has no agent turn",
@@ -206,8 +211,11 @@ class AgentTurnKit:
                 "a turn served skills needs its skill loader registered and pinned",
                 details={"worker_id": worker.worker_id, "tool": skills.read_tool},
             )
+        profile_id = worker.default_model_profile
+        if thinking:
+            profile_id = self.profiles.resolve(profile_id).thinking_profile or profile_id
         spec = AgentSpec(
-            model=self.chat_models.resolve(worker.default_model_profile),
+            model=self.chat_models.resolve(profile_id),
             offered=offered,
             registry=self.tools,
             executor=self.executor,
@@ -219,7 +227,7 @@ class AgentTurnKit:
             prompt_variables=_turn_variables,
             budget=self.budget,
             profiles=self.profiles,
-            profile_id=worker.default_model_profile,
+            profile_id=profile_id,
             ceiling=ceiling,
             skills=skills,
         )
@@ -227,4 +235,4 @@ class AgentTurnKit:
         # and run inside a DW node it would otherwise checkpoint the customer's
         # words into that run's thread as a subgraph.
         agent = build_agent(spec, checkpointer=False)
-        return BoundedAgentTurn(agent, prompt, worker.default_model_profile, ceiling)
+        return BoundedAgentTurn(agent, prompt, profile_id, ceiling)

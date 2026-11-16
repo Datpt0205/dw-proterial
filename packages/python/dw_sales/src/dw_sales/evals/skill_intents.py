@@ -313,9 +313,12 @@ def grade_golden(
         floor = float(expected.get("min_intent_accuracy", 0.0))
         if details["all"]["intent_accuracy"] < floor:
             return GradeResult.fail("the recorded turns score lower than recorded", **details)
-        tool_floor = float(expected.get("min_expected_tool_called", 0.0))
-        if (details["withheld"]["expected_tool_called"] or 0.0) < tool_floor:
-            return GradeResult.fail("the recorded turns looked up less than recorded", **details)
+        # The withheld messages lean on what only the thread holds; since
+        # dw1_agent@1.2.0 it is in the turn's input (ticket 40, way 5), so
+        # what is held is that they still read right, not that a tool ran.
+        withheld_floor = float(expected.get("min_withheld_intent_accuracy", 0.0))
+        if (details["withheld"]["intent_accuracy"] or 0.0) < withheld_floor:
+            return GradeResult.fail("the withheld messages read worse than recorded", **details)
     return GradeResult.ok(**details)
 
 

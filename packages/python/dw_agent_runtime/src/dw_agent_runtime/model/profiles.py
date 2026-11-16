@@ -96,6 +96,11 @@ class ModelProfile(BaseModel):
     # fell back to a default would produce a collection nobody chose the width of.
     embedding: ModelRoute | None = None
     budgets: ModelBudgets = ModelBudgets()
+    # The profile an agent turn that must reason runs on, where this profile
+    # keeps thinking off (dw_sales ticket 40: one step measured better with
+    # thinking on, the rest no better and slower). None: such a turn runs on
+    # this profile. Read by `AgentTurnKit.turn(thinking=True)` only.
+    thinking_profile: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def _embedding_route_declares_its_width(self) -> ModelProfile:

@@ -6,14 +6,16 @@ mail is read as before."""
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from dw_evals.graders import GraderContext
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.application.skills import READ_SKILL
-from dw_sales.application.thread_tools import CASE_BY_NUMBER
+from dw_sales.application.thread_tools import CASE_BY_NUMBER, ThreadBinding, ThreadMessageView
 from dw_sales.application.threads import question
 from dw_sales.evals.skill_intents import (
     _NRV,
@@ -79,3 +81,33 @@ async def test_off_unsure_or_over_its_ceiling_a_mail_is_read_as_before() -> None
     tenant is not served reads it exactly as off."""
     result = await _bounded(REPO)
     assert result.passed, result.details
+
+
+async def test_the_turn_is_given_the_threads_cases_and_earlier_messages_as_data() -> None:
+    """Ticket 40, way 5: what the case snapshot and thread messages tools
+    would answer is in the turn's input from the start, from the binding code
+    built (never from the message), each inside the template's contained
+    input block, so the turn need not spend calls fetching it."""
+    seen: list[str] = []
+    answering = scripted(_says("asks", "Thanks, we will check internally."))
+
+    class _Seeing(type(answering)):  # type: ignore[misc]
+        def _generate(self, messages: list[Any], *args: Any, **kwargs: Any) -> Any:
+            seen.append("\n".join(str(m.content) for m in messages))
+            return super()._generate(messages, *args, **kwargs)
+
+    harness = Harness.build(REPO, _Seeing(), skills=MemoryRuleVersions())
+    earlier = ThreadMessageView(
+        author="sales", received_on=date(2026, 11, 9), subject="PO", text="Ship on 20/11?"
+    )
+    binding = ThreadBinding(ALPHA, "NRV", "SKL-5", (earlier,), _NRV.cases)
+    spec = {"id": "SKL-5", "subject": "Re: PO", "body": "Thanks, we will check internally."}
+
+    reading, _ = await harness.read(
+        spec, binding, author="customer", about=question("order", "NRV-PO-26-0457")
+    )
+
+    assert reading.prompt == "sales.dw1_agent@1.2.0"
+    first = seen[0]
+    assert '<input name="cases">' in first and "NRV-PO-26-0457" in first
+    assert '<input name="earlier">' in first and "Ship on 20/11?" in first

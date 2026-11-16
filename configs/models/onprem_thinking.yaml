@@ -1,0 +1,40 @@
+schema_version: "1.0"
+profile_id: onprem_thinking
+routing_policy_version: "1.0.0"
+# `onprem` (1.5.0, whose `thinking_profile` names this one) with thinking ON
+# for the tool-calling route only (dw_sales ticket 40, decided by Đạt
+# 2026-11-16, way 3): DW1's agent with skills reads
+# a thread message on `chat`, and the `skill_intents` step's misses were
+# intents added against `thread-intents/SKILL.md` rules 2-4, which is the
+# kind of reasoning thinking is for. Every other route is onprem's, thinking
+# off, so the skill pick (one scored call on the structured route) and the
+# one-call reading measure as before. A step is put on this profile alone;
+# no worker's default is it. Same server, model and budgets as `onprem`.
+structured_extraction:
+  provider: onprem
+  model: qwen3.8-flash-next-q2_0
+  timeout_seconds: 120
+  reasoning_effort: none
+  temperature: 0.0
+  max_input_tokens: 6000
+  logprobs: true
+reasoning:
+  provider: onprem
+  model: qwen3.8-flash-next-q2_0
+  timeout_seconds: 180
+  reasoning_effort: none
+chat:
+  provider: onprem
+  model: qwen3.8-flash-next-q2_0
+  timeout_seconds: 120
+  reasoning_effort: low
+  temperature: 0.0
+  max_input_tokens: 6000
+embedding:
+  provider: onprem
+  model: bge-m3:567m
+  dimensions: 1024
+  timeout_seconds: 120
+budgets:
+  max_input_tokens_per_run: 60000
+  max_cost_usd_per_run: 0.01
