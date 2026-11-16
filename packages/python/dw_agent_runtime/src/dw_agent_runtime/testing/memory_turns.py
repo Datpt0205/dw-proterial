@@ -11,7 +11,8 @@ in-memory audit) are replaced.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
@@ -36,12 +37,15 @@ RUNTIME_COPY = "runtime@1.7.0.yaml"
 
 @dataclass(frozen=True)
 class GivenChatModel:
-    """A `ChatModelFactory` answering every profile with one model."""
+    """A `ChatModelFactory` answering every profile with one model, but a
+    profile given its own (a live lane's thinking profile, dw_sales ticket
+    40), so a turn run on that profile is measured on that profile's model."""
 
     model: BaseChatModel
+    by_profile: Mapping[str, BaseChatModel] = field(default_factory=dict)
 
     def resolve(self, profile_id: str) -> BaseChatModel:
-        return self.model
+        return self.by_profile.get(profile_id, self.model)
 
 
 def memory_turn_kit(
@@ -52,6 +56,7 @@ def memory_turn_kit(
     clock: UtcClock,
     ids: IdGenerator,
     executions: MemoryToolExecutions | None = None,
+    by_profile: Mapping[str, BaseChatModel] | None = None,
 ) -> AgentTurnKit:
     """An `AgentTurnKit` over ``model``, with what ``configs`` ships."""
     copy = load_runtime_copy(configs / "copy" / RUNTIME_COPY)
@@ -65,7 +70,7 @@ def memory_turn_kit(
     toolsets.load_directory(configs / "toolsets")
     tools = ToolRegistry()
     return AgentTurnKit(
-        chat_models=GivenChatModel(model),
+        chat_models=GivenChatModel(model, dict(by_profile or {})),
         tools=tools,
         executor=ToolExecutor(
             registry=tools,

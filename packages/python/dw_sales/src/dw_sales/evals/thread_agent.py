@@ -287,6 +287,18 @@ def chat_under_test(
     return Replayed(transcripts=dict(held.get("transcripts", {})))
 
 
+def chats_under_test(ctx: GraderContext, *, prompt: PromptRef) -> dict[str, BaseChatModel]:
+    """The live lane's chat models of other profiles its own names (its
+    thinking profile, ticket 40), each recorded like the default one; none
+    when replaying, where the recorded turns answer every profile."""
+    if ctx.live_model is None:
+        return {}
+    return {
+        profile: Recording(inner=chat, observed=ctx.live_model, prompt=prompt)
+        for profile, chat in getattr(ctx.live_model, "chat_by_profile", {}).items()
+    }
+
+
 def scripted(*turn: Mapping[str, Any]) -> Replayed:
     """A model saying ``turn`` whatever it is asked: a guard's attacker."""
 
@@ -370,6 +382,7 @@ class Harness:
         *,
         skills: MemoryRuleVersions | None = None,
         pick: PickModelPort | None = None,
+        by_profile: Mapping[str, BaseChatModel] | None = None,
     ) -> Harness:
         """Given ``skills`` (the tenants' skill versions), DW1's agent with
         its skills (ticket 40) in place of the thread agent, over the same
@@ -386,6 +399,7 @@ class Harness:
             clock=clock,
             ids=ids,
             executions=executions,
+            by_profile=by_profile,
         )
         bindings = _Bindings()
         tools = ThreadTools(orders or _NoOtherOrders(), MockSalesCatalog.load(ALPHA), _demo_rules())

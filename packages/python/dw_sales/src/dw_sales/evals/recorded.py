@@ -203,6 +203,9 @@ class Observed:
     # agent, tickets 30 and 31): its turns are recorded through this object
     # too (`thread_agent.Recording`). None: the lane runs no such step.
     chat: Any = None
+    # Another profile's chat model the lane's profile names, by profile id:
+    # its `thinking_profile` (ticket 40), for a turn run there.
+    chat_by_profile: dict[str, Any] = field(default_factory=dict)
 
     @property
     def model_profile(self) -> str:
