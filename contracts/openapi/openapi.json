@@ -2743,7 +2743,9 @@
           "items",
           "convert_list",
           "quotations",
-          "lme"
+          "lme",
+          "base_prices",
+          "bravo_quotations"
         ],
         "title": "CatalogList",
         "type": "string"
@@ -5315,6 +5317,112 @@
           "spans"
         ],
         "title": "DescriptionReadingView",
+        "type": "object"
+      },
+      "DesignBasePriceView": {
+        "description": "A QUOTE line's BP as Bravo's \"Danh mục Base price\" holds it (ticket\n11), for a price reader only: ``found`` False is a BP code the list read\ndoes not hold (B21 exports the latest BPs only), never a blank price.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "base_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Price"
+          },
+          "bp_code": {
+            "title": "Bp Code",
+            "type": "string"
+          },
+          "bp_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bp Date"
+          },
+          "bp_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bp Unit"
+          },
+          "copper_kg": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copper Kg"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "lme_of_bp": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lme Of Bp"
+          },
+          "specification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specification"
+          }
+        },
+        "required": [
+          "line_no",
+          "bp_code",
+          "found"
+        ],
+        "title": "DesignBasePriceView",
         "type": "object"
       },
       "DesignCheck": {
@@ -16506,6 +16614,20 @@
                 "type": "null"
               }
             ]
+          },
+          "design_prices": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DesignBasePriceView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Prices"
           },
           "design_replies": {
             "title": "Design Replies",

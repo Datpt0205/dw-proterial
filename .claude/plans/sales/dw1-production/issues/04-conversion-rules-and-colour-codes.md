@@ -39,3 +39,23 @@ and what Sales confirmed (item 3), not through these rules.
   mapping Sales confirms in DW1 is followed through Bravo's states 1 → 2 → 3.
   Only state 3 (approved) answers a PO line; 1 and 2 show as "waiting for
   approval in Bravo".
+
+## Done in part (2026-11-16): Bravo's approval states
+
+- **Only a row Bravo approved answers a PO line.** The reader sandbox keeps
+  each group label it leaves out (`ImportedTable.groups`); a convert row
+  takes the state of the group above it (`ConvertEntry.bravo_state`):
+  approved under Bravo's "3. Đã duyệt", waiting under any other label (states
+  1 and 2, whatever Bravo calls them). `SnapshotSalesCatalog.convert_entry`
+  answers an approved row only, so a waiting one leaves the line unmapped as
+  a row missing does. DW1's own template (no groups) reads as approved, as
+  before. Tested at the lookup, both guards mutation-checked.
+- **A reader image older than this is refused**, not read as a sheet with
+  no groups (which would approve every row): the table reply must state its
+  groups (`reader_wire.TableRowsReply`), else `reader_version_mismatch`.
+- Measured outside git: B04, 1 group, **11,423 rows approved** (only state
+  3 held rows that day, as the 11-10 screens showed).
+
+Left: the colour codes (S001…) as a list and the rule that puts a colour
+into a PRV code wait on Q-B12; listing the mappings Sales confirmed in DW1
+that Bravo does not hold yet, and the waiting rows, on the master-data page.

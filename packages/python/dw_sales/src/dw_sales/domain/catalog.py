@@ -290,6 +290,9 @@ class Item(BaseModel):
         return self
 
 
+ConvertState = Literal["approved", "waiting"]
+
+
 class ConvertEntry(BaseModel):
     """One row of the convert list: a customer's code for one of our items.
 
@@ -304,6 +307,9 @@ class ConvertEntry(BaseModel):
     customer_code: CustomerCode
     customer_item_code: PrintedText
     prv_code: PrvCode
+    # Where the row stands in Bravo's approval (ticket 04): only an approved
+    # one answers a PO line; one waiting in states 1 or 2 is held, unused.
+    bravo_state: ConvertState = "approved"
 
 
 class FixedCopper(BaseModel):
@@ -372,6 +378,70 @@ class LmeMonth(BaseModel):
 
     month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     usd_per_tonne: Decimal = Field(gt=0)
+
+
+class BasePrice(BaseModel):
+    """One BP of Bravo's "Danh mục Base price" (Box B21, dw_sales ticket 11):
+    what Design prices an item at, per BP unit, at the LME of the BP. The
+    cost split is internal: it reaches a price reader only, as every amount
+    here does (`catalog_imports._PRICED`)."""
+
+    model_config = _FROZEN
+
+    bp_code: str = Field(pattern=r"^[A-Z0-9][A-Z0-9-]{1,31}$")
+    bp_date: date
+    description: str = Field(min_length=1, max_length=500)
+    # The unit the BP is priced in (``km``) and how many standard units one
+    # is (1,000 m), as Bravo states them.
+    bp_unit: str = Field(min_length=1, max_length=16)
+    convert_rate: Decimal = Field(gt=0)
+    std_unit: str | None = Field(default=None, max_length=16)
+    specification: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=32)
+    # Copper, kg per BP unit.
+    copper_kg: Decimal | None = Field(default=None, ge=0)
+    # USD per BP unit.
+    base_price: Decimal = Field(ge=0)
+    lead_time_weeks: int | None = Field(default=None, ge=0, le=520)
+    moq: Decimal | None = Field(default=None, ge=0)
+    lme_of_bp: Decimal | None = Field(default=None, gt=0)
+    mr_percent: Decimal | None = Field(default=None, ge=0)
+    material_cost: Decimal | None = Field(default=None, ge=0)
+    variable_cost: Decimal | None = Field(default=None, ge=0)
+    fixed_cost: Decimal | None = Field(default=None, ge=0)
+
+
+class BravoQuotation(BaseModel):
+    """One row of Bravo's "Master list báo giá" (Box B07, dw_sales ticket
+    12): one quotation line, keyed by Bravo's own row id (RowIdSQ), with the
+    BP it was priced from and the centre price at the quotation's LME. Read
+    only; what a price check does with it waits on dw_sales ADR 0008."""
+
+    model_config = _FROZEN
+
+    row_id: str = Field(min_length=1, max_length=64)
+    quote_no: str = Field(min_length=1, max_length=64)
+    line_no: int | None = Field(default=None, ge=0, le=9999)
+    quotation_date: date
+    valid_date: date | None = None
+    quote_class: str | None = Field(default=None, max_length=32)
+    delivery_term: str | None = Field(default=None, max_length=64)
+    delivery_mode: str | None = Field(default=None, max_length=64)
+    destination: str | None = Field(default=None, max_length=128)
+    direct_customer_code: str = Field(min_length=1, max_length=32)
+    group_customer: str | None = Field(default=None, max_length=32)
+    indirect_customer_code: str | None = Field(default=None, max_length=32)
+    customer_description: str | None = Field(default=None, max_length=500)
+    bp_code: str | None = Field(default=None, max_length=32)
+    moq: Decimal | None = Field(default=None, ge=0)
+    unit: str | None = Field(default=None, max_length=16)
+    copper_kg: Decimal | None = Field(default=None, ge=0)
+    center_price: Decimal | None = Field(default=None, ge=0)
+    lme: Decimal | None = Field(default=None, ge=0)
+    # As Bravo holds it (B07 also has "JYP"): read, not corrected.
+    currency: str | None = Field(default=None, max_length=8)
+    usd_rate: Decimal | None = Field(default=None, gt=0)
+    change: str | None = Field(default=None, max_length=16)
 
 
 # ------------------------------------------------- what the ERP already holds --

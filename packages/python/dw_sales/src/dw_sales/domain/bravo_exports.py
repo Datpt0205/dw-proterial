@@ -17,7 +17,12 @@ nothing asked for is listed (`Header.extra`), never guessed at. A title is
 matched by `header_key`: no case, diacritics, spacing or punctuation, and
 none of the ``_x000D_`` Excel writes for a line break inside a title (B07,
 B16, B21). Bravo writes many titles in two languages ("Số thứ tự/ No."):
-a column lists each form it is known by, as Bravo prints it.
+a column lists each form it is known by, as Bravo prints it. A screen whose
+row above the titles labels blocks of columns (B07: "Base price" at the
+quotation, "QUOTATION", "Base price (latest)") may title two columns alike
+("LME", "MOQ"): such a column names its ``block``, the label nearest to its
+left on the row above, and a title found only on that row (B07's
+"RowIdSQ") is the column's own.
 
 What a cell means is the caller's: the master lists
 (`master_data.parse_rows`), Design's result on a YCBG
@@ -51,6 +56,17 @@ class TableRow(BaseModel):
     cells: list[CellValue]
 
 
+class TableGroup(BaseModel):
+    """A row that labels the group of rows under it (Bravo's "3. Đã duyệt"
+    over its SUBTOTAL, B04), found by its shape in the reader sandbox and
+    left out of the rows: its label, and where it stood."""
+
+    model_config = _FROZEN
+
+    row: int = Field(ge=1)
+    label: str = Field(min_length=1, max_length=200)
+
+
 class ImportedTable(BaseModel):
     """What the reader read from a file: one sheet's rows, the header first."""
 
@@ -60,6 +76,14 @@ class ImportedTable(BaseModel):
     rows: list[TableRow]
     # The sheet held more rows than are read (`master_data.MAX_ROWS`).
     truncated: bool = False
+    # The group labels among the rows, top to bottom (ticket 04); none from a
+    # reader older than them, or a sheet with no groups.
+    groups: tuple[TableGroup, ...] = ()
+
+    def group_of(self, row: int) -> str | None:
+        """The label of the group ``row`` is under: the nearest above it."""
+        above = [group.label for group in self.groups if group.row < row]
+        return above[-1] if above else None
 
 
 # Excel's escape for a character XML cannot hold, ``_x000D_`` for a carriage
@@ -94,6 +118,12 @@ class TitledColumn(Protocol):
     @property
     def repeatable(self) -> bool: ...
 
+    @property
+    def block(self) -> str | None:
+        """The label of the block of columns it is under, where two blocks
+        title a column alike; None: any."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class ExportColumn:
@@ -104,6 +134,7 @@ class ExportColumn:
     aliases: tuple[str, ...] = ()
     required: bool = True
     repeatable: bool = False
+    block: str | None = None
 
     @property
     def keys(self) -> frozenset[str]:
@@ -153,14 +184,48 @@ class Header:
         return None
 
 
-def _matched(row: TableRow, columns: Sequence[TitledColumn]) -> dict[int, TitledColumn]:
-    by_key = {key: column for column in columns for key in column.keys}
+def _blocks(above: TableRow | None, width: int) -> list[str | None]:
+    """Each position's block label: the nearest one at or left of it on the
+    row above (a merged label holds its first cell only)."""
+    labels: list[str | None] = []
+    current: str | None = None
+    for index in range(width):
+        cell = above.cells[index] if above is not None and index < len(above.cells) else None
+        current = _title(cell) or current
+        labels.append(current)
+    return labels
+
+
+def _matched(
+    row: TableRow, above: TableRow | None, columns: Sequence[TitledColumn]
+) -> dict[int, TitledColumn]:
+    width = max(len(row.cells), 0 if above is None else len(above.cells))
+    blocks = _blocks(above, width)
     found: dict[int, TitledColumn] = {}
-    for index, cell in enumerate(row.cells):
+    for index in range(width):
+        cell = row.cells[index] if index < len(row.cells) else None
         title = _title(cell)
-        column = None if title is None else by_key.get(header_key(title))
-        if column is not None:
+        own_block = title is None
+        if title is None:
+            # Titled on the block row only (B07's "RowIdSQ").
+            above_cell = (
+                above.cells[index] if above is not None and index < len(above.cells) else None
+            )
+            title = _title(above_cell)
+        if title is None:
+            continue
+        key = header_key(title)
+        block = None if blocks[index] is None else header_key(blocks[index] or "")
+        for column in columns:
+            if key not in column.keys:
+                continue
+            # A file with no block row (DW1's own template) names no block.
+            if column.block is not None and block is not None and header_key(column.block) != block:
+                continue
+            if own_block and column.block is None:
+                continue
             found[index] = column
+            break
     return found
 
 
@@ -173,7 +238,8 @@ def find_header(
     ValueError for a column titled twice that does not add up."""
     best: tuple[int, dict[int, TitledColumn]] | None = None
     for index, row in enumerate(rows[:within]):
-        found = _matched(row, columns)
+        above = rows[index - 1] if index > 0 and rows[index - 1].row == row.row - 1 else None
+        found = _matched(row, above, columns)
         if found and (best is None or _distinct(found) > _distinct(best[1])):
             best = (index, found)
     if best is None:

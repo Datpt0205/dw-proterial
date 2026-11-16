@@ -30,6 +30,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.readers.excel import open_for_viewing
+from dw_sales.domain.bravo_exports import TableGroup
 from dw_sales.domain.master_data import MAX_ROWS, CellValue, ImportedTable, TableRow
 from dw_sales.domain.order_checks import IntakeCaps
 
@@ -67,12 +68,14 @@ def _rows(
     return rows, False
 
 
-def _group_labels(sheet: Worksheet, formulas: Worksheet) -> frozenset[int]:
+def _group_labels(sheet: Worksheet, formulas: Worksheet) -> dict[int, str]:
     """The rows that label a group of the rows under them, by their shape
     alone, never by their words: one label merged across columns of a single
     row, and nothing else in the row but formulas (Bravo's "3. Đã duyệt" over
-    A3:K3 with its SUBTOTAL beside it, B04). A title row has no formula."""
-    labels: set[int] = set()
+    A3:K3 with its SUBTOTAL beside it, B04). A title row has no formula.
+    Each with its label's text: a list kept by approval state reads its rows'
+    state from it (ticket 04)."""
+    labels: dict[int, str] = {}
     for merged in sheet.merged_cells.ranges:
         if merged.min_row != merged.max_row or merged.min_col == merged.max_col:
             continue
@@ -83,8 +86,9 @@ def _group_labels(sheet: Worksheet, formulas: Worksheet) -> frozenset[int]:
             if not merged.min_col <= cell.column <= merged.max_col and cell.value is not None
         ]
         if others and all(cell.data_type == "f" for cell in others):
-            labels.add(row)
-    return frozenset(labels)
+            text = _cell(sheet.cell(row=row, column=merged.min_col).value)
+            labels[row] = str(text)[:200] if text is not None else ""
+    return labels
 
 
 def _workbook(data: bytes, caps: IntakeCaps, named: str | None) -> ImportedTable:
@@ -102,10 +106,12 @@ def _workbook(data: bytes, caps: IntakeCaps, named: str | None) -> ImportedTable
         sheet = found
     else:
         sheet = next((s for s in visible if s.title == DATA_SHEET), visible[0])
-    rows, truncated = _rows(
-        sheet.iter_rows(values_only=True), _group_labels(sheet, formulas[sheet.title])
+    labels = _group_labels(sheet, formulas[sheet.title])
+    rows, truncated = _rows(sheet.iter_rows(values_only=True), frozenset(labels))
+    groups = tuple(
+        TableGroup(row=row, label=label) for row, label in sorted(labels.items()) if label
     )
-    return ImportedTable(sheet=sheet.title[:200], rows=rows, truncated=truncated)
+    return ImportedTable(sheet=sheet.title[:200], rows=rows, truncated=truncated, groups=groups)
 
 
 def _table_caps(caps: IntakeCaps) -> IntakeCaps:

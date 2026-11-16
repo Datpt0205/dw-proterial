@@ -56,7 +56,9 @@ from dw_sales.application.ports import (
     Snapshot,
 )
 from dw_sales.domain.catalog import (
+    BasePrice,
     BravoOrder,
+    BravoQuotation,
     ConvertEntry,
     Customer,
     Item,
@@ -107,6 +109,10 @@ class ApprovedList:
                     by_key[(record.customer_code, record.customer_item_code)] = record
                 case LmeMonth():
                     by_key[record.month] = record
+                case BasePrice():
+                    by_key[record.bp_code] = record
+                case BravoQuotation():
+                    by_key[record.row_id] = record
                 case Quotation():
                     pass
         ordered = (
@@ -338,7 +344,11 @@ class SnapshotSalesCatalog:
             return await self._standing_in(CatalogList.CONVERT_LIST).convert_entry(
                 scope, customer_code, customer_item_code
             )
-        return Snapshot(own.one((customer_code, customer_item_code), ConvertEntry), own.as_of)
+        entry = own.one((customer_code, customer_item_code), ConvertEntry)
+        # Only a row Bravo approved answers a line (ticket 04).
+        return Snapshot(
+            entry if entry is not None and entry.bravo_state == "approved" else None, own.as_of
+        )
 
     async def convert_entry(
         self, scope: SalesScope, customer_code: str, customer_item_code: str
@@ -444,6 +454,24 @@ class SnapshotSalesCatalog:
         if own is None:
             return await self._standing_in(CatalogList.LME).lme_months(scope)
         return Snapshot(own.all(LmeMonth), own.as_of)
+
+    async def base_price(self, scope: SalesScope, bp_code: str) -> Snapshot[BasePrice | None]:
+        own = await self._list(scope, CatalogList.BASE_PRICES)
+        if own is None:
+            return await self._standing_in(CatalogList.BASE_PRICES).base_price(scope, bp_code)
+        return Snapshot(own.one(bp_code, BasePrice), own.as_of)
+
+    async def base_prices(self, scope: SalesScope) -> Snapshot[Sequence[BasePrice]]:
+        own = await self._list(scope, CatalogList.BASE_PRICES)
+        if own is None:
+            return await self._standing_in(CatalogList.BASE_PRICES).base_prices(scope)
+        return Snapshot(own.all(BasePrice), own.as_of)
+
+    async def bravo_quotations(self, scope: SalesScope) -> Snapshot[Sequence[BravoQuotation]]:
+        own = await self._list(scope, CatalogList.BRAVO_QUOTATIONS)
+        if own is None:
+            return await self._standing_in(CatalogList.BRAVO_QUOTATIONS).bravo_quotations(scope)
+        return Snapshot(own.all(BravoQuotation), own.as_of)
 
     # The ERP's own records: never imported from a file (module docstring).
 

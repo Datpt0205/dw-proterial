@@ -2997,7 +2997,7 @@ export interface components {
          *     orders and open YCBG) are not among them: they come from Bravo.
          * @enum {string}
          */
-        CatalogList: "customers" | "items" | "convert_list" | "quotations" | "lme";
+        CatalogList: "customers" | "items" | "convert_list" | "quotations" | "lme" | "base_prices" | "bravo_quotations";
         /** CatalogListStateView */
         CatalogListStateView: {
             /** Can Import */
@@ -3699,6 +3699,34 @@ export interface components {
             reason: string | null;
             /** Spans */
             spans: components["schemas"]["SpanReadView"][];
+        };
+        /**
+         * DesignBasePriceView
+         * @description A QUOTE line's BP as Bravo's "Danh mục Base price" holds it (ticket
+         *     11), for a price reader only: ``found`` False is a BP code the list read
+         *     does not hold (B21 exports the latest BPs only), never a blank price.
+         */
+        DesignBasePriceView: {
+            /** As Of */
+            as_of?: string | null;
+            /** Base Price */
+            base_price?: string | null;
+            /** Bp Code */
+            bp_code: string;
+            /** Bp Date */
+            bp_date?: string | null;
+            /** Bp Unit */
+            bp_unit?: string | null;
+            /** Copper Kg */
+            copper_kg?: string | null;
+            /** Found */
+            found: boolean;
+            /** Line No */
+            line_no: number;
+            /** Lme Of Bp */
+            lme_of_bp?: string | null;
+            /** Specification */
+            specification?: string | null;
         };
         /**
          * DesignCheck
@@ -6440,6 +6468,8 @@ export interface components {
             decision?: components["schemas"]["PendingDecisionView"] | null;
             decline: components["schemas"]["DeclineView"] | null;
             design_check?: components["schemas"]["DesignCheck"] | null;
+            /** Design Prices */
+            design_prices?: components["schemas"]["DesignBasePriceView"][] | null;
             /** Design Replies */
             design_replies: number;
             design_reply: components["schemas"]["DesignReplyView"] | null;

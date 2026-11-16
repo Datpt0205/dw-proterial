@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -689,3 +690,31 @@ async def test_another_workspaces_exports_are_not_listed() -> None:
     await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "a.xlsx", EXPORT)
 
     assert await _service(world, store, FixedClock(NOW)).latest(DIEU.context(BETA)) == []
+
+
+# ------------------------------------------- the BP's base price (ticket 11) --
+
+
+async def test_a_quote_lines_bp_shows_bravos_base_price_to_price_readers_only() -> None:
+    """Acceptance 2's rule on Design's result read from Bravo: the base price
+    a BP code names reaches a price reader, never a reader of cases only;
+    a BP the list read does not hold says so, never a blank price."""
+    world = _world()
+    case_id = await _waiting(world)
+    await _take(world, _line(bp="BP-25-0187"))
+
+    priced = await world.services.quotes.get(DIEU.context(), case_id)
+    blind = await world.services.quotes.get(READER.context(), case_id)
+
+    (line,) = priced.design_prices or []
+    assert (line.bp_code, line.found, line.base_price) == ("BP-25-0187", True, Decimal("965.40"))
+    assert blind.design_prices is None
+    assert "965.4" not in blind.model_dump_json()
+
+    unknown_world = _world()
+    other = await _waiting(unknown_world)
+    await _take(unknown_world, _line(bp="BP-99-0001"))
+    (missing,) = (
+        await unknown_world.services.quotes.get(DIEU.context(), other)
+    ).design_prices or []
+    assert (missing.found, missing.base_price) == (False, None)

@@ -134,6 +134,8 @@ async def test_a_list_with_no_approved_import_is_not_connected_never_the_mock(
         CatalogList.CONVERT_LIST: lambda: catalog.convert_list(SCOPE),
         CatalogList.QUOTATIONS: lambda: catalog.quotations(SCOPE),
         CatalogList.LME: lambda: catalog.lme_months(SCOPE),
+        CatalogList.BASE_PRICES: lambda: catalog.base_price(SCOPE, "BP-25-0187"),
+        CatalogList.BRAVO_QUOTATIONS: lambda: catalog.bravo_quotations(SCOPE),
     }
     with pytest.raises(CatalogNotConnectedError) as refused:
         await reads[missing]()

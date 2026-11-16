@@ -13,7 +13,9 @@ from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.domain.catalog import (
+    BasePrice,
     BravoOrder,
+    BravoQuotation,
     ConvertEntry,
     Customer,
     Item,
@@ -77,6 +79,8 @@ class MockSalesCatalog:
         lme: Iterable[LmeMonth],
         bravo_orders: Iterable[BravoOrder],
         open_ycbg: Iterable[OpenYcbg],
+        base_prices: Iterable[BasePrice] = (),
+        bravo_quotations: Iterable[BravoQuotation] = (),
     ) -> None:
         if as_of.utcoffset() is None:
             raise ValueError("as_of needs a timezone")
@@ -96,6 +100,10 @@ class MockSalesCatalog:
         )
         self._quotations = tuple(_index(quotations, lambda q: q.quote_no, "quote no").values())
         self._lme = dict(sorted(_index(lme, lambda m: m.month, "LME month").items()))
+        self._base_prices = _index(base_prices, lambda b: b.bp_code, "BP code")
+        self._bravo_quotations = tuple(
+            _index(bravo_quotations, lambda q: q.row_id, "Bravo row id").values()
+        )
         self._orders = tuple(
             sorted(
                 _index(bravo_orders, lambda o: o.so_no, "sales order").values(),
@@ -149,6 +157,8 @@ class MockSalesCatalog:
             lme=read_records(data_dir / "lme.json", LmeMonth),
             bravo_orders=read_records(data_dir / "bravo_orders.json", BravoOrder),
             open_ycbg=read_records(data_dir / "open_ycbg.json", OpenYcbg),
+            base_prices=read_records(data_dir / "base_prices.json", BasePrice),
+            bravo_quotations=read_records(data_dir / "bravo_quotations.json", BravoQuotation),
         )
 
     def _require(self, customer_code: str, prv_codes: Iterable[str], owner: str) -> None:
@@ -233,6 +243,15 @@ class MockSalesCatalog:
 
     async def lme_months(self, scope: SalesScope) -> Snapshot[Sequence[LmeMonth]]:
         return self._many(scope, tuple(self._lme.values()))
+
+    async def base_price(self, scope: SalesScope, bp_code: str) -> Snapshot[BasePrice | None]:
+        return self._one(scope, self._base_prices.get(bp_code))
+
+    async def base_prices(self, scope: SalesScope) -> Snapshot[Sequence[BasePrice]]:
+        return self._many(scope, tuple(self._base_prices.values()))
+
+    async def bravo_quotations(self, scope: SalesScope) -> Snapshot[Sequence[BravoQuotation]]:
+        return self._many(scope, self._bravo_quotations)
 
     async def orders_for_po(
         self, scope: SalesScope, customer_code: str, po_no: str

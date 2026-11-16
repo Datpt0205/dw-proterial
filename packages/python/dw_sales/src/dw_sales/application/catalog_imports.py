@@ -153,6 +153,13 @@ _PRICED: Final[Mapping[CatalogList, tuple[SalesScopes, ...]]] = MappingProxyType
     {
         CatalogList.QUOTATIONS: (SalesScopes.PRICE_READ, SalesScopes.PRICE_OTHER_CUSTOMERS_READ),
         CatalogList.LME: (SalesScopes.PRICE_READ,),
+        # Design's base prices and their cost split (ticket 11).
+        CatalogList.BASE_PRICES: (SalesScopes.PRICE_READ,),
+        # Bravo's quotations: every customer's centre price (ticket 12).
+        CatalogList.BRAVO_QUOTATIONS: (
+            SalesScopes.PRICE_READ,
+            SalesScopes.PRICE_OTHER_CUSTOMERS_READ,
+        ),
     }
 )
 
@@ -478,6 +485,12 @@ async def _records(
         case CatalogList.LME:
             months = await catalog.lme_months(scope)
             found = Snapshot(tuple(months.data), months.as_of)
+        case CatalogList.BASE_PRICES:
+            prices = await catalog.base_prices(scope)
+            found = Snapshot(tuple(prices.data), prices.as_of)
+        case CatalogList.BRAVO_QUOTATIONS:
+            held = await catalog.bravo_quotations(scope)
+            found = Snapshot(tuple(held.data), held.as_of)
     return found
 
 
