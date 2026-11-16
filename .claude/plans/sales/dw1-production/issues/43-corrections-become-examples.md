@@ -1,6 +1,6 @@
 # 43 — Every correction becomes an example; prompts and skills re-optimised on them
 
-Status: in progress (2026-11-16): parts 1, 2 (dynamic few-shot, `description_attributes`) and 3 (the optimiser, smallest version) built; left: the head's page for a proposed prompt version, a second step, a measured gain (none reliable on the dev model), re-attesting the step on prompt 1.1.0 on the plant
+Status: in progress (2026-11-16): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version) and the head's page for a proposed prompt version built; left: a second step, a measured gain (none reliable on the dev model), re-attesting the step on prompt 1.1.0 on the plant
 Blocked by: 40
 Category: enhancement
 
@@ -183,10 +183,39 @@ retrieval waits on the Qdrant review, and the optimiser after it.
 - Acceptance 4 holds: a new decided line is indexed and shown, and counts
   towards the next proposal, with no code change.
 
+### The head's page (2026-11-16)
+
+- **`GET /api/v1/sales/prompts`** (`PromptVersionsService`, read only): the
+  platform prompt the versions add to, the version in force (layer and the
+  decided lines it shows) and every version of the tenant's, newest first,
+  with its replay counts, decision and approval. Gated on
+  `sales.rules.approve` at the route and in the service (a PIC and tenant IT
+  get 403: the lines carry customers' words); rule versions are narrowed by
+  tenant RLS, so another tenant's head lists none. No route proposes or
+  decides: the decision stays the `sales.prompts` approval on `/approvals`
+  (two-person rule, idempotency key, audit `sales.prompts.*`), carried out
+  by the worker.
+- **Which corrections**: a `Demonstration` now keeps the decided line it was
+  taken from (`label_id`, `case_id`, `customer_code`, optional so older
+  documents read), filled by the optimiser; never shown to a reading
+  (`shown_lines` reads description and code only; a unit test asserts none
+  of them reaches the model).
+- **Web**: `/sales/rules/prompts` ("Lời nhắc DW1 học", linked from the rules
+  page for the head): one row per version, its status, "Đọc đúng a/n dòng
+  đã quyết (bản đang dùng: b/n) · Qua cả k ca bảo mật"; opened, a waiting
+  one shows the lines it adds, drops and keeps against the version in
+  force, each with its customer and a link to the order, and "Mở phê
+  duyệt". The same comparison is drawn under the approval on `/approvals`
+  (`PromptApprovalChanges`), where the inbox now decides `sales.prompts`
+  itself instead of linking to `/sales`. Audit labels for the three
+  actions and the lane.
+- The "golden set" the score is measured on is the tenant's decided lines
+  (the labelled cases) plus the step's eval security cases: the eval's own
+  golden set maps against a synthetic item master, where a tenant's
+  demonstrations name codes that do not exist.
+
 ### Left
 
-- The head's page for a proposed prompt version (its demonstrations and
-  replay counts): today the generic approvals inbox shows the reason only.
 - A measured gain: the example form (description + the kept item's
   attributes) taught the dev model little; showing the confirmed reading's
   own spans as the example (a confirmed line's reading is a right answer

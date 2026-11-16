@@ -1584,6 +1584,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prompt Versions */
+        get: operations["prompt_versions_api_v1_sales_prompts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes": {
         parameters: {
             query?: never;
@@ -3627,6 +3644,24 @@ export interface components {
             requested_date: string;
             /** Suggested Delivery Date */
             suggested_delivery_date: string | null;
+        };
+        /**
+         * Demonstration
+         * @description One decided line a version shows: the customer's description and the
+         *     PRV code a person kept. The reading shows the code's attributes from the
+         *     item master, never the code (`model_reading.shown_lines`).
+         */
+        Demonstration: {
+            /** Case Id */
+            case_id?: string | null;
+            /** Customer Code */
+            customer_code?: string | null;
+            /** Description */
+            description: string;
+            /** Label Id */
+            label_id?: string | null;
+            /** Prv Code */
+            prv_code: string;
         };
         /**
          * Derivation
@@ -6340,6 +6375,84 @@ export interface components {
             line_no: number | null;
             /** Value */
             value: string;
+        };
+        /**
+         * PromptReplay
+         * @description What the version was proposed on: the labelled cases replayed, how
+         *     many the platform's (or the version in force) read right and how many
+         *     this one does, and the security cases it passed. Counts only.
+         */
+        PromptReplay: {
+            /** Cases */
+            cases: number;
+            /** Right After */
+            right_after: number;
+            /** Right Before */
+            right_before: number;
+            /** Security Cases */
+            security_cases: number;
+        };
+        /**
+         * PromptVersionView
+         * @description A tenant's version of the prompt, as the head's page shows it.
+         */
+        PromptVersionView: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Comment */
+            comment: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Demonstrations */
+            demonstrations: components["schemas"]["Demonstration"][];
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /**
+             * Proposed By
+             * Format: uuid
+             */
+            proposed_by: string;
+            /** Ref */
+            ref: string;
+            replay: components["schemas"]["PromptReplay"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "rejected" | "superseded";
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /**
+         * PromptsView
+         * @description The description reading's prompt for the tenant: the platform's
+         *     prompt the versions add to, the version in force and what it shows, and
+         *     every version of the tenant's, newest first.
+         */
+        PromptsView: {
+            /** Demonstrations */
+            demonstrations: components["schemas"]["Demonstration"][];
+            /** In Force */
+            in_force: string;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "platform" | "tenant";
+            /** Prompt */
+            prompt: string;
+            /** Step */
+            step: string;
+            /** Versions */
+            versions: components["schemas"]["PromptVersionView"][];
         };
         /**
          * QuestionKind
@@ -11939,6 +12052,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PipelineView"];
+                };
+            };
+        };
+    };
+    prompt_versions_api_v1_sales_prompts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptsView"];
                 };
             };
         };

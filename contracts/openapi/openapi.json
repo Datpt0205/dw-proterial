@@ -5132,6 +5132,65 @@
         "title": "DemoUser",
         "type": "object"
       },
+      "Demonstration": {
+        "additionalProperties": false,
+        "description": "One decided line a version shows: the customer's description and the\nPRV code a person kept. The reading shows the code's attributes from the\nitem master, never the code (`model_reading.shown_lines`).",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "description": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "label_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Id"
+          },
+          "prv_code": {
+            "pattern": "^[A-Z0-9][A-Z0-9-]{1,31}$",
+            "title": "Prv Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "prv_code"
+        ],
+        "title": "Demonstration",
+        "type": "object"
+      },
       "Derivation": {
         "additionalProperties": false,
         "description": "How the bytes a PO was read from were made from the customer's file\n(ticket 27): converted from a legacy Office format, or read by OCR from\nimages of its pages. The tool's own version is kept: another converter or\nengine is another reading of the same file.",
@@ -15673,6 +15732,202 @@
           "anchor"
         ],
         "title": "ProducedValue",
+        "type": "object"
+      },
+      "PromptReplay": {
+        "additionalProperties": false,
+        "description": "What the version was proposed on: the labelled cases replayed, how\nmany the platform's (or the version in force) read right and how many\nthis one does, and the security cases it passed. Counts only.",
+        "properties": {
+          "cases": {
+            "minimum": 0.0,
+            "title": "Cases",
+            "type": "integer"
+          },
+          "right_after": {
+            "minimum": 0.0,
+            "title": "Right After",
+            "type": "integer"
+          },
+          "right_before": {
+            "minimum": 0.0,
+            "title": "Right Before",
+            "type": "integer"
+          },
+          "security_cases": {
+            "minimum": 0.0,
+            "title": "Security Cases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cases",
+          "right_before",
+          "right_after",
+          "security_cases"
+        ],
+        "title": "PromptReplay",
+        "type": "object"
+      },
+      "PromptVersionView": {
+        "description": "A tenant's version of the prompt, as the head's page shows it.",
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "demonstrations": {
+            "items": {
+              "$ref": "#/components/schemas/Demonstration"
+            },
+            "title": "Demonstrations",
+            "type": "array"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "format": "uuid",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "replay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptReplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "ref",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "comment",
+          "approval_id",
+          "demonstrations",
+          "replay"
+        ],
+        "title": "PromptVersionView",
+        "type": "object"
+      },
+      "PromptsView": {
+        "description": "The description reading's prompt for the tenant: the platform's\nprompt the versions add to, the version in force and what it shows, and\nevery version of the tenant's, newest first.",
+        "properties": {
+          "demonstrations": {
+            "items": {
+              "$ref": "#/components/schemas/Demonstration"
+            },
+            "title": "Demonstrations",
+            "type": "array"
+          },
+          "in_force": {
+            "title": "In Force",
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "platform",
+              "tenant"
+            ],
+            "title": "Layer",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PromptVersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "step",
+          "prompt",
+          "in_force",
+          "layer",
+          "demonstrations",
+          "versions"
+        ],
+        "title": "PromptsView",
         "type": "object"
       },
       "PurchaseCase": {
@@ -35851,6 +36106,27 @@
           }
         },
         "summary": "Pipeline",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/prompts": {
+      "get": {
+        "operationId": "prompt_versions_api_v1_sales_prompts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Prompt Versions",
         "tags": [
           "sales"
         ]
