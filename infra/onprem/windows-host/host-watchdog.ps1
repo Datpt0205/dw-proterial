@@ -60,11 +60,13 @@ if ((Test-Path $mailFile) -and $state['mail.pending']) {
     $state['mail.pending'] = $left
 }
 
-# The first minutes after boot: Hyper-V is still starting the VM and Strata waits
-# on purpose, so those two are not judged yet (measured: a check at boot saw the
-# VM "Off" and called Start-VM over Hyper-V's own start).
+# The first minutes after boot: Hyper-V is still starting the VM, Strata waits on
+# purpose and Tailscale is still connecting, so those are not judged yet
+# (measured: a check at boot saw the VM "Off" and called Start-VM over Hyper-V's
+# own start; a boot that installed updates took ~5 minutes and Tailscale was
+# reported down twice before it connected).
 $hostUpMin = ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMinutes
-$booting = $hostUpMin -lt 5
+$booting = $hostUpMin -lt 10
 
 # One result per check: ok, or a sentence saying what is wrong.
 # A check needing N failures in a row before it counts keeps a slow boot or a
@@ -124,7 +126,9 @@ if ($booting) {
 $ts = 'C:\Program Files\Tailscale\tailscale.exe'
 $tsState = ''
 try { $tsState = (& $ts status --json | ConvertFrom-Json).BackendState } catch { }
-if ($tsState -ne 'Running') {
+if ($booting) {
+    # judged from the next round on
+} elseif ($tsState -ne 'Running') {
     if (Report 'tailscale' $false "Tailscale is '$tsState'; the watchdog restarted its service. Remote support is cut off until it reconnects." 2) {
         Restart-Service Tailscale -ErrorAction SilentlyContinue
     }
@@ -136,6 +140,32 @@ foreach ($d in 'C', 'V', 'B') {
     if (-not $v) { continue }
     $free = [math]::Round(100 * $v.SizeRemaining / $v.Size, 1)
     [void](Report "disk-$d" ($free -ge 15) "Drive ${d}: has $free % free ($([math]::Round($v.SizeRemaining/1GB)) GB).")
+}
+
+# --- 5a. The physical disks are healthy -------------------------------------------------
+# Consumer disks warn before they die: a health state, wear on the SSD, heat,
+# and on the HDD uncorrected read errors that start to climb. One SSD holds
+# Windows and the VM; the HDD holds every backup.
+foreach ($pd in @(Get-PhysicalDisk | Where-Object BusType -ne 'USB')) {
+    $name = "disk-health-$($pd.MediaType)-$($pd.DeviceId)"
+    $rc = $pd | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+    $problems = @()
+    if ($pd.HealthStatus -ne 'Healthy' -or ($pd.OperationalStatus -join ',') -ne 'OK') {
+        $problems += "health '$($pd.HealthStatus)', status '$($pd.OperationalStatus -join ',')'"
+    }
+    if ($rc -and $rc.Wear -ge 80) { $problems += "worn $($rc.Wear) %" }
+    $limit = if ($pd.MediaType -eq 'SSD') { 75 } else { 55 }
+    $hot = ($rc -and $rc.Temperature -gt $limit)
+    $errKey = "$name.read_errors"
+    if ($rc -and $null -ne $rc.ReadErrorsUncorrected) {
+        $was = [int64]$state[$errKey]
+        if ([int64]$rc.ReadErrorsUncorrected -gt $was -and $state.ContainsKey($errKey)) {
+            $problems += "uncorrected read errors rose from $was to $($rc.ReadErrorsUncorrected)"
+        }
+        $state[$errKey] = [int64]$rc.ReadErrorsUncorrected
+    }
+    [void](Report $name ($problems.Count -eq 0) "Disk $($pd.FriendlyName) ($($pd.MediaType)): $($problems -join '; '). Replace it before it fails; backups are on the HDD.")
+    [void](Report "$name-heat" (-not $hot) "Disk $($pd.FriendlyName) is at $($rc.Temperature) C (limit $limit C) for 15 minutes: check the case fans and dust." 3)
 }
 
 # --- 5b. The host keeps memory to spare ------------------------------------------------
