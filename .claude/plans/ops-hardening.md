@@ -149,6 +149,15 @@ context. All five are done and on `main`. The full narrative is at
         off in the admin console) and `infra/onprem/windows-host/01-host-baseline.ps1`
         (High performance, no sleep or hibernate; Windows Update downloads
         and notifies, no restart with a session signed in, no drivers).
+        **Boot move, in progress (11-16 10:50):** `02-boot-from-os-disk.ps1`
+        shrank C: to 250 GB and made a 300 MB ESP on the SSD (bcdboot, then
+        `{bootmgr}` set to it). Two reboots came back over Tailscale with
+        nobody signing in (about 2 min each: unattended Tailscale and
+        automatic sshd hold). The BIOS still started the HDD's ESP (BCD
+        hive loaded from it), so Đạt is setting Boot Option #1 to the SSD
+        in the BIOS. Owed after that: confirm the hive on the SSD's ESP,
+        then remove the HDD's ESP, format the HDD as the backup volume and
+        make V: (ReFS) for the VM.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
