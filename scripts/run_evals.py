@@ -257,6 +257,13 @@ def live_model_for(profile: str) -> object:
     return Observed(
         interpretation_for(gateway, REPO_ROOT / "configs", profile),
         chat=None if chats is None else chats.resolve(profile),
+        # The profile a reasoning turn runs on (ticket 40), measured on its
+        # own model, never on the default profile's.
+        chat_by_profile=(
+            {}
+            if chats is None or (thinking := profiles.resolve(profile).thinking_profile) is None
+            else {thinking: chats.resolve(thinking)}
+        ),
     )
 
 

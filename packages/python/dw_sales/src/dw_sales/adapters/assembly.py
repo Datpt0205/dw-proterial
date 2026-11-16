@@ -1029,7 +1029,9 @@ def skill_agent(
     tool: the turn is not served skills (`AgentTurnKit.turn`)."""
     worker, _ = parse_worker_file(worker_file)
     _register_dw1_tools(kit, tools)
-    turn = kit.turn(worker, DW1_AGENT, SKILL_CEILING)
+    # Thinking on for this step alone (ticket 40: 0.700 off, 0.867 on, on
+    # Strata), on the profile the worker's names for it.
+    turn = kit.turn(worker, DW1_AGENT, SKILL_CEILING, thinking=True)
     choice = TurnSkillChoice(book=book, picker=SkillPicker(pick, models), agent=skills.agent)
     return ThreadAgent(turn, context, models, skills=choice)
 

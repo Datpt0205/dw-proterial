@@ -97,6 +97,7 @@ from dw_sales.evals.thread_agent import (
     _tool_scores,
     _turn_latency,
     chat_under_test,
+    chats_under_test,
     read_turns,
     run_for,
     scripted,
@@ -228,7 +229,13 @@ def grade_golden(
     withheld = _fixture(ctx, input_data["withheld_ref"])
     chat = _chat(ctx)
     picks, one_call = _doors(ctx)
-    harness = Harness.build(ctx.repo_root, chat, skills=MemoryRuleVersions(), pick=picks)
+    harness = Harness.build(
+        ctx.repo_root,
+        chat,
+        skills=MemoryRuleVersions(),
+        pick=picks,
+        by_profile=chats_under_test(ctx, prompt=DW1_AGENT),
+    )
     abouts = _abouts(replies, threads, withheld)
 
     async def read_all() -> tuple[list[Turn], list[Turn], int]:

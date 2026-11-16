@@ -111,3 +111,23 @@ async def test_the_turn_is_given_the_threads_cases_and_earlier_messages_as_data(
     first = seen[0]
     assert '<input name="cases">' in first and "NRV-PO-26-0457" in first
     assert '<input name="earlier">' in first and "Ship on 20/11?" in first
+
+
+async def test_the_skill_turn_runs_on_the_thinking_profile_and_stamps_it() -> None:
+    """Ticket 40, way 3: DW1's agent with skills reads on the profile the
+    worker's default names for reasoning (`onprem` → `onprem_thinking`),
+    with that profile's own model, and the reading says so; the thread
+    agent without skills stays on the default."""
+    plain = scripted(_says("rejects", "Thanks, we will check internally."))
+    thinking = scripted(_says("asks", "Thanks, we will check internally."))
+    harness = Harness.build(
+        REPO, plain, skills=MemoryRuleVersions(), by_profile={"onprem_thinking": thinking}
+    )
+    spec = {"id": "SKL-6", "subject": "Re: PO", "body": "Thanks, we will check internally."}
+
+    reading, _ = await harness.read(
+        spec, _NRV, author="customer", about=question("order", "NRV-PO-26-0457")
+    )
+
+    assert reading.model_profile == "onprem_thinking"
+    assert reading.kinds == ("asks",)
