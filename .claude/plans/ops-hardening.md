@@ -322,8 +322,19 @@ context. All five are done and on `main`. The full narrative is at
           its first calls fail; updates belong in the agreed window.
           **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
           so after a power cut the host starts by itself and the VM, Strata
-          and Tailscale follow. Still to run: the whole-host restart drill
-          once Strata is serving, and a real power cut at some point.
+          and Tailscale follow. **Real power cut drilled (16:14, Đạt pulled
+          the plug ~20 s):** power lost 16:14:34 (event 6008), the host
+          started by itself at 16:14:55 with no button pressed, Tailscale at
+          ~1 min, the VM at ~1.5 min, Strata serving at ~3 min (its 2-minute
+          wait included). Kernel-Power 41 logged; C:, V:, B: not dirty, both
+          disks Healthy; the VM's last journal stopped mid-run, it booted
+          with no failed unit, Docker up, the backup share mounted, Strata
+          answering over the link; no false alert (boot grace). Found: an
+          unclean stop told nobody, since everything recovered; the watchdog
+          now mails once per boot that follows a Kernel-Power 41 (sent after
+          the drill, not repeated on the next round; clean restarts leave no
+          41). Not yet drilled: a power cut with Postgres taking writes
+          (with DW deployed).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
           crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
           running first. Tailscale key expiry is off (checked from the laptop).

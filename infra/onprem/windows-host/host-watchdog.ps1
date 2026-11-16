@@ -65,8 +65,24 @@ if ((Test-Path $mailFile) -and $state['mail.pending']) {
 # (measured: a check at boot saw the VM "Off" and called Start-VM over Hyper-V's
 # own start; a boot that installed updates took ~5 minutes and Tailscale was
 # reported down twice before it connected).
-$hostUpMin = ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMinutes
+$bootTime  = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+$hostUpMin = ((Get-Date) - $bootTime).TotalMinutes
 $booting = $hostUpMin -lt 10
+
+# A boot that followed an unclean stop (power cut, hang, hard reset) is told
+# once: everything recovers by itself, so nothing else would ever say the power
+# went (drilled 2026-11-16: plug pulled, back in ~3 minutes, no mail at all).
+# A planned restart (updates) leaves no Kernel-Power 41 and is not told.
+$bootKey = $bootTime.ToString('o')
+if ($state['boot.seen'] -ne $bootKey) {
+    $unclean = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 41; StartTime = $bootTime.AddMinutes(-1) } -MaxEvents 1 -ErrorAction SilentlyContinue
+    if ($unclean) {
+        $was = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 6008; StartTime = $bootTime.AddMinutes(-1) } -MaxEvents 1 -ErrorAction SilentlyContinue
+        $when = if ($was) { ($was.Message -split "`n")[0] } else { 'time not recorded' }
+        Send-Alert 'host restarted after an unclean stop' "The host stopped without shutting down (power cut, hang or hard reset) and started again by itself at $bootKey.`n$when`nThe watchdog checks the VM, Strata and Tailscale from 10 minutes after boot; a further mail follows only if one of them is not back. If this repeats, look at the plant's power (a UPS would let Windows shut down cleanly)."
+    }
+    $state['boot.seen'] = $bootKey
+}
 
 # One result per check: ok, or a sentence saying what is wrong.
 # A check needing N failures in a row before it counts keeps a slow boot or a
