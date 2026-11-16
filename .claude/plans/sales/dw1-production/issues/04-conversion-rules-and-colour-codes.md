@@ -1,7 +1,7 @@
 # 04 — The conversion workbook's rules and colour codes as master data
 
-Status: needs-info
-Blocked by: B43 (the conversion workbook: sheets PRL PO, PRV vs PRL, Price; the colour-code table)
+Status: ready-for-agent (2026-11-16: B43 received 11-14 with sheets `PRL PO`, `PRV vs PRL`, `Price 1/2` and the colour table in `Sheet1`; its VLOOKUPs are broken `#REF!` on 259/260 rows, so read the table, not the lookups)
+Blocked by: none (Proterial: confirm the colour table is current)
 Category: enhancement
 
 ## Why
