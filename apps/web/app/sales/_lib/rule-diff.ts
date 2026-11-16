@@ -76,7 +76,16 @@ type Step =
   | { op: "remove"; b: number }
   | { op: "add"; a: number };
 
-function align(before: unknown[], after: unknown[]): Step[] {
+/**
+ * The two lists aligned by a longest common subsequence: each item kept,
+ * removed or added, in order. ``equal`` is `same` for a document; a skill's
+ * lines of words compare as text (`wordsChanges`).
+ */
+export function align<T>(
+  before: readonly T[],
+  after: readonly T[],
+  equal: (b: T, a: T) => boolean = same,
+): Step[] {
   const n = before.length;
   const m = after.length;
   const lcs: number[][] = Array.from({ length: n + 1 }, () =>
@@ -84,14 +93,15 @@ function align(before: unknown[], after: unknown[]): Step[] {
   );
   for (let i = n - 1; i >= 0; i--)
     for (let j = m - 1; j >= 0; j--)
-      lcs[i]![j] = same(before[i], after[j])
+      lcs[i]![j] = equal(before[i]!, after[j]!)
         ? lcs[i + 1]![j + 1]! + 1
         : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
   const steps: Step[] = [];
   let i = 0;
   let j = 0;
   while (i < n && j < m) {
-    if (same(before[i], after[j])) steps.push({ op: "keep", b: i++, a: j++ });
+    if (equal(before[i]!, after[j]!))
+      steps.push({ op: "keep", b: i++, a: j++ });
     else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!)
       steps.push({ op: "remove", b: i++ });
     else steps.push({ op: "add", a: j++ });

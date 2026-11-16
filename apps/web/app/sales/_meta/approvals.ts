@@ -2,6 +2,7 @@ import type { Approval } from "@dw/contracts";
 import type { ApprovalHost } from "../../../lib/approvals/types";
 import { PromptApprovalChanges } from "./prompt-approval";
 import { RuleApprovalChanges } from "./rule-approval";
+import { SkillApprovalChanges } from "./skill-approval";
 
 /** The case pages, by the `case_kind` a DW1 approval's payload names. */
 const CASE_PAGE: Record<string, string> = {
@@ -30,6 +31,9 @@ export const salesApprovalHost: ApprovalHost = {
       // A prompt version DW1 proposed (ticket 43) is decided here too, its
       // lines drawn below; `/sales/rules/prompts` lists them.
       if (approval.approval_type === "sales.prompts") return null;
+      // So is a skill version (ticket 40), its words drawn below;
+      // `/sales/rules/skills` lists them.
+      if (approval.approval_type === "sales.skills") return null;
       // A master-data import (ticket 41) is decided here too: its payload
       // names the list, the file and the counts; `/sales/master-data` shows
       // the preview and links to it.
@@ -44,12 +48,13 @@ export const salesApprovalHost: ApprovalHost = {
     },
   },
   // A rule version is decided where it is listed, so its changes are drawn
-  // there, under the payload (ticket 40), and so is a prompt version's
-  // (ticket 43).
+  // there, under the payload (ticket 40), and so are a prompt version's
+  // (ticket 43) and a skill version's.
   detail: (approval: Approval) => {
     if (approval.approval_type === "sales.rules") return RuleApprovalChanges;
     if (approval.approval_type === "sales.prompts")
       return PromptApprovalChanges;
+    if (approval.approval_type === "sales.skills") return SkillApprovalChanges;
     return null;
   },
 };
