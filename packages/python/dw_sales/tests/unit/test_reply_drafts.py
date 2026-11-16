@@ -23,10 +23,10 @@ from dw_kernel.errors import ConflictError, DomainError, NotFoundError, Permissi
 from dw_sales.application.reply_drafts import (
     PROMPT_TOKENS,
     REPLY_DRAFT,
-    REPLY_KINDS,
     check_reply,
 )
 from dw_sales.domain.order_checks import ModelStep
+from dw_sales.domain.reply_kinds import REPLY_KINDS
 from dw_sales.evals.graders import AN, OUTSIDER, READER
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.reply_drafts import (

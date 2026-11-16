@@ -48,7 +48,7 @@ export function HandoffDraft({
     <Card
       size="small"
       type="inner"
-      title={`Bản chuyển ${TEAM[draft.to]}: DW1 soạn sẵn, bạn xem, sửa và gửi`}
+      title={`Bản chuyển ${TEAM[draft.to]}${draft.kind_label ? ` (${draft.kind_label})` : ""}: DW1 soạn sẵn, bạn xem, sửa và gửi`}
     >
       <Space orientation="vertical" className="w-full">
         <Space wrap size="small">

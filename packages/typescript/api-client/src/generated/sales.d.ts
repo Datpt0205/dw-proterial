@@ -3995,6 +3995,8 @@ export interface components {
              * @enum {string}
              */
             kind: "delivery_change" | "complaint" | "sample_request";
+            /** Kind Label */
+            kind_label?: string | null;
             /**
              * Lines
              * @default []
@@ -4036,18 +4038,28 @@ export interface components {
             rules: string;
             /** Sample Quantity */
             sample_quantity?: string | null;
+            /** Skill */
+            skill?: string | null;
+            /** Skill Kind */
+            skill_kind?: string | null;
             /** So No */
             so_no?: string | null;
+            /** To */
+            to?: ("pc" | "qa") | null;
         };
         /**
          * HandoffDraftView
          * @description A routed message's hand-off as code wrote it from the template, for
          *     Sales to review, edit and send from their own mailbox (ticket 33). ``to``
          *     names the team, never an address: Sales picks the recipients.
+         *     ``kind_label``: the tenant's hand-off skill's words for its kind, where
+         *     the skill read it and gives some (ticket 42 family 5).
          */
         HandoffDraftView: {
             /** Body */
             body: string;
+            /** Kind Label */
+            kind_label?: string | null;
             /** Subject */
             subject: string;
             /** Template Ref */
@@ -4905,7 +4917,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "triage_card";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -6353,7 +6365,10 @@ export interface components {
         /**
          * ReplyDraftView
          * @description The model's wording, or why there is none; always marked as the model's
-         *     on the page, beside the template's draft of ``kind`` where it has one.
+         *     on the page, beside the template's draft of ``drafted_as`` where it has
+         *     one. ``kind`` is the kind asked for: a platform draft, or a kind of the
+         *     tenant's reply-drafts skill worded as ``drafted_as`` (ticket 42 family 5),
+         *     with the skill's label and version.
          */
         ReplyDraftView: {
             /** Body */
@@ -6364,23 +6379,34 @@ export interface components {
              */
             case_id: string;
             /**
+             * Drafted As
+             * @enum {string}
+             */
+            drafted_as: "question_answer" | "change_can_do_draft" | "change_options_draft" | "confirmation_draft";
+            /**
              * Figures Checked
              * @default 0
              */
             figures_checked: number;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "question_answer" | "change_can_do_draft" | "change_options_draft" | "confirmation_draft";
+            /** Kind */
+            kind: string;
+            /** Kind Label */
+            kind_label?: string | null;
             /** Language */
             language: string;
             /** Model Profile */
             model_profile?: string | null;
+            /**
+             * Others
+             * @default []
+             */
+            others: components["schemas"]["ReplyKindOffer"][];
             /** Prompt Ref */
             prompt_ref?: string | null;
             /** Refusal */
             refusal?: ("figure" | "amount" | "address") | null;
+            /** Skill */
+            skill?: string | null;
             /**
              * Status
              * @enum {string}
@@ -6398,6 +6424,17 @@ export interface components {
              * @default []
              */
             unsupported: string[];
+        };
+        /**
+         * ReplyKindOffer
+         * @description Another kind of the tenant's reply-drafts skill worded as the same
+         *     draft (ticket 42 family 5): what the page offers beside it.
+         */
+        ReplyKindOffer: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string | null;
         };
         /**
          * ReplyQuote
@@ -6456,6 +6493,8 @@ export interface components {
         RequestReading: {
             /** Calls */
             calls: number;
+            /** Form */
+            form?: string | null;
             /** Model Profile */
             model_profile: string;
             /** Prompt */
@@ -6468,6 +6507,8 @@ export interface components {
             route: string;
             /** Rules */
             rules: string;
+            /** Skill */
+            skill?: string | null;
         };
         /**
          * ResolvedReference
@@ -10704,7 +10745,7 @@ export interface operations {
     order_reply_draft_api_v1_sales_orders__case_id__reply_draft_get: {
         parameters: {
             query: {
-                kind: "question_answer" | "change_can_do_draft" | "change_options_draft" | "confirmation_draft";
+                kind: string;
                 message_id?: string | null;
             };
             header?: never;

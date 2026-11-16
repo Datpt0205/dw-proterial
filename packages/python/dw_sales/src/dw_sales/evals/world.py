@@ -108,6 +108,7 @@ from dw_sales.application.catalog_imports import (
 )
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
+from dw_sales.application.handoff_kinds import HandoffKindReader
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.labelled_cases import MAX_READ, StepLabels
 from dw_sales.application.layouts import (
@@ -1763,6 +1764,12 @@ def open_world(
             )
         ),
         handoffs=None if model is None else HandoffReader(model, catalog, store, notations),
+        # The same hand-off by the tenant's hand-off kinds (ticket 42 family 5).
+        handoff_kinds=(
+            None
+            if model is None
+            else HandoffKindReader(HandoffReader(model, catalog, store, notations), skills)
+        ),
         layouts=store,
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
         body_pos=None if model is None else PoBodyReader(model, notations),

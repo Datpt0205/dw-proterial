@@ -146,9 +146,9 @@ class MessageDisposition(BaseModel):
         if self.reply is not None and kind is not DispositionKind.ATTACHED_TO_CASE:
             raise ValueError("only a message attached to a case is a reply on it")
         if self.handoff is not None and (
-            self.reason is None or self.reason.value != self.handoff.kind
+            self.reason is None or self._handoff_kind() not in self._handoff_kinds()
         ):
-            raise ValueError("a hand-off is of the kind the message was routed as")
+            raise ValueError("a hand-off is of the kind the message was routed or read as")
         if (
             self.layout_prefill is not None
             and self.reason is not RoutingReason.ATTACHMENT_UNREADABLE
@@ -177,6 +177,20 @@ class MessageDisposition(BaseModel):
             elif decided is not None and not routed:
                 raise ValueError("a card's decision keeps the message routed to Sales")
         return self
+
+    def _handoff_kind(self) -> str | None:
+        """The kind a hand-off is of: its skill's kind where a tenant's
+        hand-off skill read it (ticket 42 family 5), else its fields'."""
+        if self.handoff is None:
+            return None
+        return self.handoff.skill_kind or self.handoff.kind
+
+    def _handoff_kinds(self) -> tuple[str | None, ...]:
+        """The kinds a hand-off on this message may be of: the reason it was
+        routed for, and the kind its reading read (intake asks the second
+        only where that reading's route is the reason, `order_intake`)."""
+        reason = None if self.reason is None else self.reason.value
+        return (reason, None if self.reading is None else self.reading.kind)
 
     @property
     def case_ids(self) -> tuple[uuid.UUID, ...]:

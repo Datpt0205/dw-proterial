@@ -53,15 +53,16 @@ import json
 import logging
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Final, Literal, get_args
+from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
 from dw_agent_runtime.context import caller_run
+from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.figure_check import figures, names_amount, unsupported
 from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
@@ -69,6 +70,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
+from dw_agent_runtime.model.skills import Skill
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
@@ -83,9 +85,18 @@ from dw_sales.application.screening_followups import ModelFollowupMail
 from dw_sales.application.support import stored_order
 from dw_sales.domain.catalog import Customer, Language
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.message_intent import KindName
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase, OrderLine
 from dw_sales.domain.process import DW_NAMES
+from dw_sales.domain.reply_kinds import (
+    REPLY_DRAFTS,
+    REPLY_KINDS,
+    ReplyKind,
+    ReplyKinds,
+    ReplyKindSpec,
+    reply_kinds_of,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -97,11 +108,11 @@ PROMPT_TOKENS: Final = 1400
 _OUTPUT_TOKENS: Final = 900
 _ORDER: Final = "sales_order_case"
 
-ReplyKind = Literal[
-    "question_answer", "change_can_do_draft", "change_options_draft", "confirmation_draft"
-]
-REPLY_KINDS: Final[tuple[ReplyKind, ...]] = get_args(ReplyKind)
 QUESTION: Final = "question_answer"
+# The same wording by the kinds the tenant's reply-drafts skill names (ticket
+# 42 family 5, `configs/prompts/sales/reply_kinds@1.0.0.yaml`); its cost is
+# held under `PROMPT_TOKENS` without the skill's words, counted beside it.
+REPLY_KINDS_PROMPT: Final = PromptRef("sales.reply_kinds", "1.0.0")
 # Why code dropped a draft: a figure no fact holds, an amount, an address or
 # a link.
 Refusal = Literal["figure", "amount", "address"]
@@ -112,14 +123,32 @@ ReplyStatus = Literal["drafted", "refused", "unavailable", "off"]
 _ADDRESS: Final = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+|https?://|\bwww\.", re.IGNORECASE)
 
 
+class ReplyKindOffer(BaseModel):
+    """Another kind of the tenant's reply-drafts skill worded as the same
+    draft (ticket 42 family 5): what the page offers beside it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: KindName
+    label: str | None
+
+
 class ReplyDraftView(BaseModel):
     """The model's wording, or why there is none; always marked as the model's
-    on the page, beside the template's draft of ``kind`` where it has one."""
+    on the page, beside the template's draft of ``drafted_as`` where it has
+    one. ``kind`` is the kind asked for: a platform draft, or a kind of the
+    tenant's reply-drafts skill worded as ``drafted_as`` (ticket 42 family 5),
+    with the skill's label and version."""
 
     model_config = ConfigDict(frozen=True)
 
     case_id: uuid.UUID
-    kind: ReplyKind
+    kind: KindName
+    drafted_as: ReplyKind
+    kind_label: str | None = None
+    skill: str | None = None
+    # The skill's other kinds worded as the same draft, offered beside it.
+    others: list[ReplyKindOffer] = []
     status: ReplyStatus
     # The customer's contacts in the master data: code's choice, not the model's.
     to: list[str] = []
@@ -264,6 +293,33 @@ def _example(subject: str, body: str) -> str:
     return f"Subject: {subject}\n\n{body}"
 
 
+class ReplySkillPort(Protocol):
+    """One skill as the run's tenant holds it now (`skills.SkillBook`)."""
+
+    async def skill(self, run: RunContext, name: str) -> Skill: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _Served:
+    """The tenant's reply-drafts skill as served, and the kind of it asked."""
+
+    skill: Skill
+    kinds: ReplyKinds
+    kind: ReplyKindSpec
+
+
+def served_reply_kinds(skill: Skill) -> ReplyKinds | None:
+    """The kinds ``skill``'s words name, or None for words that do not read:
+    checked again whenever the skill is served, so a version no longer
+    holding is not used (the draft is worded as with the step off)."""
+    try:
+        return reply_kinds_of(skill.body)
+    except ValueError as exc:
+        # Which version and why; never the words.
+        _LOG.warning("reply kinds of %s not used: %s", skill.ref, type(exc).__name__)
+        return None
+
+
 @dataclass(frozen=True)
 class ReplyDrafts:
     """`GET /orders/{case_id}/reply-draft` (module docstring)."""
@@ -283,24 +339,38 @@ class ReplyDrafts:
     worker_version: str
     # Where deployed, no example is read from copy marked mock (audit 11).
     deployed: bool = False
+    # The tenant's reply-drafts skill (ticket 42 family 5), asked where its
+    # step may run; None: never, and every draft is worded as before.
+    skills: ReplySkillPort | None = None
 
     async def draft(
         self,
         context: AccessContext,
         case_id: uuid.UUID,
-        kind: ReplyKind,
+        kind: str,
         *,
         message_id: str | None = None,
     ) -> ReplyDraftView:
-        if (kind == QUESTION) != (message_id is not None):
-            raise DomainError(
-                "an answer names the customer's mail, and only an answer does",
-                details={"field": "message_id", "kind": kind},
-            )
+        if kind in REPLY_KINDS:
+            _names_the_mail(kind, message_id)
         await self.gate.require(
             context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
         )
         scope = sales_scope(context)
+        run = caller_run(
+            context,
+            run_id=self.ids.new_uuid(),
+            worker_id=self.worker_id,
+            worker_version=self.worker_version,
+            trace="sales-reply-draft",
+            subject_ref=f"{_ORDER}:{case_id}",
+        )
+        served = await self._served(scope, run, kind)
+        if served is None and kind not in REPLY_KINDS:
+            # A kind no served version names: not offered, whatever it is.
+            raise NotFoundError("no such kind of mail", details={"kind": kind})
+        drafts: ReplyKind = served.kind.drafts if served is not None else _platform(kind)
+        _names_the_mail(drafts, message_id)
         question: tuple[str, ...] = ()
         async with self.uow(scope) as work:
             case = (await stored_order(work, case_id, viewer=context)).case
@@ -309,7 +379,7 @@ class ReplyDrafts:
         customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
         if customer is None:
             raise NotFoundError("no such customer", details={"customer_code": case.customer_code})
-        template = ORDER_GATES.get(kind)
+        template = ORDER_GATES.get(drafts)
         if template is not None and not (
             template.open_in(case, context, self.gate)
             and template.channel in (None, customer.confirmation_channel)
@@ -318,53 +388,60 @@ class ReplyDrafts:
                 "this draft is not offered in the order's current state",
                 details={"kind": kind, "status": case.status.value, "rule": "not_offered"},
             )
-        base = {
+        base: dict[str, object] = {
             "case_id": case_id,
             "kind": kind,
+            "drafted_as": drafts,
             "to": [c.address for c in customer.contacts],
             "language": customer.language,
         }
-        if not await self._on(scope):
-            return ReplyDraftView(**base, status="off")
+        if served is not None:
+            base |= {
+                "kind_label": served.kind.label,
+                "skill": served.skill.ref,
+                "others": [
+                    ReplyKindOffer(kind=other.name, label=other.label)
+                    for other in served.kinds.drafting(drafts)
+                    if other.name != kind
+                ],
+            }
+        elif not await self._on(scope, ModelStep.REPLY_DRAFT):
+            return ReplyDraftView.model_validate({**base, "status": "off"})
         if self.model is None:
-            return ReplyDraftView(**base, status="unavailable")
+            return ReplyDraftView.model_validate({**base, "status": "unavailable"})
         copy = (await self.copy.artifact_copy(scope, ())).emails
         if self.deployed and copy.mock:
             raise ConflictError(
                 MOCK_COPY.format(ref=copy.ref), details={"copy": copy.ref, "rule": "mock_copy"}
             )
-        letter = copy.template(kind, customer.language).template
+        letter = copy.template(drafts, customer.language).template
         people = People({m.user_id: m for m in await self.directory.list_members(context)})
-        facts = json.dumps(reply_facts(kind, case, customer, people), ensure_ascii=False, indent=1)
+        facts = json.dumps(
+            reply_facts(drafts, case, customer, people), ensure_ascii=False, indent=1
+        )
         inputs = {
             "facts": facts,
             "example": _example(letter.subject, letter.body),
             "question": "\n".join(question),
         }
+        prompt, budget = REPLY_DRAFT, PROMPT_TOKENS
+        if served is not None:
+            inputs = {"skill": served.skill.body, "kind": kind, **inputs}
+            prompt = REPLY_KINDS_PROMPT
+            budget = PROMPT_TOKENS + estimated_tokens(served.skill.body)
         stamp = {
             **base,
-            "prompt_ref": str(REPLY_DRAFT),
+            "prompt_ref": str(prompt),
             "model_profile": self.model.model_profile,
         }
-        if estimated_tokens("".join(inputs.values())) > self.model.max_input_tokens - PROMPT_TOKENS:
-            return ReplyDraftView(**stamp, status="unavailable")
+        if estimated_tokens("".join(inputs.values())) > self.model.max_input_tokens - budget:
+            return ReplyDraftView.model_validate({**stamp, "status": "unavailable"})
         try:
             answer = await self.model.interpret(
-                REPLY_DRAFT,
-                inputs,
-                ModelFollowupMail,
-                run=caller_run(
-                    context,
-                    run_id=self.ids.new_uuid(),
-                    worker_id=self.worker_id,
-                    worker_version=self.worker_version,
-                    trace="sales-reply-draft",
-                    subject_ref=f"{_ORDER}:{case_id}",
-                ),
-                max_output_tokens=_OUTPUT_TOKENS,
+                prompt, inputs, ModelFollowupMail, run=run, max_output_tokens=_OUTPUT_TOKENS
             )
         except (ModelUnavailableError, QuotaExceededError):
-            return ReplyDraftView(**stamp, status="unavailable")
+            return ReplyDraftView.model_validate({**stamp, "status": "unavailable"})
         check = check_reply(f"{answer.subject}\n{answer.body}", facts)
         if check.refusal is not None:
             # Ids, the kind and why: never a figure the model wrote.
@@ -372,27 +449,59 @@ class ReplyDrafts:
                 "reply draft dropped",
                 extra={"case_id": str(case_id), "kind": kind, "refusal": check.refusal},
             )
-            return ReplyDraftView(
-                **stamp,
-                status="refused",
-                refusal=check.refusal,
-                unsupported=list(check.unsupported),
+            return ReplyDraftView.model_validate(
+                {
+                    **stamp,
+                    "status": "refused",
+                    "refusal": check.refusal,
+                    "unsupported": list(check.unsupported),
+                }
             )
-        return ReplyDraftView(
-            **stamp,
-            status="drafted",
-            subject=answer.subject,
-            body=answer.body,
-            figures_checked=check.figures,
+        return ReplyDraftView.model_validate(
+            {
+                **stamp,
+                "status": "drafted",
+                "subject": answer.subject,
+                "body": answer.body,
+                "figures_checked": check.figures,
+            }
         )
 
-    async def _on(self, scope: SalesScope) -> bool:
-        """The step on in the tenant's rules in force and measured at its bar;
+    async def _on(self, scope: SalesScope, step: ModelStep) -> bool:
+        """``step`` on in the tenant's rules in force and measured at its bar;
         never without the gate."""
         if self.model_steps is None:
             return False
         rules = await self.rules.rules(scope)
-        return await self.model_steps.allows(scope, rules, ModelStep.REPLY_DRAFT)
+        return await self.model_steps.allows(scope, rules, step)
+
+    async def _served(self, scope: SalesScope, run: RunContext, kind: str) -> _Served | None:
+        """The tenant's reply-drafts skill and its kind ``kind``, where the
+        skill's step may run and the version served names it; None
+        otherwise, and the draft is worded as with the step off (a kind that
+        is no platform draft is then not offered)."""
+        if self.skills is None or not await self._on(scope, ModelStep.SKILL_REPLY_DRAFTS):
+            return None
+        skill = await self.skills.skill(run, REPLY_DRAFTS)
+        kinds = served_reply_kinds(skill)
+        named = None if kinds is None else kinds.named(kind)
+        if kinds is None or named is None:
+            return None
+        return _Served(skill, kinds, named)
+
+
+def _platform(kind: str) -> ReplyKind:
+    """``kind`` as the platform's draft it is (asked after `REPLY_KINDS`)."""
+    return next(known for known in REPLY_KINDS if known == kind)
+
+
+def _names_the_mail(drafts: str, message_id: str | None) -> None:
+    """An answer names the customer's mail it answers, and only an answer does."""
+    if (drafts == QUESTION) != (message_id is not None):
+        raise DomainError(
+            "an answer names the customer's mail, and only an answer does",
+            details={"field": "message_id", "kind": drafts},
+        )
 
 
 async def _asked(work: SalesUnitOfWork, case_id: uuid.UUID, message_id: str) -> tuple[str, ...]:
@@ -415,3 +524,85 @@ async def _asked(work: SalesUnitOfWork, case_id: uuid.UUID, message_id: str) -> 
             details={"message_id": message_id, "rule": "not_asked"},
         )
     return tuple(quote.text for found in quotes for quote in found)
+
+
+# ------------------------------------------------------------- replay --
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyKindExample:
+    """One example a proposed version of the reply-drafts skill is replayed
+    on: a platform draft's facts, the letter it follows and the customer's
+    question, as code builds them for a fictional order, and the PO number a
+    kept mail states."""
+
+    example_id: str
+    drafts: ReplyKind
+    facts: str
+    example: str
+    question: str
+    po_no: str
+
+
+class ReplyKindExamplesPort(Protocol):
+    """The platform's examples a reply-drafts proposal is replayed on."""
+
+    def examples(self) -> Sequence[ReplyKindExample]: ...
+
+
+@dataclass(frozen=True)
+class ReplyKindReplay:
+    """A proposed version of the ``reply-drafts`` skill worded on the
+    platform's examples beside the version in force
+    (`skill_replay.SkillReplayer` asks it for that skill). Each example is
+    worded as every kind of the version that drafts as its draft: right where
+    each is kept by `check_reply` and states the order's number, as the bar's
+    metric reads a kept draft. A version naming no kind for a draft words
+    nothing of it. Nothing is stored or shown but the counts."""
+
+    model: InterpretationPort
+    examples: ReplyKindExamplesPort
+
+    async def counts(
+        self,
+        proposed: Skill,
+        in_force: Skill,
+        *,
+        new_run: Callable[[], RunContext],
+        forget_run: Callable[[uuid.UUID], object],
+    ) -> tuple[int, int, int, int, tuple[str, ...]]:
+        sides = ((proposed, served_reply_kinds(proposed)), (in_force, served_reply_kinds(in_force)))
+        messages = unanswered = 0
+        right = [0, 0]
+        for example in self.examples.examples():
+            messages += 1
+            for side, (skill, kinds) in enumerate(sides):
+                worded = () if kinds is None else kinds.drafting(example.drafts)
+                kept = bool(worded)
+                for kind in worded:
+                    run = new_run()
+                    try:
+                        mail = await self.model.interpret(
+                            REPLY_KINDS_PROMPT,
+                            {
+                                "skill": skill.body,
+                                "kind": kind.name,
+                                "facts": example.facts,
+                                "example": example.example,
+                                "question": example.question,
+                            },
+                            ModelFollowupMail,
+                            run=run,
+                            max_output_tokens=_OUTPUT_TOKENS,
+                        )
+                    except ModelUnavailableError:
+                        unanswered += 1
+                        kept = False
+                        continue
+                    finally:
+                        forget_run(run.run_id)
+                    text = f"{mail.subject}\n{mail.body}"
+                    kept = kept and check_reply(text, example.facts).refusal is None
+                    kept = kept and example.po_no in text
+                right[side] += kept
+        return messages, right[0], right[1], unanswered, ()

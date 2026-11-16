@@ -1,6 +1,6 @@
 # 42 — Hard-coded reading moved to skills, one family at a time
 
-Status: in progress (family 1 done 2026-11-16; families 2-6 left, each after its skill passes its bar on Strata)
+Status: in progress (families 1, 3 and 5 done 2026-11-16; families 2, 4 and 6 left, each after its skill passes its bar on Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -149,3 +149,134 @@ Under dw_sales ADR 0014 ("Applied 2026-11-16: the mail kinds").
   (`evals/mail_kinds.py`, `test_mail_kinds.py`).
 - Not done here: item 6's "two parsers for which line" (not small: two
   readers with different inputs; left in item 6).
+
+## Done: family 3, customer document formats (2026-11-16)
+
+Under dw_sales ADR 0014 ("Applied 2026-11-16: the document forms").
+
+- **The skill**: `configs/skills/dw1/document-forms/SKILL.md` (1.0.0): per
+  form a block (`- kind:` / `customer:` / `route:` / `means:`) read by
+  `domain/document_forms.py` (`document_forms_of`, `FORM_ROUTES` =
+  `quote_request` only, `customer` a code or `any`) on family 5's one block
+  reader (`domain/skill_blocks.py`). The platform's two forms are for any
+  customer: the standard English form, naming every label `rfq_excel` reads
+  (a test holds them together), and a customer's own request sheet in
+  general words. A company's version is a `platform.rule_versions` row
+  (`sales_skill_document_forms`, migration `42b7626a1bb7` from
+  `99ae8f7eb765`, which also admits the step in the four step CHECKs, each
+  rebuilt from the values it holds); proposing one with an unknown route, a
+  customer that is no code or a form named twice is refused
+  (`skill_words_unreadable`); one that no longer reads when served is not
+  used. Never offered to the thread pick (`skills.STEP_SKILLS`).
+- **The step**: `application/document_forms.py` (`DocumentFormReader`,
+  prompt `sales.document_forms@1.0.0`, schema built per call from the forms
+  of the sender domain's customer and of any customer, plus `none`); the
+  answer is ticket 29's spans, verified by `verify_rfq` and built into the
+  request by `RfqModelReader.request_of` (made public for it, with
+  `calls_for`), every value flagged `model_read`. Stamped
+  `RequestReading.skill` / `form`; activity and labelled cases count it
+  under `ModelStep.SKILL_DOCUMENT_FORMS` (`domain.activity.request_step`),
+  bar 0.85 on `all.right_field`, T0, switch `model_assist.skill_document_forms`
+  off everywhere (the test rules 1.5.2 too, with the reason).
+- **Where it is asked**: the quotation flow (`QuotationService._model_read`)
+  after the fixed reader, before ticket 29's reading; intake
+  (`OrderIntake._a_form`) where no reader recognised a file, the sender's
+  domain names a customer and nobody uploaded it: a file it reads into a
+  request makes the mail a quotation request beside the `RFQ No.` marker,
+  which stays code's first door. Off, below its bar, the model down, `none`
+  or nothing verified: exactly as before. Two readings of one file (intake
+  recognises, the quotation flow reads) are two calls; accepted for now.
+- **Replay**: `DocumentFormReplay` (the worker's `sales_skill_replay` lane
+  dispatches a document-forms proposal to it) on ticket 29's request
+  spreadsheets and the forms fixture (`FixtureDocumentFormExamples`), right
+  when every stated value reads as stated; the order and the invoice are
+  security cases.
+- **Eval** `sales_document_forms@1.0.0` (graders `dw_sales.evals.document_forms`):
+  golden, a new customer's form by a skill version only (acceptance 2:
+  the fixed reader misses all three, the version proposed and waiting,
+  intake takes the mail with the step on and not off), injection in a
+  cell, cross-tenant and cross-customer, missing evidence (a span not in
+  the file, no currency, a hidden row, an order and an invoice), off /
+  below bar / down / `none` read as before (acceptance 1). **Strata, live,
+  2026-11-16** (qwen3.8-flash-next-q2_0, not attested): 0.893 right (bar
+  0.85), 0.005 wrong; ticket 29's 18 files by the platform's skill 0.871,
+  the three new forms by the company's version 33/33 (by the platform's
+  skill alone 0.939); p50 7.15 s, p95 17.97 s. Recorded:
+  `sales_document_forms_recorded.json` (27 answers).
+- **Kept both paths** (acceptance 3 met on this run, not acted on): the
+  fixed reader and its marker read first, ticket 29's reading after a form
+  reads nothing; removing either waits for an attested measurement.
+- **Not moved, on purpose**: `domain/change_requests.py`'s mail-body change
+  table (also named in item 3). Read again, it reads no header's words: a
+  row is the order's by its PO number, its line by a code of the case, the
+  asked date's column by the values alone, and a quantity never from a
+  table; a change in words already goes to the change-request model step.
+  Nothing there is a customer's language. Its "which line" question is item
+  6's (one question, two parsers), and belongs with that.
+- **Not done**: a quantity whose unit is only in its column's header stays
+  deferred (`verify_rfq` takes a unit from the item's line only); taking it
+  from the same column's header cell is a change to ticket 29's checks,
+  left for a decision.
+
+## Done: family 5, hand-off and reply kinds (2026-11-16)
+
+Under dw_sales ADR 0014 ("Applied 2026-11-16: the hand-off and reply kinds").
+
+- **The skills**: `configs/skills/dw1/handoffs/SKILL.md` (1.0.0, ticket 33's
+  three kinds, each `asks:` one of the three typed field sets and `to:` the
+  team the copy writes it to) and `configs/skills/dw1/reply-drafts/SKILL.md`
+  (1.0.0, ticket 32's four drafts, each `drafts:` itself), read by
+  `domain/handoff_kinds.py` and `domain/reply_kinds.py` on family 3's one
+  block reader (`domain/skill_blocks.py`). A version naming a recipient, a
+  send, a price, an amount, a tool, a team, field or draft code does not
+  hold, or a hand-off kind named after a route that takes none, is refused
+  when proposed (`skill_words_unreadable`) and unused when served. Both are
+  `STEP_SKILLS`, never offered to the thread pick. `ReplyKind` moved to the
+  domain; `HandoffTeam` too.
+- **The hand-off step**: `application/handoff_kinds.py` (`HandoffKindReader`,
+  prompt `sales.handoff_kinds@1.0.0`), asked in `OrderIntake._with_handoff`
+  first where `model_assist.skill_handoffs` is on and measured
+  (`ModelStep.SKILL_HANDOFFS`, T1, bar 0.85 `all.right`): the kind the
+  reading stamped (only where its route is the reason the mail was routed
+  for), else the reason's platform kind. Every value goes through
+  `HandoffReader` as before; the stamp carries the skill version, kind,
+  label and team, rendered to the skill's team; the inbox card shows the
+  label. No kind of the skill, no usable answer, off or below bar: ticket
+  33's one call exactly as before. A disposition holds a hand-off only of
+  its reason or its reading's kind.
+- **The reply step**: `ReplyDrafts.draft` takes a kind name; where
+  `model_assist.skill_reply_drafts` is on and measured
+  (`ModelStep.SKILL_REPLY_DRAFTS`, T0, bar 0.85 `all.complete`) and the
+  served version names it, it is worded under `sales.reply_kinds@1.0.0` as
+  the draft the skill maps it to (gate, facts, `check_reply`, recipients the
+  draft's); the view says `drafted_as`, `kind_label`, `skill` and the other
+  kinds of the same draft (`others`), which the order page offers by label.
+  Otherwise ticket 32 exactly; a company's kind is not found.
+- **Storage**: migration `7c00901ada90` (from family 3's `42b7626a1bb7`)
+  admits `sales_skill_handoffs`, `sales_skill_reply_drafts` and the two
+  steps in the key and four step CHECKs, rebuilt from the catalog.
+- **Replay**: `HandoffKindReplay` (ticket 33's golden mails and the new
+  kind's, by what code locates, no order resolved) and `ReplyKindReplay`
+  (ticket 32's twelve drafts' facts,
+  `evals/fixtures/cases/sales_reply_kinds_examples.json`, by `check_reply`
+  and the PO stated), dispatched by `SkillReplayer` (`StepSkillReplay`); a
+  step skill whose replay is not wired waits unreplayed.
+- **Evals** `sales_handoff_kinds@1.0.0` and `sales_reply_kinds@1.0.0`:
+  golden re-scored through the skill, a company's new kind by a version only
+  (a certificate request to QA through intake; a short confirmation),
+  refused versions, injection, cross-tenant, missing evidence, off / below
+  bar / down / unreadable exactly as before. **Strata, live, 2026-11-16**
+  (qwen3.8-flash-next-q2_0, not attested): hand-offs 0.863 right, 0 wrong
+  (bar 0.85; the one call replays 0.849; a first run 0.849 with two
+  transport failures), the new kind 2/2; reply drafts 10/12 complete (0.833,
+  **below** the 0.85 bar, both Japanese figure refusals). Recorded:
+  `sales_handoff_kinds_recorded.json` (40), `sales_reply_kinds_recorded.json`
+  (14).
+- **Kept both paths**: the reply kinds are below their bar; the hand-off
+  kinds passed on this run, but a company uses the step only once its own
+  measurement is attested. The tests' rules (mock 1.5.2) keep both steps
+  off, as they do the mail kinds.
+- Not done here: a new hand-off kind is written with its field set's
+  platform words (the `sales_handoffs` copy is keyed by the three kinds;
+  keying it by kind is a copy schema change, left for a decision); no
+  Design recipient (none in master data).

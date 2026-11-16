@@ -180,10 +180,21 @@ model_assist:
   # so the company's mail kinds are tested with their own rules
   # (`dw_sales.evals.mail_kinds`), not with this version.
   skill_mail_kinds: false
+  # Off here too (ticket 42 family 3): a request file the fixed reader does
+  # not read would be read through sales.document_forms, which has no
+  # recordings for the integration suite's files; the forms are tested with
+  # their own rules (`dw_sales.evals.document_forms`).
+  skill_document_forms: false
   # Off here too (ticket 33): a residue mail's card would be read through
   # sales.triage_card, which has no recordings for the integration suite's
   # mails; the card is tested with its own rules (`dw_sales.evals.triage`).
   triage_card: false
+  # Off here too (ticket 42 family 5): the integration suite's hand-offs and
+  # drafts are read through request_handoff's and reply_draft's recordings;
+  # the company's hand-off and reply kinds are tested with their own rules
+  # (`dw_sales.evals.handoff_kinds`, `dw_sales.evals.reply_kinds`).
+  skill_handoffs: false
+  skill_reply_drafts: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

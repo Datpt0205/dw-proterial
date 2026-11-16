@@ -29,6 +29,9 @@ const REFUSAL: Record<NonNullable<ReplyDraft["refusal"]>, string> = {
  * against the order, refused any amount or address, and chose the
  * recipients; a refused draft says why, the figures on click. Nothing is
  * sent: the person opens it in their own mail program (`DraftedMail`).
+ * Where the company's reply-drafts skill names other kinds worded as the
+ * same draft (ticket 42 family 5), each is offered by its label, asked on
+ * click like the first.
  */
 export function AgentReply({
   caseId,
@@ -43,16 +46,20 @@ export function AgentReply({
   const { hasScope } = useAuth();
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<ReplyDraft | null>(null);
+  // The company's other kinds of this draft, as the first answer named them.
+  const [others, setOthers] = useState<ReplyDraft["others"]>([]);
   const [error, setError] = useState<unknown>(null);
   const reason = hasScope("sales.order.prepare")
     ? null
     : "Chỉ Sales phụ trách đơn hàng mới nhờ DW1 soạn được.";
 
-  const ask = async () => {
+  const ask = async (asked: ReplyKind = kind) => {
     setBusy(true);
     setError(null);
     try {
-      setView(await salesApi().replyDraft(caseId, kind, messageId));
+      const answer = await salesApi().replyDraft(caseId, asked, messageId);
+      setView(answer);
+      if (asked === kind) setOthers(answer.others);
     } catch (e) {
       setError(e);
     } finally {
@@ -71,9 +78,22 @@ export function AgentReply({
         >
           {view ? "AI soạn lại" : "Bản AI soạn"}
         </GuardedButton>
+        {others.map((other) => (
+          <GuardedButton
+            key={other.kind}
+            size="small"
+            type="link"
+            reason={reason}
+            inlineReason={false}
+            loading={busy}
+            onClick={() => void ask(other.kind)}
+          >
+            {other.label ?? other.kind}
+          </GuardedButton>
+        ))}
       </div>
       {view ? (
-        <Outcome view={view} fallback={kind !== "question_answer"} />
+        <Outcome view={view} fallback={view.drafted_as !== "question_answer"} />
       ) : null}
       <ActionError error={error} />
     </Flex>
@@ -87,6 +107,9 @@ function Outcome({ view, fallback }: { view: ReplyDraft; fallback: boolean }) {
   if (view.status === "drafted")
     return (
       <Space orientation="vertical" size={4} className="w-full">
+        {view.kind_label ? (
+          <Typography.Text strong>{view.kind_label}</Typography.Text>
+        ) : null}
         <DraftedMail draft={view} />
         <Typography.Text type="secondary">
           DW1 đã kiểm: {view.figures_checked} con số đều có trong hồ sơ, không

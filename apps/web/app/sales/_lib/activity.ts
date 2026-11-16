@@ -45,6 +45,9 @@ const MODEL_STEPS: Record<ModelStep, null> = {
   reply_draft: null,
   skill_intents: null,
   skill_mail_kinds: null,
+  skill_document_forms: null,
+  skill_handoffs: null,
+  skill_reply_drafts: null,
   triage_card: null,
 };
 export const MODEL_STEP_IDS = Object.keys(MODEL_STEPS) as ModelStep[];
@@ -72,6 +75,7 @@ const PER_FIELD = {
   not_found: "không tìm thấy trong thư chữ mô hình chỉ ra",
   repeated: "chữ mô hình chỉ ra xuất hiện hơn một lần",
   unparsed: "DW1 không đọc được giá trị từ chữ đó",
+  contradicts_record: "khác với cách viết số, ngày đã ghi cho khách này",
 } as const;
 
 /** A field an activity row names, in words; null when no table names it. */
@@ -99,7 +103,9 @@ export function knownReason(code: string): string | null {
     (READING_REASON as Record<string, string>)[code] ??
     (ROUTING_REASON as Record<string, string>)[code];
   if (exact) return capitalised(exact);
-  const part = /^(.+)_(not_found|repeated|unparsed)$/.exec(code);
+  const part = /^(.+)_(not_found|repeated|unparsed|contradicts_record)$/.exec(
+    code,
+  );
   const field = part ? knownField(part[1]!) : null;
   if (part && field)
     return `${field}: ${PER_FIELD[part[2] as keyof typeof PER_FIELD]}`;

@@ -41,6 +41,18 @@ fictional golden mails of the message intent (`sales_intent`), graded by the
 route each takes, and its injections are security cases that fail when read
 into a route that hands the mail to the order or quotation flow.
 
+**The document forms** (ticket 42 family 3) read a customer's file at a
+fixed step: a proposal of them is replayed by `DocumentFormReplay` on the
+fictional request files of the eval fixtures, a file right when every value
+it states is read as stated, and its security cases (an order, a file that
+is no request) fail when the proposal reads them into a request at all.
+
+**The hand-offs and the reply drafts** (ticket 42 family 5) are read at
+fixed steps of their own too: a proposal of either is replayed by its own
+`StepSkillReplay` (`handoff_kinds.HandoffKindReplay`,
+`reply_drafts.ReplyKindReplay`) on the platform's examples, graded by what
+code keeps of each reading; where none is wired, it waits unreplayed.
+
 **The mail it was taught from** (ticket 34): a version of the mail kinds
 proposed from a triage card names that mail (`SkillTrigger`), and its replay
 reads it with the version and with the one in force, beside the example
@@ -74,6 +86,7 @@ from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.document_forms import DocumentFormReplay
 from dw_sales.application.mail_kinds import MailKindReplay, served_kinds
 from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -91,8 +104,11 @@ from dw_sales.application.skills import (
 from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.thread_tools import CaseView, ThreadBinding, ThreadMessageView
 from dw_sales.application.threads import ThreadedCase
+from dw_sales.domain.document_forms import DOCUMENT_FORMS
+from dw_sales.domain.handoff_kinds import HANDOFFS
 from dw_sales.domain.mail_kinds import MAIL_KINDS
 from dw_sales.domain.reply_intent import Author, ReplyReading
+from dw_sales.domain.reply_kinds import REPLY_DRAFTS
 
 __all__ = [
     "SKILL_REPLAY_LANE",
@@ -132,6 +148,21 @@ class ReplayExamplesPort(Protocol):
     """The platform's example mails a proposal is replayed on."""
 
     def examples(self) -> Sequence[ReplayExample]: ...
+
+
+class StepSkillReplay(Protocol):
+    """A skill read at a fixed step of its own, replayed on its examples:
+    (examples read, right with the proposal, right with the version in
+    force, readings with no usable answer, the security cases failed)."""
+
+    async def counts(
+        self,
+        proposed: Skill,
+        in_force: Skill,
+        *,
+        new_run: Callable[[], RunContext],
+        forget_run: Callable[[uuid.UUID], object],
+    ) -> tuple[int, int, int, int, tuple[str, ...]]: ...
 
 
 @dataclass(frozen=True)
@@ -184,6 +215,16 @@ class SkillReplayer:
     # 34). None: no mailbox here, and such a version is replayed with the
     # mail said not found.
     inbox: InboxPort | None = None
+    # The hand-offs and the reply drafts (ticket 42 family 5), each read at
+    # its own step: replayed on the platform's example mails by what code
+    # keeps. None: a proposal of it waits unreplayed, so the head cannot
+    # approve it.
+    handoffs: StepSkillReplay | None = None
+    reply_drafts: StepSkillReplay | None = None
+    # The document forms, a skill a fixed step reads (ticket 42 family 3):
+    # replayed on the platform's example request files. None: no model reads
+    # them here, and a proposal of them waits unreplayed.
+    document_forms: DocumentFormReplay | None = None
 
     async def tick(self, scope: SalesScope) -> int:
         """Replays every proposal of ``scope``'s tenant that has none yet;
@@ -200,6 +241,8 @@ class SkillReplayer:
             for v in waiting
             if v.key.startswith(SKILL_PREFIX)
             and (skill_name(v.key) != MAIL_KINDS or self.mail_kinds is not None)
+            and self._replayable(skill_name(v.key))
+            and (skill_name(v.key) != DOCUMENT_FORMS or self.document_forms is not None)
             and _read_here(v, scope)
         ]
         if not waiting:
@@ -247,6 +290,28 @@ class SkillReplayer:
             if taught is not None and taught.found:
                 unread += (taught.with_route is None) + (taught.without_route is None)
             return self._stored(version, read, right, right_before, unread, refused, taught)
+        if proposed.name == DOCUMENT_FORMS:
+            assert self.document_forms is not None  # tick says so
+            in_force_forms = await self.book.skill(self._run(scope), DOCUMENT_FORMS)
+            return self._stored(
+                version,
+                *await self.document_forms.counts(
+                    scope,
+                    proposed,
+                    in_force_forms,
+                    new_run=lambda: self._run(scope),
+                    forget_run=self.forget_run,
+                ),
+            )
+        step = self._step_replays().get(proposed.name)
+        if step is not None:
+            counts = await step.counts(
+                proposed,
+                await self.book.skill(self._run(scope), proposed.name),
+                new_run=lambda: self._run(scope),
+                forget_run=self.forget_run,
+            )
+            return self._stored(version, *counts)
         in_force = await self.book.skill_set(self._run(scope))
         changed = SkillSet(
             in_force.tenant_id,
@@ -269,6 +334,17 @@ class SkillReplayer:
             right_with += _right(example.gold, with_it)
             right_without += _right(example.gold, without)
         return self._stored(version, messages, right_with, right_without, unanswered, tuple(failed))
+
+    def _step_replays(self) -> dict[str, StepSkillReplay | None]:
+        """The replay of each skill read at a fixed step of its own other
+        than the mail kinds (ticket 42 family 5), by name."""
+        return {HANDOFFS: self.handoffs, REPLY_DRAFTS: self.reply_drafts}
+
+    def _replayable(self, name: str) -> bool:
+        """Whether a proposal of the skill ``name`` is replayed here: a
+        skill a fixed step reads only where its replay is wired."""
+        replays = self._step_replays()
+        return name not in replays or replays[name] is not None
 
     async def _taught(
         self, scope: SalesScope, trigger: SkillTrigger, proposed: Skill, in_force: Skill

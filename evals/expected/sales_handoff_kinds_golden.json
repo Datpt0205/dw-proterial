@@ -1,0 +1,5 @@
+{
+  "_comment": "The recorded readings (onprem profile on Strata, qwen3.8-flash-next-q2_0, 2026-11-16, prompt sales.handoff_kinds@1.0.0 with the platform's handoffs skill 1.0.0) carry 0.863 of the 73 fields the 33 golden mails state, right (the bar is 0.85; ticket 33's one call replays 0.849 on the same mails), none wrong, 0.137 deferred to a person. A first run the same day scored 0.849, two of its 33 calls failing at the transport (InfrastructureError), which code reads as an empty form. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill or the model changes.",
+  "min_right": 0.86,
+  "max_wrong": 0.0
+}

@@ -56,10 +56,12 @@ from dw_kernel.errors import NotFoundError
 from dw_kernel.ports import Uuid4Generator
 from dw_sales.adapters.assembly import step_model
 from dw_sales.adapters.mock.fixtures import DATA_DIR
-from dw_sales.application.reply_drafts import REPLY_DRAFT, ReplyDraftView, ReplyKind
+from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.application.reply_drafts import REPLY_DRAFT, REPLY_KINDS_PROMPT, ReplyDraftView
 from dw_sales.domain.catalog import Language
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import DispositionKind, OrderStatus
+from dw_sales.domain.reply_kinds import ReplyKind
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, NOW, SampleSet, SampleWith, World, open_world
 from dw_sales.testing.measurements import passing
@@ -158,27 +160,50 @@ def drafting_world(
     *,
     question: str = QUESTIONS["en"],
     measured: bool = True,
+    skill: bool = False,
+    skill_measured: bool = True,
 ) -> World:
     """DW1 over ``sample`` with only the two steps this measures on: the
     reading of a reply (scripted to find ``question``) and the drafting,
     worded by ``drafter``. ``measured``: the drafting's live eval met its bar
-    for the tenant; without it the step stays off whatever the rules say."""
+    for the tenant; without it the step stays off whatever the rules say.
+    ``skill``: worded by the tenant's reply-drafts skill instead (ticket 42
+    family 5), its step on in the tenant's rules and, with
+    ``skill_measured``, measured with the drafting's."""
     from dw_sales.evals.graders import CALLERS
 
     # No drafter: a process with no model at all, which reads no reply either.
     model = (
         None
         if drafter is None
-        else ByPrompt({"sales.reply_intent": asking(question), REPLY_DRAFT.prompt_id: drafter})
+        else ByPrompt(
+            {
+                "sales.reply_intent": asking(question),
+                REPLY_DRAFT.prompt_id: drafter,
+                REPLY_KINDS_PROMPT.prompt_id: drafter,
+            }
+        )
     )
     world = open_world(repo_root, sample, CALLERS, model=model, measured=False)
     worker, _ = parse_worker_file(repo_root / "configs" / "workers" / "sales.yaml")
     routed = step_model(repo_root / "configs", worker.default_model_profile).model_for(
         ALPHA.tenant_id.value
     )
-    steps = [ModelStep.REPLY_INTENT, *([ModelStep.REPLY_DRAFT] if measured else [])]
+    worded = [ModelStep.SKILL_REPLY_DRAFTS] if skill and skill_measured else []
+    drafting = [ModelStep.REPLY_DRAFT, *worded]
+    steps = [ModelStep.REPLY_INTENT, *(drafting if measured else [])]
     ids = Uuid4Generator()
     world.measurements.seed(ALPHA, *(passing(step, routed, NOW, ids) for step in steps))
+    if skill:
+        # The sample's own rules, as the world seeded them, with the step on.
+        current = (
+            load_tenant_order_rules(sample.data_dir / "policies") or world.policies.order_rules
+        )
+        assist = current.model_assist.model_copy(update={"skill_reply_drafts": True})
+        world.store.rule_versions.seed_approved(
+            ALPHA.tenant_id.value,
+            current.model_copy(update={"policy_version": "1.92.0", "model_assist": assist}),
+        )
     return world
 
 
@@ -241,7 +266,7 @@ async def answered_by_pc(world: World, case_id: uuid.UUID, day: date) -> None:
 
 
 async def draft(
-    world: World, case_id: uuid.UUID, kind: ReplyKind, message_id: str | None = None
+    world: World, case_id: uuid.UUID, kind: str, message_id: str | None = None
 ) -> ReplyDraftView:
     from dw_sales.evals.graders import AN
 
@@ -265,7 +290,8 @@ class Drafted:
 
 
 def _last_facts(model: Any) -> Mapping[str, Any]:
-    calls = [c for c in getattr(model, "calls", ()) if c[0].prompt_id == REPLY_DRAFT.prompt_id]
+    prompts = {REPLY_DRAFT.prompt_id, REPLY_KINDS_PROMPT.prompt_id}
+    calls = [c for c in getattr(model, "calls", ()) if c[0].prompt_id in prompts]
     return json.loads(calls[-1][2]["facts"]) if calls else {}
 
 
@@ -280,14 +306,17 @@ async def _one(
     return Drafted(language, kind, view, _last_facts(model))
 
 
-async def golden_drafts(repo_root: Path, model: InterpretationPort) -> list[Drafted]:
-    """Every kind in every language, worded by ``model``."""
+async def golden_drafts(
+    repo_root: Path, model: InterpretationPort, *, skill: bool = False
+) -> list[Drafted]:
+    """Every kind in every language, worded by ``model``; ``skill``: by the
+    platform's reply-drafts skill (ticket 42 family 5)."""
     found: list[Drafted] = []
     for language in LANGUAGES:
         question = QUESTIONS[language]
         asked = reply("R2", body=question, hour=11)
         with sample_for(language, pull_in(), asked) as sample:
-            world = drafting_world(repo_root, sample, model, question=question)
+            world = drafting_world(repo_root, sample, model, question=question, skill=skill)
             case_id = await confirmed(world)
             from dw_sales.evals.graders import AN
 
@@ -299,7 +328,7 @@ async def golden_drafts(repo_root: Path, model: InterpretationPort) -> list[Draf
             await answered_by_pc(world, case_id, ASKED)
             found.append(await _one(world, model, language, "change_can_do_draft", case_id))
         with sample_for(language, pull_in()) as sample:
-            world = drafting_world(repo_root, sample, model, question=question)
+            world = drafting_world(repo_root, sample, model, question=question, skill=skill)
             case_id = await confirmed(world)
             await answered_by_pc(world, case_id, LATER)
             found.append(await _one(world, model, language, "change_options_draft", case_id))
@@ -568,7 +597,7 @@ async def _no_amount(repo_root: Path) -> dict[str, Any]:
         told: list[str] = []
         statuses: dict[str, str] = {}
         for kind, message_id in (("question_answer", "R2"), ("confirmation_draft", None)):
-            view = await draft(world, case_id, kind, message_id)  # type: ignore[arg-type]
+            view = await draft(world, case_id, kind, message_id)
             told.append(json.dumps(_last_facts(drafter)))
             statuses[kind] = _status(view)
         await answered_by_pc(world, case_id, ASKED)

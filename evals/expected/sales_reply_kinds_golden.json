@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded answers (onprem profile on Strata, qwen3.8-flash-next-q2_0, 2026-11-16, prompt sales.reply_kinds@1.0.0 with the platform's reply-drafts skill 1.0.0) kept 10 of the 12 golden drafts, each stating the PO and every date it answers with (all.complete 0.833 against the 0.85 bar, so the step stays off; ticket 32's one call recorded the same 0.833 on another model). Both drops are Japanese figure refusals (question_answer/ja, change_options_draft/ja); vi and en 8 of 8. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill, the facts or the model change.",
+  "min_complete": 0.83
+}

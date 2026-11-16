@@ -79,7 +79,7 @@ from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.followups import SalesFollowups, due_soon
-from dw_sales.domain.handoffs import Handoff
+from dw_sales.domain.handoffs import Handoff, HandoffTeam
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.orders import (
@@ -2494,14 +2494,17 @@ class AttachmentView(BaseModel):
 class HandoffDraftView(BaseModel):
     """A routed message's hand-off as code wrote it from the template, for
     Sales to review, edit and send from their own mailbox (ticket 33). ``to``
-    names the team, never an address: Sales picks the recipients."""
+    names the team, never an address: Sales picks the recipients.
+    ``kind_label``: the tenant's hand-off skill's words for its kind, where
+    the skill read it and gives some (ticket 42 family 5)."""
 
     model_config = _VIEW
 
-    to: Literal["pc", "qa"]
+    to: HandoffTeam
     subject: str
     body: str
     template_ref: str
+    kind_label: str | None = None
 
 
 class InboxMessageView(BaseModel):

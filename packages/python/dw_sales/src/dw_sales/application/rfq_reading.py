@@ -146,12 +146,8 @@ class RfqModelReader:
                 # missing (audit finding 10): a person reads it whole.
                 return "partly_shown"
             parts.extend(text.parts)
-        budget = self.model.max_input_tokens - PROMPT_TOKENS
-        pieces = [piece for part in parts for piece in part.pieces(budget, estimated_tokens)]
-        if any(estimated_tokens(piece.text) > budget for piece in pieces):
-            return "too_long"
-        calls = _packed(pieces, budget)
-        if len(calls) > MAX_CALLS:
+        calls = calls_for(parts, self.model.max_input_tokens - PROMPT_TOKENS)
+        if calls is None:
             return "too_long"
         verdict = VerifiedRfq()
         # Each document's notation from all of it, not from one call's pieces,
@@ -178,9 +174,9 @@ class RfqModelReader:
             except ModelUnavailableError:
                 return "unavailable"
             verify_rfq(call, answer, received_on, into=verdict, documents=documents, record=record)
-        return await self._request(scope, message, contents, customer, rules, verdict, run, calls)
+        return await self.request_of(scope, message, contents, customer, rules, verdict, run, calls)
 
-    async def _request(
+    async def request_of(
         self,
         scope: SalesScope,
         message: InboundMessage,
@@ -190,20 +186,19 @@ class RfqModelReader:
         verdict: VerifiedRfq,
         run: RunContext,
         calls: Sequence[Sequence[TextPart]],
+        *,
+        prompt: PromptRef = RFQ_EXTRACTION,
     ) -> RequestRead | NotRead:
-        if not verdict.items:
-            return "not_understood"
-        if verdict.currency is None:
-            # No default and no correction path: pricing in a currency nobody
-            # stated is a guess, so a person reads the request.
-            return "currency_missing"
-        reads: list[Read[Any]] = [verdict.currency]
-        reads += [r for r in (verdict.rfq_no, verdict.quote_due) if r is not None]
-        for item in verdict.items:
-            reads += [r for r in _item_reads(item) if r is not None]
+        """The request code accepted of ``verdict``, read in ``calls`` under
+        ``prompt``, or why none was: also the request the tenant's document
+        forms read (ticket 42 family 3), so both readings build one request
+        one way."""
+        refused = unread(verdict)
+        if refused is not None:
+            return refused
+        assert verdict.currency is not None  # `unread` says so
+        reads = _reads(verdict)
         files = {r.attachment_id for r in reads} - {None}
-        if len(files) > 1:
-            return "several_files"
         attachment = next(
             (c.attachment for c in contents if c.attachment.attachment_id in files), None
         )
@@ -217,7 +212,7 @@ class RfqModelReader:
         body_text = normalised(newest_part(message).text)
         header = {"rfq_no": verdict.rfq_no, "quote_due": verdict.quote_due}
         document = RfqDocument(
-            parser_version=str(RFQ_EXTRACTION),
+            parser_version=str(prompt),
             rfq_no=_sourced(verdict.rfq_no),
             rfq_date=None,
             quote_due=_sourced(verdict.quote_due),
@@ -241,7 +236,7 @@ class RfqModelReader:
             attachment=attachment,
             body=MessageText(text=body_text, sha256=text_digest(body_text)) if body_read else None,
             reading=RequestReading(
-                prompt=str(RFQ_EXTRACTION),
+                prompt=str(prompt),
                 model_profile=self.model.model_profile,
                 route=self.model.route,
                 rules=rules.version,
@@ -280,6 +275,42 @@ class RfqModelReader:
             for number, line in mapped.items():
                 found[number] = (line.mapping.candidates, line.reading)
         return found
+
+
+def unread(verdict: VerifiedRfq) -> NotRead | None:
+    """Why ``verdict`` makes no request, or None where it makes one: no item
+    read, no currency (no default and no correction path: pricing in a
+    currency nobody stated is a guess, so a person reads the request), or
+    values from more than one file. Asked by `RfqModelReader.request_of`
+    and by intake's recognition of a document form, one answer for both."""
+    if not verdict.items:
+        return "not_understood"
+    if verdict.currency is None:
+        return "currency_missing"
+    if len({r.attachment_id for r in _reads(verdict)} - {None}) > 1:
+        return "several_files"
+    return None
+
+
+def _reads(verdict: VerifiedRfq) -> list[Read[Any]]:
+    """Every value ``verdict`` read, the request's and its items'."""
+    reads: list[Read[Any]] = [] if verdict.currency is None else [verdict.currency]
+    reads += [r for r in (verdict.rfq_no, verdict.quote_due) if r is not None]
+    for item in verdict.items:
+        reads += [r for r in _item_reads(item) if r is not None]
+    return reads
+
+
+def calls_for(parts: Sequence[TextPart], budget: int) -> list[list[TextPart]] | None:
+    """The parts in pieces that fit ``budget`` tokens, packed in calls; None
+    where one piece is over the budget or the request needs more than
+    `MAX_CALLS`: a request read in part would miss lines nobody knows are
+    missing."""
+    pieces = [piece for part in parts for piece in part.pieces(budget, estimated_tokens)]
+    if any(estimated_tokens(piece.text) > budget for piece in pieces):
+        return None
+    calls = _packed(pieces, budget)
+    return None if len(calls) > MAX_CALLS else calls
 
 
 def _packed(pieces: Sequence[TextPart], budget: int) -> list[list[TextPart]]:
@@ -370,6 +401,24 @@ def _requested(
     )
 
 
+class DocumentFormsPort(Protocol):
+    """The tenant's document forms reading a request's files
+    (`document_forms.DocumentFormReader`): the request, or None for nothing
+    read, which the flow then reads as with them off."""
+
+    async def read(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        contents: Sequence[AttachmentContent],
+        customer: Customer,
+        rules: OrderRules,
+        *,
+        received_on: date,
+        run: RunContext,
+    ) -> RequestRead | None: ...
+
+
 @dataclass(frozen=True)
 class ModelRequests:
     """The quotation flow's model step: the reader, the tenant's rules that
@@ -380,3 +429,6 @@ class ModelRequests:
     reader: RfqModelReader
     rules: OrderRulesPort
     gate: ModelStepGatePort
+    # The tenant's document forms (ticket 42 family 3), asked first where
+    # their own switch is on and measured; None: not wired here.
+    forms: DocumentFormsPort | None = None

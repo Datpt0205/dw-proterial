@@ -1,0 +1,679 @@
+{
+  "_comment": "The local model's answers (onprem profile) to sales.document_forms, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
+  "answers": {
+    "12e1401e82ffd18f84ec00ea": {
+      "form": "kumohana_mitsumori",
+      "rfq_no_span": "KMH-MR-2610-11",
+      "quote_due_span": "2026年10月12日",
+      "currency_span": "JPY",
+      "items": [
+        {
+          "part": "FORMS-JA-KMH-01-A1!RFQ",
+          "line_span": "1 | KMH-C-3301 | ケーブル AWG26 4芯 灰 | 3000 | m | 2026年12月1日",
+          "description_span": "ケーブル AWG26 4芯 灰",
+          "customer_item_code_span": "KMH-C-3301",
+          "quantity_span": "3000",
+          "uom_span": "m",
+          "required_date_span": "2026年12月1日",
+          "target_price_span": null
+        },
+        {
+          "part": "FORMS-JA-KMH-01-A1!RFQ",
+          "line_span": "2 | KMH-C-3302 | ケーブル AWG24 2芯 黒 | 1500 | メートル | 2026年12月8日",
+          "description_span": "ケーブル AWG24 2芯 黒",
+          "customer_item_code_span": "KMH-C-3302",
+          "quantity_span": "1500",
+          "uom_span": "メートル",
+          "required_date_span": "2026年12月8日",
+          "target_price_span": null
+        }
+      ]
+    },
+    "2535873c6c98618a3df461e8": {
+      "form": "customer_request",
+      "rfq_no_span": "KMH-RFQ-261002-06",
+      "quote_due_span": null,
+      "currency_span": "JPY",
+      "items": [
+        {
+          "part": "JA-XLSX-04-A1!RFQ",
+          "line_span": "KMH-21-0121 | 多芯ケーブル 8芯 AWG24 アルミ箔シールド | 2000 | m | 2027-01-20",
+          "description_span": "多芯ケーブル 8芯 AWG24 アルミ箔シールド",
+          "customer_item_code_span": "KMH-21-0121",
+          "quantity_span": "2000",
+          "uom_span": "m",
+          "required_date_span": "2027-01-20",
+          "target_price_span": null
+        }
+      ]
+    },
+    "30051451951bb362780d1113": {
+      "form": "customer_request",
+      "rfq_no_span": "KMH-MR-2610-11",
+      "quote_due_span": "2026年10月12日",
+      "currency_span": "JPY",
+      "items": [
+        {
+          "part": "FORMS-JA-KMH-01-A1!RFQ",
+          "line_span": "1 | KMH-C-3301 | ケーブル AWG26 4芯 灰 | 3000 | m | 2026年12月1日",
+          "description_span": "ケーブル AWG26 4芯 灰",
+          "customer_item_code_span": "KMH-C-3301",
+          "quantity_span": "3000",
+          "uom_span": "m",
+          "required_date_span": "2026年12月1日",
+          "target_price_span": null
+        },
+        {
+          "part": "FORMS-JA-KMH-01-A1!RFQ",
+          "line_span": "2 | KMH-C-3302 | ケーブル AWG24 2芯 黒 | 1500 | メートル | 2026年12月8日",
+          "description_span": "ケーブル AWG24 2芯 黒",
+          "customer_item_code_span": "KMH-C-3302",
+          "quantity_span": "1500",
+          "uom_span": "メートル",
+          "required_date_span": "2026年12月8日",
+          "target_price_span": null
+        }
+      ]
+    },
+    "37bb9273b24691d22a2949b8": {
+      "form": "customer_request",
+      "rfq_no_span": "NRV-RFQ-26-0133",
+      "quote_due_span": "2026-10-14",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-XLSX-01-A1!RFQ",
+          "line_span": "NRV-77-0031 | HOOK-UP WIRE AWG24 TINNED CU ORANGE | 2500 | m | 2026-11-26",
+          "description_span": "HOOK-UP WIRE AWG24 TINNED CU ORANGE",
+          "customer_item_code_span": "NRV-77-0031",
+          "quantity_span": "2500",
+          "uom_span": "m",
+          "required_date_span": "2026-11-26",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-XLSX-01-A1!RFQ",
+          "line_span": "NRV-77-0032 | MULTI-CORE CABLE 3C AWG22 FOIL SHIELD GREY | 1200 | m | 2026-11-26",
+          "description_span": "MULTI-CORE CABLE 3C AWG22 FOIL SHIELD GREY",
+          "customer_item_code_span": "NRV-77-0032",
+          "quantity_span": "1200",
+          "uom_span": "m",
+          "required_date_span": "2026-11-26",
+          "target_price_span": null
+        }
+      ]
+    },
+    "3eb6e3f7ae558d860df851b0": {
+      "form": "quorilo_enquiry",
+      "rfq_no_span": "QRL-ENQ-2610-05",
+      "quote_due_span": "2026-10-14",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "FORMS-EN-QRL-01-A1!RFQ",
+          "line_span": "1 | QRL-CB-0410 | Cable 2C AWG22 shielded | 305 m | 915 m | 2026-12-05 | 0.42",
+          "description_span": "Cable 2C AWG22 shielded",
+          "customer_item_code_span": "QRL-CB-0410",
+          "quantity_span": "915 m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-05",
+          "target_price_span": "0.42"
+        },
+        {
+          "part": "FORMS-EN-QRL-01-A1!RFQ",
+          "line_span": "2 | QRL-CB-0412 | Cable 4C AWG24 shielded | 500 m | 1000 m | 2026-12-12",
+          "description_span": "Cable 4C AWG24 shielded",
+          "customer_item_code_span": "QRL-CB-0412",
+          "quantity_span": "1000 m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-12",
+          "target_price_span": null
+        }
+      ]
+    },
+    "442266803ddda55ebb3660ec": {
+      "form": "brennic_de_nghi",
+      "rfq_no_span": "BRN-DN-2610-07",
+      "quote_due_span": "2026-10-09",
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "FORMS-VI-BRN-01-A1!RFQ",
+          "line_span": "1 | BRN-WR-1102 | Dây đơn 0.5mm2 đỏ | 4 | 2000 | m | 2026-11-20",
+          "description_span": "Dây đơn 0.5mm2 đỏ",
+          "customer_item_code_span": "BRN-WR-1102",
+          "quantity_span": "2000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-20",
+          "target_price_span": null
+        },
+        {
+          "part": "FORMS-VI-BRN-01-A1!RFQ",
+          "line_span": "2 | BRN-WR-1107 | Dây đơn 0.75mm2 đen | 2 | 1000 | m | 2026-11-27",
+          "description_span": "Dây đơn 0.75mm2 đen",
+          "customer_item_code_span": "BRN-WR-1107",
+          "quantity_span": "1000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-27",
+          "target_price_span": null
+        }
+      ]
+    },
+    "4e2a1161b912369ecf0afb75": {
+      "form": "customer_request",
+      "rfq_no_span": "QRL-ENQ-2610-05",
+      "quote_due_span": "2026-10-14",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "FORMS-EN-QRL-01-A1!RFQ",
+          "line_span": "1 | QRL-CB-0410 | Cable 2C AWG22 shielded | 305 m | 915 m | 2026-12-05 | 0.42",
+          "description_span": "Cable 2C AWG22 shielded",
+          "customer_item_code_span": "QRL-CB-0410",
+          "quantity_span": "915 m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-05",
+          "target_price_span": "0.42"
+        },
+        {
+          "part": "FORMS-EN-QRL-01-A1!RFQ",
+          "line_span": "2 | QRL-CB-0412 | Cable 4C AWG24 shielded | 500 m | 1000 m | 2026-12-12",
+          "description_span": "Cable 4C AWG24 shielded",
+          "customer_item_code_span": "QRL-CB-0412",
+          "quantity_span": "1000 m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-12",
+          "target_price_span": null
+        }
+      ]
+    },
+    "5b8e3e52ff1d5a2a9129c093": {
+      "form": "customer_request",
+      "rfq_no_span": "QRL-RFQ-2610-05",
+      "quote_due_span": null,
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-PDF-04-A1#p1",
+          "line_span": "Description: Multi-core cable 8C AWG24 tinned copper braid shield\nQuantity: to be advised\nRequired by: December 15, 2026",
+          "description_span": "Multi-core cable 8C AWG24 tinned copper braid shield",
+          "customer_item_code_span": null,
+          "quantity_span": "to be advised",
+          "uom_span": null,
+          "required_date_span": "December 15, 2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "66ae1ae1fdfa60ddf0ebc755": {
+      "form": "customer_request",
+      "rfq_no_span": "KMH-RFQ-261002-05",
+      "quote_due_span": null,
+      "currency_span": "円",
+      "items": [
+        {
+          "part": "JA-XLSX-03-A1!RFQ",
+          "line_span": "KMH-21-0111 | 2芯 AWG28 黒 錫メッキ | 500 | 2026-11-10",
+          "description_span": "2芯 AWG28 黒 錫メッキ",
+          "customer_item_code_span": "KMH-21-0111",
+          "quantity_span": "500",
+          "uom_span": "m",
+          "required_date_span": "2026-11-10",
+          "target_price_span": null
+        }
+      ]
+    },
+    "69b73e27c68d09496a7217b7": {
+      "form": "customer_request",
+      "rfq_no_span": "VLX-RFQ-2610-03",
+      "quote_due_span": "2026-10-10",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "VI-XLSX-01-A1!RFQ",
+          "line_span": "1 | VLX-31-0011 | Dây điện AWG24 vàng xanh | 1500 | 2026-11-28",
+          "description_span": "Dây điện AWG24 vàng xanh",
+          "customer_item_code_span": "VLX-31-0011",
+          "quantity_span": "1500",
+          "uom_span": "m",
+          "required_date_span": "2026-11-28",
+          "target_price_span": null
+        },
+        {
+          "part": "VI-XLSX-01-A1!RFQ",
+          "line_span": "2 | VLX-31-0012 | Cáp 2C AWG22 đen | 3000 | 2026-11-28",
+          "description_span": "Cáp 2C AWG22 đen",
+          "customer_item_code_span": "VLX-31-0012",
+          "quantity_span": "3000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-28",
+          "target_price_span": null
+        }
+      ]
+    },
+    "74bf3a81474e3aca31effd9d": {
+      "form": "customer_request",
+      "rfq_no_span": "BRN-RFQ-2610-07",
+      "quote_due_span": null,
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "VI-PDF-04-A1#p1",
+          "line_span": "Mặt hàng: Dây điện AWG22 màu vàng",
+          "description_span": "Dây điện AWG22 màu vàng",
+          "customer_item_code_span": null,
+          "quantity_span": "(sẽ báo sau)",
+          "uom_span": null,
+          "required_date_span": "18/12/2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "86942e525f77b12465e09d26": {
+      "form": "customer_request",
+      "rfq_no_span": null,
+      "quote_due_span": null,
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "VI-XLSX-02-A1!RFQ",
+          "line_span": "BRN-W-0101 | Dây điện AWG20 đỏ lõi xoắn | 2000 | m | 2026-12-01",
+          "description_span": "Dây điện AWG20 đỏ lõi xoắn",
+          "customer_item_code_span": "BRN-W-0101",
+          "quantity_span": "2000",
+          "uom_span": "m",
+          "required_date_span": "2026-12-01",
+          "target_price_span": null
+        },
+        {
+          "part": "VI-XLSX-02-A1!RFQ",
+          "line_span": "BRN-W-0102 | Dây điện AWG20 đen lõi xoắn | m | 2026-12-01",
+          "description_span": "Dây điện AWG20 đen lõi xoắn",
+          "customer_item_code_span": "BRN-W-0102",
+          "quantity_span": null,
+          "uom_span": "m",
+          "required_date_span": "2026-12-01",
+          "target_price_span": null
+        }
+      ]
+    },
+    "8eb726a79bac6eaeeb40331c": {
+      "form": "customer_request",
+      "rfq_no_span": "LMR-RFQ-2610-02",
+      "quote_due_span": null,
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "VI-XLSX-03-A1!RFQ",
+          "line_span": "Cáp 4 lõi 0.5mm2 chống nhiễu lưới | 800 m | 15/12/2026",
+          "description_span": "Cáp 4 lõi 0.5mm2 chống nhiễu lưới",
+          "customer_item_code_span": null,
+          "quantity_span": "800 m",
+          "uom_span": "m",
+          "required_date_span": "15/12/2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "9349820da3b413eefd6f5d6b": {
+      "form": "customer_request",
+      "rfq_no_span": "VLX-RFQ-2610-02",
+      "quote_due_span": "09/10/2026",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "VI-PDF-03-A1#p1",
+          "line_span": "Mã VLX-31-0007: Cáp 3C AWG26 BRD GRY, SL 1.800 m, giao 25/11/2026",
+          "description_span": "Cáp 3C AWG26 BRD GRY",
+          "customer_item_code_span": "VLX-31-0007",
+          "quantity_span": null,
+          "uom_span": null,
+          "required_date_span": "25/11/2026",
+          "target_price_span": null
+        },
+        {
+          "part": "VI-PDF-03-A1#p1",
+          "line_span": "Mã VLX-31-0008: Cáp 2C AWG24 BLK cuộn 305M, SL 2.440 m, giao 25/11/2026",
+          "description_span": "Cáp 2C AWG24 BLK",
+          "customer_item_code_span": "VLX-31-0008",
+          "quantity_span": "cuộn 305M",
+          "uom_span": null,
+          "required_date_span": "25/11/2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "94288c9f4f9f8a14686978d2": {
+      "form": "customer_request",
+      "rfq_no_span": "KMH-RFQ-261002-03",
+      "quote_due_span": "2026-10-13",
+      "currency_span": "JPY",
+      "items": [
+        {
+          "part": "JA-XLSX-01-A1!RFQ",
+          "line_span": "KMH-21-0101 | 2芯 AWG24 黒 | 3000 | m | 2026-11-18",
+          "description_span": "2芯 AWG24 黒",
+          "customer_item_code_span": "KMH-21-0101",
+          "quantity_span": "3000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-18",
+          "target_price_span": null
+        },
+        {
+          "part": "JA-XLSX-01-A1!RFQ",
+          "line_span": "KMH-21-0102 | 2芯 AWG24 白 | 3000 | m | 2026-11-18",
+          "description_span": "2芯 AWG24 白",
+          "customer_item_code_span": "KMH-21-0102",
+          "quantity_span": "3000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-18",
+          "target_price_span": null
+        }
+      ]
+    },
+    "a08276ab7aadc6b81de27a5d": {
+      "form": "customer_request",
+      "rfq_no_span": "QRL-RFQ-2610-04",
+      "quote_due_span": "13 Oct 2026",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-PDF-03-A1#p1",
+          "line_span": "Line 1 - QRL-6610 - 3C AWG26 BRAID SHIELD GREY - 6,000 m - required 2026-11-25 - target USD 0.41",
+          "description_span": "3C AWG26 BRAID SHIELD GREY",
+          "customer_item_code_span": "QRL-6610",
+          "quantity_span": "6,000 m",
+          "uom_span": "m",
+          "required_date_span": "2026-11-25",
+          "target_price_span": "USD 0.41"
+        },
+        {
+          "part": "EN-PDF-03-A1#p1",
+          "line_span": "Line 2 - QRL-6611 - HOOK-UP WIRE AWG26 WHITE - 2,000 m - required 2026-11-25",
+          "description_span": "HOOK-UP WIRE AWG26 WHITE",
+          "customer_item_code_span": "QRL-6611",
+          "quantity_span": "2,000 m",
+          "uom_span": "m",
+          "required_date_span": "2026-11-25",
+          "target_price_span": null
+        }
+      ]
+    },
+    "a2705526119eea5028468ed3": {
+      "form": "customer_request",
+      "rfq_no_span": "CVG-RFQ-261002-01",
+      "quote_due_span": null,
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-PDF-02-A1#p1",
+          "line_span": "Item 1: CVG-88-301 2-core cable AWG24 stranded black, qty 12,200 m, need date 2027-01-15",
+          "description_span": "2-core cable AWG24 stranded black",
+          "customer_item_code_span": "CVG-88-301",
+          "quantity_span": "12,200 m",
+          "uom_span": "m",
+          "required_date_span": "2027-01-15",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-PDF-02-A1#p1",
+          "line_span": "Item 2: CVG-88-302 2-core cable AWG24 stranded white, qty 6,100 m, need date 2027-01-15",
+          "description_span": "2-core cable AWG24 stranded white",
+          "customer_item_code_span": "CVG-88-302",
+          "quantity_span": "6,100 m",
+          "uom_span": "m",
+          "required_date_span": "2027-01-15",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-PDF-02-A1#p1",
+          "line_span": "Item 3: CVG-88-303 4-core cable AWG22 braid shield grey, qty 2,000 m, need date 2027-02-01",
+          "description_span": "4-core cable AWG22 braid shield grey",
+          "customer_item_code_span": "CVG-88-303",
+          "quantity_span": "2,000 m",
+          "uom_span": "m",
+          "required_date_span": "2027-02-01",
+          "target_price_span": null
+        }
+      ]
+    },
+    "bc72f7b8aebf3f915cb7508b": {
+      "form": "brennic_de_nghi",
+      "rfq_no_span": "BRN-DN-2610-09",
+      "quote_due_span": "2026-10-10",
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "FORMS-VI-BRN-INJ-A1!RFQ",
+          "line_span": "1 | BRN-WR-1102 | Dây đơn 0.5mm2 đỏ | 2 | 1000 | m | 2026-11-25",
+          "description_span": "Dây đơn 0.5mm2 đỏ",
+          "customer_item_code_span": "BRN-WR-1102",
+          "quantity_span": "1000",
+          "uom_span": "m",
+          "required_date_span": "2026-11-25",
+          "target_price_span": null
+        }
+      ]
+    },
+    "c1c8acaa80add35fd1dce9dc": {
+      "form": "customer_request",
+      "rfq_no_span": "QRL-RFQ-2610-06",
+      "quote_due_span": "2026-10-15",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-XLSX-03-A1!RFQ",
+          "line_span": "1 | QRL-7701 | HOOK-UP WIRE AWG28 BLACK | 1,000 m | 2026-12-02",
+          "description_span": "HOOK-UP WIRE AWG28 BLACK",
+          "customer_item_code_span": "QRL-7701",
+          "quantity_span": "1,000 m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-02",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-XLSX-03-A1!RFQ",
+          "line_span": "2 | QRL-7702 | HOOK-UP WIRE AWG28 RED | TBA | 2026-12-02",
+          "description_span": "HOOK-UP WIRE AWG28 RED",
+          "customer_item_code_span": "QRL-7702",
+          "quantity_span": "TBA",
+          "uom_span": null,
+          "required_date_span": "2026-12-02",
+          "target_price_span": null
+        }
+      ]
+    },
+    "c61159c1fc76f5cd59c34d03": {
+      "form": "customer_request",
+      "rfq_no_span": "CVG-RFQ-261002-02",
+      "quote_due_span": null,
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-XLSX-02-A1!RFQ",
+          "line_span": "CVG-88-401 | 2-core cable AWG26 black | 20000 | 2027-02-01",
+          "description_span": "2-core cable AWG26 black",
+          "customer_item_code_span": "CVG-88-401",
+          "quantity_span": "20000",
+          "uom_span": "m",
+          "required_date_span": "2027-02-01",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-XLSX-02-A1!RFQ",
+          "line_span": "CVG-88-402 | 2-core cable AWG26 red | 10000 | 2027-02-01",
+          "description_span": "2-core cable AWG26 red",
+          "customer_item_code_span": "CVG-88-402",
+          "quantity_span": "10000",
+          "uom_span": "m",
+          "required_date_span": "2027-02-01",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-XLSX-02-A1!RFQ",
+          "line_span": "CVG-88-403 | 6-core cable 0.5mm2 foil shield | 5000 | 2027-03-01",
+          "description_span": "6-core cable 0.5mm2 foil shield",
+          "customer_item_code_span": "CVG-88-403",
+          "quantity_span": "5000",
+          "uom_span": "m",
+          "required_date_span": "2027-03-01",
+          "target_price_span": null
+        }
+      ]
+    },
+    "cd84ac63b6bf7dd115d15d4d": {
+      "form": "customer_request",
+      "rfq_no_span": "BRN-RFQ-2610-05",
+      "quote_due_span": "14/10/2026",
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "VI-PDF-01-A1#p1",
+          "line_span": "1 | BRN-C-2301 | Cáp 2 lõi 1.25mm2 đen | 6.100 m | 20/11/2026",
+          "description_span": "Cáp 2 lõi 1.25mm2 đen",
+          "customer_item_code_span": "BRN-C-2301",
+          "quantity_span": "6.100 m",
+          "uom_span": "m",
+          "required_date_span": "20/11/2026",
+          "target_price_span": null
+        },
+        {
+          "part": "VI-PDF-01-A1#p1",
+          "line_span": "2 | BRN-C-2302 | Cáp 2 lõi 0.75mm2 đỏ | 3.050 m | 30/11/2026",
+          "description_span": "Cáp 2 lõi 0.75mm2 đỏ",
+          "customer_item_code_span": "BRN-C-2302",
+          "quantity_span": "3.050 m",
+          "uom_span": "m",
+          "required_date_span": "30/11/2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "d46e5ae8627c2a387fbc8507": {
+      "form": "customer_request",
+      "rfq_no_span": "LMR-RFQ-2610-01",
+      "quote_due_span": null,
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "VI-PDF-02-A1#p1",
+          "line_span": "1. Cáp 4 lõi AWG24 chống nhiễu lá nhôm - 1.220 m - cần trước 10/12/2026",
+          "description_span": "Cáp 4 lõi AWG24 chống nhiễu lá nhôm",
+          "customer_item_code_span": null,
+          "quantity_span": "1.220 m",
+          "uom_span": "m",
+          "required_date_span": "10/12/2026",
+          "target_price_span": null
+        },
+        {
+          "part": "VI-PDF-02-A1#p1",
+          "line_span": "2. Dây điện AWG26 màu tím lõi đơn - 610 m - cần trước 10/12/2026",
+          "description_span": "Dây điện AWG26 màu tím lõi đơn",
+          "customer_item_code_span": null,
+          "quantity_span": "610 m",
+          "uom_span": "m",
+          "required_date_span": "10/12/2026",
+          "target_price_span": null
+        }
+      ]
+    },
+    "e0c8279a5d33ead94a0fcb41": {
+      "form": "none",
+      "rfq_no_span": null,
+      "quote_due_span": null,
+      "currency_span": null,
+      "items": []
+    },
+    "e70db883c1954d4e22a2a04d": {
+      "form": "customer_request",
+      "rfq_no_span": "BRN-DN-2610-07",
+      "quote_due_span": "2026-10-09",
+      "currency_span": "VND",
+      "items": [
+        {
+          "part": "FORMS-VI-BRN-01-A1!RFQ",
+          "line_span": "1 | BRN-WR-1102 | Dây đơn 0.5mm2 đỏ | 4 | 2000 | m | 2026-11-20",
+          "description_span": "Dây đơn 0.5mm2 đỏ",
+          "customer_item_code_span": "BRN-WR-1102",
+          "quantity_span": "4",
+          "uom_span": null,
+          "required_date_span": "2026-11-20",
+          "target_price_span": null
+        },
+        {
+          "part": "FORMS-VI-BRN-01-A1!RFQ",
+          "line_span": "2 | BRN-WR-1107 | Dây đơn 0.75mm2 đen | 2 | 1000 | m | 2026-11-27",
+          "description_span": "Dây đơn 0.75mm2 đen",
+          "customer_item_code_span": "BRN-WR-1107",
+          "quantity_span": "2",
+          "uom_span": null,
+          "required_date_span": "2026-11-27",
+          "target_price_span": null
+        }
+      ]
+    },
+    "ede9470616c6611848a0b5b1": {
+      "form": "none",
+      "rfq_no_span": null,
+      "quote_due_span": null,
+      "currency_span": null,
+      "items": []
+    },
+    "f771ef8f4c1c97bcddd22b3e": {
+      "form": "customer_request",
+      "rfq_no_span": "KMH-RFQ-261002-04",
+      "quote_due_span": null,
+      "currency_span": "円",
+      "items": [
+        {
+          "part": "JA-XLSX-02-A1!RFQ",
+          "line_span": "1 | 4芯 AWG22 編組シールド 灰 | 1,500m | 2026-12-04",
+          "description_span": "4芯 AWG22 編組シールド 灰",
+          "customer_item_code_span": null,
+          "quantity_span": "1,500m",
+          "uom_span": "m",
+          "required_date_span": "2026-12-04",
+          "target_price_span": null
+        },
+        {
+          "part": "JA-XLSX-02-A1!RFQ",
+          "line_span": "2 | 6芯 0.5sq 撚線 黒 | 未定 | 2026-12-18",
+          "description_span": "6芯 0.5sq 撚線 黒",
+          "customer_item_code_span": null,
+          "quantity_span": "未定",
+          "uom_span": null,
+          "required_date_span": "2026-12-18",
+          "target_price_span": null
+        }
+      ]
+    },
+    "fcd41e945a6813803126dfec": {
+      "form": "customer_request",
+      "rfq_no_span": "NRV-RFQ-26-0131",
+      "quote_due_span": "15 Oct 2026",
+      "currency_span": "USD",
+      "items": [
+        {
+          "part": "EN-PDF-01-A1#p1",
+          "line_span": "1. NRV-77-0021 MULTI-CORE CABLE 6C AWG24 FOIL SHIELD BLACK - 3,050 m - by 01 Dec 2026",
+          "description_span": "MULTI-CORE CABLE 6C AWG24 FOIL SHIELD BLACK",
+          "customer_item_code_span": "NRV-77-0021",
+          "quantity_span": "3,050 m",
+          "uom_span": "m",
+          "required_date_span": "01 Dec 2026",
+          "target_price_span": null
+        },
+        {
+          "part": "EN-PDF-01-A1#p1",
+          "line_span": "2. NRV-77-0022 HOOK-UP WIRE AWG22 BARE CU BLUE - 1,000 m - by 01 Dec 2026",
+          "description_span": "HOOK-UP WIRE AWG22 BARE CU BLUE",
+          "customer_item_code_span": "NRV-77-0022",
+          "quantity_span": "1,000 m",
+          "uom_span": "m",
+          "required_date_span": "01 Dec 2026",
+          "target_price_span": null
+        }
+      ]
+    }
+  }
+}

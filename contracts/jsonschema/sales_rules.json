@@ -1402,6 +1402,16 @@
             "title": "Salesorder Skill",
             "type": "boolean"
           },
+          "skill_document_forms": {
+            "default": false,
+            "title": "Skill Document Forms",
+            "type": "boolean"
+          },
+          "skill_handoffs": {
+            "default": false,
+            "title": "Skill Handoffs",
+            "type": "boolean"
+          },
           "skill_intents": {
             "default": false,
             "title": "Skill Intents",
@@ -1418,6 +1428,11 @@
             "minimum": 0.5,
             "title": "Skill Pick Confidence",
             "type": "number"
+          },
+          "skill_reply_drafts": {
+            "default": false,
+            "title": "Skill Reply Drafts",
+            "type": "boolean"
           },
           "thread_agent": {
             "default": false,

@@ -138,6 +138,9 @@ class ModelStep(StrEnum):
     REPLY_DRAFT = "reply_draft"
     SKILL_INTENTS = "skill_intents"
     SKILL_MAIL_KINDS = "skill_mail_kinds"
+    SKILL_DOCUMENT_FORMS = "skill_document_forms"
+    SKILL_HANDOFFS = "skill_handoffs"
+    SKILL_REPLY_DRAFTS = "skill_reply_drafts"
     TRIAGE_CARD = "triage_card"
 
 
@@ -220,6 +223,26 @@ class ModelAssist(BaseModel):
     # maps it, one of the platform's routes. With no kind read, the message
     # is classified as if this were off. Off where a version does not say.
     skill_mail_kinds: bool = False
+    # A local model reads a customer's own request form the fixed reader
+    # does not, by the forms the company's document-forms skill names for
+    # that customer (ticket 42); code finds every value at its cell and
+    # flags it for Sales to confirm. A file it reads makes the mail a
+    # quotation request. Nothing read: as if this were off. Off where a
+    # version does not say.
+    skill_document_forms: bool = False
+    # A routed message's hand-off to PC or QA is pre-filled by the kinds the
+    # company's hand-off skill names (ticket 42 family 5): the company's
+    # approved version, else the platform's. Each kind's fields and team are
+    # the platform's, as the skill maps them. With no kind of the skill for
+    # the message, or no usable answer, the hand-off is read as if this were
+    # off. Off where a version does not say.
+    skill_handoffs: bool = False
+    # A mail to a customer is worded by the kinds the company's reply-drafts
+    # skill names, each as one of the platform's drafts (ticket 42 family 5):
+    # when it is offered, its facts, its check and its recipients stay the
+    # draft's. Off: worded as `reply_draft` words it. Off where a version
+    # does not say.
+    skill_reply_drafts: bool = False
     # A message still routed "other" gets a card in the inbox (ticket 33):
     # a local model says which of the company's kinds of mail it seems to
     # be; code resolves the case it seems to concern from the numbers it

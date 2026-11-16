@@ -175,6 +175,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.skill_mail_kinds",
                     "model_assist.triage_card",
                     "model_assist.request_handoff",
+                    "model_assist.skill_handoffs",
                     "model_assist.change_request",
                 ),
                 _severities(
@@ -251,13 +252,17 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "fiscal_year_start_month",
                     "implied_acceptance",
                     "model_assist.reply_draft",
+                    "model_assist.skill_reply_drafts",
                 ),
                 _severities("missing_noc_esf"),
                 _in(_FOLLOWUPS, "implied_acceptance"),
             ),
             _step(StepId.O11),
             # Reading the RFQ (a quote step whose switch lives in the order rules).
-            _step(StepId.Q1, _in(_ORDER, "model_assist.rfq_extraction")),
+            _step(
+                StepId.Q1,
+                _in(_ORDER, "model_assist.rfq_extraction", "model_assist.skill_document_forms"),
+            ),
             _step(StepId.Q2),
             # The request to Design: whose mail counts as Design's, and how long
             # DW1 waits for the reply.

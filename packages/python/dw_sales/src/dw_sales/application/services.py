@@ -392,6 +392,9 @@ def assemble(
             worker_id,
             worker_version,
             deployed,
+            # Worded by the tenant's reply-drafts skill where its step runs
+            # (ticket 42 family 5).
+            skills=skills,
         ),
         assistant=AssistantService(
             assistant,
