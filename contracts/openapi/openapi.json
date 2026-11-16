@@ -4380,6 +4380,103 @@
         "title": "ConvertEntryView",
         "type": "object"
       },
+      "ConvertGap": {
+        "description": "One customer code Bravo does not answer with an approved row.",
+        "properties": {
+          "bravo_prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo Prv Code"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "state": {
+            "enum": [
+              "not_in_bravo",
+              "waiting_in_bravo"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code",
+          "customer_item_code",
+          "state"
+        ],
+        "title": "ConvertGap",
+        "type": "object"
+      },
+      "ConvertGapsView": {
+        "description": "The gaps, and whether an approved Bravo convert list was read at all:\nwithout one, nothing can be said to be missing from it.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "bravo_read": {
+            "title": "Bravo Read",
+            "type": "boolean"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertGap"
+            },
+            "title": "Gaps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bravo_read",
+          "as_of",
+          "gaps"
+        ],
+        "title": "ConvertGapsView",
+        "type": "object"
+      },
       "CopperBasisView": {
         "description": "How a price follows copper. A band's limits are prices of copper.",
         "properties": {
@@ -32234,6 +32331,27 @@
           }
         },
         "summary": "Bravo Orders",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/convert-gaps": {
+      "get": {
+        "operationId": "convert_gaps_api_v1_sales_master_data_convert_gaps_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertGapsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Convert Gaps",
         "tags": [
           "sales"
         ]

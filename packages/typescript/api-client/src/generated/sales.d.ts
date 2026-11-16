@@ -502,6 +502,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/master-data/convert-gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Convert Gaps */
+        get: operations["convert_gaps_api_v1_sales_master_data_convert_gaps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/master-data/convert-list": {
         parameters: {
             query?: never;
@@ -3511,6 +3528,40 @@ export interface components {
             customer_item_code: string;
             /** Prv Code */
             prv_code: string;
+        };
+        /**
+         * ConvertGap
+         * @description One customer code Bravo does not answer with an approved row.
+         */
+        ConvertGap: {
+            /** Bravo Prv Code */
+            bravo_prv_code?: string | null;
+            /** Customer Code */
+            customer_code: string;
+            /** Customer Item Code */
+            customer_item_code: string;
+            /** Prv Code */
+            prv_code?: string | null;
+            /** Recorded At */
+            recorded_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_in_bravo" | "waiting_in_bravo";
+        };
+        /**
+         * ConvertGapsView
+         * @description The gaps, and whether an approved Bravo convert list was read at all:
+         *     without one, nothing can be said to be missing from it.
+         */
+        ConvertGapsView: {
+            /** As Of */
+            as_of: string | null;
+            /** Bravo Read */
+            bravo_read: boolean;
+            /** Gaps */
+            gaps: components["schemas"]["ConvertGap"][];
         };
         /**
          * CopperBasisView
@@ -9920,6 +9971,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataView_BravoOrderView_"];
+                };
+            };
+        };
+    };
+    convert_gaps_api_v1_sales_master_data_convert_gaps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertGapsView"];
                 };
             };
         };

@@ -587,6 +587,7 @@ def build_dw1(
         example_uow=catalog_uow,
         bravo_uow=catalog_uow,
         read_back_uow=catalog_uow,
+        gaps=catalog,
         readiness=readiness,
         roles=roles,
         step_activity=step_activity,

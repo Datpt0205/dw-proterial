@@ -38,6 +38,7 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.change_reading import ChangeReader
 from dw_sales.application.change_requests import ChangeRequests
 from dw_sales.application.confirmations import Confirmations
+from dw_sales.application.convert_gaps import ConvertGapService, ConvertGapsPort
 from dw_sales.application.customer_notations import CustomerNotations, NotationLedgerPort
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
@@ -142,6 +143,7 @@ class SalesServices:
     catalog_imports: CatalogImportService
     # Bravo's YCBG export, uploaded for Design's results to be read (ticket 16).
     bravo_exports: BravoExportService
+    convert_gaps: ConvertGapService
     read_backs: ReadBackService
     # A finding explained in words by the model, on request (AI item 12).
     finding_explanations: FindingExplanations
@@ -246,6 +248,8 @@ def assemble(
     # sales order read back from one is kept for its case.
     bravo_uow: BravoExportUnitOfWorkFactory,
     read_back_uow: ReadBackUnitOfWorkFactory,
+    # What Bravo's convert list lacks of the codes Sales confirmed (ticket 04).
+    gaps: ConvertGapsPort,
     readiness: ModelReadiness,
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
@@ -359,6 +363,7 @@ def assemble(
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         bravo_exports=BravoExportService(bravo_uow, uow, gate, clock, ids),
+        convert_gaps=ConvertGapService(gaps, gate),
         read_backs=ReadBackService(uow, read_back_uow, gate),
         salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),

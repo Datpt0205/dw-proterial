@@ -49,6 +49,7 @@ from datetime import date, datetime
 from typing import Protocol
 
 from dw_kernel.errors import ConflictError
+from dw_sales.application.convert_gaps import ConvertGap, ConvertGapsView
 from dw_sales.application.ports import (
     CatalogNotConnectedError,
     SalesCatalogPort,
@@ -385,6 +386,45 @@ class SnapshotSalesCatalog:
             (*listed.data, *(kept.entry for kept in added)),
             max(listed.as_of, *(kept.recorded_at for kept in added)),
         )
+
+    async def convert_gaps(self, scope: SalesScope) -> ConvertGapsView:
+        """Implements `ConvertGapsPort` (`convert_gaps`): against the approved
+        Bravo convert list, each code Sales confirmed that it does not answer,
+        and its own rows still waiting."""
+        own = await self._list(scope, CatalogList.CONVERT_LIST)
+        if own is None:
+            return ConvertGapsView(bravo_read=False, as_of=None, gaps=[])
+        bravo = {(e.customer_code, e.customer_item_code): e for e in own.all(ConvertEntry)}
+        gaps: list[ConvertGap] = []
+        confirmed: set[tuple[str, str]] = set()
+        for kept in await self.recorded_converts.converts(scope):
+            entry = kept.entry
+            key = (entry.customer_code, entry.customer_item_code)
+            held = bravo.get(key)
+            if held is not None and held.bravo_state == "approved":
+                continue
+            confirmed.add(key)
+            gaps.append(
+                ConvertGap(
+                    customer_code=entry.customer_code,
+                    customer_item_code=entry.customer_item_code,
+                    state="not_in_bravo" if held is None else "waiting_in_bravo",
+                    prv_code=entry.prv_code,
+                    recorded_at=kept.recorded_at,
+                    bravo_prv_code=None if held is None else held.prv_code,
+                )
+            )
+        gaps.extend(
+            ConvertGap(
+                customer_code=entry.customer_code,
+                customer_item_code=entry.customer_item_code,
+                state="waiting_in_bravo",
+                bravo_prv_code=entry.prv_code,
+            )
+            for key, entry in bravo.items()
+            if entry.bravo_state == "waiting" and key not in confirmed
+        )
+        return ConvertGapsView(bravo_read=True, as_of=own.as_of, gaps=gaps)
 
     async def learn_convert(
         self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID

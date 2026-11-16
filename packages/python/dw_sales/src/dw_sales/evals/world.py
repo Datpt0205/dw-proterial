@@ -1851,6 +1851,7 @@ def open_world(
         # Bravo exports and the sales orders read back share one store here.
         bravo_uow=(bravo_store := MemoryBravoExportStore(outbox=runtime.outbox)),
         read_back_uow=bravo_store,
+        gaps=catalog,
         readiness=readiness,
         roles=StaticRoleCatalog(),
         step_activity=store,

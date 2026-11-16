@@ -68,6 +68,7 @@ from dw_sales.application.catalog_imports import (
     CatalogStateView,
 )
 from dw_sales.application.change_requests import ChangeRequestResult, TypedChange
+from dw_sales.application.convert_gaps import ConvertGapsView
 from dw_sales.application.customer_notations import CustomerNotationView
 from dw_sales.application.customer_reminders import CustomerReminderView
 from dw_sales.application.design_requests import DesignRequestView
@@ -2048,6 +2049,16 @@ def build_router(
     @router.get("/master-data/bravo-orders", response_model=MasterDataView[BravoOrderView])
     async def bravo_orders(context: Ctx, svc: Svc) -> MasterDataView[BravoOrderView]:
         return await svc.master_data.bravo_orders(context)
+
+    # The codes Sales confirmed that Bravo's convert list does not answer yet
+    # (ticket 04), for Sales to enter and approve in Bravo.
+    @router.get(
+        "/master-data/convert-gaps",
+        response_model=ConvertGapsView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def convert_gaps(context: Ctx, svc: Svc) -> ConvertGapsView:
+        return await svc.convert_gaps.list(context)
 
     @router.get("/master-data/open-ycbg", response_model=MasterDataView[OpenYcbgView])
     async def open_ycbg(context: Ctx, svc: Svc) -> MasterDataView[OpenYcbgView]:

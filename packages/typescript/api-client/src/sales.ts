@@ -427,6 +427,13 @@ export class SalesApi {
     );
   }
 
+  /** The codes Sales confirmed that Bravo's convert list lacks (ticket 04). */
+  convertGaps() {
+    return this.get<"/api/v1/sales/master-data/convert-gaps">(
+      "/api/v1/sales/master-data/convert-gaps",
+    );
+  }
+
   /** The case's sales order as Bravo held it when last read back (ticket 03). */
   bravoReadBack(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}/bravo-read-back">(
