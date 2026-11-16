@@ -44,17 +44,17 @@ async def test_a_number_bravo_cannot_have_given_is_refused_and_bravos_is_recorde
 
 
 async def test_the_export_is_the_quote_preparers_and_this_tenants(api: Api) -> None:
-    body = {"file_name": "ycbg.xlsx", "content_b64": _EXPORT}
+    body = {"screen": "ycbg", "file_name": "ycbg.xlsx", "content_b64": _EXPORT}
 
-    queued = await api.as_(DIEU).post("/ycbg-exports", body)
+    queued = await api.as_(DIEU).post("/bravo-exports", body)
     assert queued.status_code == 202, queued.text
     assert queued.json()["status"] == "queued"
 
     for persona in (api.as_(HA), api.as_(BINH)):
-        assert (await persona.post("/ycbg-exports", body)).status_code == 403
-        assert (await persona.get("/ycbg-exports")).status_code == 403
+        assert (await persona.post("/bravo-exports", body)).status_code == 403
+        assert (await persona.get("/bravo-exports?screen=ycbg")).status_code == 403
 
-    listed = await api.as_(DIEU).get("/ycbg-exports")
+    listed = await api.as_(DIEU).get("/bravo-exports?screen=ycbg")
     assert [e["export_id"] for e in listed.json()] == [queued.json()["export_id"]]
-    other = await api.as_(BAO, BETA).get("/ycbg-exports")
+    other = await api.as_(BAO, BETA).get("/bravo-exports?screen=ycbg")
     assert other.status_code == 200 and other.json() == []

@@ -483,13 +483,14 @@ rule_draft_files = sa.Table(
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
-# Bravo's YCBG exports Sales uploaded, Design's results read from them
-# (ticket 16, migration 10d5dfc1a3f1), and their files until read.
-ycbg_exports = sa.Table(
-    "ycbg_exports",
+# Bravo screens exported by Sales and read by the worker (tickets 16, 03,
+# migration owed below), and their files until read.
+bravo_exports = sa.Table(
+    "bravo_exports",
     metadata,
     sa.Column("id", UUID(as_uuid=True), primary_key=True),
     *_scope(),
+    sa.Column("screen", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("uploaded_by", UUID(as_uuid=True), nullable=False),
     sa.Column("uploaded_at", _TS, nullable=False),
@@ -503,13 +504,31 @@ ycbg_exports = sa.Table(
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
-ycbg_export_files = sa.Table(
-    "ycbg_export_files",
+bravo_export_files = sa.Table(
+    "bravo_export_files",
     metadata,
     *_scope(),
     sa.Column("export_id", UUID(as_uuid=True), nullable=False),
     sa.Column("content", sa.LargeBinary, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# A case's sales order as Bravo held it when last read back (ticket 03).
+order_bravo_read_backs = sa.Table(
+    "order_bravo_read_backs",
+    metadata,
+    *_scope(),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("case_version", sa.Integer, nullable=False),
+    sa.Column("po_no", sa.Text, nullable=False),
+    sa.Column("so_no", sa.Text, nullable=False),
+    sa.Column("differences", JSONB, nullable=False),
+    sa.Column("rows_read", sa.Integer, nullable=False),
+    sa.Column("file_sha256", sa.Text, nullable=False),
+    sa.Column("read_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("read_at", _TS, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
 # Worked examples a customer's SalesOrder rules are learned from (ticket 38,

@@ -390,23 +390,26 @@ export class SalesApi {
     );
   }
 
-  /** Bravo's YCBG screen as Sales exported it (202, ticket 16): the worker
-   * reads Design's results from it, until the vendor's API reads them back. */
-  uploadYcbgExport(
-    body: Body<"/api/v1/sales/ycbg-exports">,
+  /** A Bravo screen as Sales exported it (202, tickets 16 and 03): the
+   * worker reads Design's results on a YCBG, or the sales orders read back
+   * after the paste, until the vendor's API reads Bravo. */
+  uploadBravoExport(
+    body: Body<"/api/v1/sales/bravo-exports">,
     key: string,
-  ): Promise<Accepted<"/api/v1/sales/ycbg-exports">> {
+  ): Promise<Accepted<"/api/v1/sales/bravo-exports">> {
     return this.client.request(
       "POST",
-      "/api/v1/sales/ycbg-exports",
-      shaped<Accepted<"/api/v1/sales/ycbg-exports">>(),
+      "/api/v1/sales/bravo-exports",
+      shaped<Accepted<"/api/v1/sales/bravo-exports">>(),
       { body, idempotencyKey: key },
     );
   }
 
-  /** The latest exports, newest first, and what became of each YCBG number. */
-  ycbgExports() {
-    return this.get<"/api/v1/sales/ycbg-exports">("/api/v1/sales/ycbg-exports");
+  /** A screen's latest exports, newest first, and what became of each document. */
+  bravoExports(screen: Body<"/api/v1/sales/bravo-exports">["screen"]) {
+    return this.get<"/api/v1/sales/bravo-exports">(
+      `/api/v1/sales/bravo-exports?screen=${enc(screen)}`,
+    );
   }
 
   // ---- orders -------------------------------------------------------------
@@ -421,6 +424,13 @@ export class SalesApi {
   order(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}">(
       `/api/v1/sales/orders/${enc(caseId)}`,
+    );
+  }
+
+  /** The case's sales order as Bravo held it when last read back (ticket 03). */
+  bravoReadBack(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/bravo-read-back">(
+      `/api/v1/sales/orders/${enc(caseId)}/bravo-read-back`,
     );
   }
 

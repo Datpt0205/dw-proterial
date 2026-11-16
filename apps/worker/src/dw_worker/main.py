@@ -160,6 +160,7 @@ from dw_sales.adapters.reader_client import (
 )
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.autonomy import AUTO_APPLY_LANE
+from dw_sales.application.bravo_exports import BRAVO_EXPORT_UPLOADED, YCBG_EXPORT_UPLOADED_BEFORE
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
 from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
@@ -177,7 +178,6 @@ from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
 from dw_sales.application.salesorder_pairs import SALESORDER_SKILL_REPLAY_LANE
 from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
-from dw_sales.application.ycbg_exports import YCBG_EXPORT_UPLOADED
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -226,6 +226,7 @@ from dw_worker.consumers.sales_auto_apply import (
     INTERVAL_SECONDS as SALES_AUTO_APPLY_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_auto_apply import build_sales_auto_apply_consumer
+from dw_worker.consumers.sales_bravo_exports import build_bravo_export_handler
 from dw_worker.consumers.sales_catalog import build_catalog_import_handler
 from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_followups import (
@@ -258,7 +259,6 @@ from dw_worker.consumers.sales_skill_replay import (
     INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
-from dw_worker.consumers.sales_ycbg_exports import build_ycbg_export_handler
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -1253,12 +1253,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # the same condition.
                 if mount.salesorder_learning is not None:
                     handlers[EXAMPLE_REQUESTED] = build_example_handler(mount.salesorder_learning)
-                # A Bravo YCBG export, read for Design's results (ticket 16),
-                # on the same condition.
-                if mount.ycbg_export_reading is not None:
-                    handlers[YCBG_EXPORT_UPLOADED] = build_ycbg_export_handler(
-                        mount.ycbg_export_reading
-                    )
+                # A Bravo export (a YCBG for Design's results, ticket 16; a
+                # sales order read back, ticket 03), on the same condition.
+                # Ticket 16's own event type, which an upload made before the
+                # rename may still hold queued, reads the same row.
+                if mount.bravo_export_reading is not None:
+                    export_handler = build_bravo_export_handler(mount.bravo_export_reading)
+                    handlers[BRAVO_EXPORT_UPLOADED] = export_handler
+                    handlers[YCBG_EXPORT_UPLOADED_BEFORE] = export_handler
                 if mount.rule_draft_sweep is not None:
                     sales_rule_drafts_consumer = build_rule_draft_sweep_consumer(
                         mount.rule_draft_sweep

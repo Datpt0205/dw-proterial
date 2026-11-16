@@ -35,7 +35,9 @@ from dw_sales.domain.master_data import MAX_ROWS, CellValue, ImportedTable, Tabl
 from dw_sales.domain.order_checks import IntakeCaps
 
 DATA_SHEET: Final = "Dữ liệu"
-_MAX_COLUMNS: Final = 60
+# Bravo exports run wide: "Customer order information" has 81 columns
+# (B02, ticket 03).
+_MAX_COLUMNS: Final = 100
 _CSV_SHEET: Final = "CSV"
 
 

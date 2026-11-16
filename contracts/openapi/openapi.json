@@ -1730,6 +1730,133 @@
         "title": "BravoEntryBody",
         "type": "object"
       },
+      "BravoExport": {
+        "additionalProperties": false,
+        "description": "One uploaded export and what became of it (module docstring).",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "export_id": {
+            "format": "uuid",
+            "title": "Export Id",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "file_size": {
+            "maximum": 2097152.0,
+            "minimum": 1.0,
+            "title": "File Size",
+            "type": "integer"
+          },
+          "outcomes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExportOutcome"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "rejected": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RejectedRow"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "screen": {
+            "enum": [
+              "ycbg",
+              "sales_orders"
+            ],
+            "title": "Screen",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "read",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "format": "uuid",
+            "title": "Uploaded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "export_id",
+          "screen",
+          "status",
+          "uploaded_by",
+          "uploaded_at",
+          "file_name",
+          "file_sha256",
+          "file_size"
+        ],
+        "title": "BravoExport",
+        "type": "object"
+      },
+      "BravoExportBody": {
+        "additionalProperties": false,
+        "description": "A Bravo screen exported by Sales (tickets 16, 03): which screen, the\nfile's name and its bytes, base64, decoded here and never opened: the\nworker reads it in the reader sandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 2796204,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          },
+          "screen": {
+            "enum": [
+              "ycbg",
+              "sales_orders"
+            ],
+            "title": "Screen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen",
+          "file_name",
+          "content_b64"
+        ],
+        "title": "BravoExportBody",
+        "type": "object"
+      },
       "BravoNoBody": {
         "additionalProperties": false,
         "properties": {
@@ -1876,6 +2003,74 @@
           "columns"
         ],
         "title": "BravoPoLayout",
+        "type": "object"
+      },
+      "BravoReadBack": {
+        "additionalProperties": false,
+        "description": "A case's sales order as Bravo held it when last read, against the case\nversion it was compared with (module docstring).",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/SoDifference"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "file_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "po_no": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Po No",
+            "type": "string"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          },
+          "read_by": {
+            "format": "uuid",
+            "title": "Read By",
+            "type": "string"
+          },
+          "rows_read": {
+            "minimum": 1.0,
+            "title": "Rows Read",
+            "type": "integer"
+          },
+          "so_no": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "So No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "po_no",
+          "so_no",
+          "differences",
+          "rows_read",
+          "file_sha256",
+          "read_by",
+          "read_at"
+        ],
+        "title": "BravoReadBack",
         "type": "object"
       },
       "BriefView": {
@@ -6754,6 +6949,63 @@
           "currency"
         ],
         "title": "ExportMapping",
+        "type": "object"
+      },
+      "ExportOutcome": {
+        "additionalProperties": false,
+        "description": "What became of one document of an export: its number (a YCBG's, a\ncustomer PO's) and the case, never a value of the file.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "declined": {
+            "default": false,
+            "title": "Declined",
+            "type": "boolean"
+          },
+          "differences": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Differences",
+            "type": "integer"
+          },
+          "key": {
+            "pattern": "^[^\\x00-\\x1f\\x7f]{1,64}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "recorded",
+              "unchanged",
+              "pending",
+              "no_case",
+              "lines_differ",
+              "changed",
+              "unreadable",
+              "equal",
+              "differs",
+              "several_cases",
+              "several_sos"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "outcome"
+        ],
+        "title": "ExportOutcome",
         "type": "object"
       },
       "ExportRow": {
@@ -17700,6 +17952,36 @@
         "title": "QuoteSummaryView",
         "type": "object"
       },
+      "ReadBackView": {
+        "description": "A case's read-back as its page shows it. ``stale``: the case changed\nsince it was compared. A unit price's values are left out for a viewer\nwho may not read prices.",
+        "properties": {
+          "prices_hidden": {
+            "title": "Prices Hidden",
+            "type": "boolean"
+          },
+          "read_back": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BravoReadBack"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "read_back",
+          "stale",
+          "prices_hidden"
+        ],
+        "title": "ReadBackView",
+        "type": "object"
+      },
       "ReadFrom": {
         "additionalProperties": false,
         "description": "Where in a mail DW2 read the request, when a document was attached:\nthe file (its id in the stored mailbox, and its name) when the lines\nwere in it (None: the mail's own words), and whether any value was read\nonly on a scanned page, which a person compares with the paper before\nDW2 sends it on (`review`).",
@@ -20822,6 +21104,76 @@
           "versions"
         ],
         "title": "SkillsView",
+        "type": "object"
+      },
+      "SoDifference": {
+        "additionalProperties": false,
+        "description": "Where Bravo's order is not what was prepared. ``expected`` and\n``actual`` are the values as printed; a unit price's are shown only to\nthose who may read prices (the view's concern).",
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "field": {
+            "enum": [
+              "missing_row",
+              "extra_row",
+              "item_code",
+              "quantity",
+              "unit_price",
+              "requested_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "po_no": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Po No",
+            "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          }
+        },
+        "required": [
+          "po_no",
+          "line_no",
+          "field"
+        ],
+        "title": "SoDifference",
         "type": "object"
       },
       "SodRuleView": {
@@ -24600,162 +24952,6 @@
           "case_version"
         ],
         "title": "YcbgBody",
-        "type": "object"
-      },
-      "YcbgExport": {
-        "additionalProperties": false,
-        "description": "One uploaded export and what became of it (module docstring).",
-        "properties": {
-          "error": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "export_id": {
-            "format": "uuid",
-            "title": "Export Id",
-            "type": "string"
-          },
-          "file_name": {
-            "maxLength": 200,
-            "title": "File Name",
-            "type": "string"
-          },
-          "file_sha256": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "File Sha256",
-            "type": "string"
-          },
-          "file_size": {
-            "maximum": 2097152.0,
-            "minimum": 1.0,
-            "title": "File Size",
-            "type": "integer"
-          },
-          "outcomes": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/YcbgOutcome"
-            },
-            "title": "Outcomes",
-            "type": "array"
-          },
-          "rejected": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/RejectedRow"
-            },
-            "title": "Rejected",
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "queued",
-              "read",
-              "failed"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "uploaded_at": {
-            "format": "date-time",
-            "title": "Uploaded At",
-            "type": "string"
-          },
-          "uploaded_by": {
-            "format": "uuid",
-            "title": "Uploaded By",
-            "type": "string"
-          }
-        },
-        "required": [
-          "export_id",
-          "status",
-          "uploaded_by",
-          "uploaded_at",
-          "file_name",
-          "file_sha256",
-          "file_size"
-        ],
-        "title": "YcbgExport",
-        "type": "object"
-      },
-      "YcbgExportBody": {
-        "additionalProperties": false,
-        "description": "Bravo's YCBG screen exported by Sales (ticket 16): its name and its\nbytes, base64, decoded here and never opened: the worker reads it in the\nreader sandbox.",
-        "properties": {
-          "content_b64": {
-            "maxLength": 2796204,
-            "minLength": 1,
-            "title": "Content B64",
-            "type": "string"
-          },
-          "file_name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "File Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file_name",
-          "content_b64"
-        ],
-        "title": "YcbgExportBody",
-        "type": "object"
-      },
-      "YcbgOutcome": {
-        "additionalProperties": false,
-        "description": "What became of one YCBG number of a read: names the number and the\ncase, never a value of Design's result.",
-        "properties": {
-          "case_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Case Id"
-          },
-          "declined": {
-            "default": false,
-            "title": "Declined",
-            "type": "boolean"
-          },
-          "outcome": {
-            "enum": [
-              "recorded",
-              "unchanged",
-              "pending",
-              "no_case",
-              "lines_differ",
-              "changed",
-              "unreadable"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "ycbg_no": {
-            "pattern": "^[!-~]{1,64}$",
-            "title": "Ycbg No",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ycbg_no",
-          "outcome"
-        ],
-        "title": "YcbgOutcome",
         "type": "object"
       },
       "ZaloConnectView": {
@@ -30715,6 +30911,115 @@
         ]
       }
     },
+    "/api/v1/sales/bravo-exports": {
+      "get": {
+        "operationId": "bravo_exports_api_v1_sales_bravo_exports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "screen",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ycbg",
+                "sales_orders"
+              ],
+              "title": "Screen",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BravoExport"
+                  },
+                  "title": "Response Bravo Exports Api V1 Sales Bravo Exports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bravo Exports",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "upload_bravo_export_api_v1_sales_bravo_exports_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BravoExportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BravoExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Bravo Export",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/customers/{customer_code}/notation": {
       "get": {
         "operationId": "customer_notation_api_v1_sales_customers__customer_code__notation_get",
@@ -33092,6 +33397,49 @@
           }
         },
         "summary": "Bravo Entry",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/bravo-read-back": {
+      "get": {
+        "operationId": "bravo_read_back_api_v1_sales_orders__case_id__bravo_read_back_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadBackView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bravo Read Back",
         "tags": [
           "sales"
         ]
@@ -38750,90 +39098,6 @@
           }
         },
         "summary": "Resume",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/ycbg-exports": {
-      "get": {
-        "operationId": "ycbg_exports_api_v1_sales_ycbg_exports_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/YcbgExport"
-                  },
-                  "title": "Response Ycbg Exports Api V1 Sales Ycbg Exports Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Ycbg Exports",
-        "tags": [
-          "sales"
-        ]
-      },
-      "post": {
-        "operationId": "upload_ycbg_export_api_v1_sales_ycbg_exports_post",
-        "parameters": [
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/YcbgExportBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/YcbgExport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Upload Ycbg Export",
         "tags": [
           "sales"
         ]

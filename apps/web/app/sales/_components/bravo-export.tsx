@@ -13,30 +13,29 @@ import { ActionError } from "../_lib/errors";
 import { base64 } from "../_lib/files";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
-import { GuardedButton } from "../_components/guarded-button";
+import { GuardedButton } from "./guarded-button";
 
-type Export = SalesSchemas["YcbgExport"];
+type Export = SalesSchemas["BravoExport"];
+type Screen = Export["screen"];
 type Outcome = Export["outcomes"][number];
 
 /** How often the list is read again while an export waits for the worker. */
 const POLL_MS = 5_000;
 
-/** What became of one YCBG number, in Sales' words. */
+/** What became of one document of an export, in Sales' words. */
 const OUTCOME: Record<Outcome["outcome"], { text: string; color: string }> = {
   recorded: { text: "Đã ghi vào hồ sơ", color: "success" },
   unchanged: { text: "Đã ghi trước đó", color: "default" },
   pending: { text: "Design chưa xong", color: "processing" },
-  no_case: { text: "Không hồ sơ nào đang chờ số này", color: "warning" },
+  no_case: { text: "Không hồ sơ nào đang chờ", color: "warning" },
   lines_differ: { text: "Dòng khác yêu cầu", color: "warning" },
   changed: { text: "Khác kết quả đã ghi", color: "warning" },
   unreadable: { text: "Kết quả không đọc được", color: "warning" },
+  equal: { text: "Khớp bản đã duyệt", color: "success" },
+  differs: { text: "Lệch bản đã duyệt", color: "error" },
+  several_cases: { text: "Nhiều hồ sơ cùng số PO", color: "warning" },
+  several_sos: { text: "PO nằm dưới nhiều SO", color: "warning" },
 };
-const TO_SALES: ReadonlyArray<Outcome["outcome"]> = [
-  "no_case",
-  "lines_differ",
-  "changed",
-  "unreadable",
-];
 
 const STATUS: Record<Export["status"], string> = {
   queued: "DW1 đang đọc",
@@ -44,14 +43,38 @@ const STATUS: Record<Export["status"], string> = {
   failed: "Không đọc được",
 };
 
+/** Each screen's words: the button, what the file is, and where a case opens. */
+const SCREEN: Record<
+  Screen,
+  { button: string; file: string; key: string; caseHref: string }
+> = {
+  ycbg: {
+    button: "Kết quả Design từ Bravo",
+    file: "Tệp xuất màn hình Phiếu yêu cầu báo giá trên Bravo. DW1 ghi kết quả Design của dòng đã CLOSE vào hồ sơ đang chờ đúng số YCBG đó.",
+    key: "Số YCBG",
+    caseHref: "/sales/quotes/",
+  },
+  sales_orders: {
+    button: "Đọc lại SO từ Bravo",
+    file: "Tệp xuất màn hình Customer order information (Form 1) trên Bravo, sau khi import. DW1 so từng dòng với file dán đã duyệt của hồ sơ cùng khách và số PO.",
+    key: "Khách · Số PO",
+    caseHref: "/sales/orders/",
+  },
+};
+
 /**
- * "Đọc kết quả Design từ Bravo" (ticket 16): Sales exports Bravo's YCBG
- * screen and drops the file here, until the vendor's API reads it back. The
- * worker reads it and puts each closed result on the one case waiting under
- * its number; a number no case waits on comes back here for Sales, never
- * onto a guessed case. Nothing is written to Bravo.
+ * One Bravo screen exported by Sales and dropped here (tickets 16, 03), until
+ * the vendor's API reads Bravo. The worker reads it; whatever matches no case
+ * surely comes back here for Sales, never onto a guessed case. Nothing is
+ * written to Bravo.
  */
-export function YcbgExportButton({ reason }: { reason: string | null }) {
+export function BravoExportButton({
+  screen,
+  reason,
+}: {
+  screen: Screen;
+  reason: string | null;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -61,17 +84,25 @@ export function YcbgExportButton({ reason }: { reason: string | null }) {
         icon={<UploadOutlined aria-hidden />}
         onClick={() => setOpen(true)}
       >
-        Kết quả Design từ Bravo
+        {SCREEN[screen].button}
       </GuardedButton>
-      {open ? <ExportDialog onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <ExportDialog screen={screen} onClose={() => setOpen(false)} />
+      ) : null}
     </>
   );
 }
 
-function ExportDialog({ onClose }: { onClose: () => void }) {
+function ExportDialog({
+  screen,
+  onClose,
+}: {
+  screen: Screen;
+  onClose: () => void;
+}) {
   const exports = useResource(
-    "sales/ycbg-exports",
-    useCallback(() => salesApi().ycbgExports(), []),
+    `sales/bravo-exports:${screen}`,
+    useCallback(() => salesApi().bravoExports(screen), [screen]),
   );
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -90,11 +121,15 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
     const file = files[0]?.originFileObj as File | undefined;
     if (!file) return;
     setError(null);
-    const body = { file_name: file.name, content_b64: await base64(file) };
+    const body = {
+      screen,
+      file_name: file.name,
+      content_b64: await base64(file),
+    };
     const result = await run(
-      "ycbg-exports",
+      `bravo-exports/${screen}`,
       body,
-      (key) => salesApi().uploadYcbgExport(body, key),
+      (key) => salesApi().uploadBravoExport(body, key),
       "Đã lưu tệp và xếp cho DW1 đọc",
     );
     if (!result.ok) {
@@ -108,23 +143,20 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       open
-      title="Kết quả Design từ Bravo"
+      title={SCREEN[screen].button}
       onCancel={onClose}
       footer={
         <GuardedButton
           type="primary"
           reason={files.length ? null : "Thả hoặc chọn tệp xuất từ Bravo."}
-          loading={pending === "ycbg-exports"}
+          loading={pending === `bravo-exports/${screen}`}
           onClick={() => void send()}
         >
           Tải lên
         </GuardedButton>
       }
     >
-      <Typography.Paragraph>
-        Tệp xuất màn hình Phiếu yêu cầu báo giá trên Bravo. DW1 ghi kết quả
-        Design của dòng đã CLOSE vào hồ sơ đang chờ đúng số YCBG đó.
-      </Typography.Paragraph>
+      <Typography.Paragraph>{SCREEN[screen].file}</Typography.Paragraph>
       <Upload.Dragger
         maxCount={1}
         accept=".xlsx,.csv"
@@ -142,13 +174,29 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
       {exports.error ? (
         <LoadError error={exports.error} onRetry={reload} />
       ) : latest ? (
-        <LatestExport export={latest} />
+        <LatestExport export={latest} screen={screen} />
       ) : null}
     </Modal>
   );
 }
 
-function LatestExport({ export: e }: { export: Export }) {
+const TO_SALES: ReadonlyArray<Outcome["outcome"]> = [
+  "no_case",
+  "lines_differ",
+  "changed",
+  "unreadable",
+  "differs",
+  "several_cases",
+  "several_sos",
+];
+
+function LatestExport({
+  export: e,
+  screen,
+}: {
+  export: Export;
+  screen: Screen;
+}) {
   const toSales = e.outcomes.filter(
     (o) => TO_SALES.includes(o.outcome) || o.declined,
   );
@@ -164,27 +212,30 @@ function LatestExport({ export: e }: { export: Export }) {
       {e.status === "read" ? (
         <>
           <Typography.Text>
-            {e.outcomes.filter((o) => o.outcome === "recorded").length} số đã
-            ghi vào hồ sơ · {toSales.length} cần Sales xem
+            {e.outcomes.length - toSales.length} khớp hoặc đã ghi ·{" "}
+            {toSales.length} cần Sales xem
             {e.rejected.length
               ? ` · ${e.rejected.length} dòng không đọc được`
               : ""}
           </Typography.Text>
           <Table
             size="small"
-            rowKey="ycbg_no"
+            rowKey="key"
             pagination={false}
             dataSource={e.outcomes}
             scroll={{ x: "max-content" }}
-            locale={{ emptyText: "Tệp không có dòng YCBG nào." }}
+            locale={{ emptyText: "Tệp không có dòng nào để đọc." }}
             columns={[
-              { title: "Số YCBG", dataIndex: "ycbg_no" },
+              { title: SCREEN[screen].key, dataIndex: "key" },
               {
                 title: "Kết quả",
                 dataIndex: "outcome",
                 render: (o: Outcome["outcome"], row: Outcome) => (
                   <>
                     <Tag color={OUTCOME[o].color}>{OUTCOME[o].text}</Tag>
+                    {row.differences ? (
+                      <Tag color="error">{row.differences} chỗ lệch</Tag>
+                    ) : null}
                     {row.declined ? (
                       <Tag color="error">Design từ chối</Tag>
                     ) : null}
@@ -196,7 +247,10 @@ function LatestExport({ export: e }: { export: Export }) {
                 dataIndex: "case_id",
                 render: (id: string | null) =>
                   id ? (
-                    <Link href={`/sales/quotes/${id}`} target="_blank">
+                    <Link
+                      href={`${SCREEN[screen].caseHref}${id}`}
+                      target="_blank"
+                    >
                       Mở hồ sơ
                     </Link>
                   ) : (

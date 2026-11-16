@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 import sqlalchemy as sa
-from sales_harness import DW1, T0, QuoteRun, World
+from sales_harness import DW1, T0, OrderRun, QuoteRun, World
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -39,14 +39,16 @@ from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.reader_client import ClientTableReader
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import Gate
+from dw_sales.application.bravo_exports import (
+    BRAVO_EXPORT_UPLOADED,
+    BravoExportReading,
+    BravoExportService,
+)
+from dw_sales.application.bravo_sales_orders import BravoReadBack
 from dw_sales.application.case_store import CaseEvent, CaseOrigin
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.ycbg_exports import (
-    YCBG_EXPORT_UPLOADED,
-    DesignChecks,
-    YcbgExportReading,
-    YcbgExportService,
-)
+from dw_sales.application.ycbg_exports import DesignChecks, YcbgScreen
+from dw_sales.domain.bravo_sales_orders import SoDifference
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.quotes import YCBG_NO_PATTERN, QuoteStatus
 from dw_sales.evals.graders import DIEU
@@ -169,8 +171,8 @@ def exports(app_sessions: async_sessionmaker[AsyncSession]) -> SqlCatalogUnitOfW
 
 def _service(
     exports: SqlCatalogUnitOfWorkFactory, uow: SqlSalesUnitOfWorkFactory
-) -> YcbgExportService:
-    return YcbgExportService(
+) -> BravoExportService:
+    return BravoExportService(
         exports, uow, Gate(ScopeAuthorizationService()), SystemClock(), Uuid4Generator()
     )
 
@@ -179,13 +181,17 @@ def _reading(
     exports: SqlCatalogUnitOfWorkFactory,
     uow: SqlSalesUnitOfWorkFactory,
     sessions: async_sessionmaker[AsyncSession],
-) -> YcbgExportReading:
-    return YcbgExportReading(
+) -> BravoExportReading:
+    return BravoExportReading(
         uow=exports,
         tables=ClientTableReader(InProcessReaderTransport(), _CAPS),
         scanner=NoMalware(),
         access=Directory((DIEU,)),
-        checks=DesignChecks(uow, SqlQuoteCaseLookup(sessions), SystemClock(), Uuid4Generator()),
+        readers={
+            "ycbg": YcbgScreen(
+                DesignChecks(uow, SqlQuoteCaseLookup(sessions), SystemClock(), Uuid4Generator())
+            )
+        },
         clock=SystemClock(),
         ids=Uuid4Generator(),
     )
@@ -226,13 +232,13 @@ async def test_an_export_is_read_onto_the_case_waiting_and_seen_by_no_one_else(
         ]
     )
     context = DIEU.context(scope)
-    queued = await _service(exports, uow).upload(context, "ycbg.xlsx", data)
+    queued = await _service(exports, uow).upload(context, "ycbg", "ycbg.xlsx", data)
 
     done = await _reading(exports, uow, app_sessions).read(scope, queued.export_id)
 
     assert done == "export read"
-    (read,) = await _service(exports, uow).latest(context)
-    assert [(o.ycbg_no, o.outcome, o.case_id) for o in read.outcomes] == [
+    (read,) = await _service(exports, uow).latest(context, "ycbg")
+    assert [(o.key, o.outcome, o.case_id) for o in read.outcomes] == [
         (M10_YCBG, "recorded", case_id),
         ("RFQ260930-031", "no_case", None),
     ]
@@ -243,11 +249,11 @@ async def test_an_export_is_read_onto_the_case_waiting_and_seen_by_no_one_else(
 
     async with migrator.connect() as conn:
         files = await conn.scalar(
-            sa.text("SELECT count(*) FROM sales.ycbg_export_files WHERE export_id = :id"),
+            sa.text("SELECT count(*) FROM sales.bravo_export_files WHERE export_id = :id"),
             {"id": queued.export_id},
         )
         rows = await conn.scalar(
-            sa.text("SELECT count(*) FROM sales.ycbg_exports WHERE id = :id"),
+            sa.text("SELECT count(*) FROM sales.bravo_exports WHERE id = :id"),
             {"id": queued.export_id},
         )
         events = await conn.scalar(
@@ -255,7 +261,7 @@ async def test_an_export_is_read_onto_the_case_waiting_and_seen_by_no_one_else(
                 "SELECT count(*) FROM platform.outbox_events WHERE aggregate_id = :id"
                 " AND event_type = :type"
             ),
-            {"id": queued.export_id, "type": YCBG_EXPORT_UPLOADED},
+            {"id": queued.export_id, "type": BRAVO_EXPORT_UPLOADED},
         )
     assert (files, rows, events) == (0, 1, 1)
 
@@ -264,10 +270,10 @@ async def test_an_export_is_read_onto_the_case_waiting_and_seen_by_no_one_else(
     assert world.alpha == quote_run.scope
     lookup = SqlQuoteCaseLookup(app_sessions)
     for other in (world.alpha, world.beta):
-        assert await _service(exports, uow).latest(DIEU.context(other)) == []
+        assert await _service(exports, uow).latest(DIEU.context(other), "ycbg") == []
         async with _bound(app_sessions, other) as session:
             seen = await session.scalar(
-                sa.text("SELECT count(*) FROM sales.ycbg_exports WHERE id = :id"),
+                sa.text("SELECT count(*) FROM sales.bravo_exports WHERE id = :id"),
                 {"id": queued.export_id},
             )
         assert seen == 0
@@ -285,13 +291,52 @@ async def test_a_connection_that_never_scoped_itself_reads_no_export(
     migrator: AsyncEngine,
 ) -> None:
     data = ycbg_export_xlsx([ExportRow(M10_YCBG, None, "PENDING", description="a")])
-    await _service(exports, uow).upload(DIEU.context(quote_run.scope), "ycbg.xlsx", data)
+    await _service(exports, uow).upload(DIEU.context(quote_run.scope), "ycbg", "ycbg.xlsx", data)
 
     async with migrator.connect() as conn:
-        held = await conn.scalar(sa.text("SELECT count(*) FROM sales.ycbg_exports"))
+        held = await conn.scalar(sa.text("SELECT count(*) FROM sales.bravo_exports"))
     async with sales_app_engine.connect() as conn:
-        seen = await conn.scalar(sa.text("SELECT count(*) FROM sales.ycbg_exports"))
-        files = await conn.scalar(sa.text("SELECT count(*) FROM sales.ycbg_export_files"))
+        seen = await conn.scalar(sa.text("SELECT count(*) FROM sales.bravo_exports"))
+        files = await conn.scalar(sa.text("SELECT count(*) FROM sales.bravo_export_files"))
 
     assert held and held > 0
     assert (seen, files) == (0, 0)
+
+
+# ------------------------------------------------- a sales order read back --
+
+
+async def test_a_cases_read_back_is_replaced_by_the_next_and_seen_by_no_other_workspace(
+    order_run: OrderRun, exports: SqlCatalogUnitOfWorkFactory, world: World
+) -> None:
+    """Ticket 03: one read-back per case, the latest replacing the one
+    before; another workspace of the tenant reads none of it (RLS)."""
+    case_id = next(iter(order_run.latest()))
+    first = BravoReadBack(
+        case_id=case_id,
+        case_version=1,
+        po_no="PO-1",
+        so_no="SO2611-000161",
+        differences=(
+            SoDifference(po_no="PO-1", line_no=1, field="unit_price", expected="1", actual="2"),
+        ),
+        rows_read=2,
+        file_sha256="e" * 64,
+        read_by=DIEU.user_id,
+        read_at=T0,
+    )
+    async with exports(order_run.scope) as work:
+        await work.read_backs.put(first)
+        await work.commit()
+    async with exports(order_run.scope) as work:
+        await work.read_backs.put(first.model_copy(update={"differences": (), "case_version": 2}))
+        await work.commit()
+
+    async with exports(order_run.scope) as work:
+        held = await work.read_backs.get(case_id)
+    other = world.alpha_other if order_run.scope == world.alpha else world.alpha
+    async with exports(other) as work:
+        seen = await work.read_backs.get(case_id)
+
+    assert held is not None and held.equal and held.case_version == 2
+    assert seen is None

@@ -32,6 +32,12 @@ let shown: Order = orderInBravo();
 const api = {
   pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => shown),
+  // Nothing read back from Bravo yet (ticket 03).
+  bravoReadBack: vi.fn(async () => ({
+    read_back: null,
+    stale: false,
+    prices_hidden: false,
+  })),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),
   caseActivity: vi.fn(async () => ({ entries: [] })),

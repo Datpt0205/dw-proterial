@@ -22,6 +22,7 @@ from sqlalchemy.pool import NullPool
 
 from dw_platform.domain.notation import KIND_VALUES, NotationKind
 from dw_sales.adapters.skill_files import load_dw1_skills
+from dw_sales.application.bravo_exports import BravoScreen, ExportStatus
 from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
@@ -30,7 +31,6 @@ from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
 from dw_sales.application.today import REMINDERS
-from dw_sales.application.ycbg_exports import ExportStatus
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.customer_notation import NotationCaseKind, NotationSource
 from dw_sales.domain.master_data import CatalogList
@@ -100,7 +100,8 @@ _SETS: dict[str, set[str]] = {
     # A worked example's status (ticket 38).
     "ck_salesorder_examples_status": set(get_args(ExampleStatus)),
     # A Bravo YCBG export's status (ticket 16).
-    "ck_ycbg_exports_status": set(get_args(ExportStatus)),
+    "ck_bravo_exports_status": set(get_args(ExportStatus)),
+    "ck_bravo_exports_screen": set(get_args(BravoScreen)),
     # A customer's notation: its kinds, where it came from, which case (ticket 37).
     "ck_customer_notations_kind": set(get_args(NotationKind)),
     "ck_customer_notations_source": set(get_args(NotationSource)),

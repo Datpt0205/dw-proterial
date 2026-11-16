@@ -24,16 +24,19 @@ from dw_platform.application.malware import ScanVerdict
 from dw_sales.adapters.reader_client import client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.worker_service import WorkerService
+from dw_sales.application.bravo_exports import (
+    BRAVO_EXPORT_UPLOADED,
+    STALE_AFTER,
+    BravoExportReading,
+    BravoExportService,
+    ExportOutcome,
+)
 from dw_sales.application.ycbg_exports import (
     COLUMNS,
-    STALE_AFTER,
-    YCBG_EXPORT_UPLOADED,
     BravoYcbgLine,
     DesignChecks,
     ExportedYcbg,
-    YcbgExportReading,
-    YcbgExportService,
-    YcbgOutcome,
+    YcbgScreen,
     parse_export,
 )
 from dw_sales.domain.bravo_exports import MissingColumnsError
@@ -49,7 +52,7 @@ from dw_sales.evals.graders import CALLERS, DIEU, READER
 from dw_sales.evals.world import ALPHA, BETA, NOW, Caller, Directory, SampleSet, World, open_world
 from dw_sales.presentation.routes import YcbgBody
 from dw_sales.testing.bravo_ycbg_export import ExportRow, ycbg_export_xlsx
-from dw_sales.testing.ycbg_export_store import MemoryYcbgExportStore
+from dw_sales.testing.bravo_export_store import MemoryBravoExportStore
 
 REPO = Path(__file__).resolve().parents[5]
 M10_YCBG = "RFQ260930-030"
@@ -107,7 +110,7 @@ def _line(
     )
 
 
-async def _take(world: World, *lines: BravoYcbgLine, caller: Caller = DIEU) -> list[YcbgOutcome]:
+async def _take(world: World, *lines: BravoYcbgLine, caller: Caller = DIEU) -> list[ExportOutcome]:
     return list(
         await _checks(world).take(caller.context(), ExportedYcbg(tuple(lines)), file_sha256=SHA)
     )
@@ -527,20 +530,20 @@ class _Scanner:
         return self.verdict
 
 
-def _service(world: World, store: MemoryYcbgExportStore, clock: FixedClock) -> YcbgExportService:
-    return YcbgExportService(store, world.store, world.services.gate, clock, Uuid4Generator())
+def _service(world: World, store: MemoryBravoExportStore, clock: FixedClock) -> BravoExportService:
+    return BravoExportService(store, world.store, world.services.gate, clock, Uuid4Generator())
 
 
 def _reading(
-    world: World, store: MemoryYcbgExportStore, *, scanner: _Scanner | None = None
-) -> YcbgExportReading:
+    world: World, store: MemoryBravoExportStore, *, scanner: _Scanner | None = None
+) -> BravoExportReading:
     readers = client_readers(InProcessReaderTransport(), world.policies.order_rules.intake)
-    return YcbgExportReading(
+    return BravoExportReading(
         uow=store,
         tables=readers.tables,
         scanner=scanner or _Scanner(),
         access=Directory(CALLERS),
-        checks=_checks(world),
+        readers={"ycbg": YcbgScreen(_checks(world))},
         clock=FixedClock(NOW),
         ids=Uuid4Generator(),
     )
@@ -558,42 +561,44 @@ EXPORT = ycbg_export_xlsx(
 async def test_an_uploaded_export_is_queued_then_read_as_the_uploader() -> None:
     world = _world()
     case_id = await _waiting(world)
-    store = MemoryYcbgExportStore()
+    store = MemoryBravoExportStore()
 
     queued = await _service(world, store, FixedClock(NOW)).upload(
-        DIEU.context(), "ycbg.xlsx", EXPORT
+        DIEU.context(), "ycbg", "ycbg.xlsx", EXPORT
     )
 
     assert queued.status == "queued"
-    (event,) = [e for e in store.outbox.events if e.event_type == YCBG_EXPORT_UPLOADED]
+    (event,) = [e for e in store.outbox.events if e.event_type == BRAVO_EXPORT_UPLOADED]
     assert event.payload == {"export_id": str(queued.export_id)}
-    assert await store(ALPHA).ycbg_exports.content(queued.export_id) == EXPORT
+    assert await store(ALPHA).bravo_exports.content(queued.export_id) == EXPORT
 
     assert await _reading(world, store).read(ALPHA, queued.export_id) == "export read"
 
-    (read,) = await _service(world, store, FixedClock(NOW)).latest(DIEU.context())
-    assert [(o.ycbg_no, o.outcome) for o in read.outcomes] == [
+    (read,) = await _service(world, store, FixedClock(NOW)).latest(DIEU.context(), "ycbg")
+    assert [(o.key, o.outcome) for o in read.outcomes] == [
         (M10_YCBG, "recorded"),
         ("RFQ260828-044", "no_case"),
         ("RFQ261110-002", "pending"),
     ]
-    assert await store(ALPHA).ycbg_exports.content(queued.export_id) is None
+    assert await store(ALPHA).bravo_exports.content(queued.export_id) is None
     assert world.quote(case_id).design_check is not None
     # Read again (the outbox delivers twice): nothing more happens.
     assert await _reading(world, store).read(ALPHA, queued.export_id) == "export not queued"
     audited = [e.action for e in store.audit.events]
-    assert audited == ["sales.ycbg_export.uploaded", "sales.ycbg_export.read"]
+    assert audited == ["sales.bravo_export.uploaded", "sales.bravo_export.read"]
     assert "RFQ" not in str([e.details for e in store.audit.events])
 
 
 async def test_a_caller_who_may_not_prepare_quotations_cannot_upload() -> None:
     world = _world()
-    store = MemoryYcbgExportStore()
+    store = MemoryBravoExportStore()
 
     with pytest.raises(PermissionDeniedError):
-        await _service(world, store, FixedClock(NOW)).upload(READER.context(), "y.xlsx", EXPORT)
+        await _service(world, store, FixedClock(NOW)).upload(
+            READER.context(), "ycbg", "y.xlsx", EXPORT
+        )
     with pytest.raises(PermissionDeniedError):
-        await _service(world, store, FixedClock(NOW)).latest(READER.context())
+        await _service(world, store, FixedClock(NOW)).latest(READER.context(), "ycbg")
 
     assert store.outbox.events == []
 
@@ -612,10 +617,10 @@ async def test_a_file_that_is_not_an_export_is_refused_at_the_door(
     name: str, data: bytes, rule: str
 ) -> None:
     world = _world()
-    store = MemoryYcbgExportStore()
+    store = MemoryBravoExportStore()
 
     with pytest.raises(DomainError) as refused:
-        await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), name, data)
+        await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "ycbg", name, data)
 
     assert refused.value.details["rule"] == rule
 
@@ -624,17 +629,21 @@ async def test_an_upload_is_refused_while_dw1_is_paused() -> None:
     world = _world()
     worker: WorkerService = world.services.worker
     await worker.pause(DIEU.context(), reason="kiểm tra")
-    store = MemoryYcbgExportStore()
+    store = MemoryBravoExportStore()
 
     with pytest.raises(ConflictError):
-        await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "y.xlsx", EXPORT)
+        await _service(world, store, FixedClock(NOW)).upload(
+            DIEU.context(), "ycbg", "y.xlsx", EXPORT
+        )
 
 
 async def test_an_uploader_who_lost_the_scope_records_nothing() -> None:
     world = _world()
     case_id = await _waiting(world)
-    store = MemoryYcbgExportStore()
-    queued = await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "y.xlsx", EXPORT)
+    store = MemoryBravoExportStore()
+    queued = await _service(world, store, FixedClock(NOW)).upload(
+        DIEU.context(), "ycbg", "y.xlsx", EXPORT
+    )
     reading = _reading(world, store)
     lost = replace(reading, access=type(reading.access)(tuple(c for c in CALLERS if c is not DIEU)))  # type: ignore[call-arg]
 
@@ -646,50 +655,56 @@ async def test_an_uploader_who_lost_the_scope_records_nothing() -> None:
 async def test_an_infected_file_is_failed_unread() -> None:
     world = _world()
     case_id = await _waiting(world)
-    store = MemoryYcbgExportStore()
-    queued = await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "y.xlsx", EXPORT)
+    store = MemoryBravoExportStore()
+    queued = await _service(world, store, FixedClock(NOW)).upload(
+        DIEU.context(), "ycbg", "y.xlsx", EXPORT
+    )
 
     reading = _reading(world, store, scanner=_Scanner(ScanVerdict.infected("EICAR")))
     assert await reading.read(ALPHA, queued.export_id) == "export failed"
 
-    (failed,) = await store(ALPHA).ycbg_exports.latest(1)
+    (failed,) = await store(ALPHA).bravo_exports.latest("ycbg", 1)
     assert failed.error == "tệp bị trình quét mã độc chặn" and failed.outcomes == ()
     assert world.quote(case_id).design_check is None
 
 
 async def test_a_file_without_the_titles_fails_naming_them() -> None:
     world = _world()
-    store = MemoryYcbgExportStore()
+    store = MemoryBravoExportStore()
     other = ycbg_export_xlsx(
         [ExportRow(M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-1")], titles=["A", "B"]
     )
-    queued = await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "y.xlsx", other)
+    queued = await _service(world, store, FixedClock(NOW)).upload(
+        DIEU.context(), "ycbg", "y.xlsx", other
+    )
 
     assert await _reading(world, store).read(ALPHA, queued.export_id) == "export failed"
 
-    (failed,) = await store(ALPHA).ycbg_exports.latest(1)
+    (failed,) = await store(ALPHA).bravo_exports.latest("ycbg", 1)
     assert failed.error is not None and COLUMNS["design_check"].header in failed.error
 
 
 async def test_an_export_its_event_lost_is_failed_by_the_next_upload() -> None:
     world = _world()
-    store = MemoryYcbgExportStore()
-    early = await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "a.xlsx", EXPORT)
+    store = MemoryBravoExportStore()
+    early = await _service(world, store, FixedClock(NOW)).upload(
+        DIEU.context(), "ycbg", "a.xlsx", EXPORT
+    )
 
     later = FixedClock(NOW + STALE_AFTER + timedelta(minutes=1))
-    await _service(world, store, later).upload(DIEU.context(), "b.xlsx", EXPORT)
+    await _service(world, store, later).upload(DIEU.context(), "ycbg", "b.xlsx", EXPORT)
 
-    stale = await store(ALPHA).ycbg_exports.get(early.export_id)
+    stale = await store(ALPHA).bravo_exports.get(early.export_id)
     assert stale is not None and stale.status == "failed"
-    assert await store(ALPHA).ycbg_exports.content(early.export_id) is None
+    assert await store(ALPHA).bravo_exports.content(early.export_id) is None
 
 
 async def test_another_workspaces_exports_are_not_listed() -> None:
     world = _world()
-    store = MemoryYcbgExportStore()
-    await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "a.xlsx", EXPORT)
+    store = MemoryBravoExportStore()
+    await _service(world, store, FixedClock(NOW)).upload(DIEU.context(), "ycbg", "a.xlsx", EXPORT)
 
-    assert await _service(world, store, FixedClock(NOW)).latest(DIEU.context(BETA)) == []
+    assert await _service(world, store, FixedClock(NOW)).latest(DIEU.context(BETA), "ycbg") == []
 
 
 # ------------------------------------------- the BP's base price (ticket 11) --

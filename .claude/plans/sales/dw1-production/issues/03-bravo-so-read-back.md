@@ -79,3 +79,39 @@ and its result screen.
   cross-check, or only show beside it? Built to show (human-in-command); the
   safe default if asked to block is to refuse the cross-check while the
   latest read-back of the current case version differs.
+
+## Done on the Excel path (2026-11-16, night)
+
+- **One path for every Bravo screen** (`application/bravo_exports.py`):
+  ticket 16's YCBG upload generalised. `POST /api/v1/sales/bravo-exports`
+  takes the screen (`ycbg`, `sales_orders`); who may upload a screen and see
+  its outcomes is one table (`SCREEN_SCOPES`: quote prepare, order prepare),
+  read by the upload's gate and by the worker when it resolves the uploader
+  again. The worker lane is `sales_bravo_exports`
+  (`sales.bravo_export.uploaded`; ticket 16's old event type still reads the
+  same row). Migration `7c6ad2350566` makes `sales.bravo_exports` and its
+  files, copies ticket 16's rows across (each outcome's `ycbg_no` its `key`,
+  tested on a database holding them), drops the old tables, and adds
+  `sales.order_bravo_read_backs`; it is one way. YCBG's 62 tests kept green.
+- **The sales orders read back** (`application/bravo_sales_orders.py`):
+  "Customer order information (Form 1)" read by Bravo's titles (B02; the
+  sandbox now reads 100 columns), grouped by direct customer and PO number,
+  matched to the one case of that customer's PO waiting on or past its Bravo
+  entry (`prepared`, `uploaded_to_bravo`), compared with its paste-sheet
+  rows, and kept for the case with the case version and the file. No case,
+  several cases, or a PO under several SOs go to Sales uncompared. Audited
+  as the uploader.
+- **On the pages:** "Đọc lại SO từ Bravo" on Đơn hàng (order prepare scope,
+  refused while DW1 is paused); "Đối chiếu với Bravo" on an order case from
+  `prepared` to `cross_checked`: equal, or each difference by line and field,
+  stale when the case changed since, a price difference's values masked
+  for a caller who may not read prices (decided in `ReadBackService`,
+  mutation-checked). It decides nothing; the PIC still records the entry.
+- Acceptance: 1 (one wrong price, one difference on that line) and 2
+  (another customer's SO under the same PO number never matched) tested at
+  the screen; 3: with nothing read the case says so and the manual entry
+  stays.
+
+Left: the vendor's API adapter (R10); filling `bravo_so_no` from Bravo when
+equal (the PIC types it today, the panel shows Bravo's); the decision in
+PLAN.md on blocking the cross-check.

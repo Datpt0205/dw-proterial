@@ -190,6 +190,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/bravo-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Exports */
+        get: operations["bravo_exports_api_v1_sales_bravo_exports_get"];
+        put?: never;
+        /** Upload Bravo Export */
+        post: operations["upload_bravo_export_api_v1_sales_bravo_exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/customers/{customer_code}/notation": {
         parameters: {
             query?: never;
@@ -853,6 +871,23 @@ export interface paths {
         put?: never;
         /** Bravo Entry */
         post: operations["bravo_entry_api_v1_sales_orders__case_id__bravo_entry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/bravo-read-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Read Back */
+        get: operations["bravo_read_back_api_v1_sales_orders__case_id__bravo_read_back_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2337,24 +2372,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/ycbg-exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ycbg Exports */
-        get: operations["ycbg_exports_api_v1_sales_ycbg_exports_get"];
-        put?: never;
-        /** Upload Ycbg Export */
-        post: operations["upload_ycbg_export_api_v1_sales_ycbg_exports_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2692,6 +2709,72 @@ export interface components {
             /** So No */
             so_no?: string | null;
         };
+        /**
+         * BravoExport
+         * @description One uploaded export and what became of it (module docstring).
+         */
+        BravoExport: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Export Id
+             * Format: uuid
+             */
+            export_id: string;
+            /** File Name */
+            file_name: string;
+            /** File Sha256 */
+            file_sha256: string;
+            /** File Size */
+            file_size: number;
+            /**
+             * Outcomes
+             * @default []
+             */
+            outcomes: components["schemas"]["ExportOutcome"][];
+            /**
+             * Rejected
+             * @default []
+             */
+            rejected: components["schemas"]["RejectedRow"][];
+            /**
+             * Screen
+             * @enum {string}
+             */
+            screen: "ycbg" | "sales_orders";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "read" | "failed";
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
+        };
+        /**
+         * BravoExportBody
+         * @description A Bravo screen exported by Sales (tickets 16, 03): which screen, the
+         *     file's name and its bytes, base64, decoded here and never opened: the
+         *     worker reads it in the reader sandbox.
+         */
+        BravoExportBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Screen
+             * @enum {string}
+             */
+            screen: "ycbg" | "sales_orders";
+        };
         /** BravoOrderLineView */
         BravoOrderLineView: {
             /**
@@ -2727,6 +2810,40 @@ export interface components {
             po_no: string;
             /** Po Revision */
             po_revision: number;
+            /** So No */
+            so_no: string;
+        };
+        /**
+         * BravoReadBack
+         * @description A case's sales order as Bravo held it when last read, against the case
+         *     version it was compared with (module docstring).
+         */
+        BravoReadBack: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            /** Differences */
+            differences: components["schemas"]["SoDifference"][];
+            /** File Sha256 */
+            file_sha256: string;
+            /** Po No */
+            po_no: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /**
+             * Read By
+             * Format: uuid
+             */
+            read_by: string;
+            /** Rows Read */
+            rows_read: number;
             /** So No */
             so_no: string;
         };
@@ -4117,6 +4234,32 @@ export interface components {
             unit_price?: string | null;
             /** Uom */
             uom: string;
+        };
+        /**
+         * ExportOutcome
+         * @description What became of one document of an export: its number (a YCBG's, a
+         *     customer PO's) and the case, never a value of the file.
+         */
+        ExportOutcome: {
+            /** Case Id */
+            case_id?: string | null;
+            /**
+             * Declined
+             * @default false
+             */
+            declined: boolean;
+            /**
+             * Differences
+             * @default 0
+             */
+            differences: number;
+            /** Key */
+            key: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "recorded" | "unchanged" | "pending" | "no_case" | "lines_differ" | "changed" | "unreadable" | "equal" | "differs" | "several_cases" | "several_sos";
         };
         /**
          * ExportRow
@@ -6820,6 +6963,19 @@ export interface components {
             ycbg_no: string | null;
         };
         /**
+         * ReadBackView
+         * @description A case's read-back as its page shows it. ``stale``: the case changed
+         *     since it was compared. A unit price's values are left out for a viewer
+         *     who may not read prices.
+         */
+        ReadBackView: {
+            /** Prices Hidden */
+            prices_hidden: boolean;
+            read_back: components["schemas"]["BravoReadBack"] | null;
+            /** Stale */
+            stale: boolean;
+        };
+        /**
          * ReadIntent
          * @description One intent code kept, standing on the quotes it located.
          */
@@ -7694,6 +7850,29 @@ export interface components {
             skills: components["schemas"]["SkillView"][];
             /** Versions */
             versions: components["schemas"]["SkillVersionView"][];
+        };
+        /**
+         * SoDifference
+         * @description Where Bravo's order is not what was prepared. ``expected`` and
+         *     ``actual`` are the values as printed; a unit price's are shown only to
+         *     those who may read prices (the view's concern).
+         */
+        SoDifference: {
+            /** Actual */
+            actual?: string | null;
+            /** Expected */
+            expected?: string | null;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "missing_row" | "extra_row" | "item_code" | "quantity" | "unit_price" | "requested_date";
+            /** Line No */
+            line_no: number;
+            /** Po No */
+            po_no: string;
+            /** Row */
+            row?: number | null;
         };
         /**
          * SourceAnchor
@@ -8629,83 +8808,6 @@ export interface components {
             /** Ycbg No */
             ycbg_no?: string | null;
         };
-        /**
-         * YcbgExport
-         * @description One uploaded export and what became of it (module docstring).
-         */
-        YcbgExport: {
-            /** Error */
-            error?: string | null;
-            /**
-             * Export Id
-             * Format: uuid
-             */
-            export_id: string;
-            /** File Name */
-            file_name: string;
-            /** File Sha256 */
-            file_sha256: string;
-            /** File Size */
-            file_size: number;
-            /**
-             * Outcomes
-             * @default []
-             */
-            outcomes: components["schemas"]["YcbgOutcome"][];
-            /**
-             * Rejected
-             * @default []
-             */
-            rejected: components["schemas"]["RejectedRow"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "read" | "failed";
-            /**
-             * Uploaded At
-             * Format: date-time
-             */
-            uploaded_at: string;
-            /**
-             * Uploaded By
-             * Format: uuid
-             */
-            uploaded_by: string;
-        };
-        /**
-         * YcbgExportBody
-         * @description Bravo's YCBG screen exported by Sales (ticket 16): its name and its
-         *     bytes, base64, decoded here and never opened: the worker reads it in the
-         *     reader sandbox.
-         */
-        YcbgExportBody: {
-            /** Content B64 */
-            content_b64: string;
-            /** File Name */
-            file_name: string;
-        };
-        /**
-         * YcbgOutcome
-         * @description What became of one YCBG number of a read: names the number and the
-         *     case, never a value of Design's result.
-         */
-        YcbgOutcome: {
-            /** Case Id */
-            case_id?: string | null;
-            /**
-             * Declined
-             * @default false
-             */
-            declined: boolean;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            outcome: "recorded" | "unchanged" | "pending" | "no_case" | "lines_differ" | "changed" | "unreadable";
-            /** Ycbg No */
-            ycbg_no: string;
-        };
     };
     responses: never;
     parameters: never;
@@ -9026,6 +9128,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    bravo_exports_api_v1_sales_bravo_exports_get: {
+        parameters: {
+            query: {
+                screen: "ycbg" | "sales_orders";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoExport"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_bravo_export_api_v1_sales_bravo_exports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BravoExportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10429,6 +10598,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bravo_read_back_api_v1_sales_orders__case_id__bravo_read_back_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadBackView"];
                 };
             };
             /** @description Validation Error */
@@ -13541,62 +13741,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerStateView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ycbg_exports_api_v1_sales_ycbg_exports_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["YcbgExport"][];
-                };
-            };
-        };
-    };
-    upload_ycbg_export_api_v1_sales_ycbg_exports_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["YcbgExportBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["YcbgExport"];
                 };
             };
             /** @description Validation Error */
