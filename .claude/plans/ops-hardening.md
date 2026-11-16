@@ -215,6 +215,20 @@ context. All five are done and on `main`. The full narrative is at
         is safe and alert by mail or Teams, Đạt to choose), the Strata
         measurement once the model is down, VM hardening (ufw, security-only
         updates).
+        **Decided (Đạt, 11-16):** no DW root certificate on the PCs for now
+        (browsers will warn on a private CA: a publicly trusted certificate
+        by DNS-01 is the way out, owed); alerts go to Đạt's own mail, not
+        Proterial IT; the host keeps ordinary internet on the 83.x LAN.
+        **Done 12:05:** `vm/11-harden.sh` (ufw 22/80/443, keys only, no
+        root, security updates without reboot, 4 GB swap, chrony synced);
+        `07-watchdog.ps1` + `host-watchdog.ps1` (SYSTEM task every 5 min:
+        start a stopped VM, restart one with no heartbeat for 15 min,
+        Strata health, restart Tailscale, disks 15 %, a restart pending
+        3 days; mail on a change of state and a daily report from 08:00 as
+        the dead man's switch). Drilled: VM stopped, running again after
+        one round, "recovered" logged. Mail is set by Đạt on the host with
+        `set-alert-mail.ps1` (a Gmail App Password, DPAPI LocalMachine),
+        owed.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
