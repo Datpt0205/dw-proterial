@@ -147,7 +147,15 @@ from dw_sales.domain.orders import (
     Note,
 )
 from dw_sales.domain.pricing import Incoterm
-from dw_sales.domain.quotes import DeclineReason, Guidance, Reason, YcbgNo
+from dw_sales.domain.quotes import (
+    DeclineReason,
+    Guidance,
+    PcsCostSheet,
+    PcsPriceLine,
+    ProductionType,
+    Reason,
+    YcbgNo,
+)
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu"
 
@@ -568,6 +576,24 @@ class PriceBody(VersionBody):
 
 class SubmitBody(VersionBody):
     quote_no: DocumentNo
+
+
+class ProductionTypeBody(VersionBody):
+    kind: ProductionType
+
+
+class PcsPriceLineBody(BaseModel):
+    model_config = _BODY
+
+    line_no: int = Field(ge=1, le=9999)
+    unit_price: Decimal = Field(gt=0)
+
+
+class PcsPriceBody(VersionBody):
+    """The price GM/BC Manager decided, per line (ticket 05); who recorded it
+    is the caller, never a field of the request."""
+
+    lines: list[PcsPriceLineBody] = Field(min_length=1, max_length=9999)
 
 
 class DeclineBody(VersionBody):
@@ -1983,6 +2009,44 @@ def build_router(
             management_guidance=body.management_guidance,
         )
         return await idem.record(change)
+
+    @router.post(
+        "/quotes/{case_id}/production-type",
+        response_model=CaseChangeView,
+        dependencies=quote_scope,
+    )
+    async def production_type(
+        case_id: uuid.UUID, body: ProductionTypeBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.quote_commands.production_type(
+            context, case_id, case_version=body.case_version, kind=body.kind
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/quotes/{case_id}/pcs-price", response_model=CaseChangeView, dependencies=quote_scope
+    )
+    async def pcs_price(
+        case_id: uuid.UUID, body: PcsPriceBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.quote_commands.pcs_price(
+            context,
+            case_id,
+            case_version=body.case_version,
+            lines=[
+                PcsPriceLine(line_no=line.line_no, unit_price=line.unit_price)
+                for line in body.lines
+            ],
+        )
+        return await idem.record(change)
+
+    @router.get(
+        "/quotes/{case_id}/pcs-price-request",
+        response_model=PcsCostSheet,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def pcs_price_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PcsCostSheet:
+        return await svc.quotes.pcs_price_request(context, case_id)
 
     @router.post(
         "/quotes/{case_id}/submit", response_model=CaseChangeView, dependencies=quote_scope

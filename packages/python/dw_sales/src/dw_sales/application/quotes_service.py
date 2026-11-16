@@ -80,12 +80,17 @@ from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import (
     DeclineReason,
     LinePrice,
+    PcsCostSheet,
+    PcsPrice,
+    PcsPriceLine,
     PricingDecision,
+    ProductionType,
     QuoteActor,
     QuoteCapability,
     QuoteCase,
     QuoteFindingCode,
     QuoteStatus,
+    pcs_price_request,
 )
 
 _QUOTE = "sales_quote_case"
@@ -182,6 +187,17 @@ class QuoteQueries:
             for s in stored
             if (kept is None or s.case.case_id in kept) and seen_by(context, CaseKind.QUOTE, s)
         ]
+
+    async def pcs_price_request(self, context: AccessContext, case_id: uuid.UUID) -> PcsCostSheet:
+        """The cost sheet to ask GM/BC Manager for a pcs price (ticket 05):
+        the request's lines, every price cell blank, so a case reader may
+        see it."""
+        await self.gate.require(
+            context, SalesScopes.CASE_READ, resource_type=_QUOTE, resource_id=str(case_id)
+        )
+        async with self.uow(sales_scope(context)) as work:
+            stored = await stored_quote(work, case_id, viewer=context)
+        return pcs_price_request(stored.case)
 
     async def get(
         self,
@@ -439,6 +455,44 @@ class QuoteCommands:
             case_version,
             f"quote.spec_{step}",
             lambda case, actor, at: moves[step](case),
+        )
+
+    async def production_type(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        *,
+        case_version: int,
+        kind: ProductionType,
+    ) -> CaseChangeView:
+        """Mass or pcs (ticket 05), as the caller says, before pricing."""
+        return await self._decide(
+            context,
+            case_id,
+            case_version,
+            "quote.production_type_set",
+            lambda case, actor, at: case.set_production_type(kind, by=actor.user_id, at=at),
+            reason_code=kind,
+        )
+
+    async def pcs_price(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        *,
+        case_version: int,
+        lines: Sequence[PcsPriceLine],
+    ) -> CaseChangeView:
+        """The price GM/BC Manager decided for a pcs case, recorded by the
+        caller (ticket 05); Sales prices the case from it afterwards."""
+        return await self._decide(
+            context,
+            case_id,
+            case_version,
+            "quote.pcs_price_recorded",
+            lambda case, actor, at: case.record_pcs_price(
+                PcsPrice(lines=tuple(lines), recorded_by=actor.user_id, recorded_at=at)
+            ),
         )
 
     async def price(

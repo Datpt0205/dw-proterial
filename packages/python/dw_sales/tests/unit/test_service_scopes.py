@@ -178,6 +178,18 @@ CALLS: dict[str, tuple[str, Call]] = {
         ),
     ),
     "quotes.get": ("sales.case.read", lambda c: quote_queries.get(c, CASE)),
+    "quotes.pcs_price_request": (
+        "sales.case.read",
+        lambda c: quote_queries.pcs_price_request(c, CASE),
+    ),
+    "quotes.production_type": (
+        "sales.quote.prepare",
+        lambda c: quote_commands.production_type(c, CASE, case_version=1, kind="pcs"),
+    ),
+    "quotes.pcs_price": (
+        "sales.quote.prepare",
+        lambda c: quote_commands.pcs_price(c, CASE, case_version=1, lines=[]),
+    ),
     "quotes.price": (
         "sales.quote.prepare",
         lambda c: quote_commands.price(
