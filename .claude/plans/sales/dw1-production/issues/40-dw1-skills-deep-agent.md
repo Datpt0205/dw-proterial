@@ -168,3 +168,15 @@ Under dw_sales ADR 0015 decision 5 (the skill is picked by one scored call).
   measure thinking on for this step alone; (4) corrections as examples
   (ticket 43); (5) give the case snapshot up front so fewer turns hit the
   ceiling. The step stays off; every reply goes to a person meanwhile.
+- **Decided by Đạt (2026-11-16): improve `skill_intents` through the model,
+  not a code guard: ways (3), (4) and (5) above, in another session once the
+  ticket 37 session has committed** (both touch `dw_sales` in the one working
+  tree). (3): this step's route with thinking on (`reasoning_effort`, the step
+  alone), measured against thinking off on the bar set; (4): ticket 43's
+  examples (a person's correction of an intent, found by the case's customer
+  first) shown to this step as untrusted input; (5): the case snapshot and the
+  thread's last messages given in the turn's input, so the agent calls fewer
+  tools (today 180 agent calls for 80 mails, 8 turns at the ceiling). Each
+  measured live on the plant's Strata over Tailscale (ticket 01's comment has
+  how), the bar 0.85 and no false accept. RP16/RP17 stay false accepts until
+  then; the step stays off.
