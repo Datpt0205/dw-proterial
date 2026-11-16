@@ -310,9 +310,9 @@ context. All five are done and on `main`. The full narrative is at
           is why it never showed. Strata now runs `--parallel 1`
           (`strata-watchdog.ps1`; a logprobs call answers 200); one slot is
           also faster per request (~190 tok/s alone vs ~76 with three
-          sharing). **Owed by Đạt:** one slot with logprobs (ticket 44's
-          auto-apply works, requests queue) or three without (every result
-          to a person); advised: one slot. The full run is going again on
+          sharing). **Decided by Đạt (11-16): one slot with logprobs**
+          (ticket 44's auto-apply works, requests queue), over three without
+          (every result to a person). The full run is going again on
           one slot. Also: an eval run started while an update installed had
           its first calls fail; updates belong in the agreed window.
           **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
