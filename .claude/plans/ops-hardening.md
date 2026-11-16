@@ -96,6 +96,24 @@ context. All five are done and on `main`. The full narrative is at
         network, so the VM needs no DDA at all; if not, Strata goes in the VM
         with the GPU by DDA (IOMMU on the Z890 board, unmeasured).
 
+        **On site 11-16, 09:49 (BIOS photo): the host has no OS yet** ("cannot
+        find any bootable devices"), past the contract's hardware-ready date
+        (11-13, HĐ 5.1 has Bên A deliver it with its OS). Hardware read from
+        the BIOS: ASUS TUF GAMING Z890-PLUS WIFI, BIOS 3012, Core Ultra 7
+        270K Plus, 64 GB DDR5 at 4000 MHz (XMP off; kept off for stability).
+        Owed by Proterial IT: the Windows Server 2025 ISO and licence (retail,
+        OEM or volume/KMS; the 180-day evaluation converts by DISM if the key
+        comes later) and who installs it. Given to Đạt: BIOS settings (Restore
+        AC Power Loss = Power On, ErP off, VMX and VT-d on, Secure Boot),
+        install "Standard (Desktop Experience)" not the Core default, the
+        board's LAN driver on the USB. **Remote setup (Đạt, 11-16):** OpenSSH
+        on the host, key only, port 22 open to any address while in dev
+        (firewall rule `dw-setup-ssh`), a dedicated laptop key
+        (`proterial_dw_ed25519`, outside the repo), then Tailscale on the host
+        in unattended mode for support from outside the plant (login by URL,
+        no auth key through chat; key expiry off for the node). Tailscale is
+        Đạt's call; IT to be told. Not run yet: no OS.
+
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
         the GPU by DDA.** Still owed: the Windows Server version (2025
