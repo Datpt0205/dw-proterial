@@ -155,9 +155,12 @@ context. All five are done and on `main`. The full narrative is at
         nobody signing in (about 2 min each: unattended Tailscale and
         automatic sshd hold). The BIOS still started the HDD's ESP (BCD
         hive loaded from it), so Đạt is setting Boot Option #1 to the SSD
-        in the BIOS. Owed after that: confirm the hive on the SSD's ESP,
-        then remove the HDD's ESP, format the HDD as the backup volume and
-        make V: (ReFS) for the VM.
+        in the BIOS. **Done 10:55:** with Boot Option #1 on the KIOXIA,
+        the BCD hive loads from the SSD's ESP. `03-volumes.ps1` then made
+        V: (ReFS, 1612 GB, `DW-VM`) on the SSD and B: (NTFS 64K, 3726 GB,
+        `DW-BACKUP`) on the wiped HDD; one ESP left, on the SSD. WinRE
+        came back only after clearing the old store's id in ReAgent.xml
+        (now in the script); enabled on the SSD's recovery partition.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
