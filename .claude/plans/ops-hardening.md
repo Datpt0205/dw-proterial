@@ -230,9 +230,16 @@ context. All five are done and on `main`. The full narrative is at
         `set-alert-mail.ps1` (a Gmail App Password, DPAPI LocalMachine).
         **Mail on (12:47):** set with `-FromStdin`; the test mail and the
         SYSTEM watchdog's daily report were both sent. The App Password
-        went through the chat, so Đạt is to make a new one, rerun the script
-        interactively and revoke the old. Tailscale key expiry still needs
-        his click in the admin console (no CLI for it).
+        went through the chat; **Đạt keeps it (11-16, risk accepted: a
+        Gmail sender used only for alerts)**. Tailscale key expiry: **turned
+        off by Đạt (11-16)**.
+        **Status 11-16 evening (Đạt):** the mail flows (one Power Automate
+        flow per PIC into the Team's folders, the OneDrive sync account on
+        the host, a Sent Items flow) are done tomorrow; Strata's attested
+        run over Tailscale is in progress; the Bravo API waits on a
+        three-party meeting (Proterial, the Bravo vendor, FPT) on the 11-13
+        request; meanwhile Đạt exports the Bravo screens himself for the
+        Excel stand-in (ticket 14).
         **Model and RAM (Đạt asked, 11-16):** Strata serves only
         Qwen3.8-Flash-Next (its variants: ISTA-DASLab, Unsloth, Gyro, Swift,
         Coder) and Qwen3.6-35B-A3B. Qwen3.8-27B (dense, vision, Apache 2.0,
@@ -269,68 +276,68 @@ context. All five are done and on `main`. The full narrative is at
         before the network was up was lost (now queued and retried; drilled
         with a broken SMTP port, then sent).
         **While waiting for code (11-16 afternoon):** `09-internal-link.ps1`
-        + `vm/14-internal-link.sh`: an Internal vSwitch `DW-Internal`, host
-        10.250.0.1, VM 10.250.0.2 (`dwlink0`, fixed MAC); `dw-host` in the
-        VM's /etc/hosts now names the link, so the backup mount and DW's
-        model URL do not change when IT moves the LAN to 83.x. Strata 8080
-        and SMB 445 allow 10.250.0.2 only: from the VM over the LAN, 8080
-        times out. Tailscale's Windows client adds its own allow-all rule for
-        its interface (the laptop reaches 8080 and 3389 over the tailnet), so
-        the tailnet's membership and ACL are the control there; owed with the
-        move to an FPT tailnet: an ACL to admin devices, port 22/3389.
-        `windows-update.ps1` (installs every software update through a SYSTEM
-        task, since the API refuses an SSH session; never restarts): round 1
-        installed 5 (2026-09 security update, .NET, Defender, MSRT), round 2
-        found the 2026-11 security update. `10-remote-and-devices.ps1`: RDP
-        with NLA from 100.64.0.0/10 only (Windows' own RDP rules off), the
-        MediaTek Wi-Fi and Bluetooth disabled. The watchdog reads each
-        physical disk's health, SSD wear (80 %), heat (HDD 55 C, SSD 75 C)
-        and the HDD's uncorrected read errors rising; its boot grace now
-        covers Tailscale and lasts 10 minutes (an update boot took ~5 and
-        reported Tailscale down twice).
-        **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
-        so after a power cut the host starts by itself and the VM, Strata
-        and Tailscale follow. Still to run: the whole-host restart drill
-        once Strata is serving, and a real power cut at some point.
-        **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
-        crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
-        running first. Tailscale key expiry is off (checked from the laptop).
-        Boot order fixed: `DW-Strata`'s startup trigger waits 2 minutes so
-        the VM takes its fixed 16 GB first. The watchdog alerts when the
-        host has under 2 GB available for 15 minutes. Found for the backup
-        batch: valkey runs with `noeviction` and no `--maxmemory` under the
-        production overlay's 256 MB cgroup limit, so a full cache is
-        OOM-killed (and may reload its RDB into the same limit) instead of
-        refusing writes; container memory against its limit is not
-        alerted on yet.
-        **Backups built and drilled (11-16 13:15, on the VM against a
-        throwaway stack: the production images, the repo's init script):**
-        `08-backup-share.ps1` (B:\DW-Backup, SMB encrypted, local
-        `dwbackup` with a random password piped to the VM),
-        `vm/12-backup-mount.sh` (cifs `seal`, automount, `dw-host` in
-        /etc/hosts as the one place the host's address lives),
-        `infra/compose/docker-compose.backup.yml` (archive_mode on, gzip
-        per segment to the VM's disk, archive_timeout 900),
-        `vm/backup/dw-backup.sh` + `vm/13-backup.sh` (timers: nightly 02:15
-        dumps of dw, keycloak, roles; a base backup weekly; Qdrant full
-        snapshot; objects by rclone sync with changed files kept aside;
-        .env and Caddy's CA; SHA256SUMS; WAL hourly; restore test on the
-        1st). Retention 7 daily, 4 Sundays, 12 firsts, 5 bases, WAL back to
-        the oldest base, changed objects 90 days: drilled with back-dated
-        folders, each dropped or kept as the rule says. Found and fixed:
-        the database list was queried in a database that does not exist, so
-        a "successful" nightly held no dump (the restore test now requires
-        `databases.txt` and dw's tables); a failed restore test left its
-        containers behind (cleanup on EXIT). Mutations: a changed byte, a
-        Qdrant count above the snapshot's, a missing dw dump each failed the
-        restore test. The host watchdog reads B:\DW-Backup\status (26 h
-        nightly, 3 h WAL, 35 days or failed restore test): a 72-hour-old
-        nightly mailed "PROBLEM: backup", then "OK again". Timers are
-        disabled and the test data gone until DW is deployed. Owed at
-        deploy: add `docker-compose.backup.yml` to the onprem compose
-        command (`make onprem-up` does not yet), `13-backup.sh <dir> dw`,
-        one PITR restore from a base backup and WAL in the drill, and the
-        VM's pulls failing on IPv6 now and then (watch it).
+        - `vm/14-internal-link.sh`: an Internal vSwitch `DW-Internal`, host
+          10.250.0.1, VM 10.250.0.2 (`dwlink0`, fixed MAC); `dw-host` in the
+          VM's /etc/hosts now names the link, so the backup mount and DW's
+          model URL do not change when IT moves the LAN to 83.x. Strata 8080
+          and SMB 445 allow 10.250.0.2 only: from the VM over the LAN, 8080
+          times out. Tailscale's Windows client adds its own allow-all rule for
+          its interface (the laptop reaches 8080 and 3389 over the tailnet), so
+          the tailnet's membership and ACL are the control there; owed with the
+          move to an FPT tailnet: an ACL to admin devices, port 22/3389.
+          `windows-update.ps1` (installs every software update through a SYSTEM
+          task, since the API refuses an SSH session; never restarts): round 1
+          installed 5 (2026-09 security update, .NET, Defender, MSRT), round 2
+          found the 2026-11 security update. `10-remote-and-devices.ps1`: RDP
+          with NLA from 100.64.0.0/10 only (Windows' own RDP rules off), the
+          MediaTek Wi-Fi and Bluetooth disabled. The watchdog reads each
+          physical disk's health, SSD wear (80 %), heat (HDD 55 C, SSD 75 C)
+          and the HDD's uncorrected read errors rising; its boot grace now
+          covers Tailscale and lasts 10 minutes (an update boot took ~5 and
+          reported Tailscale down twice).
+          **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
+          so after a power cut the host starts by itself and the VM, Strata
+          and Tailscale follow. Still to run: the whole-host restart drill
+          once Strata is serving, and a real power cut at some point.
+          **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
+          crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
+          running first. Tailscale key expiry is off (checked from the laptop).
+          Boot order fixed: `DW-Strata`'s startup trigger waits 2 minutes so
+          the VM takes its fixed 16 GB first. The watchdog alerts when the
+          host has under 2 GB available for 15 minutes. Found for the backup
+          batch: valkey runs with `noeviction` and no `--maxmemory` under the
+          production overlay's 256 MB cgroup limit, so a full cache is
+          OOM-killed (and may reload its RDB into the same limit) instead of
+          refusing writes; container memory against its limit is not
+          alerted on yet.
+          **Backups built and drilled (11-16 13:15, on the VM against a
+          throwaway stack: the production images, the repo's init script):**
+          `08-backup-share.ps1` (B:\DW-Backup, SMB encrypted, local
+          `dwbackup` with a random password piped to the VM),
+          `vm/12-backup-mount.sh` (cifs `seal`, automount, `dw-host` in
+          /etc/hosts as the one place the host's address lives),
+          `infra/compose/docker-compose.backup.yml` (archive_mode on, gzip
+          per segment to the VM's disk, archive_timeout 900),
+          `vm/backup/dw-backup.sh` + `vm/13-backup.sh` (timers: nightly 02:15
+          dumps of dw, keycloak, roles; a base backup weekly; Qdrant full
+          snapshot; objects by rclone sync with changed files kept aside;
+          .env and Caddy's CA; SHA256SUMS; WAL hourly; restore test on the
+          1st). Retention 7 daily, 4 Sundays, 12 firsts, 5 bases, WAL back to
+          the oldest base, changed objects 90 days: drilled with back-dated
+          folders, each dropped or kept as the rule says. Found and fixed:
+          the database list was queried in a database that does not exist, so
+          a "successful" nightly held no dump (the restore test now requires
+          `databases.txt` and dw's tables); a failed restore test left its
+          containers behind (cleanup on EXIT). Mutations: a changed byte, a
+          Qdrant count above the snapshot's, a missing dw dump each failed the
+          restore test. The host watchdog reads B:\DW-Backup\status (26 h
+          nightly, 3 h WAL, 35 days or failed restore test): a 72-hour-old
+          nightly mailed "PROBLEM: backup", then "OK again". Timers are
+          disabled and the test data gone until DW is deployed. Owed at
+          deploy: add `docker-compose.backup.yml` to the onprem compose
+          command (`make onprem-up` does not yet), `13-backup.sh <dir> dw`,
+          one PITR restore from a base backup and WAL in the drill, and the
+          VM's pulls failing on IPv6 now and then (watch it).
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
