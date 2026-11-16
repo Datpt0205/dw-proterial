@@ -25,6 +25,19 @@ typed by hand.
 - Once the API carries "Chi tiết thực hiện", the same read answers the
   assistant's "đã giao chưa".
 
+**Measured 2026-11-16 (Đạt's screenshots of Bravo 8):** Sales imports the
+PIC's SalesOrder file through "Đơn đặt hàng bán › Dữ liệu › Import"
+(layout "Layout1", from row 4), and the dialog stands with **"Bỏ qua các
+lỗi…" and "Không ghi nhật ký…" ticked**: a row Bravo refuses is skipped and
+nothing records it. So an import that "finished" proves nothing, and this
+read-back is what catches a lost line; it belongs before DW prepares any
+file for import, not after. The exports share one shape (row 1 the screen's
+title, row 2 the header; "Customer order information", "Cancelled order
+information", "Báo giá, chào hàng", "Danh mục Base price", "Black list"),
+described outside git in `Downloads\proterial\Bravo-export\_ANH.md`.
+Still owed: the import's "2. Thiết lập import" (Layout1's column mapping)
+and its result screen.
+
 ## Acceptance
 
 1. A pasted SO with one wrong price shows one finding on that line.
