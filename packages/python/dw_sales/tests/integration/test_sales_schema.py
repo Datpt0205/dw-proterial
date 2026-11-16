@@ -20,6 +20,7 @@ from pg_test_db import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_platform.domain.notation import KIND_VALUES, NotationKind
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
@@ -29,6 +30,7 @@ from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
 from dw_sales.domain import dispositions, followups, orders, quotes
+from dw_sales.domain.customer_notation import NotationCaseKind, NotationSource
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
 
@@ -93,6 +95,10 @@ _SETS: dict[str, set[str]] = {
     "ck_rule_drafts_rule_key": _values(RuleKey),
     # A worked example's status (ticket 38).
     "ck_salesorder_examples_status": set(get_args(ExampleStatus)),
+    # A customer's notation: its kinds, where it came from, which case (ticket 37).
+    "ck_customer_notations_kind": set(get_args(NotationKind)),
+    "ck_customer_notations_source": set(get_args(NotationSource)),
+    "ck_customer_notations_case_kind": set(get_args(NotationCaseKind)),
     # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
 }
 
@@ -139,6 +145,19 @@ async def test_the_platform_rule_versions_admit_every_sales_key(catalog: AsyncCo
     # optimiser proposes (ticket 43).
     prompts = {PROMPT_KEY}
     assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey) | skills | prompts
+
+
+async def test_a_notation_holds_exactly_the_values_each_kind_does(catalog: AsyncConnection) -> None:
+    """`ck_customer_notations_value` against `KIND_VALUES`, the platform's one
+    list of them (ticket 37): the decimal mark, the date order, and the ISO
+    code each bare symbol may stand for."""
+    definition = await _constraint(catalog, "ck_customer_notations_value")
+    held: dict[str, set[str]] = {}
+    for kind, values in re.findall(
+        r"kind = '(\w+)'::text\) AND \(value = ANY \(ARRAY\[([^\]]+)\]", definition
+    ):
+        held[kind] = set(re.findall(r"'([^']+)'::text", values))
+    assert held == {kind: set(values) for kind, values in KIND_VALUES.items()}
 
 
 @pytest.mark.parametrize("name", sorted(_SETS))

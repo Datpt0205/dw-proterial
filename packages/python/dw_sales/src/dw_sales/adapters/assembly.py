@@ -68,6 +68,7 @@ from dw_sales.adapters.persistence.catalog import (
     SqlApprovedLists,
     SqlCatalogUnitOfWorkFactory,
 )
+from dw_sales.adapters.persistence.customer_notations import SqlCustomerNotations
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseReader
 from dw_sales.adapters.persistence.labelled_examples import SqlDescriptionExamples
@@ -100,6 +101,7 @@ from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.customer_notations import NotationRecordPort
 from dw_sales.application.examples import ExampleFinder, ExampleIndexLane, ExampleIndexPort
 from dw_sales.application.followups import BriefWriterPort, FollowupLane, PushNoticePort
 from dw_sales.application.handoffs import HandoffReader
@@ -173,6 +175,7 @@ from dw_sales.application.thread_tools import (
 )
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.today import FollowupNoticesPort
+from dw_sales.application.triage import TriageReader
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
@@ -348,6 +351,9 @@ def build_dw1(
     catalog_uow = SqlCatalogUnitOfWorkFactory(
         session_factory, audit=audit, approvals=approvals, outbox=outbox
     )
+    # How each customer writes numbers, dates and bare symbols (ticket 37):
+    # learned from Sales' confirmations, read by every reader of their words.
+    notations = SqlCustomerNotations(session_factory, audit)
     readers = client_readers(reader, policies.order_rules.intake)
     stored = SqlMailbox(session_factory, audit)
     if mail_drop is not None and mailbox != "stored":
@@ -441,7 +447,9 @@ def build_dw1(
         requests=(
             None
             if interpretation is None
-            else model_requests(interpretation, catalog, tenant_rules, readers.texts, readiness)
+            else model_requests(
+                interpretation, catalog, tenant_rules, readers.texts, readiness, notations
+            )
         ),
     )
     # A message classified by the tenant's mail kinds (ticket 42), its numbers
@@ -471,6 +479,9 @@ def build_dw1(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
         ),
         mail_kinds=mail_kinds,
+        # A message still routed "other" gets a card on the same reader
+        # (ticket 33): the served kinds, the one call, the one resolution.
+        triage=None if mail_kinds is None else TriageReader(mail_kinds),
         threads=ThreadLinks(uow, mail),
         replies=None if interpretation is None else ReplyReader(interpretation),
         thread_agent=(
@@ -488,13 +499,15 @@ def build_dw1(
         # platform's skills with the tenant's approved versions of them.
         skill_agent=dw1_agent,
         handoffs=(
-            None if interpretation is None else HandoffReader(interpretation, catalog, order_cases)
+            None
+            if interpretation is None
+            else HandoffReader(interpretation, catalog, order_cases, notations)
         ),
         layouts=SqlLayoutLookup(session_factory),
         layout_prefiller=(
             None if interpretation is None else LayoutPrefiller(interpretation, layout_checks)
         ),
-        body_pos=None if interpretation is None else PoBodyReader(interpretation),
+        body_pos=None if interpretation is None else PoBodyReader(interpretation, notations),
         model_steps=readiness,
         autonomy=AutonomyGate(thresholds),
         uploads=stored,
@@ -546,6 +559,7 @@ def build_dw1(
         scanner=scanner,
         converts=catalog,
         senders=catalog,
+        notations=notations,
         assistant=SqlAssistantStoreFactory(session_factory),
         notices=notices,
         reminder_marks=SqlReminderMarkStoreFactory(session_factory),
@@ -692,6 +706,8 @@ def build_dw1(
                     if mail_kinds is None
                     else MailKindReplay(mail_kinds, FixtureMailKindExamples.load(configs.parent))
                 ),
+                # The mail a mail-kinds version was taught from (ticket 34).
+                inbox=inbox,
             )
         ),
         salesorder_skill_replay=(
@@ -963,12 +979,14 @@ def model_requests(
     rules: OrderRulesPort,
     texts: AttachmentTextPort,
     gate: ModelStepGatePort,
+    records: NotationRecordPort,
 ) -> ModelRequests:
     """The quotation flow's model step over ``model`` (ticket 29): requests
     read from the mail and the attachments' ``texts``, item descriptions as
-    ticket 28 reads them, switched by the tenant's rules and held to the
-    step's bar by ``gate``."""
-    reader = RfqModelReader(model, texts, catalog, DescriptionReader(model))
+    ticket 28 reads them, ambiguous values settled by the customer's notation
+    ``records`` where a document leaves them open (ticket 37), switched by the
+    tenant's rules and held to the step's bar by ``gate``."""
+    reader = RfqModelReader(model, texts, catalog, DescriptionReader(model), records)
     return ModelRequests(reader=reader, rules=rules, gate=gate)
 
 

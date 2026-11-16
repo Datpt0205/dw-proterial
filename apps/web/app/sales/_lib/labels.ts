@@ -481,6 +481,7 @@ export const REGION_FLAG = {
   ocr: "Đọc bằng OCR, cần xác nhận",
   opened_with_password: "Tệp có mật khẩu, cần xác nhận",
   not_printed: "Tệp không in giá trị này, cần xác nhận",
+  notation_from_record: "Đọc theo cách viết đã ghi của khách",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */

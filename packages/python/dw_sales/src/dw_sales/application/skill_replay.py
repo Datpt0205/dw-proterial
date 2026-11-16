@@ -41,6 +41,14 @@ fictional golden mails of the message intent (`sales_intent`), graded by the
 route each takes, and its injections are security cases that fail when read
 into a route that hands the mail to the order or quotation flow.
 
+**The mail it was taught from** (ticket 34): a version of the mail kinds
+proposed from a triage card names that mail (`SkillTrigger`), and its replay
+reads it with the version and with the one in force, beside the example
+mails, and stores both readings (`TriggerReplay`). The mail is read in its
+own workspace only: the lane of another workspace of the tenant leaves such
+a version for that one's lane. A mail no longer there is stored as not
+found, and nothing of it is read.
+
 A replay in which some reading got no usable answer is stored as
 ``incomplete`` with the count: the comparison is shown, and said to be
 partial, rather than hidden.
@@ -58,7 +66,7 @@ from typing import Final, Literal, Protocol
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.agent_turn import TurnCeilingReachedError
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
-from dw_agent_runtime.model.skills import SkillSet
+from dw_agent_runtime.model.skills import Skill, SkillSet
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import RuleStatus, RuleVersion
@@ -66,9 +74,9 @@ from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.mail_kinds import MailKindReplay
+from dw_sales.application.mail_kinds import MailKindReplay, served_kinds
 from dw_sales.application.order_ports import OrderRulesPort
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.rules import rule_work
 from dw_sales.application.skills import (
     SKILL_PREFIX,
@@ -76,6 +84,8 @@ from dw_sales.application.skills import (
     SkillDocument,
     SkillReplay,
     SkillReplayStorePort,
+    SkillTrigger,
+    TriggerReplay,
     skill_name,
 )
 from dw_sales.application.thread_agent import ThreadAgent
@@ -170,6 +180,10 @@ class SkillReplayer:
     # model reads mail kinds here, and a proposal of them waits unreplayed,
     # so the head cannot approve it.
     mail_kinds: MailKindReplay | None = None
+    # Where the mail a mail-kinds version was taught from is read (ticket
+    # 34). None: no mailbox here, and such a version is replayed with the
+    # mail said not found.
+    inbox: InboxPort | None = None
 
     async def tick(self, scope: SalesScope) -> int:
         """Replays every proposal of ``scope``'s tenant that has none yet;
@@ -186,6 +200,7 @@ class SkillReplayer:
             for v in waiting
             if v.key.startswith(SKILL_PREFIX)
             and (skill_name(v.key) != MAIL_KINDS or self.mail_kinds is not None)
+            and _read_here(v, scope)
         ]
         if not waiting:
             return 0
@@ -222,7 +237,16 @@ class SkillReplayer:
                 new_run=lambda: self._run(scope),
                 forget_run=self.forget_run,
             )
-            return self._stored(version, *counts)
+            trigger = SkillDocument.model_validate(dict(version.document)).trigger
+            taught = (
+                None
+                if trigger is None
+                else await self._taught(scope, trigger, proposed, in_force_kinds)
+            )
+            read, right, right_before, unread, refused = counts
+            if taught is not None and taught.found:
+                unread += (taught.with_route is None) + (taught.without_route is None)
+            return self._stored(version, read, right, right_before, unread, refused, taught)
         in_force = await self.book.skill_set(self._run(scope))
         changed = SkillSet(
             in_force.tenant_id,
@@ -246,6 +270,40 @@ class SkillReplayer:
             right_without += _right(example.gold, without)
         return self._stored(version, messages, right_with, right_without, unanswered, tuple(failed))
 
+    async def _taught(
+        self, scope: SalesScope, trigger: SkillTrigger, proposed: Skill, in_force: Skill
+    ) -> TriggerReplay:
+        """The mail a version was taught from, read with it and with the
+        version in force (module docstring)."""
+        assert self.mail_kinds is not None  # asked for a mail-kinds version only
+        message = (
+            None if self.inbox is None else await self.inbox.get_message(scope, trigger.message_id)
+        )
+        if message is None:
+            return TriggerReplay(message_id=trigger.message_id, found=False)
+        reads = []
+        for skill in (proposed, in_force):
+            reads.append(
+                await self.mail_kinds.read(
+                    skill,
+                    served_kinds(skill),
+                    message,
+                    new_run=lambda: self._run(scope),
+                    forget_run=self.forget_run,
+                )
+            )
+        (with_route, with_kind), (without_route, without_kind) = reads
+        return TriggerReplay(
+            message_id=trigger.message_id,
+            found=True,
+            with_kind=None if with_kind is None else with_kind.name,
+            with_label=None if with_kind is None else with_kind.label,
+            with_route=with_route,
+            without_kind=None if without_kind is None else without_kind.name,
+            without_label=None if without_kind is None else without_kind.label,
+            without_route=without_route,
+        )
+
     def _stored(
         self,
         version: RuleVersion,
@@ -254,6 +312,7 @@ class SkillReplayer:
         right_without: int,
         unanswered: int,
         failed: tuple[str, ...],
+        trigger: TriggerReplay | None = None,
     ) -> SkillReplay:
         return SkillReplay(
             version_id=version.version_id,
@@ -265,6 +324,7 @@ class SkillReplayer:
             right_without=right_without,
             unanswered=unanswered,
             security_failed=failed,
+            trigger=trigger,
         )
 
     async def _read(
@@ -336,6 +396,13 @@ class SkillReplayer:
             autonomy_level="A1",
             approval_policy_version="1.0.0",
         )
+
+
+def _read_here(version: RuleVersion, scope: SalesScope) -> bool:
+    """Whether ``scope``'s lane replays ``version``: every version, but one
+    taught from a mail of another workspace, whose own lane reads it."""
+    trigger = SkillDocument.model_validate(dict(version.document)).trigger
+    return trigger is None or trigger.workspace_id == scope.workspace_id.value
 
 
 def _right(gold: frozenset[str], reading: ReplyReading | Literal[False] | None) -> int:

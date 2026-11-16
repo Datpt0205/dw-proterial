@@ -128,6 +128,11 @@ class RegionFlag(StrEnum):
     # states, and zero for a price, beside the value it stands with; Sales
     # confirms or types it.
     NOT_PRINTED = "not_printed"
+    # Its words ("1.500 m", "05/11/2026", a bare "$") read one way only by
+    # the customer's notation record, which Sales' earlier confirmations
+    # settled (ticket 37): the document itself does not say, so a person
+    # sees which record read it, and changes the record if it is wrong.
+    NOTATION_FROM_RECORD = "notation_from_record"
 
 
 class FlaggedValue(BaseModel):

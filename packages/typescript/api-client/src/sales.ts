@@ -343,6 +343,21 @@ export class SalesApi {
     );
   }
 
+  /** A triage card decided (ticket 33): the step taken (the card's or
+   * another of the closed set), or null to dismiss it; ``attach`` attaches
+   * a reply to the case the card names, never a case the caller names. */
+  decideTriageCard(
+    messageId: string,
+    body: Body<"/api/v1/sales/inbox/{message_id}/triage">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/triage">(
+      `/api/v1/sales/inbox/${enc(messageId)}/triage`,
+      body,
+      key,
+    );
+  }
+
   /** A handled message open again, back on its owner's Việc cần làm. */
   reopenMessage(messageId: string, key: string) {
     return this.post<"/api/v1/sales/inbox/{message_id}/reopen">(
@@ -1389,6 +1404,44 @@ export class SalesApi {
   salesOrderExamples(customerCode: string) {
     return this.get<"/api/v1/sales/customers/{customer_code}/salesorder-examples">(
       `/api/v1/sales/customers/${enc(customerCode)}/salesorder-examples`,
+    );
+  }
+
+  /**
+   * How the customer writes numbers, dates and bare currency symbols, as
+   * Sales' confirmations settled it (ticket 37): each kind known, and the
+   * value it was learned from, or that a person set it.
+   */
+  customerNotation(customerCode: string) {
+    return this.get<"/api/v1/sales/customers/{customer_code}/notation">(
+      `/api/v1/sales/customers/${enc(customerCode)}/notation`,
+    );
+  }
+
+  /** A person states one kind (`sales.order.prepare`): it replaces what was learned. */
+  setCustomerNotation(
+    customerCode: string,
+    body: SalesSchemas["CustomerNotationBody"],
+    idempotencyKey: string,
+  ) {
+    return this.put<"/api/v1/sales/customers/{customer_code}/notation">(
+      `/api/v1/sales/customers/${enc(customerCode)}/notation`,
+      body,
+      idempotencyKey,
+    );
+  }
+
+  /** The kind is no longer known: the customer's values of it go to a person again. */
+  forgetCustomerNotation(
+    customerCode: string,
+    kind: SalesSchemas["CustomerNotationBody"]["kind"],
+    idempotencyKey: string,
+  ): Promise<SalesSchemas["CustomerNotationView"]> {
+    return this.client.request(
+      "DELETE",
+      `/api/v1/sales/customers/${enc(customerCode)}/notation/${enc(kind)}`,
+      shaped<SalesSchemas["CustomerNotationView"]>(),
+      { idempotencyKey },
     );
   }
 

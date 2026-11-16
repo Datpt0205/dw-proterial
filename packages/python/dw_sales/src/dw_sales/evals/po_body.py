@@ -43,6 +43,7 @@ from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import FlaggedValue, OrderCase, PoDocument, RegionFlag
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, SampleWith, open_world
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 from dw_sales.testing.followups import platform_zone
 
 _FIXTURE = "evals/fixtures/cases/sales_po_body.json"
@@ -134,7 +135,11 @@ async def _read(model: Any, spec: Mapping[str, Any]) -> PoDocument | str:
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
     message = _message(spec)
     received_on = local_day(message.received_at, platform_zone().zone)
-    return await PoBodyReader(model).read(message, received_on=received_on, run=run)
+    # No customer holds a notation record here: the mail's own values settle
+    # it or a person does (ticket 37's records are graded on RFQs and hand-offs).
+    return await PoBodyReader(model, MemoryCustomerNotations()).read(
+        message, scope=ALPHA, customer_code="NONE", received_on=received_on, run=run
+    )
 
 
 def grade_golden(

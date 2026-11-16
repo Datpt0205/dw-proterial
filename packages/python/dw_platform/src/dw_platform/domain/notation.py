@@ -33,6 +33,24 @@ that can only be read one way; no tenant or customer setting guesses it:
 Evidence pointing both ways fixes nothing (for dates it is a conflict, and
 every numeric date of that document goes to a person).
 
+**A customer's record** (Sales ticket 37) is what that customer's earlier
+documents settled, learned by code from a person's confirmation of a value
+the document left ambiguous (`learned`: the one notation under which the
+words read as the value confirmed), one entry per kind (`NotationKind`) and
+held as a `Notation` of its own (`record_of`). `settle` reads a value by the
+document's own evidence together with the record, and says which settled it:
+
+- the document says nothing on that kind: the record settles it
+  (``by_record``);
+- the document agrees with the record: the document settles it, as before;
+- the document says otherwise: the two together fix nothing, the value is
+  not read, and a person reads it (``contradicts_record``).
+
+So the record never changes a value the document reads by itself: it only
+settles one the document left open, and a value the document reads one way
+(even by the weak evidence of a decimal point) that the record would read
+another is a contradiction, not read.
+
 **Reading a value** (`read_number`, `day_and_month`, `read_currency`) never
 guesses: "1.250" or "1,250" (one separator, exactly three digits after, a
 first group of one to three digits not starting with 0) is ambiguous, and is
@@ -47,7 +65,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
@@ -345,3 +363,102 @@ def notation_of(text: str) -> Notation:
     folded = normal.upper()
     currencies = frozenset(code for name, code in _NAMES.items() if _named(folded, name))
     return Notation(frozenset(marks), frozenset(orders), currencies, points)
+
+
+# ---------------------------------------------------- a customer's record --
+
+NotationKind = Literal["decimal_mark", "date_order", "dollar_sign", "yen_sign"]
+
+# What each kind of a customer's record may hold: the decimal mark, the date
+# order, and the ISO code a bare ``$`` or ``¥`` stands for (`_SYMBOLS`).
+KIND_VALUES: Final[Mapping[NotationKind, frozenset[str]]] = MappingProxyType(
+    {
+        "decimal_mark": frozenset({".", ","}),
+        "date_order": frozenset({"day_first", "month_first"}),
+        "dollar_sign": _SYMBOLS["$"],
+        "yen_sign": _SYMBOLS["¥"],
+    }
+)
+
+
+def record_of(entries: Iterable[tuple[NotationKind, str]]) -> Notation:
+    """A customer's record, one ``(kind, value)`` per kind, as the evidence
+    it stands for: the decimal mark and date order its documents use, and
+    the ISO code its bare symbols mean (named, as a document naming ``USD``
+    settles ``$``). A value no kind holds is refused (ValueError); two values
+    of one kind fix nothing, as two ways in one document do."""
+    marks: set[DecimalMark] = set()
+    orders: set[DateOrder] = set()
+    currencies: set[str] = set()
+    for kind, value in entries:
+        if value not in KIND_VALUES[kind]:
+            raise ValueError(f"{kind} holds no {value!r}")
+        if kind == "decimal_mark":
+            marks.add("." if value == "." else ",")
+        elif kind == "date_order":
+            orders.add("day_first" if value == "day_first" else "month_first")
+        else:
+            currencies.add(value)
+    return Notation(frozenset(marks), frozenset(orders), frozenset(currencies))
+
+
+@dataclass(frozen=True, slots=True)
+class Settled[T]:
+    """A value read by a document's evidence and its writer's record (module
+    docstring): ``by_record`` when only the record settles it;
+    ``contradicts_record`` when the document reads it one way and the record
+    another, so it is not read and a person reads it."""
+
+    value: T | None
+    by_record: bool = False
+    contradicts_record: bool = False
+    # Not read, though some notation reads the words: a value the notation
+    # left open (or the record contradicts), not words that are no value.
+    unsettled: bool = False
+
+
+def settle[T](
+    parse: Callable[[Notation], T | None], document: Notation, record: Notation = UNSTATED
+) -> Settled[T]:
+    """``parse`` (a reader's own parser of one span, given a notation) read
+    by ``document``'s evidence and the writer's ``record``: the one answer
+    every reader of a customer's words uses (module docstring)."""
+    own = parse(document)
+    if own is None:
+        value = parse(document | record)
+        if value is not None:
+            return Settled(value, by_record=True)
+        return Settled(None, unsettled=any(parse(c.notation) is not None for c in _CANDIDATES))
+    if parse(document | record) == own:
+        return Settled(own)
+    return Settled(None, contradicts_record=True, unsettled=True)
+
+
+@dataclass(frozen=True, slots=True)
+class Learned:
+    """One kind of a writer's notation, as a person's confirmation settled it."""
+
+    kind: NotationKind
+    value: str
+
+    @property
+    def notation(self) -> Notation:
+        return record_of([(self.kind, self.value)])
+
+
+_CANDIDATES: Final = tuple(
+    Learned(kind, value) for kind, values in KIND_VALUES.items() for value in sorted(values)
+)
+
+
+def learned[T](parse: Callable[[Notation], T | None], confirmed: T) -> Learned | None:
+    """What a person's confirmation that the words ``parse`` reads stand for
+    ``confirmed`` settles about how their writer writes: the one kind and
+    value under which they read as ``confirmed``. None where the words read
+    by themselves (they settle nothing), where no notation reads them as the
+    value confirmed (the person corrected the value, not its reading), or
+    where more than one does. Code compares; nothing is guessed."""
+    if parse(UNSTATED) is not None:
+        return None
+    hits = [c for c in _CANDIDATES if parse(c.notation) == confirmed]
+    return hits[0] if len(hits) == 1 else None

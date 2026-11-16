@@ -1,4 +1,6 @@
 import type { SalesSchemas } from "@dw/api-client";
+import { intentKindLabel } from "./labels";
+import { messageRef } from "./messages";
 import { nextVersion } from "./rules";
 
 export type SkillsView = SalesSchemas["SkillsView"];
@@ -53,4 +55,30 @@ export function securityLine(replay: SkillReplay): string | null {
 export function incompleteLine(replay: SkillReplay): string | null {
   if (replay.outcome !== "incomplete") return null;
   return `${replay.unanswered} lần mô hình không trả lời: kết quả chưa đủ`;
+}
+
+type TriggerReplay = NonNullable<SkillReplay["trigger"]>;
+
+/** How one side of a replay read the taught mail, in words. */
+function readAs(
+  kind?: string | null,
+  label?: string | null,
+  route?: string | null,
+) {
+  if (route == null) return "mô hình không trả lời";
+  if (!kind) return "không nhận ra loại thư";
+  return `“${intentKindLabel({ kind, kind_label: label })}”`;
+}
+
+/**
+ * The mail a version was taught from (ticket 34), read with it and without
+ * it; null for a version no triage card proposed.
+ */
+export function triggerLine(replay: SkillReplay): string | null {
+  const taught: TriggerReplay | null | undefined = replay.trigger;
+  if (!taught) return null;
+  const ref = messageRef(taught.message_id);
+  if (!taught.found)
+    return `Thư gốc ${ref}: không còn trong hộp thư, không chạy thử được`;
+  return `Thư gốc ${ref}: bản đề xuất đọc là ${readAs(taught.with_kind, taught.with_label, taught.with_route)} · bản đang dùng đọc là ${readAs(taught.without_kind, taught.without_label, taught.without_route)}`;
 }

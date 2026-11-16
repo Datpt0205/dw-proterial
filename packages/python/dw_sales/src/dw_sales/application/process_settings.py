@@ -173,6 +173,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.skill_intents",
                     "model_assist.skill_pick_confidence",
                     "model_assist.skill_mail_kinds",
+                    "model_assist.triage_card",
                     "model_assist.request_handoff",
                     "model_assist.change_request",
                 ),

@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem profile on Strata, qwen3.8-flash-next-q2_0, 2026-11-16, prompt sales.triage_card@1.0.0 with the platform's mail-kinds skill 1.0.0) make 97 of the 98 golden cards right, step and case (92 residue mails 0.989, 6 card mails 1.0). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill or the model changes.",
+  "min_card_accuracy": 0.99
+}

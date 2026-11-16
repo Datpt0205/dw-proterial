@@ -269,6 +269,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Phân loại thư theo các loại thư của công ty",
       help: "Các loại thư và cách hiểu từng loại nằm trong kỹ năng phân loại thư (bản công ty đã duyệt, nếu có); mỗi loại đi theo một tuyến có sẵn. Không phân loại được thì dùng bước phân loại thư, rồi đến Sales.",
     },
+    "model_assist.triage_card": {
+      label: "Thẻ gợi ý cho thư chuyển Sales “Khác”",
+      help: "DW1 gợi ý thư có vẻ thuộc loại nào, liên quan hồ sơ nào của chính khách gửi, và một bước xử lý. Chỉ là gợi ý: thư giữ nguyên hướng xử lý cho đến khi Sales bấm làm theo hoặc bỏ qua.",
+    },
     "model_assist.skill_pick_confidence": {
       label: "Độ chắc chắn tối thiểu khi DW1 chọn kỹ năng",
       help: "Từ 0,5 đến 1. Chưa chắc bằng mức này thì thư được đọc như khi tắt bước kỹ năng.",

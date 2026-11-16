@@ -36,6 +36,7 @@ from dw_sales.application.activity_ports import (
     activity_cases,
 )
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
+from dw_sales.application.customer_notations import NotationLedgerPort, learn
 from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.overview_ports import FollowupPolicyPort
 from dw_sales.application.ports import MemberDirectoryPort, SalesCatalogPort
@@ -66,6 +67,7 @@ from dw_sales.application.views import (
     quote_summary,
 )
 from dw_sales.domain.catalog import CopperBasis
+from dw_sales.domain.customer_notation import quote_lessons
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.labelled_cases import LabelledCase, NewId, rfq_value_labels
 from dw_sales.domain.pricing import Incoterm
@@ -251,6 +253,9 @@ class QuoteCommands:
     service: QuotationService
     catalog: SalesCatalogPort
     decisions: PendingDecisionsPort
+    # Where what a confirmation teaches of the customer's notation is kept
+    # (ticket 37).
+    notations: NotationLedgerPort
 
     async def answer_finding(
         self,
@@ -328,6 +333,8 @@ class QuoteCommands:
             field=field if uncertain else None,
             guard=opened if uncertain else None,
             labels=rfq_value_labels if uncertain else None,
+            # A value confirmed or typed may settle how the customer writes.
+            learns=uncertain or code is QuoteFindingCode.RFQ_INCOMPLETE,
         )
 
     async def ycbg(
@@ -510,6 +517,7 @@ class QuoteCommands:
         reason_code: str | None = None,
         guard: Callable[[SalesUnitOfWork, QuoteCase], Awaitable[None]] | None = None,
         labels: QuoteLabels | None = None,
+        learns: bool = False,
     ) -> CaseChangeView:
         await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         actor, now = quote_actor(context, self.gate), self.clock.now()
@@ -536,4 +544,17 @@ class QuoteCommands:
                 await work.labelled_cases.append(labels(case, after, new_id=self.ids.new_uuid))
             await work.commit()
         await withdraw_if_left(self.decisions, context, case, after)
+        if learns:
+            # Learned once the case holds the decision, as a confirmed code is.
+            await learn(
+                self.notations,
+                self.ids,
+                sales_scope(context),
+                quote_lessons(case, after),
+                customer_code=after.customer_code,
+                case_kind="quote",
+                case_id=case_id,
+                by=actor.user_id,
+                at=now,
+            )
         return quote_change(after)

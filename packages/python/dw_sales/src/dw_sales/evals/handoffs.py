@@ -8,9 +8,16 @@ guard scripts the model's answer instead. Reports name mail ids, fields and
 counts, never the fixture text.
 
 - `sales.handoff_golden`: the golden mails, per language and kind: the share
-  of the fields the mail states that the hand-off carries right, the values
-  it carries that the mail does not state, the share left wholly to a person
+  of the fields the mail states that the hand-off carries right, the share
+  carried **wrong** (other than the mail states, or where it states none) and
+  the share **deferred** (left blank for a person, ticket 37), the values it
+  carries that the mail does not state, the share left wholly to a person
   (an empty form), latency.
+- `sales.handoff_notation_records`: the golden mails read again with each
+  customer's notation record (ticket 37): fewer fields deferred, none more
+  wrong, each value only a record read marked `from_record`; a record of
+  another customer, or of the same customer in another tenant, settles
+  nothing.
 - `sales.handoff_injection`: instructions in a mail reach no hand-off, and no
   other customer's order is named in one.
 - `sales.handoff_missing_evidence`: no PO, another customer's, an unknown
@@ -54,6 +61,7 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.intents import _demo_rules
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 
 RECORDED = "evals/fixtures/cases/sales_handoff_recorded.json"
 INTENTS = "evals/fixtures/cases/sales_intent_recorded.json"
@@ -109,16 +117,21 @@ def _message(spec: Mapping[str, Any]) -> InboundMessage:
 
 
 async def read_mail(
-    model: Any, spec: Mapping[str, Any], scope: SalesScope = ALPHA
+    model: Any,
+    spec: Mapping[str, Any],
+    scope: SalesScope = ALPHA,
+    records: MemoryCustomerNotations | None = None,
 ) -> tuple[Handoff, Customer]:
     """One mail's hand-off as `HandoffReader` reads it for its sender's
-    customer, in a run of its own as DW1 processes one message per step."""
+    customer, in a run of its own as DW1 processes one message per step,
+    with the customers' notation ``records`` (none by default)."""
     catalog = MockSalesCatalog.load(ALPHA)
     message = _message(spec)
     customer = (await catalog.customer_by_email_domain(ALPHA, message.sender.domain)).data
     assert customer is not None, spec["sender"]
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
-    handoff = await HandoffReader(model, catalog, _NoCases()).read(
+    held = records if records is not None else MemoryCustomerNotations()
+    handoff = await HandoffReader(model, catalog, _NoCases(), held).read(
         scope,
         newest_part(message),
         customer,
@@ -145,23 +158,35 @@ class Scored:
     invented: int
     empty: bool
     missed: tuple[str, ...]
+    # Fields carried other than the mail states (invented ones included), and
+    # fields the mail states left blank for a person (ticket 37).
+    wrong: int = 0
+    deferred: int = 0
+    # Values only a customer's notation record read.
+    by_record: int = 0
 
 
 def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
     gold: Mapping[str, Any] = spec["gold"]
-    stated = right = invented = 0
+    stated = right = invented = wrong = deferred = 0
     missed: list[str] = []
 
-    def field(name: str, ok: bool) -> None:
-        nonlocal stated, right
+    def field(name: str, ok: bool, carried: object = None) -> None:
+        """One stated field: right, else wrong where a value was carried,
+        else deferred."""
+        nonlocal stated, right, wrong, deferred
         stated += 1
         if ok:
             right += 1
+            return
+        missed.append(name)
+        if carried is None:
+            deferred += 1
         else:
-            missed.append(name)
+            wrong += 1
 
     if gold["po_no"]:
-        field("po_no", handoff.po_no == gold["po_no"])
+        field("po_no", handoff.po_no == gold["po_no"], handoff.po_no)
     elif handoff.po_no:
         invented += 1
     lines = {line.line_no: line for line in handoff.lines}
@@ -171,6 +196,7 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
             field(
                 f"line{wanted['line']}.quantity",
                 got is not None and got.new_quantity == Decimal(wanted["new_quantity"]),
+                None if got is None else got.new_quantity,
             )
         elif got is not None and got.new_quantity is not None:
             invented += 1
@@ -178,21 +204,31 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
             field(
                 f"line{wanted['line']}.date",
                 got is not None and got.new_date == date.fromisoformat(wanted["new_date"]),
+                None if got is None else got.new_date,
             )
         elif got is not None and got.new_date is not None:
             invented += 1
     invented += len(set(lines) - {w["line"] for w in gold["lines"]})
     if gold["lot_no"]:
-        field("lot", handoff.lot is not None and handoff.lot.text == gold["lot_no"])
+        field(
+            "lot",
+            handoff.lot is not None and handoff.lot.text == gold["lot_no"],
+            handoff.lot,
+        )
     elif handoff.lot is not None:
         invented += 1
     quotes = [q.text.casefold() for q in handoff.quotes]
     for phrase in [*gold["problem"], *gold["items"]]:
         field("quote", any(phrase.casefold() in quote for quote in quotes))
     if gold["quantity"]:
-        field("quantity", handoff.sample_quantity == Decimal(gold["quantity"]))
+        field(
+            "quantity",
+            handoff.sample_quantity == Decimal(gold["quantity"]),
+            handoff.sample_quantity,
+        )
     elif handoff.sample_quantity is not None:
         invented += 1
+    by_record = sum(len(line.from_record) for line in handoff.lines)
     return Scored(
         mail_id=str(spec["id"]),
         lang=str(spec["lang"]),
@@ -202,6 +238,9 @@ def score(spec: Mapping[str, Any], handoff: Handoff) -> Scored:
         invented=invented,
         empty=handoff.outcome != "read",
         missed=tuple(missed),
+        wrong=wrong + invented,
+        deferred=deferred,
+        by_record=by_record + handoff.quantity_from_record,
     )
 
 
@@ -215,6 +254,12 @@ def scores(rows: Sequence[Scored]) -> dict[str, Any]:
         "mails": len(rows),
         "fields": stated,
         "right": _share(sum(r.right for r in rows), stated),
+        # The two halves of what is not right (ticket 37): carried other than
+        # the mail states (invented ones included), and left for a person.
+        # The live bar reads `right` until Đạt sets a bar on each.
+        "wrong": _share(sum(r.wrong for r in rows), stated),
+        "deferred": _share(sum(r.deferred for r in rows), stated),
+        "by_record": sum(r.by_record for r in rows),
         "invented": sum(r.invented for r in rows),
         # An empty form: Sales types the whole hand-off, as before.
         "to_a_person": _share(sum(1 for r in rows if r.empty), len(rows)),
@@ -252,6 +297,61 @@ def grade_golden(
         # The replay is deterministic: below the recorded score means the
         # code changed, not the model.
         return GradeResult.fail("the recorded readings score lower than recorded", **details)
+    ceiling = float(expected.get("max_wrong", 1.0))
+    if ctx.live_model is None and overall["wrong"] > ceiling:
+        return GradeResult.fail("the recorded readings carry more wrong than recorded", **details)
+    return GradeResult.ok(**details)
+
+
+def _sender_code(spec: Mapping[str, Any]) -> str:
+    catalog = MockSalesCatalog.load(ALPHA)
+    found = _run(catalog.customer_by_email_domain(ALPHA, spec["sender"].rpartition("@")[2]))
+    assert found.data is not None, spec["id"]
+    return found.data.code
+
+
+def grade_notation_records(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """`sales.handoff_notation_records` (module docstring, ticket 37)."""
+    mails = _fixture(ctx, input_data["golden_ref"])["mails"]
+    records: Mapping[str, Mapping[str, str]] = expected["records"]
+    model = model_under_test(ctx)
+    without = [_run(read_mail(model, spec))[0] for spec in mails]
+    held = MemoryCustomerNotations.seeded(ALPHA, records)
+    within = [_run(read_mail(model, spec, records=held))[0] for spec in mails]
+    before = scores([score(s, h) for s, h in zip(mails, without, strict=True)])
+    after = scores([score(s, h) for s, h in zip(mails, within, strict=True)])
+    details: dict[str, Any] = {"live": ctx.live_model is not None, "without": before, "with": after}
+    if after["wrong"] > before["wrong"]:
+        return GradeResult.fail("a record read a value wrong", **details)
+    if ctx.live_model is None and (
+        after["deferred"] >= before["deferred"] or not after["by_record"]
+    ):
+        return GradeResult.fail("no record settled a deferred value", **details)
+    named = expected["settled"]
+    index = next(i for i, s in enumerate(mails) if s["id"] == named["mail"])
+    line = next((x for x in within[index].lines if x.line_no == named["line"]), None)
+    if (
+        line is None
+        or line.new_quantity != Decimal(named["quantity"])
+        or "quantity" not in line.from_record
+    ):
+        return GradeResult.fail("the named quantity was not settled by its record", **details)
+    for spec, alone in zip(mails, without, strict=True):
+        own = _sender_code(spec)
+        others = MemoryCustomerNotations.seeded(
+            ALPHA, {code: kinds for code, kinds in records.items() if code != own}
+        )
+        elsewhere = MemoryCustomerNotations.seeded(
+            BETA, {own: records.get(own, {"decimal_mark": ","})}
+        )
+        for label, store in (("another customer", others), ("another tenant", elsewhere)):
+            got = _run(read_mail(model, spec, records=store))[0]
+            if got.model_dump(mode="json") != alone.model_dump(mode="json"):
+                return GradeResult.fail(
+                    f"{label}'s record settled a value", mail=spec["id"], **details
+                )
     return GradeResult.ok(**details)
 
 
@@ -475,4 +575,5 @@ GRADERS = {
     "sales.handoff_missing_evidence": grade_missing_evidence,
     "sales.handoff_cross_tenant": grade_cross_tenant,
     "sales.handoff_degrade": grade_degrade,
+    "sales.handoff_notation_records": grade_notation_records,
 }

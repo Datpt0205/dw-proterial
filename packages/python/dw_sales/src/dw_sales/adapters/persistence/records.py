@@ -146,6 +146,7 @@ class SqlMessageLog:
                 if disposition.thread_cases
                 else None
             ),
+            "triage": (disposition.triage.model_dump(mode="json") if disposition.triage else None),
             "processed_at": processed_at,
             # Processed again, the message is open again: a mark made on the
             # disposition it replaces does not carry over.
@@ -305,6 +306,7 @@ def disposition_of(row: RowMapping, more_cases: Sequence[uuid.UUID] = ()) -> Mes
             "layout_prefill": row["layout_prefill"],
             "thread_cases": row["thread_cases"] or (),
             "more_cases": tuple(more_cases),
+            "triage": row["triage"],
         }
     )
 

@@ -53,6 +53,7 @@ from dw_agent_runtime.model.streaming import SSE_HEADERS, SSE_MEDIA_TYPE, opened
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_kernel.pagination import MAX_PAGE_SIZE, Page
 from dw_platform.application.access_context import AccessContext
+from dw_platform.domain.notation import NotationKind
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.activity_ports import CaseListActivity, HandledBy
@@ -65,6 +66,7 @@ from dw_sales.application.catalog_imports import (
     CatalogStateView,
 )
 from dw_sales.application.change_requests import ChangeRequestResult, TypedChange
+from dw_sales.application.customer_notations import CustomerNotationView
 from dw_sales.application.customer_reminders import CustomerReminderView
 from dw_sales.application.design_text_reading import DesignTextReadingView, ModelDesignReply
 from dw_sales.application.finding_explanations import FindingExplanationView
@@ -79,7 +81,11 @@ from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.reply_drafts import ReplyDraftView, ReplyKind
-from dw_sales.application.routed_mail import HandledRequest, HandledView
+from dw_sales.application.routed_mail import (
+    CardDecisionRequest,
+    HandledRequest,
+    HandledView,
+)
 from dw_sales.application.rule_drafts import RuleDraftView
 from dw_sales.application.rules import (
     PlatformDocumentView,
@@ -272,6 +278,16 @@ class ExampleFileBody(BaseModel):
 
     def data(self) -> tuple[str, bytes]:
         return self.file_name, _file_bytes(self.content_b64)
+
+
+class CustomerNotationBody(BaseModel):
+    """How the customer writes one kind, as a person states it (ticket 37):
+    the kind and its value, checked against the values the kind holds."""
+
+    model_config = _BODY
+
+    kind: NotationKind
+    value: Annotated[str, Field(min_length=1, max_length=16)]
 
 
 class SalesOrderExampleBody(BaseModel):
@@ -1217,6 +1233,20 @@ def build_router(
         view = await svc.routed_mail.pick_case(context, message_id, body.case_id)
         return await idem.record(view)
 
+    # A triage card decided (ticket 33): its step taken, another legal step
+    # taken instead, or the card dismissed, by whoever may mark the message
+    # handled (`RoutedMailService.decide_card` decides whose it is).
+    @router.post(
+        "/inbox/{message_id}/triage",
+        response_model=MessageDispositionView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def decide_triage_card(
+        message_id: _MessageId, body: CardDecisionRequest, context: Ctx, svc: Svc, idem: Idem
+    ) -> MessageDispositionView:
+        view = await svc.routed_mail.decide_card(context, message_id, body)
+        return await idem.record(view)
+
     @router.post(
         "/inbox/{message_id}/reopen",
         response_model=HandledView,
@@ -2092,6 +2122,48 @@ def build_router(
     )
     async def rule_draft(draft_id: uuid.UUID, context: Ctx, svc: Svc) -> RuleDraftView:
         return await svc.rule_drafts.get(context, draft_id)
+
+    # ------------------------------ a customer's notation record (37) --
+    # How the customer writes numbers, dates and bare symbols, learned from
+    # Sales' confirmations: read with `sales.case.read`, set or forgotten by a
+    # holder of `sales.order.prepare` (the service asks for both too). The
+    # customer is the path's, looked up in the caller's own workspace.
+
+    @router.get(
+        "/customers/{customer_code}/notation",
+        response_model=CustomerNotationView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def customer_notation(
+        customer_code: CustomerCode, context: Ctx, svc: Svc
+    ) -> CustomerNotationView:
+        return await svc.customer_notations.entries(context, customer_code)
+
+    @router.put(
+        "/customers/{customer_code}/notation",
+        response_model=CustomerNotationView,
+        dependencies=prepare_scope,
+    )
+    async def set_customer_notation(
+        customer_code: CustomerCode,
+        body: CustomerNotationBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CustomerNotationView:
+        view = await svc.customer_notations.set(context, customer_code, body.kind, body.value)
+        return await idem.record(view)
+
+    @router.delete(
+        "/customers/{customer_code}/notation/{kind}",
+        response_model=CustomerNotationView,
+        dependencies=prepare_scope,
+    )
+    async def forget_customer_notation(
+        customer_code: CustomerCode, kind: NotationKind, context: Ctx, svc: Svc, idem: Idem
+    ) -> CustomerNotationView:
+        view = await svc.customer_notations.forget(context, customer_code, kind)
+        return await idem.record(view)
 
     # ------------- a customer's SalesOrder rules learned by example (38) --
     # The pair is kept for the worker (202): the API reads no customer file.

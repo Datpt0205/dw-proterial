@@ -1,0 +1,13 @@
+{
+  "_comment": "Ticket 37. Each fictional customer's notation as Sales would confirm it the first time: the Vietnamese customers group thousands with a dot and write the day first, the English and Japanese ones group with a comma. Read with these records, the golden requests defer fewer values and read none more wrong; Velatrix's '1.500 m' (vi-body-01, line 2) reads 1500 m flagged as settled by its record. A record held only for another customer, or for the same customer in another tenant, changes no reading.",
+  "records": {
+    "VLX": {"decimal_mark": ",", "date_order": "day_first"},
+    "BRN": {"decimal_mark": ",", "date_order": "day_first"},
+    "TZ2609": {"decimal_mark": ",", "date_order": "day_first"},
+    "NRV": {"decimal_mark": "."},
+    "QRL": {"decimal_mark": "."},
+    "CVG": {"decimal_mark": "."},
+    "KMH": {"decimal_mark": "."}
+  },
+  "settled": {"request": "vi-body-01", "item": 2, "quantity": "1500"}
+}

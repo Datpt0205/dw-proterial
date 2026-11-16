@@ -20,7 +20,7 @@ decides on its own what a correction is.
 
 One function per step derives the case from what the step's own service
 already holds when the person decides (`mapping_label`, `po_value_label`,
-`rfq_value_labels`, `change_line_label`, `layout_label`); each returns
+`rfq_value_labels`, `change_line_label`, `layout_label`, `triage_label`); each returns
 nothing for an item no model proposed (a code reader's value, a line the
 convert list mapped, a change a person typed), because such an item labels
 no model.
@@ -51,6 +51,7 @@ from dw_sales.domain.orders import (
     value_with_correction,
 )
 from dw_sales.domain.quotes import QuoteCase, QuoteFindingCode
+from dw_sales.domain.triage import TriageCard
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -377,4 +378,49 @@ def layout_label(
         model_profile=prefill.model_profile,
         rules=prefill.rules,
         decided_by=layout.proposed_by,
+    )
+
+
+def triage_label(
+    card: TriageCard,
+    *,
+    message_id: str,
+    customer_code: str | None,
+    new_id: NewId,
+) -> LabelledCase:
+    """A person's decision on a mail's triage card (`triage_card`, ticket
+    33): the kind read, the step and the case suggested, beside the step and
+    the case the person took (the kind as read: the person routes, they do
+    not relabel). Taken as suggested is a confirmation, another step a
+    correction, a dismissal a rejection (`verdict_of`)."""
+    decided = card.decided
+    if decided is None:
+        raise ValueError("only a decided card is a labelled case")
+    proposed = card.proposal()
+    kept = (
+        None
+        if decided.step is None
+        else {
+            "kind": card.kind,
+            "step": decided.step,
+            "case_id": None if decided.case_id is None else str(decided.case_id),
+        }
+    )
+    return LabelledCase(
+        label_id=new_id(),
+        decided_at=decided.at,
+        step=ModelStep.TRIAGE_CARD,
+        lane=CaseKind.ORDER,
+        case_id=decided.case_id or card.case_id,
+        customer_code=customer_code,
+        message_id=message_id,
+        attachment_id=None,
+        line_no=None,
+        field="triage",
+        proposed=dict(proposed),
+        kept=kept,
+        prompt=card.prompt,
+        model_profile=card.model_profile,
+        rules=card.rules,
+        decided_by=decided.by,
     )

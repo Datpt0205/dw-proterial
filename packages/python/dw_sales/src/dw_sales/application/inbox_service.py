@@ -215,7 +215,8 @@ async def _offered_numbers(
     work: SalesUnitOfWork, logged: Iterable[LoggedMessage], hidden: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
     """What each case a routed reply still open is offered goes by (ticket
-    24), and each case of a mail with several POs (ticket 19): the PO's
+    24), each case of a mail with several POs (ticket 19), and the case a
+    triage card names (ticket 33): the PO's
     number, or the request's; none for a case the caller does not see."""
     named: list[tuple[CaseKind, uuid.UUID]] = []
     for entry in logged:
@@ -224,6 +225,10 @@ async def _offered_numbers(
             named += [(CaseKind.ORDER, case_id) for case_id in disposition.case_ids]
         if entry.handled is None:
             named += [(c.case_kind, c.case_id) for c in disposition.thread_cases]
+        card = disposition.triage
+        if card is not None and card.case_id is not None:
+            # The case a triage card names (ticket 33).
+            named.append((CaseKind.ORDER, card.case_id))
     numbers: dict[uuid.UUID, str] = {}
     for kind, case_id in named:
         if case_id in hidden or case_id in numbers:

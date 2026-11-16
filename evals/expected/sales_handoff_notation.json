@@ -1,0 +1,13 @@
+{
+  "_comment": "Ticket 37. Each fictional customer's notation as Sales would confirm it the first time (the same records as sales_rfq_notation.json): read with them, the golden mails defer fewer fields and carry none more wrong; Velatrix's '2.000 m' (HO01, line 1) reads 2000 m marked as settled by its record. A record held only for another customer, or for the same customer in another tenant, changes no hand-off.",
+  "records": {
+    "VLX": {"decimal_mark": ",", "date_order": "day_first"},
+    "BRN": {"decimal_mark": ",", "date_order": "day_first"},
+    "TZ2609": {"decimal_mark": ",", "date_order": "day_first"},
+    "NRV": {"decimal_mark": "."},
+    "QRL": {"decimal_mark": "."},
+    "CVG": {"decimal_mark": "."},
+    "KMH": {"decimal_mark": "."}
+  },
+  "settled": {"mail": "HO01", "line": 1, "quantity": "2000"}
+}

@@ -70,6 +70,7 @@ import { PoUpload } from "./po-upload";
 import { HandoffDraft } from "./handoff-draft";
 import { SenderCustomerPanel } from "./sender-customer";
 import { ThreadCasesPanel } from "./thread-cases";
+import { TriageCardPanel } from "./triage-card";
 import { DesignTextPanel } from "./design-text";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
@@ -511,6 +512,15 @@ function Inbox() {
                       messageId={m.message_id}
                       offered={m.disposition.thread_cases}
                       onPicked={() => {
+                        inbox.reload();
+                        overview.reload();
+                      }}
+                    />
+                  ) : null}
+                  {m.disposition.triage ? (
+                    <TriageCardPanel
+                      message={m}
+                      onChanged={() => {
                         inbox.reload();
                         overview.reload();
                       }}

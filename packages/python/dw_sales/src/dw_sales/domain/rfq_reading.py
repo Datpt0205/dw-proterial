@@ -32,9 +32,12 @@ item code of ours or a route.
    taken only in metres (the seller's one unit), from a unit the span or the
    unit span states: ``5 reels`` is no quantity. ``1.250`` and ``05/11/2026``
    are read only where the document the span is in settles them (its other
-   numbers and dates, `notations`); else the value is left for Sales. A date
-   without a year takes the one that puts it on or after the day the mail
-   arrived, less a month.
+   numbers and dates, `notations`), or, where it says nothing, the
+   customer's notation record does (ticket 37, `notation.settle`: such a
+   value is marked `by_record`, and one the document reads otherwise than
+   the record is not read); else the value is left for Sales, anchored at
+   its words (`unsettled`). A date without a year takes the one that puts it
+   on or after the day the mail arrived, less a month.
 4. The request's own values are found anywhere in the parts, and need not be
    unique: a number in the subject and the body is one number.
 5. Every value the model's words gave is flagged `model_read`, and Sales
@@ -67,6 +70,7 @@ from dw_platform.domain.notation import (
     notation_of,
     read_currency,
     read_number,
+    settle,
 )
 from dw_sales.domain.anchors import SourceAnchor, TextRange
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo
@@ -419,6 +423,11 @@ class VerifiedItem:
     uom: Read[str] | None
     needed_by: Read[date] | None
     stated_target_price: Read[Decimal] | None
+    # The fields read only by the customer's notation record (ticket 37).
+    by_record: frozenset[str] = frozenset()
+    # The quantity or date whose words the notation left open: not read,
+    # and where they are, for Sales to type (`RequestedItem.unsettled`).
+    unsettled: tuple[tuple[str, SourceAnchor], ...] = ()
 
 
 @dataclass
@@ -431,6 +440,8 @@ class VerifiedRfq:
     quote_due: Read[date] | None = None
     currency: Read[Currency] | None = None
     refused: Counter[str] = field(default_factory=Counter)
+    # The request's own fields read only by the customer's record (ticket 37).
+    by_record: set[str] = field(default_factory=set)
 
 
 _Located = tuple[TextPart, int, int]
@@ -447,10 +458,16 @@ def notations(parts: Sequence[TextPart]) -> dict[str | None, Notation]:
 
 
 class _Parts:
-    def __init__(self, parts: Sequence[TextPart], notations: Mapping[str | None, Notation]) -> None:
+    def __init__(
+        self,
+        parts: Sequence[TextPart],
+        notations: Mapping[str | None, Notation],
+        record: Notation,
+    ) -> None:
         self.parts = {part.part_id: part for part in parts}
         self._texts = {part.part_id: FoldedText(part.text) for part in parts}
         self._notations = notations
+        self.record = record
 
     def text(self, part_id: str) -> FoldedText:
         return self._texts[part_id]
@@ -474,14 +491,17 @@ def verify_rfq(
     into: VerifiedRfq | None = None,
     *,
     documents: Mapping[str | None, Notation] | None = None,
+    record: Notation = UNSTATED,
 ) -> VerifiedRfq:
     """What of ``answer`` code accepts (module docstring, checks 1-5), added
     to ``into`` (the verdict of an earlier call of the same request). Never
     raises on the model's answer. ``documents`` is each document's notation
     (`notations`) read from the whole request, where ``parts`` are only the
-    pieces of one call; by default, the notation of ``parts`` themselves."""
+    pieces of one call; by default, the notation of ``parts`` themselves.
+    ``record`` is the sender's customer's notation record (ticket 37), which
+    settles only what a document leaves open."""
     verdict = into if into is not None else VerifiedRfq()
-    held = _Parts(parts, notations(parts) if documents is None else documents)
+    held = _Parts(parts, notations(parts) if documents is None else documents, record)
     seen_lines = {
         (i.line.anchor.attachment_id, i.line.anchor.quote, _start(i)) for i in verdict.items
     }
@@ -500,7 +520,7 @@ def verify_rfq(
             held,
             answer.rfq_no_span,
             lambda span, _notation: parse_document_no(span),
-            verdict.refused,
+            verdict,
             "rfq_no",
         )
     if verdict.quote_due is None and answer.quote_due_span:
@@ -508,13 +528,11 @@ def verify_rfq(
             held,
             answer.quote_due_span,
             lambda span, notation: parse_date(span, received_on, notation),
-            verdict.refused,
+            verdict,
             "quote_due",
         )
     if verdict.currency is None and answer.currency_span:
-        verdict.currency = _header(
-            held, answer.currency_span, parse_currency, verdict.refused, "currency"
-        )
+        verdict.currency = _header(held, answer.currency_span, parse_currency, verdict, "currency")
     return verdict
 
 
@@ -527,20 +545,28 @@ def _header[T](
     held: _Parts,
     span: str,
     parse: Callable[[str, Notation], T | None],
-    refused: Counter[str],
+    verdict: VerifiedRfq,
     name: str,
 ) -> Read[T] | None:
     located = held.anywhere(span)
     if located is None:
-        refused[f"{name}_not_found"] += 1
+        verdict.refused[f"{name}_not_found"] += 1
         return None
     part, start, end = located
-    value = parse(part.text[start:end], held.notation(part))
+    words = part.text[start:end]
+    settled = settle(lambda n: parse(words, n), held.notation(part), held.record)
     anchor = part.anchor(start, end)
-    if value is None or anchor is None:
-        refused[f"{name}_unparsed"] += 1
+    if settled.value is None or anchor is None:
+        verdict.refused[f"{name}_{_why(settled.contradicts_record)}"] += 1
         return None
-    return Read(value, anchor, part.attachment_id)
+    if settled.by_record:
+        verdict.by_record.add(name)
+    return Read(settled.value, anchor, part.attachment_id)
+
+
+def _why(contradicts_record: bool) -> str:
+    """A refusal's reason: the record said otherwise, or the words read not."""
+    return "contradicts_record" if contradicts_record else "unparsed"
 
 
 def _item(
@@ -570,26 +596,38 @@ def _item(
             return None
         return found
 
+    by_record: set[str] = set()
+    unsettled: list[tuple[str, SourceAnchor]] = []
+
     def read[T](
-        place: tuple[int, int] | None, parse: Callable[[str], T | None], name: str
+        place: tuple[int, int] | None, parse: Callable[[str, Notation], T | None], name: str
     ) -> Read[T] | None:
         if place is None:
             return None
-        value = parse(part.text[place[0] : place[1]])
+        words = part.text[place[0] : place[1]]
+        settled = settle(lambda n: parse(words, n), notation, held.record)
         anchor = part.anchor(*place)
-        if value is None or anchor is None:
-            refused[f"{name}_unparsed"] += 1
+        if settled.value is None or anchor is None:
+            refused[f"{name}_{_why(settled.contradicts_record)}"] += 1
+            if settled.unsettled and anchor is not None and name in _UNSETTLED:
+                unsettled.append((name, anchor))
             return None
-        return Read(value, anchor, part.attachment_id)
+        if settled.by_record:
+            by_record.add(name)
+        return Read(settled.value, anchor, part.attachment_id)
 
-    description = read(within(raw.description_span, "description"), _description, "description")
+    description = read(
+        within(raw.description_span, "description"),
+        lambda span, _n: _description(span),
+        "description",
+    )
     if description is None:
         return None
     quantity_place = within(raw.quantity_span, "quantity")
     quantity_read: Read[tuple[Decimal, bool]] | None = read(
-        quantity_place, lambda span: parse_quantity(span, notation), "quantity"
+        quantity_place, parse_quantity, "quantity"
     )
-    uom = read(within(raw.uom_span, "uom"), parse_uom, "uom")
+    uom = read(within(raw.uom_span, "uom"), lambda span, _n: parse_uom(span), "uom")
     quantity: Read[Decimal] | None = None
     if quantity_read is not None:
         number, states_metres = quantity_read.value
@@ -606,22 +644,29 @@ def _item(
         description=description,
         customer_item_code=read(
             within(raw.customer_item_code_span, "customer_item_code"),
-            parse_item_code,
+            lambda span, _n: parse_item_code(span),
             "customer_item_code",
         ),
         quantity=quantity,
         uom=uom,
         needed_by=read(
             within(raw.required_date_span, "needed_by"),
-            lambda span: parse_date(span, received_on, notation),
+            lambda span, n: parse_date(span, received_on, n),
             "needed_by",
         ),
         stated_target_price=read(
             within(raw.target_price_span, "target_price"),
-            lambda span: parse_price(span, notation),
+            parse_price,
             "target_price",
         ),
+        by_record=frozenset(by_record if quantity is not None else by_record - {"quantity"}),
+        unsettled=tuple(unsettled),
     )
+
+
+# The values a line leaves for Sales when its words are not settled: the two
+# a request may lack (`RequestedItem.missing`).
+_UNSETTLED: Final = frozenset({"quantity", "needed_by"})
 
 
 def _line_anchor(part: TextPart, start: int, end: int) -> SourceAnchor | None:

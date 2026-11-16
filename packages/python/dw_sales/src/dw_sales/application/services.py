@@ -36,6 +36,7 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.change_reading import ChangeReader
 from dw_sales.application.change_requests import ChangeRequests
 from dw_sales.application.confirmations import Confirmations
+from dw_sales.application.customer_notations import CustomerNotations, NotationLedgerPort
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.design_text_reading import DesignTextReplies
@@ -115,6 +116,9 @@ class SalesServices:
     sources: SourceService
     artifacts: ArtifactService
     master_data: MasterDataService
+    # How each customer writes numbers, dates and bare currency symbols, as
+    # Sales' confirmations settled it (ticket 37).
+    customer_notations: CustomerNotations
     worker: WorkerService
     assignment: AssignmentService
     # A routed message marked handled, or open again (2026-10-27).
@@ -222,6 +226,8 @@ def assemble(
     converts: ConvertLedgerPort,
     # Where a sender Sales confirms as a customer's is kept (the catalog too).
     senders: SenderLedgerPort,
+    # Where each customer's notation record is kept (ticket 37).
+    notations: NotationLedgerPort,
     # The status assistant's sessions, each bound to its person (ADR 0007).
     assistant: AssistantStoreFactory,
     # What the follow-ups told a person, read back for their feed, and what
@@ -275,9 +281,9 @@ def assemble(
         uploads=PoUploads(uow, gate, clock, ids, catalog, intake.rules, directory, uploads, queue),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=orders,
-        order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts),
+        order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts, notations),
         quotes=quotes,
-        quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending),
+        quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending, notations),
         sources=sources,
         artifacts=ArtifactService(
             uow,
@@ -311,9 +317,10 @@ def assemble(
             ),
         ),
         master_data=MasterDataService(gate, catalog),
+        customer_notations=CustomerNotations(gate, notations, catalog, clock, ids),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
-        routed_mail=RoutedMailService(uow, gate, directory, clock, ids),
+        routed_mail=RoutedMailService(uow, gate, directory, clock, ids, catalog),
         layouts=LayoutService(
             uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks, intake
         ),

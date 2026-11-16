@@ -197,6 +197,8 @@ RECORDED_BY_PROMPT = {
     "sales.skill_pick": _CASES / "sales_skill_pick_recorded.json",
     # The tenant's mail kinds (ticket 42 family 1).
     "sales.mail_kinds": _CASES / "sales_mail_kinds_recorded.json",
+    # A mail routed "other", its triage card (ticket 33).
+    "sales.triage_card": _CASES / "sales_triage_card_recorded.json",
 }
 # A step that reads with tools records whole turns, every assistant message of
 # each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).

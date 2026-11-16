@@ -190,6 +190,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/customers/{customer_code}/notation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer Notation */
+        get: operations["customer_notation_api_v1_sales_customers__customer_code__notation_get"];
+        /** Set Customer Notation */
+        put: operations["set_customer_notation_api_v1_sales_customers__customer_code__notation_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/customers/{customer_code}/notation/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget Customer Notation */
+        delete: operations["forget_customer_notation_api_v1_sales_customers__customer_code__notation__kind__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/customers/{customer_code}/salesorder-examples": {
         parameters: {
             query?: never;
@@ -357,6 +392,23 @@ export interface paths {
         put?: never;
         /** Reopen */
         post: operations["reopen_api_v1_sales_inbox__message_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/inbox/{message_id}/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Triage Card */
+        post: operations["decide_triage_card_api_v1_sales_inbox__message_id__triage_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2576,6 +2628,47 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * CardDecisionRequest
+         * @description A person's decision on a triage card: the step they take (the card's
+         *     own or another of the closed set), None to dismiss it; ``attach`` to
+         *     attach a reply to the case the card names. Never a case id: the only
+         *     case a card may lead to is its own.
+         */
+        CardDecisionRequest: {
+            /**
+             * Attach
+             * @default false
+             */
+            attach: boolean;
+            /** Step */
+            step: ("reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice") | null;
+        };
+        /**
+         * CardVerdict
+         * @description What a person did with a card, and when.
+         */
+        CardVerdict: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Case Id */
+            case_id?: string | null;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "taken" | "changed" | "dismissed";
+            /** Step */
+            step: ("reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice") | null;
+        };
         /** CaseActivityView */
         CaseActivityView: {
             /**
@@ -3246,6 +3339,36 @@ export interface components {
             unchecked_regions: string[];
         };
         /**
+         * CustomerNotationBody
+         * @description How the customer writes one kind, as a person states it (ticket 37):
+         *     the kind and its value, checked against the values the kind holds.
+         */
+        CustomerNotationBody: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "decimal_mark" | "date_order" | "dollar_sign" | "yen_sign";
+            /** Value */
+            value: string;
+        };
+        /**
+         * CustomerNotationView
+         * @description A customer's notation: each kind known, what it rests on, and the
+         *     values each kind may hold (the platform's one list, so a screen offers
+         *     exactly what the server takes).
+         */
+        CustomerNotationView: {
+            /** Choices */
+            choices: {
+                [key: string]: string[];
+            };
+            /** Customer Code */
+            customer_code: string;
+            /** Entries */
+            entries: components["schemas"]["NotationEntryView"][];
+        };
+        /**
          * CustomerReminderView
          * @description A draft, or why there is none; always marked as the model's.
          */
@@ -3894,6 +4017,11 @@ export interface components {
             prompt: string;
             quantity?: components["schemas"]["Located"] | null;
             /**
+             * Quantity From Record
+             * @default false
+             */
+            quantity_from_record: boolean;
+            /**
              * Quotes
              * @default []
              */
@@ -3936,6 +4064,11 @@ export interface components {
          */
         HandoffLine: {
             date_span?: components["schemas"]["Located"] | null;
+            /**
+             * From Record
+             * @default []
+             */
+            from_record: ("quantity" | "date")[];
             /** Item */
             item?: string | null;
             /** Line No */
@@ -4701,6 +4834,7 @@ export interface components {
              * @default []
              */
             thread_cases: components["schemas"]["ThreadCaseView"][];
+            triage?: components["schemas"]["TriageCardView"] | null;
         };
         /**
          * MessageTextView
@@ -4771,7 +4905,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "triage_card";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -4787,6 +4921,44 @@ export interface components {
              * @enum {string}
              */
             step: "multiply";
+        };
+        /**
+         * NotationEntryView
+         * @description One kind of a customer's notation on the master data screen.
+         */
+        NotationEntryView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Case Id */
+            case_id: string | null;
+            /** Case Kind */
+            case_kind: ("order" | "quote") | null;
+            /** Confirmed */
+            confirmed: string | null;
+            /** Field */
+            field: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "decimal_mark" | "date_order" | "dollar_sign" | "yen_sign";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "confirmed" | "set";
+            /** Value */
+            value: string;
+            /** Written */
+            written: string | null;
         };
         /** OpenYcbgView */
         OpenYcbgView: {
@@ -6093,7 +6265,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr" | "opened_with_password" | "not_printed";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr" | "opened_with_password" | "not_printed" | "notation_from_record";
         /**
          * RejectedRow
          * @description A row that is not applied, and why. ``row`` 0 is the file itself.
@@ -6796,6 +6968,8 @@ export interface components {
         SkillProposal: {
             /** Description */
             description: string;
+            /** From Message */
+            from_message?: string | null;
             /** Instructions */
             instructions: string;
             /** Version */
@@ -6833,6 +7007,7 @@ export interface components {
              * @enum {string}
              */
             source: "platform_examples" | "customer_pairs";
+            trigger?: components["schemas"]["TriggerReplay"] | null;
             /** Unanswered */
             unanswered: number;
             /**
@@ -6869,6 +7044,8 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "approved" | "rejected" | "superseded";
+            /** Trigger */
+            trigger?: string | null;
             /**
              * Version Id
              * Format: uuid
@@ -7432,6 +7609,52 @@ export interface components {
             hidden: number;
             /** Reminders */
             reminders: components["schemas"]["ReminderView"][];
+        };
+        /**
+         * TriageCardView
+         * @description A message's triage card as the inbox shows it: what it seems to be
+         *     (the skill's kind, its label where the skill gives one, and the route
+         *     the skill maps it onto), the one step suggested, the case it names
+         *     where the caller may see it, and the decision once made.
+         */
+        TriageCardView: {
+            case: components["schemas"]["ThreadCaseView"] | null;
+            decided: components["schemas"]["CardVerdict"] | null;
+            /** Kind */
+            kind: string | null;
+            /** Kind Label */
+            kind_label: string | null;
+            /** Routed As */
+            routed_as: string | null;
+            /** Skill */
+            skill: string;
+            /** Step */
+            step: ("reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice") | null;
+        };
+        /**
+         * TriggerReplay
+         * @description The mail a version was proposed from (`SkillTrigger`), read with the
+         *     version and with the one in force: the kind each named (None: no usable
+         *     answer, or no kind read), its label where the skill gives one, and the
+         *     route it took (``none``: no kind read; None: no usable answer).
+         */
+        TriggerReplay: {
+            /** Found */
+            found: boolean;
+            /** Message Id */
+            message_id: string;
+            /** With Kind */
+            with_kind?: string | null;
+            /** With Label */
+            with_label?: string | null;
+            /** With Route */
+            with_route?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | "none" | null;
+            /** Without Kind */
+            without_kind?: string | null;
+            /** Without Label */
+            without_label?: string | null;
+            /** Without Route */
+            without_route?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | "none" | null;
         };
         /** TurnView */
         TurnView: {
@@ -8113,6 +8336,110 @@ export interface operations {
             };
         };
     };
+    customer_notation_api_v1_sales_customers__customer_code__notation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerNotationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_customer_notation_api_v1_sales_customers__customer_code__notation_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                customer_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerNotationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerNotationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_customer_notation_api_v1_sales_customers__customer_code__notation__kind__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                customer_code: string;
+                kind: "decimal_mark" | "date_order" | "dollar_sign" | "yen_sign";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerNotationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     salesorder_examples_api_v1_sales_customers__customer_code__salesorder_examples_get: {
         parameters: {
             query?: never;
@@ -8539,6 +8866,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HandledView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_triage_card_api_v1_sales_inbox__message_id__triage_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageDispositionView"];
                 };
             };
             /** @description Validation Error */

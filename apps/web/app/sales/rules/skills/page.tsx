@@ -1,38 +1,25 @@
 "use client";
 
-import { Suspense, useCallback, useRef, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
-import {
-  Alert,
-  Button,
-  Drawer,
-  Form,
-  Grid,
-  Input,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from "antd";
+import { Alert, Table, Tag, Typography } from "antd";
 import { InfoTip, PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { useAuth } from "../../../../lib/auth/auth-context";
 import { salesApi } from "../../_lib/api";
-import { ActionError } from "../../_lib/errors";
 import { usePeople } from "../../_lib/people";
 import { RULE_STATUS } from "../../_lib/rules";
 import {
   SKILL_LAYER,
   incompleteLine,
-  nextSkillVersion,
   replayLine,
   securityLine,
+  triggerLine,
   versionsOf,
   type Skill,
   type SkillVersion,
   type SkillsView,
 } from "../../_lib/skills";
-import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { salesCrumbs } from "../../_components/crumbs";
 import {
@@ -41,7 +28,7 @@ import {
   useIsPhone,
 } from "../../_components/list-parts";
 import { GuardedButton } from "../../_components/guarded-button";
-import { useConfirmDiscard } from "../../_components/rule-editor";
+import { ProposeSkill } from "../../_components/propose-skill";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
 
@@ -313,6 +300,7 @@ function Replay({ version }: { version: SkillVersion }) {
   }
   const security = securityLine(replay);
   const incomplete = incompleteLine(replay);
+  const taught = triggerLine(replay);
   return (
     <span className="flex flex-col items-start gap-1">
       <span className="inline-flex items-center gap-1">
@@ -322,142 +310,9 @@ function Replay({ version }: { version: SkillVersion }) {
           được đọc một lần với bản đề xuất và một lần với bản đang dùng.
         </InfoTip>
       </span>
+      {taught ? <Typography.Text>{taught}</Typography.Text> : null}
       {incomplete ? <Alert type="warning" showIcon title={incomplete} /> : null}
       {security ? <Alert type="error" showIcon title={security} /> : null}
     </span>
-  );
-}
-
-interface ProposalForm {
-  version: string;
-  description: string;
-  instructions: string;
-}
-
-/** "Đề xuất sửa": a whole new text of one skill, sent for the head's approval. */
-function ProposeSkill({
-  skill,
-  versions,
-  onClose,
-  onProposed,
-}: {
-  skill: Skill;
-  versions: readonly SkillVersion[];
-  onClose: () => void;
-  onProposed: () => void;
-}) {
-  const { run, pending } = useAction();
-  const discard = useConfirmDiscard();
-  const [form] = Form.useForm<ProposalForm>();
-  const [error, setError] = useState<unknown>(null);
-  const touched = useRef(false);
-  // A bottom sheet on a phone (ui-quality §9); from the right from md up.
-  const sheet = Grid.useBreakpoint().md === false;
-  const id = `propose-skill/${skill.name}`;
-
-  const close = () => (touched.current ? discard(onClose) : onClose());
-  const submit = async (values: ProposalForm) => {
-    setError(null);
-    const result = await run(
-      id,
-      { name: skill.name, ...values },
-      (key) => salesApi().proposeSkill(skill.name, values, key),
-      `Đã gửi duyệt kỹ năng "${skill.name}" ${values.version}. DW1 chạy thử trên thư mẫu, rồi Trưởng bộ phận duyệt trên trang Duyệt.`,
-    );
-    if (result.ok) return onProposed();
-    setError(result.error);
-  };
-
-  return (
-    <Drawer
-      open
-      onClose={close}
-      placement={sheet ? "bottom" : "right"}
-      size={sheet ? "90vh" : "min(960px, 100vw)"}
-      title={`Đề xuất sửa kỹ năng ${skill.name}`}
-      destroyOnHidden
-      footer={
-        <Space wrap>
-          <Button
-            type="primary"
-            loading={pending === id}
-            onClick={() => form.submit()}
-          >
-            Gửi duyệt
-          </Button>
-          <Button onClick={close}>Hủy</Button>
-        </Space>
-      }
-    >
-      <div className="space-y-4">
-        <ActionError error={error} />
-        <Form<ProposalForm>
-          form={form}
-          layout="vertical"
-          validateTrigger="onBlur"
-          scrollToFirstError={{ focus: true }}
-          initialValues={{
-            version: nextSkillVersion(skill, versions),
-            description: skill.description,
-            instructions: skill.instructions,
-          }}
-          onValuesChange={() => {
-            touched.current = true;
-          }}
-          onFinish={(values) => void submit(values)}
-        >
-          <Form.Item
-            name="version"
-            label="Số phiên bản"
-            rules={[
-              {
-                required: true,
-                message: "Cần số phiên bản",
-                validateTrigger: "onSubmit",
-              },
-              { pattern: /^\d+\.\d+\.\d+$/, message: "Dạng 1.2.3" },
-            ]}
-          >
-            <Input className="max-w-40" />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label="Dùng khi nào (DW1 chọn kỹ năng theo câu này)"
-            rules={[
-              {
-                required: true,
-                message: "Cần mô tả",
-                validateTrigger: "onSubmit",
-              },
-              { max: 1024, message: "Tối đa 1024 ký tự" },
-            ]}
-          >
-            <Input.TextArea
-              autoSize={{ minRows: 2, maxRows: 6 }}
-              maxLength={1024}
-              showCount
-            />
-          </Form.Item>
-          <Form.Item
-            name="instructions"
-            label="Lời hướng dẫn"
-            rules={[
-              {
-                required: true,
-                message: "Cần lời hướng dẫn",
-                validateTrigger: "onSubmit",
-              },
-              { max: 12000, message: "Tối đa 12000 ký tự" },
-            ]}
-          >
-            <Input.TextArea
-              autoSize={{ minRows: 8, maxRows: 30 }}
-              maxLength={12000}
-              showCount
-            />
-          </Form.Item>
-        </Form>
-      </div>
-    </Drawer>
   );
 }

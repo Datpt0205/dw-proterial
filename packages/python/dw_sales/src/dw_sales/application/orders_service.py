@@ -37,6 +37,7 @@ from dw_sales.application.activity_ports import (
 from dw_sales.application.autonomy import applied_by
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.confirmations import confirmation_copy
+from dw_sales.application.customer_notations import NotationLedgerPort, learn
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
@@ -68,6 +69,7 @@ from dw_sales.application.views import (
     order_summary,
 )
 from dw_sales.domain.catalog import ConvertEntry
+from dw_sales.domain.customer_notation import order_lesson
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.labelled_cases import mapping_label, po_value_label, undo_label
 from dw_sales.domain.orders import (
@@ -172,6 +174,9 @@ class OrderCommands:
     decisions: PendingDecisionsPort
     # Where a code Sales confirms is kept for the customer's next PO.
     converts: ConvertLedgerPort
+    # Where what a typed value teaches of the customer's notation is kept
+    # (ticket 37).
+    notations: NotationLedgerPort
 
     async def dispose(
         self,
@@ -333,6 +338,20 @@ class OrderCommands:
             if label is not None:
                 await work.labelled_cases.append([label])
             await work.commit()
+        # Learned once the case holds it: how the customer writes what Sales
+        # typed, for the next document that does not say (ticket 37).
+        taught = order_lesson(case, corrected, finding_key, field)
+        await learn(
+            self.notations,
+            self.ids,
+            scope,
+            [] if taught is None else [taught],
+            customer_code=corrected.customer_code,
+            case_kind="order",
+            case_id=case_id,
+            by=actor.user_id,
+            at=now,
+        )
         return order_change(corrected)
 
     async def record_pc_date(

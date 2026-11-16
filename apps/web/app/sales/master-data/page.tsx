@@ -4,6 +4,7 @@ import { Suspense, useCallback, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Alert,
+  Button,
   Skeleton,
   Table,
   Tabs,
@@ -37,6 +38,7 @@ import { LIST_NAME, type CatalogList } from "../_lib/catalog";
 import type { Resource } from "../_lib/use-resource";
 import { ImportPanel } from "./import-panel";
 import { SalesOrderLearning } from "./salesorder-learning";
+import { CustomerNotationDrawer } from "./customer-notation";
 import { GuardedButton } from "../_components/guarded-button";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { useFillHeight } from "../../../lib/use-fill-height";
@@ -226,6 +228,7 @@ function Customers() {
   const name = usePeople();
   const { hasScope } = useAuth();
   const [learning, setLearning] = useState<string | null>(null);
+  const [notation, setNotation] = useState<string | null>(null);
   // The pair and its replay carry prices, as the rules learned from it do.
   const learnBlocked = !hasScope(SCOPE.rulesPropose)
     ? "Cần quyền đề xuất quy tắc (sales.rules.propose)."
@@ -238,6 +241,12 @@ function Customers() {
         <SalesOrderLearning
           customerCode={learning}
           onClose={() => setLearning(null)}
+        />
+      ) : null}
+      {notation ? (
+        <CustomerNotationDrawer
+          customerCode={notation}
+          onClose={() => setNotation(null)}
         />
       ) : null}
       <Snapshot<S["CustomerView"]>
@@ -293,6 +302,21 @@ function Customers() {
             title: "Sales phụ trách",
             dataIndex: "sales_pic",
             render: (v: string | null) => (v ? name(v) : "Chưa giao"),
+          },
+          {
+            // How the customer writes numbers and dates (ticket 37): the
+            // detail, and changing it, open on click.
+            title: "Cách viết số, ngày",
+            key: "notation",
+            render: (_, c) => (
+              <Button
+                size="small"
+                onClick={() => setNotation(c.code)}
+                aria-label={`Cách viết số và ngày của khách ${c.code}`}
+              >
+                Xem
+              </Button>
+            ),
           },
           {
             title: "Quy tắc SalesOrder",

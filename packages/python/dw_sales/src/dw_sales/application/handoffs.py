@@ -17,9 +17,11 @@ returns what code keeps:
 - each line resolved exactly against that order: by its number, by the
   PRV code or the customer's code the convert list maps to the line's item;
 - each quantity and date parsed from its span, as the mail's own values
-  settle "2.000" and "05/11", a quantity only in metres: words code does not
-  read are kept, flagged, for Sales to fill from; each quote that names no
-  destination (`carries_contact`).
+  settle "2.000" and "05/11", else as the sender's customer's notation
+  record does (ticket 37, `NotationRecordPort`; marked `from_record`), a
+  quantity only in metres: words code does not read are kept, flagged, for
+  Sales to fill from; each quote that names no destination
+  (`carries_contact`).
 
 A message that does not fit the model's input whole is not cut: it is an
 ``unavailable`` hand-off counted ``too_long``, for Sales, as before.
@@ -54,7 +56,8 @@ from dw_agent_runtime.model.interpretation import (
     estimated_tokens,
 )
 from dw_platform.domain.mail_parts import MessagePart
-from dw_platform.domain.notation import Notation, notation_of
+from dw_platform.domain.notation import Notation, notation_of, settle
+from dw_sales.application.customer_notations import NotationRecordPort, record_for
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import CatalogNotConnectedError, SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
@@ -62,6 +65,7 @@ from dw_sales.domain.handoffs import (
     MAX_ITEMS,
     MAX_QUOTES,
     MODEL_SCHEMAS,
+    FromRecord,
     Handoff,
     HandoffKind,
     HandoffLine,
@@ -69,6 +73,7 @@ from dw_sales.domain.handoffs import (
     ModelComplaint,
     ModelDeliveryChange,
     ModelSampleRequest,
+    QuantityRead,
     carries_contact,
     line_number_of,
     locate,
@@ -112,6 +117,8 @@ class HandoffReader:
     model: InterpretationPort
     catalog: SalesCatalogPort
     cases: OrderCaseLookupPort
+    # The sender's customer's notation record (ticket 37).
+    records: NotationRecordPort
 
     async def read(
         self,
@@ -172,13 +179,18 @@ class HandoffReader:
         received_on: date,
         refused: Counter[str],
     ) -> dict[str, Any]:
-        notation = notation_of(text)
+        # The mail's own notation, and the customer's record for what the
+        # mail leaves open: never another customer's.
+        notation = _Notations(
+            notation_of(text), await record_for(self.records, scope, customer.code)
+        )
         if isinstance(answer, ModelSampleRequest):
             quantity = self._quantity(text, answer.quantity_span, notation, refused)
             return {
                 "quotes": _quotes(text, answer.item_spans, MAX_ITEMS, refused, "item"),
-                "sample_quantity": quantity[0] if quantity else None,
-                "quantity": quantity[1] if quantity else None,
+                "sample_quantity": quantity.value if quantity else None,
+                "quantity": quantity.words if quantity else None,
+                "quantity_from_record": bool(quantity and quantity.by_record),
             }
         assert isinstance(answer, ModelDeliveryChange | ModelComplaint)
         located_po, order = await self._order(scope, text, customer, answer.po_no_span, refused)
@@ -282,7 +294,7 @@ class HandoffReader:
         order: _Order,
         asked: Any,
         received_on: date,
-        notation: Notation,
+        notation: _Notations,
         refused: Counter[str],
     ) -> HandoffLine | None:
         reference = locate(text, asked.line_or_item_span, bounded=True)
@@ -295,7 +307,18 @@ class HandoffReader:
         flags: Counter[str] = Counter()
         quantity = self._quantity(text, asked.new_quantity_span, notation, flags)
         located_date = locate(text, asked.new_date_span, bounded=True)
-        day = parse_date(located_date.text, received_on, notation) if located_date else None
+        day = None
+        from_record: list[FromRecord] = ["quantity"] if quantity and quantity.by_record else []
+        if located_date is not None:
+            words = located_date.text
+            settled = settle(
+                lambda n: parse_date(words, received_on, n), notation.mail, notation.record
+            )
+            day = settled.value
+            if settled.by_record:
+                from_record.append("date")
+            if settled.contradicts_record:
+                flags["date_contradicts_record"] += 1
         if located_date is not None and day is None:
             flags["date_unread"] += 1
         if quantity is None and located_date is None:
@@ -306,10 +329,11 @@ class HandoffReader:
             reference=reference,
             line_no=found.line_no,
             item=found.prv_code,
-            new_quantity=quantity[0] if quantity else None,
-            quantity=quantity[1] if quantity else None,
+            new_quantity=quantity.value if quantity else None,
+            quantity=quantity.words if quantity else None,
             new_date=day,
             date_span=located_date,
+            from_record=tuple(from_record),
         )
 
     async def _order_line(
@@ -330,18 +354,28 @@ class HandoffReader:
 
     @staticmethod
     def _quantity(
-        text: str, span: str | None, notation: Notation, refused: Counter[str]
-    ) -> tuple[Decimal | None, Located] | None:
+        text: str, span: str | None, notation: _Notations, refused: Counter[str]
+    ) -> QuantityRead | None:
         """The quantity in metres and the customer's words for it; the words
         alone, flagged (``quantity_unread``), when code does not read them as
         metres (`quantity_at`); None when the span is not there."""
         located = locate(text, span, bounded=True)
-        read = quantity_at(text, located, notation) if located else None
+        read = quantity_at(text, located, notation.mail, notation.record) if located else None
         if span is not None and read is None:
             refused["quantity"] += 1
-        elif read is not None and read[0] is None:
+        elif read is not None and read.value is None:
             refused["quantity_unread"] += 1
+            if read.contradicts_record:
+                refused["quantity_contradicts_record"] += 1
         return read
+
+
+@dataclass(frozen=True, slots=True)
+class _Notations:
+    """The mail's own notation and its sender's customer's record."""
+
+    mail: Notation
+    record: Notation
 
 
 def _quotes(

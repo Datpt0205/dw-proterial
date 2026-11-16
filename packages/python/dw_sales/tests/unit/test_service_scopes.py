@@ -30,7 +30,7 @@ from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
-from dw_sales.application.routed_mail import RoutedMailService
+from dw_sales.application.routed_mail import CardDecisionRequest, RoutedMailService
 from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import NoSourceCache, SourceService
 from dw_sales.application.worker_service import WorkerService
@@ -71,9 +71,9 @@ CLOCK = FixedClock(datetime(2026, 10, 2, tzinfo=UTC))
 IDS = Uuid4Generator()
 
 order_queries = OrderQueries(STORE, GATE, STORE, STORE, STORE, STORE, STORE)
-order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE, STORE)
-quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 # The routes' way to start DW1, and the steps the run takes: both check.
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
 # "DW xử lý" queues (ticket 25): it checks before reading the mailbox too.
@@ -88,7 +88,7 @@ master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 assignment = AssignmentService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
-routed_mail = RoutedMailService(STORE, GATE, STORE, CLOCK, IDS)
+routed_mail = RoutedMailService(STORE, GATE, STORE, CLOCK, IDS, STORE)
 
 type Call = Callable[[AccessContext], Awaitable[object]]
 
@@ -133,6 +133,11 @@ CALLS: dict[str, tuple[str, Call]] = {
     "routed_mail.pick_case": (
         "sales.inbox.process",
         lambda c: routed_mail.pick_case(c, "M01", CASE),
+    ),
+    # A triage card decided (ticket 33): whoever may mark the message.
+    "routed_mail.decide_card": (
+        "sales.case.read",
+        lambda c: routed_mail.decide_card(c, "M01", CardDecisionRequest(step=None)),
     ),
     "dw1.record_bravo_entry": (
         "sales.order.prepare",

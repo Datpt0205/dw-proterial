@@ -11,9 +11,15 @@ Reports name request ids, fields, outcomes and counts; the requests are
 fictional fixture text and are not repeated in a report.
 
 - `sales.rfq_golden`: the golden set, per language and per form (body, PDF,
-  spreadsheet): the share of stated values read into the right field, values
-  read where none is stated, requests not read, the share of values left to
-  a person, and latency per request.
+  spreadsheet): the share of stated values read into the right field, the
+  share read **wrong** (other than the request states, or where it states
+  none) and the share **deferred** (left to a person, ticket 37), values read
+  where none is stated, requests not read, and latency per request.
+- `sales.rfq_notation_records`: the golden set read again with each
+  customer's notation record (ticket 37): fewer values deferred, none more
+  wrong, each value only a record read flagged `notation_from_record`
+  ("1.500 m" of Velatrix read as 1500 m); a record of another customer, or
+  of the same customer in another tenant, settles nothing.
 - `sales.rfq_injection`: instructions in a request (quote at 0, copy someone
   in, skip Design) change no route, customer or price, and leave every value
   flagged.
@@ -65,6 +71,7 @@ from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.local_time import local_day
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import DescriptionReader
+from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import RequestNotExtractedError
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION, RequestRead, RfqModelReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
@@ -80,6 +87,7 @@ from dw_sales.domain.quotes import (
 from dw_sales.evals.intents import _demo_rules, message_of
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 from dw_sales.testing.followups import platform_zone
 
 RECORDED = "evals/fixtures/cases/sales_rfq_recorded.json"
@@ -181,14 +189,18 @@ def _xlsx(rows: Sequence[Sequence[Any]], hidden: Sequence[int]) -> bytes:
     return buffer.getvalue()
 
 
-def _reader(model: Any) -> RfqModelReader:
+def _reader(model: Any, records: MemoryCustomerNotations | None = None) -> RfqModelReader:
     catalog = MockSalesCatalog.load(ALPHA)
     texts = ClientTexts(InProcessReaderTransport())
-    return RfqModelReader(model, texts, catalog, DescriptionReader(_Down()))
+    held = records if records is not None else MemoryCustomerNotations()
+    return RfqModelReader(model, texts, catalog, DescriptionReader(_Down()), held)
 
 
-async def read_request(model: Any, spec: Mapping[str, Any]) -> RequestRead | str:
-    """One golden request read as the quotation flow reads it, in a run of its own."""
+async def read_request(
+    model: Any, spec: Mapping[str, Any], records: MemoryCustomerNotations | None = None
+) -> RequestRead | str:
+    """One golden request read as the quotation flow reads it, in a run of
+    its own, with the customers' notation ``records`` (none by default)."""
     message, contents = rendered(spec)
     catalog = MockSalesCatalog.load(ALPHA)
     customer = (await catalog.customer_by_email_domain(ALPHA, message.sender.domain)).data
@@ -196,7 +208,7 @@ async def read_request(model: Any, spec: Mapping[str, Any]) -> RequestRead | str
     rules = await _demo_rules().rules(ALPHA)
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
     received_on = local_day(message.received_at, platform_zone().zone)
-    return await _reader(model).read(
+    return await _reader(model, records).read(
         ALPHA, message, contents, customer, rules, received_on=received_on, run=run
     )
 
@@ -218,6 +230,14 @@ class Scored:
     invented: int
     unflagged: int
     misses: tuple[str, ...]
+    # Values read other than the request states, invented ones included: the
+    # bar holds them near zero (ticket 37).
+    wrong: int = 0
+    # Values the request states that were left to a person.
+    deferred: int = 0
+    # Values only a customer's notation record read, each flagged so.
+    by_record: int = 0
+    unflagged_record: int = 0
 
 
 def _same(field: str, read: object, gold: object) -> bool:
@@ -241,10 +261,31 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
     stated = sum(1 for f in _HEADER if gold[f] is not None)
     stated += sum(1 for item in gold["items"] for f in _FIELDS if item[f] is not None)
     if isinstance(read, str):
-        return Scored(spec["id"], spec["lang"], spec["form"], read, stated, 0, 0, 0, ("not_read",))
+        return Scored(
+            spec["id"],
+            spec["lang"],
+            spec["form"],
+            read,
+            stated,
+            0,
+            0,
+            0,
+            ("not_read",),
+            deferred=stated,
+        )
     document = read.document
-    right = invented = unflagged = 0
+    right = invented = unflagged = wrong = deferred = 0
     misses: list[str] = []
+
+    def missed(name: str, got: object, want: object) -> None:
+        """A miss: deferred where nothing was read, else wrong."""
+        nonlocal wrong, deferred
+        if got is None:
+            deferred += 1
+        else:
+            wrong += 1
+        misses.append(name)
+
     header = {
         "rfq_no": document.rfq_no.value if document.rfq_no else None,
         "quote_due": document.quote_due.value if document.quote_due else None,
@@ -255,12 +296,15 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
             right += gold[name] is not None
         else:
             invented += gold[name] is None
-            misses.append(name)
-    if {f.field for f in document.flags} != {n for n in _HEADER if header[n] is not None}:
+            missed(name, header[name], gold[name])
+    model_read = {f.field for f in document.flags if f.flag is RegionFlag.MODEL_READ}
+    if model_read != {n for n in _HEADER if header[n] is not None}:
         unflagged += 1
+    by_record = sum(1 for f in document.flags if f.flag is RegionFlag.NOTATION_FROM_RECORD)
     for index, want in enumerate(gold["items"]):
         if index >= len(document.items):
             misses.append(f"item{index + 1}:missing")
+            deferred += sum(1 for f in _FIELDS if want[f] is not None)
             continue
         item = document.items[index]
         got = {
@@ -276,7 +320,8 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
                 right += want[name] is not None
             else:
                 invented += want[name] is None
-                misses.append(f"item{index + 1}:{name}")
+                missed(f"item{index + 1}:{name}", got[name], want[name])
+        by_record += sum(1 for f in item.flags if f.flag is RegionFlag.NOTATION_FROM_RECORD)
         flagged = {f.field for f in item.flags if f.flag is RegionFlag.MODEL_READ}
         if {n for n in _FIELDS if got[n] is not None} - flagged:
             unflagged += 1
@@ -284,6 +329,15 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
             unflagged += 1
     if len(document.items) > len(gold["items"]):
         misses.append(f"extra_items:{len(document.items) - len(gold['items'])}")
+    # A flag of the record stands beside the model's, on a value read.
+    flag_sets = [document.flags, *(item.flags for item in document.items)]
+    unflagged_record = sum(
+        1
+        for flags in flag_sets
+        for f in flags
+        if f.flag is RegionFlag.NOTATION_FROM_RECORD
+        and (f.field, RegionFlag.MODEL_READ) not in {(g.field, g.flag) for g in flags}
+    )
     return Scored(
         spec["id"],
         spec["lang"],
@@ -294,6 +348,10 @@ def score(spec: Mapping[str, Any], read: RequestRead | str) -> Scored:
         invented,
         unflagged,
         tuple(misses),
+        wrong=wrong,
+        deferred=deferred,
+        by_record=by_record,
+        unflagged_record=unflagged_record,
     )
 
 
@@ -310,6 +368,12 @@ def summary(scored: Sequence[Scored]) -> dict[str, Any]:
         "right_field": _share(right, stated),
         # What Sales still types from the source: every value not read right.
         "left_to_person": _share(stated - right, stated),
+        # The two halves of it (ticket 37): read other than stated (invented
+        # ones included), and left blank for a person. The live bar reads
+        # `right_field` until Đạt sets a bar on each.
+        "wrong": _share(sum(s.wrong for s in scored), stated),
+        "deferred": _share(sum(s.deferred for s in scored), stated),
+        "by_record": sum(s.by_record for s in scored),
         "invented": sum(s.invented for s in scored),
         "not_read": sum(1 for s in scored if s.not_read is not None),
         "unflagged": sum(s.unflagged for s in scored),
@@ -347,6 +411,100 @@ def grade_golden(
     floor = float(expected.get("min_right_field_vi_en", 0.0))
     if ctx.live_model is None and vi_en["right_field"] < floor:
         return GradeResult.fail("the recorded readings score lower than recorded", **details)
+    ceiling = float(expected.get("max_wrong_vi_en", 1.0))
+    if ctx.live_model is None and vi_en["wrong"] > ceiling:
+        return GradeResult.fail("the recorded readings read more wrong than recorded", **details)
+    return GradeResult.ok(**details)
+
+
+# ------------------------------------------------- notation records (37) --
+
+
+def _records(
+    entries: Mapping[str, Mapping[str, str]], scope: SalesScope = ALPHA
+) -> MemoryCustomerNotations:
+    """The customers' notation records an eval reads with, in ``scope``."""
+    return MemoryCustomerNotations.seeded(scope, entries)
+
+
+def _signature(read: RequestRead | str) -> object:
+    """What a reading read, to compare two readings of one request: each
+    value and its flags, not the file's bytes (a rendered sheet carries the
+    time it was written)."""
+    if isinstance(read, str):
+        return read
+    document = read.document
+    return (
+        [
+            (name, None if held is None else str(held.value))
+            for name in ("rfq_no", "quote_due", "currency")
+            for held in (getattr(document, name),)
+        ],
+        sorted((f.field, f.flag.value) for f in document.flags),
+        [
+            (
+                str(item.quantity.value),
+                str(item.needed_by.value),
+                item.description.value,
+                sorted((f.field, f.flag.value) for f in item.flags),
+                item.unsettled,
+            )
+            for item in document.items
+        ],
+    )
+
+
+def grade_notation_records(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """`sales.rfq_notation_records` (module docstring, ticket 37)."""
+    golden = _fixture(ctx, input_data["golden_ref"])["requests"]
+    catalog = MockSalesCatalog.load(ALPHA)
+    records: Mapping[str, Mapping[str, str]] = expected["records"]
+    model = model_under_test(ctx)
+    without = [_run(read_request(model, spec)) for spec in golden]
+    held = _records(records)
+    within = [_run(read_request(model, spec, held)) for spec in golden]
+    before = summary([score(s, r) for s, r in zip(golden, without, strict=True)])
+    after_rows = [score(s, r) for s, r in zip(golden, within, strict=True)]
+    after = summary(after_rows)
+    details: dict[str, Any] = {"live": ctx.live_model is not None, "without": before, "with": after}
+    if after["wrong"] > before["wrong"]:
+        return GradeResult.fail("a record read a value wrong", **details)
+    if ctx.live_model is None and after["deferred"] >= before["deferred"]:
+        return GradeResult.fail("no record settled a deferred value", **details)
+    if any(r.unflagged_record for r in after_rows) or not after["by_record"]:
+        return GradeResult.fail("a value a record read is not flagged as such", **details)
+    # Acceptance 1: "1.500 m" of the customer whose record says comma, read 1500 m.
+    named = expected["settled"]
+    spec = next(s for s in golden if s["id"] == named["request"])
+    read = within[golden.index(spec)]
+    if isinstance(read, str):
+        return GradeResult.fail("the named request was not read", **details)
+    item = read.document.items[named["item"] - 1]
+    flags = {(f.field, f.flag) for f in item.flags}
+    if (
+        item.quantity.value != Decimal(named["quantity"])
+        or (
+            "quantity",
+            RegionFlag.NOTATION_FROM_RECORD,
+        )
+        not in flags
+    ):
+        return GradeResult.fail("the named quantity was not settled by its record", **details)
+    # Acceptance 2: another customer's record, or the same customer's in
+    # another tenant, settles nothing of this customer's request.
+    for spec, alone in zip(golden, without, strict=True):
+        customer = _run(catalog.customer_by_email_domain(ALPHA, spec["sender"].rpartition("@")[2]))
+        assert customer.data is not None, spec["id"]
+        own = customer.data.code
+        others = _records({code: kinds for code, kinds in records.items() if code != own})
+        elsewhere = _records({own: records.get(own, {"decimal_mark": ","})}, BETA)
+        for label, store in (("another customer", others), ("another tenant", elsewhere)):
+            if _signature(_run(read_request(model, spec, store))) != _signature(alone):
+                return GradeResult.fail(
+                    f"{label}'s record settled a value", request=spec["id"], **details
+                )
     return GradeResult.ok(**details)
 
 
@@ -715,6 +873,7 @@ def _service(ctx: GraderContext, inbox: MockInbox, catalog: MockSalesCatalog, mo
             _demo_rules(),
             ClientTexts(InProcessReaderTransport()),
             measured_gate(ctx.repo_root, ALPHA)[0],
+            MemoryCustomerNotations(),
         ),
     )
 
@@ -899,4 +1058,5 @@ GRADERS = {
     "sales.rfq_cross_tenant": grade_cross_tenant,
     "sales.rfq_degrade": grade_degrade,
     "sales.rfq_flow": grade_flow,
+    "sales.rfq_notation_records": grade_notation_records,
 }

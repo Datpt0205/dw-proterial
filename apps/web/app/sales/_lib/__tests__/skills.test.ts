@@ -4,6 +4,7 @@ import {
   nextSkillVersion,
   replayLine,
   securityLine,
+  triggerLine,
   type Skill,
   type SkillReplay,
   type SkillVersion,
@@ -72,6 +73,30 @@ describe("skills", () => {
     );
     expect(incompleteLine(bad)).toBe(
       "3 lần mô hình không trả lời: kết quả chưa đủ",
+    );
+  });
+
+  it("says how each side read the mail a version was taught from (ticket 34)", () => {
+    expect(triggerLine(REPLAY)).toBeNull();
+    const taught = {
+      ...REPLAY,
+      trigger: {
+        message_id: "M31",
+        found: true,
+        with_kind: "invoice_request",
+        with_label: "Khách hỏi hoá đơn",
+        with_route: "other" as const,
+        without_kind: "other",
+        without_label: null,
+        without_route: "other" as const,
+      },
+    };
+    expect(triggerLine(taught)).toBe(
+      "Thư gốc M31: bản đề xuất đọc là “Khách hỏi hoá đơn” · bản đang dùng đọc là “Khác”",
+    );
+    const gone = { ...taught, trigger: { ...taught.trigger, found: false } };
+    expect(triggerLine(gone)).toBe(
+      "Thư gốc M31: không còn trong hộp thư, không chạy thử được",
     );
   });
 });

@@ -123,10 +123,12 @@ def _one_file(anchors: Iterable[SourceAnchor]) -> bool:
 
 
 def _flags_name_fields(flags: Iterable[FlaggedValue], allowed: frozenset[str], owner: str) -> None:
-    fields = [flag.field for flag in flags]
-    if unknown := sorted(set(fields) - allowed):
+    listed = [(flag.field, flag.flag) for flag in flags]
+    if unknown := sorted({field for field, _ in listed} - allowed):
         raise ValueError(f"{owner} flags fields it does not have: {unknown}")
-    if len(fields) != len(set(fields)):
+    # A field may carry two reasons (read by a model, settled by the
+    # customer's notation record, ticket 37), never one reason twice.
+    if len(listed) != len(set(listed)):
         raise ValueError(f"{owner} flags a field twice")
 
 
@@ -166,6 +168,11 @@ class RequestedItem(BaseModel):
     # to weigh: never an item, which Design names.
     candidates: tuple[PrvCode, ...] = ()
     description_reading: DescriptionReading | None = None
+    # Values the request writes that its notation did not settle ("1.200 m",
+    # "05/11" with nothing else saying which, ticket 37): left blank for Sales,
+    # anchored at the words, which Sales' answer is compared with to learn
+    # how the customer writes (`customer_notation`).
+    unsettled: tuple[RfqField, ...] = ()
 
     @model_validator(mode="after")
     def _model_values_are_flagged(self) -> Self:
@@ -173,6 +180,8 @@ class RequestedItem(BaseModel):
         for flag in self.flags:
             if getattr(self, flag.field) is None or getattr(self, flag.field).value is None:
                 raise ValueError(f"line {self.line_no} flags {flag.field}, which holds nothing")
+        if any(getattr(self, field).value is not None for field in self.unsettled):
+            raise ValueError(f"line {self.line_no} holds a value it calls unsettled")
         if self.stated_target_price is not None and self.target_price is not None:
             raise ValueError("a target price is the form's or a model-read statement, not both")
         if len(set(self.candidates)) != len(self.candidates):

@@ -12,7 +12,11 @@ run is opening the case. `RfqModelReader.read`:
    prompt): a request that needs more than `MAX_CALLS` is not read at all,
    rather than read in part, and no call is ever refused as too long;
 3. asks under prompt `sales.rfq_extraction` and verifies every answer
-   (`verify_rfq`);
+   (`verify_rfq`), each document's ambiguous values settled by the
+   document, else by the sender's customer's notation record (ticket 37,
+   `NotationRecordPort`): a value only the record settles is flagged
+   `notation_from_record`, and one left open is anchored at its words for
+   Sales to type (`RequestedItem.unsettled`);
 4. reads each item's description as ticket 28 does, for candidates Sales and
    Design weigh, unless the convert list already names the item;
 5. returns the request with every value it read flagged `model_read`, or why
@@ -37,6 +41,7 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMessage
+from dw_sales.application.customer_notations import NotationRecordPort, record_for
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
@@ -116,6 +121,8 @@ class RfqModelReader:
     texts: AttachmentTextPort
     catalog: SalesCatalogPort
     descriptions: DescriptionReader
+    # The sender's customer's notation record (ticket 37).
+    records: NotationRecordPort
 
     async def read(
         self,
@@ -147,8 +154,10 @@ class RfqModelReader:
         if len(calls) > MAX_CALLS:
             return "too_long"
         verdict = VerifiedRfq()
-        # Each document's notation from all of it, not from one call's pieces.
+        # Each document's notation from all of it, not from one call's pieces,
+        # and the customer's record for what a document leaves open.
         documents = notations(parts)
+        record = await record_for(self.records, scope, customer.code)
         for call in calls:
             inputs = {
                 # Code-built JSON inside the untrusted block: a part cannot
@@ -168,7 +177,7 @@ class RfqModelReader:
                 )
             except ModelUnavailableError:
                 return "unavailable"
-            verify_rfq(call, answer, received_on, into=verdict, documents=documents)
+            verify_rfq(call, answer, received_on, into=verdict, documents=documents, record=record)
         return await self._request(scope, message, contents, customer, rules, verdict, run, calls)
 
     async def _request(
@@ -214,10 +223,17 @@ class RfqModelReader:
             quote_due=_sourced(verdict.quote_due),
             currency=Sourced(value=verdict.currency.value, source=verdict.currency.anchor),
             items=requested,
-            flags=tuple(
-                FlaggedValue(field=name, flag=RegionFlag.MODEL_READ)
-                for name, value in (("currency", verdict.currency), *header.items())
-                if value is not None
+            flags=(
+                *(
+                    FlaggedValue(field=name, flag=RegionFlag.MODEL_READ)
+                    for name, value in (("currency", verdict.currency), *header.items())
+                    if value is not None
+                ),
+                *(
+                    FlaggedValue(field=name, flag=RegionFlag.NOTATION_FROM_RECORD)
+                    for name in ("currency", "quote_due")
+                    if name in verdict.by_record
+                ),
             ),
         )
         return RequestRead(
@@ -301,9 +317,12 @@ def _requested(
     line_no: int, item: VerifiedItem, known: tuple[tuple[str, ...], Any] | None
 ) -> RequestedItem:
     """One verified item as the request's line: every value the model's words
-    gave flagged `model_read`; a value not read anchored at the line, so Sales
-    is shown where it is missing (`rfq_incomplete`)."""
+    gave flagged `model_read`, and `notation_from_record` where only the
+    customer's record settled it; a value not read anchored at the line, so
+    Sales is shown where it is missing (`rfq_incomplete`), or at its words
+    where the notation left them open (`unsettled`)."""
     line = item.line.anchor
+    open_words = dict(item.unsettled)
     read_fields = {
         "description": item.description,
         "customer_item_code": item.customer_item_code,
@@ -319,19 +338,31 @@ def _requested(
         description=Sourced(value=item.description.value, source=item.description.anchor),
         quantity=Sourced(
             value=quantity.value if quantity else None,
-            source=quantity.anchor if quantity else line,
+            source=quantity.anchor if quantity else open_words.get("quantity", line),
         ),
         # The seller quotes in metres only; with no unit read, the quantity
         # is not read either, and the line asks for it.
         uom=Sourced(value="m", source=item.uom.anchor if item.uom else line),
         needed_by=Sourced[date | None](
             value=needed_by.value if needed_by else None,
-            source=needed_by.anchor if needed_by else line,
+            source=needed_by.anchor if needed_by else open_words.get("needed_by", line),
         ),
-        flags=tuple(
-            FlaggedValue(field=name, flag=RegionFlag.MODEL_READ)
-            for name, value in read_fields.items()
-            if value is not None
+        flags=(
+            *(
+                FlaggedValue(field=name, flag=RegionFlag.MODEL_READ)
+                for name, value in read_fields.items()
+                if value is not None
+            ),
+            *(
+                FlaggedValue(field=name, flag=RegionFlag.NOTATION_FROM_RECORD)
+                for name, value in read_fields.items()
+                if value is not None and name in item.by_record
+            ),
+        ),
+        unsettled=tuple(
+            name
+            for name, value in (("quantity", quantity), ("needed_by", needed_by))
+            if value is None and name in open_words
         ),
         stated_target_price=_sourced(item.stated_target_price),
         candidates=found,

@@ -58,6 +58,7 @@ from dw_sales.domain.mail_kinds import (
     NO_KIND,
     MailKind,
     MailKinds,
+    ReadRoute,
     mail_kinds_of,
 )
 from dw_sales.domain.message_intent import (
@@ -174,9 +175,18 @@ class MailKindReader:
         )
 
     async def answer(
-        self, skill: Skill, kinds: MailKinds, part: MessagePart, *, run: RunContext
+        self,
+        skill: Skill,
+        kinds: MailKinds,
+        part: MessagePart,
+        *,
+        run: RunContext,
+        prompt: PromptRef = MAIL_KINDS_PROMPT,
     ) -> KindAnswer | None:
-        """One call under ``skill``'s words: None for no usable answer."""
+        """One call under ``skill``'s words: None for no usable answer.
+        ``prompt``: the mail kinds' own, or a triage card's (ticket 33), which
+        asks the same question of a mail already routed ``other``, with the
+        same inputs and the same schema."""
         inputs = {
             "skill": skill.body,
             "subject": part.subject,
@@ -184,7 +194,7 @@ class MailKindReader:
         }
         try:
             answer = await self.model.interpret(
-                MAIL_KINDS_PROMPT,
+                prompt,
                 inputs,
                 kinds_schema(kinds.names),
                 run=run,
@@ -296,13 +306,33 @@ class MailKindReplay:
     ) -> str | None:
         """The route ``example`` takes under ``skill``: ``none`` for no kind
         read (answered, but routed by no kind), None for no usable answer."""
+        route, _ = await self.read(
+            skill, kinds, example.message, new_run=new_run, forget_run=forget_run
+        )
+        return route
+
+    async def read(
+        self,
+        skill: Skill,
+        kinds: MailKinds | None,
+        message: InboundMessage,
+        *,
+        new_run: Callable[[], RunContext],
+        forget_run: Callable[[uuid.UUID], object],
+    ) -> tuple[ReadRoute | None, MailKind | None]:
+        """``message`` read under ``skill``, in a run of its own: the route
+        and the kind (``none`` and no kind for no kind read, or for words
+        that do not read; None and no kind for no usable answer). The mail a
+        version was taught from is read this way (ticket 34)."""
         if kinds is None:
-            return NO_KIND
+            return NO_KIND, None
         run = new_run()
         try:
-            answer = await self.reader.answer(skill, kinds, newest_part(example.message), run=run)
+            answer = await self.reader.answer(skill, kinds, newest_part(message), run=run)
         finally:
             forget_run(run.run_id)
         if answer is None:
-            return None
-        return NO_KIND if answer.kind is None else answer.kind.route
+            return None, None
+        if answer.kind is None:
+            return NO_KIND, None
+        return answer.kind.route, answer.kind
