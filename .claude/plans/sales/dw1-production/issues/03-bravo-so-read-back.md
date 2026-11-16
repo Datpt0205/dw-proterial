@@ -52,3 +52,30 @@ and its result screen.
   2 decimals; price in USD = price ÷ rate for VND. Delivered quantities are
   in the item's "Đơn hàng bán" tab (quantity done) and in "Chi tiết thực
   hiện".
+
+## In progress (2026-11-16)
+
+- Built and committed: the row-by-row comparison
+  (`domain/bravo_sales_orders.compare`, `ed7f8ec6`): per PO line a row per
+  delivery in the paste sheet's order (`order_artifacts.upload_rows`, the one
+  source of what is entered), item code, quantity, unit price as printed and
+  the requested date; `missing_row` is a row Bravo's import skipped,
+  `extra_row` one it holds beyond; a cancelled line expects none.
+  Acceptance 1 holds at this level (one wrong price, one difference on that
+  line).
+- **Q-B6 answered by B02, partly:** one PO is not always one SO. B02 holds
+  3 POs under one SO, 2 under two and 1 under four (revisions keyed again),
+  and a PO line under 2-4 rows. So a PO Bravo holds under several SOs is not
+  compared (which one the paste made is not guessed); it goes to Sales.
+- Built, not committed (parked outside the repo while the parallel session
+  holds `services.py`, `assembly.py`, `evals/world.py`, `routes.py`): the
+  Customer order information (Form 1) reader (B02's titles; 81 columns, so
+  the sandbox's 60-column cap goes to 100), one upload path for every Bravo
+  screen (`ycbg_exports` generalised to `bravo_exports` with a `screen`;
+  YCBG's tests to be kept green), the read-back kept per case
+  (`order_bravo_read_backs`, stamped with the case version and the file) and
+  shown on the order case beside the PIC's entry; it decides nothing.
+- Decision owed (Đạt): should a read-back with differences block the
+  cross-check, or only show beside it? Built to show (human-in-command); the
+  safe default if asked to block is to refuse the cross-check while the
+  latest read-back of the current case version differs.
