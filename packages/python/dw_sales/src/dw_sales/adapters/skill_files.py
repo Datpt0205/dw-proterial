@@ -17,14 +17,17 @@ from typing import Any, Final
 
 import yaml
 
+from dw_platform.application.rule_versions import RuleVersionLookupPort
+from dw_sales.application.salesorder_skills import salesorder_skill_book
 from dw_sales.application.skills import (
     Dw1Skills,
+    SkillBook,
     SkillDocument,
     platform_skills,
     skill_key,
 )
 
-__all__ = ["load_dw1_skills"]
+__all__ = ["load_dw1_skills", "load_salesorder_skill", "skills_book"]
 
 _FRONTMATTER: Final = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 _SEMVER: Final = re.compile(r"^\d+\.\d+\.\d+$")
@@ -65,3 +68,18 @@ def load_dw1_skills(directory: Path) -> Dw1Skills:
         agent_ref=f"{head['name']}@{head['metadata']['version']}",
         skills=platform_skills(skills),
     )
+
+
+def load_salesorder_skill(directory: Path) -> SkillDocument:
+    """``directory`` (``configs/skills/dw1-salesorder``): the platform's
+    generic SalesOrder skill, ``salesorder/SKILL.md``, which a customer with
+    no version of its own is filled with (ticket 41)."""
+    return _skill(directory / "salesorder" / "SKILL.md")
+
+
+def skills_book(directory: Path, dw1: Dw1Skills, stored: RuleVersionLookupPort) -> SkillBook:
+    """The book every process resolves skills through: DW1's skills
+    (``directory``/dw1, read as ``dw1``) and, for every customer's SalesOrder
+    key, the generic SalesOrder skill (``directory``/dw1-salesorder), each
+    with the tenant's approved version over it (`salesorder_skills`)."""
+    return salesorder_skill_book(dw1, stored, load_salesorder_skill(directory / "dw1-salesorder"))

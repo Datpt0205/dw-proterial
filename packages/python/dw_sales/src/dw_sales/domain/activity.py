@@ -41,6 +41,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from dw_sales.domain.description_reading import DescriptionReading, GateRoute
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import MappingStatus, OrderCase
 from dw_sales.domain.quotes import QuoteCase
@@ -232,6 +233,12 @@ def _reply_step(reading: ReplyReading, steps_by_prompt: Mapping[str, ModelStep])
     return step if step in agents else ModelStep.REPLY_INTENT
 
 
+def _intent_step(reading: IntentReading) -> ModelStep:
+    """The step a message's classification is: the mail kinds' where a skill
+    read it (ticket 42), the one call's otherwise."""
+    return ModelStep.MESSAGE_INTENT if reading.skill is None else ModelStep.SKILL_MAIL_KINDS
+
+
 def _from_disposition(
     disposition: MessageDisposition, steps_by_prompt: Mapping[str, ModelStep]
 ) -> list[_Stamped]:
@@ -242,7 +249,7 @@ def _from_disposition(
         read = intent.outcome == "read"
         found.append(
             _Stamped(
-                ModelStep.MESSAGE_INTENT,
+                _intent_step(intent),
                 intent.prompt,
                 intent.model_profile,
                 "accepted" if read else "unavailable",

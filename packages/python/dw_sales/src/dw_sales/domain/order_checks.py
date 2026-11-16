@@ -126,6 +126,7 @@ class ModelStep(StrEnum):
     (`application.model_readiness.BARS`)."""
 
     DESCRIPTION_ATTRIBUTES = "description_attributes"
+    SALESORDER_SKILL = "salesorder_skill"
     MESSAGE_INTENT = "message_intent"
     RFQ_EXTRACTION = "rfq_extraction"
     REPLY_INTENT = "reply_intent"
@@ -136,6 +137,7 @@ class ModelStep(StrEnum):
     THREAD_AGENT = "thread_agent"
     REPLY_DRAFT = "reply_draft"
     SKILL_INTENTS = "skill_intents"
+    SKILL_MAIL_KINDS = "skill_mail_kinds"
 
 
 class ModelAssist(BaseModel):
@@ -171,6 +173,12 @@ class ModelAssist(BaseModel):
     # A local model proposes which label on a new PO form names which field,
     # for the layout-onboarding screen a person completes (ticket 30).
     layout_proposal: bool
+    # A local model fills a customer's SalesOrder file with the customer's
+    # skill and read-only look-ups, naming each cell's source; code traces
+    # every cell, writes only what it traced and flags the rest for the PIC
+    # (ticket 41). Off, or below its bar: the customer's learned rules fill
+    # it (ADR 0013). Off where a version does not say.
+    salesorder_skill: bool = False
     # A local model reads a PO written in the mail body, with no file (AI
     # item 4); every value it read is flagged for Sales to confirm. Off when
     # a version written before 1.8.0 does not say.
@@ -205,6 +213,12 @@ class ModelAssist(BaseModel):
     # reads the message; less sure, the message is read as if the step were
     # off.
     skill_pick_confidence: float = Field(default=0.9, ge=0.5, le=1.0)
+    # A local model classifies a message no reader accepted by the kinds the
+    # company's mail-classifying skill names (ticket 42): the company's
+    # approved version, else the platform's. Each kind goes where the skill
+    # maps it, one of the platform's routes. With no kind read, the message
+    # is classified as if this were off. Off where a version does not say.
+    skill_mail_kinds: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

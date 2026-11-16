@@ -42,6 +42,8 @@ worked example alike: the same row, the same code.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -339,6 +341,56 @@ class Lookups:
         return found if isinstance(found, str | Decimal) else None
 
 
+# ----------------------------------------------------------- comparing --
+# How a cell is compared, by the replay of a worked example (ticket 38) and by
+# the trace of a model's fill (ticket 41): one rule, here.
+
+_DAY: Final = re.compile(
+    r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$"
+)
+_NUMBER: Final = re.compile(r"^-?\d+(\.\d+)?$")
+
+
+def canonical(value: Value) -> date | Decimal | str | None:
+    """A cell as the replay compares it: a date by its day (a text written
+    ``yyyy-mm-dd``, ``yyyy/mm/dd`` or ``yyyy.mm.dd``, with a time of day or
+    not, as the reader hands a date cell over, is that day), a number
+    by its value (a text of plain digits too), any other text NFKC and
+    trimmed, an empty cell as None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, int | Decimal):
+        return Decimal(value)
+    text = unicodedata.normalize("NFKC", value).strip()
+    if not text:
+        return None
+    if day := _DAY.match(text):
+        try:
+            return date(int(day.group(1)), int(day.group(2)), int(day.group(3)))
+        except ValueError:
+            return text
+    if _NUMBER.match(text):
+        try:
+            return Decimal(text)
+        except InvalidOperation:
+            return text
+    return text
+
+
+def shown(value: Value) -> str | None:
+    """A value as a difference names it."""
+    found = canonical(value)
+    if found is None:
+        return None
+    if isinstance(found, date):
+        return found.isoformat()
+    if isinstance(found, Decimal):
+        return format(found, "f")
+    return found[:200]
+
+
 # ------------------------------------------------------------ applying --
 
 # Why a step could not be applied, named on the replay's difference and on
@@ -386,11 +438,25 @@ def apply_rule(
         value = getattr(customer, rule.customer)
     else:
         value = None
-    for number, step in enumerate(rule.steps, start=1):
+    return apply_steps(rule.column, value, rule.steps, values, lookups)
+
+
+def apply_steps(
+    column: str,
+    value: Value,
+    steps: Sequence[Step],
+    values: Mapping[UploadField, Value],
+    lookups: Lookups,
+) -> Value:
+    """``steps`` applied in order to ``value``, one row's ``values`` naming
+    the fields a step reads: a rule's, and a computation a model named for a
+    cell (`salesorder_fill`), redone by the same code. Raises
+    `StepRefusedError` naming ``column`` where a step cannot be applied."""
+    for number, step in enumerate(steps, start=1):
         try:
             value = _step(step, value, values, lookups)
         except _StepError as refused:
-            raise StepRefusedError(rule.column, number, refused.problem) from None
+            raise StepRefusedError(column, number, refused.problem) from None
     return value
 
 

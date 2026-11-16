@@ -35,6 +35,12 @@ serves the proposal outside its own readings, writes no case, and its runs
 are the lane's own (`system_actor`), holding only the scope DW1's processing
 holds (`sales.inbox.process`), which the read-only look-up tools require.
 
+**The mail kinds** (ticket 42) are read at a fixed step, not by a thread
+message's reading: a proposal of them is replayed by `MailKindReplay` on the
+fictional golden mails of the message intent (`sales_intent`), graded by the
+route each takes, and its injections are security cases that fail when read
+into a route that hands the mail to the order or quotation flow.
+
 A replay in which some reading got no usable answer is stored as
 ``incomplete`` with the count: the comparison is shown, and said to be
 partial, rather than hidden.
@@ -60,6 +66,7 @@ from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.mail_kinds import MailKindReplay
 from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import rule_work
@@ -69,10 +76,12 @@ from dw_sales.application.skills import (
     SkillDocument,
     SkillReplay,
     SkillReplayStorePort,
+    skill_name,
 )
 from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.thread_tools import CaseView, ThreadBinding, ThreadMessageView
 from dw_sales.application.threads import ThreadedCase
+from dw_sales.domain.mail_kinds import MAIL_KINDS
 from dw_sales.domain.reply_intent import Author, ReplyReading
 
 __all__ = [
@@ -156,6 +165,11 @@ class SkillReplayer:
     # Frees a reading run's entry in the process's spend ledger once it is
     # read: every reading is a run of its own.
     forget_run: Callable[[uuid.UUID], object]
+    # The mail kinds, a skill a fixed step reads (ticket 42): replayed on the
+    # platform's example mails of the message intent, by route. None: no
+    # model reads mail kinds here, and a proposal of them waits unreplayed,
+    # so the head cannot approve it.
+    mail_kinds: MailKindReplay | None = None
 
     async def tick(self, scope: SalesScope) -> int:
         """Replays every proposal of ``scope``'s tenant that has none yet;
@@ -167,7 +181,12 @@ class SkillReplayer:
             waiting = await work.rule_versions.list_all(
                 keys=sorted(self.book.platform), statuses=_WAITING
             )
-        waiting = [v for v in waiting if v.key.startswith(SKILL_PREFIX)]
+        waiting = [
+            v
+            for v in waiting
+            if v.key.startswith(SKILL_PREFIX)
+            and (skill_name(v.key) != MAIL_KINDS or self.mail_kinds is not None)
+        ]
         if not waiting:
             return 0
         done = await self.replays.stored(scope, [v.version_id for v in waiting])
@@ -194,6 +213,16 @@ class SkillReplayer:
         """``version`` read beside the skills ``scope``'s tenant holds now."""
         assert self.agent.skills is not None  # tick says so
         proposed = SkillDocument.model_validate(dict(version.document)).skill()
+        if proposed.name == MAIL_KINDS:
+            assert self.mail_kinds is not None  # tick says so
+            in_force_kinds = await self.book.skill(self._run(scope), MAIL_KINDS)
+            counts = await self.mail_kinds.counts(
+                proposed,
+                in_force_kinds,
+                new_run=lambda: self._run(scope),
+                forget_run=self.forget_run,
+            )
+            return self._stored(version, *counts)
         in_force = await self.book.skill_set(self._run(scope))
         changed = SkillSet(
             in_force.tenant_id,
@@ -215,6 +244,17 @@ class SkillReplayer:
             unanswered += without is None
             right_with += _right(example.gold, with_it)
             right_without += _right(example.gold, without)
+        return self._stored(version, messages, right_with, right_without, unanswered, tuple(failed))
+
+    def _stored(
+        self,
+        version: RuleVersion,
+        messages: int,
+        right_with: int,
+        right_without: int,
+        unanswered: int,
+        failed: tuple[str, ...],
+    ) -> SkillReplay:
         return SkillReplay(
             version_id=version.version_id,
             replayed_at=self.clock.now(),
@@ -224,7 +264,7 @@ class SkillReplayer:
             right_with=right_with,
             right_without=right_without,
             unanswered=unanswered,
-            security_failed=tuple(failed),
+            security_failed=failed,
         )
 
     async def _read(

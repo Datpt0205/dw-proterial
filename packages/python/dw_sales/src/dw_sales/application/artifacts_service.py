@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Final, Literal, Protocol
+from typing import TYPE_CHECKING, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -128,6 +128,9 @@ from dw_sales.domain.orders import (
     OrderStatus,
 )
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus, SignedCopy
+
+if TYPE_CHECKING:
+    from dw_sales.application.salesorder_fill import TracedFill
 
 _O = OrderStatus
 _Q = QuoteStatus
@@ -368,6 +371,14 @@ class Download:
         return file_name(self.record)
 
 
+class SkillFillPort(Protocol):
+    """Fills a case's upload file with its customer's SalesOrder skill, where
+    the step runs for the tenant (`salesorder_case_fill.CaseSalesOrderFill`,
+    ticket 41); None: the customer's rules fill it."""
+
+    async def fill_case(self, context: AccessContext, case: OrderCase) -> TracedFill | None: ...
+
+
 class _Case(Protocol):
     @property
     def case_id(self) -> uuid.UUID: ...
@@ -429,6 +440,9 @@ class ArtifactService:
     # The mailbox, for the customer's own PO files the confirmation goes back
     # with (ticket 28); None: the draft carries the processed Excel alone.
     inbox: InboxPort | None = None
+    # The SalesOrder skill's fill of an upload file (ticket 41); None where
+    # this process reaches no model: the rules fill it.
+    salesorder_skill: SkillFillPort | None = None
 
     # ------------------------------------------------------------- orders --
 
@@ -588,6 +602,8 @@ class ArtifactService:
             raise DomainError("no such artifact kind", details={"field": "kind"})
         compose = gate.compose
         self._price(context, gate.price_bearing, kind=kind)
+        # Asked before the transaction: a model call holds no connection.
+        fill = await self._skill_fill(cases, context, case_id, kind, case_version)
         scope, now = sales_scope(context), self.clock.now()
         # The objects this render stored: removed again unless their records
         # commit (ticket 06), so a failed commit leaves no object behind.
@@ -626,6 +642,7 @@ class ArtifactService:
                         po_files=await self._po_files(scope, case, kind),
                         deployed=self.deployed,
                         lookups=await self._lookups(scope, copy, customer),
+                        skill_fill=fill,
                     )
                     for rendered in await compose(drafting, self.design):
                         record = self._record(cases.kind, case, kind, rendered, context, now)
@@ -647,6 +664,31 @@ class ArtifactService:
             await self._discard(scope, stored)
             raise
         return [_view(record, downloadable=True) for record in current]
+
+    async def _skill_fill[CaseT: _Case](
+        self,
+        cases: _Cases[CaseT],
+        context: AccessContext,
+        case_id: uuid.UUID,
+        kind: str,
+        case_version: int,
+    ) -> TracedFill | None:
+        """An order's upload file filled with the customer's SalesOrder
+        skill, only where none is drawn at this version yet (ticket 41)."""
+        if self.salesorder_skill is None or kind != "bravo_upload":
+            return None
+        if cases.kind is not CaseKind.ORDER:
+            return None
+        if await self._rendered(cases, sales_scope(context), case_id, kind, case_version):
+            return None
+        async with self.uow(sales_scope(context)) as work:
+            case = await cases.load(work, case_id, context)
+        if not isinstance(case, OrderCase) or case.case_version != case_version:
+            return None
+        # No model call for a file the draw would refuse anyway.
+        if not cases.gates[kind].open_in(case, context, self.gate):
+            return None
+        return await self.salesorder_skill.fill_case(context, case)
 
     async def _rendered[CaseT: _Case](
         self, cases: _Cases[CaseT], scope: SalesScope, case_id: uuid.UUID, kind: str, version: int

@@ -106,7 +106,14 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
         "sales_order_rules@1.5.2",
     )
     assert not any(demo.model_assist.on(step) for step in ModelStep)
-    assert all(steps_on.model_assist.on(step) for step in ModelStep)
+    # The mail kinds stay off in 1.5.2 (ticket 42): the API's integration
+    # suite reads residue mail through the one call's recordings.
+    assert all(
+        steps_on.model_assist.on(step)
+        for step in ModelStep
+        if step is not ModelStep.SKILL_MAIL_KINDS
+    )
+    assert not steps_on.model_assist.on(ModelStep.SKILL_MAIL_KINDS)
 
     def rest(rules: OrderRules) -> dict[str, object]:
         dumped = rules.model_dump(mode="json")

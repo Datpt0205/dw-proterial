@@ -24,6 +24,7 @@ from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
 from dw_sales.evals.intents import GRADERS as INTENT_GRADERS
 from dw_sales.evals.layouts import GRADERS as LAYOUT_GRADERS
 from dw_sales.evals.legacy import GRADERS as LEGACY_GRADERS
+from dw_sales.evals.mail_kinds import GRADERS as MAIL_KIND_GRADERS
 from dw_sales.evals.morning_brief import GRADERS as BRIEF_GRADERS
 from dw_sales.evals.pc_dates import GRADERS as PC_DATE_GRADERS
 from dw_sales.evals.po_body import GRADERS as PO_BODY_GRADERS
@@ -34,6 +35,7 @@ from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
 from dw_sales.evals.salesorder_rules import GRADERS as SALESORDER_RULES_GRADERS
+from dw_sales.evals.salesorder_skill import GRADERS as SALESORDER_SKILL_GRADERS
 from dw_sales.evals.screening_followups import GRADERS as SCREENING_GRADERS
 from dw_sales.evals.sender_customers import GRADERS as SENDER_GRADERS
 from dw_sales.evals.skill_intents import GRADERS as SKILL_INTENT_GRADERS
@@ -58,6 +60,7 @@ GRADERS = {
         **RULE_DRAFT_GRADERS,
         **RULE_WORDS_GRADERS,
         **SALESORDER_RULES_GRADERS,
+        **SALESORDER_SKILL_GRADERS,
         **EXPLANATION_GRADERS,
         **DESIGN_TEXT_GRADERS,
         **COLUMN_GRADERS,
@@ -73,6 +76,7 @@ GRADERS = {
         **THREAD_AGENT_GRADERS,
         **REPLY_DRAFT_GRADERS,
         **SKILL_INTENT_GRADERS,
+        **MAIL_KIND_GRADERS,
     }.items()
 }
 

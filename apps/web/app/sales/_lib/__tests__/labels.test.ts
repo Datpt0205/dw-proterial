@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GLOSSARY_LISTS, GLOSSARY_TABLES } from "../labels";
+import { GLOSSARY_LISTS, GLOSSARY_TABLES, intentKindLabel } from "../labels";
 
 /**
  * The glossary owns the words; `labels.ts` is the screen's copy. This reads
@@ -70,4 +70,21 @@ describe("the Sales labels", () => {
       expect(labels).toEqual(list(lead));
     },
   );
+});
+
+describe("a message's kind as a model read it (ticket 42)", () => {
+  it("names a company's own kind by its skill's label, a platform kind by its word", () => {
+    expect(
+      intentKindLabel({
+        kind: "invoice_request",
+        kind_label: "Khách hỏi hoá đơn",
+      }),
+    ).toBe("Khách hỏi hoá đơn");
+    expect(intentKindLabel({ kind: "complaint", kind_label: null })).toBe(
+      "Khiếu nại",
+    );
+    expect(intentKindLabel({ kind: "invoice_request" })).toBe(
+      "invoice_request",
+    );
+  });
 });

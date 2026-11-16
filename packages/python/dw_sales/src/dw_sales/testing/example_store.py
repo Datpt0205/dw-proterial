@@ -3,9 +3,10 @@
 Holds the SQL store's contract, not only the happy path: each scope's
 examples are its own (what RLS gives the SQL store), `settle` writes only an
 example still queued and drops its files, `submit` only a replayed one,
-`prune` drops an example never sent with its files, and a transaction that
-does not commit writes nothing. The platform's audit and outbox are written
-at once, as the eval store's are.
+`prune` drops an example never sent with its files, a worked pair is its
+scope's (ticket 41), and a transaction that does not commit writes nothing.
+The platform's audit and outbox are written at once, as the eval store's
+are.
 """
 
 from __future__ import annotations
@@ -20,16 +21,17 @@ from typing import Self
 from dw_agent_runtime.testing.memory_runtime import MemoryAudit, MemoryOutbox
 from dw_kernel.errors import ConflictError
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.salesorder_learning import SalesOrderExample
+from dw_sales.application.salesorder_learning import SalesOrderExample, WorkedPair
 
 
 @dataclass
 class _ScopeState:
     examples: dict[uuid.UUID, SalesOrderExample] = field(default_factory=dict)
     files: dict[uuid.UUID, tuple[bytes, bytes]] = field(default_factory=dict)
+    pairs: list[WorkedPair] = field(default_factory=list)
 
     def copy(self) -> _ScopeState:
-        return _ScopeState(dict(self.examples), dict(self.files))
+        return _ScopeState(dict(self.examples), dict(self.files), list(self.pairs))
 
 
 class _Examples:
@@ -87,11 +89,29 @@ class _Examples:
         return len(old)
 
 
+class _Pairs:
+    def __init__(self, state: _ScopeState) -> None:
+        self._state = state
+
+    async def add(self, pair: WorkedPair) -> None:
+        if any(p.pair_id == pair.pair_id for p in self._state.pairs):
+            raise ConflictError(
+                "the sales store refused the change",
+                details={"constraint": "pk_salesorder_pairs"},
+            )
+        self._state.pairs.append(pair)
+
+    async def for_customer(self, customer_code: str, limit: int) -> Sequence[WorkedPair]:
+        found = [p for p in self._state.pairs if p.customer_code == customer_code]
+        return sorted(found, key=lambda p: p.added_at, reverse=True)[:limit]
+
+
 class _Work:
     def __init__(self, store: MemoryExampleStore, scope: SalesScope) -> None:
         self._store, self._scope = store, scope
         self._state = store.state(scope).copy()
         self.examples = _Examples(self._state)
+        self.pairs = _Pairs(self._state)
         self.audit = store.audit
         self.outbox = store.outbox
 
@@ -99,6 +119,7 @@ class _Work:
         self._store.states[self._scope] = self._state
         self._state = self._state.copy()
         self.examples = _Examples(self._state)
+        self.pairs = _Pairs(self._state)
 
     async def __aenter__(self) -> Self:
         return self

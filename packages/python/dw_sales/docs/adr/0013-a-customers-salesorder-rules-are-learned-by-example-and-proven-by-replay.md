@@ -116,3 +116,76 @@ flagged, never written. Decisions 3 to 6 hold: the replay now runs on all of
 the customer's pairs, the head approves, and a person approves the file
 before Bravo. The rules above stay as the fallback until the skill passes
 its bar on Strata.
+
+## Applied 2026-11-16: the skill with tools (ticket 41, by the agent, Đạt away)
+
+The amendment above, built; what it did not settle was settled so, and is
+recorded here because no rule above moved.
+
+- **The skill**: one per customer, ``salesorder-<customer code>``, a tenant
+  rule version under ``sales_skill_salesorder_<code>`` in the skills' own
+  store and flow (ADR 0014, ticket 40: proposed by whoever proposes rules,
+  decided by the head on a `sales.skills` approval, never the proposer). The
+  platform ships one generic skill (`configs/skills/dw1-salesorder`, fictional
+  pairs only), which fills a customer with no version of its own; the skill
+  book answers every customer's key with it but never lists one, so a thread
+  turn's skill pick is offered DW1's skills alone. Migration `711e8b760139`
+  admits the key family by pattern in `ck_rule_versions_key`.
+- **A constant the skill names** is a text between backticks in its
+  ``## Constants`` section, or the fixed text the layout holds in that
+  column; nothing elsewhere in the skill counts, so a worked pair's values or
+  a field's name never pass as one.
+- **The tools are called by code, before the one turn**: the customer's
+  record, its own convert list for every code the PO prints, the item each
+  found code reaches (`salesorder_fill.prepared_calls`), each shown with an
+  id the model names. The PO decides which look-ups exist, so nothing is
+  withheld, and a turn that chose its own calls looped on Strata (ticket 40,
+  0.183). The calendar and the unit factors are ADR 0013's closed set, which
+  code redoes; the PO as read is the rows with an anchor per value,
+  ``R<row>.<field>``. A tool is bound to one customer when it is built
+  (`SalesOrderTools.bound`): another customer's convert rows, and items only
+  another customer's list reaches, are not in it.
+- **The trace** (`salesorder_fill.trace`) writes code's value, never the
+  model's text: the anchor must be the row's own, a call one made for the
+  row's item and give the value again, a computation give it again, a
+  constant be the skill's. A price column (the layout's ``unit_price`` or
+  ``amount``) takes only a source that reads the PO's price (ADR 0008). A
+  column the layout fills that the answer leaves empty is flagged too
+  (`not_filled`); PC's dates are left for the person as in every file.
+- **Worked pairs** are ticket 38's examples: every uploaded pair whose PO the
+  normal reading read and whose PIC's file is the layout is kept
+  (`sales.salesorder_pairs`, workspace-narrowed, append-only), written in the
+  transaction that settles the example. Not a labelled case of ticket 43: a
+  labelled case is one item by reference, a pair is a whole file. Correcting
+  a drawn file and uploading it is the same door.
+- **A skill change** is replayed by the worker's lane
+  `sales_salesorder_skill_replay` on the customer's newest 20 pairs, with it
+  and with the skill in force, stored beside the version (`sales.skill_replays`,
+  source ``customer_pairs``). The head's approval is refused unless every
+  pair came out as the PIC's file, every fill answered, and at least one pair
+  proved it (`skills.PAIRS_BROKEN`); rejecting stays open. "Cannot be sent
+  for approval" is built as "cannot be approved": proposing opens the
+  approval at once in the skills' flow, and the refusal is where the head
+  decides.
+- **The gate**: `ModelStep.SALESORDER_SKILL`, switch
+  `model_assist.salesorder_skill` (off in every platform version), tier T2
+  (the file is still approved by a person, ADR 0026), bar 0.95 on the golden
+  pairs' cell accuracy, held with no injected or other customer's value ever
+  written. Asked when a case's ``bravo_upload`` file is drawn
+  (`salesorder_case_fill.CaseSalesOrderFill`, through the one-call door, the
+  caller's plan checked, before the draw's transaction): off, below the bar,
+  no usable answer or the plan's day spent, the rules above fill it. A cell
+  the trace refused is blank in the file and listed on its second sheet.
+- **Measured on Strata, 2026-11-16 (Giang's home lab, not attested)**:
+  1.0 cell accuracy on the three golden pairs (114 cells, every one traced,
+  three calls, p50 11.5 s), with each customer's skill words as a PIC would
+  write them; on a line shape no pair showed, 7 of 8 cells right and the
+  eighth flagged, the unmapped code's item never written; no injected price
+  and no other customer's code written. Three pairs whose skills were
+  written knowing the pairs are a small set: the step stays off until a
+  tenant's attested measurement on the plant's model, and its own customers'
+  pairs, say otherwise.
+- **Not built yet**: listing and proposing a customer's SalesOrder skill on
+  the skills page, with its pair replay (the skills API proposes one by name;
+  the approval inbox shows its approval); withdrawing a wrong pair; a PO
+  column the reading does not keep is still no source.

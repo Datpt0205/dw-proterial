@@ -92,8 +92,8 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.adapters.skill_examples import FixtureReplayExamples
-from dw_sales.adapters.skill_files import load_dw1_skills
+from dw_sales.adapters.skill_examples import FixtureMailKindExamples, FixtureReplayExamples
+from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
@@ -106,6 +106,7 @@ from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
 from dw_sales.application.mail_drop import MailDrop, MailDropNotices
+from dw_sales.application.mail_kinds import MailKindReader, MailKindReplay
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
 from dw_sales.application.model_readiness import ModelReadiness
@@ -139,7 +140,9 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
+from dw_sales.application.salesorder_fill import SalesOrderFiller
 from dw_sales.application.salesorder_learning import SalesOrderLearning
+from dw_sales.application.salesorder_pairs import SalesOrderSkillReplayer
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.skill_pick import PickModelPort, SkillPicker
@@ -149,7 +152,6 @@ from dw_sales.application.skills import (
     READ_SKILL_VERSION,
     Dw1Skills,
     SkillSettlement,
-    skill_book,
 )
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, SourceCachePort
@@ -236,6 +238,10 @@ class Dw1Mount:
     # without it, for the head to see (ticket 40): built where DW1's agent
     # with skills is, a model and the agent turns wired.
     skill_replay: SkillReplayer | None = None
+    # What replays a proposed version of a customer's SalesOrder skill on the
+    # customer's worked pairs, for the head to see (ticket 41): built where
+    # the one-call door is.
+    salesorder_skill_replay: SalesOrderSkillReplayer | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -399,7 +405,9 @@ def build_dw1(
     # DW1's skills (ticket 40): the platform's in `configs/skills/dw1`, a
     # tenant's own approved version of one in `platform.rule_versions`.
     dw1_skills = load_dw1_skills(configs / "skills" / "dw1")
-    skills = skill_book(dw1_skills, SqlRuleVersionLookup(session_factory))
+    # And every customer's SalesOrder skill (ticket 41), the generic one
+    # where the tenant approved none of its own.
+    skills = skills_book(configs / "skills", dw1_skills, SqlRuleVersionLookup(session_factory))
     thread_tools = ThreadTools(order_cases, catalog, tenant_rules)
     # What DW1's model steps did: the activity routes, the process page's
     # share and the case lists' drill-down read it.
@@ -436,6 +444,15 @@ def build_dw1(
             else model_requests(interpretation, catalog, tenant_rules, readers.texts, readiness)
         ),
     )
+    # A message classified by the tenant's mail kinds (ticket 42), its numbers
+    # resolved by the one call's own resolution.
+    mail_kinds = (
+        None
+        if interpretation is None
+        else MailKindReader(
+            interpretation, skills, IntentReader(interpretation, catalog, order_cases)
+        )
+    )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
@@ -453,6 +470,7 @@ def build_dw1(
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
         ),
+        mail_kinds=mail_kinds,
         threads=ThreadLinks(uow, mail),
         replies=None if interpretation is None else ReplyReader(interpretation),
         thread_agent=(
@@ -669,6 +687,30 @@ def build_dw1(
                 worker_id=worker.worker_id,
                 worker_version=worker.worker_version,
                 forget_run=agent_turns.budget.forget,
+                mail_kinds=(
+                    None
+                    if mail_kinds is None
+                    else MailKindReplay(mail_kinds, FixtureMailKindExamples.load(configs.parent))
+                ),
+            )
+        ),
+        salesorder_skill_replay=(
+            None
+            if one_call_model is None
+            else SalesOrderSkillReplayer(
+                uow=uow,
+                pairs=catalog_uow,
+                replays=SqlSkillReplays(session_factory, audit),
+                book=skills,
+                rules=book,
+                catalog=catalog,
+                filler=SalesOrderFiller(
+                    interpretation_for(one_call_model, configs, worker.default_model_profile)
+                ),
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
             )
         ),
         prompt_optimiser=(
@@ -793,7 +835,10 @@ def build_skill_settlement(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     dw1_skills = load_dw1_skills(configs / "skills" / "dw1")
     return SkillSettlement(
-        uow, skill_book(dw1_skills, SqlRuleVersionLookup(session_factory)), clock, ids
+        uow,
+        skills_book(configs / "skills", dw1_skills, SqlRuleVersionLookup(session_factory)),
+        clock,
+        ids,
     )
 
 

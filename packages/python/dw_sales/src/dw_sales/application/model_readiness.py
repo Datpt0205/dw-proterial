@@ -52,6 +52,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.change_reading import CHANGE_REQUEST
 from dw_sales.application.handoffs import REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
+from dw_sales.application.mail_kinds import MAIL_KINDS_PROMPT
 from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
@@ -59,6 +60,7 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_drafts import REPLY_DRAFT
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
+from dw_sales.application.salesorder_fill import SALESORDER_FILL
 from dw_sales.application.thread_agent import DW1_AGENT, THREAD_AGENT
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 
@@ -119,6 +121,21 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         ModelStep.LAYOUT_PROPOSAL: StepBar(
             0.90, "all.right", LAYOUT_PROPOSAL, "sales_layout", "sales.layout_golden"
         ),
+        # Ticket 41: the golden pairs' SalesOrder cells filled with the
+        # customer's skill come out as the PIC's file, every one traced, over
+        # every cell compared (a flagged cell is a miss); and the grader's
+        # own conditions: no injected instruction and no other customer's
+        # value ever written. A tenant's own version of a skill is replayed
+        # on its customer's pairs before the head decides it, not by this
+        # bar. Proposed by the agent; the attested measurement is on the
+        # plant's model.
+        ModelStep.SALESORDER_SKILL: StepBar(
+            0.95,
+            "golden.cell_accuracy",
+            SALESORDER_FILL,
+            "sales_salesorder_skill",
+            "sales.salesorder_skill_golden",
+        ),
         # AI item 4: the golden mails' values read into the right field, over
         # every value the golden POs state. A PO refused goes to a person.
         ModelStep.PO_BODY_EXTRACTION: StepBar(
@@ -168,6 +185,19 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             DW1_AGENT,
             "sales_skill_intents",
             "sales.skill_intents_golden",
+        ),
+        # Ticket 42 family 1: the message intent's golden residue classified
+        # by the platform's mail-classifying skill, routed as its kind's route
+        # and held at the one call's bar, on the same metric, so the two
+        # readings of one task compare on one number. A tenant's own version
+        # is replayed and read by its head before it applies, not by this
+        # bar. Proposed by the agent.
+        ModelStep.SKILL_MAIL_KINDS: StepBar(
+            0.90,
+            "all.kind_accuracy",
+            MAIL_KINDS_PROMPT,
+            "sales_mail_kinds",
+            "sales.mail_kinds_golden",
         ),
     }
 )

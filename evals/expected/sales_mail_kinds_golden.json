@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem profile on Strata, Qwen3.8-Flash-Next Q2_0, 2026-11-16, prompt sales.mail_kinds@1.0.0 with the platform's mail-kinds skill 1.0.0) route 92 of the 92 golden messages as their kind (the one call on the same model and day: 0.978). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt, the skill or the model changes.",
+  "min_kind_accuracy": 1.0
+}

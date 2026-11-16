@@ -35,22 +35,26 @@ holds its own version of a skill in its data.
   (`skill_replay.SkillReplayer`), and stores the counts beside it
   (`SkillReplay`); the skills list shows them, and the head may approve only
   a version whose replay is stored (`SkillDecisions`). Rejecting needs none.
+- **A customer's SalesOrder skill** (ticket 41) is a skill like these,
+  ``salesorder-<customer code>`` (`salesorder_skills`), replayed on the
+  customer's worked pairs instead: the head may approve a version only where
+  every pair came out as the PIC's file (`SkillDecisions`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.skills import Skill, SkillSet
-from dw_kernel.errors import ConflictError, NotFoundError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -74,12 +78,15 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.rules import ProposerNames, rule_work
+from dw_sales.domain.mail_kinds import MAIL_KINDS, mail_kinds_of
 
 __all__ = [
     "READ_SKILL",
     "READ_SKILL_VERSION",
     "SKILLS_APPROVAL",
     "SKILLS_DECIDED",
+    "STEP_SKILLS",
+    "WORDS_UNREADABLE",
     "Dw1Skills",
     "SkillBook",
     "SkillDecisions",
@@ -101,6 +108,14 @@ READ_SKILL_VERSION: Final = "1.0.0"
 # The most a skill's instructions may hold: the platform's first is about
 # 5,000 characters, and every model call of a turn that loaded it carries it.
 INSTRUCTIONS_LIMIT: Final = 12_000
+
+# The skills code reads at one fixed step of the classification order (ADR
+# 0014's guards: malware, document, upload, headers, then the model), never
+# offered to a thread message's skill pick: the mail kinds (ticket 42).
+STEP_SKILLS: Final = frozenset({MAIL_KINDS})
+# What code checks of a version's words before it is proposed, per skill: the
+# mail kinds' routes are the platform's legal ones (ticket 42).
+_WORDS_CHECKED: Final[Mapping[str, Callable[[str], object]]] = {MAIL_KINDS: mail_kinds_of}
 
 _RESOURCE: Final = "sales_skill_version"
 SKILLS_APPROVAL: Final = "sales.skills"
@@ -127,6 +142,30 @@ def skill_key(name: str) -> str:
 def skill_name(key: str) -> str:
     """The skill a key stores: `skill_key`'s inverse."""
     return key.removeprefix(SKILL_PREFIX).replace("_", "-")
+
+
+# A customer's SalesOrder skill (ticket 41, `salesorder_skills`): the generic
+# skill's key, then the customer's code in lower case.
+SALESORDER_PREFIX: Final = SKILL_PREFIX + "salesorder_"
+
+
+def salesorder_key(customer_code: str) -> str:
+    """The key a customer's SalesOrder skill is stored under."""
+    return SALESORDER_PREFIX + customer_code.lower()
+
+
+def is_salesorder_key(key: str) -> bool:
+    """Whether ``key`` is a customer's SalesOrder skill's: the prefix, then a
+    customer code (`domain.catalog.CustomerCode`) in lower case."""
+    code = key.removeprefix(SALESORDER_PREFIX)
+    return (
+        key.startswith(SALESORDER_PREFIX)
+        and 2 <= len(code) <= 16
+        and code.isascii()
+        and code.isalnum()
+        and code[0].isalpha()
+        and code == code.lower()
+    )
 
 
 class SkillDocument(BaseModel):
@@ -176,14 +215,20 @@ class SkillBook(RuleBook):
     never sideways), and the ones a stamp names (`RuleBook.at`)."""
 
     async def skill_set(self, run: RunContext) -> SkillSet:
-        """Every platform skill as the run's tenant holds it now."""
-        scope = ContextScope(TenantId(run.tenant_id), WorkspaceId(run.workspace_id))
+        """Every platform skill a thread message's reading may pick, as the
+        run's tenant holds it now: not one a fixed step reads (`STEP_SKILLS`)."""
         skills = []
         for key in sorted(self.platform):
-            document = (await self.current(scope, key)).policy
-            assert isinstance(document, SkillDocument)
-            skills.append(document.skill())
+            if skill_name(key) not in STEP_SKILLS:
+                skills.append(await self.skill(run, skill_name(key)))
         return SkillSet(run.tenant_id, run.workspace_id, tuple(skills))
+
+    async def skill(self, run: RunContext, name: str) -> Skill:
+        """The skill named ``name`` as the run's tenant holds it now."""
+        scope = ContextScope(TenantId(run.tenant_id), WorkspaceId(run.workspace_id))
+        document = (await self.current(scope, skill_key(name))).policy
+        assert isinstance(document, SkillDocument)
+        return document.skill()
 
     def knows(self, key: str) -> bool:
         return key in self.platform
@@ -201,7 +246,10 @@ def skill_book(skills: Dw1Skills, stored: RuleVersionLookupPort) -> SkillBook:
 
 # ------------------------------------------------------------- replays --
 
-ReplaySource = Literal["platform_examples"]
+# ``customer_pairs``: a customer's SalesOrder skill replayed on its worked
+# pairs (ticket 41): ``messages`` counts the pairs, ``right_*`` the pairs
+# whose fill came out as the PIC's file.
+ReplaySource = Literal["platform_examples", "customer_pairs"]
 ReplayOutcome = Literal["replayed", "incomplete"]
 
 
@@ -245,8 +293,24 @@ class SkillReplayStorePort(Protocol):
         ...
 
 
+# Refused: proposing a version whose words code cannot read (an unknown
+# route, a kind named twice).
+WORDS_UNREADABLE: Final = "skill_words_unreadable"
+
+
+def _first_error(exc: ValueError) -> str:
+    """What is wrong, in one sentence: pydantic's first message, or the
+    reader's own."""
+    if isinstance(exc, ValidationError):
+        return str(exc.errors()[0]["msg"])
+    return str(exc)
+
+
 # Refused: approving a version the worker has not replayed yet.
 NOT_REPLAYED: Final = "skill_not_replayed"
+# Refused: approving a customer's SalesOrder skill that did not reproduce
+# every worked pair of the customer, or that no pair proved (ticket 41).
+PAIRS_BROKEN: Final = "skill_pairs_broken"
 
 
 # --------------------------------------------------------------- views --
@@ -392,6 +456,14 @@ class SkillsService:
             description=proposal.description,
             instructions=proposal.instructions,
         )
+        if (check := _WORDS_CHECKED.get(name)) is not None:
+            try:
+                check(document.instructions)
+            except ValueError as exc:
+                raise DomainError(
+                    f"Kỹ năng {name} chưa đọc được: {_first_error(exc)}",
+                    details={"skill": name, "rule": WORDS_UNREADABLE},
+                ) from exc
         version = await self._engine.propose(
             context, key, document.model_dump(mode="json"), applies_directly=False
         )
@@ -422,13 +494,38 @@ class SkillDecisions:
         )
         if not decision.approve:
             return
-        version_id = asked_of(REGISTRY, request).version_id
-        if version_id not in await self.replays.stored(sales_scope(context), [version_id]):
+        asked = asked_of(REGISTRY, request)
+        version_id = asked.version_id
+        stored = await self.replays.stored(sales_scope(context), [version_id])
+        if version_id not in stored:
             raise ConflictError(
                 "Phiên bản kỹ năng chưa được chạy thử trên thư mẫu: chờ kết quả chạy thử"
                 " rồi duyệt (vẫn có thể từ chối).",
                 details={"version_id": str(version_id), "rule": NOT_REPLAYED},
             )
+        replay = stored[version_id]
+        if is_salesorder_key(asked.key) and not every_pair(replay):
+            raise ConflictError(
+                "Kỹ năng SalesOrder của khách chưa điền đúng mọi cặp ví dụ của khách: sửa kỹ"
+                " năng hoặc thêm cặp ví dụ rồi đề xuất lại (vẫn có thể từ chối).",
+                details={
+                    "version_id": str(version_id),
+                    "rule": PAIRS_BROKEN,
+                    "pairs": replay.messages,
+                    "reproduced": replay.right_with,
+                },
+            )
+
+
+def every_pair(replay: SkillReplay) -> bool:
+    """A customer's SalesOrder skill replayed on its pairs, every one of
+    which came out as the PIC's file: at least one, each answered."""
+    return (
+        replay.source == "customer_pairs"
+        and replay.outcome == "replayed"
+        and replay.messages > 0
+        and replay.right_with == replay.messages
+    )
 
 
 @dataclass(frozen=True)

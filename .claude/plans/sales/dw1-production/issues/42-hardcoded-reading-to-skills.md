@@ -1,6 +1,6 @@
 # 42 — Hard-coded reading moved to skills, one family at a time
 
-Status: ready-for-agent (after 40; each family after its skill passes its bar on Strata)
+Status: in progress (family 1 done 2026-11-16; families 2-6 left, each after its skill passes its bar on Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -100,3 +100,52 @@ Per family moved:
   The injection mail's own date became `20/11/2026` so its live check still
   tests the injection.
   Tests: `dw_sales/tests/unit/test_pc_dates.py`.
+
+## Done: family 1, mail kinds (2026-11-16)
+
+Under dw_sales ADR 0014 ("Applied 2026-11-16: the mail kinds").
+
+- **The skill**: `configs/skills/dw1/mail-kinds/SKILL.md` (1.0.0), the kinds
+  and rules of `sales.message_intent@1.1.0` word for word, each kind a
+  block (`- kind:` / `route:` / `label:` / `means:`) read by
+  `domain/mail_kinds.py` (`mail_kinds_of`, `ROUTES` = `INTENT_ROUTES`' rows).
+  A company's version is a `platform.rule_versions` row
+  (`sales_skill_mail_kinds`, migration `beba87138cda` from `e1b1e0cadb66`,
+  which also admits the step in the four step CHECKs); proposing one with
+  an unknown route is refused (`skill_words_unreadable`); one that no
+  longer reads when served is not used. Never offered to the thread
+  message's skill pick (`skills.STEP_SKILLS`).
+- **The step**: `application/mail_kinds.py` (`MailKindReader`, prompt
+  `sales.mail_kinds@1.0.0`, schema built per call from the served kinds plus
+  `none`), asked in `OrderIntake._classified` before the one call where
+  `model_assist.skill_mail_kinds` is on and measured (`ModelStep.SKILL_MAIL_KINDS`,
+  bar 0.90 on `all.kind_accuracy`, T0); one table routes both readings
+  (`_routed_read`). No kind read: the one call, else a person, exactly as
+  before. The reading stamps the kind, `routed_as`, `kind_label` and the
+  skill version; activity counts it under its own step.
+- **API and web**: `IntentReading.kind` is a string (no enum the web must
+  know), with `kind_label`, `routed_as`, `skill`; the inbox shows
+  `intentKindLabel` (the skill's label, else today's word).
+- **Replay**: `MailKindReplay` (the worker's `sales_skill_replay` lane
+  dispatches a mail-kinds proposal to it) on the message intent's 92 golden
+  mails and 5 injections (`FixtureMailKindExamples`), by route.
+- **Eval** `sales_mail_kinds@1.0.0`: golden re-scored through the skill,
+  a company's new kind by a skill version only (acceptance 2), injection,
+  cross-tenant, missing evidence, off/below bar/down/none read exactly as
+  before (acceptance 1). **Strata, live, 2026-11-16**
+  (qwen3.8-flash-next-q2_0, not attested): 92/92 (one call the same day
+  0.978), p50 1.41 s / p95 1.52 s; the new kind 4/4; no injection opened a
+  case. Recorded: `sales_mail_kinds_recorded.json` (101 answers).
+- **Kept both paths** (acceptance 3 met on this run, not acted on): a
+  company uses the skill step only once its own measurement is attested
+  (`run_evals.py --live onprem --attest`), and the one call is what every
+  company with `message_intent` on reads with today. Removing it is the
+  step after the demo tenant is attested and switched.
+- **The tests' rules (mock `sales_order_rules@1.5.2`) keep the mail kinds
+  off**, the one exception to "every step on" there: the API's integration
+  suite reads residue mail through the one call's recorded answers, and
+  turning the step on would send it through `sales.mail_kinds`, which has
+  no recordings for those mails. The skill path is tested with its own rules
+  (`evals/mail_kinds.py`, `test_mail_kinds.py`).
+- Not done here: item 6's "two parsers for which line" (not small: two
+  readers with different inputs; left in item 6).

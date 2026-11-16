@@ -13,6 +13,14 @@ worker image ships (`infra/docker/worker.Dockerfile` copies `evals/fixtures`).
   security cases only.
 
 Each case is bound as the eval binds it: its numbers and status, no lines.
+The mail kinds' examples (ticket 42, `FixtureMailKindExamples`) are the
+message intent's: the fictional golden mails of `sales_intent`
+(`evals/fixtures/cases/sales_intent_golden.json`), each with the route it is
+read as, and its injections with no readable PO
+(`evals/fixtures/cases/sales_intent_security.json`), security cases that must
+never be read into a route that hands the mail to the order or quotation flow,
+the routes every one of them asks for.
+
 A file that is missing gives no examples, and a replay with none stores
 nothing to compare (the page says so); a file that does not hold to the
 shape fails at startup.
@@ -27,15 +35,19 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Final
 
+from pydantic import TypeAdapter
+
 from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
+from dw_sales.application.mail_kinds import MailKindExample
 from dw_sales.application.skill_replay import ReplayExample
 from dw_sales.application.thread_tools import CaseView, ThreadMessageView
 from dw_sales.application.threads import AskedAbout, question
+from dw_sales.domain.message_intent import IntentKind
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteStatus
 from dw_sales.domain.reply_intent import Author
 
-__all__ = ["FixtureReplayExamples"]
+__all__ = ["FixtureMailKindExamples", "FixtureReplayExamples"]
 
 GOLDEN: Final = Path("evals") / "fixtures" / "cases" / "sales_reply_golden.json"
 SECURITY: Final = Path("evals") / "fixtures" / "cases" / "sales_thread_agent_security.json"
@@ -53,6 +65,12 @@ _SECURITY_TAGS: Final = frozenset({"conditional", "non_answer"})
 # The case the injections are written against.
 _INJECTED_ON: Final = ("order", "NRV-PO-26-0457", OrderStatus.CONFIRMATION_SENT.value)
 _RECEIVED: Final = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+INTENT_GOLDEN: Final = Path("evals") / "fixtures" / "cases" / "sales_intent_golden.json"
+INTENT_SECURITY: Final = Path("evals") / "fixtures" / "cases" / "sales_intent_security.json"
+# The routes that hand a mail to the order or quotation flow: what every
+# injection of the message intent asks to be read as.
+_FLOW_ROUTES: Final = frozenset({"po", "quote_request", "design_reply"})
+_ROUTE: Final[TypeAdapter[IntentKind]] = TypeAdapter(IntentKind)
 
 
 def _message(spec: Mapping[str, Any]) -> InboundMessage:
@@ -126,4 +144,38 @@ class FixtureReplayExamples:
         return cls(tuple(found))
 
     def examples(self) -> Sequence[ReplayExample]:
+        return self.held
+
+
+@dataclass(frozen=True)
+class FixtureMailKindExamples:
+    """Implements `MailKindExamplesPort` from the fixtures under ``root``,
+    read once at startup (module docstring)."""
+
+    held: tuple[MailKindExample, ...]
+
+    @classmethod
+    def load(cls, root: Path) -> FixtureMailKindExamples:
+        found: list[MailKindExample] = []
+        if (root / INTENT_GOLDEN).is_file():
+            golden = json.loads((root / INTENT_GOLDEN).read_text(encoding="utf-8"))["messages"]
+            found.extend(
+                MailKindExample(
+                    str(spec["id"]),
+                    _message(spec),
+                    _ROUTE.validate_python(spec["gold"]),
+                    frozenset(),
+                )
+                for spec in golden
+            )
+        if (root / INTENT_SECURITY).is_file():
+            security = json.loads((root / INTENT_SECURITY).read_text(encoding="utf-8"))
+            found.extend(
+                MailKindExample(str(spec["id"]), _message(spec), None, _FLOW_ROUTES)
+                for spec in security["injection"]
+                if not spec.get("with_po")
+            )
+        return cls(tuple(found))
+
+    def examples(self) -> Sequence[MailKindExample]:
         return self.held

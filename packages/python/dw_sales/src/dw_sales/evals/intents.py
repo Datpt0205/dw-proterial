@@ -188,7 +188,7 @@ async def read_messages(model: Any, messages: Sequence[Mapping[str, Any]]) -> li
                 message_id=str(spec["id"]),
                 lang=str(spec["lang"]),
                 gold=str(spec["gold"]),
-                kind=None if read is None else read.kind,
+                kind=None if read is None else read.route,
                 without_model=await without_model_kind(platform, message),
                 language=None if read is None else read.reading.language,
             )

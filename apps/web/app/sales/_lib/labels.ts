@@ -255,6 +255,18 @@ export const INTENT_KIND = {
   other: "Khác",
 } as const;
 
+/**
+ * The kind a model read a message as, in words: a company's own kind by the
+ * label its mail-classifying skill gives it (ticket 42), else the platform
+ * kind's word, else the kind's name.
+ */
+export function intentKindLabel(reading: {
+  kind?: string | null;
+  kind_label?: string | null;
+}): string {
+  return reading.kind_label ?? label(INTENT_KIND, reading.kind);
+}
+
 /** What a model read a customer's reply in a case's thread as (ticket 32). */
 /**
  * What a message in a case's thread does (ticket 26, CONTEXT.md "Thread

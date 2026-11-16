@@ -33,6 +33,7 @@ type Filter = SalesSchemas["ActivityFilter"];
 /** Every model step the API names; one it adds fails to compile here. */
 const MODEL_STEPS: Record<ModelStep, null> = {
   description_attributes: null,
+  salesorder_skill: null,
   message_intent: null,
   rfq_extraction: null,
   reply_intent: null,
@@ -43,6 +44,7 @@ const MODEL_STEPS: Record<ModelStep, null> = {
   thread_agent: null,
   reply_draft: null,
   skill_intents: null,
+  skill_mail_kinds: null,
 };
 export const MODEL_STEP_IDS = Object.keys(MODEL_STEPS) as ModelStep[];
 

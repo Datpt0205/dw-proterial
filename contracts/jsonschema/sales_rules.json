@@ -1397,9 +1397,19 @@
             "title": "Rfq Extraction",
             "type": "boolean"
           },
+          "salesorder_skill": {
+            "default": false,
+            "title": "Salesorder Skill",
+            "type": "boolean"
+          },
           "skill_intents": {
             "default": false,
             "title": "Skill Intents",
+            "type": "boolean"
+          },
+          "skill_mail_kinds": {
+            "default": false,
+            "title": "Skill Mail Kinds",
             "type": "boolean"
           },
           "skill_pick_confidence": {

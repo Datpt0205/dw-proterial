@@ -67,8 +67,11 @@ def _run(scope: object = ALPHA) -> RunContext:
 def test_the_platform_skills_are_named_by_their_folder_and_versioned() -> None:
     skills = load_dw1_skills(SKILLS)
     assert skills.agent_ref == "dw1@1.1.0" and skills.agent.strip()
-    (only,) = skills.skills.values()
-    assert (only.name, only.ref) == (NAME, "sales_skill_thread_intents@1.0.0")
+    assert {s.ref for s in skills.skills.values()} == {
+        "sales_skill_thread_intents@1.0.0",
+        "sales_skill_mail_kinds@1.0.0",
+    }
+    assert all(skill_key(s.name) == key for key, s in skills.skills.items())
     assert skill_name(skill_key(NAME)) == NAME
 
 
@@ -131,7 +134,7 @@ async def test_a_version_waiting_on_the_head_is_not_served() -> None:
     world = _world()
     await world.services.skills.propose(GIANG.context(), NAME, _proposal("1.1.0"))
     listed = await world.services.skills.list(GIANG.context())
-    assert [s.layer for s in listed.skills] == ["platform"]
+    assert [s.layer for s in listed.skills] == ["platform", "platform"]
     assert [(v.ref, v.status) for v in listed.versions] == [
         ("sales_skill_thread_intents@1.1.0", "proposed")
     ]
@@ -151,7 +154,7 @@ async def test_the_proposer_cannot_approve_their_own_skill() -> None:
         await world.decide_skill(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
     assert refused.value.details["rule"] == "maker_checker"
     listed = await world.services.skills.list(GIANG.context())
-    assert listed.skills[0].layer == "platform"
+    assert {s.layer for s in listed.skills} == {"platform"}
 
 
 async def _replayed(world: World, version_id: uuid.UUID) -> SkillReplay:
@@ -214,9 +217,10 @@ async def test_another_head_approves_and_the_tenants_reading_uses_it() -> None:
     await world.decide_skill(HUONG, proposed.version_id, approve=True, comment="Đồng ý")
     listed = await world.services.skills.list(GIANG.context())
     assert [(s.ref, s.layer) for s in listed.skills] == [
-        ("sales_skill_thread_intents@1.1.0", "tenant")
+        ("sales_skill_mail_kinds@1.0.0", "platform"),
+        ("sales_skill_thread_intents@1.1.0", "tenant"),
     ]
-    assert listed.skills[0].instructions.endswith("A reply saying 'Noted.' accepts.")
+    assert listed.skills[1].instructions.endswith("A reply saying 'Noted.' accepts.")
     assert {v.status for v in listed.versions} == {"approved"}
 
 

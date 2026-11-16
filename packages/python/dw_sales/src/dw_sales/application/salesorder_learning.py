@@ -51,6 +51,13 @@ sends it for approval:
 From then on code applies the approved rules to every PO of the customer
 (`order_artifacts.bravo_upload`), with no model.
 
+**A worked pair** (ticket 41): every example whose PO the normal reading
+read and whose PIC's file is the tenant's layout is also kept as one of the
+customer's worked pairs (`WorkedPair`), the PO as read and the PIC's rows,
+written in the transaction that settles the example. A change to the
+customer's SalesOrder skill is replayed on all of them
+(`salesorder_pairs.SalesOrderSkillReplayer`).
+
 Every step is audited; the worker's as itself (`lane_audit_event`,
 `system:sales_salesorder_examples`): ids, the customer, the status, the
 files' hashes, counts and problem codes, never a cell's value.
@@ -62,12 +69,10 @@ import hashlib
 import json
 import logging
 import re
-import unicodedata
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
 from types import TracebackType
 from typing import Any, Final, Literal, Protocol, Self
 
@@ -105,12 +110,7 @@ from dw_sales.application.artifact_content import (
     Value,
 )
 from dw_sales.application.catalog_imports import OutboxPort
-from dw_sales.application.order_artifacts import (
-    checked_row,
-    delivery_rows,
-    file_rows,
-    line_values,
-)
+from dw_sales.application.order_artifacts import checked_row, example_rows
 from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.application.processing import RequesterAccessPort
 from dw_sales.application.rules import Resolved, RuleKey, RuleVersionView
@@ -124,8 +124,10 @@ from dw_sales.application.salesorder_rules import (
     StepProblem,
     StepRefusedError,
     apply_rule,
+    canonical,
     column_letter,
     layout_cell,
+    shown,
 )
 from dw_sales.application.source import SheetGrid
 from dw_sales.application.template_reading import (
@@ -301,6 +303,27 @@ class SalesOrderExample(BaseModel):
     version_id: uuid.UUID | None = None
 
 
+class WorkedPair(BaseModel):
+    """A PO and the SalesOrder file the PIC made from it, kept for the
+    customer (ticket 41): the PO as the normal reading read it, the day it
+    came in, and the PIC's rows, each its visible cells' text by column
+    letter. Price-bearing, as the files are. A skill change is replayed on
+    every pair of its customer (`salesorder_pairs`)."""
+
+    model_config = _FROZEN
+
+    pair_id: uuid.UUID
+    # The example it was read from; None once that example was dropped.
+    example_id: uuid.UUID | None
+    customer_code: CustomerCode
+    received_on: date
+    layout_ref: str = Field(max_length=200)
+    document: PoDocument
+    expected: tuple[dict[Letter, str], ...] = Field(min_length=1, max_length=MAX_ROWS)
+    added_by: uuid.UUID
+    added_at: AwareDatetime
+
+
 class SalesOrderExampleView(BaseModel):
     """An example as the customer's screen and the approval read it."""
 
@@ -400,75 +423,6 @@ def pic_file(grid: SheetGrid, layout: BravoUploadLayout) -> PicFile | list[Learn
             found.setdefault(cell.row, {})[cell.column - 1] = cell.text
     rows = tuple(PicRow(number, found[number]) for number in sorted(found)[:MAX_ROWS])
     return PicFile(row.sheet, row.row, headers, rows)
-
-
-def example_rows(
-    document: PoDocument, customer_code: str, received_on: date, lookups: Lookups
-) -> list[dict[UploadField, Value]]:
-    """The rows the upload file holds for the example's PO, as a case's file
-    would hold them: each line through `line_values` (the PRV code the
-    customer's convert list gives, where its item is in the master), a row
-    per delivery, the file's own values. No case yet, so no suggested date."""
-    deliveries: list[dict[UploadField, Value]] = []
-    for po in document.lines:
-        prv = lookups.convert.get(po.customer_item_code)
-        values = line_values(
-            customer_code,
-            document.header,
-            po,
-            prv_code=prv if prv in lookups.items else None,
-            suggested=None,
-        )
-        deliveries += delivery_rows(values, po, lambda _: None)
-    return file_rows(deliveries, received_on)
-
-
-# ----------------------------------------------------------- comparing --
-
-_DAY: Final = re.compile(
-    r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$"
-)
-_NUMBER: Final = re.compile(r"^-?\d+(\.\d+)?$")
-
-
-def canonical(value: Value) -> date | Decimal | str | None:
-    """A cell as the replay compares it: a date by its day (a text written
-    ``yyyy-mm-dd``, ``yyyy/mm/dd`` or ``yyyy.mm.dd``, with a time of day or
-    not, as the reader hands a date cell over, is that day), a number
-    by its value (a text of plain digits too), any other text NFKC and
-    trimmed, an empty cell as None."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, date):
-        return value
-    if isinstance(value, int | Decimal):
-        return Decimal(value)
-    text = unicodedata.normalize("NFKC", value).strip()
-    if not text:
-        return None
-    if day := _DAY.match(text):
-        try:
-            return date(int(day.group(1)), int(day.group(2)), int(day.group(3)))
-        except ValueError:
-            return text
-    if _NUMBER.match(text):
-        try:
-            return Decimal(text)
-        except InvalidOperation:
-            return text
-    return text
-
-
-def shown(value: Value) -> str | None:
-    """A value as a difference names it."""
-    found = canonical(value)
-    if found is None:
-        return None
-    if isinstance(found, date):
-        return found.isoformat()
-    if isinstance(found, Decimal):
-        return format(found, "f")
-    return found[:200]
 
 
 def _filled(layout: BravoUploadLayout, rules: CustomerSalesOrderRules | None) -> set[int]:
@@ -736,11 +690,24 @@ class ExampleStorePort(Protocol):
         ...
 
 
+class WorkedPairStorePort(Protocol):
+    """The workspace's worked pairs inside a unit of work (RLS-bound)."""
+
+    async def add(self, pair: WorkedPair) -> None: ...
+
+    async def for_customer(self, customer_code: str, limit: int) -> Sequence[WorkedPair]:
+        """The customer's pairs, newest first."""
+        ...
+
+
 class ExampleUnitOfWork(Protocol):
     """One transaction in one workspace; leaving without `commit` rolls back."""
 
     @property
     def examples(self) -> ExampleStorePort: ...
+
+    @property
+    def pairs(self) -> WorkedPairStorePort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...
@@ -1075,6 +1042,8 @@ class Pair:
     rows: list[dict[UploadField, Value]]
     pic: PicFile
     baseline: Replay
+    # The PO as read, kept with the PIC's rows as a worked pair (ticket 41).
+    document: PoDocument | None = None
 
 
 @dataclass(frozen=True)
@@ -1109,14 +1078,16 @@ class SalesOrderLearning:
             files = None if example is None else await work.examples.files(example_id)
         if example is None or example.status != "queued":
             return "example not queued"
-        settled = (
-            _failed(example, "tệp không còn để đọc")
+        settled, pair = (
+            (_failed(example, "tệp không còn để đọc"), None)
             if files is None
             else await self._settle(scope, example, *files)
         )
         async with self.uow(scope) as work:
             if not await work.examples.settle(settled):
                 return "example changed meanwhile"
+            if pair is not None:
+                await work.pairs.add(pair)
             await work.audit.append(
                 lane_audit_event(
                     lane=EXAMPLE_LANE,
@@ -1135,7 +1106,9 @@ class SalesOrderLearning:
 
     async def _settle(
         self, scope: SalesScope, example: SalesOrderExample, po: bytes, salesorder: bytes
-    ) -> SalesOrderExample:
+    ) -> tuple[SalesOrderExample, WorkedPair | None]:
+        """What the example settles as, and the worked pair it is once both
+        files were read (ticket 41)."""
         for data in (po, salesorder):
             verdict = await self.scanner.scan(data)
             if verdict.outcome == "unavailable":
@@ -1143,16 +1116,39 @@ class SalesOrderLearning:
                     "chưa quét được tệp, thử lại", details={"reason_code": "scanner_unavailable"}
                 )
             if verdict.outcome == "infected":
-                return _failed(example, "tệp bị trình quét mã độc chặn")
+                return _failed(example, "tệp bị trình quét mã độc chặn"), None
         context = await self._asker(scope, example)
         if context is None:
-            return _failed(example, "người tải tệp không còn quyền học quy tắc của khách")
+            return _failed(example, "người tải tệp không còn quyền học quy tắc của khách"), None
         read = await self._pair(scope, example, po, salesorder)
         if isinstance(read, str):
-            return _failed(example, read)
+            return _failed(example, read), None
         if isinstance(read, list):
-            return example.model_copy(update={"status": "refused", "problems": tuple(read)})
-        pair = read
+            return example.model_copy(update={"status": "refused", "problems": tuple(read)}), None
+        return await self._learned(example, read, context), self._worked(example, read)
+
+    def _worked(self, example: SalesOrderExample, pair: Pair) -> WorkedPair | None:
+        """The pair as the customer's worked pair: the PO as read, the PIC's
+        rows by letter."""
+        if pair.document is None or not pair.pic.rows:
+            return None
+        return WorkedPair(
+            pair_id=self.ids.new_uuid(),
+            example_id=example.example_id,
+            customer_code=example.customer_code,
+            received_on=example.received_on,
+            layout_ref=pair.layout.ref,
+            document=pair.document,
+            expected=tuple(
+                {column_letter(i): text for i, text in row.cells.items()} for row in pair.pic.rows
+            ),
+            added_by=example.requested_by,
+            added_at=self.clock.now(),
+        )
+
+    async def _learned(
+        self, example: SalesOrderExample, pair: Pair, context: AccessContext
+    ) -> SalesOrderExample:
         kept = example.model_copy(update={"replay": pair.baseline})
         if pair.baseline.matches and not pair.baseline.unexplained:
             # The layout alone reproduces the file: nothing to ask, nothing to learn.
@@ -1231,7 +1227,7 @@ class SalesOrderLearning:
         )
         rows = example_rows(document, customer.code, example.received_on, lookups)
         baseline = replay(layout, None, rows, customer, lookups, pic)
-        return Pair(layout, customer, lookups, rows, pic, baseline)
+        return Pair(layout, customer, lookups, rows, pic, baseline, document)
 
     async def _grid(self, data: bytes) -> SheetGrid | None:
         """The first sheet with a header row."""

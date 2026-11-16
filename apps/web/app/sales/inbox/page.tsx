@@ -34,7 +34,7 @@ import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
 import {
-  INTENT_KIND,
+  intentKindLabel,
   label,
   PROCESSING_ERROR,
   ROUTING_ADVICE,
@@ -731,9 +731,7 @@ function IntentTag({
     );
   return (
     <span className="flex flex-col items-start gap-1">
-      <StatusTag tone="warn">
-        Mô hình đọc: {label(INTENT_KIND, reading.kind)}
-      </StatusTag>
+      <StatusTag tone="warn">Mô hình đọc: {intentKindLabel(reading)}</StatusTag>
       {reading.references.length ? (
         <Typography.Text>
           Nhắc tới:{" "}
