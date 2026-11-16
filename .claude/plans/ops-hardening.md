@@ -253,6 +253,34 @@ context. All five are done and on `main`. The full narrative is at
         OOM-killed (and may reload its RDB into the same limit) instead of
         refusing writes; container memory against its limit is not
         alerted on yet.
+        **Backups built and drilled (11-16 13:15, on the VM against a
+        throwaway stack: the production images, the repo's init script):**
+        `08-backup-share.ps1` (B:\DW-Backup, SMB encrypted, local
+        `dwbackup` with a random password piped to the VM),
+        `vm/12-backup-mount.sh` (cifs `seal`, automount, `dw-host` in
+        /etc/hosts as the one place the host's address lives),
+        `infra/compose/docker-compose.backup.yml` (archive_mode on, gzip
+        per segment to the VM's disk, archive_timeout 900),
+        `vm/backup/dw-backup.sh` + `vm/13-backup.sh` (timers: nightly 02:15
+        dumps of dw, keycloak, roles; a base backup weekly; Qdrant full
+        snapshot; objects by rclone sync with changed files kept aside;
+        .env and Caddy's CA; SHA256SUMS; WAL hourly; restore test on the
+        1st). Retention 7 daily, 4 Sundays, 12 firsts, 5 bases, WAL back to
+        the oldest base, changed objects 90 days: drilled with back-dated
+        folders, each dropped or kept as the rule says. Found and fixed:
+        the database list was queried in a database that does not exist, so
+        a "successful" nightly held no dump (the restore test now requires
+        `databases.txt` and dw's tables); a failed restore test left its
+        containers behind (cleanup on EXIT). Mutations: a changed byte, a
+        Qdrant count above the snapshot's, a missing dw dump each failed the
+        restore test. The host watchdog reads B:\DW-Backup\status (26 h
+        nightly, 3 h WAL, 35 days or failed restore test): a 72-hour-old
+        nightly mailed "PROBLEM: backup", then "OK again". Timers are
+        disabled and the test data gone until DW is deployed. Owed at
+        deploy: add `docker-compose.backup.yml` to the onprem compose
+        command (`make onprem-up` does not yet), `13-backup.sh <dir> dw`,
+        one PITR restore from a base backup and WAL in the drill, and the
+        VM's pulls failing on IPv6 now and then (watch it).
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
