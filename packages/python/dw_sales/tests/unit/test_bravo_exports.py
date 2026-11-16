@@ -74,3 +74,29 @@ def test_a_cell_past_the_rows_end_is_blank() -> None:
     short = TableRow(row=2, cells=["CLOSE", "RFQ261101-001"])
     assert found.cell(short, _LINE) is None
     assert found.cell(short, ExportColumn("Never titled", required=False)) is None
+
+
+def test_a_title_two_blocks_share_is_told_apart_by_the_block_above() -> None:
+    """Box B07: "LME" under "Base price (at quotation)" and again under
+    "QUOTATION"; "RowIdSQ" titled on the block row only."""
+    rows = _rows(
+        ["Master list báo giá"],
+        ["Base price", None, "QUOTATION", None, None, "RowIdSQ"],
+        ["BP Code", "LME", "Quote No.", "LME", "Center price", None],
+        ["BP000001", 7750, "QN-1", 8250, 1.5, "1SQ"],
+    )
+    quoted = ExportColumn("LME", block="QUOTATION")
+    at_bp = ExportColumn("LME", block="Base price")
+    row_id = ExportColumn("RowIdSQ", block="RowIdSQ")
+    found = find_header(rows, (ExportColumn("Quote No."), quoted, at_bp, row_id))
+
+    data = rows[3]
+    assert found.index == 2
+    assert (found.cell(data, quoted), found.cell(data, at_bp), found.cell(data, row_id)) == (
+        8250,
+        7750,
+        "1SQ",
+    )
+    # Without its block, the title is two columns: refused, never the first.
+    with pytest.raises(ValueError, match="hai lần"):
+        find_header(rows, (ExportColumn("Quote No."), ExportColumn("LME")))

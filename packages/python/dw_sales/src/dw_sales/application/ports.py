@@ -22,7 +22,9 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.catalog import (
+    BasePrice,
     BravoOrder,
+    BravoQuotation,
     ConvertEntry,
     Customer,
     Item,
@@ -172,6 +174,19 @@ class SalesCatalogPort(Protocol):
 
     async def lme_months(self, scope: SalesScope) -> Snapshot[Sequence[LmeMonth]]:
         """Every month on record, oldest first."""
+        ...
+
+    async def base_price(self, scope: SalesScope, bp_code: str) -> Snapshot[BasePrice | None]:
+        """Bravo's base price under ``bp_code`` (ticket 11), or None when the
+        list read holds no such BP."""
+        ...
+
+    async def base_prices(self, scope: SalesScope) -> Snapshot[Sequence[BasePrice]]:
+        """Every BP of the list read, in its order."""
+        ...
+
+    async def bravo_quotations(self, scope: SalesScope) -> Snapshot[Sequence[BravoQuotation]]:
+        """Bravo's quotation master list as read (ticket 12), in its order."""
         ...
 
     async def orders_for_po(

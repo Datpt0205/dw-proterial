@@ -650,7 +650,11 @@ function QuoteDetail() {
           </Typography.Text>
         )}
         {data.design_check ? (
-          <DesignCheckPanel check={data.design_check} readBy={name} />
+          <DesignCheckPanel
+            check={data.design_check}
+            readBy={name}
+            prices={data.design_prices}
+          />
         ) : null}
       </Card>
 

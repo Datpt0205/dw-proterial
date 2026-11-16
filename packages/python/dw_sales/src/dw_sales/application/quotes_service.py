@@ -39,7 +39,12 @@ from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFact
 from dw_sales.application.customer_notations import NotationLedgerPort, learn
 from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.overview_ports import FollowupPolicyPort
-from dw_sales.application.ports import MemberDirectoryPort, SalesCatalogPort
+from dw_sales.application.ports import (
+    CatalogNotConnectedError,
+    MemberDirectoryPort,
+    SalesCatalogPort,
+    SalesScope,
+)
 from dw_sales.application.quotation import QuotationService, ScreeningRow
 from dw_sales.application.runs import (
     PendingDecisionsPort,
@@ -59,6 +64,7 @@ from dw_sales.application.support import (
 from dw_sales.application.threads import ThreadMembersPort, case_thread
 from dw_sales.application.views import (
     CaseChangeView,
+    DesignBasePriceView,
     PendingDecisionView,
     QuoteCaseView,
     QuoteSummaryView,
@@ -206,6 +212,8 @@ class QuoteQueries:
             evidence = await self.service.price_evidence(
                 scope, case, as_of=today, incoterm=incoterm, destination=destination
             )
+        # Left out for a caller who may not read prices by the view (`quote_case`).
+        design_prices = await self._design_prices(scope, case)
         decision = None
         if (waits_on := awaiting(case)) is not None:
             approval_id = await self.decisions.pending(
@@ -234,7 +242,45 @@ class QuoteQueries:
                 outgoing=await outgoing_in(self.directory, context),
             ),
             sent=sent,
+            design_prices=design_prices,
         )
+
+    async def _design_prices(
+        self, scope: SalesScope, case: QuoteCase
+    ) -> list[DesignBasePriceView] | None:
+        """Each QUOTE line's BP in Bravo's base-price list (ticket 11). None
+        with no result read; a BP the list does not hold, or no list at all,
+        is a line not found."""
+        check = case.design_check
+        if check is None:
+            return None
+        shown: list[DesignBasePriceView] = []
+        for line in check.lines:
+            if line.bp_code is None:
+                continue
+            try:
+                found = await self.service.catalog.base_price(scope, line.bp_code)
+            except CatalogNotConnectedError:
+                shown.append(
+                    DesignBasePriceView(line_no=line.line_no, bp_code=line.bp_code, found=False)
+                )
+                continue
+            bp = found.data
+            shown.append(
+                DesignBasePriceView(
+                    line_no=line.line_no,
+                    bp_code=line.bp_code,
+                    found=bp is not None,
+                    base_price=None if bp is None else bp.base_price,
+                    bp_unit=None if bp is None else bp.bp_unit,
+                    copper_kg=None if bp is None else bp.copper_kg,
+                    lme_of_bp=None if bp is None else bp.lme_of_bp,
+                    specification=None if bp is None else bp.specification,
+                    bp_date=None if bp is None else bp.bp_date,
+                    as_of=found.as_of,
+                )
+            )
+        return shown
 
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:
         """WIV-03-023 step 12: codes quoted with no order in the 12 months."""

@@ -74,6 +74,8 @@ const TABS = [
   "convert-list",
   "quotations",
   "lme",
+  "base-prices",
+  "bravo-quotations",
   "bravo-orders",
   "open-ycbg",
 ] as const;
@@ -133,6 +135,16 @@ function MasterData() {
             key: "lme",
             label: LIST_NAME.lme,
             children: imported("lme", <Lme />),
+          },
+          {
+            key: "base-prices",
+            label: LIST_NAME.base_prices,
+            children: imported("base_prices", null),
+          },
+          {
+            key: "bravo-quotations",
+            label: LIST_NAME.bravo_quotations,
+            children: imported("bravo_quotations", null),
           },
           {
             key: "bravo-orders",

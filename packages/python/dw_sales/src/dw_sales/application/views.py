@@ -1816,6 +1816,26 @@ class DesignLineView(BaseModel):
     anchors: dict[str, SourceAnchor]
 
 
+class DesignBasePriceView(BaseModel):
+    """A QUOTE line's BP as Bravo's "Danh mục Base price" holds it (ticket
+    11), for a price reader only: ``found`` False is a BP code the list read
+    does not hold (B21 exports the latest BPs only), never a blank price."""
+
+    model_config = _VIEW
+
+    line_no: int
+    bp_code: str
+    found: bool
+    base_price: Decimal | None = None
+    bp_unit: str | None = None
+    copper_kg: Decimal | None = None
+    lme_of_bp: Decimal | None = None
+    specification: str | None = None
+    bp_date: date | None = None
+    # When the list read holds it; None where no list is connected.
+    as_of: datetime | None = None
+
+
 class DesignReplyView(BaseModel):
     model_config = _VIEW
 
@@ -2133,6 +2153,9 @@ class QuoteCaseView(BaseModel):
     design_replies: int
     # Design's result as Bravo holds it, read from an export (ticket 16).
     design_check: DesignCheck | None = None
+    # Each QUOTE line's base price from Bravo's list (ticket 11); None for a
+    # caller who may not read prices, as for a case with no result read.
+    design_prices: list[DesignBasePriceView] | None = None
     pricing: PricingView | None
     earlier_pricing: int
     returns: list[ReturnView]
@@ -2200,6 +2223,7 @@ def quote_case(
     served: frozenset[SourceRegion] = frozenset(),
     thread: CaseThread | None = None,
     sent: Mapping[str, SentRead] | None = None,
+    design_prices: Sequence[DesignBasePriceView] | None = None,
 ) -> QuoteCaseView:
     """The case for one caller. ``served``: the regions of this case version
     the caller was served (`SourceServedPort.served`); none by default, so
@@ -2332,6 +2356,7 @@ def quote_case(
         ),
         design_replies=len(case.design_replies),
         design_check=case.design_check,
+        design_prices=list(design_prices) if prices.amounts and design_prices is not None else None,
         pricing=(
             PricingView(
                 decided_by=pricing.decided_by,

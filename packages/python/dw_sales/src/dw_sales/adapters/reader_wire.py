@@ -42,6 +42,7 @@ from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMe
 from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.bravo_exports import TableGroup
 from dw_sales.domain.file_passwords import MAX_PASSWORD_CHARS, MAX_PASSWORDS
 from dw_sales.domain.layouts import LayoutSource, PoMapping
 from dw_sales.domain.master_data import ImportedTable
@@ -55,6 +56,15 @@ from dw_sales.domain.rfq_reading import AttachmentText, TextPart
 _WIRE = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 _Password = Annotated[str, StringConstraints(min_length=1, max_length=MAX_PASSWORD_CHARS)]
+
+
+class TableRowsReply(ImportedTable):
+    """A table as the reader answers it: its groups always stated, none
+    included (ticket 04). A reader older than them answers without the field,
+    and is refused as of another version (`ReaderMismatchError`), never read
+    as a sheet with no groups, which would make every convert row approved."""
+
+    groups: tuple[TableGroup, ...]
 
 
 class ReaderOp(StrEnum):
@@ -230,7 +240,7 @@ RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
         ReaderOp.SOURCE_PDF_PAGE: TypeAdapter(PdfPage | None),
         ReaderOp.SOURCE_SHEET_NAMES: TypeAdapter(list[str]),
         ReaderOp.SOURCE_SHEET_GRID: TypeAdapter(SheetGrid | None),
-        ReaderOp.TABLE_ROWS: TypeAdapter(ImportedTable),
+        ReaderOp.TABLE_ROWS: TypeAdapter(TableRowsReply),
         ReaderOp.MAIL_READ: TypeAdapter(MailRead),
         ReaderOp.TEXT_DOCUMENT: TypeAdapter(DocumentText),
     }

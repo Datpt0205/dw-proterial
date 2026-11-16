@@ -18,6 +18,8 @@ export const LIST_NAME: Record<CatalogList, string> = {
   convert_list: "Bảng quy đổi mã",
   quotations: "Báo giá",
   lme: "LME",
+  base_prices: "Base price",
+  bravo_quotations: "Báo giá (Bravo)",
 };
 
 /** The tab each list lives on, by the list the API names. */
@@ -27,6 +29,8 @@ export const TAB_OF: Record<CatalogList, string> = {
   convert_list: "convert-list",
   quotations: "quotations",
   lme: "lme",
+  base_prices: "base-prices",
+  bravo_quotations: "bravo-quotations",
 };
 
 export const IMPORT_STATUS: Record<CatalogImport["status"], string> = {
@@ -90,9 +94,17 @@ export function sourceLabel(
  * scopes (the server refuses the same), or an import of this list is
  * waiting on its approval.
  */
+// The lists whose rows carry prices: importing one needs the price scopes.
+const PRICED: ReadonlySet<CatalogList> = new Set<CatalogList>([
+  "quotations",
+  "lme",
+  "base_prices",
+  "bravo_quotations",
+]);
+
 export function uploadBlocked(state: CatalogListState): string | null {
   if (!state.can_import)
-    return state.catalog_list === "quotations" || state.catalog_list === "lme"
+    return PRICED.has(state.catalog_list)
       ? "Danh mục này có giá: chỉ người được nhập dữ liệu chủ và xem giá (Trưởng bộ phận Sales) nhập được."
       : "Bạn chưa có quyền nhập dữ liệu chủ (Sales phụ trách hoặc Trưởng bộ phận Sales).";
   if (state.open?.status === "submitted")

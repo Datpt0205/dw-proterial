@@ -2,9 +2,15 @@
 
 import { Alert, Table, Tag, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
+import { MaskedValue } from "@dw/ui";
 import { formatDateTime } from "../../../../lib/dates";
+import { formatMoney, formatQuantity } from "../../../../lib/money";
 
 type Check = SalesSchemas["DesignCheck"];
+type BasePrice = SalesSchemas["DesignBasePriceView"];
+
+// Who sees a base price: said once, beside the column (ui-quality §6).
+const PRICES_HIDDEN = "Chỉ người được xem giá thấy giá cơ bản của Design.";
 
 /**
  * Design's result as Bravo holds it (ticket 16): read from the YCBG export
@@ -15,10 +21,15 @@ type Check = SalesSchemas["DesignCheck"];
 export function DesignCheckPanel({
   check,
   readBy,
+  prices,
 }: {
   check: Check;
   readBy: (id: string) => string;
+  /** Each QUOTE line's BP in Bravo's base-price list (ticket 11); null for
+   * a caller who may not read prices. */
+  prices: BasePrice[] | null | undefined;
 }) {
+  const byLine = new Map((prices ?? []).map((p) => [p.line_no, p]));
   return (
     <div className="space-y-2">
       {check.lines.some((l) => l.verdict === "decline") ? (
@@ -54,6 +65,24 @@ export function DesignCheckPanel({
             title: "Mã BP",
             dataIndex: "bp_code",
             render: (c: string | null) => c ?? "—",
+          },
+          {
+            title: "Giá cơ bản (Bravo)",
+            key: "base_price",
+            render: (_: unknown, line: Check["lines"][number]) => {
+              if (line.verdict !== "quote") return "—";
+              if (!prices) return <MaskedValue sentence={PRICES_HIDDEN} />;
+              const bp = byLine.get(line.line_no);
+              if (!bp?.found || bp.base_price == null)
+                return (
+                  <Tag color="warning">Không có trong danh mục Base price đã đọc</Tag>
+                );
+              const cu =
+                bp.copper_kg == null
+                  ? ""
+                  : ` · Cu ${formatQuantity(bp.copper_kg)} kg/${bp.bp_unit ?? ""}`;
+              return `${formatMoney(bp.base_price, "USD")}/${bp.bp_unit ?? ""}${cu}`;
+            },
           },
           {
             title: "Lý do",

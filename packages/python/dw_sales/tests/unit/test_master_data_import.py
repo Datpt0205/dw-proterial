@@ -27,7 +27,15 @@ from dw_sales.application.catalog_imports import (
     TableUnreadableError,
 )
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
-from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, Quotation
+from dw_sales.domain.catalog import (
+    BasePrice,
+    BravoQuotation,
+    ConvertEntry,
+    Customer,
+    Item,
+    LmeMonth,
+    Quotation,
+)
 from dw_sales.domain.master_data import (
     SPECS,
     CatalogList,
@@ -51,7 +59,9 @@ from dw_sales.testing.catalog_store import (
 
 pytestmark = pytest.mark.unit
 
-CatalogRecordModel = Customer | Item | ConvertEntry | Quotation | LmeMonth
+CatalogRecordModel = (
+    Customer | Item | ConvertEntry | Quotation | LmeMonth | BasePrice | BravoQuotation
+)
 
 REPO = Path(__file__).resolve().parents[5]
 
@@ -116,6 +126,8 @@ def test_every_list_reads_back_from_its_own_template_rows(catalog_list: CatalogL
         CatalogList.CONVERT_LIST: ("convert_list.json", ConvertEntry),
         CatalogList.QUOTATIONS: ("quotations.json", Quotation),
         CatalogList.LME: ("lme.json", LmeMonth),
+        CatalogList.BASE_PRICES: ("base_prices.json", BasePrice),
+        CatalogList.BRAVO_QUOTATIONS: ("bravo_quotations.json", BravoQuotation),
     }
     name, model = files[catalog_list]
     records: tuple[CatalogRecordModel, ...] = read_records(DATA_DIR / name, model)

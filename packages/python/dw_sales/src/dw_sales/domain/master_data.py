@@ -57,6 +57,8 @@ from dw_sales.domain.bravo_exports import TableRow as TableRow
 from dw_sales.domain.bravo_exports import find_header
 from dw_sales.domain.bravo_exports import header_key as header_key
 from dw_sales.domain.catalog import (
+    BasePrice,
+    BravoQuotation,
     ConvertEntry,
     Customer,
     Item,
@@ -79,9 +81,15 @@ class CatalogList(StrEnum):
     CONVERT_LIST = "convert_list"
     QUOTATIONS = "quotations"
     LME = "lme"
+    # Design's base prices, Bravo's "Danh mục Base price" (ticket 11).
+    BASE_PRICES = "base_prices"
+    # Bravo's "Master list báo giá", read only (ticket 12).
+    BRAVO_QUOTATIONS = "bravo_quotations"
 
 
-type CatalogRecord = Customer | Item | ConvertEntry | Quotation | LmeMonth
+type CatalogRecord = (
+    Customer | Item | ConvertEntry | Quotation | LmeMonth | BasePrice | BravoQuotation
+)
 
 # How much of one list a file may hold: above Proterial's lists as Bravo
 # exports them (B04 11,523 rows, B06 12,271), and a bound on what one import
@@ -107,6 +115,9 @@ ColumnKind = Literal[
     "text",
     "int",
     "decimal",
+    # A number Bravo exported as text with "." as its decimal mark and no
+    # grouping (B07's MOQ: "0.305", "1000.5"); a comma is refused.
+    "dot_decimal",
     "pack",
     "date",
     "month",
@@ -183,6 +194,20 @@ def plain(number: Decimal) -> str:
     decimal mark. ``0.0420`` and ``0.042`` print alike, so a diff compares the
     value, not how it was typed."""
     return format(number.normalize(), "f")
+
+
+_DOT_DECIMAL: Final = re.compile(r"^\d+(\.\d+)?$")
+
+
+def _dot_decimal(value: CellValue) -> str | None:
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return str(Decimal(str(value)))
+    text = _text(value)
+    if text is None:
+        return None
+    if not _DOT_DECIMAL.match(text):
+        raise CellError("không phải số dạng 1234.5 (dấu chấm thập phân, không phân cách nghìn)")
+    return text
 
 
 def _int(value: CellValue) -> int | None:
@@ -305,6 +330,9 @@ class Column:
     # A choice cell may name several values ("Vietnamese/English"); the first
     # one named is read, the order Sales wrote them in.
     first_of_several: bool = False
+    # The block of columns it is under, where an export titles two alike
+    # (`bravo_exports.find_header`; B07's "LME" in two blocks).
+    block: str | None = None
 
     @property
     def keys(self) -> frozenset[str]:
@@ -324,6 +352,8 @@ class Column:
             case "decimal":
                 number = read_decimal(value)
                 return None if number is None else str(number)
+            case "dot_decimal":
+                return _dot_decimal(value)
             case "pack":
                 return _pack(value)
             case "domains":
@@ -372,7 +402,7 @@ class Column:
         if self.kind == "month":
             year, month = str(value).split("-")
             return f"{month}/{year}"
-        if self.kind in ("decimal", "pack"):
+        if self.kind in ("decimal", "dot_decimal", "pack"):
             return plain(Decimal(str(value)))
         return str(value)
 
@@ -541,6 +571,9 @@ _YES_NO_HINT = "Có / Không"
 _LANGUAGES: Final = {"vi": "Tiếng Việt", "en": "Tiếng Anh", "ja": "Tiếng Nhật"}
 _STATUSES: Final = {"official": "Chính thức", "temporary": "Tạm thời"}
 _CHANNELS: Final = {"email": "Email", "portal": "Cổng khách hàng"}
+# Bravo's label of its approved state on the convert list (B04). Any other
+# group label is a state before it: the row waits (ticket 04).
+_APPROVED_GROUP: Final = header_key("3. Đã duyệt")
 _GROUPS: Final = {"direct": "Trực tiếp", "temporary": "Khách tạm", "indirect": "Gián tiếp"}
 _FAMILIES: Final = {"hook_up_wire": "Dây đơn", "multi_core_cable": "Cáp nhiều lõi"}
 _STRANDING: Final = {"single": "Lõi đơn", "stranded": "Lõi xoắn"}
@@ -1018,8 +1051,269 @@ _LME = ListSpec(
     ),
 )
 
+_BASE_PRICES = ListSpec(
+    list=CatalogList.BASE_PRICES,
+    label="Base price",
+    model=BasePrice,
+    key=lambda r: str(r.get("bp_code") or ""),
+    columns=(
+        Column("bp_code", "Mã BP", "text", "BP + 6 chữ số, như Bravo", aliases=("BP Code",)),
+        Column("bp_date", "Ngày BP", "date", "dd/mm/yyyy", aliases=("BP Date",)),
+        Column(
+            "description",
+            "Mô tả ngắn",
+            "text",
+            "Mô tả ngắn của mã hàng",
+            aliases=("Short item description",),
+        ),
+        Column("bp_unit", "Đơn vị BP", "text", "Ví dụ km", aliases=("BP Unit",)),
+        Column(
+            "convert_rate",
+            "Hệ số quy đổi",
+            "decimal",
+            "Số đơn vị chuẩn trong một đơn vị BP (1000 m trong 1 km)",
+            aliases=("Convert rate",),
+        ),
+        Column(
+            "std_unit", "Đơn vị chuẩn", "text", "Ví dụ m", required=False, aliases=("STD Unit",)
+        ),
+        Column(
+            "specification",
+            "Spec",
+            "text",
+            "Số bản vẽ hoặc spec",
+            required=False,
+            aliases=("Specification",),
+        ),
+        Column("category", "Nhóm", "text", "HK, CB, CA…", required=False, aliases=("Category",)),
+        Column(
+            "copper_kg",
+            "Cu (kg/đơn vị BP)",
+            "decimal",
+            "Khối lượng đồng trên một đơn vị BP",
+            required=False,
+            aliases=("CU WT: KG/{BP Unit}", "CU WT"),
+        ),
+        Column(
+            "base_price",
+            "Base price (USD/đơn vị BP)",
+            "decimal",
+            "Giá cơ bản, USD trên một đơn vị BP",
+            aliases=("Base price: USD/{BP Unit}", "Base price"),
+        ),
+        Column(
+            "lead_time_weeks",
+            "Lead time (tuần)",
+            "int",
+            "Số tuần",
+            required=False,
+            aliases=("Lead time (Wk)",),
+        ),
+        Column("moq", "MOQ", "decimal", "Số lượng tối thiểu", required=False),
+        Column(
+            "lme_of_bp",
+            "LME của BP",
+            "decimal",
+            "Thường 7750",
+            required=False,
+            aliases=("LME of BP",),
+        ),
+        Column(
+            "mr_percent",
+            "%MR của BP",
+            "decimal",
+            "Phần trăm",
+            required=False,
+            aliases=("%MR of BP",),
+        ),
+        Column(
+            "material_cost",
+            "Chi phí vật liệu (USD/km)",
+            "decimal",
+            "Nội bộ",
+            required=False,
+            aliases=("Material cost (USD/Km)",),
+        ),
+        Column(
+            "variable_cost",
+            "Chi phí biến đổi",
+            "decimal",
+            "Nội bộ",
+            required=False,
+            aliases=("Variable cost",),
+        ),
+        Column(
+            "fixed_cost",
+            "Chi phí cố định",
+            "decimal",
+            "Nội bộ",
+            required=False,
+            aliases=("Fix cost",),
+        ),
+    ),
+)
+
+_BRAVO_QUOTATIONS = ListSpec(
+    list=CatalogList.BRAVO_QUOTATIONS,
+    label="Master list báo giá (Bravo)",
+    model=BravoQuotation,
+    key=lambda r: str(r.get("row_id") or ""),
+    columns=(
+        Column(
+            "row_id",
+            "Mã dòng Bravo",
+            "text",
+            "RowIdSQ của Bravo",
+            aliases=("RowIdSQ",),
+            # Bravo titles it on the block row only (B07).
+            block="RowIdSQ",
+        ),
+        Column("quote_no", "Số báo giá", "text", "QN-…, QM-…", aliases=("Quote No.",)),
+        Column("line_no", "Stt", "int", "Dòng của báo giá", required=False),
+        Column("quotation_date", "Ngày báo giá", "date", "dd/mm/yyyy", aliases=("Quotation Date",)),
+        Column(
+            "valid_date",
+            "Hiệu lực đến",
+            "date",
+            "dd/mm/yyyy",
+            required=False,
+            aliases=("Valid date",),
+        ),
+        Column(
+            "quote_class",
+            "Loại",
+            "text",
+            "Update / New",
+            required=False,
+            aliases=("Class (Update/New)",),
+        ),
+        Column(
+            "delivery_term",
+            "Điều kiện giao",
+            "text",
+            "FCA, DAP…",
+            required=False,
+            aliases=("Delivery term",),
+        ),
+        Column(
+            "delivery_mode",
+            "Phương thức giao",
+            "text",
+            "ROAD, AIR…",
+            required=False,
+            aliases=("Delivery mode",),
+        ),
+        Column("destination", "Nơi giao", "text", "", required=False, aliases=("Destination",)),
+        Column(
+            "direct_customer_code",
+            "Mã khách trực tiếp",
+            "text",
+            "FG…, TDC…",
+            aliases=("Direct customer code",),
+        ),
+        Column(
+            "group_customer",
+            "Nhóm khách",
+            "text",
+            "PRV, PRAP…",
+            required=False,
+            aliases=("Group customer",),
+        ),
+        Column(
+            "indirect_customer_code",
+            "Mã khách gián tiếp",
+            "text",
+            "",
+            required=False,
+            aliases=("Indirect customer code",),
+        ),
+        Column(
+            "customer_description",
+            "Mô tả của khách",
+            "text",
+            "",
+            required=False,
+            aliases=("Customer description",),
+        ),
+        Column(
+            "bp_code",
+            "Mã BP lúc báo giá",
+            "text",
+            "",
+            required=False,
+            aliases=("BP Code",),
+            block="Base price(tại thời điểm báo giá)",
+        ),
+        Column(
+            "moq",
+            "MOQ báo giá",
+            "dot_decimal",
+            "",
+            required=False,
+            aliases=("MOQ",),
+            block="QUOTATION",
+        ),
+        Column("unit", "Đơn vị", "text", "km, m, Pcs", required=False, aliases=("Unit",)),
+        Column(
+            "copper_kg",
+            "Cu trong báo giá",
+            "decimal",
+            "",
+            required=False,
+            aliases=("Cu weight in Quotation",),
+        ),
+        Column(
+            "center_price",
+            "Giá center",
+            "decimal",
+            "Giá ở LME center",
+            required=False,
+            aliases=("Center price",),
+        ),
+        Column(
+            "lme",
+            "LME báo giá",
+            "decimal",
+            "",
+            required=False,
+            aliases=("LME",),
+            block="QUOTATION",
+        ),
+        Column(
+            "currency", "Tiền tệ", "text", "USD, VND, JPY", required=False, aliases=("Currency",)
+        ),
+        Column(
+            "usd_rate",
+            "Tỷ giá USD",
+            "decimal",
+            "",
+            required=False,
+            aliases=("USD Exchange rate",),
+        ),
+        Column(
+            "change",
+            "Mới/Sửa/Huỷ",
+            "text",
+            "",
+            required=False,
+            aliases=("New/ Revise/ Cancel",),
+        ),
+    ),
+)
+
 SPECS: Final[Mapping[CatalogList, ListSpec]] = MappingProxyType(
-    {spec.list: spec for spec in (_CUSTOMERS, _ITEMS, _CONVERT, _QUOTATIONS, _LME)}
+    {
+        spec.list: spec
+        for spec in (
+            _CUSTOMERS,
+            _ITEMS,
+            _CONVERT,
+            _QUOTATIONS,
+            _LME,
+            _BASE_PRICES,
+            _BRAVO_QUOTATIONS,
+        )
+    }
 )
 
 
@@ -1145,7 +1439,9 @@ def _record(
         record = spec.model.model_validate(spec.shape(flat))
     except ValidationError as exc:
         return _refusal(spec, row.row, exc.errors()[0])
-    assert isinstance(record, Customer | Item | ConvertEntry | Quotation | LmeMonth)
+    assert isinstance(
+        record, Customer | Item | ConvertEntry | Quotation | LmeMonth | BasePrice | BravoQuotation
+    )
     return record
 
 
@@ -1178,6 +1474,8 @@ def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
         if isinstance(read, RejectedRow):
             rejected.append(read)
             continue
+        if catalog_list is CatalogList.CONVERT_LIST and table.groups:
+            read = _in_state(read, table.group_of(row.row))
         key = record_key(catalog_list, read)
         if key in seen:
             rejected.append(
@@ -1196,6 +1494,14 @@ def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
         rejected=tuple(sorted([*rejected, *refused], key=lambda r: r.row)),
         unknown_headers=header.extra,
     )
+
+
+def _in_state(record: CatalogRecord, group: str | None) -> CatalogRecord:
+    """A Bravo convert row in the state its group says: approved only under
+    Bravo's "3. Đã duyệt"; under any other label, or none, it waits."""
+    approved = group is not None and header_key(group).startswith(_APPROVED_GROUP)
+    assert isinstance(record, ConvertEntry)
+    return record.model_copy(update={"bravo_state": "approved" if approved else "waiting"})
 
 
 def _unshared(records: Sequence[ParsedRecord], notes: list[RejectedRow]) -> list[ParsedRecord]:
@@ -1352,6 +1658,9 @@ def records_of(
     records: list[CatalogRecord] = []
     for document in documents:
         record = model.model_validate(document)
-        assert isinstance(record, Customer | Item | ConvertEntry | Quotation | LmeMonth)
+        assert isinstance(
+            record,
+            Customer | Item | ConvertEntry | Quotation | LmeMonth | BasePrice | BravoQuotation,
+        )
         records.append(record)
     return tuple(records)
