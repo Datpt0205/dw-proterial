@@ -51,6 +51,22 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **2026-11-16, knowledge ingest has no document parser on premises**
+  (found answering Đạt on RAG). `dw_worker.composition.build_parser` adds
+  `GatewayFileParser` (pdf/docx/xlsx/pptx and images sent to a cloud model's
+  `input_file`/`input_image`) only with `openai_base_url` + key; the plant has
+  neither, so only plaintext/markdown ingests and every other upload fails "no
+  parser supports" (the error is visible, not silent). DW1's PO reading is not
+  affected (its own `reader` sandbox, Tesseract for scans). Also:
+  `structure_aware_chunks` cuts by characters (1200, overlap 150) with no table
+  rule, so a long table loses its header row mid-way. Proposed, not built
+  (Đạt to decide when, and which Proterial documents go in): parse in the
+  `reader` sandbox (text layer, docx, xlsx to markdown keeping headings and
+  tables; scans rendered per page and transcribed by Qwen3.8's vision through
+  Strata, a low-priority background lane since it shares the GPU), table-aware
+  chunks (a table whole, or row groups repeating the header), the section path
+  carried into what is embedded, then `retrieval_eval.py` on real documents.
+  bge-m3 on CPU in the VM (Strata serves no embeddings).
 - **2026-10-25, sign-in accounts an Org Admin creates** (Đạt; spec
   `platform-runtime/member-sign-in-accounts/spec.md`): "Thêm người" on the
   members screen makes the person, the role and a Keycloak account with a
