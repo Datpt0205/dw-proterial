@@ -109,6 +109,23 @@ def test_the_onprem_profile_stays_on_the_server_with_thinking_off() -> None:
     assert (profile.embedding.provider, profile.embedding.dimensions) == (Provider.ONPREM, 1024)
 
 
+def test_the_onprem_thinking_profile_differs_only_in_its_chat_routes_thinking() -> None:
+    """dw_sales ticket 40: the profile a reasoning turn runs on is the same
+    server, model, budgets and every route but chat's thinking, so nothing
+    leaves the plant and no other step changes."""
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(REPO_ROOT / "configs" / "models")
+    base = profiles.resolve("onprem")
+    assert base.thinking_profile is not None
+    thinking = profiles.resolve(base.thinking_profile)
+    assert thinking.thinking_profile is None and thinking.fallback is None
+    assert base.chat is not None and thinking.chat is not None
+    assert thinking.chat.reasoning_effort not in (None, "none")
+    assert thinking.chat.model_copy(update={"reasoning_effort": "none"}) == base.chat
+    for route in ("structured_extraction", "reasoning", "embedding", "budgets"):
+        assert getattr(thinking, route) == getattr(base, route), route
+
+
 def test_a_deployed_process_with_only_the_onprem_server_builds() -> None:
     """An on-premises deployment has no gateway and no key for one: its own
     server is the real provider a deployed profile requires."""

@@ -121,3 +121,12 @@ those steps off.
   per call mostly 0.9–2.4 s; descriptions 7.2 s (p95 9.1). Acceptance 1
   still owed: the attested run once DW runs on the plant, after the misses
   are worked or the steps left off.
+- **2026-11-16 evening, the plant's Strata again (RTX PRO 4000, Q2_0, one
+  slot, over Tailscale from the laptop), measured, not attested:** the two
+  notation cases that failed in the afternoon now pass after `01bd501c`
+  (ticket 37's graders tell a record's effect from the live model's
+  variance). `sales_handoff@1.0.0` 7/7 (`sales-handoff-notation-records`
+  passes; golden right 0.877, wrong 0, invented 0) and `sales_rfq@1.0.0`
+  10/10 (`sales-rfq-notation-records` passes; golden right_field 0.85, wrong
+  0). Same day, `skill_intents` before any change: bar set 0.700 (the
+  afternoon's 0.717), false accepts RP16 and RP17 (ticket 40 continues).

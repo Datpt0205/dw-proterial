@@ -43,6 +43,7 @@ nothing of this runs.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -64,7 +65,7 @@ from dw_sales.application.model_calls import record_model_call
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import reading_context
 from dw_sales.application.skill_pick import SkillPicker
-from dw_sales.application.thread_tools import ThreadContextPort, bound_to
+from dw_sales.application.thread_tools import ThreadBinding, ThreadContextPort, bound_to
 from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.activity import ModelCall
 from dw_sales.domain.reply_intent import (
@@ -89,11 +90,18 @@ CEILING: Final = TurnCeiling(max_model_calls=4, max_input_tokens=16_000, max_sec
 # and the prompt, the tools' descriptions and what they return share it.
 BODY_TOKENS: Final = 2500
 # DW1's agent with skills (ticket 40): its prompt (`configs/prompts/sales/
-# dw1_agent@1.1.0.yaml`, the picked skill's words in it), and its ceiling,
+# dw1_agent@1.2.0.yaml`, the picked skill's words in it, and since 1.2.0 the
+# thread's cases and last earlier messages, `_up_front`), and its ceiling,
 # unchanged since 1.0.0: one call more than the thread agent's, and the
 # tokens for DW1's conduct and the skill's instructions, which every call of
 # the turn carries: about 1,700 tokens for the first skill. 120 seconds.
-DW1_AGENT: Final = PromptRef("sales.dw1_agent", "1.1.0")
+DW1_AGENT: Final = PromptRef("sales.dw1_agent", "1.2.0")
+# What the turn is given up front (ticket 40, way 5): the binding's cases,
+# and its last earlier messages, each cut, so the snapshot and the history
+# cost tokens once instead of a tool round each.
+EARLIER_SHOWN: Final = 3
+EARLIER_TOKENS: Final = 300
+CASES_TOKENS: Final = 1500
 SKILL_CEILING: Final = TurnCeiling(max_model_calls=5, max_input_tokens=24_000, max_seconds=120.0)
 
 
@@ -113,6 +121,21 @@ class TurnSkillChoice:
     book: SkillSetPort
     picker: SkillPicker
     agent: str
+
+
+def _up_front(binding: ThreadBinding) -> dict[str, str]:
+    """What the case snapshot and thread messages tools would answer, from
+    the binding code built: the thread's cases, and its last earlier
+    messages oldest first, each message's text cut (`EARLIER_TOKENS`)."""
+    earlier = [
+        message.model_copy(update={"text": cut_to_tokens(message.text, EARLIER_TOKENS)})
+        for message in binding.earlier[-EARLIER_SHOWN:]
+    ]
+    cases = json.dumps([c.model_dump(mode="json") for c in binding.cases], ensure_ascii=False)
+    return {
+        "cases": cut_to_tokens(cases, CASES_TOKENS),
+        "earlier": json.dumps([m.model_dump(mode="json") for m in earlier], ensure_ascii=False),
+    }
 
 
 @dataclass(frozen=True)
@@ -163,7 +186,12 @@ class ThreadAgent:
             picked = await self.skills.picker.pick(held, inputs, floor=pick_floor, run=run)
             if picked.skill is None:
                 return None
-            inputs = {**inputs, "agent": self.skills.agent, "skill": picked.skill.body}
+            inputs = {
+                **inputs,
+                "agent": self.skills.agent,
+                "skill": picked.skill.body,
+                **_up_front(binding),
+            }
             used = (picked.skill.ref,)
         started = time.perf_counter()
         answered = False

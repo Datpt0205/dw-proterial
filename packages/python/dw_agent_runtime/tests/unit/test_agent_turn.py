@@ -44,6 +44,8 @@ COPY = load_runtime_copy(
     Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.7.0.yaml"
 )
 PROFILE = "turn_test"
+# The profile a turn that reasons runs on (`ModelProfile.thinking_profile`).
+THINKING = "turn_test_thinking"
 PROMPT = PromptRef("turn_test.read", "1.0.0")
 TOOL = "turn_test.lookup"
 CEILING = TurnCeiling(max_model_calls=3, max_input_tokens=100_000, max_seconds=5)
@@ -67,22 +69,27 @@ async def _lookup(payload: BaseModel, run: RunContext) -> LookupOutput:
     return LookupOutput(found=cast(LookupInput, payload).number == "PO-1")
 
 
-def _profiles(run_tokens: int = 1_000_000) -> ModelProfileRegistry:
+def _profiles(run_tokens: int = 1_000_000, thinking: str | None = None) -> ModelProfileRegistry:
     profiles = ModelProfileRegistry()
     route = {"provider": "mock", "model": "mock-1"}
-    profiles.register(
-        ModelProfile.model_validate(
-            {
-                "schema_version": "1.0",
-                "profile_id": PROFILE,
-                "routing_policy_version": "1.0.0",
-                "structured_extraction": route,
-                "reasoning": route,
-                "chat": route,
-                "budgets": {"max_input_tokens_per_run": run_tokens, "max_cost_usd_per_run": 1.0},
-            }
+    for profile_id, points_to in ((PROFILE, thinking), (THINKING, None)):
+        profiles.register(
+            ModelProfile.model_validate(
+                {
+                    "schema_version": "1.0",
+                    "profile_id": profile_id,
+                    "routing_policy_version": "1.0.0",
+                    "structured_extraction": route,
+                    "reasoning": route,
+                    "chat": route | ({"reasoning_effort": "low"} if profile_id == THINKING else {}),
+                    "thinking_profile": points_to,
+                    "budgets": {
+                        "max_input_tokens_per_run": run_tokens,
+                        "max_cost_usd_per_run": 1.0,
+                    },
+                }
+            )
         )
-    )
     return profiles
 
 
@@ -102,17 +109,24 @@ def _prompts() -> PromptRegistry:
 
 
 class _Models:
-    """A chat model factory handing out one given model."""
+    """A chat model factory handing out one given model, noting each profile
+    it was asked for."""
 
     def __init__(self, model: MockChatModel) -> None:
         self.model = model
+        self.asked: list[str] = []
 
     def resolve(self, profile_id: str) -> MockChatModel:
+        self.asked.append(profile_id)
         return self.model
 
 
 def _kit(
-    model: MockChatModel, *, store: FakeExecutionStore | None = None, run_tokens: int = 1_000_000
+    model: MockChatModel,
+    *,
+    store: FakeExecutionStore | None = None,
+    run_tokens: int = 1_000_000,
+    thinking: str | None = None,
 ) -> tuple[AgentTurnKit, FakeUoWFactory]:
     uow = FakeUoWFactory()
     tools = ToolRegistry()
@@ -169,7 +183,7 @@ def _kit(
         prompts=_prompts(),
         copy=COPY,
         budget=RunBudgetLedger(),
-        profiles=_profiles(run_tokens),
+        profiles=_profiles(run_tokens, thinking),
     )
     kit.register(
         RegisteredTool(
@@ -328,3 +342,30 @@ async def test_a_turn_inside_a_graph_node_writes_nothing_into_the_host_runs_chec
     )
     namespaces = set(saver.storage["host"])
     assert namespaces == {""}
+
+
+# ------------------------------------------------------------ thinking --
+
+
+async def test_a_turn_that_reasons_runs_on_its_profiles_thinking_profile() -> None:
+    """dw_sales ticket 40: thinking on for one step alone. The turn asks for
+    it; the profile names where it runs (`thinking_profile`), and the turn
+    says which profile it ran on, so the reading stamps the true one."""
+    model = _model(AIMessage(content='{"kind": "x"}'))
+    kit, _ = _kit(model, thinking=THINKING)
+    models = cast(_Models, kit.chat_models)
+
+    plain = kit.turn(_worker(), PROMPT, CEILING)
+    reasoning = kit.turn(_worker(), PROMPT, CEILING, thinking=True)
+
+    assert models.asked == [PROFILE, THINKING]
+    assert (plain.model_profile, reasoning.model_profile) == (PROFILE, THINKING)
+
+
+async def test_a_profile_naming_no_thinking_profile_runs_the_turn_on_itself() -> None:
+    model = _model(AIMessage(content='{"kind": "x"}'))
+    kit, _ = _kit(model)
+
+    turn = kit.turn(_worker(), PROMPT, CEILING, thinking=True)
+
+    assert turn.model_profile == PROFILE

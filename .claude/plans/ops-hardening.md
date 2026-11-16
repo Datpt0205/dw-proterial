@@ -375,6 +375,15 @@ context. All five are done and on `main`. The full narrative is at
           `node:22-alpine`), 20 of 20, 17.5 GB; run as a transient systemd
           unit (`dw-prepull`), since an SSH-held run was cut once. VM disk:
           364 GB free.
+          **Proposed to Đạt (11-16), not done:** (a) at deploy, the stateful
+          services' data in fixed directories under `/srv/dw/data` (bind
+          mounts) instead of named volumes, so a mistyped `docker compose
+          down -v` cannot delete them (only FPT's key reaches the VM;
+          backups stay the last net); (b) hide Sign out for `dwmail` (per-user
+          `NoLogoff`) and have the watchdog alert when its session or OneDrive
+          is gone (mail waits in the Team meanwhile); (c) few Windows admins,
+          FPT on its own account: only an admin can Turn Off the VM, which
+          equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
           crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
           running first. Tailscale key expiry is off (checked from the laptop).

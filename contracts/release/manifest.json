@@ -78,6 +78,11 @@
       "version": "1.5.0"
     },
     {
+      "checksum": "c4af6a49c727d495e3d8bd09339dedd0c3381f7ac4bb67aa3632a54f98faf2a1",
+      "copy_id": "sales_emails",
+      "version": "1.6.0"
+    },
+    {
       "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
       "copy_id": "sales_handoffs",
       "version": "1.0.0"
@@ -91,6 +96,11 @@
       "checksum": "991b7aa76a8dabe0d6f9dff1b7042d8659eb95499d4969f10b024f9aeaf48a7d",
       "copy_id": "sales_handoffs",
       "version": "1.2.0"
+    },
+    {
+      "checksum": "540a20a9572ac152e5d3d48e1e341e1c410dc25d988e11ce47583b70fe7b5fd8",
+      "copy_id": "sales_reminders",
+      "version": "1.0.0"
     }
   ],
   "eval_datasets": [
@@ -1014,7 +1024,7 @@
           "path": "evals/expected/sales_skill_intents.json"
         },
         {
-          "checksum": "db08bf285e3ef79999562776be8b940d2164cd2c5bc1486dc77cefa2c0d1dda7",
+          "checksum": "c8561213d01d5f696941879912255bc3bbc8761d205462f1f8a9a9e4db61e2cf",
           "path": "evals/expected/sales_skill_intents_golden.json"
         },
         {
@@ -1114,7 +1124,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "01bd501ccc284816c36fcaa591404157d7e9b9bb",
+  "git_sha": "07bc2f6759eb85456c989c3532e6b273eae7d4a6",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1144,9 +1154,14 @@
       "routing_policy_version": "1.0.0"
     },
     {
-      "checksum": "468c03bd950ddfad02761bedd0e1da425586578ea5dda0cf36a1469e15c7b16d",
+      "checksum": "d3dc7e695bc847c2b7c81c674812d0f4b8a6a23d0ede5e9e486c259b17900f79",
       "profile_id": "onprem",
-      "routing_policy_version": "1.4.0"
+      "routing_policy_version": "1.5.0"
+    },
+    {
+      "checksum": "aa50c2511c4a7e603ca120664be8f522af74b3d107421048a03030c0876d3755",
+      "profile_id": "onprem_thinking",
+      "routing_policy_version": "1.0.0"
     },
     {
       "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",
@@ -1295,6 +1310,11 @@
       "checksum": "67cc087776e7edab47cd4878b00f9df4ab8289f90adf254687b6a5fe9307812b",
       "policy_id": "sales_followups",
       "version": "1.5.0"
+    },
+    {
+      "checksum": "46def0eae682ddd724f6e2fe794bfba609a635716bd0fb88a01dced9dae6fef6",
+      "policy_id": "sales_followups",
+      "version": "1.6.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
@@ -1522,6 +1542,11 @@
       "checksum": "217a63be306d01adb3a1059092bee5544d01de52e90259bc448c47cfcfd616b4",
       "prompt_id": "sales.dw1_agent",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "ed5c8efd1eea254a70ebf33e2a5cd2eb34416036fb6e26cd2b66a71b91b26289",
+      "prompt_id": "sales.dw1_agent",
+      "version": "1.2.0"
     },
     {
       "checksum": "70b956d776f29d398e0f79a298ca4655b3c94cebc26571f6466259cfede0d621",

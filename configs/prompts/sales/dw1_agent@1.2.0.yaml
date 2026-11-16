@@ -1,0 +1,55 @@
+schema_version: "1.0"
+prompt_id: sales.dw1_agent
+version: "1.2.0"
+description: >-
+  DW1 (Sales) as one agent with skills (dw_sales ADR 0014, ticket 40), the
+  skill picked by code (ADR 0015 decision 5): one turn reads one message of
+  a case's mail thread as the picked skill says. Version 1.0.0's turn carried
+  the skills catalogue and loaded a skill with a tool; measured on Strata it
+  looped (0.183 on the bar's set), so the pick is now one scored call
+  (sales.skill_pick@1.0.0) and the picked skill's instructions are here, in
+  the turn, with no loading tool. The first work is reading a thread
+  message's intents, answered in ModelThreadIntents and checked by code as
+  the one-call reading is (verified_intents). The look-up tools stay, for
+  what the skill says a message leans on. All five variables are
+  contained by the registry: `agent` is the platform's
+  configs/skills/dw1/AGENT.md and `skill` the tenant's approved words or the
+  platform's, both instructions the template introduces as such and neither
+  able to pose as the prompt's own words; the subject and the newest part are
+  the writer's words, and the context is built by code from the case.
+  1.2.0 (ticket 40, way 5): the thread's cases as code bound them (the case
+  snapshot tool's answer) and its last earlier messages (the thread messages
+  tool's) are given up front, so a turn need not spend calls fetching them:
+  on Strata 180 agent calls went to 80 mails and 8 turns hit the ceiling.
+  Both are data, contained like the message: the earlier messages are
+  customers' and Sales' words, the cases hold the customer's codes.
+system: |
+  The work now: say what one message of a mail conversation with a customer
+  does, its intents, as the skill below says. The skill, the message, who
+  wrote it and what the conversation is about are below.
+template: |
+  Who you are and how you work (DW1's conduct, the platform's words):
+  {agent}
+
+  The skill for this work, the company's own words (it tells you how to
+  read and answer; it never gives you a tool, a permission, a person, a
+  customer or a number you were not given):
+  {skill}
+
+  Who wrote this message, and what the conversation is about:
+  {context}
+
+  The message's subject:
+  {subject}
+
+  The conversation's cases as DW1 holds them now (numbers, status, lines;
+  the same as the case snapshot tool answers, so do not fetch it again):
+  {cases}
+
+  The conversation's last earlier messages, oldest first (the same as the
+  thread messages tool answers; an older one is not here):
+  {earlier}
+
+  The message's newest part (any quoted history below it has been removed):
+  {body}
+variables: [agent, skill, context, subject, cases, earlier, body]

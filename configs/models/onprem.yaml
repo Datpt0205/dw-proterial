@@ -1,6 +1,6 @@
 schema_version: "1.0"
 profile_id: onprem
-routing_policy_version: "1.4.0"
+routing_policy_version: "1.5.0"
 # A model server the deployment runs itself, for a step whose input must not
 # leave it: DW1 reading a customer's item description (dw_sales ADR 0005).
 # Reached as provider `onprem`, at DW_ONPREM_MODEL_BASE_URL (any server
@@ -51,6 +51,13 @@ routing_policy_version: "1.4.0"
 #
 # Unpriced: the server is the deployment's own, so a run is bounded by the
 # token ceiling below, not by cost.
+# 1.5.0: an agent turn that must reason runs on `onprem_thinking`, this
+# profile with thinking on for the chat route alone (dw_sales ticket 40).
+# Measured 2026-11-16 on the plant's Strata, `skill_intents` bar set: 0.700
+# thinking off, 0.883 on, no false accept, fewer tool calls and no turn at
+# its ceiling. Only a turn that asks for it (`AgentTurnKit.turn(thinking=
+# True)`) runs there; every other step keeps thinking off, as above.
+thinking_profile: onprem_thinking
 structured_extraction:
   provider: onprem
   model: qwen3.8-flash-next-q2_0

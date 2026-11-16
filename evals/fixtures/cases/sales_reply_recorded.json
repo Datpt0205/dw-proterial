@@ -15,7 +15,7 @@
       "intents": [
         {
           "quote_spans": [
-            "Thank you for your email. I am out of the office until 19 October 2026 with limited access to email.",
+            "I am out of the office until 19 October 2026 with limited access to email.",
             "For urgent matters, please contact procurement@quorilo.example."
           ],
           "intent": "unclear"

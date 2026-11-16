@@ -180,3 +180,59 @@ Under dw_sales ADR 0015 decision 5 (the skill is picked by one scored call).
   measured live on the plant's Strata over Tailscale (ticket 01's comment has
   how), the bar 0.85 and no false accept. RP16/RP17 stay false accepts until
   then; the step stays off.
+
+## Ways 3 and 5 measured (2026-11-16 evening, the plant's Strata, one slot)
+
+Live from the laptop over Tailscale, `sales_skill_intents@1.0.0`, each run
+changing one thing. Measured, not attested.
+
+| Run | Thinking (chat route) | Cases + earlier mail up front (way 5) | Bar set | False accepts | Tool calls | Turns at the ceiling | p50 / p95 s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R0 | off | no (`dw1_agent@1.1.0`) | 0.700 | RP16, RP17 | 113 | 8 | 4.09 / 8.81 |
+| R1 | low | no | 0.883 | none | 4 | 0 | 3.31 / 4.50 |
+| R2 | off | yes (`dw1_agent@1.2.0`) | 0.800 | RP16 | 67 | 3 | 2.96 / 8.74 |
+| R3 | low | yes | 0.850 | none | 1 | 0 | 3.72 / 11.13 |
+| R1b | low | no (repeat) | 0.867 | none | | | 3.22 / 5.09 |
+| R3b | low | yes (repeat) | 0.867 | none | | | 3.17 / 4.66 |
+
+All languages with thinking (R1): 0.900 (vi 0.962, en 0.886, ja 0.842),
+nothing unavailable. What is left missed with thinking is not the rule 2-4
+pattern any more (RP11/RP12 cancels vs rejects, RP40 accepts+asks, RP52,
+RP59, RP60, W03). Run to run the same setting moves by about 0.02 (R0 0.700
+here against 0.717 in the afternoon), so R1 and R3 are level.
+
+**Kept: thinking on for this step alone, and the cases and earlier messages
+up front.** With thinking the agent stops calling tools (the withheld set's
+"called the tool it needed" falls from 0.889 to 0.06-0.22), so the context
+a message leans on has to be in the turn already: way 5 is what keeps that
+right, and alone it moves 0.700 to 0.800 with RP17 gone.
+
+Built:
+
+- `ModelProfile.thinking_profile` and `AgentTurnKit.turn(thinking=True)`
+  (`dw_agent_runtime`): the turn runs on the profile the default one names,
+  and says which, so the reading stamps the true profile. `onprem` 1.5.0
+  names `onprem_thinking` (same server, model, budgets and routes; chat's
+  `reasoning_effort: low`); a config test holds the two to that.
+- `dw1_agent@1.2.0`: the binding's cases (the snapshot tool's answer, cut
+  to 1,500 tokens) and its last three earlier messages (300 tokens each)
+  as two more contained inputs (`thread_agent._up_front`); tested at the
+  turn, mutation-checked.
+
+Owed before the step can be measured on as built, then switched:
+
+- One line in `adapters/assembly.py` (`skill_agent`: `kit.turn(...,
+  thinking=True)`), held while the parallel session commits that file.
+- The eval harness gives the turn kit the live chat model of one profile
+  (`GivenChatModel`); with `thinking=True` it must resolve per profile, or a
+  run on `--live onprem` would stamp `onprem_thinking` and measure thinking
+  off. The measurements above ran the whole set on `--live onprem_thinking`,
+  which is the same thing for this step (its pick and one-call reading are
+  on the structured route, thinking off on both profiles).
+- **Way 4 has no source yet:** no step labels a person's correction of a
+  reply's intents (ticket 43's labelled cases cover the description reading
+  only), so there is nothing to show as an example. It needs a labelled case
+  for `skill_intents` first: where Sales takes another step than the one
+  proposed, or corrects the intents on the reply. Not built here.
+- The step stays off until Đạt switches it, after the wiring above is
+  measured once more as built.
