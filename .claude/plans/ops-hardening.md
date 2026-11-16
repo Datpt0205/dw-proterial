@@ -126,6 +126,13 @@ context. All five are done and on `main`. The full narrative is at
         Update; a supported PCIe NIC (I210/X550 class) is the clean fix.
         "Run with PowerShell" runs unelevated and closes on the first error:
         the SSH script is run from an Administrator window.
+        Ran there at 10:54: sshd running and automatic, rule `dw-setup-ssh`
+        on; no IPv4 address, so not reachable yet. Host name
+        `WIN-3JN0TH0NE0H`, Server 2025 Standard build 26100, English. Disks:
+        **one SSD and one 4 TB HDD** (not the two SSDs first assumed), so no
+        RAID: SSD for Windows and the DW VM, HDD for backups only (nightly
+        dump, continuous WAL, weekly VM export). Display on Microsoft Basic
+        Display Adapter (code 10): no GPU driver yet.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
