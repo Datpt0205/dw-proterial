@@ -223,7 +223,8 @@ def _region(anchor: SourceAnchor) -> SourceRegion | None:
 
 def _order_anchors(document: PoDocument) -> list[LabelledAnchor]:
     anchors = [
-        LabelledAnchor(field=name, anchor=anchor) for name, anchor in document.header.anchors
+        LabelledAnchor(field=name, anchor=anchor)
+        for name, anchor in document.header.anchors.stated()
     ]
     for line in document.lines:
         anchors += [
@@ -324,7 +325,9 @@ def required_regions(case: OrderCase) -> frozenset[SourceRegion]:
     document = case.document
     anchors: list[SourceAnchor] = [document.header.anchors.po_no]
     flagged_header = {flag.field for flag in document.header.flags}
-    anchors += [anchor for name, anchor in document.header.anchors if name in flagged_header]
+    anchors += [
+        anchor for name, anchor in document.header.anchors.stated() if name in flagged_header
+    ]
     lines = {line.line_no: line for line in document.lines}
     for line in document.lines:
         flagged = {flag.field for flag in line.flags}
@@ -341,7 +344,7 @@ def required_regions(case: OrderCase) -> frozenset[SourceRegion]:
         elif finding.code.value == "line_total_mismatch" and document.total is not None:
             anchors.append(document.total.anchor)
         else:
-            anchors += [anchor for _, anchor in document.header.anchors]
+            anchors += [anchor for _, anchor in document.header.anchors.stated()]
     for order_line in case.lines:
         if order_line.mapping.hand_entered:
             anchors.append(order_line.po_line.anchors.customer_item_code)

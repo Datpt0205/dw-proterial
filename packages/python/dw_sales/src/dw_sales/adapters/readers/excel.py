@@ -571,9 +571,12 @@ def _header(sheet: _Sheet, layout: ExcelLayout) -> PoHeader:
         cell = sheet.value_beside(label_cell)
         anchor = sheet.anchor(cell)
         try:
-            values[field] = _HEADER_VALUES[field](cell.value)
+            value = _HEADER_VALUES[field](cell.value)
         except ValueError as exc:
             raise _RefusedError(f"{field.replace('_', ' ')} {exc}", anchor) from exc
+        if value is None:  # a value the PO may leave blank: it states none
+            continue
+        values[field] = value
         anchors[field] = anchor
         flags.extend(FlaggedValue(field=field, flag=flag) for flag in sheet.flags(cell))
         legacy.extend(sheet.legacy(field, cell))
@@ -829,6 +832,7 @@ _HEADER_VALUES: Mapping[PoHeaderField, Callable[[object], object]] = {
     "revision": _whole_number,
     "po_date": _day,
     "currency": _currency,
+    "delivery_term": lambda value: _text(value) or None,
 }
 _LINE_VALUES: Mapping[PoLineField, Callable[[object], object]] = {
     "line_no": _whole_number,

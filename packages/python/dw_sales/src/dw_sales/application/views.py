@@ -1148,6 +1148,9 @@ class OrderCaseView(BaseModel):
     name_revision: str | None = None
     po_date: date
     currency: Currency
+    # As the PO prints it, where its layout maps the label (ticket 02): what
+    # `delivery_term_mismatch` compares with the customer's. None: not stated.
+    delivery_term: str | None = None
     # None: the PO was written in the mail (AI item 4); its values' anchors
     # are ranges of the message's text, served by its own route, and
     # ``attachment_sha256`` is that text's digest.
@@ -1570,9 +1573,10 @@ def order_case(
         name_revision=document.name_revision,
         po_date=case.header.po_date,
         currency=case.header.currency,
+        delivery_term=case.header.delivery_term,
         attachment_id=document.attachment_id,
         attachment_sha256=document.attachment_sha256,
-        header_anchors=dict(case.header.anchors),
+        header_anchors=dict(case.header.anchors.stated()),
         header_flags=list(case.header.flags),
         header_corrections=_corrections(case.header_corrections, prices),
         buyer=document.buyer,

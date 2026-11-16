@@ -427,7 +427,7 @@ def service(
 
 # ------------------------------------------------------------ order cases --
 
-_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.13.0.yaml"))
+_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.15.0.yaml"))
 
 
 def intake(cases: OrderCases) -> OrderIntake:

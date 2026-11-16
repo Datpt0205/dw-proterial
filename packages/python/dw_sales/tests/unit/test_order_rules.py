@@ -24,7 +24,7 @@ from dw_sales.application.rules import RuleBookOrderRules
 pytestmark = pytest.mark.unit
 
 SHIPPED = (
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.13.0.yaml")
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.15.0.yaml")
 )
 
 MOCK_POLICIES = DATA_DIR / "policies"
@@ -33,14 +33,14 @@ MOCK_POLICIES = DATA_DIR / "policies"
 def test_the_shipped_policy_loads() -> None:
     rules = load_order_rules(SHIPPED)
 
-    assert rules.version == "sales_order_rules@1.13.0"
+    assert rules.version == "sales_order_rules@1.15.0"
 
 
 def test_a_file_named_for_another_version_is_refused(tmp_path: Path) -> None:
     renamed = tmp_path / "sales_order_rules@1.2.1.yaml"
     shutil.copy(SHIPPED, renamed)
 
-    with pytest.raises(ValueError, match=r"holds sales_order_rules@1\.13\.0"):
+    with pytest.raises(ValueError, match=r"holds sales_order_rules@1.15.0"):
         load_order_rules(renamed)
 
 
@@ -142,7 +142,7 @@ def test_the_platform_confirms_only_a_new_layouts_first_po() -> None:
     repo = Path(__file__).resolve().parents[5]
     rules = load_sales_policies(repo / "configs/policies", repo / "configs/copy").order_rules
     assert (rules.version, rules.layout_onboarding.uncertain_first_pos) == (
-        "sales_order_rules@1.14.0",
+        "sales_order_rules@1.15.0",
         1,
     )
     # No customer agrees by silence until Proterial names their days (ticket 28).

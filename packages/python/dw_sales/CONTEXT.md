@@ -138,6 +138,13 @@ API and the plan use the English terms. The spec is
   files. Which file should win is Proterial's to say (owed). Two files of
   one PO number that print other revisions or other line numbers, or three,
   route the mail to Sales.
+- **Delivery term** (Điều kiện giao hàng): the Incoterms rule a sales order
+  is entered on (DAP, FCA, CIP on the orders seen, one per customer). The
+  upload file writes the customer's, from its record; a PO's own is read only
+  where the customer's layout maps its label, kept as printed ("FCA
+  Haiphong"), and compared by its rule: another one, or a term naming no
+  single rule, raises `delivery_term_mismatch` for Sales to accept or ask
+  about, never written over either side (ticket 02).
 - **File-name revision hint** (Tên tệp gợi ý PO sửa): the suffix a file's
   name carries after the PO number (`R`, `R1`, `-2`, `-RE11`, `RV`), shown
   beside the PO number and the printed revision. Only a hint: the printed
@@ -752,6 +759,7 @@ sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử
 | `legacy_encoding`          | Font tiếng Việt cũ (TCVN3/VNI)       |
 | `requested_date_missing`   | Dòng chưa có ngày yêu cầu            |
 | `files_disagree`           | Hai tệp của cùng PO ghi khác nhau    |
+| `delivery_term_mismatch`   | Điều kiện giao hàng khác hồ sơ khách |
 | `rfq_incomplete`           | Yêu cầu báo giá thiếu thông tin      |
 | `price_below_policy_floor` | Giá dưới mức sàn                     |
 | `price_floor_unknown`      | Không tính được giá sàn              |

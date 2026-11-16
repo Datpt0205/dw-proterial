@@ -56,7 +56,7 @@ from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.13.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.15.0.yaml"
 ).intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -126,7 +126,7 @@ def test_an_excel_po_is_read_with_every_value_at_its_cell() -> None:
         date(2026, 9, 19),
         "USD",
     )
-    assert [_ref(a) for _, a in header.anchors] == ["PO!B4", "PO!E4", "PO!B5", "PO!E5"]
+    assert [_ref(a) for _, a in header.anchors.stated()] == ["PO!B4", "PO!E4", "PO!B5", "PO!E5"]
     assert [line.line_no for line in po.lines] == [1, 2, 3, 4]
     third = po.lines[2]
     assert third.model_dump(exclude={"anchors", "flags", "legacy"}) == {
@@ -280,7 +280,7 @@ def test_merged_header_cells_are_read_past_their_merge() -> None:
     po = _po(_read(buffer.getvalue()))
 
     assert (po.header.po_no, po.header.revision, po.header.currency) == ("MRG-001", 2, "USD")
-    assert [_ref(a) for _, a in po.header.anchors] == ["PO!C4", "PO!E4", "PO!C5", "PO!E5"]
+    assert [_ref(a) for _, a in po.header.anchors.stated()] == ["PO!C4", "PO!E4", "PO!C5", "PO!E5"]
     first, second = po.lines
     assert (first.uom, first.unit_price, first.description) == ("M", Decimal("0.042"), "")
     assert (second.customer_item_code, second.description) == ("100234", "HOOK-UP WIRE RED")
@@ -726,7 +726,7 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
         date(2026, 9, 23),
         "VND",
     )
-    assert [(a.page, a.quote) for _, a in header.anchors] == [
+    assert [(a.page, a.quote) for _, a in header.anchors.stated()] == [
         (1, "BRN-PO-2609-031"),
         (1, "0"),
         (1, "23/09/2026"),

@@ -50,7 +50,7 @@ def _intake(order_run: OrderRun, app_sessions: async_sessionmaker[AsyncSession])
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.13.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.15.0.yaml")),
         cases=SqlOrderCaseLookup(app_sessions),
         new_case_id=uuid.uuid4,
     )

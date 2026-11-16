@@ -880,6 +880,7 @@ CUSTOMER_CHECK_CODES: Final = frozenset(
         FindingCode.CUSTOMER_TEMPORARY,
         FindingCode.MISSING_NOC_ESF,
         FindingCode.SENDER_UNVERIFIED,
+        FindingCode.DELIVERY_TERM_MISMATCH,
     }
 )
 
@@ -1000,6 +1001,7 @@ def check_customer(
     authentication: MailAuthentication,
     po_date: date,
     received_on: date,
+    delivery_term: str | None,
     rules: OrderRules,
 ) -> tuple[Finding, ...]:
     """Findings about the customer and the sender, in the order shown.
@@ -1008,7 +1010,10 @@ def check_customer(
     names rather than the sender's domain; `customer_temporary`;
     `missing_noc_esf`, which holds the order's confirmation until the
     export-control PIC accepts it (DW1 decides nothing about export control);
-    `sender_unverified` when the mail system's results are not all ``pass``.
+    `sender_unverified` when the mail system's results are not all ``pass``;
+    `delivery_term_mismatch` when the PO's ``delivery_term`` is not the
+    customer's (`same_delivery_term`). A PO stating none, or a customer whose
+    record holds none, is not a mismatch: there is nothing to compare.
     """
     found: list[Finding] = []
     if attributed_by_document:
@@ -1034,7 +1039,44 @@ def check_customer(
                 actual="spf={}, dkim={}, dmarc={}".format(*results),
             )
         )
+    held = customer.delivery_term
+    stated = delivery_term
+    if stated is not None and held is not None and not same_delivery_term(stated, held):
+        found.append(
+            rules.finding(FindingCode.DELIVERY_TERM_MISMATCH, expected=held, actual=stated)
+        )
     return tuple(found)
+
+
+# Incoterms 2020: the closed set a delivery term is compared in (ticket 02).
+# The term on every sales order seen is one (B41: DAP, FCA, CIP, one per
+# customer), and a PO prints it with its place and edition ("DAP Hanoi",
+# "FCA Haiphong, Incoterms 2020"), which the customer's record does not hold.
+INCOTERMS: Final = frozenset(
+    {"EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"}
+)
+
+
+def incoterm(text: str) -> str | None:
+    """The one Incoterms rule ``text`` names as a word of its own, or None
+    when it names none, or two (then nothing says which one was meant)."""
+    named = {word for word in re.split(r"[^0-9A-Z]+", text.upper()) if word} & INCOTERMS
+    return next(iter(named)) if len(named) == 1 else None
+
+
+def same_delivery_term(stated: str, held: str) -> bool:
+    """Whether the term a PO states is the customer's: the same Incoterms
+    rule, whatever place follows it; or, for a term outside Incoterms that a
+    customer's record holds as Bravo spells it, the same words. Anything else
+    is a person's to decide, never a guess."""
+    rule = incoterm(stated)
+    if rule is not None:
+        return rule == incoterm(held)
+    return _words(stated) == _words(held)
+
+
+def _words(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
 def _compliance_finding(

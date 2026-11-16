@@ -7282,7 +7282,8 @@
           "requested_date_missing",
           "reel_length_mismatch",
           "spec_mismatch",
-          "files_disagree"
+          "files_disagree",
+          "delivery_term_mismatch"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -9486,6 +9487,19 @@
             ],
             "title": "Decimal Separator",
             "type": "string"
+          },
+          "delivery_term": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Term"
           },
           "description": {
             "maxLength": 80,
@@ -12981,6 +12995,17 @@
               }
             ]
           },
+          "delivery_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Term"
+          },
           "derivation": {
             "anyOf": [
               {
@@ -14686,6 +14711,178 @@
         "title": "PcRequestView",
         "type": "object"
       },
+      "PcsCostRow": {
+        "additionalProperties": false,
+        "description": "One row of the cost sheet sent to GM/BC Manager: what the request\nstates, and the price cells left blank for the GM (and Purchasing) to\nfill. Never a figure the case does not hold.",
+        "properties": {
+          "customer_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Item Code"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "line_no": {
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "needed_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed By"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "total": {
+            "title": "Total",
+            "type": "null"
+          },
+          "unit_price": {
+            "title": "Unit Price",
+            "type": "null"
+          },
+          "uom": {
+            "title": "Uom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "customer_item_code",
+          "description",
+          "quantity",
+          "uom",
+          "needed_by"
+        ],
+        "title": "PcsCostRow",
+        "type": "object"
+      },
+      "PcsCostSheet": {
+        "additionalProperties": false,
+        "description": "The request to GM/BC Manager for a pcs price (ticket 05): the request's\nlines, and the cost lines of B49's sheet in its order, every amount\nblank.",
+        "properties": {
+          "cost_lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cost Lines",
+            "type": "array"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "rfq_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rfq No"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PcsCostRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "customer_code",
+          "rfq_no",
+          "rows",
+          "cost_lines"
+        ],
+        "title": "PcsCostSheet",
+        "type": "object"
+      },
+      "PcsPriceBody": {
+        "additionalProperties": false,
+        "description": "The price GM/BC Manager decided, per line (ticket 05); who recorded it\nis the caller, never a field of the request.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PcsPriceLineBody"
+            },
+            "maxItems": 9999,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version",
+          "lines"
+        ],
+        "title": "PcsPriceBody",
+        "type": "object"
+      },
+      "PcsPriceLineBody": {
+        "additionalProperties": false,
+        "properties": {
+          "line_no": {
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Unit Price"
+          }
+        },
+        "required": [
+          "line_no",
+          "unit_price"
+        ],
+        "title": "PcsPriceLineBody",
+        "type": "object"
+      },
       "PendingDecisionView": {
         "description": "The platform approval a case waits on: the decision is made there\n(`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales\nroute. Present only while the case is in the state that waits on it.",
         "properties": {
@@ -16081,6 +16278,30 @@
           "anchor"
         ],
         "title": "ProducedValue",
+        "type": "object"
+      },
+      "ProductionTypeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "mass",
+              "pcs"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "kind"
+        ],
+        "title": "ProductionTypeBody",
         "type": "object"
       },
       "PromptReplay": {
@@ -37820,6 +38041,120 @@
         ]
       }
     },
+    "/api/v1/sales/quotes/{case_id}/pcs-price": {
+      "post": {
+        "operationId": "pcs_price_api_v1_sales_quotes__case_id__pcs_price_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PcsPriceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pcs Price",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/pcs-price-request": {
+      "get": {
+        "operationId": "pcs_price_request_api_v1_sales_quotes__case_id__pcs_price_request_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PcsCostSheet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pcs Price Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/quotes/{case_id}/price": {
       "post": {
         "operationId": "price_api_v1_sales_quotes__case_id__price_post",
@@ -37886,6 +38221,77 @@
           }
         },
         "summary": "Price",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/production-type": {
+      "post": {
+        "operationId": "production_type_api_v1_sales_quotes__case_id__production_type_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductionTypeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Production Type",
         "tags": [
           "sales"
         ]

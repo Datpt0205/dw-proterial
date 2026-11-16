@@ -56,7 +56,7 @@ from dw_sales.testing.reading_tools import (
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(REPO / "configs/policies/sales_order_rules@1.13.0.yaml")
+RULES = load_order_rules(REPO / "configs/policies/sales_order_rules@1.15.0.yaml")
 CAPS = RULES.intake
 # A legacy workbook as far as DW1 tells one; none is committed (the
 # public-repo guard cannot read a binary Office file).

@@ -281,7 +281,7 @@ async def test_a_corrected_value_reads_back_beside_the_value_as_read(
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         zones=platform_zone(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.13.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.15.0.yaml")),
         cases=SqlOrderCaseLookup(app_sessions),
         new_case_id=uuid.uuid4,
     )

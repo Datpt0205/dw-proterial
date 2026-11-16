@@ -126,7 +126,7 @@ def _unflagged(document: PoDocument) -> bool:
         return {f.field for f in flags if f.flag is RegionFlag.MODEL_READ}
 
     header = document.header
-    return read(header.flags) != set(type(header.anchors).model_fields) or any(
+    return read(header.flags) != {name for name, _ in header.anchors.stated()} or any(
         read(line.flags) != set(type(line.anchors).model_fields) for line in document.lines
     )
 

@@ -190,6 +190,7 @@ function MappingForm({
           ...values,
           kind: source.kind,
           revision: values.revision || null,
+          delivery_term: values.delivery_term || null,
           page_label: source.kind === "pdf" ? null : values.page_label || null,
           thousands_separator: values.thousands_separator ?? ",",
           decimal_separator: values.decimal_separator ?? ".",

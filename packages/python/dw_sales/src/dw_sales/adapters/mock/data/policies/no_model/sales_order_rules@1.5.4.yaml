@@ -226,3 +226,5 @@ findings:
   # Two files of one PO in one mail print a value differently (tickets 19
   # and 22): neither file wins.
   files_disagree: error
+  # Ticket 02: the delivery term a PO prints is not the customer's.
+  delivery_term_mismatch: error

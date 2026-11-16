@@ -1456,6 +1456,7 @@ class OrderIntake:
                 authentication=message.authentication,
                 po_date=header.po_date,
                 received_on=received_on,
+                delivery_term=header.delivery_term,
                 rules=rules,
             )
         )
@@ -1735,7 +1736,7 @@ class OrderIntake:
         po_findings = list(check_document(corrected.document, rules))
         po_codes = DOCUMENT_CHECK_CODES
         if corrected.line_no is None:
-            po_findings += await self._customer_findings(scope, case, header.po_date, rules)
+            po_findings += await self._customer_findings(scope, case, header, rules)
             po_codes |= CUSTOMER_CHECK_CODES
         bravo: BravoHistory | None = None
         others = [
@@ -1875,12 +1876,12 @@ class OrderIntake:
         )
 
     async def _customer_findings(
-        self, scope: SalesScope, case: OrderCase, po_date: date, rules: OrderRules
+        self, scope: SalesScope, case: OrderCase, header: PoHeader, rules: OrderRules
     ) -> tuple[Finding, ...]:
         """The customer's and the sender's checks again, on the entered PO date
-        (the fiscal year an ESF is renewed for). The sender's results are the
-        message's; a customer taken from the document is one with
-        `customer_unknown`, which that check raised exactly then."""
+        (the fiscal year an ESF is renewed for) and delivery term. The sender's
+        results are the message's; a customer taken from the document is one
+        with `customer_unknown`, which that check raised exactly then."""
         customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
         message = await self.inbox.get_message(scope, case.message_id)
         if customer is None or message is None:
@@ -1894,8 +1895,9 @@ class OrderIntake:
                 f.code is FindingCode.CUSTOMER_UNKNOWN for f in case.findings
             ),
             authentication=message.authentication,
-            po_date=po_date,
+            po_date=header.po_date,
             received_on=await self._received_on(scope, case.received_at),
+            delivery_term=header.delivery_term,
             rules=rules,
         )
 
