@@ -51,6 +51,13 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **2026-11-16, bulk handover of a leaver's work, ready-for-agent**
+  (`platform-runtime/bulk-handover/spec.md`): preview then one confirm moves
+  A's open DW1 cases, customers, unsent mail, reminders and DW2 requests to B;
+  A cannot be deactivated while owning open work; plus a warning for a member
+  whose address has no mail folder, and DW2 applying `visible_owners` as DW1
+  does. Owed: who presses it (default head, IT fallback); Proterial's
+  `restricted` (Đạt leans it).
 - **CRITICAL, 2026-11-16, knowledge ingest has no document parser on premises**
   (found answering Đạt on RAG). **Đạt: parked as critical until the plant's
   infrastructure is done, then done with the code tickets; ask him before
