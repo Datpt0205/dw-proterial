@@ -133,6 +133,22 @@ context. All five are done and on `main`. The full narrative is at
         RAID: SSD for Windows and the DW VM, HDD for backups only (nightly
         dump, continuous WAL, weekly VM export). Display on Microsoft Basic
         Display Adapter (code 10): no GPU driver yet.
+        **Reached over SSH 11-16 ~10:35** (I226-LM driver took, 1 Gbps;
+        Tailscale 1.104.7 on the host, `ssh dw-host` from the laptop). Read
+        from the host: SSD KIOXIA EXCERIA BASIC 2 TB NVMe (C: is all of it),
+        HDD WD40EZZX 4 TB with an empty NTFS volume; **the EFI system
+        partition Windows boots from sits on the HDD**, so a dead HDD stops
+        the host from booting and the HDD cannot be wiped for backups until
+        an ESP is made on the SSD (`bcdboot`, owed, needs a person at the
+        console for the reboot). NVIDIA `DEV_2C34` present, on Microsoft Basic
+        Display; Intel chipset, MEI, iGPU, MediaTek WiFi and Bluetooth have no
+        driver. VT-x, SLAT and Secure Boot on; Hyper-V not installed.
+        Windows not activated (0xC004F056: a KMS client key, Proterial's
+        part). DHCP 192.168.1.69 on a temporary network. Applied:
+        Tailscale unattended (`ForceDaemon` true; key expiry still to turn
+        off in the admin console) and `infra/onprem/windows-host/01-host-baseline.ps1`
+        (High performance, no sleep or hibernate; Windows Update downloads
+        and notifies, no restart with a session signed in, no drivers).
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
