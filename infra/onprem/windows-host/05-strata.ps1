@@ -56,6 +56,9 @@ Copy-Item (Join-Path $here 'strata-watchdog.ps1') $watchdog -Force
 $action    = New-ScheduledTaskAction -Execute 'powershell.exe' `
                 -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$watchdog`""
 $atBoot    = New-ScheduledTaskTrigger -AtStartup
+# The VM's 16 GB is taken when the VM starts; Strata then fills most of the rest
+# with the model's experts. Strata waits 2 minutes so the VM always starts first.
+$atBoot.Delay = 'PT2M'
 $every5    = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
 $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\Administrator" -LogonType S4U -RunLevel Highest
 $settings  = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable `

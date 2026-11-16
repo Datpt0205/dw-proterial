@@ -242,6 +242,17 @@ context. All five are done and on `main`. The full narrative is at
         Gyro-S in Strata (27.6 GB vs 37.6 GB, lower quality), then 27B Q4 on
         llama.cpp, which changes ADR 0025 and needs every DW step attested
         again. Owed: Đạt's choice after the measurement.
+        **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
+        crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
+        running first. Tailscale key expiry is off (checked from the laptop).
+        Boot order fixed: `DW-Strata`'s startup trigger waits 2 minutes so
+        the VM takes its fixed 16 GB first. The watchdog alerts when the
+        host has under 2 GB available for 15 minutes. Found for the backup
+        batch: valkey runs with `noeviction` and no `--maxmemory` under the
+        production overlay's 256 MB cgroup limit, so a full cache is
+        OOM-killed (and may reload its RDB into the same limit) instead of
+        refusing writes; container memory against its limit is not
+        alerted on yet.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and

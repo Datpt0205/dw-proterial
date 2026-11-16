@@ -108,6 +108,14 @@ foreach ($d in 'C', 'V', 'B') {
     [void](Report "disk-$d" ($free -ge 15) "Drive ${d}: has $free % free ($([math]::Round($v.SizeRemaining/1GB)) GB).")
 }
 
+# --- 5b. The host keeps memory to spare ------------------------------------------------
+# Strata keeps the model's experts in RAM and the VM holds a fixed 16 GB, so the
+# host runs close to full by design. Below 2 GB for 15 minutes, Windows starts
+# trimming Strata's memory (slow answers) or a restart of the VM may not find
+# its 16 GB.
+$availMB = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
+[void](Report 'host-memory' ($availMB -ge 2048) "The host has only $availMB MB of memory available. Strata may slow down, and the VM may not start again after a stop." 3)
+
 # --- 6. A restart Windows has been waiting for over 3 days --------------------------
 $pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 if ($pending) {
