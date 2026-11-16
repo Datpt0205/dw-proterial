@@ -64,7 +64,7 @@ from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.reply_intent import REPLY_INTENT, ReplyReader
 from dw_sales.application.skill_pick import NO_SKILL, SKILL_PICK, PickModelPort
-from dw_sales.application.skills import READ_SKILL, SkillDocument
+from dw_sales.application.skills import READ_SKILL, SkillDocument, skill_key
 from dw_sales.application.thread_agent import DW1_AGENT, SKILL_CEILING
 from dw_sales.application.thread_tools import CASE_BY_NUMBER, CaseView, ThreadBinding
 from dw_sales.application.threads import question
@@ -118,8 +118,8 @@ def _chat(ctx: GraderContext) -> BaseChatModel:
 
 
 def _platform_skill(repo_root: Path) -> SkillDocument:
-    (skill,) = load_dw1_skills(repo_root / _SKILLS_DIR).skills.values()
-    return skill
+    # The thread message's skill; the mail kinds are another step's (ticket 42).
+    return load_dw1_skills(repo_root / _SKILLS_DIR).skills[skill_key("thread-intents")]
 
 
 def _tenant_version(repo_root: Path, version: str, rule: str) -> SkillDocument:

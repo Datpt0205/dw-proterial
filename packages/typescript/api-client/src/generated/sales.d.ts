@@ -4020,10 +4020,18 @@ export interface components {
          *     disposition: the prompt, profile and route of the call, the rules whose
          *     switch asked for it, and the outcome. ``unavailable``: no usable answer
          *     within the retry window, so the message went to Sales as `other`.
+         *
+         *     Read with the tenant's mail-classifying skill (ticket 42), ``kind`` is a
+         *     kind that skill names, ``skill`` the version it was read with,
+         *     ``routed_as`` the legal route the skill gave that kind and ``kind_label``
+         *     the skill's words for it, where it gives some. Read with the one call,
+         *     ``kind`` is one of the platform's kinds and is its own route.
          */
         IntentReading: {
             /** Kind */
-            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | null;
+            kind?: string | null;
+            /** Kind Label */
+            kind_label?: string | null;
             /** Language */
             language?: ("vi" | "en" | "ja" | "other") | null;
             /** Model Profile */
@@ -4042,8 +4050,12 @@ export interface components {
             references: components["schemas"]["ResolvedReference"][];
             /** Route */
             route: string;
+            /** Routed As */
+            routed_as?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | null;
             /** Rules */
             rules: string;
+            /** Skill */
+            skill?: string | null;
         };
         /**
          * IntentView
@@ -4759,7 +4771,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -6818,9 +6830,9 @@ export interface components {
             security_failed: string[];
             /**
              * Source
-             * @constant
+             * @enum {string}
              */
-            source: "platform_examples";
+            source: "platform_examples" | "customer_pairs";
             /** Unanswered */
             unanswered: number;
             /**

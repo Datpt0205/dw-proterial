@@ -265,6 +265,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "DW1 đọc thư trong hồ sơ theo kỹ năng của công ty",
       help: "DW1 chọn kỹ năng phù hợp (bản công ty đã duyệt, nếu có) rồi đọc thư, tra cứu thêm khi cần. Không đọc được thì dùng bước tra cứu, rồi bước đọc thư trả lời, rồi đến Sales.",
     },
+    "model_assist.skill_mail_kinds": {
+      label: "Phân loại thư theo các loại thư của công ty",
+      help: "Các loại thư và cách hiểu từng loại nằm trong kỹ năng phân loại thư (bản công ty đã duyệt, nếu có); mỗi loại đi theo một tuyến có sẵn. Không phân loại được thì dùng bước phân loại thư, rồi đến Sales.",
+    },
     "model_assist.skill_pick_confidence": {
       label: "Độ chắc chắn tối thiểu khi DW1 chọn kỹ năng",
       help: "Từ 0,5 đến 1. Chưa chắc bằng mức này thì thư được đọc như khi tắt bước kỹ năng.",
@@ -278,6 +282,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     "model_assist.layout_proposal": {
       label: "Đề xuất ánh xạ cho mẫu PO mới",
+    },
+    "model_assist.salesorder_skill": {
+      label: "Điền tệp SalesOrder theo kỹ năng của từng khách",
+      help: "Mô hình điền từng ô theo kỹ năng của khách và nêu nguồn; hệ thống dò lại từng ô, ô nào không dò được thì để trống cho PIC. Tắt thì dùng quy tắc đã học từ ví dụ. Tệp vẫn cần người duyệt trước khi vào Bravo.",
     },
     "model_assist.po_body_extraction": {
       label: "Đọc PO khách viết trong thân thư",

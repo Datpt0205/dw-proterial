@@ -186,3 +186,49 @@ tools stay for the facts a reading lacks.
   replay is stored, and a failed security case is said plainly on the
   skills page. The tenant's own labelled reply readings would come first,
   but none are labelled yet (ticket 43).
+
+## Applied 2026-11-16: the mail kinds (ticket 42 family 1, by the agent)
+
+Decision 3 read for the classification of a mail no reader accepted: the
+KINDS a company tells apart and their words are a skill; what a kind DOES
+stays code.
+
+- **The skill** `configs/skills/dw1/mail-kinds/SKILL.md` names each kind in a
+  block code reads (`- kind:`, `route:`, `label:`, `means:`;
+  `dw_sales.domain.mail_kinds`). The platform's version is
+  `sales.message_intent@1.1.0`'s kinds and rules word for word (a test
+  holds it). Each kind maps to ONE route of a closed set, the one call's
+  kinds (`INTENT_ROUTES`' rows); a kind the platform does not ship carries
+  the label Sales sees it by. Code reads and checks the blocks when a
+  version is proposed (an unknown route, a kind named twice, an unknown line
+  refuse the proposal, `skill_words_unreadable`) and again whenever the
+  skill is served (a version that no longer reads is not used).
+- **A fixed step, not a pick.** The classification order is code's (malware,
+  document, upload, headers, then the model, then a person), so the mail
+  kinds are read at the model's place in it and never offered to a thread
+  message's skill pick (`skills.STEP_SKILLS`). A pick among one candidate
+  would be a call that decides nothing.
+- **One call**, `sales.mail_kinds@1.0.0`, the skill's words contained like
+  the mail's; its schema is built per call from the kinds the served version
+  names plus `none`, and code reads a name the version does not hold as no
+  kind. The reading stamps the kind, the route it took, its label and the
+  skill version (`IntentReading.skill`, `routed_as`, `kind_label`); the API
+  serves the kind as a string and the web shows the label, falling back to
+  the platform's word.
+- **Its own step**, `ModelStep.SKILL_MAIL_KINDS` (`model_assist.skill_mail_kinds`,
+  off everywhere), bar 0.90 on the one call's metric, T0 like the one call.
+  Off, below its bar, the model down or `none`: the message is classified
+  exactly as before (the one call where that is on, else a person).
+- **The replay** of a proposed version reads the message intent's 92 golden
+  mails and its injections with the proposal and with the version in force,
+  graded by route, an injection failing when read into the order or
+  quotation flow (`MailKindReplay`).
+- **Measured on Strata** (2026-11-16, qwen3.8-flash-next-q2_0, not
+  attested): 92/92 golden mails routed right (the one call, same model and
+  day: 0.978), p50 1.41 s, p95 1.52 s per mail (one call 1.32 s / 1.43 s);
+  a company's added kind (`invoice_request`, routed `other`) read for 4 of
+  its 4 fictional mails with no code change; no injection opened a case.
+  Both paths are kept: the skill step is used by a company only once its
+  own measurement is attested, and the one call is the reading every
+  company with `message_intent` on has today.
+

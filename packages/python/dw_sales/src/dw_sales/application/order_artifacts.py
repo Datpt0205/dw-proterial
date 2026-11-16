@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from dw_kernel.errors import ConflictError
 from dw_sales.application.artifact_content import (
@@ -36,7 +36,7 @@ from dw_sales.application.artifact_content import (
 )
 from dw_sales.application.drafting import Drafting, Rendered, anchor_text, filled, line_template
 from dw_sales.application.local_time import local_day
-from dw_sales.application.salesorder_rules import StepRefusedError, filled_row
+from dw_sales.application.salesorder_rules import Lookups, StepRefusedError, filled_row
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Language
 from dw_sales.domain.orders import (
@@ -50,9 +50,13 @@ from dw_sales.domain.orders import (
     MappingStatus,
     OrderCase,
     OrderLine,
+    PoDocument,
     PoHeader,
     PoLine,
 )
+
+if TYPE_CHECKING:
+    from dw_sales.application.salesorder_fill import TracedFill
 
 type OrderDrafting = Drafting[OrderCase]
 
@@ -234,6 +238,27 @@ def file_rows(
     ]
 
 
+def example_rows(
+    document: PoDocument, customer_code: str, received_on: date, lookups: Lookups
+) -> list[dict[UploadField, Value]]:
+    """The rows the upload file holds for the example's PO, as a case's file
+    would hold them: each line through `line_values` (the PRV code the
+    customer's convert list gives, where its item is in the master), a row
+    per delivery, the file's own values. No case yet, so no suggested date."""
+    deliveries: list[dict[UploadField, Value]] = []
+    for po in document.lines:
+        prv = lookups.convert.get(po.customer_item_code)
+        values = line_values(
+            customer_code,
+            document.header,
+            po,
+            prv_code=prv if prv in lookups.items else None,
+            suggested=None,
+        )
+        deliveries += delivery_rows(values, po, lambda _: None)
+    return file_rows(deliveries, received_on)
+
+
 def _po_value(line: OrderLine, field: str) -> Value:
     """The value as the PO prints it; Sales' PRV code is none of the PO's."""
     return None if field == "prv_code" else getattr(line.po_line, field)
@@ -336,9 +361,12 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     quantity and its date. Each column holds what its source says
     (`salesorder_rules.filled_row`): the customer's own SalesOrder rules
     where it has them (ticket 38, applied by code, no model), the layout
-    for every column they do not name; a blank column holds nothing. Before
-    the file is made, every row is checked (`checked_row`)."""
-    return _paste_sheet(d, d.case.lines)
+    for every column they do not name; a blank column holds nothing. Where
+    the customer's SalesOrder skill filled the rows for this draw (ticket 41,
+    `salesorder_case_fill`), each cell is what code traced, a cell it could
+    not trace left blank and listed for the PIC. Before the file is made,
+    every row is checked (`checked_row`)."""
+    return _paste_sheet(d, d.case.lines, d.skill_fill)
 
 
 def bravo_update(d: OrderDrafting) -> tuple[Rendered, ...]:
@@ -348,18 +376,28 @@ def bravo_update(d: OrderDrafting) -> tuple[Rendered, ...]:
     (`upload_rows`). The PIC approves this exact file before it is entered."""
     loop = d.case.update_loop
     changed = set() if loop is None else {x.line_no for x in loop.lines}
-    return _paste_sheet(d, [line for line in d.case.lines if line.line_no in changed])
+    return _paste_sheet(d, [line for line in d.case.lines if line.line_no in changed], None)
 
 
-def _paste_sheet(d: OrderDrafting, lines: Iterable[OrderLine]) -> tuple[Rendered, ...]:
+def _paste_sheet(
+    d: OrderDrafting, lines: Iterable[OrderLine], fill: TracedFill | None
+) -> tuple[Rendered, ...]:
     """The paste sheet of ``lines`` (`bravo_upload`'s docstring)."""
     case, layout = d.case, d.upload
     doc = d.internal("bravo_upload")
     received = local_day(case.received_at, d.copy.zone)
     deliveries = (row for line in lines for row in upload_rows(case, line))
     rules = d.customer_rules
-    rows = []
-    for values in file_rows(deliveries, received):
+    all_values = file_rows(deliveries, received)
+    # A fill traced against another layout, or other rows, fills nothing;
+    # nor one a row of which the file's own checks refuse: the rules do.
+    if fill is not None and (fill.layout_ref != layout.ref or len(fill.rows) != len(all_values)):
+        fill = None
+    filled = None if fill is None else _filled_rows(layout, all_values, fill)
+    if filled is None:
+        fill = None
+    rows = list(filled or ())
+    for values in all_values if filled is None else ():
         try:
             row = filled_row(layout, rules, values, d.customer, d.lookups)
         except StepRefusedError as refused:
@@ -382,17 +420,38 @@ def _paste_sheet(d: OrderDrafting, lines: Iterable[OrderLine]) -> tuple[Rendered
         banner=layout.banner,
         formats=tuple(c.number_format for c in layout.columns),
     )
+    filled_by = (
+        f"{fill.skill_ref} · {fill.prompt}"
+        if fill is not None
+        else None
+        if rules is None
+        else d.copy.salesorder.ref
+    )
     about = Sheet(
         name=label(doc, "sheet"),
         title=doc.template.title,
-        heading=d.stamp(
-            layout.version if rules is None else f"{layout.version} · {d.copy.salesorder.ref}"
-        ),
+        heading=d.stamp(layout.version if filled_by is None else f"{layout.version} · {filled_by}"),
         columns=(),
         rows=(),
-        notes=(doc.word("mock", layout=layout.version),) if layout.mock else (),
+        notes=(
+            *((doc.word("mock", layout=layout.version),) if layout.mock else ()),
+            *(fill.notes() if fill is not None else ()),
+        ),
     )
     return (d.xlsx(layout.version, Workbook((upload, about), INTERNAL, d.at)),)
+
+
+def _filled_rows(
+    layout: BravoUploadLayout, all_values: Sequence[Mapping[UploadField, Value]], fill: TracedFill
+) -> list[tuple[Value, ...]] | None:
+    """The fill's rows once each passes `checked_row`; None where one does not."""
+    try:
+        return [
+            checked_row(layout, values, traced.values())
+            for values, traced in zip(all_values, fill.rows, strict=True)
+        ]
+    except ConflictError:
+        return None
 
 
 def checked_row(
@@ -652,7 +711,7 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
             else bound.word("no_cross_check")
         ),
     }
-    (processed,) = _paste_sheet(d, case.lines)
+    (processed,) = _paste_sheet(d, case.lines, None)
     excel = FileAttachment(
         f"{_file_stem(case.effective_header.po_no)}-xu-ly.xlsx",
         processed.content_type,

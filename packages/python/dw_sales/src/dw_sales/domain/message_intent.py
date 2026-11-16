@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import unicodedata
 import uuid
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
@@ -36,6 +36,9 @@ from dw_sales.domain.spans import FoldedText
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
+# The platform's kinds, which are also the closed set of legal routes a kind
+# of a tenant's mail-classifying skill may take (`mail_kinds.ROUTES`, ticket
+# 42): each a row of `order_intake.INTENT_ROUTES`.
 IntentKind = Literal[
     "po",
     "quote_request",
@@ -48,6 +51,9 @@ IntentKind = Literal[
     "portal_notice",
     "other",
 ]
+# A kind's name, the platform's or one a tenant's skill names (ticket 42):
+# lowercase words joined by ``_``.
+KindName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$", max_length=40)]
 IntentLanguage = Literal["vi", "en", "ja", "other"]
 # At most this many numbers are taken from one message: a reply names one or
 # two; a list of twenty is not a reference to anything.
@@ -96,7 +102,13 @@ class IntentReading(BaseModel):
     """What the model reading of a message's intent did, stamped on its
     disposition: the prompt, profile and route of the call, the rules whose
     switch asked for it, and the outcome. ``unavailable``: no usable answer
-    within the retry window, so the message went to Sales as `other`."""
+    within the retry window, so the message went to Sales as `other`.
+
+    Read with the tenant's mail-classifying skill (ticket 42), ``kind`` is a
+    kind that skill names, ``skill`` the version it was read with,
+    ``routed_as`` the legal route the skill gave that kind and ``kind_label``
+    the skill's words for it, where it gives some. Read with the one call,
+    ``kind`` is one of the platform's kinds and is its own route."""
 
     model_config = _FROZEN
 
@@ -105,9 +117,12 @@ class IntentReading(BaseModel):
     route: str = Field(min_length=1, max_length=64)
     rules: str = Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")
     outcome: IntentOutcome
-    kind: IntentKind | None = None
+    kind: KindName | None = None
     language: IntentLanguage | None = None
     references: tuple[ResolvedReference, ...] = Field(default=(), max_length=MAX_REFERENCES)
+    skill: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]*@\d+\.\d+\.\d+$")
+    routed_as: IntentKind | None = None
+    kind_label: str | None = Field(default=None, min_length=1, max_length=60)
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
@@ -116,7 +131,22 @@ class IntentReading(BaseModel):
             raise ValueError("a reading names a kind and a language exactly when it was read")
         if self.references and not read:
             raise ValueError("only a reading resolves references")
+        if self.skill is None:
+            if self.routed_as is not None or self.kind_label is not None:
+                raise ValueError("only a skill's reading names a route and a label of its own")
+            if self.kind is not None and self.kind not in get_args(IntentKind):
+                raise ValueError("a reading with no skill names one of the platform's kinds")
+        elif not read or self.routed_as is None:
+            raise ValueError("a skill's reading names the kind it read and the route it took")
         return self
+
+    @property
+    def routed(self) -> IntentKind | None:
+        """The legal route the kind read took: the skill's for it, or the
+        platform kind's own."""
+        if self.routed_as is not None:
+            return self.routed_as
+        return next((k for k in get_args(IntentKind) if k == self.kind), None)
 
 
 _DOCUMENT_NO: TypeAdapter[str] = TypeAdapter(DocumentNo)

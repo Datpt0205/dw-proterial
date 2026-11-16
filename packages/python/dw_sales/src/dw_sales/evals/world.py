@@ -76,7 +76,7 @@ from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, r
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.adapters.skill_files import load_dw1_skills
+from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.autonomy import AutonomyGate, VersionKey
 from dw_sales.application.case_store import (
@@ -133,7 +133,7 @@ from dw_sales.application.runs import subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.skill_pick import PickModelPort
-from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement, skill_book
+from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
 from dw_sales.application.thread_tools import ThreadContext, ThreadTools
@@ -1674,7 +1674,7 @@ def open_world(
     order_rules = RuleBookOrderRules(book)
     # DW1's skills, the platform's with the bound tenant's own versions (ticket 40).
     dw1_skills = load_dw1_skills(repo_root / "configs" / "skills" / "dw1")
-    skills = skill_book(dw1_skills, store.rule_versions)
+    skills = skills_book(repo_root / "configs" / "skills", dw1_skills, store.rule_versions)
     catalog = SnapshotSalesCatalog(
         MemoryApprovedLists(catalog_store),
         mock,

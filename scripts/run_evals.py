@@ -195,6 +195,8 @@ RECORDED_BY_PROMPT = {
     "sales.reply_draft": _CASES / "sales_reply_draft_recorded.json",
     # DW1's skill pick (ticket 40): its answers and their confidences.
     "sales.skill_pick": _CASES / "sales_skill_pick_recorded.json",
+    # The tenant's mail kinds (ticket 42 family 1).
+    "sales.mail_kinds": _CASES / "sales_mail_kinds_recorded.json",
 }
 # A step that reads with tools records whole turns, every assistant message of
 # each, by the turn's rendered prompt (`dw_sales.evals.thread_agent`).

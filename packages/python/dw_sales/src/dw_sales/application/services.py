@@ -74,6 +74,8 @@ from dw_sales.application.runs import (
     Dw1RunsPort,
     PendingDecisionsPort,
 )
+from dw_sales.application.salesorder_case_fill import CaseSalesOrderFill
+from dw_sales.application.salesorder_fill import SalesOrderFiller
 from dw_sales.application.salesorder_learning import (
     ExampleUnitOfWorkFactory,
     SalesOrderExamples,
@@ -291,6 +293,22 @@ def assemble(
             scanner,
             deployed,
             inbox,
+            # A case's upload file filled with its customer's SalesOrder
+            # skill, through the one-call door, where the step runs (ticket
+            # 41); no model, and the rules fill it.
+            None
+            if one_call is None
+            else CaseSalesOrderFill(
+                intake.rules,
+                readiness,
+                book,
+                catalog,
+                skills,
+                SalesOrderFiller(one_call),
+                ids,
+                worker_id,
+                worker_version,
+            ),
         ),
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),

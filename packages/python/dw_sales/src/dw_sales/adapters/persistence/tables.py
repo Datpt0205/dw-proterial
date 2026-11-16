@@ -515,6 +515,24 @@ salesorder_example_files = sa.Table(
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# A customer's worked pairs (ticket 41, migration 711e8b760139): the PO as
+# read and the PIC's rows, append-only.
+salesorder_pairs = sa.Table(
+    "salesorder_pairs",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("example_id", UUID(as_uuid=True)),
+    sa.Column("customer_code", sa.Text, nullable=False),
+    sa.Column("received_on", sa.Date, nullable=False),
+    sa.Column("layout_ref", sa.Text, nullable=False),
+    sa.Column("document", JSONB, nullable=False),
+    sa.Column("expected", JSONB, nullable=False),
+    sa.Column("added_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("added_at", _TS, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # The stored mailbox (ticket 43, migration e544ff20fad6): each message whole in
 # `message`, the keys the queries need beside it, and each attachment's bytes.
 # Both append-only and partitioned by month on `received_at`.

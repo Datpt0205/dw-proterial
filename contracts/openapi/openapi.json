@@ -7499,22 +7499,13 @@
       },
       "IntentReading": {
         "additionalProperties": false,
-        "description": "What the model reading of a message's intent did, stamped on its\ndisposition: the prompt, profile and route of the call, the rules whose\nswitch asked for it, and the outcome. ``unavailable``: no usable answer\nwithin the retry window, so the message went to Sales as `other`.",
+        "description": "What the model reading of a message's intent did, stamped on its\ndisposition: the prompt, profile and route of the call, the rules whose\nswitch asked for it, and the outcome. ``unavailable``: no usable answer\nwithin the retry window, so the message went to Sales as `other`.\n\nRead with the tenant's mail-classifying skill (ticket 42), ``kind`` is a\nkind that skill names, ``skill`` the version it was read with,\n``routed_as`` the legal route the skill gave that kind and ``kind_label``\nthe skill's words for it, where it gives some. Read with the one call,\n``kind`` is one of the platform's kinds and is its own route.",
         "properties": {
           "kind": {
             "anyOf": [
               {
-                "enum": [
-                  "po",
-                  "quote_request",
-                  "design_reply",
-                  "reply_to_case",
-                  "delivery_change",
-                  "complaint",
-                  "sample_request",
-                  "portal_notice",
-                  "other"
-                ],
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
                 "type": "string"
               },
               {
@@ -7522,6 +7513,19 @@
               }
             ],
             "title": "Kind"
+          },
+          "kind_label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind Label"
           },
           "language": {
             "anyOf": [
@@ -7574,10 +7578,44 @@
             "title": "Route",
             "type": "string"
           },
+          "routed_as": {
+            "anyOf": [
+              {
+                "enum": [
+                  "po",
+                  "quote_request",
+                  "design_reply",
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routed As"
+          },
           "rules": {
             "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
             "title": "Rules",
             "type": "string"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]*@\\d+\\.\\d+\\.\\d+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
           }
         },
         "required": [
@@ -10536,6 +10574,7 @@
         "description": "The DW1 steps a model may take part in: each a switch of `ModelAssist`\nby the same name (a test holds the two together), and each with the bar\nits live eval must meet before the switch does anything\n(`application.model_readiness.BARS`).",
         "enum": [
           "description_attributes",
+          "salesorder_skill",
           "message_intent",
           "rfq_extraction",
           "reply_intent",
@@ -10545,7 +10584,8 @@
           "change_request",
           "thread_agent",
           "reply_draft",
-          "skill_intents"
+          "skill_intents",
+          "skill_mail_kinds"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -19021,7 +19061,10 @@
             "type": "array"
           },
           "source": {
-            "const": "platform_examples",
+            "enum": [
+              "platform_examples",
+              "customer_pairs"
+            ],
             "title": "Source",
             "type": "string"
           },

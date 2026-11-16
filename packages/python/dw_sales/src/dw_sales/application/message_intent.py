@@ -56,9 +56,12 @@ PROMPT_TOKENS: Final = 1200
 
 @dataclass(frozen=True, slots=True)
 class IntentRead:
-    """A reading code accepted: the kind, the language and the references."""
+    """A reading code accepted: the legal route its kind takes, and the stamp
+    (the kind, the language and the references). Read by this one call, the
+    kind is its own route; read with the tenant's mail kinds
+    (`mail_kinds.MailKindReader`, ticket 42), the route is the skill's for it."""
 
-    kind: IntentKind
+    route: IntentKind
     reading: IntentReading
 
 
@@ -94,7 +97,7 @@ class IntentReader:
         numbers = located_numbers(part.text, answer.referenced_number_spans)
         references = await self.resolve(scope, customer, numbers)
         return IntentRead(
-            kind=answer.kind,
+            route=answer.kind,
             reading=IntentReading(
                 prompt=str(MESSAGE_INTENT),
                 model_profile=self.model.model_profile,

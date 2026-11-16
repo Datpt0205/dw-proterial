@@ -18,6 +18,7 @@ from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import UploadField, Value
+from dw_sales.application.order_artifacts import example_rows
 from dw_sales.application.rules import RuleKey, RuleVersionView
 from dw_sales.application.salesorder_learning import (
     EXAMPLE_LANE,
@@ -29,13 +30,12 @@ from dw_sales.application.salesorder_learning import (
     PicRow,
     Replay,
     SalesOrderExample,
-    canonical,
-    example_rows,
     verify,
 )
 from dw_sales.application.salesorder_rules import (
     CustomerSalesOrderRules,
     Lookups,
+    canonical,
     column_index,
     filled_row,
 )

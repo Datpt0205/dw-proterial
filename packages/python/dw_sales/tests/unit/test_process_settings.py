@@ -390,10 +390,12 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.thread_agent"): model,
         (RuleKey.ORDER_RULES, "model_assist.skill_intents"): model,
         (RuleKey.ORDER_RULES, "model_assist.skill_pick_confidence"): model,
+        (RuleKey.ORDER_RULES, "model_assist.skill_mail_kinds"): model,
         (RuleKey.ORDER_RULES, "model_assist.request_handoff"): model,
         (RuleKey.ORDER_RULES, "model_assist.change_request"): model,
         (RuleKey.ORDER_RULES, "model_assist.description_attributes"): model,
         (RuleKey.ORDER_RULES, "model_assist.layout_proposal"): model,
+        (RuleKey.ORDER_RULES, "model_assist.salesorder_skill"): model,
         (RuleKey.ORDER_RULES, "model_assist.rfq_extraction"): model,
         (RuleKey.ORDER_RULES, "model_assist.po_body_extraction"): model,
         (RuleKey.ORDER_RULES, "model_assist.reply_draft"): model,
@@ -493,11 +495,14 @@ async def test_a_switched_on_step_with_no_measurement_is_served_not_in_effect() 
         ModelStep.REPLY_INTENT,
         ModelStep.THREAD_AGENT,
         ModelStep.SKILL_INTENTS,
+        ModelStep.SKILL_MAIL_KINDS,
         ModelStep.REQUEST_HANDOFF,
         ModelStep.CHANGE_REQUEST,
     ]
     for model in steps["O1"].models:
-        assert model.enabled and not model.effective and model.latest is None
+        # The mail kinds are off in the tests' rules (ticket 42, 1.5.2).
+        on = model.step is not ModelStep.SKILL_MAIL_KINDS
+        assert model.enabled is on and not model.effective and model.latest is None
         assert model.bar == BARS[model.step].bar and model.metric == BARS[model.step].metric
         assert model.prompt == str(BARS[model.step].prompt) and model.model
     assert steps["O6"].models == []
@@ -508,7 +513,9 @@ async def test_a_switched_on_step_measured_at_its_bar_is_served_in_effect() -> N
     models = [m for step in view.steps for m in step.models]
     assert len(models) == len(ModelStep)
     for model in models:
-        assert model.effective and model.latest is not None and model.latest.passed
+        # Measured at its bar, and off in the tests' rules (ticket 42, 1.5.2).
+        on = model.step is not ModelStep.SKILL_MAIL_KINDS
+        assert model.effective is on and model.latest is not None and model.latest.passed
         assert (model.latest.model, model.latest.prompt) == (model.model, model.prompt)
 
 

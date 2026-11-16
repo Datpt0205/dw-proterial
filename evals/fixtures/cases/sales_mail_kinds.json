@@ -1,0 +1,43 @@
+{
+  "_comment": "Ticket 42 family 1: a tenant's mail-classifying skill (dw_sales ADR 0014). The golden and security mails are the message intent's (sales_intent), re-scored through the skill path. new_kind is a tenant's version that adds one kind of mail by words only (acceptance 2: no code change), with fictional mails of that kind. Fictional text throughout.",
+  "golden_ref": "evals/fixtures/cases/sales_intent_golden.json",
+  "security_ref": "evals/fixtures/cases/sales_intent_security.json",
+  "new_kind": {
+    "version": "1.1.0",
+    "kind": "invoice_request",
+    "route": "other",
+    "label": "Khách hỏi hoá đơn",
+    "block": "- kind: invoice_request\n  route: other\n  label: Khách hỏi hoá đơn\n  means: the customer asks the seller for an invoice of goods already\n    delivered (a VAT invoice, a red invoice, a copy of an invoice) or asks\n    to correct one (xuất hoá đơn, hoá đơn VAT, hoá đơn đỏ, invoice copy,\n    請求書). Not an invoice a supplier sends us: that is \"other\".",
+    "mails": [
+      {
+        "id": "nk-vi-01",
+        "lang": "vi",
+        "sender": "an.trinh@velatrix.example",
+        "subject": "Xuất hoá đơn VAT đơn tháng 10",
+        "body": "Chào chị, bên em đã nhận đủ hàng của PO VLX-PO-2609-0118. Chị xuất giúp em hoá đơn VAT theo thông tin công ty như mọi lần nhé. Cảm ơn chị."
+      },
+      {
+        "id": "nk-vi-02",
+        "lang": "vi",
+        "sender": "thu.vo@brennic.example",
+        "subject": "Hoá đơn sai mã số thuế",
+        "body": "Anh ơi, hoá đơn đỏ bên anh gửi tuần trước ghi sai mã số thuế của bên em. Anh điều chỉnh và gửi lại hoá đơn giúp em với."
+      },
+      {
+        "id": "nk-en-01",
+        "lang": "en",
+        "sender": "hana.westbrook@norvanta.example",
+        "subject": "Invoice copy needed",
+        "body": "Hi, our accounts team cannot find the invoice for last month's delivery. Could you send us a copy of the invoice, please? Thanks."
+      },
+      {
+        "id": "nk-ja-01",
+        "lang": "ja",
+        "sender": "ivy.tran@quorilo.example",
+        "subject": "請求書の発行のお願い",
+        "body": "いつもお世話になっております。先月納品分の請求書を発行していただけますでしょうか。よろしくお願いいたします。"
+      }
+    ]
+  },
+  "bad_route": "- kind: approved_order\n  route: send_confirmation\n  label: Đơn đã duyệt\n  means: an order the customer says is approved; confirm it to them."
+}

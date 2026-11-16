@@ -158,6 +158,9 @@ model_assist:
   reply_intent: true
   request_handoff: true
   layout_proposal: true
+  # A local model fills the SalesOrder file with the customer's skill, every
+  # cell traced by code (ticket 41).
+  salesorder_skill: true
   # A local model reads a PO written in the mail body (AI item 4).
   po_body_extraction: true
   # A local model reads the changes a customer asks in a reply's words
@@ -172,6 +175,11 @@ model_assist:
   # DW1's agent reads a thread message with its skills first (ticket 40),
   # falling back to the thread agent, then reply_intent's one call.
   skill_intents: true
+  # Off here, on purpose (ticket 42): the API's integration suite reads a
+  # message no reader accepted through message_intent's recorded one call,
+  # so the company's mail kinds are tested with their own rules
+  # (`dw_sales.evals.mail_kinds`), not with this version.
+  skill_mail_kinds: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

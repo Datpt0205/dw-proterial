@@ -35,8 +35,11 @@ with the customer's own words and code verified (ticket 33, `HandoffReader`).
 Only a message no reader accepted is classified by its words, and only by a
 local model's typed intent where the tenant's rules turn it on and its bar
 is met (`message_intent`, dw_sales ADR 0005), which code maps to the route
-(`INTENT_ROUTES`). **No keyword table decides what a mail means** (CLAUDE.md
-§6, hardcode audit finding 6): with the step off or no model wired, a person
+(`INTENT_ROUTES`). Where the tenant turns it on, the kinds are first the ones
+its mail-classifying skill names, each mapped by the skill onto one of those
+routes (`mail_kinds`, ticket 42); with no kind read, the one call reads.
+**No keyword table decides what a mail means** (CLAUDE.md §6, hardcode audit
+finding 6): with the step off or no model wired, a person
 reads it, except a mail a verified Design mailbox sent, which goes to the
 quotation flow as Design's (an identity code checks, `DesignSenderPort`).
 A mail carrying a document no reader accepted is routed
@@ -107,7 +110,8 @@ from dw_sales.application.examples import Lookup
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.local_time import LocalZonePort, local_day
-from dw_sales.application.message_intent import IntentReader
+from dw_sales.application.mail_kinds import MailKindReader
+from dw_sales.application.message_intent import IntentRead, IntentReader
 from dw_sales.application.model_reading import DescriptionReader, Showing
 from dw_sales.application.order_ports import (
     READ_AS,
@@ -210,7 +214,9 @@ _LOG = logging.getLogger("dw_sales.model")
 # Handed to the quotation flow, which gives them their disposition.
 QUOTATION_KINDS = frozenset({MessageKind.QUOTE_REQUEST, MessageKind.DESIGN_REPLY})
 
-# Where each kind a model reads goes (ticket 31). The order and quotation
+# Where each kind a model reads goes (ticket 31): the legal routes, which a
+# tenant's mail-classifying skill maps each of its kinds onto (ticket 42,
+# `mail_kinds.ROUTES` is this table's keys). The order and quotation
 # flows still decide for themselves: a PO without a readable file, or a
 # Design reply from a sender the mail system did not verify, is routed as it
 # would be anyway. The rest go to the customer's Sales PIC with the reason.
@@ -369,6 +375,11 @@ class OrderIntake:
     # 31), for a tenant whose rules turn it on. None: no model is wired, and
     # a person reads those messages (module docstring).
     intents: IntentReader | None = None
+    # The same classification by the kinds the tenant's mail-classifying
+    # skill names (ticket 42), asked first where the tenant's rules turn it
+    # on; with no kind read, the message is classified as if it were off.
+    # None: no model is wired.
+    mail_kinds: MailKindReader | None = None
     # The case a reply's thread headers name (ticket 32). None: no case log is
     # wired (a reader-only test), and no reply is linked.
     threads: ThreadLinkPort | None = None
@@ -570,6 +581,16 @@ class OrderIntake:
             if cases:
                 return await self._among(scope, message, sender, rules, cases, run, now)
         if (
+            self.mail_kinds is not None
+            and run is not None
+            and await self._model_step(scope, rules, ModelStep.SKILL_MAIL_KINDS)
+        ):
+            read = await self.mail_kinds.read(
+                scope, newest_part(message), sender, rules_version=rules.version, run=run
+            )
+            if read is not None:
+                return await self._routed_read(scope, read, attached, rules, run)
+        if (
             self.intents is not None
             and run is not None
             and await self._model_step(scope, rules, ModelStep.MESSAGE_INTENT)
@@ -691,7 +712,19 @@ class OrderIntake:
                 NOT_UNDERSTOOD,
                 self.intents.unavailable(rules.version),
             )
-        route = INTENT_ROUTES[read.kind]
+        return await self._routed_read(scope, read, attached, rules, run)
+
+    async def _routed_read(
+        self,
+        scope: SalesScope,
+        read: IntentRead,
+        attached: Sequence[_Attached],
+        rules: OrderRules,
+        run: RunContext,
+    ) -> Classification:
+        """Where a kind read goes: its route's row of `INTENT_ROUTES`, the
+        one table for the one call's kinds and the tenant's (ticket 42)."""
+        route = INTENT_ROUTES[read.route]
         if isinstance(route, RoutingReason):
             return Classification(MessageKind.OTHER, route, reading=read.reading)
         if (

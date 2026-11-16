@@ -1,6 +1,6 @@
 # 41 — A customer's SalesOrder made by a skill with tools, every cell traced by code
 
-Status: ready-for-agent (after 40)
+Status: done (2026-11-16)
 Blocked by: 40 (the skill store and the deep agent)
 Category: enhancement
 
@@ -53,3 +53,54 @@ under ADR 0014.
 3. A skill change that breaks any of the customer's worked pairs cannot be
    sent for approval.
 4. A tool never returns another customer's convert rows or items.
+
+## Done
+
+Built 2026-11-16 by the agent (Đạt away); what the ticket did not settle is
+recorded in dw_sales ADR 0013 "Applied 2026-11-16: the skill with tools".
+
+- **The skill**: ``salesorder-<customer code>`` per customer, a tenant
+  version under ``sales_skill_salesorder_<code>`` in the skills' store and
+  flow (`application/salesorder_skills.py`, `skills.py`); the platform's
+  generic one, fictional pairs only, in
+  `configs/skills/dw1-salesorder/salesorder/SKILL.md`. Constants are the
+  backticked texts of its ``## Constants`` section.
+- **The tools** (`application/salesorder_fill.py`, `SalesOrderTools`): the
+  customer's record, its own convert list, the items that list reaches,
+  bound to one customer when built; called by code for every code the PO
+  prints before the one turn, each shown with an id. The PO as read is a row
+  per delivery, each value at ``R<row>.<field>``.
+- **The turn**: prompt `sales.salesorder_fill@1.0.0`, json_schema answer
+  `ModelSalesOrderFill` (per cell a value and its source), five rows a call.
+- **The trace** (`salesorder_fill.trace`): every cell of every row redone;
+  what is written is code's value; a cell not traced is flagged with its
+  reason (`FlagReason`) and never written; a price column takes only the
+  PO's own price.
+- **Worked pairs**: `sales.salesorder_pairs` (migration `711e8b760139`),
+  written by ticket 38's learning with every pair it reads. A skill change is
+  replayed by the worker's `sales_salesorder_skill_replay` lane on the
+  customer's newest 20 pairs (`application/salesorder_pairs.py`); the head's
+  approval is refused unless every pair came out as the PIC's file
+  (`skills.PAIRS_BROKEN`).
+- **The gate**: `ModelStep.SALESORDER_SKILL`, switch
+  `model_assist.salesorder_skill` (off), T2, bar 0.95 on
+  ``golden.cell_accuracy``; asked when a case's ``bravo_upload`` file is drawn
+  (`application/salesorder_case_fill.py`, `artifacts_service`), the learned
+  rules filling it otherwise; flagged cells blank and listed on the file's
+  second sheet.
+- **Eval** `sales_salesorder_skill@1.0.0` (golden, unseen line shape,
+  injection, cross-customer, missing evidence), graders in
+  `dw_sales/evals/salesorder_skill.py`. Measured once on Strata
+  (2026-11-16, not attested): 1.0 cell accuracy on the three golden pairs
+  (114 cells, every one traced, p50 11.5 s a call); the unseen shape 7 of 8
+  oracle cells right, the eighth flagged (`value_not_computed`), the
+  unmapped code's item never written; no injected or other customer's value
+  written. Report `evals/reports/live-onprem/sales_salesorder_skill@1.0.0.json`.
+  The step stays off until a tenant's attested measurement on the plant's
+  model.
+
+Not built: the skills page listing and proposing a customer's SalesOrder
+skill and showing its pair replay (the API route of ticket 40 proposes one by
+name today; the approval inbox shows the approval); withdrawing a wrong
+pair; a PO column the reading does not keep (PRS number) is still not a
+source.

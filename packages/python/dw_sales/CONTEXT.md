@@ -253,6 +253,17 @@ API and the plan use the English terms. The spec is
   thread agent reads the message where that is on, else the one call, else
   Sales. Off until a tenant turns it on and its live eval meets the bar
   (`skill_intents`, ticket 40).
+- **Mail kind** (Loại thư của công ty): a kind of mail a company tells
+  apart, named with its meaning in its mail-classifying skill (`mail-kinds`):
+  the platform's version names the message intent's kinds word for word, and
+  a company adds or rewords one with a skill version its head approves.
+  Each kind goes on exactly one **route**, one of the message intent's kinds
+  (`po`, `quote_request`, ... `other`), which code holds; a kind the
+  platform does not ship carries the label Sales sees. A company's version
+  naming a route code does not hold is refused when proposed. Read where a
+  company turns it on (`skill_mail_kinds`) and its live eval meets the bar;
+  with no kind read, the message intent's own reading classifies it
+  (ticket 42).
 - **AI-worded reply** (Bản AI soạn): a mail to the customer about an order
   that a local model words beside the template's draft, never in its place:
   the answer to a customer's reply read `asks` (which has no template), PC's

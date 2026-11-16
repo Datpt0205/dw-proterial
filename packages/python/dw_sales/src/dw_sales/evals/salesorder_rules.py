@@ -171,8 +171,8 @@ def converts(master: Mapping[str, Any]) -> list[ConvertEntry]:
 
 @dataclass(frozen=True)
 class Catalog:
-    """`LearningCatalogPort` over the fixture's master data, for one tenant:
-    another tenant has none of it."""
+    """`LearningCatalogPort` (and ticket 41's `PairCatalogPort`) over the
+    fixture's master data, for one tenant: another tenant has none of it."""
 
     customer_list: Sequence[Customer]
     item_list: Sequence[Item]
@@ -181,6 +181,9 @@ class Catalog:
 
     def _mine(self, scope: SalesScope) -> bool:
         return scope.tenant_id == self.tenant.tenant_id
+
+    async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:
+        return Snapshot(self.customer_list if self._mine(scope) else (), _NOW)
 
     async def customer_by_code(self, scope: SalesScope, code: str) -> Snapshot[Customer | None]:
         found = next((c for c in self.customer_list if c.code == code), None)

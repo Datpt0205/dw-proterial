@@ -87,6 +87,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         ModelStep.REPLY_INTENT: Tier.APPLIES_ITSELF,
         ModelStep.THREAD_AGENT: Tier.APPLIES_ITSELF,
         ModelStep.SKILL_INTENTS: Tier.APPLIES_ITSELF,
+        # The same classification as the message intent's, by the company's
+        # kinds; where the mail goes is still a route code holds (ticket 42).
+        ModelStep.SKILL_MAIL_KINDS: Tier.APPLIES_ITSELF,
         # Values of a PO written in the mail's body, read into the case.
         ModelStep.PO_BODY_EXTRACTION: Tier.APPLIES_ITSELF,
         # A draft nobody has sent; sending is a person's.
@@ -96,6 +99,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # A layout, once approved, reads every later PO of the form: an
         # approval (dw_sales ticket 30).
         ModelStep.LAYOUT_PROPOSAL: Tier.PERSON_APPROVES,
+        # A SalesOrder file goes to Bravo only once a person approved it
+        # (ADR 0026), whatever filled it (ticket 41).
+        ModelStep.SALESORDER_SKILL: Tier.PERSON_APPROVES,
         # A change to what the customer was confirmed, line by line by a
         # person (dw_sales ADR 0010).
         ModelStep.CHANGE_REQUEST: Tier.PERSON_APPROVES,

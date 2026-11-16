@@ -174,6 +174,7 @@ from dw_sales.application.prompt_versions import PROMPTS_DECIDED
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
+from dw_sales.application.salesorder_pairs import SALESORDER_SKILL_REPLAY_LANE
 from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
 from dw_worker.composition import (
@@ -889,6 +890,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # The replay of a proposed DW1 skill version (Sales ticket 40), for the
     # head to see before deciding.
     sales_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
+    # A customer's SalesOrder skill replayed on its worked pairs (ticket 41).
+    sales_salesorder_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
@@ -1223,6 +1226,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     sales_skill_replay_consumer = build_sales_skill_replay_consumer(
                         mount.skill_replay, threshold_scopes
                     )
+                if mount.salesorder_skill_replay is not None:
+                    # Paced and isolated per workspace as the skill replay is.
+                    sales_salesorder_skill_replay_consumer = build_sales_skill_replay_consumer(
+                        mount.salesorder_skill_replay, threshold_scopes
+                    )
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
@@ -1370,6 +1378,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             SKILL_REPLAY_LANE,
             sales_skill_replay_consumer,
+            interval_seconds=SALES_SKILL_REPLAY_INTERVAL_SECONDS,
+        )
+    # And a proposed customer SalesOrder skill replayed on its customer's
+    # worked pairs (ticket 41): it only stores a replay, so no ReapTarget.
+    if sales_salesorder_skill_replay_consumer is not None:
+        registry.register(
+            SALESORDER_SKILL_REPLAY_LANE,
+            sales_salesorder_skill_replay_consumer,
             interval_seconds=SALES_SKILL_REPLAY_INTERVAL_SECONDS,
         )
 

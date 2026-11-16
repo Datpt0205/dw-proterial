@@ -38,6 +38,7 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDrafts
 from dw_sales.adapters.persistence.salesorder_examples import SqlSalesOrderExamples
+from dw_sales.adapters.persistence.salesorder_pairs import SqlWorkedPairs
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.catalog_imports import (
     OPEN,
@@ -233,6 +234,8 @@ class SqlCatalogUnitOfWork:
     snapshots: SqlCatalogSnapshots
     drafts: SqlRuleDrafts
     examples: SqlSalesOrderExamples
+    # A customer's worked pairs (ticket 41), written with the example settled.
+    pairs: SqlWorkedPairs
     approvals: RunLessApprovalsPort
     audit: AuditRepositoryPort
     outbox: OutboxPort
@@ -260,6 +263,7 @@ class SqlCatalogUnitOfWork:
         self.snapshots = SqlCatalogSnapshots(session, self._scope)
         self.drafts = SqlRuleDrafts(session, self._scope)
         self.examples = SqlSalesOrderExamples(session, self._scope)
+        self.pairs = SqlWorkedPairs(session, self._scope)
         self.approvals = self._factory.approvals(session)
         self.audit = self._factory.audit(session)
         self.outbox = self._factory.outbox(session)

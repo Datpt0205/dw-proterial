@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Final, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 from zoneinfo import ZoneInfo
 
 from dw_kernel.errors import ConflictError
@@ -45,6 +45,9 @@ from dw_sales.application.salesorder_rules import (
 )
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Customer, Language
+
+if TYPE_CHECKING:
+    from dw_sales.application.salesorder_fill import TracedFill
 
 # Why a file is not drawn where deployed from copy marked mock (audit 11), as
 # Purchasing refuses its mock Bravo layout (`dw_purchasing...orders.MOCK_LAYOUT`).
@@ -155,6 +158,9 @@ class Drafting[CaseT]:
     # The master data the customer's SalesOrder rules look up (ticket 38):
     # read for a customer whose rules name a lookup, empty otherwise.
     lookups: Lookups = field(default_factory=Lookups)
+    # The upload file's rows filled with the customer's SalesOrder skill and
+    # traced (ticket 41), where the step ran for this draw; None: the rules.
+    skill_fill: TracedFill | None = None
 
     def _real[C: (SalesEmailCopy, SalesDocumentCopy, BravoUploadLayout)](self, copy: C) -> C:
         if self.deployed and copy.mock:

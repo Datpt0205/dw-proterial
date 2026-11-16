@@ -98,6 +98,7 @@ TOP_REASONS: Final = 5
 _ON_DISPOSITION: Final = frozenset(
     {
         ModelStep.MESSAGE_INTENT,
+        ModelStep.SKILL_MAIL_KINDS,
         ModelStep.REPLY_INTENT,
         ModelStep.THREAD_AGENT,
         ModelStep.SKILL_INTENTS,
@@ -108,6 +109,7 @@ _ON_DISPOSITION: Final = frozenset(
 _ROUTING: Final = frozenset(
     {
         ModelStep.MESSAGE_INTENT,
+        ModelStep.SKILL_MAIL_KINDS,
         ModelStep.REPLY_INTENT,
         ModelStep.THREAD_AGENT,
         ModelStep.SKILL_INTENTS,
@@ -341,11 +343,14 @@ def _disposition_produced(
     def plain(name: str, value: object, line_no: int | None = None) -> ProducedValue:
         return ProducedValue(field=name, value=_value(value), line_no=line_no, anchor=None)
 
-    if row.step is ModelStep.MESSAGE_INTENT and disposition.reading is not None:
+    if (
+        row.step in (ModelStep.MESSAGE_INTENT, ModelStep.SKILL_MAIL_KINDS)
+        and disposition.reading is not None
+    ):
         reading = disposition.reading
-        return [
-            plain(n, v) for n, v in (("kind", reading.kind), ("language", reading.language)) if v
-        ]
+        # A tenant's own kind by the words its skill gives it (ticket 42).
+        kind = reading.kind_label or reading.kind
+        return [plain(n, v) for n, v in (("kind", kind), ("language", reading.language)) if v]
     if (
         row.step in (ModelStep.REPLY_INTENT, ModelStep.THREAD_AGENT, ModelStep.SKILL_INTENTS)
         and disposition.reply is not None
