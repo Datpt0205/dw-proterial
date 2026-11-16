@@ -368,8 +368,13 @@ context. All five are done and on `main`. The full narrative is at
           person's flow, then a Team owner RDPs in as dwmail over Tailscale,
           signs OneDrive in (MFA), adds `DW-mail` with "Add shortcut to My
           files", leaves by Disconnect; then the read-only share to the VM
-          and its mount (to build, after the folder exists). The VM is
-          pre-pulling the stack's pinned images.
+          and its mount (to build, after the folder exists). **Images
+          pre-pulled in the VM:** all 18 pinned third-party images of the
+          on-prem compose (Langfuse and ClickHouse left out) and the two
+          bases DW's images build from (`python:3.12-slim-bookworm`,
+          `node:22-alpine`), 20 of 20, 17.5 GB; run as a transient systemd
+          unit (`dw-prepull`), since an SSH-held run was cut once. VM disk:
+          364 GB free.
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
           crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
           running first. Tailscale key expiry is off (checked from the laptop).
