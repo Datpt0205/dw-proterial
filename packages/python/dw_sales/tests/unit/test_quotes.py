@@ -144,7 +144,7 @@ def _request(*items: dict[str, Any], **overrides: Any) -> QuoteRequest:
     )
 
 
-def _reply(*line_nos: int, ycbg: str = "YCBG-2609-030", copper: str | None = "11.8") -> DesignReply:
+def _reply(*line_nos: int, ycbg: str = "RFQ260930-030", copper: str | None = "11.8") -> DesignReply:
     def at(cell: str) -> dict[str, Any]:
         return {
             "attachment_id": "M25-A1",
@@ -252,7 +252,7 @@ def _approve(case: QuoteCase, actor: QuoteActor = HEAD, **kwargs: Any) -> QuoteC
 
 _STEPS: dict[QuoteStatus, Callable[[QuoteCase], QuoteCase]] = {
     QuoteStatus.YCBG_DRAFTED: lambda c: c.draft_ycbg(),
-    QuoteStatus.YCBG_RECORDED: lambda c: c.record_ycbg("YCBG-2609-030", by=PRICER, at=AT),
+    QuoteStatus.YCBG_RECORDED: lambda c: c.record_ycbg("RFQ260930-030", by=PRICER, at=AT),
     QuoteStatus.SENT_TO_DESIGN: lambda c: c.send_to_design(),
     QuoteStatus.DESIGN_REPLIED: lambda c: c.record_design_reply(_reply()),
     QuoteStatus.PRICED: _priced,
@@ -576,12 +576,12 @@ def test_the_ycbg_is_recorded_with_its_number_and_who_typed_it() -> None:
     case = _case(QuoteStatus.YCBG_RECORDED)
 
     assert case.ycbg is not None
-    assert (case.ycbg.ycbg_no, case.ycbg.recorded_by) == ("YCBG-2609-030", PRICER)
+    assert (case.ycbg.ycbg_no, case.ycbg.recorded_by) == ("RFQ260930-030", PRICER)
 
 
 def test_a_reply_to_another_ycbg_cannot_be_recorded_on_the_case() -> None:
     with pytest.raises(ValidationError, match="this case's YCBG"):
-        _case(QuoteStatus.SENT_TO_DESIGN).record_design_reply(_reply(ycbg="YCBG-2608-044"))
+        _case(QuoteStatus.SENT_TO_DESIGN).record_design_reply(_reply(ycbg="RFQ260828-044"))
 
 
 def test_a_spec_discussion_can_send_the_case_back_to_design_and_keeps_the_reply() -> None:

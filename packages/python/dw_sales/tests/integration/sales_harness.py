@@ -230,7 +230,7 @@ async def run_m10(
     )
     case = await keep(case.draft_ycbg(), "quote.ycbg_drafted", DW1)
     case = await keep(
-        case.record_ycbg("YCBG-2609-030", by=PRICER, at=at), "quote.ycbg_recorded", user(PRICER)
+        case.record_ycbg("RFQ260930-030", by=PRICER, at=at), "quote.ycbg_recorded", user(PRICER)
     )
     case = await keep(case.send_to_design(), "quote.sent_to_design", user(PRICER))
     outcome = await service.take_design_reply(scope, "M25")

@@ -234,7 +234,7 @@ async function pricingConflict(
   await expect(page.getByText("DW1 đã soạn YCBG").first()).toBeVisible();
   await page.getByRole("button", { name: "Đã lập YCBG", exact: true }).click();
   const record = dialog(page, "Ghi số YCBG Bravo đã cấp");
-  await record.getByLabel("Số YCBG trên Bravo").fill("YCBG-2609-030");
+  await record.getByLabel("Số YCBG trên Bravo").fill("RFQ260930-030");
   await record
     .getByRole("button", { name: "Ghi số YCBG", exact: true })
     .click();

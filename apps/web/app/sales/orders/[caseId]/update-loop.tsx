@@ -8,7 +8,12 @@ import { InfoTip, StatusTag } from "@dw/ui";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
-import { ARTIFACT_KIND, SUBFLOW_STEP, label } from "../../_lib/labels";
+import {
+  ARTIFACT_KIND,
+  INTERNAL_REASON,
+  SUBFLOW_STEP,
+  label,
+} from "../../_lib/labels";
 import type { Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
@@ -179,18 +184,36 @@ function LoopCard({
   };
 
   const verdict = loop.verdict ? VERDICT[loop.verdict] : null;
+  // Proterial's own change (ticket 10): PC's answer is in, nothing to ask.
+  const internal = loop.reason ?? null;
   return (
-    <Card size="small" title="Khách xin thay đổi đơn đã nhập Bravo">
+    <Card
+      size="small"
+      title={
+        internal
+          ? `Thay đổi nội bộ: ${label(INTERNAL_REASON, internal)}`
+          : "Khách xin thay đổi đơn đã nhập Bravo"
+      }
+    >
       <Space orientation="vertical" className="w-full">
         <Space wrap role="status">
           <StatusTag tone="warn">{AWAITS[loop.awaits]}</StatusTag>
           <Typography.Text>từ {formatDateTime(loop.since)}</Typography.Text>
           {verdict ? <StatusTag tone="pri">{verdict}</StatusTag> : null}
-          <InfoTip label="Vòng cập nhật">
-            DW1 soạn bản hỏi PC và thư trả lời khách; bạn tự gửi rồi ghi lại.
-            Đơn chỉ đổi khi khách đồng ý, sau đó bạn duyệt đúng tệp cập nhật
-            Bravo, nhập vào Bravo, đơn được kiểm chéo và xác nhận lại.
-          </InfoTip>
+          {internal ? (
+            <InfoTip label="Thay đổi nội bộ">
+              PC đổi lịch sau xác nhận; đơn đã đổi theo các dòng bạn áp dụng.
+              Soạn “{label(ARTIFACT_KIND, "internal_change_notice")}” ở mục Tài
+              liệu và tự gửi khách. Duyệt đúng tệp cập nhật Bravo, nhập vào
+              Bravo, đơn được kiểm chéo và xác nhận lại.
+            </InfoTip>
+          ) : (
+            <InfoTip label="Vòng cập nhật">
+              DW1 soạn bản hỏi PC và thư trả lời khách; bạn tự gửi rồi ghi lại.
+              Đơn chỉ đổi khi khách đồng ý, sau đó bạn duyệt đúng tệp cập nhật
+              Bravo, nhập vào Bravo, đơn được kiểm chéo và xác nhận lại.
+            </InfoTip>
+          )}
         </Space>
 
         {loop.awaits === "ask_pc" || loop.awaits === "waiting_pc" ? (
@@ -373,7 +396,7 @@ function LoopCard({
           columns={[
             { title: "Dòng", dataIndex: "line_no", width: 64 },
             {
-              title: "Đơn đang giữ → khách xin",
+              title: internal ? "Cắt số lượng" : "Đơn đang giữ → khách xin",
               key: "asked",
               render: (_, l) => (
                 <Space orientation="vertical" size={0}>
@@ -386,7 +409,11 @@ function LoopCard({
                       → {formatDate(l.asked_requested_date)}
                     </Typography.Text>
                   ) : null}
-                  {l.asked_quantity ? (
+                  {l.asked_quantity && internal ? (
+                    <Typography.Text>
+                      Còn <Quantity value={l.asked_quantity} />
+                    </Typography.Text>
+                  ) : l.asked_quantity ? (
                     <Typography.Text>
                       Số lượng: <Quantity value={l.held_quantity} /> →{" "}
                       <Quantity value={l.asked_quantity} />
@@ -415,6 +442,8 @@ function LoopCard({
               title: "",
               key: "action",
               fixed: "right",
+              // PC's own change carries PC's answer already.
+              hidden: internal !== null,
               render: (_, l) => (
                 <GuardedButton
                   size="small"

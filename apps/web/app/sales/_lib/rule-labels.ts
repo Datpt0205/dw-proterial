@@ -311,6 +311,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Đọc thay đổi khách xin bằng lời",
       help: "Thư trả lời xin đổi ngày giao hoặc số lượng: mô hình chỉ ra dòng và giá trị trong thư; Sales xác nhận từng dòng trước khi đơn đổi.",
     },
+    "model_assist.internal_change": {
+      label: "Đọc thư PC đổi lịch sau xác nhận",
+      help: "Thư PC dời, tách hoặc cắt dòng (Thay đổi nội bộ): mô hình chỉ ra dòng và từng đợt giao trong thư; Sales kiểm rồi bấm Áp dụng.",
+    },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
       label: "Số PO đầu cần xác nhận từng giá trị",
@@ -515,6 +519,14 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "pc_request.subject": { label: "Tiêu đề" },
     "pc_request.line": { label: "Mẫu một dòng hỏi PC" },
     "pc_request.body": { label: "Nội dung" },
+    design_request: {
+      label: "Mẫu đề nghị Design tạo mã",
+      help: "Bản Sales chép gửi Design khi bấm “Đề nghị Design tạo mã” trên một dòng chưa có mã.",
+    },
+    "design_request.subject": { label: "Tiêu đề" },
+    "design_request.nearest": { label: "Mẫu một mã gần nhất" },
+    "design_request.no_nearest": { label: "Câu khi không có mã gần" },
+    "design_request.body": { label: "Nội dung" },
   },
   sales_salesorder_rules: {
     customers: {

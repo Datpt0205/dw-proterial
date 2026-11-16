@@ -97,6 +97,7 @@ from dw_sales.domain.orders import (
     FindingCode,
     FindingDisposition,
     FlaggedValue,
+    InternalReason,
     LineChange,
     MappingStatus,
     OrderCase,
@@ -110,8 +111,10 @@ from dw_sales.domain.orders import (
     ValueCorrection,
 )
 from dw_sales.domain.quotes import (
+    DesignCheck,
     FindingAccepted,
     FindingCorrected,
+    FromOrder,
     PriceEvidence,
     PriceSuggestion,
     QuoteCase,
@@ -614,6 +617,16 @@ class PcRequestStateView(BaseModel):
     at: datetime
 
 
+class DesignRequestStateView(BaseModel):
+    """Sales asked Design to create a PRV code for this line, and waits (ticket 06)."""
+
+    model_config = _VIEW
+
+    line_no: int
+    by: uuid.UUID
+    at: datetime
+
+
 class UpdateDeliveryView(BaseModel):
     """One delivery PC gives a changed line in the update loop (ticket 29)."""
 
@@ -764,6 +777,8 @@ class UpdateLoopView(BaseModel):
     verdict: PcVerdict | None
     lines: list[UpdateLineView]
     approval: UpdateApprovalView | None
+    # Why, for Proterial's own change (ticket 10); None: a customer's.
+    reason: InternalReason | None = None
 
 
 def _update_awaits(case: OrderCase) -> UpdateAwaits:
@@ -814,6 +829,7 @@ def update_loop_view(case: OrderCase) -> UpdateLoopView | None:
         awaits=_update_awaits(case),
         verdict=loop.verdict,
         lines=lines,
+        reason=loop.reason,
         approval=(
             None
             if loop.approval is None
@@ -1095,6 +1111,22 @@ class OrderSummaryView(BaseModel):
     awaits_cross_check: bool
 
 
+class QuoteLinkView(BaseModel):
+    """A quote case opened from the order (ticket 09): for which lines, who
+    opened it and when, and its status now. ``status`` None: the caller does
+    not see that quote case, and is shown only that it exists."""
+
+    model_config = _VIEW
+
+    quote_case_id: uuid.UUID
+    lines: list[int]
+    by: uuid.UUID
+    at: datetime
+    status: str | None
+    # The order waits on it: it is neither approved nor declined.
+    waiting: bool
+
+
 class OrderCaseView(BaseModel):
     model_config = _VIEW
 
@@ -1195,8 +1227,16 @@ class OrderCaseView(BaseModel):
     change_requests: list[ChangeRequestView] = []
     # Sales asked PC for delivery dates and waits on the answer (ticket 07).
     pc_request: PcRequestStateView | None = None
+    # Sales asked Design for a new PRV code and waits, per line (ticket 06).
+    design_requests: list[DesignRequestStateView] = []
     # A customer's change on the order once it is in Bravo (ticket 29).
     update_loop: UpdateLoopView | None = None
+    # "Thay đổi nội bộ" may be applied now (ticket 10,
+    # `OrderCase.takes_internal_change`): the page offers it by this.
+    internal_change_open: bool = False
+    # The quote cases opened from the order for lines with no valid
+    # quotation, oldest first (ticket 09).
+    quote_links: list[QuoteLinkView] = []
     # The values whose page or sheet no person was served before the
     # cross-check step began (Bravo recorded), for the cross-checker to open
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
@@ -1499,6 +1539,7 @@ def order_case(
     sent: Mapping[str, SentRead] | None = None,
     change_requests: Sequence[ChangeRequest] = (),
     confirmation_copy: InboundMessage | None = None,
+    quote_links: Sequence[QuoteLinkView] = (),
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1620,7 +1661,12 @@ def order_case(
             if case.pc_request
             else None
         ),
+        design_requests=[
+            DesignRequestStateView.model_validate(r.model_dump()) for r in case.design_requests
+        ],
         update_loop=update_loop_view(case),
+        internal_change_open=case.takes_internal_change,
+        quote_links=list(quote_links),
         unopened_values=(
             unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
             if cross_checker
@@ -2081,6 +2127,8 @@ class QuoteCaseView(BaseModel):
     ycbg_recorded_at: datetime | None
     design_reply: DesignReplyView | None
     design_replies: int
+    # Design's result as Bravo holds it, read from an export (ticket 16).
+    design_check: DesignCheck | None = None
     pricing: PricingView | None
     earlier_pricing: int
     returns: list[ReturnView]
@@ -2100,6 +2148,8 @@ class QuoteCaseView(BaseModel):
     thread_before: list[ThreadMessageView] = []
     # The messages Sales sent on its thread(s) (ticket 25).
     thread_sent: list[SentMessageView] = []
+    # The order case it was opened from (ticket 09); None for a request.
+    from_order: FromOrder | None = None
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -2277,6 +2327,7 @@ def quote_case(
             else None
         ),
         design_replies=len(case.design_replies),
+        design_check=case.design_check,
         pricing=(
             PricingView(
                 decided_by=pricing.decided_by,
@@ -2341,6 +2392,7 @@ def quote_case(
         replies=talk.replies,
         thread_before=[thread_message(m) for m in thread.before] if thread else [],
         thread_sent=talk.sent,
+        from_order=case.from_order,
     )
 
 

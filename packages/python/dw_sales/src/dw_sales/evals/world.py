@@ -166,6 +166,7 @@ from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.example_store import MemoryExampleStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
 from dw_sales.testing.role_catalog import StaticRoleCatalog
+from dw_sales.testing.ycbg_export_store import MemoryYcbgExportStore
 from dw_sales.workflows.graph import register
 
 ALPHA = SalesScope(TenantId(uuid.UUID(int=0xA1FA)), WorkspaceId(uuid.UUID(int=0xA1FB)))
@@ -1098,6 +1099,12 @@ class MemoryStore:
             if s.case.ycbg is not None and s.case.ycbg.ycbg_no == ycbg_no
         ]
 
+    async def quotes(
+        self, scope: SalesScope, quote_case_ids: Collection[uuid.UUID]
+    ) -> Sequence[QuoteCase]:
+        held = self.state(scope).quotes
+        return [held[i].case for i in quote_case_ids if i in held]
+
 
 # ------------------------------------------------- the platform's pieces --
 
@@ -1779,6 +1786,8 @@ def open_world(
         autonomy=AutonomyGate(store),
         uploads=uploads,
         design_senders=quotation,
+        # The quote cases opened from an order (ticket 09).
+        linked_quotes=store,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications(clock=clock)
@@ -1821,6 +1830,7 @@ def open_world(
         templates=XlsxCatalogTemplates(),
         draft_uow=draft_store,
         example_uow=example_store,
+        ycbg_uow=MemoryYcbgExportStore(outbox=runtime.outbox),
         readiness=readiness,
         roles=StaticRoleCatalog(),
         step_activity=store,

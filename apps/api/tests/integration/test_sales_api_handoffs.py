@@ -103,7 +103,7 @@ async def test_a_routed_complaint_carries_a_hand_off_code_wrote_and_kept(
     # A case reader sees the hand-off as they see the mail it was copied from.
     listed = {m["message_id"]: m for m in (await an.get("/inbox")).json()}
     draft = listed["M31"]["handoff_draft"]
-    assert (draft["to"], draft["template_ref"]) == ("qa", "sales_handoffs@1.1.0#complaint")
+    assert (draft["to"], draft["template_ref"]) == ("qa", "sales_handoffs@1.2.0#complaint")
     assert "VLX-PO-2608-0102" in draft["subject"] and "LOT-2609-118" in draft["subject"]
     assert f"«{PROBLEM}»" in draft["body"]
     # Leadership reads aggregates only, and another tenant's mailbox is its own.

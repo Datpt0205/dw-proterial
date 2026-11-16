@@ -142,6 +142,7 @@ class ModelStep(StrEnum):
     SKILL_HANDOFFS = "skill_handoffs"
     SKILL_REPLY_DRAFTS = "skill_reply_drafts"
     TRIAGE_CARD = "triage_card"
+    INTERNAL_CHANGE = "internal_change"
 
 
 class ModelAssist(BaseModel):
@@ -250,6 +251,11 @@ class ModelAssist(BaseModel):
     # platform's routes. Advice: the routing stays until Sales takes or
     # dismisses it. Off where a version does not say.
     triage_card: bool = False
+    # A local model reads PC's mail Sales pastes into "Thay đổi nội bộ"
+    # (ticket 10): per line, the words naming it and each delivery's
+    # quantity and date, which code finds, resolves and parses; Sales applies
+    # the lines. Off: Sales types them. Off where a version does not say.
+    internal_change: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

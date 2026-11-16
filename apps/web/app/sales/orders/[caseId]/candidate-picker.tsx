@@ -28,6 +28,7 @@ import { label, MAPPING_STATUS } from "../../_lib/labels";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { DescriptionReadingPanel } from "./description-reading";
+import { DesignRequestPanel } from "./design-request";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = SalesSchemas["OrderLineView"];
@@ -180,6 +181,14 @@ export function CandidatePicker({
           Trạng thái mã: {label(MAPPING_STATUS, line.mapping.status)}
         </Typography.Text>
         <DescriptionReadingPanel reading={line.basis.description_reading} />
+        {typing && line.mapping.status === "unmapped" ? (
+          <DesignRequestPanel
+            order={order}
+            lineNo={line.line_no}
+            onUse={setTyped}
+            onChanged={onDone}
+          />
+        ) : null}
         {typing ? (
           <Form layout="vertical">
             <Form.Item

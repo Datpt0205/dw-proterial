@@ -5317,6 +5317,101 @@
         "title": "DescriptionReadingView",
         "type": "object"
       },
+      "DesignCheck": {
+        "additionalProperties": false,
+        "description": "Design's result on a whole YCBG, read from Bravo (ticket 16), never\nwritten there: Bravo's status is Design's to close. Read from the YCBG\nexport a person uploaded (``file_sha256``, ``read_by``) until the\nvendor's API reads a request back by its number (R13).",
+        "properties": {
+          "file_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DesignCheckLine"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          },
+          "read_by": {
+            "format": "uuid",
+            "title": "Read By",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "pattern": "^RFQ[0-9]{6}-[0-9]{3}$",
+            "title": "Ycbg No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ycbg_no",
+          "lines",
+          "file_sha256",
+          "read_by",
+          "read_at"
+        ],
+        "title": "DesignCheck",
+        "type": "object"
+      },
+      "DesignCheckLine": {
+        "additionalProperties": false,
+        "description": "Design's result on one line of the YCBG, as Bravo holds it once the\nline is closed: QUOTE with the BP code it is quoted under, or DECLINE\nwith Design's reason.",
+        "properties": {
+          "bp_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z0-9][A-Z0-9-]{1,31}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bp Code"
+          },
+          "line_no": {
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "verdict": {
+            "enum": [
+              "quote",
+              "decline"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "verdict"
+        ],
+        "title": "DesignCheckLine",
+        "type": "object"
+      },
       "DesignLineView": {
         "properties": {
           "anchors": {
@@ -5433,6 +5528,90 @@
           "lines"
         ],
         "title": "DesignReplyView",
+        "type": "object"
+      },
+      "DesignRequestStateView": {
+        "description": "Sales asked Design to create a PRV code for this line, and waits (ticket 06).",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line_no",
+          "by",
+          "at"
+        ],
+        "title": "DesignRequestStateView",
+        "type": "object"
+      },
+      "DesignRequestView": {
+        "description": "The request to Design for one line, drafted from the case for a person\nto send, and the codes Design named since it was recorded sent (who\nrecorded it, and when, is the order's own `design_requests`).",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "named": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NamedCodeView"
+            },
+            "title": "Named",
+            "type": "array"
+          },
+          "nearest": {
+            "items": {
+              "$ref": "#/components/schemas/NearestCodeView"
+            },
+            "title": "Nearest",
+            "type": "array"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "template_ref": {
+            "title": "Template Ref",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version",
+          "line_no",
+          "to",
+          "subject",
+          "body",
+          "template_ref",
+          "nearest"
+        ],
+        "title": "DesignRequestView",
         "type": "object"
       },
       "DesignTextLineView": {
@@ -6786,6 +6965,29 @@
         "title": "FollowupDraftView",
         "type": "object"
       },
+      "FromOrder": {
+        "additionalProperties": false,
+        "description": "The order case a quote case was opened from (ticket 09): its id and\nPO number, stamped when the quote opened, so both cases name each other.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "po_no": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Po No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "po_no"
+        ],
+        "title": "FromOrder",
+        "type": "object"
+      },
       "GrantMemberRequest": {
         "properties": {
           "department": {
@@ -7906,6 +8108,318 @@
           "quotes"
         ],
         "title": "IntentView",
+        "type": "object"
+      },
+      "InternalApplyBody": {
+        "additionalProperties": false,
+        "description": "Proterial's own change as a person applies it (ticket 10): why, and\neach line with the deliveries PC now gives it.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InternalLine"
+            },
+            "maxItems": 300,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "reason": {
+            "enum": [
+              "overcapacity",
+              "ng",
+              "short_stock",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "reason",
+          "lines"
+        ],
+        "title": "InternalApplyBody",
+        "type": "object"
+      },
+      "InternalDelivery": {
+        "additionalProperties": false,
+        "description": "One delivery a person applies: how much, on PC's date.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,16}0*$)\\d{0,12}\\.\\d{0,3}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "quantity",
+          "date"
+        ],
+        "title": "InternalDelivery",
+        "type": "object"
+      },
+      "InternalDeliveryView": {
+        "description": "A delivery as read: a value None where the paste leaves it to a person.",
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "date_words": {
+            "title": "Date Words",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "quantity_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Words"
+          }
+        },
+        "required": [
+          "quantity",
+          "date",
+          "quantity_words",
+          "date_words"
+        ],
+        "title": "InternalDeliveryView",
+        "type": "object"
+      },
+      "InternalLine": {
+        "additionalProperties": false,
+        "description": "One line a person applies, with its deliveries in PC's order.",
+        "properties": {
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/InternalDelivery"
+            },
+            "maxItems": 99,
+            "minItems": 1,
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "line_no": {
+            "maximum": 99999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line_no",
+          "deliveries"
+        ],
+        "title": "InternalLine",
+        "type": "object"
+      },
+      "InternalLineView": {
+        "description": "A line as read. ``line_no`` None: the words name no line of the order,\nrefused. ``held_*``: the line as the order holds it, beside what PC gives.",
+        "properties": {
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/InternalDeliveryView"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "held_deliveries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UpdateDeliveryView"
+            },
+            "title": "Held Deliveries",
+            "type": "array"
+          },
+          "held_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Quantity"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_such_line",
+                  "unread",
+                  "quantity_raised",
+                  "printed_schedules"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "uom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uom"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "words",
+          "deliveries",
+          "problem"
+        ],
+        "title": "InternalLineView",
+        "type": "object"
+      },
+      "InternalReadBody": {
+        "additionalProperties": false,
+        "description": "PC's mail as Sales pasted it into \"Thay đổi nội bộ\" (ticket 10): read,\nnever stored, to DW1's reading limit (`pc_dates.MAX_TEXT`).",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "text"
+        ],
+        "title": "InternalReadBody",
+        "type": "object"
+      },
+      "InternalReadView": {
+        "description": "What DW1 read of the paste, or why nothing: always marked as the\nmodel's on the page, and nothing of it is kept.",
+        "properties": {
+          "dropped": {
+            "default": 0,
+            "title": "Dropped",
+            "type": "integer"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InternalLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "status": {
+            "enum": [
+              "read",
+              "nothing",
+              "unavailable",
+              "off"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text_max": {
+            "default": 8000,
+            "title": "Text Max",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "InternalReadView",
         "type": "object"
       },
       "InviteMemberRequest": {
@@ -10846,7 +11360,8 @@
           "skill_document_forms",
           "skill_handoffs",
           "skill_reply_drafts",
-          "triage_card"
+          "triage_card",
+          "internal_change"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -11089,6 +11604,64 @@
           "revoked_at"
         ],
         "title": "MySupportGrantModel",
+        "type": "object"
+      },
+      "NamedCodeView": {
+        "description": "A code a Design mail names that the item master holds, and the mail.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "message_id",
+          "sender",
+          "subject",
+          "received_at"
+        ],
+        "title": "NamedCodeView",
+        "type": "object"
+      },
+      "NearestCodeView": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "description"
+        ],
+        "title": "NearestCodeView",
         "type": "object"
       },
       "NewTenantView": {
@@ -11898,6 +12471,14 @@
               }
             ]
           },
+          "design_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DesignRequestStateView"
+            },
+            "title": "Design Requests",
+            "type": "array"
+          },
           "duplicate_of_case": {
             "anyOf": [
               {
@@ -11959,6 +12540,11 @@
             },
             "title": "Header Flags",
             "type": "array"
+          },
+          "internal_change_open": {
+            "default": false,
+            "title": "Internal Change Open",
+            "type": "boolean"
           },
           "legacy_text_anchor": {
             "anyOf": [
@@ -12056,6 +12642,14 @@
                 "type": "null"
               }
             ]
+          },
+          "quote_links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QuoteLinkView"
+            },
+            "title": "Quote Links",
+            "type": "array"
           },
           "received_at": {
             "format": "date-time",
@@ -12578,6 +13172,34 @@
           "pc_confirmed_at"
         ],
         "title": "OrderLineView",
+        "type": "object"
+      },
+      "OrderQuoteView": {
+        "description": "The quote case opened from the order, and the order's next version.",
+        "properties": {
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "quote_case_id": {
+            "format": "uuid",
+            "title": "Quote Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "quote_case_id",
+          "lines"
+        ],
+        "title": "OrderQuoteView",
         "type": "object"
       },
       "OrderSummaryView": {
@@ -15866,6 +16488,16 @@
               }
             ]
           },
+          "design_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DesignCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "design_replies": {
             "title": "Design Replies",
             "type": "integer"
@@ -15911,6 +16543,16 @@
             },
             "title": "Findings",
             "type": "array"
+          },
+          "from_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FromOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "lines": {
             "items": {
@@ -16518,6 +17160,58 @@
           "anchors"
         ],
         "title": "QuoteLineView",
+        "type": "object"
+      },
+      "QuoteLinkView": {
+        "description": "A quote case opened from the order (ticket 09): for which lines, who\nopened it and when, and its status now. ``status`` None: the caller does\nnot see that quote case, and is shown only that it exists.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "quote_case_id": {
+            "format": "uuid",
+            "title": "Quote Case Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "quote_case_id",
+          "lines",
+          "by",
+          "at",
+          "status",
+          "waiting"
+        ],
+        "title": "QuoteLinkView",
         "type": "object"
       },
       "QuoteSummaryView": {
@@ -22653,6 +23347,23 @@
             "title": "Lines",
             "type": "array"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "overcapacity",
+                  "ng",
+                  "short_stock",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
           "request_id": {
             "format": "uuid",
             "title": "Request Id",
@@ -23486,7 +24197,7 @@
           "ycbg_no": {
             "anyOf": [
               {
-                "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+                "pattern": "^RFQ[0-9]{6}-[0-9]{3}$",
                 "type": "string"
               },
               {
@@ -23500,6 +24211,162 @@
           "case_version"
         ],
         "title": "YcbgBody",
+        "type": "object"
+      },
+      "YcbgExport": {
+        "additionalProperties": false,
+        "description": "One uploaded export and what became of it (module docstring).",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "export_id": {
+            "format": "uuid",
+            "title": "Export Id",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "file_size": {
+            "maximum": 2097152.0,
+            "minimum": 1.0,
+            "title": "File Size",
+            "type": "integer"
+          },
+          "outcomes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/YcbgOutcome"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "rejected": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RejectedRow"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "read",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "format": "uuid",
+            "title": "Uploaded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "export_id",
+          "status",
+          "uploaded_by",
+          "uploaded_at",
+          "file_name",
+          "file_sha256",
+          "file_size"
+        ],
+        "title": "YcbgExport",
+        "type": "object"
+      },
+      "YcbgExportBody": {
+        "additionalProperties": false,
+        "description": "Bravo's YCBG screen exported by Sales (ticket 16): its name and its\nbytes, base64, decoded here and never opened: the worker reads it in the\nreader sandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 2796204,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "YcbgExportBody",
+        "type": "object"
+      },
+      "YcbgOutcome": {
+        "additionalProperties": false,
+        "description": "What became of one YCBG number of a read: names the number and the\ncase, never a value of Design's result.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "declined": {
+            "default": false,
+            "title": "Declined",
+            "type": "boolean"
+          },
+          "outcome": {
+            "enum": [
+              "recorded",
+              "unchanged",
+              "pending",
+              "no_case",
+              "lines_differ",
+              "changed",
+              "unreadable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "pattern": "^[!-~]{1,64}$",
+            "title": "Ycbg No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ycbg_no",
+          "outcome"
+        ],
+        "title": "YcbgOutcome",
         "type": "object"
       },
       "ZaloConnectView": {
@@ -32767,6 +33634,148 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/internal-change": {
+      "post": {
+        "operationId": "apply_internal_change_api_v1_sales_orders__case_id__internal_change_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalApplyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Internal Change",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/internal-change/read": {
+      "post": {
+        "operationId": "read_internal_change_api_v1_sales_orders__case_id__internal_change_read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalReadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalReadView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Internal Change",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/delivery-date": {
       "post": {
         "description": "PC agreed the line's short lead time: recorded as who and when.",
@@ -32845,6 +33854,140 @@
           }
         },
         "summary": "Delivery Date",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/design-request": {
+      "get": {
+        "operationId": "design_request_api_v1_sales_orders__case_id__lines__line_no__design_request_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Request",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "design_asked_api_v1_sales_orders__case_id__lines__line_no__design_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Asked",
         "tags": [
           "sales"
         ]
@@ -33637,6 +34780,148 @@
           }
         },
         "summary": "Prepare",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/quote": {
+      "post": {
+        "operationId": "open_quote_api_v1_sales_orders__case_id__quote_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderQuoteView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Quote",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/quote-check": {
+      "post": {
+        "operationId": "quote_check_api_v1_sales_orders__case_id__quote_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Check",
         "tags": [
           "sales"
         ]
@@ -37055,6 +38340,90 @@
           }
         },
         "summary": "Resume",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/ycbg-exports": {
+      "get": {
+        "operationId": "ycbg_exports_api_v1_sales_ycbg_exports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/YcbgExport"
+                  },
+                  "title": "Response Ycbg Exports Api V1 Sales Ycbg Exports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ycbg Exports",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "upload_ycbg_export_api_v1_sales_ycbg_exports_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YcbgExportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YcbgExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Ycbg Export",
         "tags": [
           "sales"
         ]

@@ -519,6 +519,21 @@ _PC_NAMES: Final = frozenset({"customer", "po", "lines"})
 _PC_LINE_NAMES: Final = frozenset(
     {"line_no", "item", "customer_item", "quantity", "uom", "requested_date"}
 )
+# The request to Design to create a PRV code for a line (ticket 06).
+_DESIGN_NAMES: Final = frozenset(
+    {
+        "customer",
+        "po",
+        "line_no",
+        "customer_item",
+        "description",
+        "quantity",
+        "uom",
+        "requested_date",
+        "nearest",
+    }
+)
+_DESIGN_NEAREST_NAMES: Final = frozenset({"code", "description"})
 
 
 def _named(names: frozenset[str]) -> dict[str, Any]:
@@ -579,6 +594,40 @@ class PcRequestTemplate(BaseModel):
         return _plain_placeholders(value, _PC_LINE_NAMES)
 
 
+class DesignRequestTemplate(BaseModel):
+    """The words of the request Sales sends Design to create a PRV code for a
+    line no item fits (ticket 06), from the order case: ``{customer}``,
+    ``{po}``, ``{line_no}``, ``{customer_item}``, ``{description}`` (as the PO
+    prints it), ``{quantity}``, ``{uom}``, ``{requested_date}`` and
+    ``{nearest}`` in the subject and body; one ``nearest`` per code of the
+    tenant's item master nearest the line, with ``{code}`` and its
+    ``{description}``, or ``no_nearest`` where none is."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_DESIGN_NAMES))
+    nearest: str = Field(
+        min_length=1, max_length=300, json_schema_extra=_named(_DESIGN_NEAREST_NAMES)
+    )
+    no_nearest: str = Field(min_length=1, max_length=300)
+    body: str = Field(min_length=1, max_length=4000, json_schema_extra=_named(_DESIGN_NAMES))
+
+    @field_validator("subject", "body")
+    @classmethod
+    def _placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _DESIGN_NAMES)
+
+    @field_validator("nearest")
+    @classmethod
+    def _nearest_placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _DESIGN_NEAREST_NAMES)
+
+    @field_validator("no_nearest")
+    @classmethod
+    def _no_placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, frozenset())
+
+
 class HandoffCopy(BaseModel):
     """`configs/copy/sales_handoffs@<version>.yaml`: the hand-off's words."""
 
@@ -594,6 +643,8 @@ class HandoffCopy(BaseModel):
     templates: Mapping[HandoffKind, HandoffTemplate]
     # The request to PC for an order's delivery dates (ticket 07, 1.1.0).
     pc_request: PcRequestTemplate
+    # The request to Design for a new PRV code (ticket 06, 1.2.0).
+    design_request: DesignRequestTemplate
 
     @field_validator("line")
     @classmethod
@@ -715,6 +766,63 @@ def render_pc_request(
         subject=template.subject.format(**values),
         body=template.body.format(**values),
         template_ref=f"{copy.ref}#pc_request",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class NearestCode:
+    """A code of the tenant's item master near the line, and its words."""
+
+    code: str
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class DesignAskedLine:
+    """The line Design is asked to create a code for, as the PO prints it."""
+
+    line_no: int
+    customer_item_code: str
+    description: str
+    quantity: Decimal
+    uom: str
+    # None: the PO prints it blank (date to follow).
+    requested_date: date | None
+
+
+def render_design_request(
+    copy: HandoffCopy,
+    *,
+    customer_code: str,
+    po_no: str,
+    line: DesignAskedLine,
+    nearest: Sequence[NearestCode],
+) -> RenderedPcRequest:
+    """The request to Design: the template's words around the line as the
+    PO prints it and the ``nearest`` codes the caller took from the tenant's
+    item master; no other code is written. A date the PO leaves blank is the
+    copy's ``unknown``."""
+    template, unknown = copy.design_request, copy.unknown
+    listed = "\n".join(
+        template.nearest.format(code=n.code, description=n.description) for n in nearest
+    )
+    values = {
+        "customer": customer_code,
+        "po": po_no,
+        "line_no": line.line_no,
+        "customer_item": line.customer_item_code,
+        "description": line.description,
+        "quantity": _number(line.quantity),
+        "uom": line.uom,
+        "requested_date": (
+            line.requested_date.strftime("%d/%m/%Y") if line.requested_date else unknown
+        ),
+        "nearest": listed or template.no_nearest,
+    }
+    return RenderedPcRequest(
+        subject=template.subject.format(**values),
+        body=template.body.format(**values),
+        template_ref=f"{copy.ref}#design_request",
     )
 
 

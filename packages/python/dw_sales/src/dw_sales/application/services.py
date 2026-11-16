@@ -39,14 +39,17 @@ from dw_sales.application.confirmations import Confirmations
 from dw_sales.application.customer_notations import CustomerNotations, NotationLedgerPort
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
+from dw_sales.application.design_requests import DesignRequests
 from dw_sales.application.design_text_reading import DesignTextReplies
 from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
+from dw_sales.application.internal_changes import InternalChanges
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
+from dw_sales.application.order_quotes import OrderQuotes
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.outbound_mail import OutboundMailService
 from dw_sales.application.overview_service import OverviewService
@@ -96,6 +99,7 @@ from dw_sales.application.threads import ThreadMembersPort
 from dw_sales.application.today import FollowupNoticesPort, ReminderMarkStoreFactory, TodayService
 from dw_sales.application.update_loop import UpdateLoops
 from dw_sales.application.worker_service import WorkerService
+from dw_sales.application.ycbg_exports import YcbgExportService, YcbgExportUnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -134,6 +138,8 @@ class SalesServices:
     salesorder_examples: SalesOrderExamples
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
+    # Bravo's YCBG export, uploaded for Design's results to be read (ticket 16).
+    ycbg_exports: YcbgExportService
     # A finding explained in words by the model, on request (AI item 12).
     finding_explanations: FindingExplanations
     # A customer suggested for a sender no domain matched (AI item 5).
@@ -157,16 +163,25 @@ class SalesServices:
     pc_dates: PcDateReplies
     # The request to PC drafted, the wait recorded, PC's answer per line (ticket 07).
     pc_requests: PcRequests
+    # The request to Design for a new PRV code drafted, the wait recorded,
+    # and the codes Design's mails name for Sales to confirm (ticket 06).
+    design_requests: DesignRequests
     # What a customer asked to change by mail, confirmed line by line (ticket 27).
     change_requests: ChangeRequests
     # A customer's change on an order in Bravo, through PC and back (ticket 29).
     update_loops: UpdateLoops
+    # Proterial's own change of a confirmed order, read from PC's mail and
+    # applied by a person (ticket 10).
+    internal_changes: InternalChanges
     # The confirmation sent, then the customer's agreement (ticket 28).
     confirmations: Confirmations
     # DW1's skills, and a version of one proposed for the head (ticket 40).
     skills: SkillsService
     # A person's day: today's brief and their reminders, marked (tickets 47, 48).
     today: TodayService
+    # A quote case opened from an order's lines with no valid quotation, and
+    # those lines checked again once it is approved (ticket 09).
+    order_quotes: OrderQuotes
     gate: Gate
 
 
@@ -218,6 +233,8 @@ def assemble(
     draft_uow: RuleDraftUnitOfWorkFactory,
     # Where a worked example's pair is kept until learned (ticket 38).
     example_uow: ExampleUnitOfWorkFactory,
+    # Where a Bravo YCBG export is kept until read (ticket 16).
+    ycbg_uow: YcbgExportUnitOfWorkFactory,
     readiness: ModelReadiness,
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
@@ -270,6 +287,7 @@ def assemble(
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
     orders = OrderQueries(uow, gate, pending, step_activity, book, threads, directory)
+    order_quotes = OrderQuotes(uow, gate, clock, ids, inbox, intake, book, release_manifest_ref)
     quotes = QuoteQueries(
         uow, gate, clock, quotation, pending, step_activity, book, threads, directory
     )
@@ -329,6 +347,7 @@ def assemble(
             gate, intake.rules, readiness, roles, step_activity, clock
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
+        ycbg_exports=YcbgExportService(ycbg_uow, uow, gate, clock, ids),
         salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         finding_explanations=FindingExplanations(
@@ -354,7 +373,21 @@ def assemble(
             uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
         ),
         pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
+        design_requests=DesignRequests(uow, gate, clock, ids, catalog, book, book, inbox),
         update_loops=UpdateLoops(uow, gate, clock, ids, intake, book, book),
+        internal_changes=InternalChanges(
+            uow,
+            gate,
+            clock,
+            ids,
+            intake,
+            intake.zones,
+            intake.rules,
+            intake.model_steps,
+            one_call,
+            worker_id,
+            worker_version,
+        ),
         confirmations=Confirmations(uow, gate, clock, ids, intake, pending, threads, directory),
         change_requests=ChangeRequests(
             uow,
@@ -413,9 +446,12 @@ def assemble(
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays),
         today=TodayService(gate, clock, notices, reminder_marks, book),
+        order_quotes=order_quotes,
         gate=gate,
     )
-    decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)
+    decisions = CaseDecisions(
+        uow, gate, clock, ids, quotation, processing, notifications, order_quotes
+    )
     return SalesAssembly(
         services=services,
         decisions=decisions,

@@ -1,9 +1,10 @@
 """Order cases through the API: reading them, and each Sales decision on one.
 
 Every decision follows one path (`_decide`): the scope it needs, the case in
-the caller's workspace, the version the caller decided on, for `prepare` the
-served source (`require_served`), then the case decides (`OrderCase`), and
-the next case is stored with its event and audit row in one transaction. The
+the caller's workspace, the version the caller decided on, then the case
+decides (`OrderCase`), and the next case is stored with its event and audit
+row in one transaction; `prepare` reads the served source (`require_served`)
+and the quote cases opened from the order (ticket 09) in that transaction. The
 case refuses what the process does not allow (409), a scope the caller lacks
 is refused before anything is read (403), and a case of another workspace is
 not found (404).
@@ -41,6 +42,7 @@ from dw_sales.application.customer_notations import NotationLedgerPort, learn
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
+from dw_sales.application.order_quotes import quote_link_views, settled_quotes
 from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.ports import MemberDirectoryPort
 from dw_sales.application.runs import (
@@ -133,6 +135,7 @@ class OrderQueries:
             sent = {s.message_id: s for s in await work.sent.list_all()}
             requests = await work.change_requests.for_case(case_id)
             artifacts = await work.artifacts.for_case(CaseKind.ORDER, case_id)
+            quote_links = await quote_link_views(work, context, stored.case)
         thread = await case_thread(
             self.threads,
             scope,
@@ -161,6 +164,7 @@ class OrderQueries:
             sent=sent,
             change_requests=requests,
             confirmation_copy=confirmation_copy(stored.case, thread.sent, artifacts),
+            quote_links=quote_links,
         )
 
 
@@ -396,15 +400,23 @@ class OrderCommands:
     async def prepare(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
     ) -> CaseChangeView:
-        """The PIC's self-check is done (step 7), once they were served the source."""
-        return await self._decide(
-            context,
-            case_id,
-            case_version,
-            "order.prepared",
-            lambda case, actor, at: case.prepare(actor, at),
-            served_gate=True,
-        )
+        """The PIC's self-check is done (step 7), once they were served the
+        source, and while no quote case opened from the order is still open
+        (ticket 09): the linked quotes are read in the same transaction, and
+        the case refuses one it is not told is settled."""
+        await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
+        actor, now = order_actor(context, self.gate), self.clock.now()
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+            same_version(case_id, case.case_version, case_version)
+            await require_served(work, context.principal_id, case)
+            settled = await settled_quotes(work, case)
+            after = decided(lambda: case.prepare(actor, now, settled_quotes=settled))
+            event = person_event("order.prepared", context, now)
+            await save_order(work, context, self.ids, case, after, event)
+            await work.commit()
+        await withdraw_if_left(self.decisions, context, case, after)
+        return order_change(after)
 
     async def close(
         self,
@@ -439,7 +451,6 @@ class OrderCommands:
         action: str,
         step: Callable[[OrderCase, Actor, datetime], OrderCase],
         *,
-        served_gate: bool = False,
         finding_key: str | None = None,
         field: str | None = None,
         reason_code: str | None = None,
@@ -449,8 +460,6 @@ class OrderCommands:
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
-            if served_gate:
-                await require_served(work, context.principal_id, case)
             after = decided(lambda: step(case, actor, now))
             event = person_event(
                 action,

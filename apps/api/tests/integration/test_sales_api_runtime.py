@@ -53,7 +53,7 @@ ALPHA_TENANT = sid("tenant", "tenant-alpha")
 
 async def _pending_quote(api: Api) -> dict[str, Any]:
     dieu = api.as_(DIEU)
-    return await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    return await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
 
 async def test_the_purchasing_manager_cannot_decide_a_sales_quote(api: Api) -> None:

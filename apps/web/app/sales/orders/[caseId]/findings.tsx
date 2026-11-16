@@ -28,6 +28,7 @@ import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { FindingWords } from "../../_components/money";
 import { DispositionTag, SeverityTag } from "../../_components/tags";
+import { OpenQuoteButton } from "./quote-link";
 import { ValueCorrections } from "./value-corrections";
 
 type Order = SalesSchemas["OrderCaseView"];
@@ -341,6 +342,9 @@ function FindingCard({
           </Typography.Text>
         </Typography.Text>
         <FindingExplanation caseId={order.case_id} findingKey={finding.key} />
+        {finding.code === "quotation_missing" ? (
+          <OpenQuoteButton order={order} viewer={viewer} onOpened={onDecided} />
+        ) : null}
         {finding.code === "legacy_encoding" ? (
           <Typography.Text role="note">
             PO gõ bằng font tiếng Việt cũ: chữ đọc ra không phải chữ khách thấy,

@@ -177,6 +177,7 @@ from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
 from dw_sales.application.salesorder_pairs import SALESORDER_SKILL_REPLAY_LANE
 from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
+from dw_sales.application.ycbg_exports import YCBG_EXPORT_UPLOADED
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -257,6 +258,7 @@ from dw_worker.consumers.sales_skill_replay import (
     INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
+from dw_worker.consumers.sales_ycbg_exports import build_ycbg_export_handler
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -1251,6 +1253,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # the same condition.
                 if mount.salesorder_learning is not None:
                     handlers[EXAMPLE_REQUESTED] = build_example_handler(mount.salesorder_learning)
+                # A Bravo YCBG export, read for Design's results (ticket 16),
+                # on the same condition.
+                if mount.ycbg_export_reading is not None:
+                    handlers[YCBG_EXPORT_UPLOADED] = build_ycbg_export_handler(
+                        mount.ycbg_export_reading
+                    )
                 if mount.rule_draft_sweep is not None:
                     sales_rule_drafts_consumer = build_rule_draft_sweep_consumer(
                         mount.rule_draft_sweep

@@ -1080,6 +1080,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/internal-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Internal Change */
+        post: operations["apply_internal_change_api_v1_sales_orders__case_id__internal_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/internal-change/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Internal Change */
+        post: operations["read_internal_change_api_v1_sales_orders__case_id__internal_change_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/delivery-date": {
         parameters: {
             query?: never;
@@ -1094,6 +1128,24 @@ export interface paths {
          * @description PC agreed the line's short lead time: recorded as who and when.
          */
         post: operations["delivery_date_api_v1_sales_orders__case_id__lines__line_no__delivery_date_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/design-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Design Request */
+        get: operations["design_request_api_v1_sales_orders__case_id__lines__line_no__design_request_get"];
+        put?: never;
+        /** Design Asked */
+        post: operations["design_asked_api_v1_sales_orders__case_id__lines__line_no__design_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1282,6 +1334,40 @@ export interface paths {
         put?: never;
         /** Prepare */
         post: operations["prepare_api_v1_sales_orders__case_id__prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Quote */
+        post: operations["open_quote_api_v1_sales_orders__case_id__quote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/quote-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote Check */
+        post: operations["quote_check_api_v1_sales_orders__case_id__quote_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2228,6 +2314,24 @@ export interface paths {
         put?: never;
         /** Resume */
         post: operations["resume_api_v1_sales_worker_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/ycbg-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ycbg Exports */
+        get: operations["ycbg_exports_api_v1_sales_ycbg_exports_get"];
+        put?: never;
+        /** Upload Ycbg Export */
+        post: operations["upload_ycbg_export_api_v1_sales_ycbg_exports_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3596,6 +3700,50 @@ export interface components {
             /** Spans */
             spans: components["schemas"]["SpanReadView"][];
         };
+        /**
+         * DesignCheck
+         * @description Design's result on a whole YCBG, read from Bravo (ticket 16), never
+         *     written there: Bravo's status is Design's to close. Read from the YCBG
+         *     export a person uploaded (``file_sha256``, ``read_by``) until the
+         *     vendor's API reads a request back by its number (R13).
+         */
+        DesignCheck: {
+            /** File Sha256 */
+            file_sha256: string;
+            /** Lines */
+            lines: components["schemas"]["DesignCheckLine"][];
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /**
+             * Read By
+             * Format: uuid
+             */
+            read_by: string;
+            /** Ycbg No */
+            ycbg_no: string;
+        };
+        /**
+         * DesignCheckLine
+         * @description Design's result on one line of the YCBG, as Bravo holds it once the
+         *     line is closed: QUOTE with the BP code it is quoted under, or DECLINE
+         *     with Design's reason.
+         */
+        DesignCheckLine: {
+            /** Bp Code */
+            bp_code?: string | null;
+            /** Line No */
+            line_no: number;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "quote" | "decline";
+        };
         /** DesignLineView */
         DesignLineView: {
             /** Anchors */
@@ -3635,6 +3783,51 @@ export interface components {
             reply_date: string;
             /** Ycbg No */
             ycbg_no: string;
+        };
+        /**
+         * DesignRequestStateView
+         * @description Sales asked Design to create a PRV code for this line, and waits (ticket 06).
+         */
+        DesignRequestStateView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Line No */
+            line_no: number;
+        };
+        /**
+         * DesignRequestView
+         * @description The request to Design for one line, drafted from the case for a person
+         *     to send, and the codes Design named since it was recorded sent (who
+         *     recorded it, and when, is the order's own `design_requests`).
+         */
+        DesignRequestView: {
+            /** Body */
+            body: string;
+            /** Case Version */
+            case_version: number;
+            /** Line No */
+            line_no: number;
+            /**
+             * Named
+             * @default []
+             */
+            named: components["schemas"]["NamedCodeView"][];
+            /** Nearest */
+            nearest: components["schemas"]["NearestCodeView"][];
+            /** Subject */
+            subject: string;
+            /** Template Ref */
+            template_ref: string;
+            /** To */
+            to: string[];
         };
         /** DesignTextLineView */
         DesignTextLineView: {
@@ -3954,6 +4147,20 @@ export interface components {
              */
             to: string[];
         };
+        /**
+         * FromOrder
+         * @description The order case a quote case was opened from (ticket 09): its id and
+         *     PO number, stamped when the quote opened, so both cases name each other.
+         */
+        FromOrder: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Po No */
+            po_no: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4215,6 +4422,125 @@ export interface components {
             intent: "sends_po" | "requests_change" | "cancels" | "accepts" | "rejects" | "asks" | "adds_info" | "sends_rfq" | "unclear";
             /** Quotes */
             quotes: string[];
+        };
+        /**
+         * InternalApplyBody
+         * @description Proterial's own change as a person applies it (ticket 10): why, and
+         *     each line with the deliveries PC now gives it.
+         */
+        InternalApplyBody: {
+            /** Case Version */
+            case_version: number;
+            /** Lines */
+            lines: components["schemas"]["InternalLine"][];
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "overcapacity" | "ng" | "short_stock" | "other";
+        };
+        /**
+         * InternalDelivery
+         * @description One delivery a person applies: how much, on PC's date.
+         */
+        InternalDelivery: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Quantity */
+            quantity: number | string;
+        };
+        /**
+         * InternalDeliveryView
+         * @description A delivery as read: a value None where the paste leaves it to a person.
+         */
+        InternalDeliveryView: {
+            /** Date */
+            date: string | null;
+            /** Date Words */
+            date_words: string;
+            /** Quantity */
+            quantity: string | null;
+            /** Quantity Words */
+            quantity_words: string | null;
+        };
+        /**
+         * InternalLine
+         * @description One line a person applies, with its deliveries in PC's order.
+         */
+        InternalLine: {
+            /** Deliveries */
+            deliveries: components["schemas"]["InternalDelivery"][];
+            /** Line No */
+            line_no: number;
+        };
+        /**
+         * InternalLineView
+         * @description A line as read. ``line_no`` None: the words name no line of the order,
+         *     refused. ``held_*``: the line as the order holds it, beside what PC gives.
+         */
+        InternalLineView: {
+            /** Deliveries */
+            deliveries: components["schemas"]["InternalDeliveryView"][];
+            /**
+             * Held Deliveries
+             * @default []
+             */
+            held_deliveries: components["schemas"]["UpdateDeliveryView"][];
+            /** Held Quantity */
+            held_quantity?: string | null;
+            /** Line No */
+            line_no: number | null;
+            /** Problem */
+            problem: ("no_such_line" | "unread" | "quantity_raised" | "printed_schedules") | null;
+            /** Uom */
+            uom?: string | null;
+            /** Words */
+            words: string;
+        };
+        /**
+         * InternalReadBody
+         * @description PC's mail as Sales pasted it into "Thay đổi nội bộ" (ticket 10): read,
+         *     never stored, to DW1's reading limit (`pc_dates.MAX_TEXT`).
+         */
+        InternalReadBody: {
+            /** Case Version */
+            case_version: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * InternalReadView
+         * @description What DW1 read of the paste, or why nothing: always marked as the
+         *     model's on the page, and nothing of it is kept.
+         */
+        InternalReadView: {
+            /**
+             * Dropped
+             * @default 0
+             */
+            dropped: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["InternalLineView"][];
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "nothing" | "unavailable" | "off";
+            /**
+             * Text Max
+             * @default 8000
+             */
+            text_max: number;
         };
         /** ItemBasisView */
         ItemBasisView: {
@@ -4917,7 +5243,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card" | "internal_change";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -4933,6 +5259,34 @@ export interface components {
              * @enum {string}
              */
             step: "multiply";
+        };
+        /**
+         * NamedCodeView
+         * @description A code a Design mail names that the item master holds, and the mail.
+         */
+        NamedCodeView: {
+            /** Code */
+            code: string;
+            /** Description */
+            description: string;
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+        };
+        /** NearestCodeView */
+        NearestCodeView: {
+            /** Code */
+            code: string;
+            /** Description */
+            description: string;
         };
         /**
          * NotationEntryView
@@ -5054,6 +5408,11 @@ export interface components {
             customer_code: string;
             decision?: components["schemas"]["PendingDecisionView"] | null;
             derivation?: components["schemas"]["Derivation"] | null;
+            /**
+             * Design Requests
+             * @default []
+             */
+            design_requests: components["schemas"]["DesignRequestStateView"][];
             /** Duplicate Of Case */
             duplicate_of_case: string | null;
             /** Duplicate Of So */
@@ -5070,6 +5429,11 @@ export interface components {
             header_corrections: components["schemas"]["ValueCorrectionView"][];
             /** Header Flags */
             header_flags: components["schemas"]["FlaggedValue"][];
+            /**
+             * Internal Change Open
+             * @default false
+             */
+            internal_change_open: boolean;
             legacy_text_anchor: components["schemas"]["SourceAnchor"] | null;
             /** Lines */
             lines: components["schemas"]["OrderLineView"][];
@@ -5094,6 +5458,11 @@ export interface components {
             /** Prepared By */
             prepared_by: string | null;
             print_copy: components["schemas"]["PrintCopyView"] | null;
+            /**
+             * Quote Links
+             * @default []
+             */
+            quote_links: components["schemas"]["QuoteLinkView"][];
             /**
              * Received At
              * Format: date-time
@@ -5216,6 +5585,21 @@ export interface components {
             value_states: {
                 [key: string]: components["schemas"]["ValueState"];
             };
+        };
+        /**
+         * OrderQuoteView
+         * @description The quote case opened from the order, and the order's next version.
+         */
+        OrderQuoteView: {
+            /** Case Version */
+            case_version: number;
+            /** Lines */
+            lines: number[];
+            /**
+             * Quote Case Id
+             * Format: uuid
+             */
+            quote_case_id: string;
         };
         /**
          * OrderSummaryView
@@ -6039,6 +6423,7 @@ export interface components {
             customer_from: string;
             decision?: components["schemas"]["PendingDecisionView"] | null;
             decline: components["schemas"]["DeclineView"] | null;
+            design_check?: components["schemas"]["DesignCheck"] | null;
             /** Design Replies */
             design_replies: number;
             design_reply: components["schemas"]["DesignReplyView"] | null;
@@ -6050,6 +6435,7 @@ export interface components {
             evidence: components["schemas"]["EvidenceView"][] | components["schemas"]["Hidden"] | null;
             /** Findings */
             findings: components["schemas"]["QuoteFindingView"][];
+            from_order?: components["schemas"]["FromOrder"] | null;
             /** Lines */
             lines: components["schemas"]["QuoteLineView"][];
             master_list: components["schemas"]["StampView"] | null;
@@ -6211,6 +6597,35 @@ export interface components {
             target_price: components["schemas"]["Amount"] | null;
             /** Uom */
             uom: string;
+        };
+        /**
+         * QuoteLinkView
+         * @description A quote case opened from the order (ticket 09): for which lines, who
+         *     opened it and when, and its status now. ``status`` None: the caller does
+         *     not see that quote case, and is shown only that it exists.
+         */
+        QuoteLinkView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Lines */
+            lines: number[];
+            /**
+             * Quote Case Id
+             * Format: uuid
+             */
+            quote_case_id: string;
+            /** Status */
+            status: string | null;
+            /** Waiting */
+            waiting: boolean;
         };
         /** QuoteSummaryView */
         QuoteSummaryView: {
@@ -7896,6 +8311,8 @@ export interface components {
             awaits: "ask_pc" | "waiting_pc" | "answer_customer" | "waiting_customer" | "approve_update" | "bravo_entry" | "cross_check" | "confirm";
             /** Lines */
             lines: components["schemas"]["UpdateLineView"][];
+            /** Reason */
+            reason?: ("overcapacity" | "ng" | "short_stock" | "other") | null;
             /**
              * Request Id
              * Format: uuid
@@ -8052,6 +8469,83 @@ export interface components {
             case_version: number;
             /** Ycbg No */
             ycbg_no?: string | null;
+        };
+        /**
+         * YcbgExport
+         * @description One uploaded export and what became of it (module docstring).
+         */
+        YcbgExport: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Export Id
+             * Format: uuid
+             */
+            export_id: string;
+            /** File Name */
+            file_name: string;
+            /** File Sha256 */
+            file_sha256: string;
+            /** File Size */
+            file_size: number;
+            /**
+             * Outcomes
+             * @default []
+             */
+            outcomes: components["schemas"]["YcbgOutcome"][];
+            /**
+             * Rejected
+             * @default []
+             */
+            rejected: components["schemas"]["RejectedRow"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "read" | "failed";
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
+        };
+        /**
+         * YcbgExportBody
+         * @description Bravo's YCBG screen exported by Sales (ticket 16): its name and its
+         *     bytes, base64, decoded here and never opened: the worker reads it in the
+         *     reader sandbox.
+         */
+        YcbgExportBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
+        /**
+         * YcbgOutcome
+         * @description What became of one YCBG number of a read: names the number and the
+         *     case, never a value of Design's result.
+         */
+        YcbgOutcome: {
+            /** Case Id */
+            case_id?: string | null;
+            /**
+             * Declined
+             * @default false
+             */
+            declined: boolean;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "recorded" | "unchanged" | "pending" | "no_case" | "lines_differ" | "changed" | "unreadable";
+            /** Ycbg No */
+            ycbg_no: string;
         };
     };
     responses: never;
@@ -10270,7 +10764,154 @@ export interface operations {
             };
         };
     };
+    apply_internal_change_api_v1_sales_orders__case_id__internal_change_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InternalApplyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_internal_change_api_v1_sales_orders__case_id__internal_change_read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InternalReadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalReadView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delivery_date_api_v1_sales_orders__case_id__lines__line_no__delivery_date_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_request_api_v1_sales_orders__case_id__lines__line_no__design_request_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignRequestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_asked_api_v1_sales_orders__case_id__lines__line_no__design_request_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10705,6 +11346,82 @@ export interface operations {
         };
     };
     prepare_api_v1_sales_orders__case_id__prepare_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_quote_api_v1_sales_orders__case_id__quote_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderQuoteView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_check_api_v1_sales_orders__case_id__quote_check_post: {
         parameters: {
             query?: never;
             header?: {
@@ -12645,6 +13362,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerStateView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ycbg_exports_api_v1_sales_ycbg_exports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YcbgExport"][];
+                };
+            };
+        };
+    };
+    upload_ycbg_export_api_v1_sales_ycbg_exports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YcbgExportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YcbgExport"];
                 };
             };
             /** @description Validation Error */

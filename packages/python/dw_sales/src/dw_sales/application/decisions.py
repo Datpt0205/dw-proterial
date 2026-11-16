@@ -48,6 +48,7 @@ from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import InboxProcessing
+from dw_sales.application.order_quotes import OrderQuotes
 from dw_sales.application.ports import NotificationSenderPort
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import parse_finding_key
@@ -103,6 +104,10 @@ class CaseDecisions:
     inbox: InboxProcessing
     # The pricer is told when their quotation is approved (2026-10-28).
     notifications: NotificationSenderPort
+    # The order a quote was opened from has its lines checked again once the
+    # quote is approved (ticket 09). None: nothing is checked here, and the
+    # order waits for a person's "Kiểm tra lại".
+    order_quotes: OrderQuotes | None = None
 
     # ------------------------------------------------------- DW xử lý --
 
@@ -372,6 +377,8 @@ class CaseDecisions:
                 await work.commit()
         if write and quoted is not None and action == "quote.approved":
             await self._approved(decider, quoted)
+            if self.order_quotes is not None:
+                await self.order_quotes.resume(decider, quoted)
         return action
 
     async def _approved(self, decider: AccessContext, quote: QuoteCase) -> None:

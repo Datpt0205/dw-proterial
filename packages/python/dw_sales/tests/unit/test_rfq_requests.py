@@ -522,7 +522,7 @@ async def test_a_stated_target_never_reaches_price_evidence_or_its_finding() -> 
             case = case.confirm_value(finding.line_no, field, value, by=PERSON, at=AT)
     replied = (
         case.draft_ycbg()
-        .record_ycbg("YCBG-2610-099", by=PERSON, at=AT)
+        .record_ycbg("RFQ261031-099", by=PERSON, at=AT)
         .send_to_design()
         .record_design_reply(_reply())
     )
@@ -573,7 +573,7 @@ def _reply() -> DesignReply:
                 "sha256": sha,
             },
             "document": {
-                "ycbg_no": {"value": "YCBG-2610-099", "source": at("B4")},
+                "ycbg_no": {"value": "RFQ261031-099", "source": at("B4")},
                 "reply_date": {"value": "2026-10-03", "source": at("E4")},
                 "lines": [
                     {

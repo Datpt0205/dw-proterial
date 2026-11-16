@@ -27,7 +27,7 @@ def _column(board: dict[str, Any], kind: str, status: str) -> dict[str, Any]:
 async def test_the_board_lays_out_cases_by_status_with_each_persons_step(api: Api) -> None:
     an, dieu, giang, khoa = api.as_(AN), api.as_(DIEU), api.as_(GIANG), api.as_(KHOA)
     up = await uploaded(an, await order_of(an, "M01"))
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
     boards = {}
     for name, persona in {"an": an, "dieu": dieu, "giang": giang, "khoa": khoa}.items():

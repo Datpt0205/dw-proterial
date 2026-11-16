@@ -159,7 +159,7 @@ MEMBERS = (
 T0 = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)
 NOW = datetime(2026, 10, 5, 3, 0, tzinfo=UTC)
 CONFIRMED_ON = date(2026, 11, 27)
-YCBG_M10 = "YCBG-2609-030"
+YCBG_M10 = "RFQ260930-030"
 QUOTE_NO = "Q26-0301"
 BAND = LmeBand(low_usd_per_tonne=Decimal(10500), high_usd_per_tonne=Decimal(11000))
 DECIDED = Decimal("0.6890")
@@ -172,8 +172,8 @@ PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
 FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.4.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
-    emails=load_copy(COPY / "sales_emails@1.4.0.yaml", SalesEmailCopy),
-    documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
+    emails=load_copy(COPY / "sales_emails@1.5.0.yaml", SalesEmailCopy),
+    documents=load_copy(COPY / "sales_documents@1.3.0.yaml", SalesDocumentCopy),
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
     zone=FOLLOWUPS.working_hours.zone,
@@ -683,6 +683,22 @@ async def _change_accepted_m01() -> OrderCase:
     return await intake(OrderCases()).take_update(SCOPE, await _waiting_customer_m01(), T0)
 
 
+async def _internal_change_m01() -> OrderCase:
+    """M01 confirmed, then PC splits its line 1 over two dates (ticket 10)."""
+    case = await _confirmed_m01()
+    half = case.line(1).effective.quantity / 2
+    later = _ASKED + timedelta(days=7)
+    return await intake(OrderCases()).take_internal_change(
+        SCOPE,
+        case,
+        uuid.UUID(int=10),
+        "short_stock",
+        {1: [(half, _ASKED), (half, later)]},
+        Actor(user_id=AN),
+        T0,
+    )
+
+
 class _OwnEntryCatalog:
     """The mock catalog, whose Bravo holds ``case`` as DW1 entered it."""
 
@@ -739,6 +755,7 @@ KINDS: dict[str, tuple[Builder, Builder]] = {
         lambda: _change_answered_m01("can_do"),
     ),
     "bravo_update": (_change_accepted_m01, _waiting_customer_m01),
+    "internal_change_notice": (_internal_change_m01, _confirmed_m01),
     "bravo_upload": (lambda: _prepared_m01(), _m01),
     "cross_check_sheet": (_uploaded_m27, _m01),
     "confirmation_draft": (_confirmed_m01, lambda: _cross_checked_m01()),
@@ -1563,7 +1580,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
     assert refused.value.details == {
         "kind": "send_draft",
         "language": "ja",
-        "copy": "sales_emails@1.4.0",
+        "copy": "sales_emails@1.5.0",
         "reason": "template_missing",
     }
     assert not world.objects and not world.artifacts
@@ -1605,7 +1622,7 @@ async def test_m10_quotation_is_japanese_and_from_the_submitted_document_only() 
         assert case.submission.document_sha256 in text
         assert "Đỗ Minh Giang" in text  # the approver, by name
     assert {r.template_ref for r, _ in await _rendered(case, "quotation_final")} == {
-        "sales_documents.quotation.ja@1.2.0"
+        "sales_documents.quotation.ja@1.3.0"
     }
 
 
@@ -1702,6 +1719,11 @@ async def test_the_ycbg_and_the_design_request_go_to_design_in_vietnamese() -> N
     message = _eml(await _one(await m10("ycbg_recorded"), "design_request_draft"))
 
     assert YCBG_M10 in form and "MOCK" in form
+    # Bravo's YCBG (ticket 16): the mail's subject as its description, and
+    # per line the direct customer beside the customer's own words.
+    assert "見積依頼 KMH-RFQ-260930-02" in form
+    assert "Khách hàng trực tiếp" in form and "Khách hàng gián tiếp" in form
+    assert "Mô tả hàng của khách" in form and "KMH" in form
     assert [a.addr_spec for a in message["To"].addresses] == list(ARTIFACT_COPY.design_mailboxes)
     assert YCBG_M10 in str(message["Subject"])
 
@@ -2089,7 +2111,7 @@ async def test_the_send_draft_attaches_the_final_files_drawn_before_a_new_docume
         hashlib.sha256(part.get_content()).hexdigest() for part in message.iter_attachments()
     }
     assert attached == {view.sha256 for view in finals}
-    assert {view.template_ref for view in finals} == {"sales_documents.quotation.ja@1.2.0"}
+    assert {view.template_ref for view in finals} == {"sales_documents.quotation.ja@1.3.0"}
     # The next case version draws with the tenant's version.
     assert (await book.artifact_copy(SCOPE, [])).documents.ref == "sales_documents@9.0.1"
 
@@ -2133,6 +2155,8 @@ def test_every_customer_draft_has_every_language_and_every_internal_one_vietname
         "send_draft",
         "change_can_do_draft",
         "change_options_draft",
+        # Proterial's own change told to the customer (ticket 10).
+        "internal_change_notice",
         # The example of the model's answer to a customer's question (ticket 32).
         "question_answer",
     }

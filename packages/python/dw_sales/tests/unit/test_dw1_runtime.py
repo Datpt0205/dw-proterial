@@ -77,7 +77,7 @@ async def _pending_quote(world: World, pricer: Caller = DIEU) -> uuid.UUID:
         return world.quote(case_id).case_version
 
     await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no=None)
-    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no="YCBG-2609-030")
+    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no="RFQ260930-030")
     await commands.design_sent(DIEU.context(), case_id, case_version=version())
     await world.process_each(DIEU, ["M25"])
     await _price(world, pricer, case_id, PRICE)
@@ -296,7 +296,7 @@ async def test_design_s_reply_is_audited_under_the_run_that_processed_it() -> No
     case_id = seen["M10"][0].case_id
     assert case_id is not None
     commands = world.services.quote_commands
-    for ycbg_no in (None, "YCBG-2609-030"):
+    for ycbg_no in (None, "RFQ260930-030"):
         version = world.quote(case_id).case_version
         await commands.ycbg(DIEU.context(), case_id, case_version=version, ycbg_no=ycbg_no)
     await commands.design_sent(

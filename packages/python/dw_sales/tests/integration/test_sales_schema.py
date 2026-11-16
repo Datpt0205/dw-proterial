@@ -29,6 +29,7 @@ from dw_sales.application.prompt_versions import PROMPT_KEY
 from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
+from dw_sales.application.ycbg_exports import ExportStatus
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.customer_notation import NotationCaseKind, NotationSource
 from dw_sales.domain.master_data import CatalogList
@@ -95,6 +96,8 @@ _SETS: dict[str, set[str]] = {
     "ck_rule_drafts_rule_key": _values(RuleKey),
     # A worked example's status (ticket 38).
     "ck_salesorder_examples_status": set(get_args(ExampleStatus)),
+    # A Bravo YCBG export's status (ticket 16).
+    "ck_ycbg_exports_status": set(get_args(ExportStatus)),
     # A customer's notation: its kinds, where it came from, which case (ticket 37).
     "ck_customer_notations_kind": set(get_args(NotationKind)),
     "ck_customer_notations_source": set(get_args(NotationSource)),

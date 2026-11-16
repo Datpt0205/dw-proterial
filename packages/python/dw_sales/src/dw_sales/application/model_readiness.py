@@ -52,6 +52,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.change_reading import CHANGE_REQUEST
 from dw_sales.application.document_forms import DOCUMENT_FORMS_PROMPT
 from dw_sales.application.handoffs import HANDOFF_KINDS_PROMPT, REQUEST_HANDOFF
+from dw_sales.application.internal_changes import INTERNAL_CHANGE
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.mail_kinds import MAIL_KINDS_PROMPT
 from dw_sales.application.message_intent import MESSAGE_INTENT
@@ -249,6 +250,17 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             TRIAGE_CARD_PROMPT,
             "sales_triage_card",
             "sales.triage_card_golden",
+        ),
+        # Ticket 10: the golden pastes of PC's mail read as exactly their
+        # lines, each with its deliveries, over every paste, at ticket 27's
+        # bar for the customer's own change. Sales applies every line, so a
+        # miss costs a line typed. Proposed by the agent.
+        ModelStep.INTERNAL_CHANGE: StepBar(
+            0.85,
+            "all.right",
+            INTERNAL_CHANGE,
+            "sales_internal_change",
+            "sales.internal_change_golden",
         ),
     }
 )

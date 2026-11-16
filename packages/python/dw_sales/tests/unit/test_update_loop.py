@@ -171,7 +171,7 @@ async def test_a_change_on_a_confirmed_order_joins_the_loop_and_changes_nothing_
     assert after.status is OrderStatus.CONFIRMATION_SENT
     assert after.lines == before.lines
     # 6-DW2 is ticket 07's request with the value asked, for a person to copy.
-    assert draft.template_ref == "sales_handoffs@1.1.0#pc_request"
+    assert draft.template_ref == "sales_handoffs@1.2.0#pc_request"
     assert draft.lines == [2] and "20/11/2026" in draft.body and "04/12/2026" not in draft.body
     assert "sales.order.update_change_confirmed" in _actions(world, case_id)
 

@@ -371,9 +371,11 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
 
 def bravo_update(d: OrderDrafting) -> tuple[Rendered, ...]:
     """6.2-SP: the Bravo update of a customer's change the customer accepted
-    (ticket 29), in the paste sheet's layout and rules, a row per delivery of
-    each changed line only, with PC's first and current confirmed dates
-    (`upload_rows`). The PIC approves this exact file before it is entered."""
+    (ticket 29), or of Proterial's own change (ticket 10: the change list
+    applied in Bravo's "Thay đổi chi tiết"), in the paste sheet's layout and
+    rules, a row per delivery of each changed line only, with PC's first and
+    current confirmed dates (`upload_rows`). The PIC approves this exact file
+    before it is entered."""
     loop = d.case.update_loop
     changed = set() if loop is None else {x.line_no for x in loop.lines}
     return _paste_sheet(d, [line for line in d.case.lines if line.line_no in changed], None)
@@ -773,6 +775,45 @@ def _change_answer(d: OrderDrafting, kind: str, *, with_asked: bool) -> tuple[Re
             )
         lines.append(bound.fill(line_template(bound), values))
     body = {**_order_values(d, language), "lines": "\n".join(lines)}
+    return (d.eml(bound.ref, filled(bound, draft, body)),)
+
+
+def internal_change_notice(d: OrderDrafting) -> tuple[Rendered, ...]:
+    """Proterial's own change of a confirmed order, told to the customer
+    (ticket 10, the BA's 6.1B): the reason in the company's words, and each
+    changed line with the deliveries PC now gives it and, where PC cut it,
+    its quantity. Every figure is one the Bravo update file holds for the
+    same lines (`bravo_update`); no price, no amount. A person sends it."""
+    case, language = d.case, d.language
+    loop = case.update_loop
+    assert loop is not None and loop.reason is not None  # the gate opens on it only
+    bound, draft = d.customer_email("internal_change_notice")
+    lines = []
+    for held in loop.lines:
+        line = case.line(held.line_no).effective
+        assert held.pc_answer is not None  # Proterial's own change: every line answered
+        deliveries = "; ".join(
+            bound.word(
+                "delivery",
+                quantity=delivery.quantity,
+                uom=line.uom,
+                date=day_text(delivery.date, language),
+            )
+            for delivery in held.pc_answer.deliveries
+        )
+        cut = bound.word("cut", quantity=line.quantity, uom=line.uom) if held.changes else ""
+        values = {
+            "line_no": held.line_no,
+            "customer_item_code": line.customer_item_code,
+            "deliveries": deliveries,
+            "cut": cut,
+        }
+        lines.append(bound.fill(line_template(bound), values))
+    body = {
+        **_order_values(d, language),
+        "lines": "\n".join(lines),
+        "reason": bound.word(f"reason.{loop.reason}"),
+    }
     return (d.eml(bound.ref, filled(bound, draft, body)),)
 
 

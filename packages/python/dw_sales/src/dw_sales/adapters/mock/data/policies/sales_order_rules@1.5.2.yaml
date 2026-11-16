@@ -195,6 +195,9 @@ model_assist:
   # (`dw_sales.evals.handoff_kinds`, `dw_sales.evals.reply_kinds`).
   skill_handoffs: false
   skill_reply_drafts: false
+  # A local model reads PC's mail Sales pastes into "Thay đổi nội bộ"
+  # (ticket 10); a person applies the lines.
+  internal_change: true
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

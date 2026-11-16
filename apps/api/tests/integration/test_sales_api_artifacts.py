@@ -338,7 +338,7 @@ async def test_the_cross_check_sheet_waits_for_the_bravo_entry(api: Api) -> None
 
     (sheet,) = await _render(an, "orders", case, "cross_check_sheet")
 
-    assert sheet["template_ref"] == "sales_documents.cross_check_sheet.vi@1.2.0"
+    assert sheet["template_ref"] == "sales_documents.cross_check_sheet.vi@1.3.0"
 
 
 # ----------------------------------------------------------- the quotation --
@@ -350,7 +350,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
     """Spec "Done when": Giang approves M10 and downloads the approved
     quotation document; its hash is the one the approval names."""
     dieu, giang = api.as_(DIEU), api.as_(GIANG)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
     previews = await _render(giang, "quotes", pending, "quotation_preview")
     assert {p["content_type"] for p in previews} == {XLSX, "application/pdf"}
     approved = await approve(giang, pending)
@@ -366,7 +366,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
         for f in files
     }
 
-    assert {f["template_ref"] for f in files} == {"sales_documents.quotation.ja@1.2.0"}
+    assert {f["template_ref"] for f in files} == {"sales_documents.quotation.ja@1.3.0"}
     assert all(response.status_code == 200 for response in served.values())
     assert final["approval"]["document_sha256"].encode() in b"".join(
         str(c.value).encode()
@@ -381,7 +381,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
 
 async def test_a_pic_who_is_neither_pricer_nor_approver_gets_no_preview(api: Api) -> None:
     dieu, an = api.as_(DIEU), api.as_(AN)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
     response = await an.post(
         f"/quotes/{pending['case_id']}/artifacts",

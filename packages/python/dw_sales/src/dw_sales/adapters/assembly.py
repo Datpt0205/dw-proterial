@@ -187,6 +187,7 @@ from dw_sales.application.thread_tools import (
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.today import FollowupNoticesPort
 from dw_sales.application.triage import TriageReader
+from dw_sales.application.ycbg_exports import DesignChecks, YcbgExportReading
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
@@ -229,6 +230,9 @@ class Dw1Mount:
     # example in the worker (ticket 38); built with the drain, which
     # resolves who asked.
     salesorder_learning: SalesOrderLearning | None = None
+    # What reads Design's results from an uploaded Bravo YCBG export in the
+    # worker (ticket 16); built with the drain, which resolves who uploaded.
+    ycbg_export_reading: YcbgExportReading | None = None
     # What DW1's model steps did, per case and over time (slice 3), for the
     # activity routes (`dw_sales.presentation.activity_routes`).
     activity: ActivityService | None = None
@@ -536,6 +540,8 @@ def build_dw1(
         autonomy=AutonomyGate(thresholds),
         uploads=stored,
         design_senders=quotation,
+        # The quote cases opened from an order (ticket 09).
+        linked_quotes=SqlQuoteCaseLookup(session_factory),
     )
     runs = RuntimeDw1Runs(
         runtime.runner,
@@ -576,6 +582,7 @@ def build_dw1(
         templates=XlsxCatalogTemplates(),
         draft_uow=catalog_uow,
         example_uow=catalog_uow,
+        ycbg_uow=catalog_uow,
         readiness=readiness,
         roles=roles,
         step_activity=step_activity,
@@ -695,6 +702,15 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
+    ycbg_export_reading = YcbgExportReading(
+        uow=catalog_uow,
+        tables=readers.tables,
+        scanner=scanner,
+        access=requester_access,
+        checks=DesignChecks(uow, SqlQuoteCaseLookup(session_factory), clock, ids),
+        clock=clock,
+        ids=ids,
+    )
     return Dw1Mount(
         services=assembly.services,
         lane=lane,
@@ -703,6 +719,7 @@ def build_dw1(
         catalog_parsing=catalog_parsing,
         rule_drafting=rule_drafting,
         salesorder_learning=salesorder_learning,
+        ycbg_export_reading=ycbg_export_reading,
         rule_draft_sweep=RuleDraftSweep(
             catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
         ),

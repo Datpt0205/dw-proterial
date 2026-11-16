@@ -884,6 +884,70 @@
   },
   "sales_handoffs": {
     "$defs": {
+      "DesignRequestTemplate": {
+        "additionalProperties": false,
+        "description": "The words of the request Sales sends Design to create a PRV code for a\nline no item fits (ticket 06), from the order case: ``{customer}``,\n``{po}``, ``{line_no}``, ``{customer_item}``, ``{description}`` (as the PO\nprints it), ``{quantity}``, ``{uom}``, ``{requested_date}`` and\n``{nearest}`` in the subject and body; one ``nearest`` per code of the\ntenant's item master nearest the line, with ``{code}`` and its\n``{description}``, or ``no_nearest`` where none is.",
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{customer_item}",
+              "{description}",
+              "{line_no}",
+              "{nearest}",
+              "{po}",
+              "{quantity}",
+              "{requested_date}",
+              "{uom}"
+            ]
+          },
+          "nearest": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Nearest",
+            "type": "string",
+            "x-placeholders": [
+              "{code}",
+              "{description}"
+            ]
+          },
+          "no_nearest": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "No Nearest",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{customer_item}",
+              "{description}",
+              "{line_no}",
+              "{nearest}",
+              "{po}",
+              "{quantity}",
+              "{requested_date}",
+              "{uom}"
+            ]
+          }
+        },
+        "required": [
+          "subject",
+          "nearest",
+          "no_nearest",
+          "body"
+        ],
+        "title": "DesignRequestTemplate",
+        "type": "object"
+      },
       "HandoffTemplate": {
         "additionalProperties": false,
         "description": "One kind's words. Placeholders are filled by code from the hand-off:\n``{customer}``, ``{po}``, ``{message_id}``, ``{lines}``, ``{lot}``,\n``{quotes}``, ``{quantity}``.",
@@ -993,6 +1057,9 @@
         "title": "Copy Id",
         "type": "string"
       },
+      "design_request": {
+        "$ref": "#/$defs/DesignRequestTemplate"
+      },
       "line": {
         "maxLength": 300,
         "minLength": 1,
@@ -1056,7 +1123,8 @@
       "line",
       "quote",
       "templates",
-      "pc_request"
+      "pc_request",
+      "design_request"
     ],
     "title": "HandoffCopy",
     "type": "object"
@@ -1365,6 +1433,11 @@
           },
           "description_attributes": {
             "title": "Description Attributes",
+            "type": "boolean"
+          },
+          "internal_change": {
+            "default": false,
+            "title": "Internal Change",
             "type": "boolean"
           },
           "layout_proposal": {

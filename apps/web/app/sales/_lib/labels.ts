@@ -406,7 +406,10 @@ export const CASE_EVENT = {
   "order.mapping_rejected": "Bỏ mã ứng viên (không phải mã này)",
   "order.pc_date_recorded": "Ghi PC đồng ý lead time ngắn",
   "order.pc_asked": "Ghi đã hỏi PC ngày giao",
+  "order.design_asked": "Ghi đã gửi Design đề nghị tạo mã",
   "order.pc_answer_recorded": "Ghi ngày PC trả lời",
+  "order.quote_opened": "Mở báo giá cho dòng chưa có báo giá",
+  "order.quote_rechecked": "Kiểm tra lại theo báo giá đã duyệt",
   "order.update_change_confirmed":
     "Xác nhận thay đổi của khách (đơn đã nhập Bravo)",
   "order.update_pc_asked": "Ghi đã hỏi PC về thay đổi",
@@ -414,6 +417,7 @@ export const CASE_EVENT = {
   "order.update_answer_sent": "Ghi đã gửi khách trả lời về thay đổi",
   "order.update_customer_answered": "Ghi khách quyết định về thay đổi",
   "order.update_approved": "Duyệt tệp cập nhật Bravo",
+  "order.internal_change_applied": "Áp dụng thay đổi nội bộ (PC đổi lịch)",
   "order.correction_requested": "Yêu cầu khách sửa PO",
   "order.prepared": "Tự kiểm xong",
   "order.bravo_recorded": "Ghi số đơn Bravo",
@@ -429,10 +433,12 @@ export const CASE_EVENT = {
   "order.reassigned": "Giao cho người khác",
   "order.change_confirmed": "Xác nhận thay đổi khách xin",
   "quote.received": "Nhận yêu cầu báo giá",
+  "quote.opened_from_order": "Mở từ đơn hàng chưa có báo giá",
   "quote.ycbg_drafted": "Soạn YCBG",
   "quote.ycbg_recorded": "Ghi số YCBG trên Bravo",
   "quote.sent_to_design": "Gửi Design",
   "quote.design_replied": "Design phản hồi",
+  "quote.design_checked": "Kết quả Design từ Bravo",
   "quote.spec_start": "Bắt đầu thảo luận spec",
   "quote.spec_settle": "Chốt spec",
   "quote.spec_ask_design_again": "Hỏi lại Design",
@@ -719,7 +725,8 @@ export const ARTIFACT_KIND = {
   change_summary: "Tóm tắt thay đổi cho Bravo",
   change_can_do_draft: "Thư báo khách đáp ứng được thay đổi (nháp)",
   change_options_draft: "Thư báo khách phương án của PC (nháp)",
-  bravo_update: "Tệp cập nhật Bravo cho thay đổi của khách",
+  bravo_update: "Tệp cập nhật Bravo cho thay đổi",
+  internal_change_notice: "Thư báo khách thay đổi nội bộ (nháp)",
   convert_list_proposal: "Đề xuất bổ sung bảng quy đổi mã",
   design_code_request: "Phiếu nhờ Design tạo mã",
   cannot_supply_draft: "Thư báo không cung cấp được (nháp)",
@@ -732,6 +739,14 @@ export const ARTIFACT_KIND = {
   send_draft: "Thư gửi báo giá (nháp)",
   master_list_update: "Cập nhật master list",
   quote_signed: "Bản báo giá đã ký (tải lên)",
+} as const;
+
+/** Why Proterial itself changes a confirmed order (ticket 10, BA 6.1B). */
+export const INTERNAL_REASON = {
+  overcapacity: "Quá tải sản xuất",
+  ng: "Hàng NG",
+  short_stock: "Thiếu hàng, vật tư",
+  other: "Lý do khác",
 } as const;
 
 /** The language a draft is written in (`Customer.language`). */

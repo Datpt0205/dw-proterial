@@ -87,7 +87,7 @@ async def test_the_request_is_drafted_from_the_case_and_changes_nothing() -> Non
     draft = await world.services.pc_requests.draft(AN.context(), case_id)
 
     assert draft.lines == [1, 2, 3]
-    assert draft.template_ref == "sales_handoffs@1.1.0#pc_request"
+    assert draft.template_ref == "sales_handoffs@1.2.0#pc_request"
     assert before.header.po_no in draft.subject
     assert draft.body.count("- Dòng ") == 3
     assert "06/11/2026" in draft.body  # line 1's requested date, as entered

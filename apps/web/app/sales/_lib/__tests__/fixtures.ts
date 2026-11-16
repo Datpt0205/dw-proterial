@@ -176,6 +176,9 @@ export function order(overrides: Partial<Order> = {}): Order {
     thread_before: [],
     thread_sent: [],
     change_requests: [],
+    design_requests: [],
+    quote_links: [],
+    internal_change_open: false,
     lines: [line],
     ...overrides,
   };

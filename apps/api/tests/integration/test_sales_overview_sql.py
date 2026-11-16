@@ -86,7 +86,7 @@ async def demo(api: Api) -> AsyncIterator[Api]:
     """The demo walked: M01 confirmed, M27 entered in Bravo awaiting its
     cross-check, M10 approved, and the rest of `DEMO_MAIL` processed."""
     an, dieu, giang = api.as_(AN), api.as_(DIEU), api.as_(GIANG)
-    await approve(giang, await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25")))
+    await approve(giang, await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25")))
     m01, m27 = await order_of(an, "M01"), await order_of(an, "M27")
     # A PDF in review, a PO with findings, a revision, and mail routed to Sales.
     for message_id in DEMO_MAIL:

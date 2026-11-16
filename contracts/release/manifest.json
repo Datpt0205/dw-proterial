@@ -43,6 +43,11 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "317bca8e734fe45d649ea18b7c922995b38c69aded673d236d3ad7486888e4e4",
+      "copy_id": "sales_documents",
+      "version": "1.3.0"
+    },
+    {
       "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
       "copy_id": "sales_emails",
       "version": "1.0.0"
@@ -68,6 +73,11 @@
       "version": "1.4.0"
     },
     {
+      "checksum": "bf6330ebc6009f6cdcb25135aee9c7ac5dad6ab2dddd6fa5b0faa589f5ae771a",
+      "copy_id": "sales_emails",
+      "version": "1.5.0"
+    },
+    {
       "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
       "copy_id": "sales_handoffs",
       "version": "1.0.0"
@@ -76,6 +86,11 @@
       "checksum": "1dcd5fbe39c5d5cc9f100091346c72f8c893f317487b3dc9293f43e329d5d55b",
       "copy_id": "sales_handoffs",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "991b7aa76a8dabe0d6f9dff1b7042d8659eb95499d4969f10b024f9aeaf48a7d",
+      "copy_id": "sales_handoffs",
+      "version": "1.2.0"
     }
   ],
   "eval_datasets": [
@@ -349,7 +364,7 @@
           "path": "evals/fixtures/cases/sales_extraction.json"
         },
         {
-          "checksum": "1fbcab541aa771cf47b9583a34a8318e4f79e9e62f462ec914a9bf448c5144e4",
+          "checksum": "585101a9a345dd9a454162507df87372522957445c202f7e26abe9bc9750d27f",
           "path": "evals/fixtures/cases/sales_findings.json"
         },
         {
@@ -373,23 +388,23 @@
           "path": "evals/fixtures/cases/sales_missing_evidence_gate.json"
         },
         {
-          "checksum": "5fb01638ce035e640bcec2fb3f6fa54be8b3df21011d8518056d18f105ee82ba",
+          "checksum": "b87e65228f240b785c3e05c17a33c8771b4d33d39ab25aeffc570f59023768b2",
           "path": "evals/fixtures/cases/sales_missing_evidence_recall.json"
         },
         {
-          "checksum": "128e8b767831289f688b10261f1deb71f7352af099e94c0447061a14b4b07941",
+          "checksum": "1f1e433c6200ca2a20ec2efd61d41cb5579819d8faa1ce206d02b83b55796ede",
           "path": "evals/fixtures/cases/sales_price_confidentiality.json"
         },
         {
-          "checksum": "1fdf077c71f603f2f6df384cd6982eeacd9ba84b6f2a884494432b4bbbb8ec1b",
+          "checksum": "6e1d41764c573b2fc1cda6b981b24218f0259144a7f96bab464fb30441927989",
           "path": "evals/fixtures/cases/sales_pricer_approver_head.json"
         },
         {
-          "checksum": "d9a31e804a75c487b27d611ae7ea78ce36688f2db73109ea5f1d049bcaa21095",
+          "checksum": "fba4b0b1e808601b1ad5168bc6b3614ff47cff05cf9cceefe5601a45814f283c",
           "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
         },
         {
-          "checksum": "7caa22b57fc9198841bcbb539d0b0045a5394f4a6008a7ef12001532ff57c7ea",
+          "checksum": "72f5121e3aa0d20ce9471df2fde1e87a2d3551c82a69fbbbe95ba3cd107a5e0f",
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
         },
         {
@@ -534,7 +549,7 @@
           "path": "evals/expected/sales_design_text_replies.json"
         },
         {
-          "checksum": "8294bbe6efce43b9bdcdbe7f8f8defc3457d359494b6d18af28aabcfe1f2d934",
+          "checksum": "ec71bb45d5241bc85a144d4728e0f0c607dccbc62c7e8efe0cb117cf81922539",
           "path": "evals/fixtures/cases/sales_design_text_replies.json"
         }
       ],
@@ -659,6 +674,21 @@
         {
           "checksum": "63da078a6d4e669bdbcfc7436e784747ead852533553a6f16357605e5f98c1d8",
           "path": "evals/fixtures/cases/sales_intent_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "2eeb6e3c716259a6f32b213cbca2e2cf305ad57be0c3b29c055ee7965ddbffcd",
+      "dataset_id": "sales_internal_change",
+      "files": [
+        {
+          "checksum": "56f3f8e45afbbc8c8cb642d1eba5204ddc333f23b50b3e95437f92044f88ed39",
+          "path": "evals/expected/sales_internal_change.json"
+        },
+        {
+          "checksum": "c4ac46934906ee55e21bf09578e20586268900993d1027f4d63ecef73bc38417",
+          "path": "evals/fixtures/cases/sales_internal_change.json"
         }
       ],
       "version": "1.0.0"
@@ -1084,7 +1114,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "572d374620d31075b7cd73801dbf2a0174c6cb67",
+  "git_sha": "01bd501ccc284816c36fcaa591404157d7e9b9bb",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1501,6 +1531,11 @@
     {
       "checksum": "1ad766b0cf9d4322373d0fbab8674fd87d0650aae8d91784ea8c03dd7f2ff02a",
       "prompt_id": "sales.handoff_kinds",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "deea8da608027eaeb80a5e3250bbbd56296779e954f58d7008927ca235d39878",
+      "prompt_id": "sales.internal_change",
       "version": "1.0.0"
     },
     {

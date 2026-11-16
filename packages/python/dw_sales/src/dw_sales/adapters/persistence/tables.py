@@ -73,6 +73,9 @@ order_cases = sa.Table(
     # Sales asked PC for the delivery dates and waits (ticket 07, migration
     # 91f83937dbf1): the lines asked, who and when; NULL otherwise.
     sa.Column("pc_request", JSONB(none_as_null=True)),
+    # Sales asked Design for a new PRV code and waits, line by line (ticket
+    # 06, migration 3d139b41fec1): the line, who and when; empty otherwise.
+    sa.Column("design_requests", JSONB, nullable=False, server_default="[]"),
     # A customer's change on the order once it is in Bravo (ticket 29,
     # migration 0d1d0e4eb203): its step, lines, PC's answer and the approved
     # Bravo update file; NULL otherwise.
@@ -82,6 +85,9 @@ order_cases = sa.Table(
     # before the confirmation. Then how the customer agreed; NULL until then.
     sa.Column("confirmation", JSONB(none_as_null=True)),
     sa.Column("agreement", JSONB(none_as_null=True)),
+    # The quote cases opened from the order for lines with no valid quotation
+    # (ticket 09, migration ae1388cdd714): ids, lines, who and when.
+    sa.Column("quote_links", JSONB, nullable=False, server_default="[]"),
     # Written by the `accumulate_makers` trigger only.
     sa.Column("makers", ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
@@ -473,6 +479,35 @@ rule_draft_files = sa.Table(
     metadata,
     *_scope(),
     sa.Column("draft_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("content", sa.LargeBinary, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# Bravo's YCBG exports Sales uploaded, Design's results read from them
+# (ticket 16, migration 10d5dfc1a3f1), and their files until read.
+ycbg_exports = sa.Table(
+    "ycbg_exports",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("uploaded_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("uploaded_at", _TS, nullable=False),
+    sa.Column("file_name", sa.Text, nullable=False),
+    sa.Column("file_sha256", sa.Text, nullable=False),
+    sa.Column("file_size", sa.Integer, nullable=False),
+    sa.Column("outcomes", JSONB, nullable=False),
+    sa.Column("rejected", JSONB, nullable=False),
+    sa.Column("error", sa.Text),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+ycbg_export_files = sa.Table(
+    "ycbg_export_files",
+    metadata,
+    *_scope(),
+    sa.Column("export_id", UUID(as_uuid=True), nullable=False),
     sa.Column("content", sa.LargeBinary, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )

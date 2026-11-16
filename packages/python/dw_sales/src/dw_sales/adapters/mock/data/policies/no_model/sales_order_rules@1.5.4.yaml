@@ -165,6 +165,7 @@ model_assist:
   triage_card: false
   skill_handoffs: false
   skill_reply_drafts: false
+  internal_change: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or
