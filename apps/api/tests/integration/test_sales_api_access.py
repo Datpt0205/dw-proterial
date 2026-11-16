@@ -69,6 +69,8 @@ async def _call(persona: Persona, method: str, path: str) -> int:
         return (await persona.get(path, sheet="PO")).status_code
     if method == "PUT":
         return (await persona.put(path, {"case_version": 1, "assignee": None})).status_code
+    if method == "DELETE":
+        return (await persona.delete(path)).status_code
     return (await persona.post(path, {"case_version": 1})).status_code
 
 

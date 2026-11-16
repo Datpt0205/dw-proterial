@@ -169,6 +169,13 @@ class Persona:
         self.calls.append(response)
         return response
 
+    async def delete(self, path: str, *, key: str | None = None) -> httpx.Response:
+        response = await self.client.delete(
+            f"/api/v1/sales{path}", headers=self.headers(key or str(uuid.uuid4()))
+        )
+        self.calls.append(response)
+        return response
+
     async def platform(self, path: str) -> httpx.Response:
         response = await self.client.get(f"/api/v1{path}", headers=self.headers())
         self.calls.append(response)
