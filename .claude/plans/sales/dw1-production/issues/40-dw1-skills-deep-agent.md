@@ -151,3 +151,20 @@ Under dw_sales ADR 0015 decision 5 (the skill is picked by one scored call).
   tenant's own `AGENT.md`.
 - The release manifest needs regenerating (`make release-manifest`) once
   tickets 40 and 43 are both in: new prompts, `AGENT.md` 1.1.0.
+- **2026-11-16, the plant's RTX PRO 4000 (Strata Q2_0, one slot), measured,
+  not attested: `skill_intents` 0.717 on the bar set (lab 0.800), 0.675 all,
+  vi 0.654, en 0.743, ja 0.579; false accepts RP16, RP17.** The pick is not
+  the cause: `thread-intents` picked for 80 of 80, confidence p50 0.985, one
+  below the 0.9 floor. The reading is: 26 misses, nearly all an intent added
+  that `thread-intents/SKILL.md` rules 2-4 forbid (accepts -> accepts+asks
+  RP03/04; rejects -> cancels+rejects RP11/13; requests_change ->
+  asks+requests_change RP14/19, -> accepts+requests_change RP16/17), so 53.7 %
+  went to a person; 8 turns gave no answer (180 agent calls for 80 mails, up
+  to 5 in a turn). The skill was unchanged (no diff). `thread_agent`, the same
+  task on its own shorter prompt, reached 0.85. Ways forward for the code
+  session, cheapest first: (1) a guard in code that "accepts" never stands
+  with "requests_change" (rule 2; removes both false accepts); (2) two intents
+  quoting the same sentence merge into the main one (quotes are 100 %); (3)
+  measure thinking on for this step alone; (4) corrections as examples
+  (ticket 43); (5) give the case snapshot up front so fewer turns hit the
+  ceiling. The step stays off; every reply goes to a person meanwhile.
