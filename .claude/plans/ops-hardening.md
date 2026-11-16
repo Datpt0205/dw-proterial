@@ -235,8 +235,9 @@ context. All five are done and on `main`. The full narrative is at
         off by Đạt (11-16)**.
         **Status 11-16 evening (Đạt):** the mail flows (one Power Automate
         flow per PIC into the Team's folders, the OneDrive sync account on
-        the host, a Sent Items flow) are done tomorrow; Strata's attested
-        run over Tailscale is in progress; the Bravo API waits on a
+        the host, a Sent Items flow) are set up on the server Tuesday or
+        Wednesday evening (11-17/18), with ticket 23's measurement; Strata:
+        ticket 01 closed by Đạt (11-16); the Bravo API waits on a
         three-party meeting (Proterial, the Bravo vendor, FPT) on the 11-13
         request; meanwhile Đạt exports the Bravo screens himself for the
         Excel stand-in (ticket 14).
