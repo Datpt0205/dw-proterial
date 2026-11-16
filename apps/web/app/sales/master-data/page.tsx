@@ -31,6 +31,7 @@ import {
   Quantity,
   UsdPerTonne,
 } from "../_components/money";
+import { ConvertGaps } from "./convert-gaps";
 import { SCOPE } from "../_components/sales-frame";
 import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
@@ -124,7 +125,13 @@ function MasterData() {
           {
             key: "convert-list",
             label: LIST_NAME.convert_list,
-            children: imported("convert_list", <ConvertList />),
+            children: imported(
+              "convert_list",
+              <>
+                <ConvertGaps />
+                <ConvertList />
+              </>,
+            ),
           },
           {
             key: "quotations",

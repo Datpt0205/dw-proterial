@@ -56,6 +56,14 @@ and what Sales confirmed (item 3), not through these rules.
 - Measured outside git: B04, 1 group, **11,423 rows approved** (only state
   3 held rows that day, as the 11-10 screens showed).
 
+- **What Bravo lacks, listed** (2026-11-16, `convert_gaps`): each code Sales
+  confirmed in DW1 that Bravo's approved convert list does not answer ("Chưa
+  có trong Bravo") or holds only waiting ("Chờ duyệt trong Bravo", beside
+  Bravo's own code), and Bravo's own waiting rows, on Dữ liệu chủ › Bảng quy
+  đổi mã, for Sales to enter and approve in Bravo. A code confirmed before
+  Bravo approved its row leaves the list once that row is read (tested,
+  mutation-checked). Without an approved Bravo list it says nothing can be
+  compared yet. `GET /api/v1/sales/master-data/convert-gaps`, case read.
+
 Left: the colour codes (S001…) as a list and the rule that puts a colour
-into a PRV code wait on Q-B12; listing the mappings Sales confirmed in DW1
-that Bravo does not hold yet, and the waiting rows, on the master-data page.
+into a PRV code wait on Q-B12.

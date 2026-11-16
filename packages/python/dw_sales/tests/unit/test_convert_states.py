@@ -8,6 +8,7 @@ then that state's rows."""
 from __future__ import annotations
 
 import io
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -116,3 +117,40 @@ async def test_a_reader_that_sends_no_groups_is_refused_never_read_as_approved()
 
     with pytest.raises(ReaderMismatchError):
         await reader.read(EXPORT, "b04.xlsx")
+
+
+async def test_sales_sees_the_mappings_it_confirmed_that_bravo_does_not_hold_yet() -> None:
+    """Ticket 04: a code Sales confirmed in DW1 stays usable until Bravo has
+    the row; DW1 lists each one Bravo lacks, or holds only as waiting, for
+    Sales to enter and approve in Bravo, and Bravo's own waiting rows."""
+    from dw_sales.domain.catalog import ConvertEntry
+
+    world = _world()
+    catalog = world.services.catalog_imports.catalog
+
+    async def confirm(words: str, prv: str) -> None:
+        await catalog.learn_convert(  # type: ignore[attr-defined]
+            ALPHA,
+            ConvertEntry(customer_code="VLX", customer_item_code=words, prv_code=prv),
+            by=AN.user_id,
+            case_id=uuid.uuid4(),
+        )
+
+    # Confirmed in DW1 before Bravo approved it: Bravo's row answers now.
+    await confirm("APPROVED-WORDS", "HW-1002")
+    view = await world.services.catalog_imports.upload(
+        AN.context(), CatalogList.CONVERT_LIST, "b04.xlsx", EXPORT
+    )
+    await world.read_imports()
+    await world.services.catalog_imports.submit(AN.context(), view.snapshot_id)
+    await world.decide_catalog(GIANG, view.snapshot_id, approve=True, comment="Đồng ý")
+    await confirm("WAITING-WORDS", "HW-1003")
+    await confirm("NEW", "HW-1004")
+
+    gaps = await world.services.convert_gaps.list(AN.context())
+
+    assert {(g.customer_item_code, g.state, g.prv_code, g.bravo_prv_code) for g in gaps.gaps} == {
+        ("WAITING-WORDS", "waiting_in_bravo", "HW-1003", "HW-1001"),
+        ("NEW", "not_in_bravo", "HW-1004", None),
+    }
+    assert gaps.bravo_read
