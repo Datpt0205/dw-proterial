@@ -98,6 +98,7 @@ from dw_sales.domain.followups import (
     brief_slot,
     due_soon,
     owed,
+    turn_status,
 )
 from dw_sales.domain.quotes import QuoteStatus
 
@@ -659,7 +660,7 @@ class Brief:
 
 
 def _bucket(case: WaitingCase) -> Bucket | None:
-    return STATUS_BUCKETS[case.kind].get(case.status)
+    return STATUS_BUCKETS[case.kind].get(turn_status(case))
 
 
 def brief_of(

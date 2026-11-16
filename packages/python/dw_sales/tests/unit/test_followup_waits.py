@@ -35,12 +35,12 @@ from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import RuleScope, RuleVersion
 from dw_sales.adapters.policy_files import rule_book
-from dw_sales.application.followups import FollowupLane, parse_source_key
+from dw_sales.application.followups import FollowupLane, brief_of, parse_source_key
 from dw_sales.application.reminder_copy import ReminderCopy
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.ycbg_exports import BravoYcbgLine, DesignChecks, ExportedYcbg
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.followups import Followup, SalesFollowups, WaitingCase, owed
+from dw_sales.domain.followups import BriefSlot, Followup, SalesFollowups, WaitingCase, owed
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import DeclineReason, QuoteStatus
 from dw_sales.evals.graders import AN, CALLERS, DIEU
@@ -140,6 +140,18 @@ def test_a_quote_whose_design_result_was_read_from_bravo_is_not_chased() -> None
     assert not [
         f for f, _, _ in _owed(_sent_to_design(checked=True), later) if f == "quote_waiting_design"
     ]
+
+
+def test_the_brief_counts_a_quote_whose_design_result_was_read_as_sales_turn() -> None:
+    """Ticket 16, the brief agreeing with the chase: Design answered in
+    Bravo's YCBG, so the case waits on Sales, not on Design, though its
+    status stays `sent_to_design`."""
+    slot = BriefSlot(day=T0.date(), at=T0, since=T0 - 24 * HOUR)
+    waiting = brief_of([_sent_to_design(checked=False)], slot, platform_followups(), None)
+    assert waiting.waiting == {"design": 1}
+    answered = brief_of([_sent_to_design(checked=True)], slot, platform_followups(), None)
+    assert answered.waiting == {"sales": 1}
+    assert answered.new_waiting == {"sales": 1}
 
 
 def test_each_new_wait_switched_off_reminds_nobody() -> None:

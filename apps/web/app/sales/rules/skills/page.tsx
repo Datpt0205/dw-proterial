@@ -2,8 +2,8 @@
 
 import { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
-import { Alert, Table, Tag, Typography } from "antd";
-import { InfoTip, PageHeader, StatusTag } from "@dw/ui";
+import { Table, Typography } from "antd";
+import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { useAuth } from "../../../../lib/auth/auth-context";
 import { salesApi } from "../../_lib/api";
@@ -11,10 +11,6 @@ import { usePeople } from "../../_lib/people";
 import { RULE_STATUS } from "../../_lib/rules";
 import {
   SKILL_LAYER,
-  incompleteLine,
-  replayLine,
-  securityLine,
-  triggerLine,
   versionsOf,
   type Skill,
   type SkillVersion,
@@ -29,6 +25,7 @@ import {
 } from "../../_components/list-parts";
 import { GuardedButton } from "../../_components/guarded-button";
 import { ProposeSkill } from "../../_components/propose-skill";
+import { SkillReplayResult } from "../../_components/skill-changes";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
 
@@ -210,7 +207,7 @@ function Skills() {
                     <span className="flex flex-col">
                       <Typography.Text strong>{v.name}</Typography.Text>
                       <Typography.Text code>{v.ref}</Typography.Text>
-                      {isPhone ? <Replay version={v} /> : null}
+                      {isPhone ? <SkillReplayResult version={v} /> : null}
                     </span>
                   ),
                 },
@@ -226,7 +223,7 @@ function Skills() {
                 {
                   title: "Chạy thử trên thư mẫu",
                   key: "replay",
-                  render: (_, v) => <Replay version={v} />,
+                  render: (_, v) => <SkillReplayResult version={v} />,
                 },
                 {
                   title: "Người đề xuất · quyết định",
@@ -281,38 +278,5 @@ function Instructions({ label, text }: { label: string; text: string }) {
     >
       {text}
     </Typography.Paragraph>
-  );
-}
-
-/** What the worker's replay found, or that it has not run yet. */
-function Replay({ version }: { version: SkillVersion }) {
-  const replay = version.replay ?? null;
-  if (!replay) {
-    if (version.status !== "proposed") return null;
-    return (
-      <span className="flex flex-col items-start gap-1">
-        <Tag color="processing">Đang chạy thử trên thư mẫu</Tag>
-        <Typography.Text>
-          Trưởng bộ phận chỉ duyệt được khi có kết quả.
-        </Typography.Text>
-      </span>
-    );
-  }
-  const security = securityLine(replay);
-  const incomplete = incompleteLine(replay);
-  const taught = triggerLine(replay);
-  return (
-    <span className="flex flex-col items-start gap-1">
-      <span className="inline-flex items-center gap-1">
-        <Typography.Text>{replayLine(replay)}</Typography.Text>
-        <InfoTip label="Thư mẫu nào?">
-          Chạy trên thư mẫu của nền tảng (chưa có thư công ty đã kiểm): mỗi thư
-          được đọc một lần với bản đề xuất và một lần với bản đang dùng.
-        </InfoTip>
-      </span>
-      {taught ? <Typography.Text>{taught}</Typography.Text> : null}
-      {incomplete ? <Alert type="warning" showIcon title={incomplete} /> : null}
-      {security ? <Alert type="error" showIcon title={security} /> : null}
-    </span>
   );
 }

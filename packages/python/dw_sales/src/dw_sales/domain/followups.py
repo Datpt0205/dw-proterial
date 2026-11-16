@@ -44,7 +44,8 @@ on a case changes because a reminder went out. The person decides.
 
 ``quote_waiting_design`` stops once Design's result was read from Bravo's
 YCBG export (`QuoteCase.design_check`, ticket 16): the status stays
-`sent_to_design`, but Design has answered.
+`sent_to_design`, but Design has answered (`turn_status`), and the morning
+brief counts it as Sales' turn, not Design's.
 
 **One wait, one reminder per stage.** A stage is due when its threshold has
 passed; it is sent once per (case, follow-up, stage, wait), the wait being
@@ -546,6 +547,18 @@ WATCHED: Final[dict[CaseKind, frozenset[str]]] = {
 }
 
 
+def turn_status(case: WaitingCase) -> str:
+    """The status whose turn ``case`` is in: its own, except a quote whose
+    Design result was read from Bravo's YCBG export (ticket 16), which is
+    Design's answer though the status stays `sent_to_design`, and so is
+    `design_replied`'s turn. The chase (`owed`) and the brief's "what waits
+    on whom" both read this, so they never disagree on whether Design is
+    still awaited."""
+    if case.kind is CaseKind.QUOTE and case.status in _WAITING_DESIGN and case.design_checked:
+        return QuoteStatus.DESIGN_REPLIED.value
+    return case.status
+
+
 @dataclass(frozen=True, slots=True)
 class Due:
     """One stage of one follow-up owed on one case: sent once per wait."""
@@ -689,13 +702,8 @@ def owed(
                 case.received_at,
                 now,
             )
-        if (
-            design.enabled
-            and not order
-            and case.status in _WAITING_DESIGN
-            # Design answered in Bravo's YCBG (ticket 16): nothing to chase.
-            and not case.design_checked
-        ):
+        # Design answered in Bravo's YCBG (ticket 16): nothing to chase.
+        if design.enabled and not order and turn_status(case) in _WAITING_DESIGN:
             found += _after(
                 case,
                 Followup.QUOTE_WAITING_DESIGN,

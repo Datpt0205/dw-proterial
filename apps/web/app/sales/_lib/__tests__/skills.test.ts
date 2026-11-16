@@ -5,6 +5,7 @@ import {
   replayLine,
   securityLine,
   triggerLine,
+  wordsChanges,
   type Skill,
   type SkillReplay,
   type SkillVersion,
@@ -98,5 +99,26 @@ describe("skills", () => {
     expect(triggerLine(gone)).toBe(
       "Thư gốc M31: không còn trong hộp thư, không chạy thử được",
     );
+  });
+
+  it("says what a version changes in the words, line by line, unchanged runs counted", () => {
+    expect(wordsChanges("a\nb", "a\nb")).toEqual([]);
+    const before = ["1", "2", "3", "4", "5", "6", "7", "8"].join("\n");
+    const after = ["1", "2", "3", "4", "five", "6", "7", "8", "9"].join("\n");
+    expect(wordsChanges(before, after, 1)).toEqual([
+      { op: "skip", count: 3 },
+      { op: "keep", text: "4" },
+      { op: "remove", text: "5" },
+      { op: "add", text: "five" },
+      { op: "keep", text: "6" },
+      { op: "skip", count: 1 },
+      { op: "keep", text: "8" },
+      { op: "add", text: "9" },
+    ]);
+    // Text, not numbers: "10" and "10.0" are two different lines of words.
+    expect(wordsChanges("10", "10.0")).toEqual([
+      { op: "remove", text: "10" },
+      { op: "add", text: "10.0" },
+    ]);
   });
 });
