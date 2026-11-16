@@ -64,10 +64,31 @@ Built 2026-11-16 (migration `10d5dfc1a3f1`, after `3d139b41fec1`).
   result different from the one recorded, or a result that is not one go to
   Sales in the upload's outcome list; a line still PENDING is skipped.
   Shown on the case ("Phản hồi của Design") with a warning on a DECLINE.
-- **Assumed** until one real export is seen (spec Q-B13): the column titles
-  `Số chứng từ`, `STT`, `Trạng thái`, `Design Check`, `Lý do`, `Mã BP`; the
-  values PENDING/CLOSE and QUOTE/DECLINE; that STT is the request's line.
+- ~~Assumed~~ **Read from Box B16 (2026-11-16, ticket 14's one reader):** the
+  titles are Bravo's own (`RFQ No`, `Mô tả của KH/Customer item description`,
+  `Status`, `Design check`, `Decline reason`, `Base price code`, and the
+  optional `Số thứ tự/ No.`), found on whichever row they are (row 4 there).
+  `Số thứ tự` is blank on every row of the real export, so a request's lines
+  are numbered in the order listed, and each must carry the request line's
+  own customer description (spacing and case aside), or the YCBG goes to
+  Sales as `lines_differ`. A row naming no RFQ number (Bravo's "Tổng cộng:")
+  is skipped. The synthetic fixture has B16's shape.
+  One case it cannot tell apart: two lines of one request with the very
+  same customer description, entered in Bravo in the other order, would
+  swap their results. Both are then the same item to the customer; Sales
+  sees both on the case before pricing.
 
 Left: a QUOTE moves nothing yet (the spec number and copper weight come from
-the BP code's base price, ticket 11); R13's adapter; follow-ups still remind
-on a case whose result was read (they read the status only).
+the BP code's base price, ticket 11); R13's adapter. (Follow-ups reminding
+on a case whose result was read: fixed below.)
+
+## Done: no chasing Design once its result was read (2026-11-16)
+
+- `quote_waiting_design` is owed only while the case has no `design_check`
+  (`WaitingCase.design_checked`, read by `SqlFollowupStore.cases` from the
+  quote's body and by the eval world from the case): the status stays
+  `sent_to_design`, but Design has answered. The brief still counts the case
+  as waiting on Design (its bucket is the status's); left as it is.
+- Tests: `test_followup_waits.py` (two worlds, one case each: the one whose
+  export was read is not reminded), `test_followup_waits_db.py` (the flag
+  read back from the body).

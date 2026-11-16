@@ -35,6 +35,7 @@ from dw_sales.application.ycbg_exports import (
     YcbgOutcome,
     parse_export,
 )
+from dw_sales.domain.bravo_exports import MissingColumnsError
 from dw_sales.domain.master_data import CellValue, ImportedTable, TableRow
 from dw_sales.domain.quotes import (
     DeclineReason,
@@ -51,6 +52,9 @@ from dw_sales.testing.ycbg_export_store import MemoryYcbgExportStore
 
 REPO = Path(__file__).resolve().parents[5]
 M10_YCBG = "RFQ260930-030"
+# The customer's words for M10's one line, as the request reads them and as
+# Sales enters them in Bravo from DW1's draft.
+M10_WORDS = "MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406"
 SHA = "a" * 64
 
 
@@ -87,6 +91,7 @@ def _line(
     verdict: str | None = "quote",
     bp: str | None = "BP-26-0187",
     reason: str | None = None,
+    words: str | None = M10_WORDS,
 ) -> BravoYcbgLine:
     return BravoYcbgLine.model_validate(
         {
@@ -96,6 +101,7 @@ def _line(
             "verdict": verdict,
             "bp_code": bp,
             "reason": reason,
+            "description": words,
         }
     )
 
@@ -212,28 +218,51 @@ async def test_an_indirect_customer_is_named_as_one_and_the_direct_left_to_sales
 # ----------------------------------------------- reading the export's rows --
 
 
-def _table(*rows: list[CellValue], heading: bool = True) -> ImportedTable:
-    titles = [
-        COLUMNS[f] for f in ("ycbg_no", "line_no", "status", "design_check", "reason", "bp_code")
-    ]
-    head: list[list[CellValue]] = [["Phiếu yêu cầu báo giá"]] if heading else []
-    body: list[list[CellValue]] = [*head, list(titles), *rows]
+_FIELDS = ("ycbg_no", "line_no", "status", "design_check", "reason", "bp_code", "description")
+
+
+def _table(*rows: list[CellValue], titles: list[str] | None = None) -> ImportedTable:
+    head: list[CellValue] = (
+        list(titles) if titles is not None else [COLUMNS[f].header for f in _FIELDS]
+    )
+    body: list[list[CellValue]] = [["RFQ List"], head, *rows]
     return ImportedTable(
-        sheet="YCBG",
+        sheet="RFQ List",
         rows=[TableRow(row=i + 1, cells=cells) for i, cells in enumerate(body)],
     )
+
+
+async def test_q_b13_bravos_own_titles_are_read_from_its_export() -> None:
+    """Q-B13 closed by Box B16: the titles as Bravo writes them, in two
+    languages and with Excel's ``_x000D_``, among Bravo's other columns."""
+    readers = client_readers(InProcessReaderTransport(), _world().policies.order_rules.intake)
+    data = ycbg_export_xlsx(
+        [
+            ExportRow(M10_YCBG, None, "CLOSE", "QUOTE", None, "BP000187", M10_WORDS),
+            ExportRow(M10_YCBG, None, "CLOSE", "DECLINE", "không làm được", None, "Dây khác"),
+        ]
+    )
+
+    table = await readers.tables.read(data, "RFQ List.xlsx")
+    parsed = parse_export(table)
+
+    assert parsed.rejected == ()
+    assert [(line.line_no, line.verdict, line.bp_code) for line in parsed.lines] == [
+        (1, "quote", "BP000187"),
+        (2, "decline", None),
+    ]
 
 
 def test_rows_are_read_by_their_titles_below_a_heading() -> None:
     parsed = parse_export(
         _table(
-            [M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-26-0187"],
-            ["RFQ261110-002", "2", " pending ", None, None, None],
-            ["RFQ261110-003", 1.0, "Close", "decline", "không làm được", None],
+            [M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-26-0187", M10_WORDS],
+            ["RFQ261110-002", "2", " pending ", None, None, None, "a"],
+            ["RFQ261110-003", 1.0, "Close", "decline", "không làm được", None, "b"],
         )
     )
 
-    assert parsed is not None and parsed.rejected == ()
+    assert parsed.rejected == ()
     assert [(line.ycbg_no, line.line_no, line.status, line.verdict) for line in parsed.lines] == [
         (M10_YCBG, 1, "close", "quote"),
         ("RFQ261110-002", 2, "pending", None),
@@ -241,32 +270,62 @@ def test_rows_are_read_by_their_titles_below_a_heading() -> None:
     ]
 
 
-def test_a_value_outside_bravos_own_is_a_rejected_row_naming_its_column() -> None:
+def test_a_requests_unnumbered_lines_are_numbered_in_the_order_listed() -> None:
     parsed = parse_export(
         _table(
-            [M10_YCBG, 1, "DONE", "QUOTE", None, "BP-1"],
-            [M10_YCBG, 1, "CLOSE", "MAYBE", None, "BP-1"],
-            [M10_YCBG, "one", "CLOSE", "QUOTE", None, "BP-1"],
+            ["RFQ261110-002", None, "CLOSE", "QUOTE", None, "BP000001", "a"],
+            [M10_YCBG, None, "CLOSE", "QUOTE", None, "BP000002", M10_WORDS],
+            ["RFQ261110-002", None, "CLOSE", "QUOTE", None, "BP000003", "b"],
         )
     )
 
-    assert parsed is not None and parsed.lines == ()
+    assert [(line.ycbg_no, line.line_no, line.bp_code) for line in parsed.lines] == [
+        ("RFQ261110-002", 1, "BP000001"),
+        ("RFQ261110-002", 2, "BP000003"),
+        (M10_YCBG, 1, "BP000002"),
+    ]
+
+
+def test_a_request_numbered_on_some_rows_only_is_not_read() -> None:
+    parsed = parse_export(
+        _table(
+            [M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP000001", "a"],
+            [M10_YCBG, None, "CLOSE", "QUOTE", None, "BP000002", "b"],
+        )
+    )
+
+    assert parsed.lines == ()
+    assert [(r.row, r.column) for r in parsed.rejected] == [
+        (3, COLUMNS["line_no"].header),
+        (4, COLUMNS["line_no"].header),
+    ]
+
+
+def test_a_value_outside_bravos_own_is_a_rejected_row_naming_its_column() -> None:
+    parsed = parse_export(
+        _table(
+            [M10_YCBG, 1, "DONE", "QUOTE", None, "BP-1", "a"],
+            [M10_YCBG, 1, "CLOSE", "MAYBE", None, "BP-1", "a"],
+            [M10_YCBG, "one", "CLOSE", "QUOTE", None, "BP-1", "a"],
+        )
+    )
+
+    assert parsed.lines == ()
     assert [r.column for r in parsed.rejected] == [
-        COLUMNS["status"],
-        COLUMNS["design_check"],
-        COLUMNS["line_no"],
+        COLUMNS["status"].header,
+        COLUMNS["design_check"].header,
+        COLUMNS["line_no"].header,
     ]
     assert all("DONE" not in r.reason and "MAYBE" not in r.reason for r in parsed.rejected)
 
 
-def test_a_file_without_every_title_is_not_read_by_position() -> None:
-    table = _table([M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-1"])
-    without_bp = ImportedTable(
-        sheet="YCBG",
-        rows=[TableRow(row=r.row, cells=r.cells[:5]) if r.row == 2 else r for r in table.rows],
-    )
+def test_a_file_without_every_title_is_refused_naming_it_not_read_by_position() -> None:
+    titles = [COLUMNS[f].header for f in _FIELDS if f != "bp_code"]
 
-    assert parse_export(without_bp) is None
+    with pytest.raises(MissingColumnsError) as refused:
+        parse_export(_table([M10_YCBG, 1, "CLOSE", "QUOTE", None, "a"], titles=titles))
+
+    assert refused.value.headers == (COLUMNS["bp_code"].header,)
 
 
 # ------------------------------------------- Design's result, matched (2) --
@@ -379,14 +438,32 @@ async def test_a_result_that_is_not_one_goes_to_sales(line: BravoYcbgLine) -> No
     assert world.quote(case_id).design_check is None
 
 
-async def test_lines_other_than_the_requests_go_to_sales() -> None:
+@pytest.mark.parametrize(
+    "lines",
+    [
+        (_line(), _line(line_no=2)),  # a line the request does not have
+        (_line(words="MULTI-CORE CABLE 2C 0.75mm2 GREY"),),  # another item's words
+        (_line(words=None),),  # no words to tell which line it is
+    ],
+    ids=["extra_line", "other_words", "no_words"],
+)
+async def test_lines_other_than_the_requests_go_to_sales(lines: tuple[BravoYcbgLine, ...]) -> None:
     world = _world()
     case_id = await _waiting(world)
 
-    (outcome,) = await _take(world, _line(), _line(line_no=2))
+    (outcome,) = await _take(world, *lines)
 
     assert (outcome.outcome, outcome.case_id) == ("lines_differ", case_id)
     assert world.quote(case_id).design_check is None
+
+
+async def test_the_customers_words_are_compared_without_spacing_or_case() -> None:
+    world = _world()
+    case_id = await _waiting(world)
+
+    (outcome,) = await _take(world, _line(words="  " + M10_WORDS.lower().replace(" ", "  ")))
+
+    assert (outcome.outcome, outcome.case_id) == ("recorded", case_id)
 
 
 async def test_the_same_result_read_again_changes_nothing_and_another_goes_to_sales() -> None:
@@ -470,9 +547,9 @@ def _reading(
 
 EXPORT = ycbg_export_xlsx(
     [
-        ExportRow(M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-26-0187"),
-        ExportRow("RFQ260828-044", 1, "CLOSE", "DECLINE", "không có vật liệu"),
-        ExportRow("RFQ261110-002", 1, "PENDING"),
+        ExportRow(M10_YCBG, None, "CLOSE", "QUOTE", None, "BP-26-0187", M10_WORDS),
+        ExportRow("RFQ260828-044", None, "CLOSE", "DECLINE", "không có vật liệu", None, "a"),
+        ExportRow("RFQ261110-002", None, "PENDING", None, None, None, "b"),
     ]
 )
 
@@ -590,7 +667,7 @@ async def test_a_file_without_the_titles_fails_naming_them() -> None:
     assert await _reading(world, store).read(ALPHA, queued.export_id) == "export failed"
 
     (failed,) = await store(ALPHA).ycbg_exports.latest(1)
-    assert failed.error is not None and COLUMNS["design_check"] in failed.error
+    assert failed.error is not None and COLUMNS["design_check"].header in failed.error
 
 
 async def test_an_export_its_event_lost_is_failed_by_the_next_upload() -> None:

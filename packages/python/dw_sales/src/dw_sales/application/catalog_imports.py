@@ -108,6 +108,7 @@ from dw_sales.domain.master_data import (
     DiffRow,
     ImportedTable,
     ListSpec,
+    ParsedList,
     ParsedRecord,
     RejectedRow,
     diff,
@@ -287,6 +288,29 @@ class TableReaderPort(Protocol):
     `InfrastructureError` when the sandbox does not answer."""
 
     async def read(self, data: bytes, file_name: str) -> ImportedTable: ...
+
+
+class BravoMasterDataPort(Protocol):
+    """Bravo's master lists, one read per list (ticket 14, ADR 0026): the
+    rows Bravo holds now as DW1's records, the rows it could not read, and
+    the columns nothing asked for. The vendor's API answers it once it
+    exists; until then the export of the list's Bravo screen a person
+    uploaded (`ExportedMasterList`). Either way the read becomes a snapshot
+    that walks the same approval, and one that fails changes nothing in
+    force. Read only: DW never writes Bravo, nor connects to its database."""
+
+    async def read(self, scope: SalesScope, catalog_list: CatalogList) -> ParsedList: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ExportedMasterList:
+    """`BravoMasterDataPort` over one exported file, as the reader sandbox
+    read it: its rows by the list's column titles (`parse_rows`)."""
+
+    table: ImportedTable
+
+    async def read(self, scope: SalesScope, catalog_list: CatalogList) -> ParsedList:
+        return parse_rows(catalog_list, self.table)
 
 
 class CatalogTemplatePort(Protocol):
@@ -840,14 +864,14 @@ class CatalogParsing:
             return _failed(snapshot, _unread(refused))
         column_map: tuple[tuple[str, str], ...] = ()
         try:
-            parsed = parse_rows(snapshot.catalog_list, table)
+            parsed = await ExportedMasterList(table).read(scope, snapshot.catalog_list)
         except ValueError as refused:
             matched = await self._matched(scope, snapshot, table)
             if matched is None:
                 return _failed(snapshot, str(refused))
             table, column_map = matched
             try:
-                parsed = parse_rows(snapshot.catalog_list, table)
+                parsed = await ExportedMasterList(table).read(scope, snapshot.catalog_list)
             except ValueError:
                 return _failed(snapshot, str(refused))
         kept, unknown = await self._references(scope, snapshot, parsed.records)

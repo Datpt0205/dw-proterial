@@ -305,12 +305,13 @@ the electronic stamp; anything typed into Bravo by DW.
   Bravo, or reply by mail? Who changes the status, and to what?
 - **Q-B12** Where are the colour codes S001–S002 used, and is there a rule
   that puts an ordinary colour (WHITE, BLACK) into a PRV code?
-- **Q-B13** One export of Bravo's YCBG screen (Excel), lines included: DW1
-  reads Design's result from it until R13 exists, and assumes its column
-  titles (`Số chứng từ`, `STT`, `Trạng thái`, `Design Check`, `Lý do`,
-  `Mã BP`) and values (PENDING/CLOSE, QUOTE/DECLINE). Is a YCBG line's number
-  (STT) the request's line number as Sales enters it from DW1's draft? Does
-  Design write a BP code on a DECLINE too? (Ticket 16.)
+- **Q-B13** (closed 11-16 by Box B16) Bravo's "RFQ List" export titles the
+  columns `RFQ No`, `Số thứ tự/ No.`, `Mô tả của KH/Customer item
+  description`, `Status`, `Design check`, `Decline reason`, `Base price code`
+  (header on row 4, 50 columns); values PENDING/CLOSE and QUOTE/DECLINE as
+  assumed. `Số thứ tự` is **blank on all 65 rows**, so DW1 numbers a request's
+  lines in the order listed and requires each line's customer description to
+  be the request's own (ticket 16). No DECLINE carries a BP code (9 of 9).
 
 ## Tickets
 

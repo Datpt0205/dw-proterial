@@ -20,8 +20,9 @@ this module owns what a row of such a spreadsheet means:
   rejected), a quote number two customers use. An email domain several
   customers claim is shared, and recognises none of them.
 - **A file as Bravo exports it** is read as it is (ticket 36): its header
-  found by shape under the title rows (`header_row`), each column also known
-  by Bravo's own label, a column Bravo does not have read as unknown or as its
+  found by its columns' titles under the title rows (the one reader of every
+  Bravo export, `bravo_exports.find_header`, ticket 14), each column also
+  known by Bravo's own label, a column Bravo does not have read as unknown or as its
   default where one fails closed.
 - **A diff** (`diff`) of a proposed list against the one in force, by key:
   added, changed (column by column, old to new, as the template prints them),
@@ -38,7 +39,6 @@ ERP (Bravo) through another adapter later, both become the same records.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
@@ -50,6 +50,12 @@ from typing import Any, Final, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_platform.domain.notation import is_ambiguous_number, read_number
+from dw_sales.domain.bravo_exports import CellValue as CellValue
+from dw_sales.domain.bravo_exports import ImportedTable as ImportedTable
+from dw_sales.domain.bravo_exports import MissingColumnsError as MissingColumnsError
+from dw_sales.domain.bravo_exports import TableRow as TableRow
+from dw_sales.domain.bravo_exports import find_header
+from dw_sales.domain.bravo_exports import header_key as header_key
 from dw_sales.domain.catalog import (
     ConvertEntry,
     Customer,
@@ -77,31 +83,6 @@ class CatalogList(StrEnum):
 
 type CatalogRecord = Customer | Item | ConvertEntry | Quotation | LmeMonth
 
-# A cell as the reader hands it over: text, a number, a yes/no, or nothing.
-# A date cell arrives as ISO text (``2026-10-01``).
-CellValue = str | int | float | bool | None
-
-
-class TableRow(BaseModel):
-    """One non-empty row of the sheet, numbered as the spreadsheet numbers it."""
-
-    model_config = _FROZEN
-
-    row: int = Field(ge=1)
-    cells: list[CellValue]
-
-
-class ImportedTable(BaseModel):
-    """What the reader read from a file: one sheet's rows, the header first."""
-
-    model_config = _FROZEN
-
-    sheet: str = Field(max_length=200)
-    rows: list[TableRow]
-    # The sheet held more rows than are read (`MAX_ROWS`).
-    truncated: bool = False
-
-
 # How much of one list a file may hold: above Proterial's lists as Bravo
 # exports them (B04 11,523 rows, B06 12,271), and a bound on what one import
 # keeps and diffs.
@@ -118,17 +99,6 @@ class RejectedRow(BaseModel):
     row: int = Field(ge=0)
     column: str | None = Field(default=None, max_length=200)
     reason: str = Field(max_length=300)
-
-
-# ------------------------------------------------------------- headers --
-
-
-def header_key(text: str) -> str:
-    """A header as it is matched: no diacritics, no case, no spacing or
-    punctuation. "Mã khách hàng" and "MA_KHACH_HANG" read the same."""
-    decomposed = unicodedata.normalize("NFKD", text.replace("đ", "d").replace("Đ", "D"))
-    bare = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]", "", bare.casefold())
 
 
 # ---------------------------------------------------------- cell kinds --
@@ -339,6 +309,11 @@ class Column:
     @property
     def keys(self) -> frozenset[str]:
         return frozenset(header_key(name) for name in (self.header, self.path, *self.aliases))
+
+    @property
+    def repeatable(self) -> bool:
+        """A file may title it twice; its cells add up (`_REPEATABLE`)."""
+        return self.kind in _REPEATABLE
 
     def read(self, value: CellValue) -> Any:
         match self.kind:
@@ -1056,14 +1031,6 @@ def record_key(catalog_list: CatalogList, record: CatalogRecord) -> str:
 # ---------------------------------------------------------------- parsing --
 
 
-class MissingColumnsError(ValueError):
-    """The file lacks a column its list needs: nothing of it is read."""
-
-    def __init__(self, headers: Sequence[str]) -> None:
-        super().__init__("thiếu cột: " + ", ".join(headers))
-        self.headers = tuple(headers)
-
-
 @dataclass(frozen=True, slots=True)
 class ParsedRecord:
     """A row read as a record: where it was in the file, and its key."""
@@ -1081,62 +1048,6 @@ class ParsedList:
     records: tuple[ParsedRecord, ...]
     rejected: tuple[RejectedRow, ...]
     unknown_headers: tuple[str, ...] = ()
-
-
-# Where the header row may be: among the first rows of the sheet, under the
-# title rows an export prints above it.
-_HEADER_SEARCH: Final = 10
-
-
-def header_row(rows: Sequence[TableRow]) -> int:
-    """Where the header is, by the rows' shape alone, never by their words:
-    the first row whose text cells number at least half of the widest of the
-    first rows (and at least two). A title above it ("Danh mục vật tư hàng
-    hóa", merged across the sheet) is one cell, and hints beside it a few; a
-    header names every column. The index into ``rows``; 0 for a sheet whose
-    first row is its header, as the template's is."""
-    first = rows[:_HEADER_SEARCH]
-    widest = max((sum(cell is not None for cell in r.cells) for r in first), default=0)
-    needed = max(2, -(-widest // 2))
-    for index, row in enumerate(first):
-        if sum(isinstance(cell, str) for cell in row.cells) >= needed:
-            return index
-    return 0
-
-
-def _columns_of(spec: ListSpec, header: TableRow) -> dict[int, Column]:
-    """Which cell of each row is which column; refuses a file that lacks a
-    required one or names one twice (a list or contacts column may repeat:
-    its cells add up)."""
-    by_key = {key: column for column in spec.columns for key in column.keys}
-    found: dict[int, Column] = {}
-    seen: dict[str, int] = {}
-    for index, cell in enumerate(header.cells):
-        text = _text(cell)
-        if text is None:
-            continue
-        column = by_key.get(header_key(text))
-        if column is None:
-            continue
-        if column.path in seen and column.kind not in _REPEATABLE:
-            raise ValueError(f"cột '{column.header}' xuất hiện hai lần")
-        seen.setdefault(column.path, index)
-        found[index] = column
-    missing = [c.header for c in spec.columns if c.required and c.path not in seen]
-    if missing:
-        raise MissingColumnsError(missing)
-    return found
-
-
-def _unknown(spec: ListSpec, header: TableRow) -> tuple[str, ...]:
-    """At most 20 headers no column matched, each cut to 100 characters: the
-    file's own text, shown back to the importer, bounded."""
-    known = {key for column in spec.columns for key in column.keys}
-    return tuple(
-        text[:100]
-        for cell in header.cells
-        if (text := _text(cell)) is not None and header_key(text) not in known
-    )[:20]
 
 
 # What a model refusal means, by pydantic's error type: no value is quoted.
@@ -1240,16 +1151,19 @@ def _record(
 
 def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
     """The file's rows as the list's records (module docstring). The header
-    is found by the rows' shape (`header_row`), the title rows above it
-    skipped; the reader already left out a group's label row (Bravo's "3. Đã
+    is the row titling the list's columns (`bravo_exports.find_header`), the
+    title rows above it skipped; the reader already left out a group's label row (Bravo's "3. Đã
     duyệt" over its SUBTOTAL). Raises `MissingColumnsError` (or ValueError for
     a header named twice, or no rows at all); every other problem is a
     rejected row."""
     spec = SPECS[catalog_list]
     if not table.rows:
         raise ValueError("tệp không có dòng nào")
-    header, *rows = table.rows[header_row(table.rows) :]
-    columns = _columns_of(spec, header)
+    header = find_header(table.rows, spec.columns)
+    columns: dict[int, Column] = {
+        index: column for index, column in header.at.items() if isinstance(column, Column)
+    }
+    rows = table.rows[header.index + 1 :]
     rejected: list[RejectedRow] = []
     if table.truncated or len(rows) > MAX_ROWS:
         rejected.append(
@@ -1280,7 +1194,7 @@ def parse_rows(catalog_list: CatalogList, table: ImportedTable) -> ParsedList:
     return ParsedList(
         records=tuple(kept),
         rejected=tuple(sorted([*rejected, *refused], key=lambda r: r.row)),
-        unknown_headers=_unknown(spec, header),
+        unknown_headers=header.extra,
     )
 
 

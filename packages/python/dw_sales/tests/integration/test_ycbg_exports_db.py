@@ -64,6 +64,8 @@ _CAPS = IntakeCaps(
 )
 
 M10_YCBG = "RFQ260930-030"
+# M10's one line in the customer's words, as Sales enters it in Bravo.
+_M10_WORDS = "MULTI-CORE CABLE 4C AWG22 STRANDED TINNED CU BRAID SHIELD GREY REEL 300M SPEC SP-5406"
 SAMPLES = [
     "RFQ261110-002",
     "RFQ2611-2",
@@ -219,8 +221,8 @@ async def test_an_export_is_read_onto_the_case_waiting_and_seen_by_no_one_else(
     case_id = await _waiting_m10(quote_run, uow, scope)
     data = ycbg_export_xlsx(
         [
-            ExportRow(M10_YCBG, 1, "CLOSE", "QUOTE", None, "BP-26-0187"),
-            ExportRow("RFQ260930-031", 1, "CLOSE", "DECLINE", "không có vật liệu"),
+            ExportRow(M10_YCBG, None, "CLOSE", "QUOTE", None, "BP-26-0187", _M10_WORDS),
+            ExportRow("RFQ260930-031", None, "CLOSE", "DECLINE", "không có vật liệu", None, "a"),
         ]
     )
     context = DIEU.context(scope)
@@ -282,7 +284,7 @@ async def test_a_connection_that_never_scoped_itself_reads_no_export(
     sales_app_engine: AsyncEngine,
     migrator: AsyncEngine,
 ) -> None:
-    data = ycbg_export_xlsx([ExportRow(M10_YCBG, 1, "PENDING")])
+    data = ycbg_export_xlsx([ExportRow(M10_YCBG, None, "PENDING", description="a")])
     await _service(exports, uow).upload(DIEU.context(quote_run.scope), "ycbg.xlsx", data)
 
     async with migrator.connect() as conn:

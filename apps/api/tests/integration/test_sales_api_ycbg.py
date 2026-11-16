@@ -19,9 +19,9 @@ from dw_sales.testing.bravo_ycbg_export import ExportRow, ycbg_export_xlsx
 
 pytestmark = pytest.mark.integration
 
-_EXPORT = base64.b64encode(ycbg_export_xlsx([ExportRow("RFQ260930-030", 1, "PENDING")])).decode(
-    "ascii"
-)
+_EXPORT = base64.b64encode(
+    ycbg_export_xlsx([ExportRow("RFQ260930-030", None, "PENDING", description="a")])
+).decode("ascii")
 
 
 async def test_a_number_bravo_cannot_have_given_is_refused_and_bravos_is_recorded(
