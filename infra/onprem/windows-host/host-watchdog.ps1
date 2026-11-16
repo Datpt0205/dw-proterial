@@ -22,8 +22,17 @@ if (Test-Path $stateFile) {
     try { (Get-Content $stateFile -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $state[$_.Name] = $_.Value } } catch { }
 }
 
+# A mail that cannot go now (at boot the network is not up yet: measured, the
+# "OK again" of the restart drill was lost) waits in the state and is retried
+# on every round until it goes.
 function Send-Alert([string]$subject, [string]$body) {
     if (-not (Test-Path $mailFile)) { Log "no mail setting; not sent: $subject"; return }
+    if (-not (Send-Now $subject $body)) {
+        $q = @($state['mail.pending']) | Where-Object { $_ }
+        $state['mail.pending'] = @($q) + @([pscustomobject]@{ subject = $subject; body = "$body`n`n(queued $(Get-Date -Format o))" })
+    }
+}
+function Send-Now([string]$subject, [string]$body) {
     try {
         Add-Type -AssemblyName System.Security
         $cfg  = Get-Content $mailFile -Raw | ConvertFrom-Json
@@ -37,8 +46,25 @@ function Send-Alert([string]$subject, [string]$body) {
         $smtp.Send($msg)
         $msg.Dispose(); $smtp.Dispose()
         Log "mail sent: $subject"
-    } catch { Log "mail failed: $subject :: $($_.Exception.Message)" }
+        return $true
+    } catch { Log "mail failed: $subject :: $($_.Exception.Message)"; return $false }
 }
+
+# Retry what earlier rounds could not send, oldest first; keep what still fails.
+if ((Test-Path $mailFile) -and $state['mail.pending']) {
+    $left = @()
+    foreach ($m in @($state['mail.pending'])) {
+        if (-not $m) { continue }
+        if (-not (Send-Now $m.subject $m.body)) { $left += $m }
+    }
+    $state['mail.pending'] = $left
+}
+
+# The first minutes after boot: Hyper-V is still starting the VM and Strata waits
+# on purpose, so those two are not judged yet (measured: a check at boot saw the
+# VM "Off" and called Start-VM over Hyper-V's own start).
+$hostUpMin = ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMinutes
+$booting = $hostUpMin -lt 5
 
 # One result per check: ok, or a sentence saying what is wrong.
 # A check needing N failures in a row before it counts keeps a slow boot or a
@@ -62,7 +88,9 @@ function Report([string]$name, [bool]$ok, [string]$problem, [int]$after = 1) {
 
 # --- 1. The VM is running ---------------------------------------------------------
 $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-if (-not $vm) {
+if ($booting) {
+    Log "host up $([math]::Round($hostUpMin, 1)) min: VM and Strata not judged yet"
+} elseif (-not $vm) {
     [void](Report 'vm' $false "VM $vmName does not exist on this host.")
 } elseif ($vm.State -ne 'Running') {
     if (Report 'vm' $false "VM $vmName was $($vm.State); the watchdog started it.") { }
@@ -82,7 +110,9 @@ if (-not $vm) {
 $strataTask = Get-ScheduledTask -TaskName 'DW-Strata' -ErrorAction SilentlyContinue
 $strataOk = $false
 try { $strataOk = ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri 'http://127.0.0.1:8080/health').StatusCode -eq 200) } catch { }
-if ($strataOk -or ($strataTask -and $strataTask.State -eq 'Running' -and -not $state['strata.served'])) {
+if ($booting) {
+    # judged from the next round on
+} elseif ($strataOk -or ($strataTask -and $strataTask.State -eq 'Running' -and -not $state['strata.served'])) {
     # Not failing while the very first launch is still downloading the model.
     if ($strataOk) { $state['strata.served'] = $true }
     [void](Report 'strata' $true '')
@@ -113,8 +143,13 @@ foreach ($d in 'C', 'V', 'B') {
 # host runs close to full by design. Below 2 GB for 15 minutes, Windows starts
 # trimming Strata's memory (slow answers) or a restart of the VM may not find
 # its 16 GB.
-$availMB = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
+$mem = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
+$availMB = [int]$mem.AvailableMBytes
 [void](Report 'host-memory' ($availMB -ge 2048) "The host has only $availMB MB of memory available. Strata may slow down, and the VM may not start again after a stop." 3)
+# Commit charge: what Windows has promised against RAM + page file. At the limit
+# every new allocation fails, in any process (Strata alone commits ~59 GB).
+$commitPct = [math]::Round(100 * $mem.CommittedBytes / $mem.CommitLimit, 1)
+[void](Report 'host-commit' ($commitPct -lt 92) "Windows has committed $commitPct % of its memory limit ($([math]::Round($mem.CommittedBytes/1GB)) of $([math]::Round($mem.CommitLimit/1GB)) GB). At 100 % allocations fail in every process." 2)
 
 # --- 5c. Backups are fresh and their restore test passes ------------------------------
 # The VM's dw-backup.sh writes B:\DW-Backup\status; it never mails, this does.
@@ -162,4 +197,4 @@ if ((Get-Date).Hour -ge 8 -and $state['daily.sent'] -ne $today) {
     $state['daily.sent'] = $today
 }
 
-$state | ConvertTo-Json | Set-Content -Path $stateFile -Encoding utf8
+$state | ConvertTo-Json -Depth 5 | Set-Content -Path $stateFile -Encoding utf8

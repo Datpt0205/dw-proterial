@@ -27,8 +27,23 @@ Set-ItemProperty -Path $au -Name NoAutoRebootWithLoggedOnUsers -Type DWord -Valu
 $wu = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
 Set-ItemProperty -Path $wu -Name ExcludeWUDriversInQualityUpdate -Type DWord -Value 1
 
+# --- Page file: a fixed 64 GB on C: --------------------------------------------
+# Strata commits about 59 GB for the model and the VM holds 16 GB, so with the
+# automatic 22 GB page file the commit charge stood at 83.2 of 85 GB (measured
+# 2026-11-16): one more allocation anywhere and Windows refuses it, whoever
+# asks. A fixed 64 GB lifts the limit to ~128 GB. It is a ceiling, not paging:
+# pages were read back from it at 0/s with the model serving. Takes effect at
+# the next restart.
+$cs = Get-CimInstance Win32_ComputerSystem
+if ($cs.AutomaticManagedPagefile) { Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $false } }
+$pf = Get-CimInstance Win32_PageFileSetting | Where-Object Name -eq 'C:\pagefile.sys'
+if (-not $pf) { $pf = New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = 'C:\pagefile.sys' } }
+Set-CimInstance -InputObject $pf -Property @{ InitialSize = [uint32]65536; MaximumSize = [uint32]65536 }
+
 # --- Report -------------------------------------------------------------------
 Write-Host '== power'; powercfg /getactivescheme
 Write-Host '== windows update policy'
 Get-ItemProperty $au | Select-Object NoAutoUpdate, AUOptions, NoAutoRebootWithLoggedOnUsers | Format-List
 Get-ItemProperty $wu | Select-Object ExcludeWUDriversInQualityUpdate | Format-List
+Write-Host '== page file (MB)'
+Get-CimInstance Win32_PageFileSetting | Format-Table Name, InitialSize, MaximumSize -AutoSize

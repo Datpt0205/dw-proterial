@@ -242,6 +242,32 @@ context. All five are done and on `main`. The full narrative is at
         Gyro-S in Strata (27.6 GB vs 37.6 GB, lower quality), then 27B Q4 on
         llama.cpp, which changes ADR 0025 and needs every DW step attested
         again. Owed: Đạt's choice after the measurement.
+        **Strata measured on the plant host (11-16 13:45, Q2_0, VM running,
+        not attested):** serving from the S4U task in session 0 on CUDA
+        (`strata.exe` and `strata-vision.exe` on the GPU, 23.5 of 24 GB
+        VRAM; the engine lives in Administrator's `%LOCALAPPDATA%\Strata`
+        despite `STRATA_DATA_DIR`); API key enforced (401 without).
+        `reasoning_effort: none` is needed or the answer is empty (thinking
+        eats the tokens). Vietnamese summary 1.6 s, warm ~78 tok/s, 3 parallel
+        requests all done in 2.1 s; vision: the mock scan
+        `scan_BRN-PO-2610-027.pdf` page 1 at 150 dpi in 4.6 s, PO number,
+        date, parties, 3 codes, quantities, prices and dates all as printed,
+        but "6.100" written as a JSON number reads 6.1: vision output must keep
+        numbers as strings for code to parse (DW's rule already); a user-guide
+        screenshot was described as what it is, nothing invented. Memory:
+        Strata ~33 GB resident, 59 GB committed; host available ~5-6 GB, no
+        paging (pages input 0/s) even with 3 parallel; **commit stood at
+        83.2 of 85 GB** with the automatic 22 GB page file, so `01` now sets
+        a fixed 64 GB (limit 127 GB, 64 % used after restart) and the
+        watchdog alerts at 92 % commit (it fired at 99.1 % before the fix).
+        Verdict: Q2_0 stays; Gyro-S not needed on these figures.
+        **Whole-host restart drill (13:49):** host on Tailscale at 111 s, VM
+        at 122 s, Strata serving at 193 s (2 min delay + ~30 s load); the VM's
+        previous boot ended in `poweroff.target` with no unclean-journal sign.
+        Found and fixed in the watchdog: at boot it judged the VM before
+        Hyper-V had started it (now 5 min grace), and a mail that failed
+        before the network was up was lost (now queued and retried; drilled
+        with a broken SMTP port, then sent).
         **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
         so after a power cut the host starts by itself and the VM, Strata
         and Tailscale follow. Still to run: the whole-host restart drill
