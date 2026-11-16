@@ -103,7 +103,7 @@ class SqlSkillReplays:
                 unanswered=replay.unanswered,
                 security_failed=list(replay.security_failed),
             )
-            .on_conflict_do_nothing(index_elements=["version_id"])
+            .on_conflict_do_nothing(index_elements=["tenant_id", "version_id"])
             .returning(_R.c.id)
         )
         async with tenant_session(self.session_factory, _bound(scope)) as session:
