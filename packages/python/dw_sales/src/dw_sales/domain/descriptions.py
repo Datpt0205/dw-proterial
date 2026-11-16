@@ -14,6 +14,9 @@ acts on; a near match is a guess.
 
 The vocabulary is built from the `Literal` types in `catalog.py`, so a colour or
 packaging added there is read here without a second list.
+
+A near match never maps a line: `nearest` only names the codes a request to
+Design shows beside a line no item fits (ticket 06), for Design to compare.
 """
 
 from __future__ import annotations
@@ -93,21 +96,32 @@ class StatedAttributes(BaseModel):
 
     def fits(self, item: Item) -> bool:
         """Every attribute stated is the item's own."""
-        attributes = item.attributes
-        known = {
-            "family": item.family,
-            "cores": attributes.cores,
-            "gauge": attributes.gauge,
-            "stranding": attributes.stranding,
-            "conductor": attributes.conductor,
-            "shield": attributes.shield,
-            "colour": attributes.colour,
-            "packaging": attributes.packaging,
-            "pack_length_m": item.pack_multiple,
-            "spec_no": attributes.spec_no,
-            "standard": attributes.standard,
-        }
+        known = _known(item)
         return all(value is None or known[name] == value for name, value in self)
+
+    def held_by(self, item: Item) -> int:
+        """How many of the attributes stated are the item's own: by the same
+        equality `fits` asks of every one (ticket 06's nearest codes)."""
+        known = _known(item)
+        return sum(value is not None and known[name] == value for name, value in self)
+
+
+def _known(item: Item) -> dict[str, object]:
+    """The item's value of each attribute a description may state."""
+    attributes = item.attributes
+    return {
+        "family": item.family,
+        "cores": attributes.cores,
+        "gauge": attributes.gauge,
+        "stranding": attributes.stranding,
+        "conductor": attributes.conductor,
+        "shield": attributes.shield,
+        "colour": attributes.colour,
+        "packaging": attributes.packaging,
+        "pack_length_m": item.pack_multiple,
+        "spec_no": attributes.spec_no,
+        "standard": attributes.standard,
+    }
 
 
 def read_description(text: str) -> StatedAttributes | None:
@@ -141,6 +155,44 @@ def read_description(text: str) -> StatedAttributes | None:
 def candidates(stated: StatedAttributes, items: Iterable[Item]) -> tuple[Item, ...]:
     """Every item the stated attributes fit, by PRV code."""
     return tuple(sorted((i for i in items if stated.fits(i)), key=lambda i: i.prv_code))
+
+
+def nearest(stated: StatedAttributes, items: Iterable[Item], limit: int) -> tuple[Item, ...]:
+    """The ``limit`` items holding the most of the stated attributes, most
+    first, then by PRV code; never one holding none of them (ticket 06).
+
+    What a line no item fits is closest to, for the request to Design to
+    create a code: `candidates` asks every attribute, this counts them. Only
+    the items given, which the caller takes from its tenant's item master,
+    so a code no item holds is never one of them."""
+    held = ((stated.held_by(item), item) for item in items)
+    ranked = sorted(
+        ((count, item) for count, item in held if count), key=lambda x: (-x[0], x[1].prv_code)
+    )
+    return tuple(item for _, item in ranked[:limit])
+
+
+def described(item: Item) -> str:
+    """The item in words for a person: Bravo's name where the item master
+    has one, else its attributes in DW1's own vocabulary, the words
+    `read_description` reads back to the same attributes."""
+    if item.name:
+        return item.name
+    a = item.attributes
+    words = (
+        FAMILY_WORDS[item.family] if item.family else None,
+        f"{a.cores}C" if a.cores else None,
+        a.gauge.upper() if a.gauge else None,
+        a.stranding.upper() if a.stranding else None,
+        CONDUCTOR_WORDS[a.conductor] if a.conductor else None,
+        SHIELD_WORDS[a.shield] if a.shield else None,
+        a.colour.upper() if a.colour else None,
+        a.packaging.upper() if a.packaging else None,
+        f"{item.pack_multiple.normalize():f}M" if item.pack_multiple else None,
+        f"SPEC {a.spec_no}" if a.spec_no else None,
+        a.standard,
+    )
+    return " ".join(word for word in words if word)
 
 
 def _phrase(words: list[str], position: int) -> tuple[str, object, int] | None:

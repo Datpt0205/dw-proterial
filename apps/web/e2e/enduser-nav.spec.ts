@@ -477,14 +477,14 @@ test("6. Reload mid-flow as Diệu: a half-typed YCBG number and a half-typed pr
   const record = page
     .getByRole("dialog")
     .filter({ hasText: "Ghi số YCBG Bravo đã cấp" });
-  await record.getByLabel("Số YCBG trên Bravo").fill("YCBG-2609-030");
+  await record.getByLabel("Số YCBG trên Bravo").fill("RFQ260930-030");
   await page.reload();
   await expect(
     page.getByText("Đã soạn YCBG", { exact: true }).first(),
   ).toBeVisible();
   await expect(record).toHaveCount(0);
   await expect(
-    page.getByText("YCBG YCBG-2609-030", { exact: true }),
+    page.getByText("YCBG RFQ260930-030", { exact: true }),
   ).toHaveCount(0);
   expect((await salesGet(request, DIEU, `/quotes/${ids.m10}`)).status).toBe(
     "ycbg_drafted",
@@ -492,13 +492,13 @@ test("6. Reload mid-flow as Diệu: a half-typed YCBG number and a half-typed pr
 
   // Finish the step for real, send to Design, and let DW1 match M25's reply.
   await page.getByRole("button", { name: "Đã lập YCBG", exact: true }).click();
-  await record.getByLabel("Số YCBG trên Bravo").fill("YCBG-2609-030");
+  await record.getByLabel("Số YCBG trên Bravo").fill("RFQ260930-030");
   await record
     .getByRole("button", { name: "Ghi số YCBG", exact: true })
     .click();
   await expect(record).toBeHidden();
   await expect(
-    page.getByText("YCBG YCBG-2609-030", { exact: true }),
+    page.getByText("YCBG RFQ260930-030", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Gửi Design", exact: true }).click();
   await expect

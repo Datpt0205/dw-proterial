@@ -2,7 +2,7 @@
   "flow": "quote",
   "pricer": "dieu",
   "rfq": "M10",
-  "ycbg": "YCBG-2609-030",
+  "ycbg": "RFQ260930-030",
   "reply": "M25",
   "price": {
     "unit_price": "0.6890",

@@ -57,6 +57,10 @@ export function refusalSentences(error: unknown): string[] {
   const unmapped = detailList(details.lines_not_mapped);
   if (unmapped.length)
     sentences.push(`Dòng ${unmapped.join(", ")} chưa có mã PRV.`);
+  if (detailList(details.quotes_open).length)
+    sentences.push(
+      "Đơn đang chờ hồ sơ báo giá mở từ đơn này: chờ báo giá được duyệt hoặc từ chối.",
+    );
   const missing = detailList(details.missing);
   if (details.rule === "source_not_served" && missing.length)
     sentences.push(`Còn phải mở: ${missing.map(regionLabel).join(", ")}.`);

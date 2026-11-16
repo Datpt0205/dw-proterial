@@ -103,7 +103,7 @@ async def _spec_discussion(world: World) -> uuid.UUID:
         return world.quote(case_id).case_version
 
     await commands.ycbg(context, case_id, case_version=version(), ycbg_no=None)
-    await commands.ycbg(context, case_id, case_version=version(), ycbg_no="YCBG-2609-028")
+    await commands.ycbg(context, case_id, case_version=version(), ycbg_no="RFQ260929-028")
     await commands.design_sent(context, case_id, case_version=version())
     await world.process_each(AN, ["M18"])
     assert world.quote(case_id).status is QuoteStatus.DESIGN_REPLIED

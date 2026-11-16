@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -57,6 +58,7 @@ import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
 import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
+import { DesignCheckPanel } from "./design-check";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
@@ -348,6 +350,19 @@ function QuoteDetail() {
         ]}
       />
 
+      {data.from_order ? (
+        <Alert
+          type="info"
+          showIcon
+          title={`Mở từ đơn hàng PO ${data.from_order.po_no}: khách gửi PO trước khi có báo giá`}
+          description="Đơn chờ báo giá này được duyệt (hoặc từ chối) rồi mới tự kiểm xong được."
+          action={
+            <Link href={`/sales/orders/${data.from_order.case_id}`}>
+              Xem đơn hàng
+            </Link>
+          }
+        />
+      ) : null}
       {data.decline ? (
         <Alert
           type="warning"
@@ -627,13 +642,16 @@ function QuoteDetail() {
               ]}
             />
           </div>
-        ) : (
+        ) : data.design_check ? null : (
           <Typography.Text>
             {data.status === "sent_to_design"
               ? "Đang chờ Design. Phản hồi được ghép bằng số YCBG."
               : "Chưa gửi Design."}
           </Typography.Text>
         )}
+        {data.design_check ? (
+          <DesignCheckPanel check={data.design_check} readBy={name} />
+        ) : null}
       </Card>
 
       <Card size="small" title="Căn cứ giá">

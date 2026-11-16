@@ -135,7 +135,7 @@ async def test_the_model_reads_the_reply_and_the_case_proposes_what_sales_confir
     model_api: Api, gateway: ScriptedReplies, migrator: AsyncEngine
 ) -> None:
     an = model_api.as_(AN)
-    case = await replied(an, "M09", "YCBG-2609-028", "M18")
+    case = await replied(an, "M09", "RFQ260929-028", "M18")
     case = await _spec(an, case, "start")
 
     m41 = await process(an, "M41")

@@ -27,7 +27,7 @@ from dw_sales.evals.world import ALPHA, SampleWith, World, open_world
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-YCBG = "YCBG-2609-030"
+YCBG = "RFQ260930-030"
 BODY = (
     f"Design reply to {YCBG}.\n"
     "Line 1: BP code BP-2609-030-01, spec SP-2609-030-01, PRV CB-2006, copper 38.4 kg/km.\n"

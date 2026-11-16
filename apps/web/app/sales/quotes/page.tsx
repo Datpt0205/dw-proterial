@@ -23,6 +23,7 @@ import { quoteTitle } from "../_lib/quote-actions";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
 import { useUnreadCases } from "../_lib/unread";
+import { useSalesViewer } from "../_lib/viewer";
 import {
   useActivityFilter,
   useListView,
@@ -41,10 +42,15 @@ import {
   usePhoneColumns,
   usePhoneTable,
 } from "../_components/list-parts";
-import { SCOPE } from "../_components/sales-frame";
+import {
+  PAUSED_REASON,
+  SCOPE,
+  useSalesFrame,
+} from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { QuoteStateTag } from "../_components/tags";
 import { useFillHeight } from "../../../lib/use-fill-height";
+import { YcbgExportButton } from "./ycbg-export";
 
 type Quote = SalesSchemas["QuoteSummaryView"];
 
@@ -102,6 +108,14 @@ function Quotes() {
     useCallback(() => salesApi().quotes(activity ?? undefined), [activity]),
   );
   const [status, setStatus] = useStatusFilter();
+  const { paused } = useSalesFrame();
+  const { hasScope } = useSalesViewer();
+  // Bravo's YCBG export (ticket 16): whoever prepares quotations, while DW1 runs.
+  const ycbgReason = !hasScope(SCOPE.quote)
+    ? "Bạn không có quyền chuẩn bị báo giá."
+    : paused
+      ? PAUSED_REASON
+      : null;
   const all = useMemo(() => quotes.data ?? [], [quotes.data]);
   const open = all.filter((q) => !DONE.includes(q.status));
   const done = all.filter((q) => DONE.includes(q.status));
@@ -186,7 +200,10 @@ function Quotes() {
         }
         help="Yêu cầu báo giá theo hạn: quá hạn trước, rồi hạn gần nhất. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam."
         actions={
-          <Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>
+          <Space wrap>
+            <YcbgExportButton reason={ycbgReason} />
+            <Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>
+          </Space>
         }
       />
       {quotes.error ? (

@@ -10,7 +10,7 @@ generated from `body` by the database, so they cannot disagree with it, and
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -150,3 +150,13 @@ class SqlQuoteCaseLookup:
         bound = TenantScope(tenant_id=scope.tenant_id.value, workspace_id=scope.workspace_id.value)
         async with tenant_session(self.session_factory, bound) as session:
             return await SqlQuoteCaseRepository(session, scope).cases_for_ycbg(ycbg_no)
+
+    async def quotes(
+        self, scope: SalesScope, quote_case_ids: Collection[uuid.UUID]
+    ) -> Sequence[QuoteCase]:
+        """Implements `LinkedQuotesPort` (ticket 09): under the scope's RLS,
+        so an id of another tenant or workspace reads as none."""
+        bound = TenantScope(tenant_id=scope.tenant_id.value, workspace_id=scope.workspace_id.value)
+        async with tenant_session(self.session_factory, bound) as session:
+            rows = await session.execute(sa.select(_Q).where(_Q.c.id.in_(list(quote_case_ids))))
+            return [_case(row) for row in rows.mappings()]

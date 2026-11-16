@@ -95,7 +95,7 @@ async def _decided_world(api: Api) -> dict[str, Any]:
     )
     await open_sources(an, m04)
     m04 = await decide(an, m04, "prepare")
-    m10 = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    m10 = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
     assert (await approve(giang, m10)).status_code == 200
     # A tenant pricing version whose floor margin is a known price, applied
     # by the head after both cases were priced (2026-10-28: a PIC proposes no

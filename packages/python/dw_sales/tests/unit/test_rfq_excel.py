@@ -478,7 +478,7 @@ async def test_a_design_reply_is_read_with_its_ycbg_number_and_every_value_ancho
     document = await _mock_reply("M25")
 
     assert (document.ycbg_no.value, document.ycbg_no.source.cell_ref) == (
-        "YCBG-2609-030",
+        "RFQ260930-030",
         "YCBG!B4",
     )
     assert document.reply_date.value == date(2026, 10, 1)
@@ -519,7 +519,7 @@ def _reply_bytes(line_no: Any) -> bytes:
     worksheet.title = "YCBG"
     layout: dict[str, Any] = {
         "A4": "YCBG No.",
-        "B4": "YCBG-2609-030",
+        "B4": "RFQ260930-030",
         "D4": "Reply Date",
         "E4": datetime(2026, 10, 1),
     }

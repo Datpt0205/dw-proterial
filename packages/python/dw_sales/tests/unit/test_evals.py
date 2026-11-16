@@ -277,8 +277,8 @@ def test_header_corrected_fails_when_prepare_ignores_the_open_finding(
 ) -> None:
     prepare = OrderCase.prepare
 
-    def ignores_findings(self: OrderCase, actor: Any, at: Any) -> OrderCase:
-        prepared = prepare(self.model_copy(update={"findings": ()}), actor, at)
+    def ignores_findings(self: OrderCase, actor: Any, at: Any, **settled: Any) -> OrderCase:
+        prepared = prepare(self.model_copy(update={"findings": ()}), actor, at, **settled)
         return prepared.model_copy(update={"findings": self.findings})
 
     monkeypatch.setattr(OrderCase, "prepare", ignores_findings)
@@ -293,7 +293,7 @@ def test_header_corrected_fails_when_prepare_ignores_the_open_finding(
 def test_header_corrected_fails_when_prepare_refuses_without_naming_the_finding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def refuses_unnamed(self: OrderCase, actor: Any, at: Any) -> OrderCase:
+    def refuses_unnamed(self: OrderCase, actor: Any, at: Any, **settled: Any) -> OrderCase:
         raise ConflictError("the self-check is not complete", details={"open_findings": []})
 
     monkeypatch.setattr(OrderCase, "prepare", refuses_unnamed)
@@ -314,8 +314,8 @@ def test_header_corrected_fails_when_the_corrected_po_cannot_be_prepared(
     """The first refusal is the real one; the PO it then prepares is refused."""
     prepare = OrderCase.prepare
 
-    def never_prepares(self: OrderCase, actor: Any, at: Any) -> OrderCase:
-        prepare(self, actor, at)
+    def never_prepares(self: OrderCase, actor: Any, at: Any, **settled: Any) -> OrderCase:
+        prepare(self, actor, at, **settled)
         raise ConflictError("the self-check is not complete", details={"open_findings": []})
 
     monkeypatch.setattr(OrderCase, "prepare", never_prepares)

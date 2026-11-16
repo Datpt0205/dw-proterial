@@ -98,6 +98,19 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
     label: "Design phản hồi",
     color: "processing",
   },
+  "sales.quote.design_checked": {
+    label: "Kết quả Design từ Bravo",
+    color: "processing",
+  },
+  "sales.ycbg_export.uploaded": {
+    label: "Tải tệp YCBG từ Bravo",
+    color: "default",
+  },
+  "sales.ycbg_export.read": { label: "Đọc tệp YCBG", color: "default" },
+  "sales.ycbg_export.failed": {
+    label: "Không đọc được tệp YCBG",
+    color: "warning",
+  },
   "sales.quote.finding_answered": {
     label: "Trả lời cờ báo giá",
     color: "default",
@@ -134,6 +147,7 @@ const LANES: Record<string, string> = {
   sales_processing: "DW1 · xử lý thư",
   sales_followups: "DW1 · nhắc việc",
   sales_rule_drafts: "DW1 · nháp quy tắc",
+  sales_ycbg_exports: "DW1 · đọc tệp YCBG từ Bravo",
   purchasing_mail_drop: "DW2 · đọc thư mục thư",
   purchasing_master_import: "DW2 · đọc file dữ liệu chủ",
   purchasing_outbound: "DW2 · gửi thư hỏi giá",

@@ -198,23 +198,28 @@ before the request.
 
 | Message | YCBG            | Answers | PRV code  |
 | ------- | --------------- | ------- | --------- |
-| `M18`   | `YCBG-2609-028` | `M09`   | none      |
-| `M25`   | `YCBG-2609-030` | `M10`   | `CB-2007` |
-| `M29`   | `YCBG-2609-029` | `M14`   | `CB-2003` |
-| `M30`   | `YCBG-2610-001` | `M23`   | `HW-1003` |
-| `M32`   | `YCBG-2608-044` | none    | none      |
+| `M18`   | `RFQ260929-028` | `M09`   | none      |
+| `M25`   | `RFQ260930-030` | `M10`   | `CB-2007` |
+| `M29`   | `RFQ260929-029` | `M14`   | `CB-2003` |
+| `M30`   | `RFQ261001-001` | `M23`   | `HW-1003` |
+| `M32`   | `RFQ260828-044` | none    | none      |
 
 A reply is matched by its YCBG number only: the open-YCBG row with that
 number names the customer and their RFQ number, which name the request. A
 reply's PRV code, when it has one, is the item the request's code maps to, and
 its spec number is that item's. `M18` answers a new design, so it has none.
+The forms state Bravo's numbers (`RFQ` + yymmdd + `-` + nnn, the only shape
+Sales may record, ticket 16); the mails' subjects and text still say
+`YCBG-2609-028` and the like, and so do their file names: the recorded model
+readings are keyed by that text, and a reply is matched by its form's number,
+never by the mail's words.
 
 YCBG still waiting on Design (open, and no reply in the mailbox):
 
 | YCBG            | Customer |
 | --------------- | -------- |
-| `YCBG-2609-012` | `BRN`    |
-| `YCBG-2609-019` | `CVG`    |
+| `RFQ260910-012` | `BRN`    |
+| `RFQ260916-019` | `CVG`    |
 
 ## Yearly screening
 

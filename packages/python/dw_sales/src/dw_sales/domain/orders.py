@@ -32,7 +32,7 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, NamedTuple, Self
+from typing import Annotated, Final, Literal, NamedTuple, Self, cast
 from zoneinfo import ZoneInfo
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
@@ -259,6 +259,20 @@ class PcRequest(BaseModel):
         )
 
 
+class DesignRequest(BaseModel):
+    """Sales asked Design to create a PRV code for line ``line_no``, which no
+    item fits (ticket 06): who recorded the request sent, and when, the
+    moment the case's wait on Design for that line begins. Open while the
+    line has no code; the code Design names maps it only as Sales confirms
+    it (`confirm_mapping`), which ends the wait."""
+
+    model_config = _FROZEN
+
+    line_no: int = Field(ge=1, le=9999)
+    by: ActorId
+    at: AwareDatetime
+
+
 def reconfirmed(
     before: PcAnswer | None,
     deliveries: Sequence[tuple[Decimal, date]],
@@ -304,20 +318,28 @@ CustomerAnswer = Literal["keep", "accept", "ask_pc_again"]
 # or PC proposes otherwise (6-DW3). Never a model's.
 PcVerdict = Literal["can_do", "proposes"]
 _ANSWERED: Final = frozenset({"answer_customer", "waiting_customer", "bravo_update"})
+# Why Proterial itself changes a confirmed order (ticket 10, the BA's 6.1B):
+# PC has no capacity, the goods failed inspection (NG), stock is short, or
+# another reason Sales tells the customer in its own words.
+InternalReason = Literal["overcapacity", "ng", "short_stock", "other"]
+# The most lines one internal change holds: a whole PO of customer 1's size.
+INTERNAL_LINES_MAX: Final = 300
 
 
 class LoopLine(BaseModel):
-    """One line of the order a customer's change asks about, in the update
-    loop: the changes the PIC confirmed (one per field, held apart from the
-    line until the customer accepts), and PC's answer for the values asked.
-    PC's answer here names PC's dates only (``first_date`` is ``date``): the
-    line's own first confirmed date is kept when the update is applied
-    (`reconfirmed`)."""
+    """One line of the order a change asks about, in the update loop: the
+    changes the PIC confirmed (one per field, held apart from the line until
+    the customer accepts), and PC's answer for the values asked. PC's answer
+    here names PC's dates only (``first_date`` is ``date``): the line's own
+    first confirmed date is kept when the update is applied (`reconfirmed`).
+    A line of Proterial's own change (ticket 10) holds PC's answer and, where
+    PC cuts the line, the quantity it cuts to; a date moved or a line split
+    changes no value the customer ordered, so it holds no change."""
 
     model_config = _FROZEN
 
     line_no: int = Field(ge=1, le=99_999)
-    changes: tuple[AppliedChange, ...] = Field(min_length=1, max_length=2)
+    changes: tuple[AppliedChange, ...] = Field(default=(), max_length=2)
     pc_answer: PcAnswer | None = None
 
     @model_validator(mode="after")
@@ -344,21 +366,27 @@ class BravoUpdateApproval(BaseModel):
 
 
 class UpdateLoop(BaseModel):
-    """A customer's change on an order already in Bravo, from the PIC's
-    confirmation to the order confirmed again (ticket 29). One per case, from
-    one change request; its step says what it waits on and ``since`` when it
-    began waiting there, the clock a reminder reads."""
+    """A change on an order already in Bravo, from the PIC's confirmation to
+    the order confirmed again (ticket 29). One per case, from one change
+    request, or from Proterial's own change (``reason``, ticket 10); its step
+    says what it waits on and ``since`` when it began waiting there, the
+    clock a reminder reads."""
 
     model_config = _FROZEN
 
     request_id: uuid.UUID
     step: UpdateStep
     since: AwareDatetime
-    lines: tuple[LoopLine, ...] = Field(min_length=1)
+    lines: tuple[LoopLine, ...] = Field(min_length=1, max_length=INTERNAL_LINES_MAX)
     # Stamped by code when PC's answer is in for every line, and kept: what
     # the draft to the customer says does not change after it is drafted.
     verdict: PcVerdict | None = None
     approval: BravoUpdateApproval | None = None
+    # Why, when the change is Proterial's own (ticket 10): no customer asked
+    # it, so the loop begins at its Bravo update with PC's answer for every
+    # line, nothing is compared with what was asked, and the customer is
+    # told (`internal_change_notice`). None: a customer's change.
+    reason: InternalReason | None = None
 
     @model_validator(mode="after")
     def _loop_is_consistent(self) -> Self:
@@ -368,7 +396,17 @@ class UpdateLoop(BaseModel):
         if any(c.request_id != self.request_id for line in self.lines for c in line.changes):
             raise ValueError("the update loop holds another request's change")
         answered = [line.pc_answer is not None for line in self.lines]
-        if self.step in _ANSWERED:
+        if self.reason is not None:
+            if self.step != "bravo_update" or not all(answered) or self.verdict is not None:
+                raise ValueError(
+                    "Proterial's own change is at its Bravo update, PC's answer in for every"
+                    " line and nothing compared"
+                )
+            if any(c.field != "quantity" for line in self.lines for c in line.changes):
+                raise ValueError("Proterial's own change cuts a quantity, or changes no value")
+        elif any(not line.changes for line in self.lines):
+            raise ValueError("a customer's change names what it asks of every line")
+        elif self.step in _ANSWERED:
             if not all(answered) or self.verdict is None:
                 raise ValueError("PC's answer is in for every line once drafted to the customer")
         elif self.verdict is not None or (self.step == "ask_pc" and any(answered)):
@@ -1942,6 +1980,31 @@ _ANSWER_IN_THE_LOOP: Final = (
 MAKER_CHECKER_REFUSAL: Final = (
     f"người đã làm một phần hồ sơ này không tự kiểm chéo được ({MAKER_CHECKER_RULE})"
 )
+# Where a quote is opened for the PO's lines with no valid quotation (ticket
+# 09): while Sales reviews the order, before its self-check.
+_QUOTABLE: Final = frozenset({_S.CHECKED, _S.IN_REVIEW})
+
+
+class QuoteLink(BaseModel):
+    """A quote case a person opened from this order ("Mở báo giá", ticket 09):
+    a PO came before any quotation for the items of ``lines``. Who opened it,
+    and when. The order waits on it while the quote case is open; whether it
+    is open is the quote case's own status, read where it matters (`prepare`,
+    the line checks), never a copy kept here. Kept once settled: the link is
+    the order's history, shown on both cases."""
+
+    model_config = _FROZEN
+
+    quote_case_id: uuid.UUID
+    lines: tuple[int, ...] = Field(min_length=1)
+    by: ActorId
+    at: AwareDatetime
+
+    @model_validator(mode="after")
+    def _lines_once(self) -> Self:
+        if len(set(self.lines)) != len(self.lines):
+            raise ValueError("a quote is opened for a line once")
+        return self
 
 
 class UnappliedDecision(BaseModel):
@@ -2039,9 +2102,15 @@ class OrderCase(BaseModel):
     # Sales asked PC for the delivery dates and waits (ticket 07): only where
     # PC's answer is recorded, and cleared once every line asked has it.
     pc_request: PcRequest | None = None
+    # Sales asked Design for a new PRV code, line by line (ticket 06): only
+    # where mappings are decided, each for a line still without a code.
+    design_requests: tuple[DesignRequest, ...] = ()
     # A customer's change on the order once it is in Bravo, from the PIC's
     # confirmation to the order confirmed again (ticket 29); None otherwise.
     update_loop: UpdateLoop | None = None
+    # The quote cases opened from this order for lines with no valid
+    # quotation, oldest first (ticket 09).
+    quote_links: tuple[QuoteLink, ...] = ()
 
     @model_validator(mode="before")
     @classmethod
@@ -2095,11 +2164,21 @@ class OrderCase(BaseModel):
                 raise ValueError(f"a {self.status} case does not wait on PC")
             if not set(self.pc_request.lines) <= line_numbers:
                 raise ValueError("PC is asked about a line the case lacks")
+        if self.design_requests:
+            asked = [request.line_no for request in self.design_requests]
+            if len(asked) != len(set(asked)):
+                raise ValueError("Design is asked once per line")
+            unmapped = {x.line_no for x in self.lines if x.mapping.status is MappingStatus.UNMAPPED}
+            if self.status not in _EDITABLE or not set(asked) <= unmapped:
+                raise ValueError("Design is asked only about a line without a code, in review")
         if (loop := self.update_loop) is not None:
             if self.status not in _LOOP_STATUSES[loop.step]:
                 raise ValueError(f"a {self.status} case is not at {loop.step} of an update")
             if not {x.line_no for x in loop.lines} <= line_numbers:
                 raise ValueError("the update names a line the case lacks")
+        quoted = [link.quote_case_id for link in self.quote_links]
+        if len(quoted) != len(set(quoted)):
+            raise ValueError("a quote case is linked to the order once")
         _require_corrections(self.header_corrections, self._header_flagged, "the PO header")
         _keeps_identity(self.header, self.effective_header, "the PO header")
         if self.header_corrections:
@@ -2808,12 +2887,17 @@ class OrderCase(BaseModel):
             )
         return self._next(transition(self.status, _S.IN_REVIEW))
 
-    def prepare(self, actor: Actor, at: datetime) -> OrderCase:
+    def prepare(
+        self, actor: Actor, at: datetime, *, settled_quotes: frozenset[uuid.UUID] = frozenset()
+    ) -> OrderCase:
         """in_review -> prepared: the PIC's self-check is done (step 7).
 
         Refused while a finding other than `missing_noc_esf` is open, while
-        one is sent back to the customer, or while a line is not mapped to a
-        code Bravo can take. Each one is named.
+        one is sent back to the customer, while a line is not mapped to a
+        code Bravo can take, or while a quote case opened from the order is
+        open (ticket 09). Each one is named. ``settled_quotes``: the linked
+        quote cases the caller read as approved or declined; a link it does
+        not name is open, so a caller that reads none refuses (fail closed).
         """
         status = transition(self.status, _S.PREPARED)
         if status is self.status:
@@ -2825,7 +2909,8 @@ class OrderCase(BaseModel):
         ]
         asked = [f.key for f in self.findings if f.disposition.kind is DispositionKind.ASK_CUSTOMER]
         unmapped = [line.line_no for line in self.lines if not line.mapping.ready]
-        if open_findings or asked or unmapped:
+        quoting = [str(q) for q in self.quotes_waited_on(settled_quotes)]
+        if open_findings or asked or unmapped or quoting:
             raise ConflictError(
                 "the self-check is not complete",
                 details={
@@ -2833,6 +2918,7 @@ class OrderCase(BaseModel):
                     "open_findings": open_findings,
                     "ask_customer": asked,
                     "lines_not_mapped": unmapped,
+                    "quotes_open": quoting,
                 },
             )
         return self._next(status, prepared_by=actor.user_id, prepared_at=at)
@@ -3065,6 +3151,30 @@ class OrderCase(BaseModel):
             request = None
         return self._edited(**taken.changes(), pc_request=request)
 
+    # ------------------------------------------------ Design (ticket 06) --
+
+    def ask_design(self, line_no: int, actor: Actor, at: datetime) -> OrderCase:
+        """Sales sent Design the request to create a PRV code for a line no
+        item fits (from their own mailbox: DW1 sends nothing). The case waits
+        on Design for that line from ``at``; asked again, the wait starts
+        again. Only for an `unmapped` line, where mappings are decided
+        (`_EDITABLE`). No value of the case changes, so a self-check stands;
+        the wait ends when the line's code is confirmed (`_next`)."""
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
+        if self.status not in _EDITABLE:
+            raise ConflictError(
+                f"Design is not asked from DW1 in {self.status}",
+                details={**details, "status": self.status.value, "rule": "design_status"},
+            )
+        if self.line(line_no).mapping.status is not MappingStatus.UNMAPPED:
+            raise ConflictError(
+                "only a line no item fits is a code for Design to create",
+                details={**details, "rule": "design_line_has_code"},
+            )
+        request = DesignRequest(line_no=line_no, by=actor.user_id, at=at)
+        others = tuple(r for r in self.design_requests if r.line_no != line_no)
+        return self._next(self.status, design_requests=(*others, request))
+
     # ------------------------------------------- the update loop (ticket 29) --
 
     def loop_target(self, loop_line: LoopLine) -> PoLine:
@@ -3221,14 +3331,20 @@ class OrderCase(BaseModel):
         `changed` does) and PC's answer, its first confirmed dates kept
         (`reconfirmed`), and its confirmed dates cleared, to be confirmed
         again."""
-        loop = self._loop("waiting_customer")
+        return self._loop_applied(self._loop("waiting_customer"))
+
+    def _loop_applied(self, loop: UpdateLoop) -> Corrected:
+        """The case's values with ``loop``'s changes and PC's answers applied
+        (`update_accepted`'s docstring): the one owner of what a line in the
+        loop becomes, for a customer's change and Proterial's own alike."""
         lines: list[OrderLine] = []
         for line in self.lines:
             held = loop.line(line.line_no)
             if held is None:
                 lines.append(line)
                 continue
-            assert held.pc_answer is not None  # waiting on the customer: answered
+            # Waiting on the customer, or Proterial's own change: answered.
+            assert held.pc_answer is not None
             fields = {c.field for c in held.changes}
             pc = held.pc_answer
             lines.append(
@@ -3265,6 +3381,148 @@ class OrderCase(BaseModel):
         corrected = self.update_accepted()
         loop = self.update_loop
         assert loop is not None  # `update_accepted` required it
+        return self._loop_taken(corrected, _loop_with(loop, step="bravo_update", since=at), recheck)
+
+    @property
+    def takes_internal_change(self) -> bool:
+        """Whether Proterial's own change may be applied now (ticket 10): the
+        confirmation has left and no other change is in the update loop. What
+        the page offers "Thay đổi nội bộ" by, and `internal_change` refuses by."""
+        return self.status in CONFIRMATION_LEFT and self.update_loop is None
+
+    def internal_change(
+        self,
+        change_id: uuid.UUID,
+        reason: InternalReason,
+        lines: Mapping[int, Sequence[tuple[Decimal, date]]],
+        actor: Actor,
+        at: datetime,
+    ) -> UpdateLoop:
+        """Proterial's own change of a confirmed order (ticket 10, the BA's
+        6.1B) as the update loop it starts: per line, the deliveries PC now
+        gives it, each a quantity and PC's date, as a person applies them.
+        No customer asked it, so the loop begins at its Bravo update (6.2-SP)
+        and the order is entered, cross-checked and confirmed again as an
+        accepted change is (`take_internal_change`).
+
+        A line's deliveries add up to its quantity (a date moved, a line
+        split) or to less (PC cuts it: part of it cancelled, and its quantity
+        becomes theirs); never to more, which is no change Proterial makes
+        alone (`quantity_raised`). A line the PO prints split keeps its
+        schedules' quantities: PC moves their dates only. Refused but on an
+        order whose confirmation has left, while another change is in the
+        loop (`update_busy`), for a line the order does not have, and for a
+        line it changes nothing on (`no_change`)."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if not self.takes_internal_change:
+            if self.status in CONFIRMATION_LEFT:
+                raise ConflictError(
+                    "đơn đang trong một vòng cập nhật khác",
+                    details={**details, "rule": "update_busy"},
+                )
+            raise ConflictError(
+                f"Proterial's own change is not taken in {self.status}",
+                details={**details, "status": self.status.value, "rule": "change_status"},
+            )
+        if not lines:
+            raise DomainError("an internal change names the lines it changes", details=details)
+        if len(lines) > INTERNAL_LINES_MAX:
+            raise DomainError(
+                "an internal change names too many lines",
+                details={**details, "lines": len(lines), "max": INTERNAL_LINES_MAX},
+            )
+        held = {line.line_no: line for line in self.lines}
+        if missing := sorted(set(lines) - held.keys()):
+            raise ConflictError(
+                "đơn không có dòng này",
+                details={**details, "lines": missing, "rule": "no_such_line"},
+            )
+        loop_lines = [
+            self._internal_line(held[no], lines[no], change_id, actor, at) for no in sorted(lines)
+        ]
+        return UpdateLoop(
+            request_id=change_id,
+            step="bravo_update",
+            since=at,
+            lines=tuple(loop_lines),
+            reason=reason,
+        )
+
+    def _internal_line(
+        self,
+        line: OrderLine,
+        deliveries: Sequence[tuple[Decimal, date]],
+        change_id: uuid.UUID,
+        actor: Actor,
+        at: datetime,
+    ) -> LoopLine:
+        """One line of `internal_change`, checked as its docstring says."""
+        details: dict[str, object] = {"case_id": str(self.case_id), "line": line.line_no}
+        if not deliveries or len(deliveries) > PC_DELIVERIES_MAX:
+            raise DomainError("a line is delivered at least once", details=details)
+        quantities = tuple(quantity for quantity, _ in deliveries)
+        total = sum(quantities, Decimal(0))
+        po = line.effective
+        if total > po.quantity:
+            raise ConflictError(
+                "thay đổi nội bộ không tăng số lượng khách đặt",
+                details={**details, "rule": "quantity_raised"},
+            )
+        if po.prints_schedules and quantities != tuple(s.quantity for s in po.schedules):
+            raise ConflictError(
+                "dòng in sẵn các đợt giao: PC chỉ dời ngày từng đợt",
+                details={**details, "rule": "printed_schedules"},
+            )
+        if total == po.quantity and tuple(deliveries) == line.confirmed_deliveries():
+            raise ConflictError("dòng này không đổi gì", details={**details, "rule": "no_change"})
+        cut = (
+            ()
+            if total == po.quantity
+            else (
+                AppliedChange(
+                    field="quantity",
+                    value=format(total.normalize(), "f"),
+                    request_id=change_id,
+                    by=actor.user_id,
+                    at=at,
+                ),
+            )
+        )
+        answer = PcAnswer(
+            deliveries=tuple(
+                PcDelivery(quantity=quantity, first_date=day, date=day)
+                for quantity, day in deliveries
+            ),
+            by=actor.user_id,
+            at=at,
+        )
+        return LoopLine(line_no=line.line_no, changes=cut, pc_answer=answer)
+
+    def internal_changed(self, loop: UpdateLoop) -> Corrected:
+        """The case's values with Proterial's own change applied, for its
+        checks to run on (`_loop_applied`); ``loop`` is `internal_change`'s."""
+        return self._loop_applied(loop)
+
+    def take_internal_change(
+        self,
+        change_id: uuid.UUID,
+        reason: InternalReason,
+        lines: Mapping[int, Sequence[tuple[Decimal, date]]],
+        actor: Actor,
+        at: datetime,
+        recheck: Recheck,
+    ) -> OrderCase:
+        """Proterial's own change applied with the changed lines' checks run
+        again, as an accepted change is (`take_update`): the order goes to
+        ``change_review`` for its Bravo update, then back to its cross-check
+        and its confirmation. The one point the case changes."""
+        loop = self.internal_change(change_id, reason, lines, actor, at)
+        return self._loop_taken(self._loop_applied(loop), loop, recheck)
+
+    def _loop_taken(self, corrected: Corrected, loop: UpdateLoop, recheck: Recheck) -> OrderCase:
+        """``corrected`` taken with ``recheck``'s results, the order at its
+        Bravo update (``loop``) in ``change_review``, its cross-check and
+        confirmation cleared."""
         taken = self._rechecked(corrected, recheck, {"case_id": str(self.case_id)})
         lines = tuple(
             OrderLine.model_validate(
@@ -3281,7 +3539,7 @@ class OrderCase(BaseModel):
             cross_checked_at=None,
             confirmed_by=None,
             confirmed_at=None,
-            update_loop=_loop_with(loop, step="bravo_update", since=at),
+            update_loop=loop,
         )
 
     def approve_update(
@@ -3593,6 +3851,92 @@ class OrderCase(BaseModel):
             superseded_by_case=superseded_by,
         )
 
+    # ------------------------------------------- a quote for the PO (ticket 09) --
+
+    def quote_lines(self) -> tuple[int, ...]:
+        """The lines a quote opened from the order asks about: those whose
+        check found no valid quotation (`quotation_missing`), whatever was
+        decided on the finding."""
+        return tuple(
+            sorted(
+                {
+                    f.line_no
+                    for f in self.findings
+                    if f.code is FindingCode.QUOTATION_MISSING and f.line_no is not None
+                }
+            )
+        )
+
+    def quotes_waited_on(self, settled: frozenset[uuid.UUID]) -> tuple[uuid.UUID, ...]:
+        """The linked quote cases ``settled`` does not name: those the order
+        waits on (`QuoteLink`)."""
+        return tuple(
+            link.quote_case_id for link in self.quote_links if link.quote_case_id not in settled
+        )
+
+    def quotes_for(self, line_no: int) -> tuple[uuid.UUID, ...]:
+        """The quote cases opened from the order for line ``line_no``."""
+        return tuple(link.quote_case_id for link in self.quote_links if line_no in link.lines)
+
+    def open_quote(
+        self,
+        quote_case_id: uuid.UUID,
+        actor: Actor,
+        at: datetime,
+        *,
+        settled_quotes: frozenset[uuid.UUID] = frozenset(),
+    ) -> OrderCase:
+        """A person opened a quote case for `quote_lines` ("Mở báo giá",
+        ticket 09); the order waits on it until it is approved or declined.
+        Refused while one opened from the order is still open (opening twice
+        opens one), where the order has no line without a valid quotation,
+        and outside review. ``settled_quotes`` as `prepare` takes it. No
+        value of the case changes."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status not in _QUOTABLE:
+            raise ConflictError(
+                f"a quote is not opened from an order in {self.status}",
+                details={**details, "status": self.status.value, "rule": "quote_status"},
+            )
+        if waiting := self.quotes_waited_on(settled_quotes):
+            raise ConflictError(
+                "a quote opened from this order is still open",
+                details={**details, "quote_case_id": str(waiting[0]), "rule": "quote_open"},
+            )
+        lines = self.quote_lines()
+        if not lines:
+            raise ConflictError(
+                "every line of the order has a valid quotation",
+                details={**details, "rule": "no_quotation_missing"},
+            )
+        link = QuoteLink(quote_case_id=quote_case_id, lines=lines, by=actor.user_id, at=at)
+        return self._next(self.status, quote_links=(*self.quote_links, link))
+
+    def quote_check(self, lines: Iterable[int]) -> Corrected:
+        """The case's values as they stand, for ``lines``' checks to run again
+        once their quote is approved (ticket 09): nothing is corrected, and
+        no code is computed again."""
+        rechecked = frozenset(lines) & {line.line_no for line in self.lines}
+        if not rechecked:
+            raise ConflictError(
+                "no line of the order waits on an approved quotation",
+                details={"case_id": str(self.case_id), "rule": "no_quoted_line"},
+            )
+        return Corrected(
+            min(rechecked),
+            self.lines,
+            self.header_corrections,
+            self.effective_document,
+            rechecked,
+            False,
+        )
+
+    def take_quote_check(self, corrected: Corrected, recheck: Recheck) -> OrderCase:
+        """`quote_check`'s lines with their checks run again, as a change is
+        taken (`take_change`): a prepared order reopens its self-check."""
+        details: dict[str, object] = {"case_id": str(self.case_id), "rule": "quote_check"}
+        return self._edited(**self._rechecked(corrected, recheck, details).changes())
+
     # ------------------------------------------------------------- helpers --
 
     def _require_compared(self, entry_compared: bool) -> None:
@@ -3661,6 +4005,11 @@ class OrderCase(BaseModel):
             # Nor on PC, once its answer can no longer be taken here (ticket
             # 07): in Bravo, PC's dates are the update loop's (ticket 29).
             changes.setdefault("pc_request", None)
+        # The wait on Design ends with the line's code, a new revision or a
+        # case that leaves review (ticket 06).
+        lines = cast(Sequence[OrderLine], changes.get("lines", self.lines))
+        waiting = _waiting_on_design(self.design_requests, status, lines)
+        changes.setdefault("design_requests", waiting)
         if status not in CONFIRMATION_LEFT:
             # What left and the customer's answer belong to that confirmation:
             # a revision, a decline or an accepted change clears them.
@@ -3680,6 +4029,17 @@ class OrderCase(BaseModel):
         return OrderCase.model_validate(
             {**dict(self), **changes, "status": status, "case_version": self.case_version + 1}
         )
+
+
+def _waiting_on_design(
+    requests: tuple[DesignRequest, ...], status: OrderStatus, lines: Sequence[OrderLine]
+) -> tuple[DesignRequest, ...]:
+    """The requests to Design a case at ``status`` with ``lines`` still waits
+    on: where mappings are decided, for a line still without a code."""
+    if status not in _EDITABLE:
+        return ()
+    unmapped = {x.line_no for x in lines if x.mapping.status is MappingStatus.UNMAPPED}
+    return tuple(r for r in requests if r.line_no in unmapped)
 
 
 _CLEARED_FROM_PREPARED: Final[Mapping[str, object]] = MappingProxyType(

@@ -150,7 +150,7 @@ async def _awaiting_design(service: QuotationService, message_id: str, ycbg_no: 
 
 
 async def _m10_replied(service: QuotationService, cases: FakeCases) -> QuoteCase:
-    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-030"))
     outcome = await service.take_design_reply(SCOPE, "M25")
     assert isinstance(outcome, ReplyAttached)
     return cases.put(SCOPE, outcome.case)
@@ -446,11 +446,11 @@ async def test_design_reply_is_attached_to_the_case_waiting_under_its_ycbg_numbe
 async def test_a_reply_quoting_a_ycbg_no_case_holds_is_routed_to_sales() -> None:
     cases = FakeCases()
     service = _service(cases=cases)
-    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-030"))
 
     outcome = await service.take_design_reply(SCOPE, "M32")
 
-    assert outcome == ReplyUnmatched(message_id="M32", ycbg_no="YCBG-2608-044")
+    assert outcome == ReplyUnmatched(message_id="M32", ycbg_no="RFQ260828-044")
     disposition = outcome.disposition
     assert (disposition.kind, disposition.reason) == ("routed_to_sales", "design_reply_unmatched")
     assert disposition.owner is not None and disposition.case_id is None
@@ -459,7 +459,7 @@ async def test_a_reply_quoting_a_ycbg_no_case_holds_is_routed_to_sales() -> None
 async def test_an_attached_reply_is_the_messages_disposition_on_its_quote_case() -> None:
     cases = FakeCases()
     service = _service(cases=cases)
-    waiting = cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    waiting = cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-030"))
 
     outcome = await service.take_design_reply(SCOPE, "M25")
 
@@ -479,7 +479,7 @@ async def test_a_reply_answering_other_lines_than_its_case_asked_is_routed_not_a
     instead of failing the case's own check and ending with no disposition."""
     cases = FakeCases()
     service = _service(cases=cases)
-    waiting = await _awaiting_design(service, "M10", "YCBG-2609-030")
+    waiting = await _awaiting_design(service, "M10", "RFQ260930-030")
     document = waiting.request.document
     (item,) = document.items
     two_lines = document.model_copy(
@@ -499,7 +499,7 @@ async def test_a_reply_is_matched_by_ycbg_number_only_never_by_customer_or_reque
     another YCBG number, is not matched: nothing but the number is compared."""
     cases = FakeCases()
     service = _service(cases=cases)
-    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-031"))
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-031"))
 
     outcome = await service.take_design_reply(SCOPE, "M25")
 
@@ -509,7 +509,7 @@ async def test_a_reply_is_matched_by_ycbg_number_only_never_by_customer_or_reque
 async def test_a_reply_for_a_case_no_longer_waiting_on_design_is_routed() -> None:
     cases = FakeCases()
     service = _service(cases=cases)
-    waiting = await _awaiting_design(service, "M10", "YCBG-2609-030")
+    waiting = await _awaiting_design(service, "M10", "RFQ260930-030")
     cases.put(SCOPE, waiting.decline_request(by=PRICER, at=AT, reason=DeclineReason.COMMERCIAL))
 
     assert isinstance(await service.take_design_reply(SCOPE, "M25"), ReplyUnmatched)
@@ -534,7 +534,7 @@ async def test_a_reply_not_from_a_verified_design_mailbox_is_routed_unread(
     cases = FakeCases()
     mailbox = _mailbox(sender, await _file("M25"), authentication=authentication)
     service = _service(inbox=mailbox, cases=cases)
-    cases.put(SCOPE, await _awaiting_design(_service(), "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(_service(), "M10", "RFQ260930-030"))
 
     outcome = await service.take_design_reply(SCOPE, "X1")
 
@@ -545,7 +545,7 @@ async def test_a_reply_not_from_a_verified_design_mailbox_is_routed_unread(
         detail="the reply does not come from a Design mailbox the mail system verified",
     )
     assert outcome.disposition.kind == "routed_to_sales"
-    (waiting,) = await cases.cases_for_ycbg(SCOPE, "YCBG-2609-030")
+    (waiting,) = await cases.cases_for_ycbg(SCOPE, "RFQ260930-030")
     assert waiting.status is QuoteStatus.SENT_TO_DESIGN and waiting.design_reply is None
 
 
@@ -554,7 +554,7 @@ async def test_the_same_reply_from_the_verified_design_mailbox_is_attached() -> 
     cases = FakeCases()
     mailbox = _mailbox("design@seller.example", await _file("M25"), authentication=VERIFIED)
     service = _service(inbox=mailbox, cases=cases)
-    cases.put(SCOPE, await _awaiting_design(_service(), "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(_service(), "M10", "RFQ260930-030"))
 
     assert isinstance(await service.take_design_reply(SCOPE, "X1"), ReplyAttached)
 
@@ -562,7 +562,7 @@ async def test_the_same_reply_from_the_verified_design_mailbox_is_attached() -> 
 async def test_a_service_given_no_design_mailbox_attaches_no_reply() -> None:
     cases = FakeCases()
     service = _service(cases=cases, design_mailboxes=frozenset())
-    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-030"))
 
     assert isinstance(await service.take_design_reply(SCOPE, "M25"), ReplyUnmatched)
 
@@ -570,7 +570,7 @@ async def test_a_service_given_no_design_mailbox_attaches_no_reply() -> None:
 async def test_another_tenants_case_under_the_same_ycbg_is_never_matched() -> None:
     cases = FakeCases()
     service = _service(cases=cases)
-    cases.put(OTHER_TENANT, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    cases.put(OTHER_TENANT, await _awaiting_design(service, "M10", "RFQ260930-030"))
 
     assert isinstance(await service.take_design_reply(SCOPE, "M25"), ReplyUnmatched)
 
@@ -660,7 +660,7 @@ async def test_a_lane_the_policy_has_no_freight_rate_for_says_so() -> None:
 
 async def test_evidence_waits_for_design() -> None:
     service = _service()
-    case = await _awaiting_design(service, "M10", "YCBG-2609-030")
+    case = await _awaiting_design(service, "M10", "RFQ260930-030")
 
     with pytest.raises(ConflictError):
         await service.price_evidence(SCOPE, case, as_of=date(2026, 10, 2))
@@ -993,7 +993,7 @@ async def test_a_reply_is_taken_only_from_the_tenants_current_design_mailboxes()
     book, versions = _book()
     cases = FakeCases()
     service = _service(cases=cases, policies=book)
-    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "RFQ260930-030"))
     versions.seed_approved(
         SCOPE.tenant_id.value, _rules("9.0.1", design_mailboxes=("thietke@seller.example",))
     )

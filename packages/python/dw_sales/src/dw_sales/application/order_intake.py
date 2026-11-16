@@ -91,7 +91,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -114,6 +114,7 @@ from dw_sales.application.examples import Lookup
 from dw_sales.application.handoff_kinds import HandoffKindReader
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
+from dw_sales.application.linked_quotes import LinkedQuotesPort
 from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.mail_kinds import MailKindReader
 from dw_sales.application.message_intent import IntentRead, IntentReader
@@ -179,6 +180,7 @@ from dw_sales.domain.order_checks import (
     map_line,
     wants_reading,
 )
+from dw_sales.domain.order_quotes import quoted_for_po
 from dw_sales.domain.orders import (
     Actor,
     AppliedChange,
@@ -187,6 +189,7 @@ from dw_sales.domain.orders import (
     Finding,
     FindingCode,
     ImpliedTerm,
+    InternalReason,
     LineCheck,
     LineMapping,
     MappingStatus,
@@ -471,6 +474,11 @@ class OrderIntake:
     # (ticket 18). None: no upload is stored in this process (the mock
     # mailbox), and every message's customer is its sender's.
     uploads: UploadLookupPort | None = None
+    # The quote cases opened from an order for its lines with no valid
+    # quotation (ticket 09): an approved one is the quotation those lines are
+    # checked against. None: none is read here, and such a line keeps
+    # `quotation_missing`, never a pass.
+    linked_quotes: LinkedQuotesPort | None = None
 
     async def classify(
         self,
@@ -1412,6 +1420,8 @@ class OrderIntake:
                 None if lme is None else lme.data,
                 rules,
                 unchecked,
+                # A revision of a PO a quote was opened for (ticket 09).
+                linked=[q for case in earlier for q in case.quotes_for(po_line.line_no)],
             )
             as_of.extend(quoted_as_of)
             checks.append(check)
@@ -1571,6 +1581,7 @@ class OrderIntake:
             None if lme is None else lme.data,
             rules,
             [],
+            linked=case.quotes_for(line.line_no),
         )
         return recheck
 
@@ -1657,6 +1668,39 @@ class OrderIntake:
         recheck = await self._recheck(scope, case, corrected, details)
         return decided(lambda: case.take_update(at, recheck))
 
+    async def take_internal_change(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        change_id: uuid.UUID,
+        reason: InternalReason,
+        lines: Mapping[int, Sequence[tuple[Decimal, date]]],
+        actor: Actor,
+        at: datetime,
+    ) -> OrderCase:
+        """Proterial's own change of a confirmed order (ticket 10), applied
+        with the changed lines' checks run again, as an accepted change is
+        (`take_update`). What it may change is the case's
+        (`OrderCase.internal_change`)."""
+        details: dict[str, object] = {"case_id": str(case.case_id)}
+        loop = decided(lambda: case.internal_change(change_id, reason, lines, actor, at))
+        recheck = await self._recheck(scope, case, case.internal_changed(loop), details)
+        return decided(
+            lambda: case.take_internal_change(change_id, reason, lines, actor, at, recheck)
+        )
+
+    async def take_quote_check(
+        self, scope: SalesScope, case: OrderCase, lines: Collection[int]
+    ) -> OrderCase:
+        """``lines``' checks run again once a quote opened from the order for
+        them is approved (ticket 09), its terms the quotation they are checked
+        against (`_check_line`), through the path a change takes. Which lines
+        and statuses take it is the case's (`OrderCase.quote_check`)."""
+        details: dict[str, object] = {"case_id": str(case.case_id)}
+        corrected = decided(lambda: case.quote_check(lines))
+        recheck = await self._recheck(scope, case, corrected, details)
+        return decided(lambda: case.take_quote_check(corrected, recheck))
+
     async def _recheck(
         self, scope: SalesScope, case: OrderCase, corrected: Corrected, details: dict[str, object]
     ) -> Recheck:
@@ -1685,6 +1729,7 @@ class OrderIntake:
                 None if lme is None else lme.data,
                 rules,
                 [],
+                linked=case.quotes_for(line.line_no),
             )
             checks.append(check)
         po_findings = list(check_document(corrected.document, rules))
@@ -1865,11 +1910,15 @@ class OrderIntake:
         lme: LmeMonth | None,
         rules: OrderRules,
         unchecked: list[str],
+        *,
+        linked: Collection[uuid.UUID] = (),
     ) -> tuple[LineCheck, list[datetime]]:
         """One line checked against its item and the customer's quotation for it
         on the PO date, with the ``as_of`` of what that read. Quotations with
         nothing to answer are named in ``unchecked`` and read as none, which
-        raises `quotation_missing`: never a pass."""
+        raises `quotation_missing`: never a pass. With none valid, the one
+        approved on a quote case opened from the order for the line
+        (``linked``, ticket 09) applies to this PO."""
         quotation = None
         read: list[datetime] = []
         if mapped.item is not None:
@@ -1886,6 +1935,13 @@ class OrderIntake:
                 prv_code=mapped.item.prv_code,
                 day=header.po_date,
             )
+            if quotation is None and linked and self.linked_quotes is not None:
+                quotation = quoted_for_po(
+                    await self.linked_quotes.quotes(scope, linked),
+                    customer_code=customer_code,
+                    prv_code=mapped.item.prv_code,
+                    po_date=header.po_date,
+                )
         check = check_line(
             po_line,
             mapped,

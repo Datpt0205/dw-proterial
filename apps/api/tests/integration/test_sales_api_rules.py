@@ -368,7 +368,7 @@ async def test_a_quote_case_is_opened_under_the_tenants_quote_rules_and_keeps_th
     the stamped version's days); tenant beta resolves the platform's."""
     await _approved(rules_api, migrator, "sales_quote_rules", _quote_rules("9.0.1", 30))
     dieu = rules_api.as_(DIEU)
-    case = await replied(dieu, "M10", "YCBG-2609-030", "M25")
+    case = await replied(dieu, "M10", "RFQ260930-030", "M25")
     await _approved(rules_api, migrator, "sales_quote_rules", _quote_rules("9.0.2", 120))
 
     pending = await submitted(dieu, case)

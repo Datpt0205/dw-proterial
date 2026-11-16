@@ -390,6 +390,25 @@ export class SalesApi {
     );
   }
 
+  /** Bravo's YCBG screen as Sales exported it (202, ticket 16): the worker
+   * reads Design's results from it, until the vendor's API reads them back. */
+  uploadYcbgExport(
+    body: Body<"/api/v1/sales/ycbg-exports">,
+    key: string,
+  ): Promise<Accepted<"/api/v1/sales/ycbg-exports">> {
+    return this.client.request(
+      "POST",
+      "/api/v1/sales/ycbg-exports",
+      shaped<Accepted<"/api/v1/sales/ycbg-exports">>(),
+      { body, idempotencyKey: key },
+    );
+  }
+
+  /** The latest exports, newest first, and what became of each YCBG number. */
+  ycbgExports() {
+    return this.get<"/api/v1/sales/ycbg-exports">("/api/v1/sales/ycbg-exports");
+  }
+
   // ---- orders -------------------------------------------------------------
 
   /** Every order case; with `activity`, only those its count stands for. */
@@ -492,6 +511,29 @@ export class SalesApi {
     return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping/reject">(
       `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/mapping/reject`,
       body,
+      key,
+    );
+  }
+
+  /** The request to Design for a new PRV code, drafted from a line no item
+   * fits with the item master's nearest codes, and the codes Design's mails
+   * name since (ticket 06); nothing is sent or stored. */
+  designRequest(caseId: string, lineNo: number) {
+    return this.get<"/api/v1/sales/orders/{case_id}/lines/{line_no}/design-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/design-request`,
+    );
+  }
+
+  /** "Ghi đã gửi Design": the order waits on Design for the line from now. */
+  recordDesignAsked(
+    caseId: string,
+    lineNo: number,
+    caseVersion: number,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/design-request">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/design-request`,
+      { case_version: caseVersion },
       key,
     );
   }
@@ -751,6 +793,25 @@ export class SalesApi {
     );
   }
 
+  /** "Mở báo giá" (ticket 09): a quote case for the order's lines with no
+   * valid quotation, linked to the order, which waits on it. */
+  openQuote(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/quote">(
+      `/api/v1/sales/orders/${enc(caseId)}/quote`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
+  /** "Kiểm tra lại": the lines of an approved quote checked again with its terms. */
+  recheckQuotedLines(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/quote-check">(
+      `/api/v1/sales/orders/${enc(caseId)}/quote-check`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   /** PC's answer for one line: each delivery's quantity and PC's date. */
   recordPcAnswer(
     caseId: string,
@@ -829,6 +890,35 @@ export class SalesApi {
   ) {
     return this.post<"/api/v1/sales/orders/{case_id}/update/bravo-file">(
       `/api/v1/sales/orders/${enc(caseId)}/update/bravo-file`,
+      body,
+      key,
+    );
+  }
+
+  /** PC's mail pasted into "Thay đổi nội bộ" (ticket 10), read into the
+   * form; nothing is stored and the order does not change. */
+  readInternalChange(
+    caseId: string,
+    caseVersion: number,
+    text: string,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/internal-change/read">(
+      `/api/v1/sales/orders/${enc(caseId)}/internal-change/read`,
+      { case_version: caseVersion, text },
+      key,
+    );
+  }
+
+  /** "Áp dụng": Proterial's own change applied; the order goes to its
+   * Bravo update, then back to its cross-check (ticket 10). */
+  applyInternalChange(
+    caseId: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/internal-change">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/internal-change">(
+      `/api/v1/sales/orders/${enc(caseId)}/internal-change`,
       body,
       key,
     );

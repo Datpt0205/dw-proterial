@@ -24,6 +24,7 @@ from dw_sales.evals.graders import GRADERS as ORDER_GRADERS
 from dw_sales.evals.handoff_kinds import GRADERS as HANDOFF_KIND_GRADERS
 from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
 from dw_sales.evals.intents import GRADERS as INTENT_GRADERS
+from dw_sales.evals.internal_changes import GRADERS as INTERNAL_CHANGE_GRADERS
 from dw_sales.evals.layouts import GRADERS as LAYOUT_GRADERS
 from dw_sales.evals.legacy import GRADERS as LEGACY_GRADERS
 from dw_sales.evals.mail_kinds import GRADERS as MAIL_KIND_GRADERS
@@ -85,6 +86,7 @@ GRADERS = {
         **REPLY_KIND_GRADERS,
         **DOCUMENT_FORM_GRADERS,
         **TRIAGE_GRADERS,
+        **INTERNAL_CHANGE_GRADERS,
     }.items()
 }
 

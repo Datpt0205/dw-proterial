@@ -16,6 +16,15 @@ API and the plan use the English terms. The spec is
   (ticket 19).
 - **Quote case** (Hồ sơ báo giá): one request for quotation, through to a
   sent quotation or a decline.
+- **Quote for a PO** (Báo giá cho PO): a quote case a person opens from an
+  order whose lines have no valid quotation (`quotation_missing`) with "Mở
+  báo giá": the customer's, for those lines as the PO prints them, assigned
+  to the order's PIC; DW1 never opens one by itself. The two cases name each
+  other. While it is open the order **waits on the quotation** ("Đơn chờ báo
+  giá") and cannot be prepared; once approved, those lines are checked again
+  with its terms, which apply to that PO from its date ("Kiểm tra lại theo
+  báo giá"); declined, the wait ends and the finding stays for Sales. One is
+  open per order at a time (ticket 09).
 - **Maker / checker** (Người làm / người kiểm): on an order, the makers are
   the preparer and whoever recorded the Bravo entry, in this round or an
   earlier one (a return, a revision, a change applied in Bravo), and whoever
@@ -27,7 +36,13 @@ API and the plan use the English terms. The spec is
   person's own record for the current version ("chưa mở nguồn" otherwise).
 - **YCBG** (Phiếu yêu cầu báo giá): the quote-request form Sales enters in
   Bravo and sends to Design. Design's reply is matched by the YCBG number
-  only.
+  only. Bravo numbers it `RFQ` + yymmdd + `-` + nnn (`RFQ261110-002`), the
+  only number Sales may record (ticket 16).
+- **Design Check** (Kết quả Design trên Bravo): what Design writes on a YCBG
+  line in Bravo, QUOTE with the BP code or DECLINE with a reason, the line's
+  status then CLOSE. DW1 reads it back (from the YCBG export a person
+  uploads until the vendor's API reads it) and records it on the one case
+  waiting under the number; it moves no status and writes nothing to Bravo.
 - **Check basis** (Căn cứ kiểm tra): what a check compared against, stamped
   on the case when the check ran. It is never re-read from master data.
 - **Coverage statement** (Phạm vi đã kiểm): what was read and checked on one
@@ -328,6 +343,21 @@ API and the plan use the English terms. The spec is
   of it (whoever approved the file is a maker), and its confirmation is
   sent again, which ends the loop. The loop runs on an order whose
   confirmation left, `confirmation_sent` or `confirmed` (tickets 29, 28).
+- **Internal change** (Thay đổi nội bộ): Proterial's own change of a
+  confirmed order, the BA's 6.1B: PC moves the dates of lines, splits them
+  over several dates or cuts them (part cancelled), for overcapacity
+  (`overcapacity`, Quá tải sản xuất), NG (`ng`, Hàng NG), short stock
+  (`short_stock`, Thiếu hàng, vật tư) or another reason (`other`). Sales
+  pastes PC's mail; a model reads the lines into the form where its step is
+  on and measured (code finds every value in the paste, refuses a line the
+  order does not have, leaves a value the paste does not settle to a
+  person); nothing is kept until a person presses **Áp dụng**, which changes
+  the order and starts its update loop at the Bravo update: the **Bravo
+  update file** is the change list for Bravo's "Thay đổi chi tiết", then the
+  entry, the cross-check and the confirmation again. The notice to the
+  customer is a draft a person sends ("Thư báo khách thay đổi nội bộ"); it
+  states no price (ticket 10). A line's deliveries never add up to more
+  than the customer ordered.
 - **Confirmation sent** (Đã gửi xác nhận, chờ khách): the PIC recorded the
   order's confirmation sent ("Ghi đã gửi xác nhận", with each line's
   confirmed dates), from now, or from the time of a **sent copy** on the

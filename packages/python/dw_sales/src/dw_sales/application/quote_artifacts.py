@@ -78,8 +78,12 @@ async def ycbg_draft(d: QuoteDrafting, design: DesignRequestSource) -> tuple[Ren
     """Q2: the quote-request form (MOCK) Sales checks and enters in Bravo."""
     request = await design.design_request(d.scope, d.case)
     doc = d.internal("ycbg_draft")
+    # Bravo's YCBG lines (ticket 16): the direct and indirect customer, then
+    # the customer's own item description.
     keys = (
         "line_no",
+        "direct_customer",
+        "indirect_customer",
         "customer_item_code",
         "known_prv_code",
         "description",
@@ -89,6 +93,7 @@ async def ycbg_draft(d: QuoteDrafting, design: DesignRequestSource) -> tuple[Ren
     )
     heading: tuple[tuple[str, Value], ...] = (
         (label(doc, "customer"), f"{request.customer_code} — {request.customer_name}"),
+        (label(doc, "description"), request.description),
         (label(doc, "rfq_no"), request.rfq_no),
         (label(doc, "quote_due"), request.quote_due),
         (label(doc, "ycbg_no"), _ycbg_no(d.case)),
@@ -101,6 +106,8 @@ async def ycbg_draft(d: QuoteDrafting, design: DesignRequestSource) -> tuple[Ren
         rows=tuple(
             (
                 line.line_no,
+                line.direct_customer,
+                line.indirect_customer,
                 line.customer_item_code,
                 line.known_prv_code,
                 line.description,

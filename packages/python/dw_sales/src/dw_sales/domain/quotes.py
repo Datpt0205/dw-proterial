@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
@@ -74,6 +75,12 @@ LeadTimeDays = Annotated[int, Field(gt=0, le=365)]
 Description = Annotated[str, Field(min_length=1, max_length=500, pattern=r"\S")]
 # Design's own code for a design. Not in the master data: Design issues it.
 BpCode = Annotated[str, Field(pattern=r"^[A-Z0-9][A-Z0-9-]{1,31}$")]
+# Bravo's number for a quote request (YCBG): ``RFQ``, the day it was raised
+# (yymmdd), and its sequence that day (``RFQ261110-002``, Box 11-10). The
+# only number Sales may record (ticket 16); `ck_quote_cases_ycbg_no` holds
+# the column to the same pattern.
+YCBG_NO_PATTERN: Final = r"^RFQ[0-9]{6}-[0-9]{3}$"
+YcbgNo = Annotated[str, Field(pattern=YCBG_NO_PATTERN)]
 Reason = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"\S")]
 Guidance = Annotated[str, Field(min_length=1, max_length=2000, pattern=r"\S")]
 CopperWeight = Annotated[Decimal, Field(gt=0)]
@@ -97,6 +104,7 @@ CopperBasisKind = Literal["fixed", "lme_band"]
 CustomerSource = Literal["sender_domain", "named_buyer"]
 
 _KG_PER_TONNE: Final = Decimal(1000)
+_YCBG_NO: Final = re.compile(YCBG_NO_PATTERN)
 
 
 class Sourced[T](BaseModel):
@@ -393,9 +401,18 @@ class QuoteRequest(BaseModel):
 
 
 class DesignRequestLine(BaseModel):
+    """One line of the YCBG as Bravo's form holds it (ticket 16): the direct
+    and the indirect customer, and the customer's own description of the item
+    (``description``, their words)."""
+
     model_config = _FROZEN
 
     line_no: LineNo
+    # Bravo's group for the case's customer decides which of the two it is
+    # (`Customer.group`): an indirect customer is the end user a direct one
+    # buys for, and the other side is then left for Sales to type in Bravo.
+    direct_customer: CustomerCode | None
+    indirect_customer: CustomerCode | None
     customer_item_code: CustomerItemCode | None
     # The item the convert list names for the customer's code, for Design to
     # confirm; None when the code is not in it.
@@ -418,6 +435,9 @@ class DesignRequestDraft(BaseModel):
 
     customer_code: CustomerCode
     customer_name: Name
+    # Bravo's description of the request: the subject of the customer's mail,
+    # as Sales enters it today (Box 11-10).
+    description: str = Field(max_length=998)
     rfq_no: DocumentNo | None
     quote_due: date | None
     lines: tuple[DesignRequestLine, ...] = Field(min_length=1)
@@ -515,6 +535,57 @@ class DesignReply(BaseModel):
 
     def line(self, line_no: int) -> DesignReplyLine:
         return next(line for line in self.document.lines if line.line_no == line_no)
+
+
+# What Design writes in a YCBG line's Design Check in Bravo (Box B16).
+DesignVerdict = Literal["quote", "decline"]
+
+
+class DesignCheckLine(BaseModel):
+    """Design's result on one line of the YCBG, as Bravo holds it once the
+    line is closed: QUOTE with the BP code it is quoted under, or DECLINE
+    with Design's reason."""
+
+    model_config = _FROZEN
+
+    line_no: LineNo
+    verdict: DesignVerdict
+    bp_code: BpCode | None = None
+    reason: Reason | None = None
+
+    @model_validator(mode="after")
+    def _verdict_carries_its_value(self) -> Self:
+        if self.verdict == "quote" and self.bp_code is None:
+            raise ValueError(f"line {self.line_no}: a QUOTE names its BP code")
+        if self.verdict == "decline" and self.reason is None:
+            raise ValueError(f"line {self.line_no}: a DECLINE gives Design's reason")
+        return self
+
+
+class DesignCheck(BaseModel):
+    """Design's result on a whole YCBG, read from Bravo (ticket 16), never
+    written there: Bravo's status is Design's to close. Read from the YCBG
+    export a person uploaded (``file_sha256``, ``read_by``) until the
+    vendor's API reads a request back by its number (R13)."""
+
+    model_config = _FROZEN
+
+    ycbg_no: YcbgNo
+    lines: tuple[DesignCheckLine, ...] = Field(min_length=1)
+    file_sha256: Sha256Hex
+    read_by: uuid.UUID
+    read_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def _distinct_lines(self) -> Self:
+        if not _distinct(line.line_no for line in self.lines):
+            raise ValueError("Design's check answers a line twice")
+        return self
+
+    @property
+    def declined(self) -> bool:
+        """Design declined a line: Sales decides what the customer is told."""
+        return any(line.verdict == "decline" for line in self.lines)
 
 
 # ------------------------------------------------------------ the evidence --
@@ -1659,6 +1730,10 @@ _MAY_HOLD: Final[Mapping[QuoteStatus, frozenset[str]]] = {
     QuoteStatus.SENT_TO_DESIGN: frozenset({"design_reply"}),
 }
 _HISTORY: Final = frozenset({"return"})
+# Before Design is asked: no result of Design's can be on the case.
+_BEFORE_DESIGN: Final = frozenset(
+    {QuoteStatus.RECEIVED, QuoteStatus.YCBG_DRAFTED, QuoteStatus.YCBG_RECORDED}
+)
 
 
 # Where a request's line read from the message's own text was read.
@@ -1695,6 +1770,41 @@ class QuoteCoverage(BaseModel):
     findings: int
 
 
+def quoted_rows(document: CustomerQuoteDocument) -> tuple[Quotation, ...]:
+    """The quotation ``document`` states, as master-list rows: one per line
+    whose item code Design gave, valid from the day it was issued to the
+    last day its prices hold. The one owner of that reading, for the master
+    list (`master_list_rows`) and an order the quote was opened from
+    (ticket 09)."""
+    return tuple(
+        Quotation(
+            quote_no=document.quote_no,
+            customer_code=document.addressee.code,
+            prv_code=line.prv_code,
+            unit_price=line.unit_price,
+            currency=document.currency,
+            uom=line.uom,
+            moq=line.moq,
+            lead_time_days=line.lead_time_days,
+            copper_basis=line.copper_basis,
+            valid_from=document.issued_on,
+            valid_to=document.valid_to,
+        )
+        for line in document.lines
+        if line.prv_code is not None
+    )
+
+
+class FromOrder(BaseModel):
+    """The order case a quote case was opened from (ticket 09): its id and
+    PO number, stamped when the quote opened, so both cases name each other."""
+
+    model_config = _FROZEN
+
+    case_id: uuid.UUID
+    po_no: str = Field(min_length=1, max_length=200)
+
+
 class QuoteCase(BaseModel):
     """One request for quotation on its way to a quotation or a decline.
 
@@ -1722,6 +1832,10 @@ class QuoteCase(BaseModel):
     ycbg: YcbgRecord | None = None
     # Every reply Design sent for this case, oldest first; the last is current.
     design_replies: tuple[DesignReply, ...] = ()
+    # Design's result as Bravo holds it (ticket 16), recorded while the case
+    # waited on Design. It moves nothing: a DECLINE is Sales' to decide on,
+    # and a QUOTE still waits on Design's specification.
+    design_check: DesignCheck | None = None
     pricing: PricingDecision | None = None
     # Decisions replaced by a later one, oldest first: kept, never edited.
     earlier_pricing: tuple[PricingDecision, ...] = ()
@@ -1733,6 +1847,9 @@ class QuoteCase(BaseModel):
     decline: Decline | None = None
     # The signed paper copy, when someone uploaded it; a later upload replaces it.
     signed_copy: SignedCopy | None = None
+    # The order case it was opened from, for a PO that came before any
+    # quotation (ticket 09); None for a customer's request.
+    from_order: FromOrder | None = None
 
     @classmethod
     def open(
@@ -1742,6 +1859,7 @@ class QuoteCase(BaseModel):
         *,
         rules_version: str,
         catalog_as_of: datetime,
+        from_order: FromOrder | None = None,
     ) -> QuoteCase:
         """A new case, with what the request raises on its own and the rules
         and data it was opened with."""
@@ -1751,6 +1869,7 @@ class QuoteCase(BaseModel):
             rules_version=rules_version,
             catalog_as_of=catalog_as_of,
             findings=intake_findings(request),
+            from_order=from_order,
         )
 
     # -------------------------------------------------------- invariants --
@@ -1812,6 +1931,14 @@ class QuoteCase(BaseModel):
             current = self.design_replies[-1].document.lines
             if {line.line_no for line in current} != lines:
                 raise ValueError("Design's reply answers every requested line once")
+        check = self.design_check
+        if check is not None:
+            if self.status in _BEFORE_DESIGN:
+                raise ValueError("Design's check is read once the case was sent to Design")
+            if self.ycbg is None or check.ycbg_no != self.ycbg.ycbg_no:
+                raise ValueError("Design's check is on this case's YCBG")
+            if {line.line_no for line in check.lines} != lines:
+                raise ValueError("Design's check answers every requested line once")
 
     def _check_pricing(self) -> None:
         if (
@@ -1964,23 +2091,7 @@ class QuoteCase(BaseModel):
                 "a line whose item code Design has still to create has no master-list row",
                 details={"case_id": str(self.case_id), "line_nos": pending},
             )
-        return tuple(
-            Quotation(
-                quote_no=document.quote_no,
-                customer_code=document.addressee.code,
-                prv_code=line.prv_code,
-                unit_price=line.unit_price,
-                currency=document.currency,
-                uom=line.uom,
-                moq=line.moq,
-                lead_time_days=line.lead_time_days,
-                copper_basis=line.copper_basis,
-                valid_from=document.issued_on,
-                valid_to=document.valid_to,
-            )
-            for line in document.lines
-            if line.prv_code is not None
-        )
+        return quoted_rows(document)
 
     def reassigned(self) -> QuoteCase:
         """The case's next version, nothing in it changed: its assignee, which
@@ -2129,7 +2240,16 @@ class QuoteCase(BaseModel):
         return self.draft_ycbg() if self.ready_for_ycbg else self
 
     def record_ycbg(self, ycbg_no: str, *, by: uuid.UUID, at: AwareDatetime) -> QuoteCase:
-        """The number the ERP gave the YCBG Sales entered: what Design's reply quotes."""
+        """The number the ERP gave the YCBG Sales entered: what Design's reply
+        quotes. Only Bravo's shape (`YcbgNo`): a number Bravo cannot have
+        given would match no reply and no result read back from Bravo. A case
+        recorded before ticket 16 keeps the number it holds (``YcbgRecord``
+        reads it), and the column refuses it on any write."""
+        if not _YCBG_NO.fullmatch(ycbg_no):
+            raise DomainError(
+                "not a YCBG number as Bravo gives it (RFQ + yymmdd + - + nnn)",
+                details={"case_id": str(self.case_id), "field": "ycbg_no"},
+            )
         return self._moved(
             QuoteStatus.YCBG_RECORDED,
             ycbg=YcbgRecord(ycbg_no=ycbg_no, recorded_by=by, recorded_at=at),
@@ -2140,6 +2260,20 @@ class QuoteCase(BaseModel):
 
     def record_design_reply(self, reply: DesignReply) -> QuoteCase:
         return self._moved(QuoteStatus.DESIGN_REPLIED, design_replies=(*self.design_replies, reply))
+
+    def record_design_check(self, check: DesignCheck) -> QuoteCase:
+        """Design's result read back from Bravo, on the case waiting on Design
+        under that YCBG; the status stays (`design_check`). The same result
+        read again changes nothing; a different one is refused, for Sales to
+        look at, rather than replacing what Sales may already have acted on."""
+        if self.design_check is not None and self.design_check.lines == check.lines:
+            return self
+        if self.status is not QuoteStatus.SENT_TO_DESIGN or self.design_check is not None:
+            raise ConflictError(
+                "Design's result is recorded once, while the case waits on Design",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        return self._changed(design_check=check)
 
     def discuss_spec(self) -> QuoteCase:
         return self._moved(QuoteStatus.SPEC_DISCUSSION)

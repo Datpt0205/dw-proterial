@@ -88,6 +88,7 @@ from dw_sales.application.order_artifacts import (
     correction_request,
     cross_check_sheet,
     design_code_request,
+    internal_change_notice,
     portal_checklist,
 )
 from dw_sales.application.ports import (
@@ -202,6 +203,13 @@ def _answers(case: OrderCase, verdict: str) -> bool:
     )
 
 
+def _internal_change(case: OrderCase, *_: object) -> bool:
+    """Proterial's own change is in the update loop (ticket 10): from its
+    application until the confirmation is sent again, which ends the loop."""
+    loop = case.update_loop
+    return loop is not None and loop.reason is not None
+
+
 def _approved_update(case: OrderCase, record: ArtifactRecord) -> bool:
     """The Bravo update file is the case's while drawn at its version and not
     yet approved; once approved, the one the approval names, by id."""
@@ -249,6 +257,9 @@ ORDER_GATES: Final[Mapping[str, ArtifactGate[OrderCase]]] = {
         _order(bravo_update),
         kept=lambda c, r: _approved_update(c, r),
     ),
+    # Proterial's own change of a confirmed order (ticket 10): the notice to
+    # the customer, beside the Bravo update file above.
+    "internal_change_notice": ArtifactGate(False, _internal_change, _order(internal_change_notice)),
     "convert_list_proposal": ArtifactGate(
         False,
         lambda c, *_: any(

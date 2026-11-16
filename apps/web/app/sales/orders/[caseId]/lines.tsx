@@ -276,6 +276,11 @@ export function LinesTable({
                     {name(line.mapping.confirmed_by)}
                   </Typography.Text>
                 ) : null}
+                {order.design_requests.some(
+                  (r) => r.line_no === line.line_no,
+                ) ? (
+                  <StatusTag tone="warn">Chờ Design</StatusTag>
+                ) : null}
                 {!["exact", "candidate_confirmed"].includes(
                   line.mapping.status,
                 ) && editable ? (

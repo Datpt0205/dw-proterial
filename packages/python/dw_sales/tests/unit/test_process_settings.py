@@ -403,6 +403,7 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.po_body_extraction"): model,
         (RuleKey.ORDER_RULES, "model_assist.reply_draft"): model,
         (RuleKey.ORDER_RULES, "model_assist.skill_reply_drafts"): model,
+        (RuleKey.ORDER_RULES, "model_assist.internal_change"): model,
         (RuleKey.QUOTE_RULES, "design_mailboxes"): LockReason.TRUST,
         (RuleKey.FOLLOWUPS, "working_hours.time_zone"): LockReason.TWO_OWNERS,
     }

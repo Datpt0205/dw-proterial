@@ -356,6 +356,9 @@ class QuotationService:
                 details={"case_id": str(case.case_id)},
             )
         customer = await self._customer(scope, case.customer_code)
+        # Bravo's YCBG names a line's direct and indirect customer (ticket 16):
+        # the case's customer is the one its group in Bravo says it is.
+        indirect = customer.group == "indirect"
         lines = []
         for item in case.request.document.items:
             known = await self._catalogue_item(scope, case.customer_code, item)
@@ -364,6 +367,8 @@ class QuotationService:
             lines.append(
                 DesignRequestLine(
                     line_no=item.line_no,
+                    direct_customer=None if indirect else customer.code,
+                    indirect_customer=customer.code if indirect else None,
                     customer_item_code=(
                         item.customer_item_code.value if item.customer_item_code else None
                     ),
@@ -375,9 +380,11 @@ class QuotationService:
                 )
             )
         document = case.request.document
+        message = await self._message(scope, case.request.message_id)
         return DesignRequestDraft(
             customer_code=customer.code,
             customer_name=customer.name,
+            description=message.subject,
             rfq_no=case.request.rfq_no,
             quote_due=document.quote_due.value if document.quote_due else None,
             lines=tuple(lines),

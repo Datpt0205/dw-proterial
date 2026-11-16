@@ -1,10 +1,10 @@
 {
   "sales_steps": {
     "M09": {
-      "ycbg": "YCBG-2609-028"
+      "ycbg": "RFQ260929-028"
     },
     "M10": {
-      "ycbg": "YCBG-2609-030"
+      "ycbg": "RFQ260930-030"
     },
     "M14": {
       "answers": {
@@ -12,7 +12,7 @@
           "customer_code": "VLX"
         }
       },
-      "ycbg": "YCBG-2609-029"
+      "ycbg": "RFQ260929-029"
     },
     "M23": {
       "answers": {
@@ -20,7 +20,7 @@
           "quantity": "3050"
         }
       },
-      "ycbg": "YCBG-2610-001"
+      "ycbg": "RFQ261001-001"
     }
   }
 }

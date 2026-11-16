@@ -39,6 +39,7 @@ from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDrafts
 from dw_sales.adapters.persistence.salesorder_examples import SqlSalesOrderExamples
 from dw_sales.adapters.persistence.salesorder_pairs import SqlWorkedPairs
+from dw_sales.adapters.persistence.ycbg_exports import SqlYcbgExports
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.catalog_imports import (
     OPEN,
@@ -227,15 +228,18 @@ class SqlCatalogSnapshots:
 
 
 class SqlCatalogUnitOfWork:
-    """Implements `CatalogUnitOfWork`, and `RuleDraftUnitOfWork` and
-    `ExampleUnitOfWork` with the same transaction: an uploaded file kept for
-    the worker, its outbox event and its audit row, in one workspace."""
+    """Implements `CatalogUnitOfWork`, and `RuleDraftUnitOfWork`,
+    `ExampleUnitOfWork` and `YcbgExportUnitOfWork` with the same transaction:
+    an uploaded file kept for the worker, its outbox event and its audit row,
+    in one workspace."""
 
     snapshots: SqlCatalogSnapshots
     drafts: SqlRuleDrafts
     examples: SqlSalesOrderExamples
     # A customer's worked pairs (ticket 41), written with the example settled.
     pairs: SqlWorkedPairs
+    # Bravo's YCBG exports Sales uploaded (ticket 16).
+    ycbg_exports: SqlYcbgExports
     approvals: RunLessApprovalsPort
     audit: AuditRepositoryPort
     outbox: OutboxPort
@@ -264,6 +268,7 @@ class SqlCatalogUnitOfWork:
         self.drafts = SqlRuleDrafts(session, self._scope)
         self.examples = SqlSalesOrderExamples(session, self._scope)
         self.pairs = SqlWorkedPairs(session, self._scope)
+        self.ycbg_exports = SqlYcbgExports(session, self._scope)
         self.approvals = self._factory.approvals(session)
         self.audit = self._factory.audit(session)
         self.outbox = self._factory.outbox(session)
@@ -289,8 +294,8 @@ class SqlCatalogUnitOfWork:
 
 @dataclass(frozen=True)
 class SqlCatalogUnitOfWorkFactory:
-    """Implements `CatalogUnitOfWorkFactory`, `RuleDraftUnitOfWorkFactory` and
-    `ExampleUnitOfWorkFactory`."""
+    """Implements `CatalogUnitOfWorkFactory`, `RuleDraftUnitOfWorkFactory`,
+    `ExampleUnitOfWorkFactory` and `YcbgExportUnitOfWorkFactory`."""
 
     session_factory: async_sessionmaker[AsyncSession]
     audit: AuditFactory

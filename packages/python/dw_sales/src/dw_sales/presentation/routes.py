@@ -68,9 +68,12 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.change_requests import ChangeRequestResult, TypedChange
 from dw_sales.application.customer_notations import CustomerNotationView
 from dw_sales.application.customer_reminders import CustomerReminderView
+from dw_sales.application.design_requests import DesignRequestView
 from dw_sales.application.design_text_reading import DesignTextReadingView, ModelDesignReply
 from dw_sales.application.finding_explanations import FindingExplanationView
+from dw_sales.application.internal_changes import InternalLine, InternalReadView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
+from dw_sales.application.order_quotes import OrderQuoteView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pc_dates import MAX_TEXT, PcDatesView, PcMailsView
@@ -121,6 +124,7 @@ from dw_sales.application.views import (
     QuoteSummaryView,
     WorkerStateView,
 )
+from dw_sales.application.ycbg_exports import YcbgExport
 from dw_sales.domain.activity import StepResult
 from dw_sales.domain.assistant import QUESTION_CHARS, CaseKey
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
@@ -131,14 +135,16 @@ from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.message_intent import KindName
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import (
+    INTERNAL_LINES_MAX,
     PC_DELIVERIES_MAX,
     AgreementHow,
     CloseReason,
     CustomerAnswer,
+    InternalReason,
     Note,
 )
 from dw_sales.domain.pricing import Incoterm
-from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
+from dw_sales.domain.quotes import DeclineReason, Guidance, Reason, YcbgNo
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu"
 
@@ -266,6 +272,21 @@ class RuleDraftBody(BaseModel):
         return _file_bytes(self.content_b64)
 
 
+class YcbgExportBody(BaseModel):
+    """Bravo's YCBG screen exported by Sales (ticket 16): its name and its
+    bytes, base64, decoded here and never opened: the worker reads it in the
+    reader sandbox."""
+
+    model_config = _BODY
+
+    file_name: Annotated[str, Field(min_length=1, max_length=200)]
+    # 2 MiB of bytes, as base64 (`MAX_EXPORT_BYTES`; the service refuses more).
+    content_b64: Annotated[str, Field(min_length=1, max_length=2_796_204)]
+
+    def data(self) -> bytes:
+        return _file_bytes(self.content_b64)
+
+
 class ExampleFileBody(BaseModel):
     """One file of a worked example (ticket 38): its name and its bytes,
     base64, decoded here and never opened: the worker reads it in the reader
@@ -348,6 +369,21 @@ class PcAnswerBody(VersionBody):
     for a line PC delivers at once, several for a line PC splits."""
 
     deliveries: list[PcDeliveryBody] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
+
+
+class InternalReadBody(VersionBody):
+    """PC's mail as Sales pasted it into "Thay đổi nội bộ" (ticket 10): read,
+    never stored, to DW1's reading limit (`pc_dates.MAX_TEXT`)."""
+
+    text: Annotated[str, Field(min_length=1, max_length=MAX_TEXT)]
+
+
+class InternalApplyBody(VersionBody):
+    """Proterial's own change as a person applies it (ticket 10): why, and
+    each line with the deliveries PC now gives it."""
+
+    reason: InternalReason
+    lines: list[InternalLine] = Field(min_length=1, max_length=INTERNAL_LINES_MAX)
 
 
 class UpdateAnswerBody(VersionBody):
@@ -499,8 +535,9 @@ class AnswerBody(VersionBody):
 
 
 class YcbgBody(VersionBody):
-    # Absent: draft the YCBG. Present: the number Bravo gave it.
-    ycbg_no: DocumentNo | None = None
+    # Absent: draft the YCBG. Present: the number Bravo gave it, in Bravo's
+    # shape (`RFQ261110-002`, ticket 16).
+    ycbg_no: YcbgNo | None = None
 
 
 class SpecBody(VersionBody):
@@ -833,6 +870,41 @@ def build_router(
         )
         return await idem.record(change)
 
+    # The request to Design for a new PRV code (ticket 06): drafted from a
+    # line no item fits, with the item master's nearest codes, for a person
+    # to send from their own account; "Ghi đã gửi Design" starts the wait.
+    # The code Design names maps the line only through `.../mapping`.
+    @router.get(
+        "/orders/{case_id}/lines/{line_no}/design-request",
+        response_model=DesignRequestView,
+        dependencies=prepare_scope,
+    )
+    async def design_request(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        context: Ctx,
+        svc: Svc,
+    ) -> DesignRequestView:
+        return await svc.design_requests.draft(context, case_id, line_no)
+
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/design-request",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def design_asked(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.design_requests.ask(
+            context, case_id, line_no, case_version=body.case_version
+        )
+        return await idem.record(change)
+
     # A customer's change on an order in Bravo (ticket 29, dw_sales ADR 0010
     # decision 3): the request to PC with the values asked, PC's answer line
     # by line, the answer to the customer recorded sent (its draft is an
@@ -918,6 +990,41 @@ def build_router(
     ) -> CaseChangeView:
         change = await svc.update_loops.approve(
             context, case_id, case_version=body.case_version, artifact_id=body.artifact_id
+        )
+        return await idem.record(change)
+
+    # Proterial's own change of a confirmed order (ticket 10): PC's mail read
+    # into the form, nothing kept; "Áp dụng" is the one door that changes the
+    # order, which goes to its Bravo update (the change list) and back to its
+    # cross-check; the notice to the customer is the `internal_change_notice`
+    # draft.
+    @router.post(
+        "/orders/{case_id}/internal-change/read",
+        response_model=InternalReadView,
+        dependencies=prepare_scope,
+    )
+    async def read_internal_change(
+        case_id: uuid.UUID, body: InternalReadBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> InternalReadView:
+        view = await svc.internal_changes.read(
+            context, case_id, case_version=body.case_version, text=body.text
+        )
+        return await idem.record(view)
+
+    @router.post(
+        "/orders/{case_id}/internal-change",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def apply_internal_change(
+        case_id: uuid.UUID, body: InternalApplyBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.internal_changes.apply(
+            context,
+            case_id,
+            case_version=body.case_version,
+            reason=body.reason,
+            lines=body.lines,
         )
         return await idem.record(change)
 
@@ -1491,6 +1598,30 @@ def build_router(
         change = await svc.order_commands.prepare(context, case_id, case_version=body.case_version)
         return await idem.record(change)
 
+    # A PO for an item with no valid quotation (ticket 09): "Mở báo giá" opens
+    # a quote case for those lines, linked to the order, which then cannot be
+    # prepared until it is approved or declined; "Kiểm tra lại" checks those
+    # lines again against the approved quotation.
+    @router.post(
+        "/orders/{case_id}/quote",
+        response_model=OrderQuoteView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE, SalesScopes.QUOTE_PREPARE)],
+    )
+    async def open_quote(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> OrderQuoteView:
+        view = await svc.order_quotes.open(context, case_id, case_version=body.case_version)
+        return await idem.record(view)
+
+    @router.post(
+        "/orders/{case_id}/quote-check", response_model=CaseChangeView, dependencies=prepare_scope
+    )
+    async def quote_check(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.order_quotes.recheck(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
     @router.post(
         "/orders/{case_id}/bravo-entry", response_model=CaseChangeView, dependencies=prepare_scope
     )
@@ -1655,6 +1786,30 @@ def build_router(
         svc: Svc,
     ) -> FollowupDraftView:
         return await svc.screening_followups.draft(context, customer_code, prv_code)
+
+    # Design's results as Bravo holds them (ticket 16): the YCBG screen
+    # exported by Sales, kept for the worker to read (202), until the
+    # vendor's API reads a request back. What became of each number is read
+    # back from the list.
+    @router.post(
+        "/ycbg-exports",
+        response_model=YcbgExport,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def upload_ycbg_export(
+        body: YcbgExportBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> YcbgExport:
+        view = await svc.ycbg_exports.upload(context, body.file_name, body.data())
+        return await idem.record(view, status_code=202)
+
+    @router.get(
+        "/ycbg-exports",
+        response_model=list[YcbgExport],
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def ycbg_exports(context: Ctx, svc: Svc) -> list[YcbgExport]:
+        return await svc.ycbg_exports.latest(context)
 
     @router.get("/quotes/{case_id}", response_model=QuoteCaseView)
     async def quote(

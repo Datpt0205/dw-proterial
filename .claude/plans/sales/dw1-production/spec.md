@@ -305,6 +305,12 @@ the electronic stamp; anything typed into Bravo by DW.
   Bravo, or reply by mail? Who changes the status, and to what?
 - **Q-B12** Where are the colour codes S001–S002 used, and is there a rule
   that puts an ordinary colour (WHITE, BLACK) into a PRV code?
+- **Q-B13** One export of Bravo's YCBG screen (Excel), lines included: DW1
+  reads Design's result from it until R13 exists, and assumes its column
+  titles (`Số chứng từ`, `STT`, `Trạng thái`, `Design Check`, `Lý do`,
+  `Mã BP`) and values (PENDING/CLOSE, QUOTE/DECLINE). Is a YCBG line's number
+  (STT) the request's line number as Sales enters it from DW1's draft? Does
+  Design write a BP code on a DECLINE too? (Ticket 16.)
 
 ## Tickets
 

@@ -218,8 +218,8 @@ async def _m10_priced() -> tuple[QuoteCase, QuotationService]:
         ),
     )
     case = await service.open_case(SCOPE, "M10", uuid.UUID(int=7))
-    waiting = case.draft_ycbg().record_ycbg("YCBG-2609-030", by=PRICER, at=AT).send_to_design()
-    CASES["YCBG-2609-030"] = waiting
+    waiting = case.draft_ycbg().record_ycbg("RFQ260930-030", by=PRICER, at=AT).send_to_design()
+    CASES["RFQ260930-030"] = waiting
     outcome = await service.take_design_reply(SCOPE, "M25")
     assert isinstance(outcome, ReplyAttached)
     decision = PricingDecision(

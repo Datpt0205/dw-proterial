@@ -378,7 +378,7 @@ def _line(
     held, blocked = held_value(case, line_no, field)
     if asked == held:
         return None
-    if blocked is None and unit is not None and not _same_unit(unit, case.line(line_no)):
+    if blocked is None and unit is not None and not same_unit(unit, case.line(line_no)):
         blocked = "unit_differs"
     return ChangeLine(
         seq=1,
@@ -394,7 +394,7 @@ def _line(
     )
 
 
-def _same_unit(unit: str, line: OrderLine) -> bool:
+def same_unit(unit: str, line: OrderLine) -> bool:
     """Whether ``unit`` is the line's: the same word, or metres both."""
     uom = line.effective.uom
     return _same(unit, uom) or (parse_uom(unit) == "m" and parse_uom(uom) == "m")
@@ -658,18 +658,28 @@ def _numbers_in(span: str) -> list[int]:
     return found
 
 
-def _named_line(case: OrderCase, span: str) -> int | None:
-    """The line ``span`` names: a customer item code of the case inside it
-    (one line only), else the one whole number in it."""
+def named_line(case: OrderCase, span: str) -> int | None:
+    """The line ``span`` names: a customer item code or PRV code of the case
+    inside it (one line only; among lines sharing the code, the one whose
+    number is a whole number in it), else the one whole number in it.
+    The number may name no line of the case: the caller refuses it, never
+    guesses (ticket 10 reads PC's mail, which names lines by PRV code)."""
     folded = FoldedText(span)
     coded = {
         line.line_no
         for line in case.lines
         if folded.occurrences(_nfkc(line.effective.customer_item_code), bounded=True)
+        or (
+            line.mapping.prv_code is not None
+            and folded.occurrences(_nfkc(line.mapping.prv_code), bounded=True)
+        )
     }
-    if coded:
-        return coded.pop() if len(coded) == 1 else None
     numbers = _numbers_in(span)
+    if len(coded) > 1:
+        numbered = coded & set(numbers)
+        return numbered.pop() if len(numbered) == 1 else None
+    if coded:
+        return coded.pop()
     return numbers[0] if len(numbers) == 1 else None
 
 
@@ -687,7 +697,7 @@ def model_changes(
     for change in answer.changes:
         named = folded.locate(_nfkc(change.line_span).strip(), bounded=True)
         place = folded.locate(_nfkc(change.asked_span).strip(), bounded=True)
-        line_no = None if isinstance(named, str) else _named_line(case, text[named[0] : named[1]])
+        line_no = None if isinstance(named, str) else named_line(case, text[named[0] : named[1]])
         if isinstance(place, str) or line_no is None:
             unread += 1
             continue

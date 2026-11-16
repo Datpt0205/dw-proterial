@@ -15,7 +15,7 @@ pytestmark = pytest.mark.integration
 
 async def test_dieu_prices_m10_and_giang_approves_it(api: Api) -> None:
     dieu, giang = api.as_(DIEU), api.as_(GIANG)
-    case = await replied(dieu, "M10", "YCBG-2609-030", "M25")
+    case = await replied(dieu, "M10", "RFQ260930-030", "M25")
     assert case["assigned_to"] == str(user_id(DIEU))
     assert (case["rules_version"], case["parser_version"]) == (
         "sales_quote_rules@1.1.0",
@@ -45,7 +45,7 @@ async def test_dieu_cannot_approve_her_own_quote_whatever_approver_boost_gives(
     api: Api,
 ) -> None:
     dieu = api.as_(DIEU)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
     refused = await approve(dieu, pending)
 
@@ -61,7 +61,7 @@ async def test_dieu_cannot_approve_her_own_quote_whatever_approver_boost_gives(
 
 async def test_giang_cannot_approve_a_quote_he_priced_and_khoa_can(api: Api) -> None:
     dieu, giang, khoa = api.as_(DIEU), api.as_(GIANG), api.as_(KHOA)
-    case = await replied(dieu, "M09", "YCBG-2609-028", "M18")
+    case = await replied(dieu, "M09", "RFQ260929-028", "M18")
     pending = await submitted(giang, case, price="1.2500", quote_no="Q26-0302")
 
     own = await approve(giang, pending)
@@ -76,7 +76,7 @@ async def test_giang_cannot_approve_a_quote_he_priced_and_khoa_can(api: Api) -> 
 
 async def test_a_quotation_priced_again_withdraws_its_approval(api: Api) -> None:
     dieu, giang = api.as_(DIEU), api.as_(GIANG)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
     first = await approval_of(giang, pending)
 
     # A change to the price after submitting withdraws the document the
@@ -96,7 +96,7 @@ async def test_a_quotation_priced_again_withdraws_its_approval(api: Api) -> None
 
 async def test_a_decision_on_a_version_the_approver_was_not_shown_is_refused(api: Api) -> None:
     dieu, giang = api.as_(DIEU), api.as_(GIANG)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
     approval_id = await approval_of(giang, pending)
 
     stale = await giang.decide(
@@ -113,7 +113,7 @@ async def test_a_decision_on_a_version_the_approver_was_not_shown_is_refused(api
 
 async def test_the_approver_returns_the_price_to_the_pricer(api: Api) -> None:
     dieu, giang = api.as_(DIEU), api.as_(GIANG)
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
     returned = await giang.decide(
         await approval_of(giang, pending),
@@ -132,7 +132,7 @@ async def test_a_pic_without_sales_price_evidence_sees_no_other_customers_price(
     api: Api,
 ) -> None:
     dieu, an = api.as_(DIEU), api.as_(AN)
-    case = await replied(dieu, "M10", "YCBG-2609-030", "M25")
+    case = await replied(dieu, "M10", "RFQ260930-030", "M25")
 
     seen_by_an = await quote(an, case["case_id"])
 
@@ -145,7 +145,7 @@ async def test_a_pic_without_sales_price_evidence_sees_no_other_customers_price(
 
 async def test_a_price_is_stamped_by_the_server_not_the_request(api: Api) -> None:
     dieu = api.as_(DIEU)
-    case = await replied(dieu, "M10", "YCBG-2609-030", "M25")
+    case = await replied(dieu, "M10", "RFQ260930-030", "M25")
 
     smuggled = await dieu.post(
         f"/quotes/{case['case_id']}/price",

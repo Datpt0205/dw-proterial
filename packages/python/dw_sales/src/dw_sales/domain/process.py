@@ -176,7 +176,7 @@ def _ba(code: str, label: str) -> BaStep:
 # (`OrderStatus`, `QuoteStatus`) or a step of a flow beside the statuses,
 # ``<flow>.<step>`` (`process_settings.SUBFLOWS`). The process page draws
 # each code on its place; `test_process_settings.py` holds every place to the
-# served view. A step DW1 does not do yet (5.1, 6.1B, 6-HUY, 2.2.x, …) has no
+# served view. A step DW1 does not do yet (5.1, 6-HUY, 2.2.x, …) has no
 # place and is left out; so is a status the BA's flow has no step for.
 BA_STEPS: Final[Mapping[Procedure, Mapping[str, tuple[BaStep, ...]]]] = MappingProxyType(
     {
@@ -216,7 +216,11 @@ BA_STEPS: Final[Mapping[Procedure, Mapping[str, tuple[BaStep, ...]]]] = MappingP
                     _ba("6-DW3", "PC đề xuất khác: soạn thư phương án cho khách"),
                     _ba("6-DW4", "PC làm được: soạn thư xác nhận điều chỉnh"),
                 ),
-                "update.bravo_update": (_ba("6.2-SP", "Duyệt cập nhật đơn trên Bravo"),),
+                # Proterial's own change (ticket 10) enters the loop here.
+                "update.bravo_update": (
+                    _ba("6.1B", "Thay đổi nội bộ: PC dời, tách hoặc cắt dòng"),
+                    _ba("6.2-SP", "Duyệt cập nhật đơn trên Bravo"),
+                ),
             }
         ),
         Procedure.QUOTATION: MappingProxyType(

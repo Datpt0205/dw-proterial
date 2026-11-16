@@ -595,11 +595,11 @@ test("1b. 'Trình duyệt' with no 'Số báo giá' (and an invalid one): field 
   ).toBeVisible();
   await button(page, "Đã lập YCBG").click();
   const record = dialog(page, "Ghi số YCBG Bravo đã cấp");
-  await record.getByLabel("Số YCBG trên Bravo").fill("YCBG-2609-030");
+  await record.getByLabel("Số YCBG trên Bravo").fill("RFQ260930-030");
   await button(record, "Ghi số YCBG").click();
   await expect(record).toBeHidden();
   await expect(
-    page.getByText("YCBG YCBG-2609-030", { exact: true }),
+    page.getByText("YCBG RFQ260930-030", { exact: true }),
   ).toBeVisible();
   await button(page, "Gửi Design").click();
   await expect

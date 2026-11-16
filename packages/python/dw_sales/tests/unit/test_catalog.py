@@ -368,7 +368,7 @@ def test_an_impossible_erp_order_is_refused(overrides: dict[str, Any]) -> None:
 def test_an_open_ycbg_names_the_request_it_was_raised_from() -> None:
     ycbg = OpenYcbg.model_validate(
         {
-            "ycbg_no": "YCBG-2609-028",
+            "ycbg_no": "RFQ260929-028",
             "customer_code": "QRL",
             "rfq_no": "QRL-RFQ-2609-03",
             "issued_on": "2026-09-29",

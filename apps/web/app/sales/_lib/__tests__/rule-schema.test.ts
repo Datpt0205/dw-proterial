@@ -82,6 +82,15 @@ const HANDOFFS = {
     line: "- Dòng {line_no}: {quantity} {uom}",
     body: "{lines}",
   },
+  // Required since 1.2.0 (ticket 06), as `pc_request` since 1.1.0: a version
+  // stored before it is read over the platform's words, so the editor is
+  // never handed a document without it.
+  design_request: {
+    subject: "Đề nghị tạo mã: PO {po} dòng {line_no}",
+    nearest: "- {code}: {description}",
+    no_nearest: "- (không có mã gần)",
+    body: "{nearest}",
+  },
 };
 
 describe("a key's schema, read into what the editor draws (ticket 40)", () => {

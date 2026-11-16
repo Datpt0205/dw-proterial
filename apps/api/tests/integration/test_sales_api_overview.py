@@ -70,7 +70,7 @@ async def test_the_a3_shadow_counts_clean_originals_only(api: Api) -> None:
 async def test_my_work_routes_each_step_to_who_may_take_it(api: Api) -> None:
     an, dieu, giang, khoa = api.as_(AN), api.as_(DIEU), api.as_(GIANG), api.as_(KHOA)
     up = await uploaded(an, await order_of(an, "M01"))
-    pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
+    pending = await submitted(dieu, await replied(dieu, "M10", "RFQ260930-030", "M25"))
 
     def ids(items: list[dict[str, Any]], action: str) -> set[str]:
         return {i["id"] for i in items if i["action"] == action}

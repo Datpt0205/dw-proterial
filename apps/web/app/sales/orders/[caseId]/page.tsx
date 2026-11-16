@@ -74,6 +74,8 @@ import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
 import { ChangeRequestsPanel } from "./change-requests";
 import { PcRequestPanel } from "./pc-request";
+import { QuoteLinksPanel } from "./quote-link";
+import { InternalChangePanel } from "./internal-change";
 import { UpdateLoopPanel } from "./update-loop";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
@@ -460,6 +462,10 @@ function OrderDetail() {
       <ChangeRequestsPanel order={data} viewer={viewer} onChanged={reload} />
 
       <PcRequestPanel order={data} viewer={viewer} onChanged={reload} />
+
+      <QuoteLinksPanel order={data} viewer={viewer} onChanged={reload} />
+
+      <InternalChangePanel order={data} viewer={viewer} onChanged={reload} />
 
       <UpdateLoopPanel
         order={data}

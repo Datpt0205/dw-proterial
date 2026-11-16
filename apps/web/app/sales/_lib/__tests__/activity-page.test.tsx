@@ -211,6 +211,12 @@ const AUTONOMY: Autonomy = {
 };
 
 const api = {
+  // What `SalesFrameProvider` reads, as the /sales layout renders every page
+  // inside it: DW1 running, and an empty mailbox.
+  overview: vi.fn(async () => ({
+    worker: { paused: false, changed_by: null, changed_at: null, reason: null },
+  })),
+  inbox: vi.fn(async () => []),
   // No case holds an answer the person has not seen (ticket 46).
   assistantUnread: vi.fn(async (): Promise<string[]> => []),
   activity: vi.fn(async (query: { from?: string; to?: string; lane?: Lane }) =>
@@ -232,6 +238,7 @@ vi.mock("../api", () => ({ salesApi: () => api }));
 import ActivityPage from "../../activity/page";
 import OrdersPage from "../../orders/page";
 import QuotesPage from "../../quotes/page";
+import { SalesFrameProvider } from "../../_components/sales-frame";
 
 const SLOW = 30_000;
 
@@ -243,7 +250,11 @@ afterEach(() => {
 
 function renderAt(url: string, page = <ActivityPage />) {
   nav.reset(url);
-  render(<UiProvider>{page}</UiProvider>);
+  render(
+    <UiProvider>
+      <SalesFrameProvider>{page}</SalesFrameProvider>
+    </UiProvider>,
+  );
 }
 
 const row = (label: string) =>
