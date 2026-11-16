@@ -334,7 +334,25 @@ context. All five are done and on `main`. The full narrative is at
           now mails once per boot that follows a Kernel-Power 41 (sent after
           the drill, not repeated on the next round; clean restarts leave no
           41). Not yet drilled: a power cut with Postgres taking writes
-          (with DW deployed).
+          (with DW deployed). **Its pass criteria (agreed with Đạt 11-16):**
+          a load script writes numbered rows and logs each one Postgres
+          acknowledged, while DW works seeded mail, a pending approval and a
+          queued send; the plug is pulled at a random moment, three times
+          (heavy writes, during the nightly backup, idle). Pass: (1) every
+          acknowledged row present; (2) no half transaction (a case without
+          its lines); (3) Postgres recovers by itself, `amcheck` clean, a
+          full `pg_dump` reads; (4) work in flight is reclaimed, one case per
+          Message-ID, no outbound mail sent twice, no job stuck past its
+          timeout; (5) the pending approval decides and resumes from its
+          checkpoint; (6) mail that arrived while down is read once; (7) the
+          WAL archive on B: has no gap and the archiver resumes with no
+          failure; (8) a PITR restore from the base backup and WAL reaches
+          within 15 minutes of the cut (measure the real figure); (9) Qdrant
+          and SeaweedFS agree with Postgres; (10) the next nightly and its
+          restore test pass; (11) the unclean-boot mail and no false alert;
+          (12) the portal usable within ~10 minutes. If (1) fails, the
+          consumer SSD lied about its flushes: a UPS and/or an SSD with
+          power-loss protection, before go-live.
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
           crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
           running first. Tailscale key expiry is off (checked from the laptop).
