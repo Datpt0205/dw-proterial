@@ -1,7 +1,7 @@
 # 05 — Mass or pcs, and the request to JP & HQ for a pcs price
 
-Status: needs-info
-Blocked by: how Sales tells mass from pcs; an example of the JP & HQ request mail
+Status: ready-for-agent (2026-11-16: B49 `xin giá pcs từ JP` gives the pcs signs, the request template and its recipient, GM/BC Manager)
+Blocked by: none; open questions for Sales: are SGA/loyalty/profit rates fixed per pcs order, is "JP & HQ" the GM at PRV, the assembly-cable variant
 Category: enhancement
 
 ## Why

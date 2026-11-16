@@ -1,7 +1,7 @@
 # 12 — The quotation master list read from Bravo, not kept twice
 
-Status: needs-info
-Blocked by: Bravo's read API ("Master list báo giá"); dw_sales ADR 0008
+Status: ready-for-agent for the reader (2026-11-16: B07 "Master list báo giá Bravo", key RowIdSQ, Quote No. + Stt); what a price check does with it waits on ADR 0008
+Blocked by: dw_sales ADR 0008 for the price check only; which of Excel (2,521 rows) or Bravo owns quotation history (Đạt owes)
 Category: enhancement
 
 ## Why

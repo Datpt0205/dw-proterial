@@ -1,7 +1,7 @@
 # 11 — Base price and BP code from Design's reply
 
-Status: needs-info
-Blocked by: ticket 14 (Bravo's Base price list); the BP code's format is known (`BP` + 6 digits)
+Status: ready-for-agent (2026-11-16: the Excel path; B21 "Danh mục Base price" columns known, B07's BP-latest block and B16's YCBG rows carry the BP code)
+Blocked by: none to build; the full Base price list (B21 holds the latest 100) is requested from Proterial Sales
 Category: enhancement
 
 ## Why

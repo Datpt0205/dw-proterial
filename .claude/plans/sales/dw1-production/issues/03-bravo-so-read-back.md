@@ -1,7 +1,7 @@
 # 03 — After the paste, DW reads the SO back and compares it with the PO
 
-Status: needs-info
-Blocked by: Bravo's read API (sales orders by customer PO); B42 ("in put PO")
+Status: ready-for-agent (2026-11-16: the Excel path; B02 is Bravo's own "Customer order information (Form 1)" export, 81 columns, and the import skips refused rows, so this read-back is required)
+Blocked by: none for the Excel path; the vendor API (R-list) replaces the upload later; B42 not received (B43's `hk & cable` sheet is Sales' own comparison)
 Category: enhancement
 
 ## Why

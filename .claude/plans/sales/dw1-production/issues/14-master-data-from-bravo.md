@@ -1,7 +1,7 @@
 # 14 — Master data read from Bravo, through one port per list
 
-Status: needs-info (the vendor API; until then Bravo's own Excel export of each screen)
-Blocked by: the Bravo API's read endpoints; to start: one Excel export per list from Sales
+Status: ready-for-agent (2026-11-16: the Excel stand-in; B04, B05, B06, B07, B09, B21 are Bravo's own exports, all with the title row 1 / header row 2 shape)
+Blocked by: none to start; the vendor API replaces each upload later (ADR 0026)
 Category: enhancement
 
 ## Why
