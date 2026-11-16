@@ -47,6 +47,12 @@ let quote: Quote = pendingQuote();
 const api = {
   pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => order),
+  // Nothing read back from Bravo yet (ticket 03).
+  bravoReadBack: vi.fn(async () => ({
+    read_back: null,
+    stale: false,
+    prices_hidden: false,
+  })),
   quote: vi.fn(async () => quote),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),

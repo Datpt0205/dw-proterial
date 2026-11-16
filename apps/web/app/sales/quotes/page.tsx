@@ -50,7 +50,7 @@ import {
 import { ScopeGate } from "../_components/scope-gate";
 import { QuoteStateTag } from "../_components/tags";
 import { useFillHeight } from "../../../lib/use-fill-height";
-import { YcbgExportButton } from "./ycbg-export";
+import { BravoExportButton } from "../_components/bravo-export";
 
 type Quote = SalesSchemas["QuoteSummaryView"];
 
@@ -201,7 +201,7 @@ function Quotes() {
         help="Yêu cầu báo giá theo hạn: quá hạn trước, rồi hạn gần nhất. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam."
         actions={
           <Space wrap>
-            <YcbgExportButton reason={ycbgReason} />
+            <BravoExportButton screen="ycbg" reason={ycbgReason} />
             <Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>
           </Space>
         }

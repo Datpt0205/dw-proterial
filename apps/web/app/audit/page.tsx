@@ -111,6 +111,21 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
     label: "Không đọc được tệp YCBG",
     color: "warning",
   },
+  // Every Bravo screen since ticket 03 (the YCBG's three above stay for the
+  // rows written before).
+  "sales.bravo_export.uploaded": {
+    label: "Tải tệp xuất từ Bravo",
+    color: "default",
+  },
+  "sales.bravo_export.read": { label: "Đọc tệp xuất Bravo", color: "default" },
+  "sales.bravo_export.failed": {
+    label: "Không đọc được tệp xuất Bravo",
+    color: "warning",
+  },
+  "sales.order.bravo_read_back": {
+    label: "Đọc lại SO từ Bravo",
+    color: "processing",
+  },
   "sales.quote.finding_answered": {
     label: "Trả lời cờ báo giá",
     color: "default",
@@ -155,6 +170,7 @@ const LANES: Record<string, string> = {
   sales_rule_drafts: "DW1 · nháp quy tắc",
   sales_prompt_optimiser: "DW1 · học từ dòng đã quyết",
   sales_ycbg_exports: "DW1 · đọc tệp YCBG từ Bravo",
+  sales_bravo_exports: "DW1 · đọc tệp xuất Bravo",
   purchasing_mail_drop: "DW2 · đọc thư mục thư",
   purchasing_master_import: "DW2 · đọc file dữ liệu chủ",
   purchasing_outbound: "DW2 · gửi thư hỏi giá",

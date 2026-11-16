@@ -155,6 +155,7 @@ from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.evals.recorded import ScriptedPick
 from dw_sales.evals.today_memory import MemoryReminderMarks
+from dw_sales.testing.bravo_export_store import MemoryBravoExportStore
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
     MemoryCatalogStore,
@@ -167,7 +168,6 @@ from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.example_store import MemoryExampleStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
 from dw_sales.testing.role_catalog import StaticRoleCatalog
-from dw_sales.testing.ycbg_export_store import MemoryYcbgExportStore
 from dw_sales.workflows.graph import register
 
 ALPHA = SalesScope(TenantId(uuid.UUID(int=0xA1FA)), WorkspaceId(uuid.UUID(int=0xA1FB)))
@@ -1848,7 +1848,9 @@ def open_world(
         templates=XlsxCatalogTemplates(),
         draft_uow=draft_store,
         example_uow=example_store,
-        ycbg_uow=MemoryYcbgExportStore(outbox=runtime.outbox),
+        # Bravo exports and the sales orders read back share one store here.
+        bravo_uow=(bravo_store := MemoryBravoExportStore(outbox=runtime.outbox)),
+        read_back_uow=bravo_store,
         readiness=readiness,
         roles=StaticRoleCatalog(),
         step_activity=store,

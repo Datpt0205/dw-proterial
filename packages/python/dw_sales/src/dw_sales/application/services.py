@@ -26,6 +26,8 @@ from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
 from dw_sales.application.auto_apply import AutoApply
+from dw_sales.application.bravo_exports import BravoExportService, BravoExportUnitOfWorkFactory
+from dw_sales.application.bravo_sales_orders import ReadBackService, ReadBackUnitOfWorkFactory
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.catalog_imports import (
     CatalogDecisions,
@@ -100,7 +102,6 @@ from dw_sales.application.threads import ThreadMembersPort
 from dw_sales.application.today import FollowupNoticesPort, ReminderMarkStoreFactory, TodayService
 from dw_sales.application.update_loop import UpdateLoops
 from dw_sales.application.worker_service import WorkerService
-from dw_sales.application.ycbg_exports import YcbgExportService, YcbgExportUnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -140,7 +141,8 @@ class SalesServices:
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
     # Bravo's YCBG export, uploaded for Design's results to be read (ticket 16).
-    ycbg_exports: YcbgExportService
+    bravo_exports: BravoExportService
+    read_backs: ReadBackService
     # A finding explained in words by the model, on request (AI item 12).
     finding_explanations: FindingExplanations
     # A customer suggested for a sender no domain matched (AI item 5).
@@ -240,8 +242,10 @@ def assemble(
     draft_uow: RuleDraftUnitOfWorkFactory,
     # Where a worked example's pair is kept until learned (ticket 38).
     example_uow: ExampleUnitOfWorkFactory,
-    # Where a Bravo YCBG export is kept until read (ticket 16).
-    ycbg_uow: YcbgExportUnitOfWorkFactory,
+    # Where a Bravo export is kept until read (tickets 16, 03), and where a
+    # sales order read back from one is kept for its case.
+    bravo_uow: BravoExportUnitOfWorkFactory,
+    read_back_uow: ReadBackUnitOfWorkFactory,
     readiness: ModelReadiness,
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
@@ -354,7 +358,8 @@ def assemble(
             gate, intake.rules, readiness, roles, step_activity, clock
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
-        ycbg_exports=YcbgExportService(ycbg_uow, uow, gate, clock, ids),
+        bravo_exports=BravoExportService(bravo_uow, uow, gate, clock, ids),
+        read_backs=ReadBackService(uow, read_back_uow, gate),
         salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         finding_explanations=FindingExplanations(

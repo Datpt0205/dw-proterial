@@ -77,6 +77,7 @@ import { PcRequestPanel } from "./pc-request";
 import { QuoteLinksPanel } from "./quote-link";
 import { InternalChangePanel } from "./internal-change";
 import { UpdateLoopPanel } from "./update-loop";
+import { BravoReadBackPanel } from "./bravo-read-back";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
@@ -466,6 +467,12 @@ function OrderDetail() {
       <QuoteLinksPanel order={data} viewer={viewer} onChanged={reload} />
 
       <InternalChangePanel order={data} viewer={viewer} onChanged={reload} />
+
+      {["prepared", "uploaded_to_bravo", "cross_checked"].includes(
+        data.status,
+      ) ? (
+        <BravoReadBackPanel caseId={caseId} />
+      ) : null}
 
       <UpdateLoopPanel
         order={data}

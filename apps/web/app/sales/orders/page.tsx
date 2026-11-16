@@ -21,6 +21,7 @@ import { label, ORDER_STATE } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
 import { useUnreadCases } from "../_lib/unread";
+import { useSalesViewer } from "../_lib/viewer";
 import {
   useActivityFilter,
   useListView,
@@ -38,7 +39,12 @@ import {
   usePhoneColumns,
   usePhoneTable,
 } from "../_components/list-parts";
-import { SCOPE } from "../_components/sales-frame";
+import { BravoExportButton } from "../_components/bravo-export";
+import {
+  PAUSED_REASON,
+  SCOPE,
+  useSalesFrame,
+} from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { OrderStateTag } from "../_components/tags";
 import { useFillHeight } from "../../../lib/use-fill-height";
@@ -92,6 +98,15 @@ function Orders() {
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
   // server narrows it, by the filter the count was served with.
   const [activity, clearActivity] = useActivityFilter();
+  const { paused } = useSalesFrame();
+  const { hasScope } = useSalesViewer();
+  // Bravo's sales orders read back after the paste (ticket 03): whoever
+  // prepares orders, while DW1 runs.
+  const soReason = !hasScope(SCOPE.prepare)
+    ? "Bạn không có quyền chuẩn bị đơn hàng."
+    : paused
+      ? PAUSED_REASON
+      : null;
   const orders = useResource(
     `sales/orders:${JSON.stringify(activity)}`,
     useCallback(() => salesApi().orders(activity ?? undefined), [activity]),
@@ -195,6 +210,7 @@ function Orders() {
             : undefined
         }
         help="Mỗi số PO của khách là một hồ sơ, từ bản đầu tới khi xác nhận; bản sửa của khách vào cùng hồ sơ."
+        actions={<BravoExportButton screen="sales_orders" reason={soReason} />}
       />
       {orders.error ? (
         <LoadError error={orders.error} onRetry={orders.reload} />

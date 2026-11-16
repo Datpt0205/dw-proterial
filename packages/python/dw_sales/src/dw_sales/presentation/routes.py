@@ -60,6 +60,8 @@ from dw_sales.application.activity_ports import CaseListActivity, HandledBy
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.assistant import AnswerView, CaseConversationView, ConversationView
+from dw_sales.application.bravo_exports import BravoExport, BravoScreen
+from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.catalog_imports import (
     CatalogImportView,
     CatalogPreviewView,
@@ -125,7 +127,6 @@ from dw_sales.application.views import (
     QuoteSummaryView,
     WorkerStateView,
 )
-from dw_sales.application.ycbg_exports import YcbgExport
 from dw_sales.domain.activity import StepResult
 from dw_sales.domain.assistant import QUESTION_CHARS, CaseKey
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
@@ -273,13 +274,14 @@ class RuleDraftBody(BaseModel):
         return _file_bytes(self.content_b64)
 
 
-class YcbgExportBody(BaseModel):
-    """Bravo's YCBG screen exported by Sales (ticket 16): its name and its
-    bytes, base64, decoded here and never opened: the worker reads it in the
-    reader sandbox."""
+class BravoExportBody(BaseModel):
+    """A Bravo screen exported by Sales (tickets 16, 03): which screen, the
+    file's name and its bytes, base64, decoded here and never opened: the
+    worker reads it in the reader sandbox."""
 
     model_config = _BODY
 
+    screen: BravoScreen
     file_name: Annotated[str, Field(min_length=1, max_length=200)]
     # 2 MiB of bytes, as base64 (`MAX_EXPORT_BYTES`; the service refuses more).
     content_b64: Annotated[str, Field(min_length=1, max_length=2_796_204)]
@@ -1788,29 +1790,43 @@ def build_router(
     ) -> FollowupDraftView:
         return await svc.screening_followups.draft(context, customer_code, prv_code)
 
-    # Design's results as Bravo holds them (ticket 16): the YCBG screen
-    # exported by Sales, kept for the worker to read (202), until the
-    # vendor's API reads a request back. What became of each number is read
-    # back from the list.
+    # A Bravo screen exported by Sales (tickets 16, 03): Design's results on
+    # a YCBG, or the sales orders read back after the paste. Kept for the
+    # worker to read (202) until the vendor's API reads Bravo; what became of
+    # each document is read back from the list. Who may upload a screen is
+    # the service's (`bravo_exports.SCREEN_SCOPES`), one answer per screen.
     @router.post(
-        "/ycbg-exports",
-        response_model=YcbgExport,
+        "/bravo-exports",
+        response_model=BravoExport,
         status_code=202,
-        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
     )
-    async def upload_ycbg_export(
-        body: YcbgExportBody, context: Ctx, svc: Svc, idem: Idem
-    ) -> YcbgExport:
-        view = await svc.ycbg_exports.upload(context, body.file_name, body.data())
+    async def upload_bravo_export(
+        body: BravoExportBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> BravoExport:
+        view = await svc.bravo_exports.upload(context, body.screen, body.file_name, body.data())
         return await idem.record(view, status_code=202)
 
     @router.get(
-        "/ycbg-exports",
-        response_model=list[YcbgExport],
-        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+        "/bravo-exports",
+        response_model=list[BravoExport],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
     )
-    async def ycbg_exports(context: Ctx, svc: Svc) -> list[YcbgExport]:
-        return await svc.ycbg_exports.latest(context)
+    async def bravo_exports(
+        context: Ctx, svc: Svc, screen: Annotated[BravoScreen, Query()]
+    ) -> list[BravoExport]:
+        return await svc.bravo_exports.latest(context, screen)
+
+    # The case's sales order as Bravo held it when last read back (ticket
+    # 03): beside the PIC's entry, deciding nothing. A unit price's values are
+    # left out for a caller who may not read prices.
+    @router.get(
+        "/orders/{case_id}/bravo-read-back",
+        response_model=ReadBackView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def bravo_read_back(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ReadBackView:
+        return await svc.read_backs.latest(context, case_id)
 
     @router.get("/quotes/{case_id}", response_model=QuoteCaseView)
     async def quote(

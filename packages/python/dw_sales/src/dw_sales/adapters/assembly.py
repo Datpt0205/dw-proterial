@@ -106,6 +106,8 @@ from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
+from dw_sales.application.bravo_exports import BravoExportReading
+from dw_sales.application.bravo_sales_orders import SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
@@ -187,7 +189,7 @@ from dw_sales.application.thread_tools import (
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.today import FollowupNoticesPort
 from dw_sales.application.triage import TriageReader
-from dw_sales.application.ycbg_exports import DesignChecks, YcbgExportReading
+from dw_sales.application.ycbg_exports import DesignChecks, YcbgScreen
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
@@ -232,7 +234,7 @@ class Dw1Mount:
     salesorder_learning: SalesOrderLearning | None = None
     # What reads Design's results from an uploaded Bravo YCBG export in the
     # worker (ticket 16); built with the drain, which resolves who uploaded.
-    ycbg_export_reading: YcbgExportReading | None = None
+    bravo_export_reading: BravoExportReading | None = None
     # What DW1's model steps did, per case and over time (slice 3), for the
     # activity routes (`dw_sales.presentation.activity_routes`).
     activity: ActivityService | None = None
@@ -583,7 +585,8 @@ def build_dw1(
         templates=XlsxCatalogTemplates(),
         draft_uow=catalog_uow,
         example_uow=catalog_uow,
-        ycbg_uow=catalog_uow,
+        bravo_uow=catalog_uow,
+        read_back_uow=catalog_uow,
         readiness=readiness,
         roles=roles,
         step_activity=step_activity,
@@ -703,12 +706,16 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
-    ycbg_export_reading = YcbgExportReading(
+    # Every Bravo screen Sales may upload, and its reader (tickets 16, 03).
+    bravo_export_reading = BravoExportReading(
         uow=catalog_uow,
         tables=readers.tables,
         scanner=scanner,
         access=requester_access,
-        checks=DesignChecks(uow, SqlQuoteCaseLookup(session_factory), clock, ids),
+        readers={
+            "ycbg": YcbgScreen(DesignChecks(uow, SqlQuoteCaseLookup(session_factory), clock, ids)),
+            "sales_orders": SalesOrderScreen(order_cases, catalog_uow, clock, ids),
+        },
         clock=clock,
         ids=ids,
     )
@@ -720,7 +727,7 @@ def build_dw1(
         catalog_parsing=catalog_parsing,
         rule_drafting=rule_drafting,
         salesorder_learning=salesorder_learning,
-        ycbg_export_reading=ycbg_export_reading,
+        bravo_export_reading=bravo_export_reading,
         rule_draft_sweep=RuleDraftSweep(
             catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
         ),

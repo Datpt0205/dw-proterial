@@ -128,9 +128,11 @@ _SALES_TABLES = (
     "sales.salesorder_pairs",
     # Migration 99ae8f7eb765 (ticket 37): each customer's notation record.
     "sales.customer_notations",
-    # Migration 10d5dfc1a3f1 (ticket 16): Bravo's YCBG exports Sales uploaded.
-    "sales.ycbg_exports",
-    "sales.ycbg_export_files",
+    # Migration 7c6ad2350566 (tickets 16, 03): every Bravo export Sales
+    # uploaded, and each order case's sales order read back.
+    "sales.bravo_exports",
+    "sales.bravo_export_files",
+    "sales.order_bravo_read_backs",
 )
 
 
@@ -174,7 +176,9 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "salesorder_examples",
         # A customer's notation is replaced and forgotten by people (99ae8f7eb765).
         "customer_notations",
-        "ycbg_exports",
+        "bravo_exports",
+        # A case's read-back is replaced by the next (7c6ad2350566).
+        "order_bravo_read_backs",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
     # An import's file and its parsed records are never updated (ticket 41),
@@ -184,7 +188,7 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "catalog_rows",
         "rule_draft_files",
         "salesorder_example_files",
-        "ycbg_export_files",
+        "bravo_export_files",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     for table in ("artifacts", "source_served", "followup_deliveries"):
