@@ -116,6 +116,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # A change to what the customer was confirmed, line by line by a
         # person (dw_sales ADR 0010).
         ModelStep.CHANGE_REQUEST: Tier.PERSON_APPROVES,
+        # PC's own change to a confirmed order changes nothing until a
+        # person applies it (ticket 10).
+        ModelStep.INTERNAL_CHANGE: Tier.PERSON_APPROVES,
     }
 )
 
