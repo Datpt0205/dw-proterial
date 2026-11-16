@@ -161,6 +161,19 @@ context. All five are done and on `main`. The full narrative is at
         `DW-BACKUP`) on the wiped HDD; one ESP left, on the SSD. WinRE
         came back only after clearing the old store's id in ReAgent.xml
         (now in the script); enabled on the SSD's recovery partition.
+        **Decided 11-16 (Đạt): Strata runs on Windows, Qwen3.8 Q2 with its
+        vision part.** So the GPU stays on the host: no DDA, and the VM can
+        stop with ShutDown. Done: Hyper-V role (one reboot, `vmms` running);
+        `04-gpu-driver.ps1` installed NVIDIA RTX Server Driver 597.30 (R595,
+        pinned by SHA256, signature valid; `nvidia-smi`: RTX PRO 4000
+        Blackwell, 24467 MiB, WDDM) and set TdrDelay/TdrDdiDelay to 60 s.
+        Owed: Strata's Windows build and the Q2 model with its vision
+        projector, from Giang (on 11-12 Strata listed the model as text
+        only); WDDM vs TCC once Strata's backend is known (TCC breaks
+        Vulkan/DirectML and needs no display on the card); Tailscale key
+        expiry off (admin console, Đạt); Intel chipset/MEI/iGPU drivers
+        (cosmetic, not installed); then vSwitch, Defender exclusions, the
+        Ubuntu VM on V:.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
