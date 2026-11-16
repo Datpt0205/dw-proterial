@@ -205,6 +205,16 @@ context. All five are done and on `main`. The full narrative is at
         (code by git bundle, images built there, `.env`, onprem compose
         with Strata at the host, bge-m3 on CPU in the VM), backups to B:,
         the host watchdog, then the drills.
+        **Held (Đạt, 11-16):** no code moves to the VM while he is still
+        coding. The VM's MAC is pinned (`00-15-5D-F2-BC-00`; host
+        `B0-82-E2-C5-77-92`) so IT can give both a fixed address when they
+        move the host to the 83.x LAN after setup; the three DW names point
+        at the VM. Owed by IT: the names in their DNS, the two addresses,
+        DW's root certificate on the PCs. Proposed next without code: the
+        host watchdog (VM off or hung, Strata, Tailscale, disk; restart what
+        is safe and alert by mail or Teams, Đạt to choose), the Strata
+        measurement once the model is down, VM hardening (ufw, security-only
+        updates).
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
