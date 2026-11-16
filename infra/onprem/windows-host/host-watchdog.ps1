@@ -116,6 +116,28 @@ foreach ($d in 'C', 'V', 'B') {
 $availMB = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
 [void](Report 'host-memory' ($availMB -ge 2048) "The host has only $availMB MB of memory available. Strata may slow down, and the VM may not start again after a stop." 3)
 
+# --- 5c. Backups are fresh and their restore test passes ------------------------------
+# The VM's dw-backup.sh writes B:\DW-Backup\status; it never mails, this does.
+# Until backups are installed (no status folder) there is nothing to judge.
+$bs = 'B:\DW-Backup\status'
+if (Test-Path $bs) {
+    function Read-Status([string]$name) {
+        $f = Join-Path $bs $name
+        if (Test-Path $f) { try { return Get-Content $f -Raw | ConvertFrom-Json } catch { } }
+        return $null
+    }
+    function Hours-Since($s) { if ($s -and $s.time) { return ((Get-Date) - [datetime]$s.time).TotalHours } return [double]::PositiveInfinity }
+    $ok = Read-Status 'last-ok.json'; $err = Read-Status 'last-error.json'
+    $wal = Read-Status 'last-wal.json'; $ver = Read-Status 'last-verify.json'
+    $why = if ($err -and (Hours-Since $err) -lt (Hours-Since $ok)) { " The last run failed: $($err.mode): $($err.error)" } else { '' }
+    $h = Hours-Since $ok
+    [void](Report 'backup' ($h -lt 26) "No successful nightly backup for $([math]::Round($h)) hours.$why")
+    $h = Hours-Since $wal
+    [void](Report 'backup-wal' ($h -lt 3) "The WAL archive has not been copied to B: for $([math]::Round($h)) hours; a lost VM would lose more than 15 minutes of work.$why")
+    $h = Hours-Since $ver
+    [void](Report 'backup-verify' (($h -lt 35 * 24) -and $ver -and $ver.ok) "The monthly restore test has not passed for $([math]::Round($h / 24)) days.$why")
+}
+
 # --- 6. A restart Windows has been waiting for over 3 days --------------------------
 $pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 if ($pending) {

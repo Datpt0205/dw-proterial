@@ -1,0 +1,25 @@
+# Backup overlay for a deployed host (on premises: the DW VM). Applied after the
+# profile overlay. It turns on Postgres's continuous WAL archive, so a restore
+# can reach any moment up to the last archived segment, not only last night's
+# dump. Everything else about backups is infra/onprem/vm/backup/dw-backup.sh.
+#
+# The archive is a directory on the VM's own disk (DW_WAL_ARCHIVE_DIR, owned by
+# uid 70, the postgres user of the alpine image), not the backup share: if the
+# share is away, archiving keeps succeeding locally and the backup job copies the
+# segments over later. archive_timeout bounds what a lost VM loses: 15 minutes.
+# Each segment is gzipped (an idle, mostly empty 16 MB segment shrinks to a few
+# KB); an existing file is taken as already archived.
+services:
+  postgres:
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=900
+      - -c
+      - archive_command=[ -f /wal-archive/%f.gz ] || { gzip -c %p > /wal-archive/%f.gz.part && mv /wal-archive/%f.gz.part /wal-archive/%f.gz; }
+    volumes:
+      - ${DW_WAL_ARCHIVE_DIR:-/srv/dw/wal-archive}:/wal-archive
