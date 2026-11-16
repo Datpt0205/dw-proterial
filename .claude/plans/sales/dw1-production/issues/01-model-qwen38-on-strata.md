@@ -93,3 +93,26 @@ the Q&A sets, the security cases, the plant's GPU.
 - Acceptance 3: each `ModelStep` already had a model-down test except the
   change request; `test_the_model_down_reads_nothing_and_a_person_types`
   added.
+- **2026-11-16 afternoon, the plant's own GPU (RTX PRO 4000 Blackwell 24 GB,
+  Strata v0.2.14 on Windows, Q2_0, one slot, vision on), measured, not
+  attested** (no plant database yet). Every DW1 model-step set, live through
+  the `onprem` profile from the laptop over Tailscale, at `480d269d` plus the
+  uncommitted ticket 37 work in the tree; 49 minutes for all 31. First found:
+  with `--parallel 3` Strata refuses `logprobs` beyond one token, and the
+  structured route asks for them (1.4.0), so every reading on it failed;
+  Strata now runs one slot (Đạt chose it, `ops-hardening.md`). On one slot:
+  28 of 31 sets passed every case. Failed cases: `sales-handoff-notation-
+  records` ("another customer's record settled a value", HO17) and
+  `sales-rfq-notation-records` ("a record read a value wrong"), both ticket
+  37's uncommitted notation records, to its session; `sales-rule-draft-golden`
+  (T-VI-2 marked ready with 8/9 columns right). Bars met: change_request 1.0,
+  description_attributes 0.933 (0.7), skill_document_forms 0.888,
+  request_handoff 0.877, skill_handoffs 0.863, message_intent 0.989,
+  layout_proposal 0.994, skill_mail_kinds 1.0, po_body_extraction 1.0,
+  skill_reply_drafts 0.917, salesorder_skill 1.0, triage_card 1.0. Missed
+  (bar 0.85 each): reply_intent 0.837 (lab 0.796), reply_draft 0.833 (lab
+  0.917: worse here), rfq_extraction 0.838 (lab 0.833), skill_intents 0.717
+  (lab 0.800), thread_agent 0.85 not passed (the bar's other condition). p50
+  per call mostly 0.9–2.4 s; descriptions 7.2 s (p95 9.1). Acceptance 1
+  still owed: the attested run once DW runs on the plant, after the misses
+  are worked or the steps left off.
