@@ -227,8 +227,21 @@ context. All five are done and on `main`. The full narrative is at
         3 days; mail on a change of state and a daily report from 08:00 as
         the dead man's switch). Drilled: VM stopped, running again after
         one round, "recovered" logged. Mail is set by Đạt on the host with
-        `set-alert-mail.ps1` (a Gmail App Password, DPAPI LocalMachine),
-        owed.
+        `set-alert-mail.ps1` (a Gmail App Password, DPAPI LocalMachine).
+        **Mail on (12:47):** set with `-FromStdin`; the test mail and the
+        SYSTEM watchdog's daily report were both sent. The App Password
+        went through the chat, so Đạt is to make a new one, rerun the script
+        interactively and revoke the old. Tailscale key expiry still needs
+        his click in the admin console (no CLI for it).
+        **Model and RAM (Đạt asked, 11-16):** Strata serves only
+        Qwen3.8-Flash-Next (its variants: ISTA-DASLab, Unsloth, Gyro, Swift,
+        Coder) and Qwen3.6-35B-A3B. Qwen3.8-27B (dense, vision, Apache 2.0,
+        Aug 2026) runs on llama.cpp/vLLM, not Strata: its 8-bit (~28 GB) does
+        not fit 24 GB of VRAM, its 4-bit does and would free the host's RAM.
+        Advised: measure Q2_0's real RAM first; if tight, RAM to 128 GB, then
+        Gyro-S in Strata (27.6 GB vs 37.6 GB, lower quality), then 27B Q4 on
+        llama.cpp, which changes ADR 0025 and needs every DW step attested
+        again. Owed: Đạt's choice after the measurement.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and

@@ -12,13 +12,19 @@ param(
     [string]$From     = $To,
     [string]$User     = $To,
     [string]$SmtpHost = 'smtp.gmail.com',
-    [int]$SmtpPort    = 587
+    [int]$SmtpPort    = 587,
+    [switch]$FromStdin    # read the password from standard input (piped), never from the command line
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
-$secure = Read-Host -AsSecureString "SMTP password (App Password) for $User"
-$plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+if ($FromStdin) {
+    $plain = [Console]::In.ReadToEnd().Trim()
+} else {
+    $secure = Read-Host -AsSecureString "SMTP password (App Password) for $User"
+    $plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+}
+$plain = $plain -replace '\s', ''   # Gmail shows App Passwords in groups of four
 $blob   = [Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($plain), $null,
             [Security.Cryptography.DataProtectionScope]::LocalMachine)
 Remove-Variable plain
