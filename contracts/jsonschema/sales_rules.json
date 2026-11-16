@@ -1424,6 +1424,11 @@
             "title": "Thread Agent",
             "type": "boolean"
           },
+          "triage_card": {
+            "default": false,
+            "title": "Triage Card",
+            "type": "boolean"
+          },
           "unread_retry_hours": {
             "maximum": 168,
             "minimum": 0,

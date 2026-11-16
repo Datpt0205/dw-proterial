@@ -1937,6 +1937,103 @@
         "title": "CancelResult",
         "type": "object"
       },
+      "CardDecisionRequest": {
+        "additionalProperties": false,
+        "description": "A person's decision on a triage card: the step they take (the card's\nown or another of the closed set), None to dismiss it; ``attach`` to\nattach a reply to the case the card names. Never a case id: the only\ncase a card may lead to is its own.",
+        "properties": {
+          "attach": {
+            "default": false,
+            "title": "Attach",
+            "type": "boolean"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "title": "CardDecisionRequest",
+        "type": "object"
+      },
+      "CardVerdict": {
+        "additionalProperties": false,
+        "description": "What a person did with a card, and when.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "decision": {
+            "enum": [
+              "taken",
+              "changed",
+              "dismissed"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "decision",
+          "step",
+          "by",
+          "at"
+        ],
+        "title": "CardVerdict",
+        "type": "object"
+      },
       "CaseActivityView": {
         "properties": {
           "case_id": {
@@ -4398,6 +4495,75 @@
         "title": "CrossCheck",
         "type": "object"
       },
+      "CustomerNotationBody": {
+        "additionalProperties": false,
+        "description": "How the customer writes one kind, as a person states it (ticket 37):\nthe kind and its value, checked against the values the kind holds.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "decimal_mark",
+              "date_order",
+              "dollar_sign",
+              "yen_sign"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "title": "CustomerNotationBody",
+        "type": "object"
+      },
+      "CustomerNotationView": {
+        "description": "A customer's notation: each kind known, what it rests on, and the\nvalues each kind may hold (the platform's one list, so a screen offers\nexactly what the server takes).",
+        "properties": {
+          "choices": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "decimal_mark",
+                "date_order",
+                "dollar_sign",
+                "yen_sign"
+              ]
+            },
+            "title": "Choices",
+            "type": "object"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NotationEntryView"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "customer_code",
+          "entries",
+          "choices"
+        ],
+        "title": "CustomerNotationView",
+        "type": "object"
+      },
       "CustomerReminderView": {
         "description": "A draft, or why there is none; always marked as the model's.",
         "properties": {
@@ -6834,6 +7000,11 @@
               }
             ]
           },
+          "quantity_from_record": {
+            "default": false,
+            "title": "Quantity From Record",
+            "type": "boolean"
+          },
           "quotes": {
             "default": [],
             "items": {
@@ -6943,6 +7114,18 @@
                 "type": "null"
               }
             ]
+          },
+          "from_record": {
+            "default": [],
+            "items": {
+              "enum": [
+                "quantity",
+                "date"
+              ],
+              "type": "string"
+            },
+            "title": "From Record",
+            "type": "array"
           },
           "item": {
             "anyOf": [
@@ -10405,6 +10588,16 @@
             },
             "title": "Thread Cases",
             "type": "array"
+          },
+          "triage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriageCardView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -10585,7 +10778,8 @@
           "thread_agent",
           "reply_draft",
           "skill_intents",
-          "skill_mail_kinds"
+          "skill_mail_kinds",
+          "triage_card"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -10858,6 +11052,117 @@
           "name"
         ],
         "title": "NewTenantView",
+        "type": "object"
+      },
+      "NotationEntryView": {
+        "description": "One kind of a customer's notation on the master data screen.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "order",
+                  "quote"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Kind"
+          },
+          "confirmed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "kind": {
+            "enum": [
+              "decimal_mark",
+              "date_order",
+              "dollar_sign",
+              "yen_sign"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "confirmed",
+              "set"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          },
+          "written": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Written"
+          }
+        },
+        "required": [
+          "kind",
+          "value",
+          "source",
+          "case_kind",
+          "case_id",
+          "field",
+          "written",
+          "confirmed",
+          "by",
+          "at"
+        ],
+        "title": "NotationEntryView",
         "type": "object"
       },
       "NotificationView": {
@@ -16511,7 +16816,8 @@
           "print_differs",
           "ocr",
           "opened_with_password",
-          "not_printed"
+          "not_printed",
+          "notation_from_record"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -19000,6 +19306,18 @@
             "title": "Description",
             "type": "string"
           },
+          "from_message": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~]{1,512}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Message"
+          },
           "instructions": {
             "maxLength": 12000,
             "minLength": 1,
@@ -19067,6 +19385,16 @@
             ],
             "title": "Source",
             "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerReplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unanswered": {
             "minimum": 0.0,
@@ -19159,6 +19487,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
           },
           "version_id": {
             "format": "uuid",
@@ -21509,6 +21848,218 @@
           "hidden"
         ],
         "title": "TodayView",
+        "type": "object"
+      },
+      "TriageCardView": {
+        "description": "A message's triage card as the inbox shows it: what it seems to be\n(the skill's kind, its label where the skill gives one, and the route\nthe skill maps it onto), the one step suggested, the case it names\nwhere the caller may see it, and the decision once made.",
+        "properties": {
+          "case": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThreadCaseView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "kind_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind Label"
+          },
+          "routed_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routed As"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "kind",
+          "kind_label",
+          "routed_as",
+          "step",
+          "case",
+          "skill",
+          "decided"
+        ],
+        "title": "TriageCardView",
+        "type": "object"
+      },
+      "TriggerReplay": {
+        "additionalProperties": false,
+        "description": "The mail a version was proposed from (`SkillTrigger`), read with the\nversion and with the one in force: the kind each named (None: no usable\nanswer, or no kind read), its label where the skill gives one, and the\nroute it took (``none``: no kind read; None: no usable answer).",
+        "properties": {
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "message_id": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "with_kind": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Kind"
+          },
+          "with_label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Label"
+          },
+          "with_route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "po",
+                  "quote_request",
+                  "design_reply",
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "none",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Route"
+          },
+          "without_kind": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Without Kind"
+          },
+          "without_label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Without Label"
+          },
+          "without_route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "po",
+                  "quote_request",
+                  "design_reply",
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "none",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Without Route"
+          }
+        },
+        "required": [
+          "message_id",
+          "found"
+        ],
+        "title": "TriggerReplay",
         "type": "object"
       },
       "TurnView": {
@@ -28751,6 +29302,194 @@
         ]
       }
     },
+    "/api/v1/sales/customers/{customer_code}/notation": {
+      "get": {
+        "operationId": "customer_notation_api_v1_sales_customers__customer_code__notation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNotationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Customer Notation",
+        "tags": [
+          "sales"
+        ]
+      },
+      "put": {
+        "operationId": "set_customer_notation_api_v1_sales_customers__customer_code__notation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerNotationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNotationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Customer Notation",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/customers/{customer_code}/notation/{kind}": {
+      "delete": {
+        "operationId": "forget_customer_notation_api_v1_sales_customers__customer_code__notation__kind__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "decimal_mark",
+                "date_order",
+                "dollar_sign",
+                "yen_sign"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerNotationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Customer Notation",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/customers/{customer_code}/salesorder-examples": {
       "get": {
         "operationId": "salesorder_examples_api_v1_sales_customers__customer_code__salesorder_examples_get",
@@ -29487,6 +30226,77 @@
           }
         },
         "summary": "Reopen",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/triage": {
+      "post": {
+        "operationId": "decide_triage_card_api_v1_sales_inbox__message_id__triage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDispositionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Triage Card",
         "tags": [
           "sales"
         ]

@@ -80,6 +80,7 @@ _STEP_LANE: Final[Mapping[ModelStep, CaseKind]] = {
     ModelStep.RFQ_EXTRACTION: CaseKind.QUOTE,
     ModelStep.REQUEST_HANDOFF: CaseKind.ORDER,
     ModelStep.LAYOUT_PROPOSAL: CaseKind.ORDER,
+    ModelStep.TRIAGE_CARD: CaseKind.ORDER,
 }
 
 
@@ -287,6 +288,23 @@ def _from_disposition(
                 # The order the hand-off is about, when code resolved one.
                 case_id=handoff.order_case_id,
                 refusals=_counts(handoff.refused),
+            )
+        )
+    card = disposition.triage
+    if card is not None:
+        # A card whose kind the model named stands for Sales to take or
+        # dismiss; one naming none suggests nothing (ticket 33).
+        read = card.kind is not None
+        found.append(
+            _Stamped(
+                ModelStep.TRIAGE_CARD,
+                card.prompt,
+                card.model_profile,
+                "accepted" if read else "refused",
+                automatic=read,
+                reason_code=None if read else "no_kind",
+                lane=CaseKind.ORDER,
+                case_id=card.case_id,
             )
         )
     prefill = disposition.layout_prefill

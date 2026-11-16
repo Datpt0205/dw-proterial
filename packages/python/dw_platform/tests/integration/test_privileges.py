@@ -126,6 +126,8 @@ _SALES_TABLES = (
     "sales.skill_replays",
     # Migration 711e8b760139 (ticket 41): a customer's worked pairs.
     "sales.salesorder_pairs",
+    # Migration 99ae8f7eb765 (ticket 37): each customer's notation record.
+    "sales.customer_notations",
 )
 
 
@@ -167,6 +169,8 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "catalog_snapshots",
         "rule_drafts",
         "salesorder_examples",
+        # A customer's notation is replaced and forgotten by people (99ae8f7eb765).
+        "customer_notations",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
     # An import's file and its parsed records are never updated (ticket 41),

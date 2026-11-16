@@ -59,6 +59,7 @@ from dw_sales.evals.graders import AN as _AN
 from dw_sales.evals.graders import CALLERS, GIANG
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 
 # An given the set `sales_rules_editor` (`sales.rules.propose`): since
 # 2026-10-28 a PIC proposes only when the admin gives them it.
@@ -126,9 +127,12 @@ async def _read(
     customer: str = "VLX",
     scope: SalesScope = ALPHA,
     model: Any = None,
+    records: MemoryCustomerNotations | None = None,
 ) -> Handoff:
     scripted = model or Recorded(raw=answer)
-    return await HandoffReader(scripted, CATALOG, _NoCases()).read(
+    return await HandoffReader(
+        scripted, CATALOG, _NoCases(), records or MemoryCustomerNotations()
+    ).read(
         scope,
         newest_part(_message(body)),
         await _customer(customer),

@@ -35,6 +35,13 @@ holds its own version of a skill in its data.
   (`skill_replay.SkillReplayer`), and stores the counts beside it
   (`SkillReplay`); the skills list shows them, and the head may approve only
   a version whose replay is stored (`SkillDecisions`). Rejecting needs none.
+- **Taught from a triage card** (ticket 34): a version of the mail kinds may
+  be proposed from the card of a mail they did not read (`SkillProposal.
+  from_message`). The server finds that mail, with its card, in the
+  proposer's own workspace, and the version records it (`SkillTrigger`), so
+  its replay reads that mail too, with the version and without it, beside
+  the example mails. It is words like any version: what it names is checked
+  as every version's is, and it decides nothing.
 - **A customer's SalesOrder skill** (ticket 41) is a skill like these,
   ``salesorder-<customer code>`` (`salesorder_skills`), replayed on the
   customer's worked pairs instead: the head may approve a version only where
@@ -78,7 +85,7 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.rules import ProposerNames, rule_work
-from dw_sales.domain.mail_kinds import MAIL_KINDS, mail_kinds_of
+from dw_sales.domain.mail_kinds import MAIL_KINDS, ReadRoute, mail_kinds_of
 
 __all__ = [
     "READ_SKILL",
@@ -94,7 +101,9 @@ __all__ = [
     "SkillReplay",
     "SkillReplayStorePort",
     "SkillSettlement",
+    "SkillTrigger",
     "SkillsService",
+    "TriggerReplay",
     "skill_key",
     "skill_name",
 ]
@@ -168,6 +177,17 @@ def is_salesorder_key(key: str) -> bool:
     )
 
 
+class SkillTrigger(BaseModel):
+    """The mail a version was proposed from (a triage card, ticket 34), in
+    the proposer's workspace as the server resolved it: its replay reads it
+    with the version and without it."""
+
+    model_config = _FROZEN
+
+    workspace_id: UUID
+    message_id: str = Field(pattern=r"^[!-~]{1,512}$")
+
+
 class SkillDocument(BaseModel):
     """One version of a skill, as stored and as resolved: the whole skill,
     never a patch."""
@@ -180,6 +200,9 @@ class SkillDocument(BaseModel):
     # What the agent chooses the skill by, in its catalogue.
     description: str = Field(min_length=1, max_length=1024)
     instructions: str = Field(min_length=1, max_length=INSTRUCTIONS_LIMIT)
+    # The mail it was proposed from, where a triage card proposed it; read
+    # by its replay only, never served.
+    trigger: SkillTrigger | None = None
 
     @property
     def ref(self) -> str:
@@ -253,6 +276,26 @@ ReplaySource = Literal["platform_examples", "customer_pairs"]
 ReplayOutcome = Literal["replayed", "incomplete"]
 
 
+class TriggerReplay(BaseModel):
+    """The mail a version was proposed from (`SkillTrigger`), read with the
+    version and with the one in force: the kind each named (None: no usable
+    answer, or no kind read), its label where the skill gives one, and the
+    route it took (``none``: no kind read; None: no usable answer)."""
+
+    model_config = _FROZEN
+
+    message_id: str = Field(pattern=r"^[!-~]{1,512}$")
+    # False: the lane did not find the mail any more (its retention, or a
+    # workspace that left); nothing was read.
+    found: bool
+    with_kind: str | None = Field(default=None, max_length=40)
+    with_label: str | None = Field(default=None, max_length=60)
+    with_route: ReadRoute | None = None
+    without_kind: str | None = Field(default=None, max_length=40)
+    without_label: str | None = Field(default=None, max_length=60)
+    without_route: ReadRoute | None = None
+
+
 class SkillReplay(BaseModel):
     """What one replay of a proposed version found, stored beside it
     (`skill_replay`)."""
@@ -277,6 +320,8 @@ class SkillReplay(BaseModel):
     unanswered: int = Field(ge=0)
     # The security cases the proposal failed, by example id.
     security_failed: tuple[str, ...] = ()
+    # The mail the version was proposed from, read both ways (ticket 34).
+    trigger: TriggerReplay | None = None
 
 
 class SkillReplayStorePort(Protocol):
@@ -306,6 +351,11 @@ def _first_error(exc: ValueError) -> str:
     return str(exc)
 
 
+# Refused: a version taught from a triage card of a skill other than the
+# mail kinds (ticket 34).
+TRIGGER_REFUSED: Final = "skill_trigger_refused"
+
+
 # Refused: approving a version the worker has not replayed yet.
 NOT_REPLAYED: Final = "skill_not_replayed"
 # Refused: approving a customer's SalesOrder skill that did not reproduce
@@ -333,6 +383,8 @@ class SkillVersionView(BaseModel):
     approval_id: UUID | None
     # What the worker's replay found; None until it has run.
     replay: SkillReplay | None = None
+    # The mail it was proposed from, where a triage card proposed it.
+    trigger: str | None = None
 
 
 class SkillView(BaseModel):
@@ -365,6 +417,9 @@ class SkillProposal(BaseModel):
     version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     description: str = Field(min_length=1, max_length=1024)
     instructions: str = Field(min_length=1, max_length=INSTRUCTIONS_LIMIT)
+    # The mail whose triage card it is proposed from (ticket 34): the
+    # server finds it, with its card, in the proposer's own workspace.
+    from_message: str | None = Field(default=None, pattern=r"^[!-~]{1,512}$")
 
 
 def _version_view(version: RuleVersion, replay: SkillReplay | None = None) -> SkillVersionView:
@@ -380,6 +435,7 @@ def _version_view(version: RuleVersion, replay: SkillReplay | None = None) -> Sk
         instructions=document.instructions,
         approval_id=version.approval_id,
         replay=replay,
+        trigger=None if document.trigger is None else document.trigger.message_id,
     )
 
 
@@ -455,6 +511,7 @@ class SkillsService:
             policy_version=proposal.version,
             description=proposal.description,
             instructions=proposal.instructions,
+            trigger=await self._trigger(context, name, proposal.from_message),
         )
         if (check := _WORDS_CHECKED.get(name)) is not None:
             try:
@@ -468,6 +525,26 @@ class SkillsService:
             context, key, document.model_dump(mode="json"), applies_directly=False
         )
         return _version_view(version)
+
+    async def _trigger(
+        self, context: AccessContext, name: str, message_id: str | None
+    ) -> SkillTrigger | None:
+        """The mail a version is proposed from (module docstring): only the
+        mail kinds are taught from a card, and only from a card on a mail of
+        the proposer's own workspace (RLS reads no other; one not found, or
+        carrying no card, is not found)."""
+        if message_id is None:
+            return None
+        if name != MAIL_KINDS:
+            raise DomainError(
+                "Chỉ kỹ năng phân loại thư được dạy từ thẻ gợi ý của một thư.",
+                details={"skill": name, "rule": TRIGGER_REFUSED},
+            )
+        async with self.uow(sales_scope(context)) as work:
+            logged = await work.messages.logged(message_id)
+        if logged is None or logged.disposition.triage is None:
+            raise NotFoundError("no such card", details={"message_id": message_id})
+        return SkillTrigger(workspace_id=context.workspace_id, message_id=message_id)
 
 
 # ----------------------------------------------------------- the decision --

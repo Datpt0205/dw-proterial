@@ -160,6 +160,7 @@ from dw_sales.testing.catalog_store import (
     MemoryRecordedQuotations,
     MemoryRecordedSenders,
 )
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.example_store import MemoryExampleStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
@@ -1312,6 +1313,8 @@ class World:
     tool_executions: MemoryToolExecutions = field(default_factory=MemoryToolExecutions)
     # What carries out a decided skill version (ticket 40), as the worker does.
     skill_settlement: SkillSettlement | None = None
+    # Each customer's notation record (ticket 37), every scope's in one store.
+    notations: MemoryCustomerNotations = field(default_factory=MemoryCustomerNotations)
 
     async def decide_layout(
         self,
@@ -1661,6 +1664,7 @@ def open_world(
     # sample set unless ``scanner`` says so.
     scanning = scanner or NoMalware()
     uploads = MemoryUploads(store)
+    notations = MemoryCustomerNotations()
     mailbox = WithUploads(
         MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir), uploads
     )
@@ -1702,7 +1706,7 @@ def open_world(
         requests=(
             None
             if model is None
-            else model_requests(model, catalog, order_rules, readers.texts, readiness)
+            else model_requests(model, catalog, order_rules, readers.texts, readiness, notations)
         ),
     )
     thread_tools = ThreadTools(store, catalog, order_rules)
@@ -1758,10 +1762,10 @@ def open_world(
                 skill_pick or ScriptedPick(),
             )
         ),
-        handoffs=None if model is None else HandoffReader(model, catalog, store),
+        handoffs=None if model is None else HandoffReader(model, catalog, store, notations),
         layouts=store,
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
-        body_pos=None if model is None else PoBodyReader(model),
+        body_pos=None if model is None else PoBodyReader(model, notations),
         model_steps=readiness,
         # The thresholds the store holds (ticket 44): none until a test or
         # the lane stores one, so every result goes to a person.
@@ -1816,6 +1820,7 @@ def open_world(
         scanner=scanning,
         converts=catalog,
         senders=catalog,
+        notations=notations,
         assistant=MemoryAssistantStores(),
         notices=notifications,
         reminder_marks=MemoryReminderMarks(),
@@ -1876,6 +1881,7 @@ def open_world(
         directory,
         executions,
         SkillSettlement(store, skills, clock, ids),
+        notations=notations,
     )
 
 

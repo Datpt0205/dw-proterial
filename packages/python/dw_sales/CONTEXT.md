@@ -328,9 +328,17 @@ API and the plan use the English terms. The spec is
   address (Bravo's contacts, then a confirmed sender); any other address is
   "customer not known", for a person (ticket 20). A domain several customers
   of one imported list claim is dropped from each of them on import as well.
-- **Triage card** (Thẻ phân loại thư): for a mail nothing else read, what
-  DW1 thinks it is, which case it seems to concern and one step from the
-  closed set, for Sales to take or not (dw_sales ADR 0012).
+- **Triage card** (Thẻ gợi ý): for a mail routed "other" that nothing else
+  read, what DW1 thinks it is (one of the company's **mail kinds**, or none),
+  the case of the sender's own customer the numbers it quotes lead to (code
+  resolves them; never another customer's), and one step from the closed
+  set (routed again as a delivery change, complaint, sample request, portal
+  notice or reply, or attached as a reply to that case). Advice: the mail
+  stays where it is until Sales takes the step, picks another or dismisses
+  the card, and each decision is a labelled case. From a card, whoever
+  proposes rules may teach the mail kinds a kind; the replay reads that mail
+  with and without the version (`triage_card`, tickets 33 and 34, dw_sales
+  ADR 0014).
 - **Skill** (Kỹ năng đọc thư): an instruction in words telling DW1 how to
   read a kind of mail, for one customer or all, proposed by a PIC or the
   head and approved by the head, never its proposer. It adds no permission,

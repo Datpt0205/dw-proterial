@@ -138,6 +138,7 @@ class ModelStep(StrEnum):
     REPLY_DRAFT = "reply_draft"
     SKILL_INTENTS = "skill_intents"
     SKILL_MAIL_KINDS = "skill_mail_kinds"
+    TRIAGE_CARD = "triage_card"
 
 
 class ModelAssist(BaseModel):
@@ -219,6 +220,13 @@ class ModelAssist(BaseModel):
     # maps it, one of the platform's routes. With no kind read, the message
     # is classified as if this were off. Off where a version does not say.
     skill_mail_kinds: bool = False
+    # A message still routed "other" gets a card in the inbox (ticket 33):
+    # a local model says which of the company's kinds of mail it seems to
+    # be; code resolves the case it seems to concern from the numbers it
+    # quotes (the sender's customer's only) and suggests one step from the
+    # platform's routes. Advice: the routing stays until Sales takes or
+    # dismisses it. Off where a version does not say.
+    triage_card: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

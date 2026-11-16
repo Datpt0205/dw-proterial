@@ -8,7 +8,9 @@ processing the message. `PoBodyReader.read` shows the model the message's
 newest part, under prompt `sales.po_body_extraction`, and returns the PO code
 accepted, every value flagged `model_read`, or why there is none; intake then
 routes the message to Sales as before, with that reason. A budget or quota
-refusal is not a reason: it stops the run.
+refusal is not a reason: it stops the run. What the mail leaves open of its
+notation, the customer's notation record settles (ticket 37,
+`NotationRecordPort`).
 """
 
 from __future__ import annotations
@@ -27,6 +29,8 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
+from dw_sales.application.customer_notations import NotationRecordPort, record_for
+from dw_sales.application.ports import SalesScope
 from dw_sales.domain.orders import PoDocument
 from dw_sales.domain.po_body_reading import ModelPoBody, read_po_body
 from dw_sales.domain.rfq_reading import normalised
@@ -46,14 +50,23 @@ _OUTPUT_TOKENS: Final = 2000
 @dataclass(frozen=True)
 class PoBodyReader:
     model: InterpretationPort
+    # The sender's customer's notation record (ticket 37).
+    records: NotationRecordPort
 
     async def read(
-        self, message: InboundMessage, *, received_on: date, run: RunContext
+        self,
+        message: InboundMessage,
+        *,
+        scope: SalesScope,
+        customer_code: str,
+        received_on: date,
+        run: RunContext,
     ) -> PoDocument | str:
         """The PO written in ``message``, or why none was read: ``too_long``
         (a mail no call holds is a person's to read, never read in part),
         ``unavailable``, or `read_po_body`'s reason. ``received_on``: the day
-        it arrived where the tenant works, which a date without a year reads by."""
+        it arrived where the tenant works, which a date without a year reads
+        by; ``customer_code`` the sender's customer, whose record is read."""
         text = normalised(newest_part(message).text)
         if estimated_tokens(text) > self.model.max_input_tokens - PROMPT_TOKENS:
             return "too_long"
@@ -72,6 +85,7 @@ class PoBodyReader:
             answer,
             received_on,
             parser_version=str(PO_BODY_EXTRACTION),
+            record=await record_for(self.records, scope, customer_code),
         )
         if verdict.refused:
             # Counts by reason only: a refusal names no customer word.

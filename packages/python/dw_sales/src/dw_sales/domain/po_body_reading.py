@@ -31,9 +31,13 @@ value, a customer, an item code of ours or a route.
    missing. The same line twice refuses it too.
 3. Every value is parsed from its span (`rfq_reading`'s parsers: numbers as
    customers group them, a numeric date's order and an ambiguous grouping
-   such as ``1.250`` only as the mail's own other values settle them, a year
-   guessed from the day the mail arrived). A currency nobody wrote is not
-   guessed (``currency_missing``), and neither is the one a bare ``$`` means.
+   such as ``1.250`` only as the mail's own other values settle them, or,
+   where the mail says nothing, as the customer's notation record does
+   (ticket 37, `notation.settle`: such a value is flagged
+   `notation_from_record` too, and one the mail reads otherwise than the
+   record is not read), a year guessed from the day the mail arrived). A
+   currency nobody wrote is not guessed (``currency_missing``), and neither
+   is the one a bare ``$`` means.
 4. What the mail does not write is the value it implies, anchored where the
    values it is made from are, as a form that prints no revision reads as
    revision 0 at its PO number (ticket 30): no revision is revision 0, no PO
@@ -54,17 +58,18 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
-from typing import Final
+from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from dw_platform.domain.notation import Notation, notation_of
+from dw_platform.domain.notation import UNSTATED, Notation, notation_of, settle
 from dw_sales.domain.anchors import MessageText, SourceAnchor, TextRange
 from dw_sales.domain.catalog import PrintedText
 from dw_sales.domain.layouts import flagged_everywhere
 from dw_sales.domain.orders import (
+    FlaggedValue,
     PoDocument,
     PoHeader,
     PoHeaderAnchors,
@@ -181,48 +186,77 @@ class _Read[T]:
     anchor: SourceAnchor
 
 
+@dataclass
+class _Reading:
+    """The mail's notation, the customer's record, and what code noted while
+    reading with them: refusals by reason, and the fields only the record
+    settled (``None`` for the PO's own, else the line's number)."""
+
+    notation: Notation
+    record: Notation
+    refused: Counter[str] = field(default_factory=Counter)
+    by_record: set[tuple[int | None, str]] = field(default_factory=set)
+
+    def parsed[T](
+        self, words: str, parse: Callable[[str, Notation], T | None], name: str, line: int | None
+    ) -> T | None:
+        settled = settle(lambda n: parse(words, n), self.notation, self.record)
+        if settled.value is None:
+            why = "contradicts_record" if settled.contradicts_record else "unparsed"
+            self.refused[f"{name}_{why}"] += 1
+        elif settled.by_record:
+            self.by_record.add((line, name))
+        return settled.value
+
+
 def read_po_body(
-    text: str, answer: ModelPoBody, received_on: date, *, parser_version: str
+    text: str,
+    answer: ModelPoBody,
+    received_on: date,
+    *,
+    parser_version: str,
+    record: Notation = UNSTATED,
 ) -> PoBodyVerdict:
     """What of ``answer`` code accepts of the PO written in ``text`` (module
     docstring, checks 1-5). ``text`` is the message's newest part as
     `mail_parts.newest_part` gives it, NFKC-normalised; ``parser_version``
-    the prompt it was read under, stamped on the PO. Never raises on the
-    model's answer."""
+    the prompt it was read under, stamped on the PO; ``record`` the
+    customer's notation record (ticket 37). Never raises on the model's
+    answer."""
     body = _Body(text)
-    # How this mail writes "1.250" and "05/11": its own other values say.
-    notation = notation_of(text)
-    refused: Counter[str] = Counter()
+    # How this mail writes "1.250" and "05/11": its own other values say,
+    # else the customer's record.
+    reading = _Reading(notation_of(text), record)
+    refused = reading.refused
 
     def none(reason: str) -> PoBodyVerdict:
         return PoBodyVerdict(None, reason, refused)
 
-    def header[T](span: str | None, parse: Callable[[str], T | None], name: str) -> _Read[T] | None:
+    def header[T](
+        span: str | None, parse: Callable[[str, Notation], T | None], name: str
+    ) -> _Read[T] | None:
         if span is None:
             return None
         place = body.first(span)
         if place is None:
             refused[f"{name}_not_found"] += 1
             return None
-        value = parse(text[place[0] : place[1]])
-        if value is None:
-            refused[f"{name}_unparsed"] += 1
-            return None
-        return _Read(value, body.anchor(*place))
+        value = reading.parsed(text[place[0] : place[1]], parse, name, None)
+        return None if value is None else _Read(value, body.anchor(*place))
 
-    po_no = header(answer.po_no_span, _printed, "po_no")
+    po_no = header(answer.po_no_span, lambda s, _n: _printed(s), "po_no")
     if po_no is None:
         return none("no_po_number")
-    currency = header(answer.currency_span, lambda s: parse_currency(s, notation), "currency")
+    currency = header(answer.currency_span, parse_currency, "currency")
     if currency is None:
         return none("currency_missing")
     if not answer.lines:
         return none("no_lines")
-    po_date = header(answer.po_date_span, lambda s: parse_date(s, received_on, notation), "po_date")
+    po_date = header(answer.po_date_span, lambda s, n: parse_date(s, received_on, n), "po_date")
     lines: list[PoLine] = []
     starts: set[int] = set()
     for number, raw in enumerate(answer.lines, start=1):
-        line = _line(body, raw, number, received_on, notation, refused)
+        line = _line(body, raw, number, received_on, reading)
         if line is None:
             return none("line_refused")
         start = line.anchors.line_no.chars
@@ -232,7 +266,7 @@ def read_po_body(
             return none("line_refused")
         starts.add(start.start)
         lines.append(line)
-    total = header(answer.total_span, lambda s: parse_price(s, notation), "total")
+    total = header(answer.total_span, parse_price, "total")
     document = PoDocument(
         attachment_id=None,
         attachment_sha256=body.sha256,
@@ -255,7 +289,39 @@ def read_po_body(
         total=PrintedTotal(amount=total.value, anchor=total.anchor) if total else None,
         body=MessageText(text=text, sha256=body.sha256),
     )
-    return PoBodyVerdict(flagged_everywhere(document, RegionFlag.MODEL_READ), None, refused)
+    flagged = flagged_everywhere(document, RegionFlag.MODEL_READ)
+    return PoBodyVerdict(_from_record(flagged, reading.by_record), None, refused)
+
+
+# What a field read is called where it is flagged: the line's ``date`` is
+# its ``requested_date``, the PO's ``total`` the total's ``amount``.
+_FLAGGED_AS: Final = {"date": "requested_date", "total": "amount"}
+
+
+def _from_record(document: PoDocument, by_record: set[tuple[int | None, str]]) -> PoDocument:
+    """``document`` with each value only the customer's record settled
+    flagged `notation_from_record` beside `model_read` (ticket 37)."""
+    if not by_record:
+        return document
+
+    def flags(existing: tuple[FlaggedValue, ...], line: int | None, total: bool) -> list[Any]:
+        names = {
+            _FLAGGED_AS.get(name, name)
+            for at, name in by_record
+            if at == line and (name == "total") == total
+        }
+        added = [FlaggedValue(field=n, flag=RegionFlag.NOTATION_FROM_RECORD) for n in sorted(names)]
+        return [*existing, *added]
+
+    dumped = document.model_dump()
+    dumped["header"]["flags"] = flags(document.header.flags, None, False)
+    dumped["lines"] = [
+        {**line.model_dump(), "flags": flags(line.flags, line.line_no, False)}
+        for line in document.lines
+    ]
+    if document.total is not None:
+        dumped["total"]["flags"] = flags(document.total.flags, None, True)
+    return PoDocument.model_validate(dumped)
 
 
 def _line(
@@ -263,32 +329,31 @@ def _line(
     raw: ModelPoLine,
     number: int,
     received_on: date,
-    notation: Notation,
-    refused: Counter[str],
+    reading: _Reading,
 ) -> PoLine | None:
+    refused = reading.refused
     line = body.folded.locate(normalised(raw.line_span), bounded=True)
     if isinstance(line, str):
         refused[f"line_{line.removeprefix('span_')}"] += 1
         return None
 
-    def read[T](span: str | None, parse: Callable[[str], T | None], name: str) -> _Read[T] | None:
+    def read[T](
+        span: str | None, parse: Callable[[str, Notation], T | None], name: str
+    ) -> _Read[T] | None:
         if span is None:
             return None
         found = body.folded.locate(normalised(span), bounded=True, within=line)
         if isinstance(found, str):
             refused[f"{name}_{found.removeprefix('span_')}"] += 1
             return None
-        value = parse(body.text[found[0] : found[1]])
-        if value is None:
-            refused[f"{name}_unparsed"] += 1
-            return None
-        return _Read(value, body.anchor(*found))
+        value = reading.parsed(body.text[found[0] : found[1]], parse, name, number)
+        return None if value is None else _Read(value, body.anchor(*found))
 
     line_anchor = body.anchor(*line)
-    code = read(raw.customer_item_code_span, _printed, "customer_item_code")
-    quantity = read(raw.quantity_span, lambda s: parse_quantity(s, notation), "quantity")
-    unit_price = read(raw.unit_price_span, lambda s: parse_price(s, notation), "unit_price")
-    uom = read(raw.uom_span, _uom, "uom")
+    code = read(raw.customer_item_code_span, lambda s, _n: _printed(s), "customer_item_code")
+    quantity = read(raw.quantity_span, parse_quantity, "quantity")
+    unit_price = read(raw.unit_price_span, parse_price, "unit_price")
+    uom = read(raw.uom_span, lambda s, _n: _uom(s), "uom")
     if code is None or quantity is None or unit_price is None:
         refused["line_incomplete"] += 1
         return None
@@ -300,11 +365,9 @@ def _line(
         # to say, never DW1's to assume.
         refused["uom_missing"] += 1
         return None
-    description = read(raw.description_span, _printed, "description")
-    amount = read(raw.amount_span, lambda s: parse_price(s, notation), "amount")
-    requested = read(
-        raw.requested_date_span, lambda s: parse_date(s, received_on, notation), "date"
-    )
+    description = read(raw.description_span, lambda s, _n: _printed(s), "description")
+    amount = read(raw.amount_span, parse_price, "amount")
+    requested = read(raw.requested_date_span, lambda s, n: parse_date(s, received_on, n), "date")
     return PoLine(
         line_no=number,
         customer_item_code=code.value,

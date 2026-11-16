@@ -128,6 +128,7 @@ from dw_sales.domain.reply_intent import (
     ThreadIntent,
     proposed_step,
 )
+from dw_sales.domain.triage import CardVerdict, TriageStep
 
 _VIEW = ConfigDict(frozen=True)
 
@@ -2385,6 +2386,26 @@ class MessageDispositionView(BaseModel):
     # of its own (``kind`` stays `not_yet_processed`) and is never processed
     # into a case: it shows under its thread, on the case.
     outgoing: bool = False
+    # The triage card of a message routed ``other`` (ticket 33).
+    triage: TriageCardView | None = None
+
+
+class TriageCardView(BaseModel):
+    """A message's triage card as the inbox shows it: what it seems to be
+    (the skill's kind, its label where the skill gives one, and the route
+    the skill maps it onto), the one step suggested, the case it names
+    where the caller may see it, and the decision once made."""
+
+    model_config = _VIEW
+
+    kind: str | None
+    kind_label: str | None
+    routed_as: str | None
+    step: TriageStep | None
+    case: ThreadCaseView | None
+    # The mail-kinds version it was read with.
+    skill: str
+    decided: CardVerdict | None
 
 
 class ThreadCaseView(BaseModel):
@@ -2411,6 +2432,7 @@ def message_disposition(
     reply is offered, or a mail with several POs is on, goes by, for those the
     caller may see; a case not in it is left out."""
     shown = numbers or {}
+    card = disposition.triage
     return MessageDispositionView(
         kind=disposition.kind.value,
         case_kind=disposition.case_kind,
@@ -2438,6 +2460,25 @@ def message_disposition(
             if case_id in shown
         ],
         outgoing=outgoing,
+        triage=(
+            None
+            if card is None
+            else TriageCardView(
+                kind=card.kind,
+                kind_label=card.kind_label,
+                routed_as=card.routed_as,
+                step=card.step,
+                case=(
+                    ThreadCaseView(
+                        case_kind=CaseKind.ORDER, case_id=card.case_id, number=shown[card.case_id]
+                    )
+                    if card.case_id is not None and card.case_id in shown
+                    else None
+                ),
+                skill=card.skill,
+                decided=card.decided,
+            )
+        ),
     )
 
 

@@ -32,6 +32,10 @@ pre-fills the onboarding screen's mapping (`LayoutPrefiller`).
 A message routed as a delivery change, a complaint or a sample request carries,
 where the tenant turns it on, a hand-off to PC or QA a local model pre-filled
 with the customer's own words and code verified (ticket 33, `HandoffReader`).
+A message still routed ``other`` carries, where the tenant turns it on, a
+triage card (`TriageReader`): what it seems to be by the tenant's mail kinds,
+the case of the sender's customer it seems to concern and one legal step,
+advice until Sales takes or dismisses it; its routing is unchanged.
 Only a message no reader accepted is classified by its words, and only by a
 local model's typed intent where the tenant's rules turn it on and its bar
 is met (`message_intent`, dw_sales ADR 0005), which code maps to the route
@@ -138,6 +142,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
 from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.threads import ThreadedCase, named_cases
+from dw_sales.application.triage import TriageReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     MAX_MESSAGE_CASES,
@@ -380,6 +385,11 @@ class OrderIntake:
     # on; with no kind read, the message is classified as if it were off.
     # None: no model is wired.
     mail_kinds: MailKindReader | None = None
+    # A card for a message still routed ``other`` (ticket 33): what it seems
+    # to be by the tenant's mail kinds, the case it seems to concern and one
+    # step, for Sales to take or dismiss; where the tenant's rules turn it
+    # on. The routing stays as it is. None: no model is wired, and no card.
+    triage: TriageReader | None = None
     # The case a reply's thread headers name (ticket 32). None: no case log is
     # wired (a reader-only test), and no reply is linked.
     threads: ThreadLinkPort | None = None
@@ -535,6 +545,9 @@ class OrderIntake:
                 message, kind, reason, sender, classification.detail, classification.candidates
             )
             outcome = await self._with_handoff(scope, message, outcome, sender, run)
+            outcome = await self._with_triage(
+                scope, message, outcome, sender, classification.reading, run
+            )
         else:
             outcome = await self._order(scope, message, kind, sender, attached, run)
         return _stamped(outcome, classification.reading)
@@ -916,6 +929,40 @@ class OrderIntake:
         )
         return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
 
+    async def _with_triage(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        outcome: IntakeOutcome,
+        sender: Customer | None,
+        reading: IntentReading | None,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """The outcome with a triage card, where the message is routed
+        ``other``, a card reader is wired, a DW1 run is processing, the
+        tenant's rules turn the step on and it meets its bar, and the
+        tenant's mail kinds did not already read it (the card would ask the
+        same question again). The disposition is otherwise the one it had."""
+        disposition = outcome.disposition
+        if (
+            disposition is None
+            or disposition.reason is not RoutingReason.OTHER
+            or (reading is not None and reading.skill is not None)
+            or self.triage is None
+            or run is None
+        ):
+            return outcome
+        rules = await self.rules.rules(scope)
+        if not await self._model_step(scope, rules, ModelStep.TRIAGE_CARD):
+            return outcome
+        card = await self.triage.read(
+            scope, newest_part(message), sender, rules_version=rules.version, run=run
+        )
+        if card is None:
+            return outcome
+        stamped = MessageDisposition.model_validate({**disposition.model_dump(), "triage": card})
+        return replace(outcome, disposition=stamped)
+
     # ------------------------------------------------------------ orders --
 
     async def _order(
@@ -1078,7 +1125,11 @@ class OrderIntake:
                 "the sender's domain matches no customer, and a PO in the mail names no buyer",
             )
         read = await self.body_pos.read(
-            message, received_on=await self._received_on(scope, message.received_at), run=run
+            message,
+            scope=scope,
+            customer_code=sender.code,
+            received_on=await self._received_on(scope, message.received_at),
+            run=run,
         )
         if isinstance(read, str):
             return self._routed(

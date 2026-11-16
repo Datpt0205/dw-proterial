@@ -103,6 +103,7 @@ _ON_DISPOSITION: Final = frozenset(
         ModelStep.THREAD_AGENT,
         ModelStep.SKILL_INTENTS,
         ModelStep.REQUEST_HANDOFF,
+        ModelStep.TRIAGE_CARD,
     }
 )
 # Steps whose product is a route (code routes from the kind read).
@@ -357,6 +358,10 @@ def _disposition_produced(
     ):
         reply = disposition.reply.reading
         return [] if reply is None else [plain("intent", kind) for kind in reply.kinds]
+    if row.step is ModelStep.TRIAGE_CARD and disposition.triage is not None:
+        card = disposition.triage
+        kind = card.kind_label or card.kind
+        return [plain(n, v) for n, v in (("kind", kind), ("step", card.step)) if v]
     if row.step is ModelStep.REQUEST_HANDOFF and disposition.handoff is not None:
         handoff = disposition.handoff
         produced = [

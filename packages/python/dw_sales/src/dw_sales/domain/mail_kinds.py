@@ -33,7 +33,7 @@ no longer reads is not used, and the mail is read as with the step off).
 from __future__ import annotations
 
 import re
-from typing import Final, Self, get_args
+from typing import Final, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -46,6 +46,7 @@ __all__ = [
     "ROUTES",
     "MailKind",
     "MailKinds",
+    "ReadRoute",
     "mail_kinds_of",
 ]
 
@@ -58,6 +59,8 @@ MAIL_KINDS: Final = "mail-kinds"
 ROUTES: Final[frozenset[str]] = frozenset(get_args(IntentKind))
 # What the model answers when no kind the skill names fits.
 NO_KIND: Final = "none"
+# Where a mail is read into: a legal route, or ``none`` for no kind read.
+ReadRoute = IntentKind | Literal["none"]
 # A company tells apart a few dozen kinds of mail at most; every one is in the
 # schema of every call.
 MAX_KINDS: Final = 40

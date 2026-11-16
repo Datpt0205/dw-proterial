@@ -232,3 +232,56 @@ stays code.
   own measurement is attested, and the one call is the reading every
   company with `message_intent` on has today.
 
+
+## Applied 2026-11-16: the triage card and a kind taught from it (tickets 33 and 34, by the agent)
+
+ADR 0012 decision 2's third use and decision 3, rebuilt here: the card reads
+with the tenant's mail kinds, and teaching DW1 a kind is a version of that
+skill. No rule above moved.
+
+- **The card** (`domain/triage.py`, `application/triage.py`): a message intake
+  still routes `other` carries one where the tenant turns it on
+  (`model_assist.triage_card`, `ModelStep.TRIAGE_CARD`, off everywhere, T0,
+  bar 0.85 on `golden.card_accuracy`, held only while no card names another
+  customer's case). One structured call, `sales.triage_card@1.0.0`, with the
+  mail kinds' inputs and schema (the served version's kinds plus `none`);
+  code reads a name the version does not hold as no kind, maps the kind onto
+  its route by the skill, and suggests a step only where a person can take
+  that route on a routed message (`TRIAGE_STEPS`: the routing-reason rows of
+  `INTENT_ROUTES` but `other`); `po`, `quote_request`, `design_reply` and
+  `other` suggest none, since only a document or a verified mailbox opens
+  those flows. The case is the one live order case the numbers code locates
+  lead to, resolved by the one resolution intake has (`IntentReader.resolve`,
+  the sender's customer only); several or none name none. No card where the
+  model gives no usable answer, the skill's words no longer read, or the
+  tenant's mail kinds already read the mail (the card would ask the same
+  question again). The routing is never changed by the card.
+- **Decided by a person** (`RoutedMailService.decide_card`,
+  `POST /sales/inbox/{id}/triage`): whoever may mark the message handled
+  takes the step, takes another of the set, or dismisses the card. The
+  request names a step and "attach", never a case: a reply is attached only
+  to the card's own case, checked again against the message's customer where
+  it moves. A step routes the message again with that reason (owner and
+  customer kept; a sample request with the customer's export-control
+  status). Each decision is stamped on the card, audited
+  (`sales.message.triage_decided`) and written as a labelled case of the
+  step (taken: confirmed; another step: corrected; dismissed: rejected).
+- **Teaching a kind** (ticket 34): from a card, a holder of
+  `sales.rules.propose` proposes a version of `mail-kinds`
+  (`SkillProposal.from_message`); the server finds that mail, with its card,
+  in the proposer's own workspace and records it on the version
+  (`SkillDocument.trigger`: workspace and message id; only the mail kinds
+  are taught from a card). The replay reads it with the version and with the
+  one in force beside the golden mails (`SkillReplay.trigger`), in that
+  workspace's lane only, and the skills page says both readings. The head
+  decides as for every skill version, never the proposer.
+- **Storage**: migration `2c91d318f833` (from `456986ea413a`) adds
+  `sales.messages.triage` and `sales.skill_replays.trigger` (JSON objects,
+  bounded, CHECKed) and admits `triage_card` in the four step CHECKs, read
+  from the catalog as `711e8b760139` does.
+- **Measured on Strata** (2026-11-16, qwen3.8-flash-next-q2_0, not
+  attested): 97/98 golden cards right on step and case (the message intent's
+  92 residue mails 0.989, six card mails in a world with three customers'
+  cases 1.0), p50 1.65 s, p95 2.12 s; no injection moved a mail or named
+  another customer's case. The step stays off until a company's own
+  measurement is attested.

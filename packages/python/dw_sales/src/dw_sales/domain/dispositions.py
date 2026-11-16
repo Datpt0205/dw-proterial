@@ -25,6 +25,7 @@ from dw_sales.domain.handoffs import Handoff
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.reply_intent import CaseReply
+from dw_sales.domain.triage import TriageCard
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -125,6 +126,11 @@ class MessageDisposition(BaseModel):
     # number after the first (ticket 19), in the order the mail names them.
     # Empty for a message with one PO, as every message before ticket 19.
     more_cases: tuple[uuid.UUID, ...] = Field(default=(), max_length=MAX_MESSAGE_CASES - 1)
+    # The card a message routed ``other`` carries where the tenant's rules
+    # ask for one (ticket 33): what it seems to be, the case it seems to
+    # concern and one step, advice until a person decides; kept, with that
+    # decision, on the disposition the decision gave it.
+    triage: TriageCard | None = None
 
     @model_validator(mode="after")
     def _kind_says_what_is_there(self) -> Self:
@@ -161,6 +167,15 @@ class MessageDisposition(BaseModel):
             or len({self.case_id, *self.more_cases}) != len(self.more_cases) + 1
         ):
             raise ValueError("only a message whose POs opened several order cases lists them")
+        if self.triage is not None:
+            decided = self.triage.decided
+            if decided is None and not (routed and self.reason is RoutingReason.OTHER):
+                raise ValueError("an undecided card is on a message routed other")
+            if decided is not None and decided.case_id is not None:
+                if kind is not DispositionKind.ATTACHED_TO_CASE or self.case_id != decided.case_id:
+                    raise ValueError("a card that attached a message is on that case")
+            elif decided is not None and not routed:
+                raise ValueError("a card's decision keeps the message routed to Sales")
         return self
 
     @property

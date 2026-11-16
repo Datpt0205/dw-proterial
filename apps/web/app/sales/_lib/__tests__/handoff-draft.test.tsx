@@ -32,6 +32,7 @@ function handoff(overrides: Partial<Handoff> = {}): Handoff {
     quotes: [{ text: QUOTE, start: 80, end: 105 }],
     sample_quantity: null,
     quantity: null,
+    quantity_from_record: false,
     refused: {},
     ...overrides,
   };

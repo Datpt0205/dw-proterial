@@ -22,7 +22,10 @@ the hand-off:
   and its body often both name it, and the order it resolves to, not where
   it is written, is what is used (as ticket 31's numbers); **parses** each
   number and date from its span (`quantity_at`, `rfq_reading.parse_date`),
-  as the mail's own other values settle "2.000" and "05/11"; a quantity is
+  as the mail's own other values settle "2.000" and "05/11", or, where the
+  mail says nothing, the customer's notation record does (ticket 37,
+  `notation.settle`; such a value is marked `from_record`, and one the mail
+  reads otherwise than the record is left for Sales); a quantity is
   taken only in metres, and any other unit keeps the customer's words for
   Sales instead of a value;
   and **resolves** the PO against the sender's own customer's orders only and
@@ -45,11 +48,11 @@ from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Final, Literal, NamedTuple, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dw_platform.domain.notation import Notation
+from dw_platform.domain.notation import UNSTATED, Notation, settle
 from dw_sales.domain.catalog import DocumentNo
 from dw_sales.domain.rfq_reading import METRE_UNIT, parse_number
 from dw_sales.domain.spans import FoldedText, word_char
@@ -57,6 +60,8 @@ from dw_sales.domain.spans import FoldedText, word_char
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 HandoffKind = Literal["delivery_change", "complaint", "sample_request"]
+# A line's value read only by the customer's notation record (ticket 37).
+FromRecord = Literal["quantity", "date"]
 MAX_LINES: Final = 20
 MAX_QUOTES: Final = 3
 MAX_ITEMS: Final = 5
@@ -141,6 +146,16 @@ class HandoffLine(BaseModel):
     new_date: date | None = None
     # Likewise the date's words, with no `new_date` when its order is unsettled.
     date_span: Located | None = None
+    # The values only the customer's notation record settled (ticket 37).
+    from_record: tuple[FromRecord, ...] = ()
+
+    @model_validator(mode="after")
+    def _a_value_from_the_record_is_there(self) -> Self:
+        if "quantity" in self.from_record and self.new_quantity is None:
+            raise ValueError("a quantity from the record is a quantity read")
+        if "date" in self.from_record and self.new_date is None:
+            raise ValueError("a date from the record is a date read")
+        return self
 
 
 HandoffOutcome = Literal["read", "unavailable", "nothing_located"]
@@ -175,6 +190,8 @@ class Handoff(BaseModel):
     sample_quantity: Decimal | None = Field(default=None, gt=0)
     # The customer's words for it; alone, words code did not read (`HandoffLine`).
     quantity: Located | None = None
+    # The sample quantity only the customer's notation record settled (ticket 37).
+    quantity_from_record: bool = False
     # How many spans the model gave that code refused, by field: a count for
     # the evals and the screen, never the text.
     refused: Mapping[str, int] = Field(default_factory=dict)
@@ -201,6 +218,8 @@ class Handoff(BaseModel):
             raise ValueError("only a sample request states a sample quantity")
         if self.kind == "sample_request" and self.po_no is not None:
             raise ValueError("a sample request names no order")
+        if self.quantity_from_record and self.sample_quantity is None:
+            raise ValueError("a quantity from the record is a quantity read")
         return self
 
 
@@ -253,9 +272,20 @@ def _metres_end(text: str, at: int) -> int | None:
     return end
 
 
+class QuantityRead(NamedTuple):
+    """A located quantity: the value in metres, or None, and the words."""
+
+    value: Decimal | None
+    words: Located
+    # Read only by the customer's notation record (ticket 37).
+    by_record: bool = False
+    # The mail reads the number otherwise than the record: left for Sales.
+    contradicts_record: bool = False
+
+
 def quantity_at(
-    part: str, located: Located, notation: Notation
-) -> tuple[Decimal | None, Located] | None:
+    part: str, located: Located, notation: Notation, record: Notation = UNSTATED
+) -> QuantityRead | None:
     """The quantity a located span states, and the customer's words for it.
 
     The span holds exactly one number (else None: no quantity, or more than
@@ -264,7 +294,8 @@ def quantity_at(
     ("3" of "3 km") is read with its unit. The value is taken only in metres,
     the one unit a hand-off line is read in, and only as the mail's notation
     reads the number (`notation`: "2.000" with nothing else settling it is
-    not read). Any other unit or none ("3 km", "4 cuộn", "2巻", "thêm 500")
+    not read), or the customer's ``record`` where the mail says nothing
+    (`notation.settle`). Any other unit or none ("3 km", "4 cuộn", "2巻", "thêm 500")
     is never converted or assumed: the value is None and the words, unit
     included, are kept for Sales to fill from."""
     text = unicodedata.normalize("NFKC", part)
@@ -274,15 +305,24 @@ def quantity_at(
     number_end = located.start + numbers[0].end()
     metres = _metres_end(text, number_end)
     value = None
+    by_record = contradicts = False
     if metres is not None:
-        value = parse_number(numbers[0].group(0), notation)
+        number = numbers[0].group(0)
+        settled = settle(lambda n: parse_number(number, n), notation, record)
+        value, by_record, contradicts = (
+            settled.value,
+            settled.by_record,
+            settled.contradicts_record,
+        )
         end = metres
     else:
         unit = _UNIT_AFTER.match(text, number_end)
         end = unit.end() if unit is not None else number_end
     end = min(max(located.end, end), located.start + 400)
     words = Located(text=text[located.start : end], start=located.start, end=end)
-    return (value if value is not None and value > 0 else None), words
+    if value is None or value <= 0:
+        return QuantityRead(None, words, contradicts_record=contradicts)
+    return QuantityRead(value, words, by_record=by_record)
 
 
 _LINE_NUMBER = re.compile(

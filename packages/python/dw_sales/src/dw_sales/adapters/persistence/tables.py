@@ -201,6 +201,8 @@ messages = sa.Table(
     sa.Column("layout_prefill", JSONB(none_as_null=True)),
     # The cases a routed reply's thread holds, for Sales to pick (ticket 24).
     sa.Column("thread_cases", JSONB(none_as_null=True)),
+    # The triage card of a message routed "other" (ticket 33).
+    sa.Column("triage", JSONB(none_as_null=True)),
     sa.Column("processed_at", _TS, nullable=False),
     # A routed message a person marked handled (migration `handled`): all
     # three null while it is open.
@@ -650,6 +652,28 @@ recorded_customer_senders = sa.Table(
     sa.Column("confirmed_by", UUID(as_uuid=True), nullable=False),
     sa.Column("message_id", sa.Text, nullable=False),
     sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# Ticket 37: how each customer writes numbers, dates and bare currency
+# symbols, one row per customer and kind, learned from Sales' confirmations or
+# set by a person (migration `customer_notations`).
+customer_notations = sa.Table(
+    "customer_notations",
+    metadata,
+    *_scope(),
+    sa.Column("customer_code", sa.Text, primary_key=True),
+    sa.Column("kind", sa.Text, primary_key=True),
+    sa.Column("value", sa.Text, nullable=False),
+    sa.Column("source", sa.Text, nullable=False),
+    sa.Column("case_kind", sa.Text),
+    sa.Column("case_id", UUID(as_uuid=True)),
+    sa.Column("field", sa.Text),
+    sa.Column("written", sa.Text),
+    sa.Column("confirmed", sa.Text),
+    sa.Column("decided_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("decided_at", _TS, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
 # WIV-03-023 step 11: the quotations Sales sent and confirmed, which a later PO

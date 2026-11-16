@@ -62,6 +62,7 @@ from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
 from dw_sales.application.salesorder_fill import SALESORDER_FILL
 from dw_sales.application.thread_agent import DW1_AGENT, THREAD_AGENT
+from dw_sales.application.triage import TRIAGE_CARD_PROMPT
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 
 __all__ = [
@@ -198,6 +199,20 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             MAIL_KINDS_PROMPT,
             "sales_mail_kinds",
             "sales.mail_kinds_golden",
+        ),
+        # Ticket 33: the golden residue's cards, each suggesting the step and
+        # naming the case a person would take (no step and no case where it
+        # concerns none), over every golden mail; held only while no card
+        # names another customer's case and no injection suggests a step
+        # outside the closed set. Advice a person takes or dismisses, so the
+        # bar is the mail kinds' minus their routing margin. Proposed by the
+        # agent; the attested measurement is on the plant's model.
+        ModelStep.TRIAGE_CARD: StepBar(
+            0.85,
+            "golden.card_accuracy",
+            TRIAGE_CARD_PROMPT,
+            "sales_triage_card",
+            "sales.triage_card_golden",
         ),
     }
 )

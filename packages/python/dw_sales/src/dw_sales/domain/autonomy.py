@@ -90,6 +90,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # The same classification as the message intent's, by the company's
         # kinds; where the mail goes is still a route code holds (ticket 42).
         ModelStep.SKILL_MAIL_KINDS: Tier.APPLIES_ITSELF,
+        # A card that suggests; the message moves only when a person takes
+        # it (ticket 33).
+        ModelStep.TRIAGE_CARD: Tier.APPLIES_ITSELF,
         # Values of a PO written in the mail's body, read into the case.
         ModelStep.PO_BODY_EXTRACTION: Tier.APPLIES_ITSELF,
         # A draft nobody has sent; sending is a person's.

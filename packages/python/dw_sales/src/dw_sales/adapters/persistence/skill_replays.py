@@ -45,6 +45,8 @@ skill_replays = sa.Table(
     sa.Column("right_without", sa.Integer, nullable=False),
     sa.Column("unanswered", sa.Integer, nullable=False),
     sa.Column("security_failed", JSONB, nullable=False),
+    # The mail a version was taught from, read both ways (ticket 34).
+    sa.Column("trigger", JSONB(none_as_null=True)),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 _R = skill_replays
@@ -65,6 +67,7 @@ def _replay(row: RowMapping) -> SkillReplay:
         right_without=row["right_without"],
         unanswered=row["unanswered"],
         security_failed=tuple(row["security_failed"]),
+        trigger=row["trigger"],
     )
 
 
@@ -102,6 +105,9 @@ class SqlSkillReplays:
                 right_without=replay.right_without,
                 unanswered=replay.unanswered,
                 security_failed=list(replay.security_failed),
+                trigger=(
+                    None if replay.trigger is None else replay.trigger.model_dump(mode="json")
+                ),
             )
             .on_conflict_do_nothing(index_elements=["tenant_id", "version_id"])
             .returning(_R.c.id)

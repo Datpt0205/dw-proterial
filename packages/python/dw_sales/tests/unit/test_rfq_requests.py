@@ -61,6 +61,7 @@ from dw_sales.evals.world import (
     measured_gate,
     open_world,
 )
+from dw_sales.testing.customer_notations import MemoryCustomerNotations
 from dw_sales.testing.followups import platform_followups
 
 pytestmark = pytest.mark.unit
@@ -180,15 +181,28 @@ class _Settled:
 
 
 def _service(
-    model: Any, *, on: bool = True, inbox: InboxPort | None = None, measured: bool = True
+    model: Any,
+    *,
+    on: bool = True,
+    inbox: InboxPort | None = None,
+    measured: bool = True,
+    records: MemoryCustomerNotations | None = None,
 ) -> QuotationService:
     """``on``: the tenant's rules turn the step on; ``measured``: its live
-    eval met the bar (dw_sales ADR 0005, addendum of 2026-10-23)."""
+    eval met the bar (dw_sales ADR 0005, addendum of 2026-10-23); ``records``:
+    the customers' notation records (ticket 37), none by default."""
     assert DEMO is not None
     catalog = MockSalesCatalog.load(SCOPE)
     rules = PlatformOrderRules(DEMO if on else POLICIES.order_rules)
     gate, _ = measured_gate(REPO, *((SCOPE,) if measured else ()))
-    requests = model_requests(model, catalog, rules, ClientTexts(InProcessReaderTransport()), gate)
+    requests = model_requests(
+        model,
+        catalog,
+        rules,
+        ClientTexts(InProcessReaderTransport()),
+        gate,
+        records or MemoryCustomerNotations(),
+    )
     # Descriptions are read by ticket 28's reader; here it is down, so a
     # line's candidates say so and nothing else moves.
     reader = requests.reader
@@ -198,6 +212,7 @@ def _service(
             ClientTexts(InProcessReaderTransport()),
             catalog,
             type(reader.descriptions)(_Down()),
+            reader.records,
         ),
         rules=rules,
         gate=gate,
@@ -881,7 +896,9 @@ async def test_a_file_shown_in_part_is_a_persons_and_no_model_is_asked() -> None
     catalog = MockSalesCatalog.load(SCOPE)
     customer = (await catalog.customer_by_code(SCOPE, "KMH")).data
     assert customer is not None and DEMO is not None
-    reader = RfqModelReader(asked, _PartlyShown(), catalog, DescriptionReader(_Down()))
+    reader = RfqModelReader(
+        asked, _PartlyShown(), catalog, DescriptionReader(_Down()), MemoryCustomerNotations()
+    )
 
     read = await reader.read(
         SCOPE, message, contents, customer, DEMO, received_on=message.received_at.date(), run=RUN
