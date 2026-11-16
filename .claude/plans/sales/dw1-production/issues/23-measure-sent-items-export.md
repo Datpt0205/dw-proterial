@@ -25,3 +25,8 @@ item keeps them decides how ticket 25 links a sent mail.
 
 1. The measurement is written down with the date and the client versions.
 2. Ticket 25 knows which link it uses: headers, or `conversationId`.
+
+## Comments
+
+- 2026-11-16, Đạt: run on the plant server on Tuesday or Wednesday
+  evening (11-17/18), while he sets up the mail flows there.

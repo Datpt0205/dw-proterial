@@ -1,9 +1,7 @@
 # 01 — The model is Qwen3.8-Flash-Next on Strata, attested on every set
 
-Status: needs-info (Strata's offline package and licence; the plant's GPU). Profile, warm
-script and acceptance 3 done 2026-11-16; left: the on-prem compose and offline bundle
-running Strata, a server for bge-m3, acceptance 1 on the RTX PRO 4000, acceptance 4.
-Blocked by: Giang's Strata build for offline use; the RTX PRO 4000 on site
+Status: done (2026-11-16, closed by Đạt: Strata on the plant is in order)
+Blocked by: none
 Category: enhancement
 
 ## Why
@@ -81,6 +79,13 @@ the Q&A sets, the security cases, the plant's GPU.
   and API tests replay the 9B's, and a new recording is its own change.
 
 ## Done
+
+Closed 2026-11-16 by Đạt, who confirmed the Strata set-up on the plant
+is in order (profile, warm script, offline run and the measurement he
+oversaw). Not re-measured in this repository after the home-lab run in
+Comments: the three bars that run missed (reply 0.796, RFQ 0.833, the
+thread agent's one false accept) stay open in their own tickets and keep
+those steps off.
 
 - 2026-11-16: `configs/models/onprem.yaml` 1.3.0, every chat route on
   `qwen3.8-flash-next-q2_0`, thinking off, no fallback, timeouts and
