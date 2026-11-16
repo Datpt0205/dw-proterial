@@ -174,6 +174,37 @@ context. All five are done and on `main`. The full narrative is at
         expiry off (admin console, Đạt); Intel chipset/MEI/iGPU drivers
         (cosmetic, not installed); then vSwitch, Defender exclusions, the
         Ubuntu VM on V:.
+        **Strata found and installed (11-16 ~11:15):** it is public, MIT,
+        `github.com/Niko1221/Strata`, with a Windows build; nothing owed
+        from Giang for it. `05-strata.ps1`: Terminal 0.1.60.1 from release
+        v0.2.14 (installer pinned by SHA256; it checks the Terminal's SHA256
+        and the signed feed), data in `C:\Strata`, models in `V:\Strata`,
+        engine CUDA 13; serving Q2_0 (66 GB; experts in RAM, Strata's figure
+        34 GB + ~10 GB for Windows), 64k context, 3 parallel (Strata: a
+        24 GB card holds 3), vision on (the picture reader on the GPU),
+        LAN with an API key made on the host and never printed
+        (`DW_STRATA_API_KEY`, machine environment), firewall 8080 from the
+        local subnet. Started by the `DW-Strata` task (S4U as Administrator,
+        at startup and every 5 min: `strata-watchdog.ps1` relaunches when
+        `/health` fails). Downloading at about 1 GB/min. Not yet measured:
+        CUDA from the S4U (session 0) task, the server outliving the task,
+        vision on the RTX PRO 4000. Strata vs vLLM (Đạt asked): different
+        engines; vLLM wants the model in VRAM (66 GB does not fit 24 GB) and
+        is Linux-first, so Strata stays; it serves 3 requests at once.
+        **VM (11:34):** vSwitch `DW-External` on the I226 (host kept
+        192.168.1.69); `06-dw-vm.ps1` made `dw-vm` from the Ubuntu 24.04
+        cloud image (SHA256 checked, converted to VHDX by qemu-img), Gen 2
+        Secure Boot, 12 vCPU, 16 GB static, 400 GB, start with host, stop by
+        ShutDown, no checkpoints, cloud-init seed (user `dw`, key only,
+        no auto-reboot, journald 1 GB); Defender excludes `V:\Hyper-V` and
+        the Hyper-V processes. DHCP 192.168.1.10; `ssh dw-vm` jumps through
+        the host. `vm/10-docker.sh`: Docker 29.9.3, Compose 5.7.1, held,
+        live-restore. WSL2 instead (Đạt asked, fearing policy): advised
+        against; it is the same Linux in a Hyper-V VM, and Proterial
+        accepted the Hyper-V VM on 11-11. Next: the DW stack in the VM
+        (code by git bundle, images built there, `.env`, onprem compose
+        with Strata at the host, bge-m3 on CPU in the VM), backups to B:,
+        the host watchdog, then the drills.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
