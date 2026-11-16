@@ -242,6 +242,10 @@ context. All five are done and on `main`. The full narrative is at
         Gyro-S in Strata (27.6 GB vs 37.6 GB, lower quality), then 27B Q4 on
         llama.cpp, which changes ADR 0025 and needs every DW step attested
         again. Owed: Đạt's choice after the measurement.
+        **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
+        so after a power cut the host starts by itself and the VM, Strata
+        and Tailscale follow. Still to run: the whole-host restart drill
+        once Strata is serving, and a real power cut at some point.
         **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
         crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
         running first. Tailscale key expiry is off (checked from the laptop).
