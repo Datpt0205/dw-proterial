@@ -656,6 +656,33 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "4f87d500a2baf60c633cfd566be30b586bcdd56ec9defa2140db79c549970198",
+      "dataset_id": "sales_mail_kinds",
+      "files": [
+        {
+          "checksum": "90ba31f32a8871f0ea44980d8edeb235e9da279bed42c9259609a1ead69025c8",
+          "path": "evals/expected/sales_mail_kinds.json"
+        },
+        {
+          "checksum": "b4a6265f124f0738c948fa4d71616e65ce05ea4144424764a9d43032e11cf7ab",
+          "path": "evals/expected/sales_mail_kinds_golden.json"
+        },
+        {
+          "checksum": "0060c67d52d401167d3ac7f402960846122b355c824e7c6112c47287f24afa6b",
+          "path": "evals/fixtures/cases/sales_intent_golden.json"
+        },
+        {
+          "checksum": "63da078a6d4e669bdbcfc7436e784747ead852533553a6f16357605e5f98c1d8",
+          "path": "evals/fixtures/cases/sales_intent_security.json"
+        },
+        {
+          "checksum": "ac3abcce6a6e30bc77521e8bd9231b4ec3057bf3ff3c620747969e6c7188277c",
+          "path": "evals/fixtures/cases/sales_mail_kinds.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "5b4e2f069ef587d24a6ee4af8c2a728d723ee47c9261bafc0deb42361c4bac1f",
       "dataset_id": "sales_morning_brief",
       "files": [
@@ -823,6 +850,25 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "b529840513bda9ac9103c5e268de4b3aa5cf1cb206a6c9f7cb8788883357448d",
+      "dataset_id": "sales_salesorder_skill",
+      "files": [
+        {
+          "checksum": "c4607f63803bb0d735fd1975af6d149853a0cb4e0b43fa94da9c8d87d2fac985",
+          "path": "evals/expected/sales_salesorder_skill.json"
+        },
+        {
+          "checksum": "8ef7f7faa16f2a1d16644ffe148980cdf34a492896c52ef24b3bbe2d7f6ce668",
+          "path": "evals/fixtures/cases/sales_salesorder_rules.json"
+        },
+        {
+          "checksum": "de548a4fae50fd0320b80ea2bf36dad237c5cba66c816a714ad6a2b4bc5fa45e",
+          "path": "evals/fixtures/cases/sales_salesorder_skill.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "37bb8ede7c1ef26fca66d4aa147357d76f7de2fd9916942302018cb57a04b7a2",
       "dataset_id": "sales_screening_followups",
       "files": [
@@ -938,7 +984,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "f87510b7e083cab38180b9913f97c5235b84b833",
+  "git_sha": "7fd64a1b61d6a7eab1a4fb3f5772c4f7eb9ea292",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1348,6 +1394,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "cb45a68bf299d4bfc7949d5a3cab57f34bb3b128124066413f9e9c7d85b6813a",
+      "prompt_id": "sales.mail_kinds",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "8d09212cc494ecdd4d1cbb1f7f7ebf3de9f91260d77eb3beb9cc6bfab5015c0f",
       "prompt_id": "sales.message_intent",
       "version": "1.0.0"
@@ -1413,6 +1464,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "eabde7d8eec138340cdb14d1036ebcd9f413a37df2b93b69b1b8fe2cfe7f6ab2",
+      "prompt_id": "sales.salesorder_fill",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "dc472ac8e7e5004816e07462dbb749724b4f4b8b62adefeb48d03ca0841fbdae",
       "prompt_id": "sales.salesorder_rules_proposal",
       "version": "1.0.0"
@@ -1453,9 +1509,21 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "32fa29716852fc41ff6d9f9fe87676ce0814e9235a4ff0e2f58d8f9ec69eab05",
+      "name": "mail-kinds",
+      "path": "configs/skills/dw1/mail-kinds/SKILL.md",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "8990690b840ddd97972f46959398dea0c5a623dd666b1cde86c5f9d8e9b649d3",
       "name": "thread-intents",
       "path": "configs/skills/dw1/thread-intents/SKILL.md",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "9a6cf9f7f7450b7727f3d2571bd611dd795b104c87c48394f7ee340a32c02c01",
+      "name": "salesorder",
+      "path": "configs/skills/dw1-salesorder/salesorder/SKILL.md",
       "version": "1.0.0"
     }
   ],
