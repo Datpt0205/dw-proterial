@@ -55,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.13.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.15.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -79,6 +79,9 @@ NOT_RAISED_BY_A_MESSAGE = {
     # spec its item does not hold; `test_order_checks.py` raises both.
     "reel_length_mismatch",
     "spec_mismatch",
+    # Ticket 02: no mock layout maps a delivery term; `test_delivery_term.py`
+    # raises it through intake.
+    "delivery_term_mismatch",
 }
 # A message no document, thread or model classified: a person reads it
 # (`other`). No keyword table routes one as a complaint, a sample request or a

@@ -116,7 +116,7 @@ def test_the_right_reading_is_a_po_from_the_mail_with_every_value_flagged() -> N
         assert anchor.quote == text[anchor.chars.start : anchor.chars.end]
     for holder in (header, *document.lines):
         flagged = {f.field for f in holder.flags if f.flag is RegionFlag.MODEL_READ}
-        assert flagged == set(type(holder.anchors).model_fields)
+        assert flagged == {name for name, a in holder.anchors if a is not None}
 
 
 def test_what_the_mail_does_not_write_is_what_it_implies_anchored_where_it_comes_from() -> None:

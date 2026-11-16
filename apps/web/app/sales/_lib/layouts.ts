@@ -36,6 +36,7 @@ export const LAYOUT_FIELDS: readonly {
   { field: "revision", label: "Lần sửa đổi", optional: true },
   { field: "po_date", label: "Ngày PO" },
   { field: "currency", label: "Tiền tệ" },
+  { field: "delivery_term", label: "Điều kiện giao hàng", optional: true },
   { field: "line_no", label: "Cột số dòng" },
   { field: "customer_item_code", label: "Cột mã hàng của khách" },
   { field: "description", label: "Cột mô tả" },

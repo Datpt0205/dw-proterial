@@ -432,6 +432,7 @@ class _Pdf:
             "revision": _whole_number,
             "po_date": self._day,
             "currency": _currency,
+            "delivery_term": lambda text: _one_line(text) or None,
         }
         self._line_values: Mapping[PoLineField, Callable[[str], object]] = {
             "line_no": _whole_number,
@@ -509,9 +510,12 @@ class _Pdf:
             if len({v for _, v, _, _ in found}) > 1:
                 raise _RefusedError(f"the {name.replace('_', ' ')} has two values", found[1][0])
             try:
-                values[name] = self._header_values[name](value)
+                read = self._header_values[name](value)
             except ValueError as exc:
                 raise _RefusedError(f"{name.replace('_', ' ')} {exc}", anchor) from exc
+            if read is None:  # a value the PO may leave blank: it states none
+                continue
+            values[name] = read
             anchors[name] = anchor
             legacy.extend(page.legacy_text(name, run))
         if "revision" not in values:

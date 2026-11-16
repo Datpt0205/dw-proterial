@@ -188,6 +188,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "customer_temporary",
                     "sender_unverified",
                     "legacy_encoding",
+                    "delivery_term_mismatch",
                 ),
             ),
             # The PRV code from the convert list, and how long DW1 waits on

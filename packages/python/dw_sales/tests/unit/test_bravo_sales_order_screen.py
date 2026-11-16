@@ -42,7 +42,7 @@ SHA = "c" * 64
 REPO = Path(__file__).resolve().parents[5]
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 T0 = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)
-_ORDER_RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.13.0.yaml")
+_ORDER_RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.15.0.yaml")
 _RULES = PlatformOrderRules(_ORDER_RULES)
 # Bravo's own titles, as B02 prints them (not customer data), with columns
 # DW1 does not read between them.

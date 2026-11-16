@@ -1339,7 +1339,8 @@
           "requested_date_missing",
           "reel_length_mismatch",
           "spec_mismatch",
-          "files_disagree"
+          "files_disagree",
+          "delivery_term_mismatch"
         ],
         "title": "FindingCode",
         "type": "string"

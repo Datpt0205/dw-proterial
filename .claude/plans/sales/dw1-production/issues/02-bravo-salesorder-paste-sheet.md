@@ -1,7 +1,8 @@
 # 02 — The Bravo paste sheet in Proterial's real "SalesOrder" layout
 
-Status: ready-for-agent (2026-11-14: the 2.0.0 layout, its column sources and the checks
-built, see "## Done"; acceptance 2, a PO's delivery term against the customer's, remains)
+Status: ready-for-human (2026-11-16: acceptance 2 built, see "## Done"; left:
+Proterial's answer on where a customer's delivery term lives, and acceptance 1
+on UAT day 1)
 Blocked by: none (B41 received 11-13 and measured below)
 Category: enhancement
 
@@ -140,3 +141,59 @@ staff code (DW then keeps it on the member, set by the admin).
 Remains: acceptance 2 needs the PO's delivery term read from the PO (not
 read today) to compare with the customer's; box quantity has no column in
 B41's layout, so acceptance 3's second check has nothing to check yet.
+
+2026-11-16, acceptance 2 (a PO's delivery term against the customer's):
+
+- **The PO's term is read where a person maps it.** `LayoutMapping` gains an
+  optional `delivery_term` label (`MAPPED_ONLY_FIELDS`: the model's layout
+  proposal does not ask for it, its schema predates it). The Excel and PDF
+  readers read the value beside it as printed ("FCA Haiphong"), with its
+  anchor; a blank value is a PO stating none, and a mapped label the PO no
+  longer prints refuses the PO as a mapped revision label does.
+  `PoHeader.delivery_term` / `PoHeaderAnchors.delivery_term` are optional and
+  set together (`PoHeaderAnchors.stated()` leaves an unstated one out where
+  anchors are listed: views, source regions, the PO-body eval). A new
+  layout's first POs flag it `new_layout` with every other value; Sales'
+  correction of it runs the customer checks again. The case view shows it.
+- **The comparison is code over a closed set** (`order_checks`): Incoterms
+  2020's eleven rules. A term names one when exactly one rule is a word of
+  its own in it ("DAP Hanoi" is DAP; "FCA or FOB" names none). The PO's term
+  is the customer's when it names the same rule, or, for a value outside
+  Incoterms that the customer's record holds as Bravo spells it, the same
+  words; anything else raises **`delivery_term_mismatch`** (PO level, error,
+  accept or ask the customer), expected the customer's, actual the PO's as
+  printed. Why a closed set, not the customer's value compared exactly: the
+  three filled B41 files carry DAP, FCA and CIP, one per customer, while a
+  PO prints the rule with its place and edition, so exact text would flag
+  every PO. A PO stating no term, or a customer whose record holds none, is
+  not a mismatch: nothing to compare. Nothing is fixed: the upload file
+  keeps writing the customer's term.
+- Order rules **1.15.0** (the platform's; the new code's severity, nothing
+  else), the mock policies, migration **`e07b932e4516`** (parent
+  `7c6ad2350566`) widening `ck_order_findings_code`,
+  the contracts, the web's words for the finding and the field and the
+  layout screen's field, the glossary (CONTEXT.md "Delivery term").
+- Tests: `test_delivery_term.py` (comparison, both readers, the layout, a
+  new layout's flag, a split file, intake, a correction compared again, the
+  view). Mutation-checked: each guard removed turned a named test red.
+
+Measured (shapes only, outside git): **Bravo's customer export carries no
+delivery term.** B05's 33 Bravo columns (A–AG) have none, nor have the six
+Sales added for DW (AH–AM); Sheet2 of B41 (Bravo's customer list, 13
+columns) has none either. The term lives on each sales order (B41 column N,
+constant per customer in all three files). So the customer's term reaches
+DW1 only through the customer import's "Điều kiện giao hàng" / "Delivery
+term" column, typed by Sales, until Proterial answers.
+
+Owed by Proterial (short): where Bravo keeps a customer's usual delivery
+term (a field of "Đối tượng" not in B05's export, or only on each order); if
+only per order, may DW1 take the one on the customer's latest sales order in
+Bravo.
+
+Left:
+
+- Done with it: the contract snapshot and types regenerated (they carry
+  ticket 05's committed routes too), release manifest for order rules
+  1.15.0, and the layout screen's optional "Điều kiện giao hàng" field.
+- Not yet: a PO written in the mail body (`po_body_reading`) and a portal export read
+  no term yet; nor does the model's layout proposal.

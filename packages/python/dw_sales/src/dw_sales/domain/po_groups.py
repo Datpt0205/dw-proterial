@@ -73,6 +73,7 @@ def _part(document: PoDocument, lines: Sequence[PoLine], *, first: bool) -> PoDo
             revision=head.anchor if anchors.revision == anchors.po_no else anchors.revision,
             po_date=head.po_date_anchor or anchors.po_date,
             currency=anchors.currency,
+            delivery_term=anchors.delivery_term,
         )
         header = PoHeader.model_validate(
             {

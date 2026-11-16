@@ -980,7 +980,7 @@ const VALUES: Record<string, string> = {
   row_no: "Số thứ tự dòng trong tệp",
   usd_rate: "Tỷ giá (1 khi đơn bằng USD)",
   order_type: "Loại đơn hàng",
-  delivery_term: "Điều kiện giao hàng",
+  // delivery_term: FIELD's, spread below (ticket 02).
   delivery_mode: "Phương thức giao hàng",
   destination: "Nơi giao",
   shipment_type: "Loại lô hàng",

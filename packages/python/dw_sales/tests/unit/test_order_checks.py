@@ -65,7 +65,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 POLICY = Path(__file__).resolve().parents[5] / "configs" / "policies"
-SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.13.0.yaml")
+SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.15.0.yaml")
 PO_DATE = date(2026, 9, 24)
 # 2026-09-24 20:00 UTC is already 25 September in Hanoi.
 RECEIVED = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
@@ -213,7 +213,7 @@ def test_the_shipped_rules_stamp_their_version_and_severity_on_a_finding() -> No
     finding = SHIPPED.finding(FindingCode.REVISED_PO)
 
     assert (finding.rule_version, finding.severity) == (
-        "sales_order_rules@1.13.0",
+        "sales_order_rules@1.15.0",
         Severity.WARNING,
     )
     assert SHIPPED.cross_check_required is True
@@ -581,6 +581,7 @@ def _customer_findings(customer: Customer, *, rules: OrderRules = SHIPPED, **kw:
         authentication=kw.get("auth", MailAuthentication(spf="pass", dkim="pass", dmarc="pass")),
         po_date=PO_DATE,
         received_on=RECEIVED_ON,
+        delivery_term=None,
         rules=rules,
     )
     return [f.code.value for f in found]

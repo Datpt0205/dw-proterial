@@ -45,7 +45,7 @@ from .test_portal_export_and_upload import CAPS, MAPPING, REF, _row, export
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.13.0.yaml")
+RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.15.0.yaml")
 VLX = "an.trinh@velatrix.example"
 DAY = datetime(2026, 10, 3, 8, 0, tzinfo=UTC)
 PASS = {"spf": "pass", "dkim": "pass", "dmarc": "pass"}

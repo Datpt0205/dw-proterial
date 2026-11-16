@@ -1960,6 +1960,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/pcs-price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pcs Price */
+        post: operations["pcs_price_api_v1_sales_quotes__case_id__pcs_price_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/pcs-price-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pcs Price Request */
+        get: operations["pcs_price_request_api_v1_sales_quotes__case_id__pcs_price_request_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/price": {
         parameters: {
             query?: never;
@@ -1971,6 +2005,23 @@ export interface paths {
         put?: never;
         /** Price */
         post: operations["price_api_v1_sales_quotes__case_id__price_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/production-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Production Type */
+        post: operations["production_type_api_v1_sales_quotes__case_id__production_type_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4332,7 +4383,7 @@ export interface components {
          * @description The order checks of the spec's findings table, one code each.
          * @enum {string}
          */
-        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing" | "reel_length_mismatch" | "spec_mismatch" | "files_disagree";
+        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing" | "reel_length_mismatch" | "spec_mismatch" | "files_disagree" | "delivery_term_mismatch";
         /**
          * FindingExplanationView
          * @description An explanation, or why there is none; always marked as the model's.
@@ -4935,6 +4986,8 @@ export interface components {
              * @enum {string}
              */
             decimal_separator: "." | ",";
+            /** Delivery Term */
+            delivery_term?: string | null;
             /** Description */
             description: string;
             /**
@@ -5675,6 +5728,8 @@ export interface components {
             /** Customer Code */
             customer_code: string;
             decision?: components["schemas"]["PendingDecisionView"] | null;
+            /** Delivery Term */
+            delivery_term?: string | null;
             derivation?: components["schemas"]["Derivation"] | null;
             /**
              * Design Requests
@@ -6221,6 +6276,64 @@ export interface components {
             template_ref: string;
         };
         /**
+         * PcsCostRow
+         * @description One row of the cost sheet sent to GM/BC Manager: what the request
+         *     states, and the price cells left blank for the GM (and Purchasing) to
+         *     fill. Never a figure the case does not hold.
+         */
+        PcsCostRow: {
+            /** Customer Item Code */
+            customer_item_code: string | null;
+            /** Description */
+            description: string;
+            /** Line No */
+            line_no: number;
+            /** Needed By */
+            needed_by: string | null;
+            /** Quantity */
+            quantity: string | null;
+            /** Total */
+            total?: null;
+            /** Unit Price */
+            unit_price?: null;
+            /** Uom */
+            uom: string;
+        };
+        /**
+         * PcsCostSheet
+         * @description The request to GM/BC Manager for a pcs price (ticket 05): the request's
+         *     lines, and the cost lines of B49's sheet in its order, every amount
+         *     blank.
+         */
+        PcsCostSheet: {
+            /** Cost Lines */
+            cost_lines: string[];
+            /** Customer Code */
+            customer_code: string;
+            /** Rfq No */
+            rfq_no: string | null;
+            /** Rows */
+            rows: components["schemas"]["PcsCostRow"][];
+        };
+        /**
+         * PcsPriceBody
+         * @description The price GM/BC Manager decided, per line (ticket 05); who recorded it
+         *     is the caller, never a field of the request.
+         */
+        PcsPriceBody: {
+            /** Case Version */
+            case_version: number;
+            /** Lines */
+            lines: components["schemas"]["PcsPriceLineBody"][];
+        };
+        /** PcsPriceLineBody */
+        PcsPriceLineBody: {
+            /** Line No */
+            line_no: number;
+            /** Unit Price */
+            unit_price: number | string;
+        };
+        /**
          * PendingDecisionView
          * @description The platform approval a case waits on: the decision is made there
          *     (`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales
@@ -6569,6 +6682,16 @@ export interface components {
             line_no: number | null;
             /** Value */
             value: string;
+        };
+        /** ProductionTypeBody */
+        ProductionTypeBody: {
+            /** Case Version */
+            case_version: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mass" | "pcs";
         };
         /**
          * PromptReplay
@@ -12996,6 +13119,75 @@ export interface operations {
             };
         };
     };
+    pcs_price_api_v1_sales_quotes__case_id__pcs_price_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PcsPriceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pcs_price_request_api_v1_sales_quotes__case_id__pcs_price_request_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcsCostSheet"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     price_api_v1_sales_quotes__case_id__price_post: {
         parameters: {
             query?: never;
@@ -13011,6 +13203,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PriceBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    production_type_api_v1_sales_quotes__case_id__production_type_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionTypeBody"];
             };
         };
         responses: {

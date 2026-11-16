@@ -94,6 +94,10 @@ COLUMN_FIELDS: Final[tuple[PoLineField, ...]] = (
 )
 # A form need not print a revision: its POs are read as revision 0.
 OPTIONAL_FIELDS: Final = frozenset({"revision"})
+# Header values a person maps where the form prints them, which the model's
+# proposal does not ask for (its schema predates them): the delivery term
+# (ticket 02), compared with the customer's and never read into the order.
+MAPPED_ONLY_FIELDS: Final[tuple[PoHeaderField, ...]] = ("delivery_term",)
 
 
 def label_key(text: str) -> str:
@@ -122,6 +126,7 @@ class LayoutMapping(BaseModel):
     unit_price: _Label
     amount: _Label
     requested_date: _Label
+    delivery_term: _Label | None = None
     # A form printing one sheet per page: the label beside the sheet's "n / N".
     page_label: _Label | None = None
     total_label: _Label
@@ -146,7 +151,7 @@ class LayoutMapping(BaseModel):
         return self
 
     def header_labels(self) -> dict[PoHeaderField, str]:
-        found = {field: getattr(self, field) for field in HEADER_FIELDS}
+        found = {field: getattr(self, field) for field in (*HEADER_FIELDS, *MAPPED_ONLY_FIELDS)}
         return {field: label for field, label in found.items() if label is not None}
 
     def column_labels(self) -> dict[PoLineField, str]:
@@ -722,7 +727,8 @@ def flagged_everywhere(document: PoDocument, flag: RegionFlag) -> PoDocument:
         return [*existing, *added]
 
     header = document.header.model_dump()
-    header["flags"] = flags(document.header.flags, HEADER_FIELDS)
+    read = [f for f in MAPPED_ONLY_FIELDS if getattr(document.header, f) is not None]
+    header["flags"] = flags(document.header.flags, (*HEADER_FIELDS, *read))
     lines = []
     for line in document.lines:
         dumped = line.model_dump()

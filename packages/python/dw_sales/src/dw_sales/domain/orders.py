@@ -27,7 +27,7 @@ Errors name ids, codes and fields, never a value read from a customer's file
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
@@ -64,7 +64,9 @@ Note = Annotated[str, Field(min_length=1, max_length=500, pattern=r"\S")]
 # ``<id>@<semver>``: a policy or a parser, as stamped on a case.
 VersionRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")]
 
-PoHeaderField = Literal["po_no", "revision", "po_date", "currency"]
+# ``delivery_term``: the term of delivery the PO prints ("DAP Hanoi"), as
+# printed, where a layout maps it (dw_sales ticket 02); a PO need not state one.
+PoHeaderField = Literal["po_no", "revision", "po_date", "currency", "delivery_term"]
 # The printed total, as a value of the PO's header a correction names: a
 # line's `amount` is another value.
 TOTAL_FIELD: Final = "total"
@@ -555,6 +557,12 @@ class PoHeaderAnchors(BaseModel):
     revision: SourceAnchor
     po_date: SourceAnchor
     currency: SourceAnchor
+    delivery_term: SourceAnchor | None = None
+
+    def stated(self) -> Iterator[tuple[str, SourceAnchor]]:
+        """Each value's name and anchor, a value the PO does not state (its
+        delivery term) left out."""
+        return ((name, anchor) for name, anchor in self if anchor is not None)
 
 
 class PoHeader(BaseModel):
@@ -569,10 +577,16 @@ class PoHeader(BaseModel):
     anchors: PoHeaderAnchors
     flags: tuple[FlaggedValue, ...] = ()
     legacy: tuple[LegacyText, ...] = ()
+    # As printed, words and place ("FCA Haiphong"); None where the PO states
+    # none or its layout maps none. Compared with the customer's own term by
+    # `order_checks.check_customer`, never written over it (ticket 02).
+    delivery_term: PrintedText | None = None
 
     @model_validator(mode="after")
     def _flags_name_header_fields(self) -> Self:
         _require_fields((*self.flags, *self.legacy), PoHeaderAnchors.model_fields, "a header")
+        if (self.delivery_term is None) != (self.anchors.delivery_term is None):
+            raise ValueError("a delivery term is read with the place it is printed")
         return self
 
     @property
@@ -939,7 +953,7 @@ class PoDocument(BaseModel):
 
     def anchors(self) -> Iterable[SourceAnchor]:
         """Every anchor the document holds."""
-        yield from (anchor for _, anchor in self.header.anchors)
+        yield from (anchor for _, anchor in self.header.anchors.stated())
         for line in self.lines:
             yield from (anchor for _, anchor in line.anchors)
             if line.line_po is not None:
@@ -1013,6 +1027,9 @@ class FindingCode(StrEnum):
     # Two files of the same PO in one mail print a value differently (ticket
     # 22): neither file wins, each value waits for a person.
     FILES_DISAGREE = "files_disagree"
+    # The delivery term the PO prints is not the customer's (ticket 02): the
+    # upload file keeps the customer's, and Sales decides which one stands.
+    DELIVERY_TERM_MISMATCH = "delivery_term_mismatch"
 
 
 # About the PO as a whole.
@@ -1028,6 +1045,7 @@ PO_LEVEL_FINDINGS: Final = frozenset(
         FindingCode.SENDER_UNVERIFIED,
         FindingCode.LEGACY_ENCODING,
         FindingCode.FILES_DISAGREE,
+        FindingCode.DELIVERY_TERM_MISMATCH,
     }
 )
 # About one line or the PO as a whole: a value in a line or in the header.
@@ -1156,6 +1174,9 @@ ALLOWED_DISPOSITIONS: Final[Mapping[FindingCode, frozenset[DispositionKind]]] = 
         # of the customer; this one names both values and both files, and is
         # accepted once Sales has settled them, or asked of the customer.
         FindingCode.FILES_DISAGREE: _ACCEPT_OR_ASK,
+        # Sales accepts the PO's term or the customer's for the order, for the
+        # reason given, or asks the customer which one they meant.
+        FindingCode.DELIVERY_TERM_MISMATCH: _ACCEPT_OR_ASK,
     }
 )
 
