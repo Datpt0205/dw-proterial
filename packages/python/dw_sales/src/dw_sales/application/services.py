@@ -67,6 +67,7 @@ from dw_sales.application.ports import (
 )
 from dw_sales.application.process_settings import ProcessSettingsService, RoleCatalogPort
 from dw_sales.application.processing import ProcessingService
+from dw_sales.application.prompt_versions import PromptBook, PromptVersionsService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.reply_drafts import ReplyDrafts
@@ -177,6 +178,9 @@ class SalesServices:
     confirmations: Confirmations
     # DW1's skills, and a version of one proposed for the head (ticket 40).
     skills: SkillsService
+    # The description reading's prompt versions the optimiser proposed, for
+    # the head (ticket 43).
+    prompts: PromptVersionsService
     # A person's day: today's brief and their reminders, marked (tickets 47, 48).
     today: TodayService
     # A quote case opened from an order's lines with no valid quotation, and
@@ -218,6 +222,9 @@ def assemble(
     # and the worker's replays of proposed versions.
     skills: SkillBook,
     skill_replays: SkillReplayStorePort,
+    # The description reading's prompt, the platform's and the tenant's
+    # versions (ticket 43).
+    prompts: PromptBook,
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
@@ -445,6 +452,7 @@ def assemble(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays),
+        prompts=PromptVersionsService(uow, gate, prompts),
         today=TodayService(gate, clock, notices, reminder_marks, book),
         order_quotes=order_quotes,
         gate=gate,

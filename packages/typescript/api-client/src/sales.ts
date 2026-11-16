@@ -1380,6 +1380,18 @@ export class SalesApi {
     return this.get<"/api/v1/sales/skills">("/api/v1/sales/skills");
   }
 
+  // ---- DW1's prompt versions (ticket 43) -------------------------------------
+
+  /**
+   * The description reading's prompt as the tenant holds it, and every
+   * version the optimiser lane proposed, to a holder of
+   * `sales.rules.approve`. Each is decided on its `sales.prompts` approval on
+   * `/approvals`; nothing here decides.
+   */
+  prompts() {
+    return this.get<"/api/v1/sales/prompts">("/api/v1/sales/prompts");
+  }
+
   /**
    * Proposes a version of the skill ``name``. It opens a `sales.skills`
    * approval the head decides on `/approvals`, never the proposer, and only

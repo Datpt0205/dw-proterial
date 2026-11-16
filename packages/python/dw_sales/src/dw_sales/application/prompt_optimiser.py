@@ -67,7 +67,7 @@ from dw_sales.application.prompt_versions import (
     Demonstration,
     PromptBook,
     PromptDemonstrations,
-    Replay,
+    PromptReplay,
 )
 from dw_sales.application.rules import ProposerNames, rule_work
 from dw_sales.domain.catalog import Item
@@ -237,7 +237,7 @@ class PromptOptimiser:
         if best is None:
             return Outcome(None, "no_better_candidate")
         _, chosen, after = best
-        replay = Replay(
+        replay = PromptReplay(
             cases=len(cases),
             right_before=sum(1 for g in before.values() if g is Grade.RIGHT),
             right_after=sum(1 for g in after.values() if g is Grade.RIGHT),
@@ -246,7 +246,14 @@ class PromptOptimiser:
         document = PromptDemonstrations(
             policy_version=_next_version(current, [v.version for v in versions]),
             demonstrations=tuple(
-                Demonstration(description=c.description, prv_code=c.prv_code) for c in chosen
+                Demonstration(
+                    description=c.description,
+                    prv_code=c.prv_code,
+                    label_id=c.label_id,
+                    case_id=c.case_id,
+                    customer_code=c.customer_code,
+                )
+                for c in chosen
             ),
             replay=replay,
         )

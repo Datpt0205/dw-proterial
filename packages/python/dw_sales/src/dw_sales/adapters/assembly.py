@@ -568,6 +568,7 @@ def build_dw1(
         book=book,
         skills=skills,
         skill_replays=SqlSkillReplays(session_factory, audit),
+        prompts=prompts,
         directory=directory,
         holders=holders,
         notifications=notifications,

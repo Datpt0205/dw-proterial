@@ -1832,6 +1832,7 @@ def open_world(
         book=book,
         skills=skills,
         skill_replays=store.skill_replays,
+        prompts=prompt_book(store.rule_versions),
         directory=directory,
         holders=directory,
         notifications=notifications,

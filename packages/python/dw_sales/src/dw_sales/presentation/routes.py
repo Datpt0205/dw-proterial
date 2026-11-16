@@ -81,6 +81,7 @@ from dw_sales.application.pc_requests import PcRequestView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
+from dw_sales.application.prompt_versions import PromptsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.reply_drafts import ReplyDraftView
@@ -2242,6 +2243,20 @@ def build_router(
         name: str, body: SkillProposal, context: Ctx, svc: Svc, idem: Idem
     ) -> SkillVersionView:
         return await idem.record(await svc.skills.propose(context, name, body))
+
+    # ------------------------------- DW1's prompt versions (ticket 43) --
+    # The description reading's prompt as the tenant holds it and every
+    # version the optimiser lane proposed, to the head who decides them
+    # (`sales.rules.approve`): no route proposes one, and each is decided on
+    # its `sales.prompts` approval on /approvals, never here.
+
+    @router.get(
+        "/prompts",
+        response_model=PromptsView,
+        dependencies=[scopes(SalesScopes.RULES_APPROVE)],
+    )
+    async def prompt_versions(context: Ctx, svc: Svc) -> PromptsView:
+        return await svc.prompts.list(context)
 
     # "Tạo từ tệp mẫu": a company's template, kept for the worker to draft a
     # version of the key from (202). A draft is a start for the editor, never
