@@ -312,8 +312,12 @@ context. All five are done and on `main`. The full narrative is at
           also faster per request (~190 tok/s alone vs ~76 with three
           sharing). **Decided by Đạt (11-16): one slot with logprobs**
           (ticket 44's auto-apply works, requests queue), over three without
-          (every result to a person). The full run is going again on
-          one slot. Also: an eval run started while an update installed had
+          (every result to a person). **Run on one slot, 15:38:** 28 of
+          31 sets passed every case; 12 bars met, 5 missed (reply intent,
+          reply draft, RFQ, skill intents, thread agent); the two
+          notation-record failures belong to ticket 37's uncommitted work,
+          one of them a value settled by another customer's record. Figures
+          in ticket 01's comments. Also: an eval run started while an update installed had
           its first calls fail; updates belong in the agreed window.
           **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
           so after a power cut the host starts by itself and the VM, Strata
