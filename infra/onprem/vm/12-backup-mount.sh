@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Mounts the host's B:\DW-Backup share (08-backup-share.ps1) at /srv/dw/backup.
 # Run as root: the SMB password comes on standard input, never as an argument:
-#   ssh dw-host 'Get-Content C:\ProgramData\DW\backup-smb.cred' | ssh dw-vm 'sudo bash 12-backup-mount.sh <host-ip>'
-# Idempotent. The host's address lives in one place, /etc/hosts as `dw-host`,
-# so moving the host to another address (the 83.x LAN) is one line.
+#   ssh dw-host 'Get-Content C:\ProgramData\DW\backup-smb.cred' | ssh dw-vm 'sudo bash 12-backup-mount.sh'
+# Idempotent. The host's address lives in one place, /etc/hosts as `dw-host`:
+# the private host link (09-internal-link.ps1, 14-internal-link.sh), which the
+# LAN's addressing never touches.
 set -euo pipefail
-HOST_IP="${1:?host IP}"
+HOST_IP="${1:-10.250.0.1}"
 MNT=/srv/dw/backup
 CRED=/root/.smb-dw-backup
 

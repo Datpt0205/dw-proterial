@@ -268,6 +268,26 @@ context. All five are done and on `main`. The full narrative is at
         Hyper-V had started it (now 5 min grace), and a mail that failed
         before the network was up was lost (now queued and retried; drilled
         with a broken SMTP port, then sent).
+        **While waiting for code (11-16 afternoon):** `09-internal-link.ps1`
+        + `vm/14-internal-link.sh`: an Internal vSwitch `DW-Internal`, host
+        10.250.0.1, VM 10.250.0.2 (`dwlink0`, fixed MAC); `dw-host` in the
+        VM's /etc/hosts now names the link, so the backup mount and DW's
+        model URL do not change when IT moves the LAN to 83.x. Strata 8080
+        and SMB 445 allow 10.250.0.2 only: from the VM over the LAN, 8080
+        times out. Tailscale's Windows client adds its own allow-all rule for
+        its interface (the laptop reaches 8080 and 3389 over the tailnet), so
+        the tailnet's membership and ACL are the control there; owed with the
+        move to an FPT tailnet: an ACL to admin devices, port 22/3389.
+        `windows-update.ps1` (installs every software update through a SYSTEM
+        task, since the API refuses an SSH session; never restarts): round 1
+        installed 5 (2026-09 security update, .NET, Defender, MSRT), round 2
+        found the 2026-11 security update. `10-remote-and-devices.ps1`: RDP
+        with NLA from 100.64.0.0/10 only (Windows' own RDP rules off), the
+        MediaTek Wi-Fi and Bluetooth disabled. The watchdog reads each
+        physical disk's health, SSD wear (80 %), heat (HDD 55 C, SSD 75 C)
+        and the HDD's uncorrected read errors rising; its boot grace now
+        covers Tailscale and lasts 10 minutes (an update boot took ~5 and
+        reported Tailscale down twice).
         **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
         so after a power cut the host starts by itself and the VM, Strata
         and Tailscale follow. Still to run: the whole-host restart drill
