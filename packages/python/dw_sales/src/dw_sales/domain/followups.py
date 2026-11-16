@@ -33,6 +33,18 @@ on a case changes because a reminder went out. The person decides.
   customer has days of silence in the order rules (ticket 28, dw_sales ADR
   0011), once those days have passed with no answer recorded: the PIC is told
   once, and records the customer's agreement (or not). DW1 never records it.
+- ``waiting_design_code``: an order whose line Sales asked Design to create a
+  PRV code for (ticket 06), from the oldest request still open, until the
+  line's code is confirmed or the order leaves review (the domain then names
+  no request, and nothing is owed).
+- ``waiting_quote``: an order waiting on a quote case opened from it (ticket
+  09), from the oldest such link whose quote is still open, while the order
+  is before its self-check. Whether the quote is open is its own status,
+  read when the cases are read, never a copy on the order.
+
+``quote_waiting_design`` stops once Design's result was read from Bravo's
+YCBG export (`QuoteCase.design_check`, ticket 16): the status stays
+`sent_to_design`, but Design has answered.
 
 **One wait, one reminder per stage.** A stage is due when its threshold has
 passed; it is sent once per (case, follow-up, stage, wait), the wait being
@@ -63,7 +75,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.orders import OrderStatus
+from dw_sales.domain.orders import OrderStatus, quote_wait_statuses
 from dw_sales.domain.quotes import QuoteStatus
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -91,6 +103,10 @@ class Followup(StrEnum):
     YOUR_TURN = "your_turn"
     # A customer's days of silence after a confirmation have passed (ticket 28).
     IMPLIED_ACCEPTANCE = "implied_acceptance"
+    # Sales asked Design for a new PRV code and waits (ticket 06).
+    WAITING_DESIGN_CODE = "waiting_design_code"
+    # An order waits on a quote case opened from it (ticket 09).
+    WAITING_QUOTE = "waiting_quote"
 
 
 class Stage(StrEnum):
@@ -231,6 +247,30 @@ class WaitingPcRule(BaseModel):
     enabled: bool = Field(description="Bật hoặc tắt nhắc hồ sơ đang chờ PC trả ngày giao.")
     remind: AfterStage = Field(
         description="Nhắc khi đã hỏi PC mà chưa ghi được ngày PC trả lời sau số giờ này."
+    )
+
+
+class WaitingDesignCodeRule(BaseModel):
+    """An order line Sales asked Design to create a PRV code for, with no
+    code yet. DW1 never mails Design: it reminds the person, who chases."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(description="Bật hoặc tắt nhắc đơn hàng đang chờ Design tạo mã.")
+    remind: AfterStage = Field(
+        description="Nhắc khi đã đề nghị Design tạo mã mà sau số giờ này dòng vẫn chưa có mã."
+    )
+
+
+class WaitingQuoteRule(BaseModel):
+    """An order waiting on a quote case opened from it, not yet approved or
+    declined: the order cannot be prepared meanwhile."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(description="Bật hoặc tắt nhắc đơn hàng đang chờ báo giá mở từ đơn.")
+    remind: AfterStage = Field(
+        description="Nhắc khi báo giá mở từ đơn chưa được duyệt hoặc từ chối sau số giờ này."
     )
 
 
@@ -402,6 +442,12 @@ class SalesFollowups(BaseModel):
         description="Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
     )
     your_turn: YourTurnRule = Field(description="Hồ sơ đến lượt người xử lý.")
+    # 1.6.0 (tickets 06 and 09): a version written before them reads both as
+    # the platform's current version has them (`read_over`).
+    waiting_design_code: WaitingDesignCodeRule = Field(
+        description="Đơn hàng đang chờ Design tạo mã PRV."
+    )
+    waiting_quote: WaitingQuoteRule = Field(description="Đơn hàng đang chờ báo giá mở từ đơn.")
     # 1.5.0 (ticket 48): a version written before the field shows the number,
     # as every push before it would have.
     push: PushRule = Field(
@@ -450,6 +496,16 @@ class WaitingCase:
     # (`ConfirmationSent.implied_from`), while the order waits on their
     # answer; None for a customer with no days, or any other status.
     implied_from: datetime | None = None
+    # When Sales recorded the oldest request to Design still open
+    # (`OrderCase.design_requests`); None while no line waits (ticket 06).
+    design_asked_at: datetime | None = None
+    # When the oldest quote case opened from the order and still open was
+    # opened (`OrderCase.quote_links`, the quote's own status); None while
+    # every linked quote is settled or none is (ticket 09).
+    quote_open_since: datetime | None = None
+    # Design's result was read from Bravo's YCBG export onto the quote case
+    # (`QuoteCase.design_check`, ticket 16).
+    design_checked: bool = False
 
 
 # The statuses each follow-up watches.
@@ -633,7 +689,13 @@ def owed(
                 case.received_at,
                 now,
             )
-        if design.enabled and not order and case.status in _WAITING_DESIGN:
+        if (
+            design.enabled
+            and not order
+            and case.status in _WAITING_DESIGN
+            # Design answered in Bravo's YCBG (ticket 16): nothing to chase.
+            and not case.design_checked
+        ):
             found += _after(
                 case,
                 Followup.QUOTE_WAITING_DESIGN,
@@ -647,6 +709,29 @@ def owed(
                 found.append(
                     Due(case, Followup.QUOTE_DEADLINE, Stage.WARN, late, deadline.warn.notify)
                 )
+        code = policy.waiting_design_code
+        if code.enabled and order and case.design_asked_at is not None:
+            found += _after(
+                case,
+                Followup.WAITING_DESIGN_CODE,
+                ((Stage.REMIND, code.remind),),
+                case.design_asked_at,
+                now,
+            )
+        quote = policy.waiting_quote
+        if (
+            quote.enabled
+            and order
+            and case.status in quote_wait_statuses()
+            and case.quote_open_since is not None
+        ):
+            found += _after(
+                case,
+                Followup.WAITING_QUOTE,
+                ((Stage.REMIND, quote.remind),),
+                case.quote_open_since,
+                now,
+            )
         pc = policy.waiting_pc
         if pc.enabled and order and case.pc_asked_at is not None:
             found += _after(

@@ -206,6 +206,10 @@ BA_STEPS: Final[Mapping[Procedure, Mapping[str, tuple[BaStep, ...]]]] = MappingP
                 "change_review": (_ba("6.2B", "Làm lại PO, kiểm lại bước 2 đến 3"),),
                 "closed": (_ba("1-X", "Đóng hồ sơ PO không hợp lệ"),),
                 "pc_request.waiting_pc": (_ba("2.4B", "Hỏi PC lịch giao và cách tách dòng"),),
+                "design_code.waiting_design": (
+                    _ba("2.2B", "Đề nghị Design tạo mã mới"),
+                    _ba("2.2B-DS", "Design tạo mã PRV"),
+                ),
                 "change_request.confirm_lines": (
                     _ba("6.1A", "Khách xin điều chỉnh qua thư"),
                     _ba("6-DW1", "Nhận ra yêu cầu, gắn với PO gốc, so thay đổi"),

@@ -33,6 +33,7 @@ from dw_sales.domain.followups import Audience, Due, Followup, SalesFollowups, S
 from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, _Followups, open_world
 from dw_sales.evals.world import Directory as Holders
+from dw_sales.testing.followups import platform_reminder_copy
 
 pytestmark = pytest.mark.unit
 
@@ -217,6 +218,8 @@ _STAGES: tuple[tuple[Followup, Stage, tuple[Audience, ...]], ...] = (
     (Followup.WAITING_CUSTOMER, Stage.REMIND, ("pic",)),
     (Followup.WAITING_PC, Stage.REMIND, ("pic",)),
     (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY, ("pic",)),
+    (Followup.WAITING_DESIGN_CODE, Stage.REMIND, ("pic",)),
+    (Followup.WAITING_QUOTE, Stage.REMIND, ("pic",)),
 )
 T0 = datetime(2026, 9, 21, 1, 12, tzinfo=UTC)
 
@@ -255,7 +258,11 @@ def test_no_push_carries_a_price_an_amount_or_the_customers_text(
     (a price written where the number should be) never leaves; neither does
     the customer's code."""
     for ref, shown in (("PO-26/0457", True), ("Giá 12.500.000 đ cho khách", False)):
-        payload = push_notice([_due(followup, stage, notify, ref=ref)], case_number=case_number)
+        payload = push_notice(
+            platform_reminder_copy().push,
+            [_due(followup, stage, notify, ref=ref)],
+            case_number=case_number,
+        )
         data = payload.payload()
         assert set(data) == {"title", "body", "url", "count", "tag"}
         text = json.dumps(data, ensure_ascii=False)

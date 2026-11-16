@@ -29,7 +29,8 @@ the hand-off:
   taken only in metres, and any other unit keeps the customer's words for
   Sales instead of a value;
   and **resolves** the PO against the sender's own customer's orders only and
-  each line exactly against that order (`application.handoffs`).
+  each line against that order as every reader of a line's words does
+  (`named_lines.named_line`, `application.handoffs`).
 - **A quote carries no destination**: a sentence naming an email address, a
   web address or a phone number is dropped (`carries_contact`). PC and QA
   reach people through master data; a customer's "ship the replacement to
@@ -341,20 +342,6 @@ def quantity_at(
     if value is None or value <= 0:
         return QuantityRead(None, words, contradicts_record=contradicts)
     return QuantityRead(value, words, by_record=by_record)
-
-
-_LINE_NUMBER = re.compile(
-    r"^(?:dòng|line|ln\.?|no\.?|#|行)?\s*(\d{1,4})\s*(?:行目|行)?(?:\s*[(:].*)?$",
-    re.IGNORECASE,
-)
-
-
-def line_number_of(span: str) -> int | None:
-    """A line named by its number ("2", "dòng 2", "line 2", "2行目"), what
-    follows it in brackets or after a colon aside ("Dòng 1 (mã VX-C4B22)");
-    else None."""
-    match = _LINE_NUMBER.match(unicodedata.normalize("NFKC", span).strip())
-    return int(match.group(1)) if match else None
 
 
 _EMAIL = re.compile(r"[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}", re.IGNORECASE)

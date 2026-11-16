@@ -13,6 +13,7 @@ import importlib.util
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -226,19 +227,26 @@ def test_a_snooze_says_for_how_long_and_nothing_else_does() -> None:
         MarkIn(mark="snoozed", hours=73)
 
 
-def test_the_migration_holds_the_domains_sets() -> None:
-    """`ck_reminder_marks_followup` and `ck_reminder_marks_customer_term`
-    name exactly `REMINDERS` and `CUSTOMER_TERM`."""
-    path = next((REPO / "db" / "migrations" / "versions").glob("4bcfa82060fc_*.py"))
-    spec = importlib.util.spec_from_file_location("reminder_marks_migration", path)
+def _migration(revision: str) -> Any:
+    path = next((REPO / "db" / "migrations" / "versions").glob(f"{revision}_*.py"))
+    spec = importlib.util.spec_from_file_location(f"migration_{revision}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def test_the_migration_holds_the_domains_sets() -> None:
+    """`ck_reminder_marks_followup` and `ck_reminder_marks_customer_term`
+    name exactly `REMINDERS` and `CUSTOMER_TERM`: the table's first list and
+    what `57bbf61ae6b8` admitted after it (tickets 06 and 09)."""
+    module = _migration("4bcfa82060fc")
 
     def listed(text: str) -> set[str]:
         return {v.strip().strip("'") for v in text.split(",")}
 
-    assert listed(module._REMINDERS) == {f.value for f in REMINDERS}
+    admitted = set(_migration("57bbf61ae6b8")._NEW_REMINDERS)
+    assert listed(module._REMINDERS) | admitted == {f.value for f in REMINDERS}
     assert listed(module._CUSTOMER_TERM) == {f.value for f in CUSTOMER_TERM}
 
 

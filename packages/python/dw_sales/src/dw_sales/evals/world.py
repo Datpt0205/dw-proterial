@@ -148,6 +148,7 @@ from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.labelled_cases import LabelledCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.order_checks import ModelStep
+from dw_sales.domain.order_quotes import SETTLED
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
@@ -747,7 +748,8 @@ class _Followups:
                 and e.to_status == status
                 and e.from_status != e.to_status
             ]
-            pc_asked_at = customer_asked_at = None
+            pc_asked_at = customer_asked_at = design_asked_at = quote_open_since = None
+            design_checked = False
             if isinstance(case, OrderCase):
                 reference, customer, due = case.header.po_no, case.customer_code, case.due
                 pc_asked_at = case.pc_request.at if case.pc_request else None
@@ -756,7 +758,19 @@ class _Followups:
                     pc_asked_at = loop.since
                 if loop is not None and loop.step == "waiting_customer":
                     customer_asked_at = loop.since
+                # The waits on Design (06) and on an open linked quote (09).
+                design_asked_at = min((r.at for r in case.design_requests), default=None)
+                quote_open_since = min(
+                    (
+                        link.at
+                        for link in case.quote_links
+                        if (quote := state.quotes.get(link.quote_case_id)) is not None
+                        and quote.case.status not in SETTLED
+                    ),
+                    default=None,
+                )
             else:
+                design_checked = case.design_check is not None
                 quote_due = case.request.document.quote_due
                 reference = case.request.reference
                 customer = case.request.customer_code
@@ -775,6 +789,9 @@ class _Followups:
                     pc_asked_at=pc_asked_at,
                     customer_asked_at=customer_asked_at,
                     implied_from=implied_from,
+                    design_asked_at=design_asked_at,
+                    quote_open_since=quote_open_since,
+                    design_checked=design_checked,
                 )
             )
         return found

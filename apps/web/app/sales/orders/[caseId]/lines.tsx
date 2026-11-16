@@ -8,6 +8,7 @@ import {
   CheckCircleOutlined,
   EyeOutlined,
   RobotOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
 import type { SalesSchemas, Words } from "@dw/api-client";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
@@ -363,6 +364,12 @@ export function LinesTable({
             key: "delivery",
             render: (_, line) => (
               <Space orientation="vertical" size={2}>
+                {line.cancelled ? (
+                  // PC cancelled the whole line (ticket 10): never delivered.
+                  <StatusTag tone="err" icon={<StopOutlined aria-hidden />}>
+                    PC đã huỷ cả dòng
+                  </StatusTag>
+                ) : null}
                 {line.confirmed_delivery_date ? (
                   <StatusTag
                     tone="ok"

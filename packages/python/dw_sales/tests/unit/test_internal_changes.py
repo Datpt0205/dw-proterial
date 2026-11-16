@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from openpyxl import load_workbook
+from pydantic import ValidationError
 
 from dw_agent_runtime.model.figure_check import figures, names_amount, unsupported
 from dw_agent_runtime.model.interpretation import ModelUnavailableError, estimated_tokens
@@ -41,8 +42,9 @@ from dw_sales.application.internal_changes import (
     InternalDelivery,
     InternalLine,
 )
+from dw_sales.application.order_artifacts import upload_rows
 from dw_sales.domain.internal_changes import ModelInternalChange, read_internal
-from dw_sales.domain.orders import OrderCase, OrderStatus
+from dw_sales.domain.orders import Actor, AppliedChange, OrderCase, OrderStatus
 from dw_sales.evals.graders import AN, CALLERS, DIEU, OUTSIDER, READER
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, SampleWith, World, open_world
@@ -93,6 +95,10 @@ def _line(no: int, *deliveries: tuple[int | str | Decimal, date]) -> InternalLin
         line_no=no,
         deliveries=[InternalDelivery(quantity=Decimal(q), date=d) for q, d in deliveries],
     )
+
+
+def _cancelled(no: int) -> InternalLine:
+    return InternalLine(line_no=no, cancelled=True)
 
 
 async def _apply(world: World, case_id: uuid.UUID, *lines: InternalLine, **kw: Any) -> Any:
@@ -333,6 +339,9 @@ async def test_reading_the_paste_changes_nothing_and_applying_is_the_one_door() 
         (Decimal(6100), NEW_A),
         (Decimal(6100), NEW_B),
     ]
+    # Confirmed on HELD without PC's answer: Bravo's first confirmed date
+    # stays the one Sales confirmed, for each delivery PC splits it into.
+    assert [d.first_date for d in line.pc_answer.deliveries] == [HELD, HELD]
     assert after.line(3) == before.line(3)
     assert AN.user_id in after.makers
     (applied,) = [e for e in world.audit() if e.action == "sales.order.internal_change_applied"]
@@ -487,6 +496,8 @@ async def test_another_tenant_finds_no_order() -> None:
             await _read(world, case_id, "Dòng 2: 18/12/2026", context=outsider)
         with pytest.raises(NotFoundError):
             await _apply(world, case_id, _line(2, (3600, NEW_B)), context=outsider)
+        with pytest.raises(NotFoundError):
+            await _apply(world, case_id, _cancelled(2), context=outsider)
         assert world.order(case_id).update_loop is None
 
 
@@ -602,6 +613,117 @@ async def test_a_customer_change_in_the_loop_holds_an_internal_one() -> None:
             await _apply(world, case_id, _line(1, (12200, NEW_A)))
     assert refused.value.details["rule"] == "update_busy"
     assert not before.takes_internal_change and world.order(case_id) == before
+
+
+# ------------------------------------------------ a whole line cancelled --
+
+
+async def test_a_cancelled_line_reaches_the_change_list_and_the_notice_and_stays_cancelled() -> (
+    None
+):
+    """Short stock: PC cancels line 3 whole and moves line 2 (W07 "cancel
+    all"). Applied, line 3 holds PC's answer of no delivery; the change list
+    holds its row at nothing (quantity and amount 0, no date), the notice
+    says it is cancelled, and the order is entered, cross-checked and
+    confirmed again without a date for it. Line 3 then takes no change."""
+    with SampleWith([]) as sample:
+        world = _world(sample)
+        case_id = await _confirmed_m04(world)
+        before = world.order(case_id)
+        await _apply(world, case_id, _cancelled(3), _line(2, (3600, NEW_B)), reason="short_stock")
+        applied = world.order(case_id)
+        (update,) = await _render(world, case_id, "bravo_update")
+        (notice,) = await _render(world, case_id, "internal_change_notice")
+        listed = await world.services.artifacts.order_artifact(
+            AN.context(), case_id, update.artifact_id
+        )
+        mail = await world.services.artifacts.order_artifact(
+            AN.context(), case_id, notice.artifact_id
+        )
+        await world.services.update_loops.approve(
+            AN.context(),
+            case_id,
+            case_version=_version(world, case_id),
+            artifact_id=update.artifact_id,
+        )
+        await world.services.dw1.record_bravo_entry(
+            AN.context(),
+            case_id,
+            case_version=_version(world, case_id),
+            so_no=None,
+            entry_compared=True,
+        )
+        await world.cross_check(DIEU, case_id)
+        # The confirmation names no date for line 3, as the page sends it.
+        await world.services.confirmations.sent(
+            AN.context(),
+            case_id,
+            case_version=_version(world, case_id),
+            delivery_dates={1: [NEW_B], 2: [NEW_B]},
+        )
+        confirmed = world.order(case_id)
+        # M04's customer confirms on its portal: the checklist of what to
+        # enter there is the confirmation.
+        (checklist,) = await _render(world, case_id, "portal_checklist")
+        entered = await world.services.artifacts.order_artifact(
+            AN.context(), case_id, checklist.artifact_id
+        )
+        with pytest.raises(ConflictError) as again:
+            await _apply(world, case_id, _line(3, (3600, NEW_A)))
+
+    line = applied.line(3)
+    assert line.cancelled and line.pc_answer is not None and line.pc_answer.deliveries == ()
+    assert line.confirmed_delivery_dates == () and line.changes == ()
+    assert line.effective == before.line(3).effective  # what the customer ordered
+    assert AN.user_id in applied.makers
+    ((row,),) = [upload_rows(applied, line)]
+    assert (row["quantity"], row["amount"]) == (0, 0)
+    assert (row["first_confirmed_date"], row["confirmed_date"]) == (None, None)
+    sheet = load_workbook(io.BytesIO(listed.data)).worksheets[0]
+    po = before.header.po_no
+    assert len([r for r in sheet.iter_rows(values_only=True) if po in r]) == 2  # lines 2 and 3
+    text = _notice_text(mail.data)
+    assert "Line 3: " in text and "cancelled" in text.split("Line 3: ")[1].splitlines()[0]
+    assert "materials are short" in text and not names_amount(text)
+    assert confirmed.status is OrderStatus.CONFIRMATION_SENT
+    assert confirmed.line(3).cancelled and confirmed.line(3).confirmed_delivery_dates == ()
+    assert confirmed.line(2).confirmed_delivery_dates == (NEW_B,)
+    portal = load_workbook(io.BytesIO(entered.data)).worksheets[0]
+    numbers = {r[0] for r in portal.iter_rows(values_only=True) if isinstance(r[0], int)}
+    assert 2 in numbers and 3 not in numbers
+    assert again.value.details["rule"] == "line_cancelled"
+    # A customer's change of the cancelled line is refused as well.
+    at = confirmed.confirmed_at
+    assert at is not None
+    change = AppliedChange(
+        field="quantity", value="100", request_id=uuid.uuid4(), by=AN.user_id, at=at
+    )
+    with pytest.raises(ConflictError) as asked:
+        confirmed.loop_change(3, change, Actor(user_id=AN.user_id))
+    assert asked.value.details["rule"] == "line_cancelled"
+
+
+async def test_a_cancel_is_said_in_so_many_words_and_never_of_every_line() -> None:
+    """A line with no delivery is a cancel only where it says so: no
+    delivery and no cancel, or a cancel with deliveries, is refused before
+    anything is read. Cancelling every line of the order is no change of it
+    (`every_line_cancelled`): the order stays as it was."""
+    with pytest.raises(ValidationError):
+        InternalLine(line_no=2, deliveries=[])
+    with pytest.raises(ValidationError):
+        InternalLine(
+            line_no=2,
+            cancelled=True,
+            deliveries=[InternalDelivery(quantity=Decimal(1), date=NEW_A)],
+        )
+    with SampleWith([]) as sample:
+        world = _world(sample)
+        case_id = await _confirmed_m04(world)
+        before = world.order(case_id)
+        with pytest.raises(ConflictError) as every:
+            await _apply(world, case_id, *(_cancelled(x.line_no) for x in before.lines))
+    assert every.value.details["rule"] == "every_line_cancelled"
+    assert world.order(case_id) == before
 
 
 # ------------------------------------------------------------ the prompt --

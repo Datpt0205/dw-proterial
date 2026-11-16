@@ -26,10 +26,10 @@ field, the value the case holds, the value asked and where the mail says it.
 - *Free text* is read by a model where the tenant's step is on and measured
   (`ModelChanges`): for each change, the words naming the line, the field
   from a closed set and the words of the value asked. Code finds both spans,
-  whole and once, in the newest part; takes the line from a customer item
-  code of the case inside the line's words, or else from the one number in
-  them; and parses the value: a date through the mail's own notation, a
-  quantity with the unit it is written in.
+  whole and once, in the newest part; takes the line its words name
+  (`named_lines.named_line`, the one answer every reader shares); and
+  parses the value: a date through the mail's own notation, a quantity with
+  the unit it is written in.
 - *A person* types a line (line, field, value) where nothing was read, the
   model being off or the mail too loose; it has no anchor and says so.
 
@@ -64,9 +64,10 @@ from dw_kernel.errors import ConflictError, DomainError
 from dw_platform.domain.mail_parts import MailTable
 from dw_platform.domain.notation import Notation, notation_of
 from dw_sales.domain.anchors import MessageText, TextRange
+from dw_sales.domain.named_lines import case_lines, named_line
 from dw_sales.domain.orders import Note, OrderCase, OrderLine
 from dw_sales.domain.rfq_reading import parse_date, parse_number, parse_uom
-from dw_sales.domain.spans import FoldedText, word_char
+from dw_sales.domain.spans import FoldedText
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -639,50 +640,6 @@ class ModelChanges(BaseModel):
     changes: tuple[ModelChange, ...] = Field(max_length=MAX_MODEL_CHANGES)
 
 
-_DIGITS: Final = re.compile(r"\d+")
-
-
-def _numbers_in(span: str) -> list[int]:
-    """The whole numbers ``span`` writes as tokens of their own: not part of
-    a code (``AWG24``), a decimal (``1.5``) or a grouped number (``1,200``)."""
-    found: list[int] = []
-    for match in _DIGITS.finditer(span):
-        start, end = match.span()
-        before = span[start - 1] if start else ""
-        after = span[end] if end < len(span) else ""
-        if (before and (word_char(before) or before in ".,")) or (
-            after and (word_char(after) or (after in ".," and span[end + 1 : end + 2].isdigit()))
-        ):
-            continue
-        found.append(int(match.group()))
-    return found
-
-
-def named_line(case: OrderCase, span: str) -> int | None:
-    """The line ``span`` names: a customer item code or PRV code of the case
-    inside it (one line only; among lines sharing the code, the one whose
-    number is a whole number in it), else the one whole number in it.
-    The number may name no line of the case: the caller refuses it, never
-    guesses (ticket 10 reads PC's mail, which names lines by PRV code)."""
-    folded = FoldedText(span)
-    coded = {
-        line.line_no
-        for line in case.lines
-        if folded.occurrences(_nfkc(line.effective.customer_item_code), bounded=True)
-        or (
-            line.mapping.prv_code is not None
-            and folded.occurrences(_nfkc(line.mapping.prv_code), bounded=True)
-        )
-    }
-    numbers = _numbers_in(span)
-    if len(coded) > 1:
-        numbered = coded & set(numbers)
-        return numbered.pop() if len(numbered) == 1 else None
-    if coded:
-        return coded.pop()
-    return numbers[0] if len(numbers) == 1 else None
-
-
 def model_changes(
     case: OrderCase, text: str, answer: ModelChanges, received_on: date
 ) -> ReadChanges:
@@ -692,12 +649,13 @@ def model_changes(
     whose value does not read is dropped and counted."""
     notation = notation_of(text)
     folded = FoldedText(text)
+    known = case_lines(case)
     lines: list[ChangeLine] = []
     unread = 0
     for change in answer.changes:
         named = folded.locate(_nfkc(change.line_span).strip(), bounded=True)
         place = folded.locate(_nfkc(change.asked_span).strip(), bounded=True)
-        line_no = None if isinstance(named, str) else named_line(case, text[named[0] : named[1]])
+        line_no = None if isinstance(named, str) else named_line(known, text[named[0] : named[1]])
         if isinstance(place, str) or line_no is None:
             unread += 1
             continue

@@ -1,5 +1,5 @@
-"""The platform's follow-up policy, and `LocalZonePort` answering its zone,
-for tests and evals with no rule book.
+"""The platform's follow-up policy and its words, and `LocalZonePort`
+answering its zone, for tests and evals with no rule book.
 
 Read through `load_sales_policies`, the one place that names which version
 DW1 runs, so a test's zone and its "due soon" have one owner too:
@@ -15,6 +15,7 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.reminder_copy import ReminderCopy
 from dw_sales.domain.followups import SalesFollowups
 
 _CONFIGS: Final = Path(__file__).resolve().parents[6] / "configs"
@@ -36,6 +37,14 @@ def platform_followups() -> SalesFollowups:
     from dw_sales.adapters.policy_files import load_sales_policies
 
     return load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy").followups
+
+
+@cache
+def platform_reminder_copy() -> ReminderCopy:
+    """The words of the follow-ups the platform ships (ticket 42 family 6)."""
+    from dw_sales.adapters.policy_files import load_sales_policies
+
+    return load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy").reminders
 
 
 def platform_zone() -> FixedZone:

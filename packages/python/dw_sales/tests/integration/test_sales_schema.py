@@ -29,6 +29,7 @@ from dw_sales.application.prompt_versions import PROMPT_KEY
 from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
+from dw_sales.application.today import REMINDERS
 from dw_sales.application.ycbg_exports import ExportStatus
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.customer_notation import NotationCaseKind, NotationSource
@@ -85,6 +86,8 @@ _SETS: dict[str, set[str]] = {
     # What the follow-ups record (ticket 42).
     "ck_followup_deliveries_followup": _values(followups.Followup) | {BRIEF},
     "ck_followup_deliveries_stage": _values(followups.Stage) | {BRIEF_STAGE},
+    # What a person marks in "Việc của tôi" (tickets 47, 06, 09).
+    "ck_reminder_marks_followup": {f.value for f in REMINDERS},
     # A master-data import's list and status (ticket 41).
     "ck_catalog_snapshots_list": _values(CatalogList),
     "ck_catalog_snapshots_status": set(get_args(ImportStatus)),

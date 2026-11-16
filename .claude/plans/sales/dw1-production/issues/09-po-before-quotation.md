@@ -51,6 +51,30 @@ first. DW1 flags the line (no quotation) and stops there.
 - **Web**: the button on the finding, "Báo giá mở từ đơn này" on the order
   (status, link, "Đơn chờ báo giá"), "Mở từ đơn hàng PO …" on the quote.
 - Left: a PO read from the mail's text (no file) opens no quote
-  (`quote_po_not_a_file`); no follow-up reminds while an order waits on its
-  quote; the process map does not draw the wait.
+  (`quote_po_not_a_file`). (The reminder and the map, left here before, are
+  done below.)
+
+## Done: the reminder and the map (2026-11-16)
+
+Migration `57bbf61ae6b8` (from `1f037954f3d9`).
+
+- **`waiting_quote`** (`domain/followups.py`): an order before its
+  self-check (`orders.quote_wait_statuses()`: checked, in review) linked to
+  a quote case still open reminds the PIC once per wait, from the oldest
+  open link, after `sales_followups.waiting_quote.remind.after_hours`
+  (platform 1.6.0: 24 h, PIC, on). Whether the quote is open is read from
+  its own status when the lane reads the cases (`order_quotes.SETTLED`, the
+  set `prepare`'s caller reads), never copied onto the order: approved,
+  sent, recorded or declined, nothing is owed; the order prepared or closed,
+  nothing either. `SqlFollowupStore.cases` joins the link to the quote case
+  in the order's own tenant and workspace (and under RLS); a link naming
+  another tenant's case reads nothing. The CHECKs admit it like 06's.
+- **The map**: the order lane's flow `quote` (`SubflowKey.QUOTE`, step
+  `waiting_quote`, in `quote_wait_statuses()`); the BA's flow has no code
+  for it, so none is drawn on it. Its setting is placed on O6.
+- Tests: `test_followup_waits.py` (fires a day after "Mở báo giá", not
+  before; nothing once the quote is declined; nothing past review),
+  `test_followup_waits_db.py` (open for priced and pending approval, none
+  for approved, sent, recorded, declined; another tenant's quote reads
+  nothing).
 

@@ -4468,10 +4468,21 @@ export interface components {
         };
         /**
          * InternalLine
-         * @description One line a person applies, with its deliveries in PC's order.
+         * @description One line a person applies, with its deliveries in PC's order; or
+         *     ``cancelled``, PC cancelling the whole line, with none. A line without
+         *     a delivery is a cancel only where it says so: an empty list alone is
+         *     refused, never read as one.
          */
         InternalLine: {
-            /** Deliveries */
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled: boolean;
+            /**
+             * Deliveries
+             * @default []
+             */
             deliveries: components["schemas"]["InternalDelivery"][];
             /** Line No */
             line_no: number;
@@ -5537,6 +5548,11 @@ export interface components {
                 [key: string]: components["schemas"]["SourceAnchor"];
             };
             basis: components["schemas"]["LineBasisView"];
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled: boolean;
             /**
              * Changes
              * @default []
@@ -7052,7 +7068,7 @@ export interface components {
          * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
          */
-        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_salesorder_rules";
+        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_salesorder_rules" | "sales_reminders";
         /**
          * RuleProposalBody
          * @description A whole policy document for one key, validated by that key's schema.
@@ -7808,7 +7824,7 @@ export interface components {
          *     status stays where it is (ticket 35).
          * @enum {string}
          */
-        SubflowKey: "thread" | "pc_request" | "change_request" | "update";
+        SubflowKey: "thread" | "pc_request" | "change_request" | "update" | "design_code" | "quote";
         /** SubflowStepView */
         SubflowStepView: {
             /** Ba Steps */

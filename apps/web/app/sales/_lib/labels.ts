@@ -697,6 +697,8 @@ export const SUBFLOW: Record<SalesSchemas["SubflowKey"], string> = {
   pc_request: "Hỏi PC ngày giao, trước khi nhập Bravo",
   change_request: "Khách xin thay đổi qua thư",
   update: "Vòng cập nhật đơn đã nhập Bravo",
+  design_code: "Đề nghị Design tạo mã mới",
+  quote: "Báo giá mở từ đơn hàng",
 };
 
 /**
@@ -713,6 +715,8 @@ export const SUBFLOW_STEP = {
   "update.answer_customer": "Chờ gửi khách trả lời",
   "update.waiting_customer": "Chờ khách quyết định",
   "update.bravo_update": "Chờ duyệt và nhập tệp cập nhật Bravo",
+  "design_code.waiting_design": "Chờ Design tạo mã",
+  "quote.waiting_quote": "Chờ báo giá được duyệt",
 } as const;
 
 /** The files DW1 renders (ticket 06's artifact table), by kind. */

@@ -6,6 +6,7 @@ import {
   App,
   Button,
   Card,
+  Checkbox,
   Collapse,
   DatePicker,
   Drawer,
@@ -52,6 +53,8 @@ interface DeliveryForm {
 }
 interface LineForm {
   line_no: number | null;
+  // PC cancels the whole line (W07): no delivery is sent for it.
+  cancelled?: boolean;
   deliveries: DeliveryForm[];
   // What DW1 read leaves to a person, shown beside the line.
   problem?: string;
@@ -79,8 +82,10 @@ function formLine(line: ReadLine): LineForm {
  * form (nothing is kept), Sales checks each line and presses "Áp dụng", the
  * one action that changes the order: it then goes to its Bravo update, its
  * cross-check and its confirmation again, and the notice to the customer is
- * a draft in "Tài liệu". Offered only where the server says the order takes
- * one (`internal_change_open`); the server refuses anyway.
+ * a draft in "Tài liệu". A line PC cancels whole is ticked "PC huỷ cả dòng"
+ * and carries no delivery; a line already cancelled is not offered. Offered
+ * only where the server says the order takes one (`internal_change_open`);
+ * the server refuses anyway.
  */
 export function InternalChangePanel({
   order,
@@ -148,10 +153,12 @@ function InternalChangeDrawer({
   const version = order.case_version;
   const readId = `internal/read/${order.case_id}`;
   const applyId = `internal/apply/${order.case_id}`;
-  const options = order.lines.map((line) => ({
-    value: line.line_no,
-    label: `Dòng ${line.line_no}: ${line.customer_item_code}`,
-  }));
+  const options = order.lines
+    .filter((line) => !line.cancelled)
+    .map((line) => ({
+      value: line.line_no,
+      label: `Dòng ${line.line_no}: ${line.customer_item_code}`,
+    }));
 
   const readPaste = async () => {
     const result = await run(
@@ -171,13 +178,19 @@ function InternalChangeDrawer({
   };
 
   const apply = (values: Values) => {
-    const lines = values.lines.map((line) => ({
-      line_no: line.line_no ?? 0,
-      deliveries: line.deliveries.map((d) => ({
-        quantity: String(d.quantity ?? ""),
-        date: fromPickerDay(d.date) ?? "",
-      })),
-    }));
+    const lines = values.lines.map((line) =>
+      line.cancelled
+        ? { line_no: line.line_no ?? 0, cancelled: true, deliveries: [] }
+        : {
+            line_no: line.line_no ?? 0,
+            cancelled: false,
+            deliveries: line.deliveries.map((d) => ({
+              quantity: String(d.quantity ?? ""),
+              date: fromPickerDay(d.date) ?? "",
+            })),
+          },
+    );
+    const cancelled = values.lines.filter((line) => line.cancelled).length;
     const body = {
       case_version: version,
       reason: values.reason ?? "other",
@@ -185,7 +198,7 @@ function InternalChangeDrawer({
     };
     modal.confirm({
       title: "Áp dụng thay đổi nội bộ",
-      content: `PO ${order.po_no}: ${lines.length} dòng đổi theo lịch PC. Đơn chuyển sang cập nhật Bravo, rồi kiểm chéo và xác nhận lại với khách.`,
+      content: `PO ${order.po_no}: ${lines.length} dòng đổi theo lịch PC${cancelled ? `, trong đó ${cancelled} dòng huỷ cả` : ""}. Đơn chuyển sang cập nhật Bravo, rồi kiểm chéo và xác nhận lại với khách.`,
       okText: "Áp dụng",
       cancelText: "Chưa áp dụng",
       autoFocusButton: "cancel",
@@ -350,50 +363,77 @@ function InternalChangeDrawer({
                     >
                       <Select className="max-w-md" options={options} />
                     </Form.Item>
-                    <Form.List name={[line.name, "deliveries"]}>
-                      {(deliveries, more) => (
-                        <>
-                          {deliveries.map((d, n) => (
-                            <Space key={d.key} align="start" wrap>
-                              <Form.Item
-                                name={[d.name, "quantity"]}
-                                label={`Số lượng đợt ${n + 1}`}
-                                rules={[
-                                  { required: true, message: "Cần số lượng" },
-                                ]}
-                              >
-                                <InputNumber min={0} decimalSeparator="," />
-                              </Form.Item>
-                              <Form.Item
-                                name={[d.name, "date"]}
-                                label={`Ngày PC đợt ${n + 1}`}
-                                rules={[
-                                  { required: true, message: "Cần ngày PC" },
-                                ]}
-                              >
-                                <DatePicker format="DD/MM/YYYY" />
-                              </Form.Item>
-                              {deliveries.length > 1 ? (
+                    <Form.Item
+                      name={[line.name, "cancelled"]}
+                      valuePropName="checked"
+                    >
+                      <Checkbox>PC huỷ cả dòng</Checkbox>
+                    </Form.Item>
+                    <Form.Item noStyle shouldUpdate>
+                      {() =>
+                        form.getFieldValue([
+                          "lines",
+                          line.name,
+                          "cancelled",
+                        ]) ? null : (
+                          <Form.List name={[line.name, "deliveries"]}>
+                            {(deliveries, more) => (
+                              <>
+                                {deliveries.map((d, n) => (
+                                  <Space key={d.key} align="start" wrap>
+                                    <Form.Item
+                                      name={[d.name, "quantity"]}
+                                      label={`Số lượng đợt ${n + 1}`}
+                                      rules={[
+                                        {
+                                          required: true,
+                                          message: "Cần số lượng",
+                                        },
+                                      ]}
+                                    >
+                                      <InputNumber
+                                        min={0}
+                                        decimalSeparator=","
+                                      />
+                                    </Form.Item>
+                                    <Form.Item
+                                      name={[d.name, "date"]}
+                                      label={`Ngày PC đợt ${n + 1}`}
+                                      rules={[
+                                        {
+                                          required: true,
+                                          message: "Cần ngày PC",
+                                        },
+                                      ]}
+                                    >
+                                      <DatePicker format="DD/MM/YYYY" />
+                                    </Form.Item>
+                                    {deliveries.length > 1 ? (
+                                      <Button
+                                        className="mt-7"
+                                        icon={
+                                          <MinusCircleOutlined aria-hidden />
+                                        }
+                                        aria-label={`Bỏ đợt ${n + 1}`}
+                                        onClick={() => more.remove(d.name)}
+                                      />
+                                    ) : null}
+                                  </Space>
+                                ))}
                                 <Button
-                                  className="mt-7"
-                                  icon={<MinusCircleOutlined aria-hidden />}
-                                  aria-label={`Bỏ đợt ${n + 1}`}
-                                  onClick={() => more.remove(d.name)}
-                                />
-                              ) : null}
-                            </Space>
-                          ))}
-                          <Button
-                            icon={<PlusOutlined aria-hidden />}
-                            onClick={() =>
-                              more.add({ quantity: null, date: null })
-                            }
-                          >
-                            Thêm một đợt
-                          </Button>
-                        </>
-                      )}
-                    </Form.List>
+                                  icon={<PlusOutlined aria-hidden />}
+                                  onClick={() =>
+                                    more.add({ quantity: null, date: null })
+                                  }
+                                >
+                                  Thêm một đợt
+                                </Button>
+                              </>
+                            )}
+                          </Form.List>
+                        )
+                      }
+                    </Form.Item>
                   </Card>
                 ))}
                 <Button

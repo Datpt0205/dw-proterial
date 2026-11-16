@@ -107,6 +107,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     confirmed_delivery_dates: [],
     pc_confirmed_by: null,
     pc_confirmed_at: null,
+    cancelled: false,
   } as Order["lines"][number];
   return {
     case_id: "01a10aa0-c939-7000-8539-31fd3e621660",

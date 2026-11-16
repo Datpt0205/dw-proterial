@@ -285,7 +285,9 @@ async def test_a_pull_in_walks_back_to_confirmed_with_every_draft_and_approval_r
     assert line.effective.requested_date == ASKED and line.po_line.requested_date == HELD
     assert line.pc_answer is not None and line.confirmed_delivery_dates == ()
     ((row,),) = [upload_rows(accepted, line)]
-    assert (row["first_confirmed_date"], row["confirmed_date"]) == (ASKED, ASKED)
+    # Confirmed without PC's answer: Bravo's first confirmed date is the one
+    # Sales confirmed (HELD), never PC's new date.
+    assert (row["first_confirmed_date"], row["confirmed_date"]) == (HELD, ASKED)
     # The approval names the exact file, and the file holds the changed line only.
     approval = approved.update_loop.approval  # type: ignore[union-attr]
     assert approval is not None

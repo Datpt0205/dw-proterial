@@ -58,6 +58,29 @@ Built 2026-11-16, by the agent (migration `3d139b41fec1`, on `7c00901ada90`).
 - Tests: `dw_sales/tests/unit/test_design_requests.py`,
   `apps/web/app/sales/_lib/__tests__/design-request.test.tsx`.
 
-Left: no reminder while Design has not answered (a `waiting_design` follow-up
-would need the follow-up lane, its CHECK and the process map's subflow); the
-process map does not draw the wait yet.
+Left (closed 2026-11-16 below): no reminder while Design has not answered;
+the process map did not draw the wait.
+
+## Done: the reminder and the map (2026-11-16)
+
+Migration `57bbf61ae6b8` (from `1f037954f3d9`).
+
+- **`waiting_design_code`** (`domain/followups.py`): an order whose
+  `design_requests` names a request reminds the PIC once per wait, from the
+  oldest request still named, after the tenant's
+  `sales_followups.waiting_design_code.remind.after_hours` (platform
+  `sales_followups@1.6.0`: 24 h, PIC, on). The wait ends where the domain
+  already ends it (the line's code confirmed, a new revision, the order out
+  of review), so the reminder stops with it. Read by
+  `SqlFollowupStore.cases` (`design_asked_at`, the oldest `at` of the
+  column) and the eval world alike; `ck_followup_deliveries_followup` and
+  `ck_reminder_marks_followup` admit it, so it reaches "Việc của tôi" and
+  the phone push like every reminder. DW1 still sends Design nothing.
+- **The map**: the order lane's flow `design_code` (`SubflowKey.DESIGN_CODE`,
+  step `waiting_design`, in the statuses where mappings are decided,
+  `orders.design_wait_statuses()`), with the BA's `2.2B` / `2.2B-DS` on it
+  (`domain/process.py`); its setting is placed on O2.
+- Tests: `dw_sales/tests/unit/test_followup_waits.py` (fires a day after the
+  request, not before; nothing once the code is confirmed; switched off),
+  `tests/integration/test_followup_waits_db.py` (the oldest request read
+  back; none named, none read).

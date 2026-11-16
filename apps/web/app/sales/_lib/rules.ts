@@ -24,6 +24,7 @@ export const RULE_KEY: Record<RuleKey, string> = {
   sales_handoffs: "Nội dung chuyển giao",
   sales_followups: "Nhắc việc và tóm tắt buổi sáng",
   sales_salesorder_rules: "Quy tắc SalesOrder của từng khách",
+  sales_reminders: "Lời nhắc việc và bản tin buổi sáng",
 };
 
 export const RULE_STATUS: Record<RuleVersion["status"], string> = {
@@ -79,6 +80,8 @@ export const RULE_ABOUT: Record<RuleKey, string> = {
   sales_documents: "Chữ trên các bảng tính và tài liệu DW1 xuất ra.",
   sales_bravo_upload: "Mẫu tệp nhập Bravo: tên sheet và thứ tự cột.",
   sales_handoffs: "Nội dung thư chuyển việc cho PC và QA.",
+  sales_reminders:
+    "Câu chữ của lời nhắc, bản tin buổi sáng và thông báo trên điện thoại DW1 gửi Sales.",
   sales_salesorder_rules:
     "Cách tệp SalesOrder của từng khách khác mẫu chung: học từ một PO và tệp PIC đã làm.",
 };
@@ -90,6 +93,7 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
   "sales_bravo_upload",
   "sales_handoffs",
   "sales_salesorder_rules",
+  "sales_reminders",
 ]);
 
 /**

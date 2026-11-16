@@ -23,6 +23,7 @@ from dw_sales.application.artifact_content import (
 )
 from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.quotation import QuoteRules
+from dw_sales.application.reminder_copy import ReminderCopy
 from dw_sales.application.rules import (
     OVERRIDABLE,
     Policy,
@@ -67,7 +68,9 @@ def load_bravo_upload(path: Path) -> BravoUploadLayout:
     return load_policy(path, BravoUploadLayout)
 
 
-def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy)](path: Path, model: type[T]) -> T:
+def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy, ReminderCopy)](
+    path: Path, model: type[T]
+) -> T:
     """``configs/copy/<copy_id>@<version>.yaml``, refused when named for
     another copy or version."""
     loaded = model.model_validate(yaml.safe_load(path.read_bytes()))
@@ -94,6 +97,8 @@ class SalesPolicies:
     handoff_copy: HandoffCopy
     # When DW1 reminds a person, and the morning brief (ticket 42).
     followups: SalesFollowups
+    # What those reminders and the brief say (ticket 42 family 6).
+    reminders: ReminderCopy
     # Each customer's own SalesOrder rules (ticket 38): none on the platform.
     salesorder: SalesOrderRules
     # Every version of each key the checkout ships, by ref, the ones above
@@ -112,6 +117,7 @@ class SalesPolicies:
             RuleKey.HANDOFFS: self.handoff_copy,
             RuleKey.FOLLOWUPS: self.followups,
             RuleKey.SALESORDER_RULES: self.salesorder,
+            RuleKey.REMINDERS: self.reminders,
         }
 
 
@@ -127,11 +133,12 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
-        emails=load_copy(copy_dir / "sales_emails@1.5.0.yaml", SalesEmailCopy),
+        emails=load_copy(copy_dir / "sales_emails@1.6.0.yaml", SalesEmailCopy),
         documents=load_copy(copy_dir / "sales_documents@1.3.0.yaml", SalesDocumentCopy),
         upload=load_bravo_upload(policies_dir / "sales_bravo_upload@2.1.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.2.0.yaml", HandoffCopy),
-        followups=load_followups(policies_dir / "sales_followups@1.5.0.yaml"),
+        followups=load_followups(policies_dir / "sales_followups@1.6.0.yaml"),
+        reminders=load_copy(copy_dir / "sales_reminders@1.0.0.yaml", ReminderCopy),
         salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
         released={},
     )
