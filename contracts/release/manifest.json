@@ -556,7 +556,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "b63f78744909befe486740e4357f840bd6fb23b105f42c1796540816b0a06732",
+      "checksum": "8dc071849eccdb9c3239d285b2fcce6b04877c2683df58b062947781904f6c03",
       "dataset_id": "sales_handoff",
       "files": [
         {
@@ -568,8 +568,12 @@
           "path": "evals/expected/sales_handoff_flow.json"
         },
         {
-          "checksum": "34810e20e765d981dcf3b1130a623e81843426c668a5d3aef9ad37417e66e00f",
+          "checksum": "9e59565ece9314dd0b6d7d6f3e10a0202f2bc7ef63c9c13fe36be193fd359448",
           "path": "evals/expected/sales_handoff_golden.json"
+        },
+        {
+          "checksum": "149bdaf16442995e157bd5dc2c6d6010204cfafcf56b7d2c215195d53eb1b79b",
+          "path": "evals/expected/sales_handoff_notation.json"
         },
         {
           "checksum": "d2b75f8d19b642a2a12cfdb9b6188c82fc36edba448152e0cbb57994980fdb51",
@@ -774,7 +778,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "11d9045b7f626ef62ab1cd626e40f94c06d9bc0c42fdd2df78ce557cc6a9ac2a",
+      "checksum": "0373e89653dbf513426930e22ab4e9aed4ffc1dd715f11c97099c68c0f2c43ba",
       "dataset_id": "sales_rfq",
       "files": [
         {
@@ -786,8 +790,12 @@
           "path": "evals/expected/sales_rfq_flow.json"
         },
         {
-          "checksum": "8ad5695e20b5d51fc66a743cef3a9eecdee43b9cbf20fc8c287fe451313c4b20",
+          "checksum": "b2b6794eabffd29e2da7a1e67d8e3f3a42e9195644c4a61a78b5bda40007f320",
           "path": "evals/expected/sales_rfq_golden.json"
+        },
+        {
+          "checksum": "3ebbee09ab1ce408e49bcf442cdcd99d1c19eee75ffcc02ec7cf47e505dd123b",
+          "path": "evals/expected/sales_rfq_notation.json"
         },
         {
           "checksum": "b0b010a0c20f59b4adbb9eb336c030b9921d14af86e5e119693e93e276bf63cd",
@@ -982,9 +990,36 @@
         }
       ],
       "version": "1.0.0"
+    },
+    {
+      "checksum": "d8cab8548b270dce92f456667ca1bf8cb6cc62c76f26c8b6634bd5c5b2c21cb6",
+      "dataset_id": "sales_triage_card",
+      "files": [
+        {
+          "checksum": "4e0959f7d501712bffdb56291cfb3fb659f0cf02704168f4a4ba224b86bfbe16",
+          "path": "evals/expected/sales_triage_card.json"
+        },
+        {
+          "checksum": "15b788bc35e76f22330649c30d6938460684c83a56f93e5716e5c8cc517257d0",
+          "path": "evals/expected/sales_triage_card_golden.json"
+        },
+        {
+          "checksum": "0060c67d52d401167d3ac7f402960846122b355c824e7c6112c47287f24afa6b",
+          "path": "evals/fixtures/cases/sales_intent_golden.json"
+        },
+        {
+          "checksum": "63da078a6d4e669bdbcfc7436e784747ead852533553a6f16357605e5f98c1d8",
+          "path": "evals/fixtures/cases/sales_intent_security.json"
+        },
+        {
+          "checksum": "3426d65e100ecd18e925d867596a8d3a845c9f37bb6a36e102c0d432c4aac81c",
+          "path": "evals/fixtures/cases/sales_triage_card.json"
+        }
+      ],
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "7fd64a1b61d6a7eab1a4fb3f5772c4f7eb9ea292",
+  "git_sha": "996179d2b746a9e8ad81784adab6aa8fcb49f120",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1496,6 +1531,11 @@
     {
       "checksum": "a3287ec19131d57babc0afcae8d8dad69023dec897ef79c0cc58369009aaf87a",
       "prompt_id": "sales.thread_summary",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "357b4b7fc724c764fd57389941d56e68eed1b42dcd1cdabf6dbda074b41fdc8c",
+      "prompt_id": "sales.triage_card",
       "version": "1.0.0"
     }
   ],
