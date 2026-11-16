@@ -113,6 +113,19 @@ context. All five are done and on `main`. The full narrative is at
         in unattended mode for support from outside the plant (login by URL,
         no auth key through chat; key expiry off for the node). Tailscale is
         Đạt's call; IT to be told. Not run yet: no OS.
+        **Later 11-16: Windows Server installed, no network.** The board's
+        NIC is an Intel I226-V (`DEV_125C`). Intel's own Server 2025 pack
+        (`Wired_driver_31.3_x64.zip`, SHA512 checked against Intel's page;
+        `PRO2500\Winx64\WS2022\e2f.inf`, DriverVer 1.1.4.46) lists 125C only
+        in its workstation section (`NTamd64.10.0.1..17763`); the server
+        section carries I226-LM (125B) and I226-IT (125D). Given to Đạt: Have
+        Disk, untick compatible hardware, pick I226-LM (same driver, still
+        signed). Not yet confirmed on the host; fallbacks Android USB
+        tethering or a USB-to-LAN dongle. A long-run server on a NIC driver
+        installed against its INF should be re-checked after each Windows
+        Update; a supported PCIe NIC (I210/X550 class) is the clean fix.
+        "Run with PowerShell" runs unelevated and closes on the first error:
+        the SSH script is run from an Administrator window.
 
         **Decided 11-11 (Proterial, through Đạt): Windows Server with
         virtualisation allowed; DW runs as (a), a Hyper-V VM with Ubuntu and
