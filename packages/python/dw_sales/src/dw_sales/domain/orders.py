@@ -227,11 +227,13 @@ class PcAnswer(BaseModel):
     line's deliveries, which add up to the line's quantity. A line delivered
     once that PC splits over several dates is several deliveries, each a row
     of the paste sheet; a line the PO prints split is confirmed schedule by
-    schedule, one delivery per printed schedule, in their order."""
+    schedule, one delivery per printed schedule, in their order. No delivery
+    at all: PC cancelled the whole line, which only Proterial's own change
+    does (ticket 10, `OrderLine.cancelled`)."""
 
     model_config = _FROZEN
 
-    deliveries: tuple[PcDelivery, ...] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
+    deliveries: tuple[PcDelivery, ...] = Field(max_length=PC_DELIVERIES_MAX)
     by: ActorId
     at: AwareDatetime
 
@@ -274,26 +276,33 @@ class DesignRequest(BaseModel):
 
 
 def reconfirmed(
-    before: PcAnswer | None,
+    line: OrderLine,
     deliveries: Sequence[tuple[Decimal, date]],
     by: ActorId,
     at: datetime,
 ) -> PcAnswer:
-    """PC's answer for a line from ``deliveries`` (each quantity with PC's
-    date), keeping the date PC confirmed first (Bravo's "Ngày XN giao hàng
-    lần đầu"): delivery by delivery while PC keeps the line's quantities as
-    they were in ``before``; split anew, every delivery keeps the line's
-    earliest first date, the one PC gave the line first; with no answer
-    before, PC's dates are the first ones (ticket 07). The one owner of the
-    rule, for an answer before the order is in Bravo and for one the update
-    loop applies (ticket 29)."""
+    """PC's answer for ``line`` from ``deliveries`` (each quantity with PC's
+    date), keeping the date first confirmed for it (Bravo's "Ngày XN giao
+    hàng lần đầu"): PC's first dates where PC answered the line before, else
+    the dates Sales confirmed it with (a line confirmed without PC's
+    answer); delivery by delivery while the quantities stay as they were;
+    split anew, every delivery keeps the line's earliest first date; with
+    nothing confirmed before, PC's dates are the first ones (ticket 07). The
+    one owner of the rule, for an answer before the order is in Bravo and
+    for one an update loop applies (tickets 29 and 10)."""
+    before = line.pc_answer
+    held = (
+        tuple((d.quantity, d.first_date) for d in before.deliveries)
+        if before is not None
+        else line.confirmed_deliveries()
+    )
     quantities = tuple(quantity for quantity, _ in deliveries)
-    if before is None:
+    if not held:
         firsts = [day for _, day in deliveries]
-    elif before.quantities == quantities:
-        firsts = [d.first_date for d in before.deliveries]
+    elif tuple(quantity for quantity, _ in held) == quantities:
+        firsts = [first for _, first in held]
     else:
-        firsts = [min(d.first_date for d in before.deliveries)] * len(deliveries)
+        firsts = [min(first for _, first in held)] * len(deliveries)
     return PcAnswer(
         deliveries=tuple(
             PcDelivery(quantity=quantity, first_date=first, date=day)
@@ -334,7 +343,8 @@ class LoopLine(BaseModel):
     first confirmed date is kept when the update is applied (`reconfirmed`).
     A line of Proterial's own change (ticket 10) holds PC's answer and, where
     PC cuts the line, the quantity it cuts to; a date moved or a line split
-    changes no value the customer ordered, so it holds no change."""
+    changes no value the customer ordered, so it holds no change, nor does a
+    line PC cancels whole, whose answer gives no delivery."""
 
     model_config = _FROZEN
 
@@ -1427,7 +1437,7 @@ class OrderLine(BaseModel):
     @model_validator(mode="after")
     def _pc_answer_delivers_the_line(self) -> Self:
         answer = self.pc_answer
-        if answer is None:
+        if answer is None or self.cancelled:
             return self
         po = self.effective
         if po.prints_schedules:
@@ -1484,6 +1494,14 @@ class OrderLine(BaseModel):
 
     def correction(self, field: str) -> ValueCorrection | None:
         return next((c for c in self.corrections if c.field == field), None)
+
+    @property
+    def cancelled(self) -> bool:
+        """PC cancelled the whole line (ticket 10, W07 "cancel all"): its
+        answer delivers none of it. The line keeps what the customer ordered;
+        it is delivered never, confirmed with no date (`deliveries` is 0),
+        and its paste-sheet row holds nothing (`upload_rows`)."""
+        return self.pc_answer is not None and not self.pc_answer.deliveries
 
     @property
     def deliveries(self) -> int:
@@ -1939,6 +1957,19 @@ def changeable_statuses() -> frozenset[OrderStatus]:
     """Where a customer's change is taken at once and PC is asked before the
     order is in Bravo (tickets 27, 07), read-only."""
     return _CHANGEABLE
+
+
+def design_wait_statuses() -> frozenset[OrderStatus]:
+    """Where an order may wait on Design for a new PRV code (ticket 06): where
+    mappings are decided. Outside them `_next` ends every wait, read-only."""
+    return _EDITABLE
+
+
+def quote_wait_statuses() -> frozenset[OrderStatus]:
+    """Where an order waits on a quote case opened from it (ticket 09): where
+    it was opened, before the self-check that refuses an open one
+    (`prepare`), read-only."""
+    return _QUOTABLE
 
 
 def transition(current: OrderStatus, target: OrderStatus) -> OrderStatus:
@@ -3115,7 +3146,7 @@ class OrderCase(BaseModel):
                 "PC's quantities do not add up to the line's: settle it with PC",
                 details={**details, "deliveries": len(quantities), "rule": "split_not_summing"},
             )
-        answer = reconfirmed(line.pc_answer, deliveries, actor.user_id, at)
+        answer = reconfirmed(line, deliveries, actor.user_id, at)
         new_line = OrderLine.model_validate(
             {
                 **dict(line),
@@ -3194,7 +3225,9 @@ class OrderCase(BaseModel):
         PIC sends the confirmation first. Refused for a line printing its
         schedules, for a change of another request while one is in the loop
         (`update_busy`), and once PC has been asked (`update_step`): the
-        request's lines are all decided before PC is asked."""
+        request's lines are all decided before PC is asked, and for a line
+        PC cancelled (`line_cancelled`, ticket 10): nothing of it is
+        delivered any more."""
         details: dict[str, object] = {"case_id": str(self.case_id), "line": line_no}
         if self.status not in CONFIRMATION_LEFT:
             raise ConflictError(
@@ -3203,6 +3236,7 @@ class OrderCase(BaseModel):
             )
         if change.by != actor.user_id:
             raise DomainError("a decision is recorded as its actor's", details=details)
+        _require_not_cancelled(self.line(line_no), details)
         if self.line(line_no).po_line.prints_schedules:
             raise ConflictError(
                 "the line prints its schedules: which one changes is asked of the customer",
@@ -3356,7 +3390,7 @@ class OrderCase(BaseModel):
                             *held.changes,
                         ),
                         "pc_answer": reconfirmed(
-                            line.pc_answer,
+                            line,
                             [(d.quantity, d.date) for d in pc.deliveries],
                             pc.by,
                             pc.at,
@@ -3408,11 +3442,15 @@ class OrderCase(BaseModel):
         A line's deliveries add up to its quantity (a date moved, a line
         split) or to less (PC cuts it: part of it cancelled, and its quantity
         becomes theirs); never to more, which is no change Proterial makes
-        alone (`quantity_raised`). A line the PO prints split keeps its
-        schedules' quantities: PC moves their dates only. Refused but on an
-        order whose confirmation has left, while another change is in the
-        loop (`update_busy`), for a line the order does not have, and for a
-        line it changes nothing on (`no_change`)."""
+        alone (`quantity_raised`). No delivery at all: PC cancels the whole
+        line (W07 "cancel all"; `OrderLine.cancelled`), never every line of
+        the order (`every_line_cancelled`: that is the order cancelled, no
+        change of it). A line the PO prints split keeps its schedules'
+        quantities: PC moves their dates only. Refused but on an order whose
+        confirmation has left, while another change is in the loop
+        (`update_busy`), for a line the order does not have, for a line PC
+        cancelled before (`line_cancelled`), and for a line it changes
+        nothing on (`no_change`)."""
         details: dict[str, object] = {"case_id": str(self.case_id)}
         if not self.takes_internal_change:
             if self.status in CONFIRMATION_LEFT:
@@ -3440,6 +3478,13 @@ class OrderCase(BaseModel):
         loop_lines = [
             self._internal_line(held[no], lines[no], change_id, actor, at) for no in sorted(lines)
         ]
+        cancelled = {no for no, line in held.items() if line.cancelled}
+        cancelled |= {x.line_no for x in loop_lines if x.pc_answer and not x.pc_answer.deliveries}
+        if cancelled == held.keys():
+            raise ConflictError(
+                "PC huỷ mọi dòng là huỷ cả đơn, không phải thay đổi nội bộ",
+                details={**details, "rule": "every_line_cancelled"},
+            )
         return UpdateLoop(
             request_id=change_id,
             step="bravo_update",
@@ -3458,8 +3503,12 @@ class OrderCase(BaseModel):
     ) -> LoopLine:
         """One line of `internal_change`, checked as its docstring says."""
         details: dict[str, object] = {"case_id": str(self.case_id), "line": line.line_no}
-        if not deliveries or len(deliveries) > PC_DELIVERIES_MAX:
-            raise DomainError("a line is delivered at least once", details=details)
+        if len(deliveries) > PC_DELIVERIES_MAX:
+            raise DomainError(
+                "PC splits a line into too many deliveries",
+                details={**details, "max": PC_DELIVERIES_MAX},
+            )
+        _require_not_cancelled(line, details)
         quantities = tuple(quantity for quantity, _ in deliveries)
         total = sum(quantities, Decimal(0))
         po = line.effective
@@ -3477,7 +3526,7 @@ class OrderCase(BaseModel):
             raise ConflictError("dòng này không đổi gì", details={**details, "rule": "no_change"})
         cut = (
             ()
-            if total == po.quantity
+            if total in (po.quantity, 0)
             else (
                 AppliedChange(
                     field="quantity",
@@ -3630,12 +3679,15 @@ class OrderCase(BaseModel):
             raise ConflictError(
                 "a short lead time has no PC-confirmed date", details={**details, "lines": waiting}
             )
-        if set(delivery_dates) != {line.line_no for line in self.lines}:
+        # A line PC cancelled (ticket 10) is delivered never: no date, named
+        # or not.
+        delivered = {line.line_no for line in self.lines if not line.cancelled}
+        if not delivered <= set(delivery_dates) <= {line.line_no for line in self.lines}:
             raise DomainError("every line gets its confirmed delivery date", details=details)
         if miscounted := [
             line.line_no
             for line in self.lines
-            if len(delivery_dates[line.line_no]) != line.deliveries
+            if len(delivery_dates.get(line.line_no, ())) != line.deliveries
         ]:
             raise DomainError(
                 "a line gets one confirmed date per delivery schedule",
@@ -3643,7 +3695,10 @@ class OrderCase(BaseModel):
             )
         lines = tuple(
             OrderLine.model_validate(
-                {**dict(line), "confirmed_delivery_dates": tuple(delivery_dates[line.line_no])}
+                {
+                    **dict(line),
+                    "confirmed_delivery_dates": tuple(delivery_dates.get(line.line_no, ())),
+                }
             )
             for line in self.lines
         )
@@ -4070,6 +4125,16 @@ def _loop_with(loop: UpdateLoop, **changes: object) -> UpdateLoop:
     if step != loop.step and step not in _LOOP_NEXT[loop.step]:
         raise ValueError(f"the update loop does not move from {loop.step} to {step}")
     return UpdateLoop.model_validate({**dict(loop), **changes})
+
+
+def _require_not_cancelled(line: OrderLine, details: Mapping[str, object]) -> None:
+    """A line PC cancelled takes no change, Proterial's or the customer's
+    (ticket 10): it is delivered never, and reviving it is no change
+    either side makes by itself."""
+    if line.cancelled:
+        raise ConflictError(
+            "dòng này đã huỷ", details={**details, "line": line.line_no, "rule": "line_cancelled"}
+        )
 
 
 def _pc_dropped(line: OrderLine, field: str) -> dict[str, object]:

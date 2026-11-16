@@ -146,4 +146,50 @@ describe("Thay đổi nội bộ (ticket 10)", () => {
     expect(await screen.findByText(/cần sửa/)).toBeTruthy();
     expect(api.applyInternalChange).not.toHaveBeenCalled();
   });
+
+  it("applies a line PC cancels whole as a cancel with no delivery, and offers no line already cancelled", async () => {
+    const shown = confirmed();
+    const held = shown.lines[0]!;
+    page({
+      ...shown,
+      lines: [held, { ...held, line_no: 2, cancelled: true }],
+    });
+    fireEvent.click(
+      screen
+        .getAllByText("Thay đổi nội bộ", { selector: "button span" })[0]!
+        .closest("button") as HTMLButtonElement,
+    );
+    const [reason, line] = await screen.findAllByRole("combobox");
+    fireEvent.mouseDown(reason!);
+    fireEvent.click(await screen.findByText("Thiếu hàng, vật tư"));
+    fireEvent.mouseDown(line!);
+    expect(await screen.findByText("Dòng 1: BRN-W-0007")).toBeTruthy();
+    expect(screen.queryByText("Dòng 2: BRN-W-0007")).toBeNull();
+    fireEvent.click(screen.getByText("Dòng 1: BRN-W-0007"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "PC huỷ cả dòng" }));
+    // A cancelled line asks for no delivery.
+    await waitFor(() => expect(screen.queryByText("Thêm một đợt")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Áp dụng" }));
+    const asked = await waitFor(() => {
+      const found = document.querySelector(".ant-modal-confirm");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    expect(asked.textContent).toContain("1 dòng huỷ cả");
+    fireEvent.click(
+      Array.from(asked.querySelectorAll("button")).find(
+        (b) => b.textContent === "Áp dụng",
+      )!,
+    );
+    await waitFor(() => expect(api.applyInternalChange).toHaveBeenCalled());
+    expect(api.applyInternalChange).toHaveBeenCalledWith(
+      shown.case_id,
+      {
+        case_version: 8,
+        reason: "short_stock",
+        lines: [{ line_no: 1, cancelled: true, deliveries: [] }],
+      },
+      expect.any(String),
+    );
+  });
 });

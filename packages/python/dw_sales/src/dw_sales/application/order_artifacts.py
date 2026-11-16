@@ -120,19 +120,23 @@ def upload_values(case: OrderCase, line: OrderLine) -> dict[UploadField, Value]:
     """What the upload file holds for ``line``: the line and the header as
     entered (a value Sales corrected replaces the value as read), the PRV code
     Sales mapped it to, and DW1's suggested date. The one source of the upload
-    value, for the upload file and the cross-check sheet alike."""
+    value, for the upload file and the cross-check sheet alike. A line PC
+    cancelled whole (ticket 10) holds nothing: quantity and amount 0."""
     if line.mapping.prv_code is None:
         raise ConflictError(
             "dòng chưa có mã PRV",
             details={"case_id": str(case.case_id), "line": line.line_no},
         )
-    return line_values(
+    values = line_values(
         case.customer_code,
         case.effective_header,
         line.effective,
         prv_code=line.mapping.prv_code,
         suggested=line.suggested_delivery_date,
     )
+    if line.cancelled:
+        return {**values, "quantity": Decimal(0), "amount": Decimal(0)}
+    return values
 
 
 def line_values(
@@ -180,10 +184,13 @@ def upload_rows(case: OrderCase, line: OrderLine) -> tuple[dict[UploadField, Val
     Once PC answered (ticket 07), each row carries PC's first and current
     date for its delivery, and a line delivered once that PC split over
     several dates is a row per PC delivery: its quantity and amount, the
-    line's requested date and DW1's suggestion."""
+    line's requested date and DW1's suggestion.
+
+    A line PC cancelled whole (ticket 10) is its one row of nothing
+    (`upload_values`), with no confirmed date."""
     rows = delivery_rows(upload_values(case, line), line.effective, line.suggested_date)
     answer = line.pc_answer
-    if answer is None:
+    if answer is None or line.cancelled:
         return rows
     if len(rows) == 1 and len(answer.deliveries) > 1:
         rows = tuple(
@@ -702,6 +709,9 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
             },
         )
         for line in case.lines
+        # A line PC cancelled is confirmed with no date: the notice told the
+        # customer (`internal_change_notice`).
+        if not line.cancelled
     ]
     values = {
         **_order_values(d, language),
@@ -782,8 +792,9 @@ def internal_change_notice(d: OrderDrafting) -> tuple[Rendered, ...]:
     """Proterial's own change of a confirmed order, told to the customer
     (ticket 10, the BA's 6.1B): the reason in the company's words, and each
     changed line with the deliveries PC now gives it and, where PC cut it,
-    its quantity. Every figure is one the Bravo update file holds for the
-    same lines (`bravo_update`); no price, no amount. A person sends it."""
+    its quantity, or that PC cancelled it whole. Every figure is one the
+    Bravo update file holds for the same lines (`bravo_update`); no price,
+    no amount. A person sends it."""
     case, language = d.case, d.language
     loop = case.update_loop
     assert loop is not None and loop.reason is not None  # the gate opens on it only
@@ -801,6 +812,8 @@ def internal_change_notice(d: OrderDrafting) -> tuple[Rendered, ...]:
             )
             for delivery in held.pc_answer.deliveries
         )
+        if not held.pc_answer.deliveries:  # PC cancelled the whole line
+            deliveries = bound.word("cancelled")
         cut = bound.word("cut", quantity=line.quantity, uom=line.uom) if held.changes else ""
         values = {
             "line_no": held.line_no,
@@ -848,6 +861,7 @@ def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:
             None,
         )
         for line in case.lines
+        if not line.cancelled
         for quantity, day in _confirmed(case, line)
     )
     heading: tuple[tuple[str, Value], ...] = (

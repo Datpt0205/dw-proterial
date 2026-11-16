@@ -84,11 +84,11 @@ from dw_sales.domain.handoffs import (
     ModelSampleRequest,
     QuantityRead,
     carries_contact,
-    line_number_of,
     locate,
     locate_identifier,
     quantity_at,
 )
+from dw_sales.domain.named_lines import LineNames, named_line, names_of
 from dw_sales.domain.rfq_reading import parse_date, parse_document_no
 
 # The prompt the spans are copied with. Its file is
@@ -376,18 +376,7 @@ class HandoffReader:
             None,
             case_id,
             tuple(
-                _OrderLine(
-                    line.line_no,
-                    line.mapping.checked_against,
-                    frozenset(
-                        code
-                        for code in (
-                            line.po_line.customer_item_code,
-                            line.mapping.checked_against,
-                        )
-                        if code
-                    ),
-                )
+                _OrderLine(line.line_no, line.mapping.checked_against, names_of(line).codes)
                 for line in live[0].lines
             ),
         )
@@ -445,18 +434,17 @@ class HandoffReader:
     async def _order_line(
         self, scope: SalesScope, customer: Customer, order: _Order, named: str
     ) -> _OrderLine | None:
-        """The one line of ``order`` a reference names: its number, its PRV
-        code or the customer's code for it, else None."""
-        number = line_number_of(named)
-        if number is not None:
-            return next((line for line in order.lines if line.line_no == number), None)
-        code = named.strip().upper()
-        matches = [line for line in order.lines if code in {c.upper() for c in line.codes}]
-        if not matches:
+        """The one line of ``order`` a reference names (`named_line`, the one
+        answer every reader of a line's words shares), else None. Words that
+        name none are, whole, a customer's code the customer's conversion
+        list may turn into the PRV code an ERP order's line is known by."""
+        known = [LineNames(line.line_no, line.codes) for line in order.lines]
+        number = named_line(known, named)
+        if number is None:
             entry = (await self.catalog.convert_entry(scope, customer.code, named.strip())).data
             if entry is not None:
-                matches = [line for line in order.lines if line.prv_code == entry.prv_code]
-        return matches[0] if len(matches) == 1 else None
+                number = named_line(known, entry.prv_code)
+        return next((line for line in order.lines if line.line_no == number), None)
 
     @staticmethod
     def _quantity(

@@ -18,6 +18,7 @@ from datetime import date, datetime
 
 import sqlalchemy as sa
 from sqlalchemy import RowMapping
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -28,6 +29,7 @@ from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import WaitingCase
+from dw_sales.domain.order_quotes import SETTLED
 from dw_sales.domain.orders import OrderStatus
 
 _D = tables.followup_deliveries
@@ -77,6 +79,41 @@ def _implied_from() -> sa.ColumnElement[datetime]:
     )
 
 
+def _elements(column: sa.ColumnElement[object], name: str) -> sa.TableValuedAlias:
+    """A jsonb array column's elements, as rows of one jsonb ``value``."""
+    return sa.func.jsonb_array_elements(column).table_valued(sa.column("value", JSONB)).alias(name)
+
+
+def _design_asked_at() -> sa.ScalarSelect[datetime]:
+    """When Sales recorded the oldest request to Design the order still names
+    (ticket 06); NULL while none. The domain drops a request as its wait
+    ends, so a request named is a wait that holds."""
+    asked = _elements(_O.c.design_requests, "asked")
+    return sa.select(sa.func.min(_at(asked.c.value["at"].astext))).scalar_subquery()
+
+
+def _quote_open_since() -> sa.ScalarSelect[datetime]:
+    """When the oldest quote case opened from the order and still open was
+    opened (ticket 09): its own status, read now, not approved or declined
+    (`order_quotes.SETTLED`); NULL while none is. Read under the same row
+    security as the order, in its tenant and workspace."""
+    link = _elements(_O.c.quote_links, "link")
+    return (
+        sa.select(sa.func.min(_at(link.c.value["at"].astext)))
+        .select_from(link)
+        .join(
+            _Q,
+            sa.and_(
+                _Q.c.tenant_id == _O.c.tenant_id,
+                _Q.c.workspace_id == _O.c.workspace_id,
+                _Q.c.id == sa.cast(link.c.value["quote_case_id"].astext, sa.Uuid),
+            ),
+        )
+        .where(_Q.c.status.notin_(sorted(status.value for status in SETTLED)))
+        .scalar_subquery()
+    )
+
+
 def _day(text: str | None) -> date | None:
     return None if text is None else date.fromisoformat(text)
 
@@ -95,6 +132,9 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         pc_asked_at=row["pc_asked_at"],
         customer_asked_at=row["customer_asked_at"],
         implied_from=row["implied_from"],
+        design_asked_at=row["design_asked_at"],
+        quote_open_since=row["quote_open_since"],
+        design_checked=bool(row["design_checked"]),
     )
 
 
@@ -126,6 +166,11 @@ class SqlFollowupStore:
             _loop_since("waiting_customer").label("customer_asked_at"),
             # When the customer's silence counts as agreement (ticket 28).
             _implied_from().label("implied_from"),
+            # The waits on Design's new code (06) and on a quote opened from
+            # the order (09).
+            _design_asked_at().label("design_asked_at"),
+            _quote_open_since().label("quote_open_since"),
+            sa.false().label("design_checked"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),
@@ -153,6 +198,10 @@ class SqlFollowupStore:
             sa.null().label("pc_asked_at"),
             sa.null().label("customer_asked_at"),
             sa.null().label("implied_from"),
+            sa.null().label("design_asked_at"),
+            sa.null().label("quote_open_since"),
+            # Design's result read from Bravo's YCBG export (ticket 16).
+            _Q.c.body["design_check"].astext.isnot(None).label("design_checked"),
         ).where(
             sa.or_(
                 _Q.c.status.in_(sorted(statuses.get(CaseKind.QUOTE, frozenset()))),

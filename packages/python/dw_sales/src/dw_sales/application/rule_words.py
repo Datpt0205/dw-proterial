@@ -69,7 +69,9 @@ PROMPT_TOKENS: Final = 1400
 OUTPUT_TOKENS: Final = 2500
 
 # The keys whose texts are the company's copy: what a draft prints.
-COPY_KEYS: Final = frozenset({RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.HANDOFFS})
+COPY_KEYS: Final = frozenset(
+    {RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.HANDOFFS, RuleKey.REMINDERS}
+)
 
 
 def apply_changes(

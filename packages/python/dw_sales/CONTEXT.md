@@ -357,7 +357,12 @@ API and the plan use the English terms. The spec is
   entry, the cross-check and the confirmation again. The notice to the
   customer is a draft a person sends ("Thư báo khách thay đổi nội bộ"); it
   states no price (ticket 10). A line's deliveries never add up to more
-  than the customer ordered.
+  than the customer ordered. A **cancelled line** (PC huỷ cả dòng, W07
+  "cancel all") is one PC's answer gives no delivery: it keeps what the
+  customer ordered, its row in the Bravo update file holds nothing
+  (quantity 0, no date), the notice says it is cancelled, the confirmation
+  sent again names no date for it, and it takes no further change. Never
+  every line of an order: that is the order cancelled, not changed.
 - **Confirmation sent** (Đã gửi xác nhận, chờ khách): the PIC recorded the
   order's confirmation sent ("Ghi đã gửi xác nhận", with each line's
   confirmed dates), from now, or from the time of a **sent copy** on the
@@ -417,13 +422,18 @@ API and the plan use the English terms. The spec is
 - **Follow-up** (Nhắc việc): an in-app notification DW1's `sales_followups`
   lane sends a member when a case has waited past a threshold: a PO not
   confirmed (`order_unconfirmed`: the PIC, then the head), a quote request
-  waiting on Design (`quote_waiting_design`), a quote due date near
+  waiting on Design (`quote_waiting_design`, until Design's result is read
+  from Bravo's YCBG export, ticket 16), a quote due date near
   (`quote_deadline`), a case waiting on the customer (`waiting_customer`),
-  an order waiting on PC's dates (`waiting_pc`, ticket 07).
+  an order waiting on PC's dates (`waiting_pc`, ticket 07), on Design's new
+  PRV code (`waiting_design_code`, ticket 06) or on a quote opened from it
+  (`waiting_quote`, ticket 09, read from the quote's own status).
   Each stage goes once per wait; outside working hours it waits for them.
   It informs and decides nothing: DW1 never mails the customer or Design.
   Every timing and switch is the tenant-overridable policy
-  `sales_followups` (ticket 42).
+  `sales_followups` (ticket 42); every word of it, the brief's and a
+  push's is the tenant-overridable copy `sales_reminders` (ticket 42
+  family 6).
 - **Morning brief** (Tóm tắt buổi sáng): one notification per person each
   working morning at the policy's local time: what came in since the last
   brief and whose turn it is, what is due soon or overdue, what waits on

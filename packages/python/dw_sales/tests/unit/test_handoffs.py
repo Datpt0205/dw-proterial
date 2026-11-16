@@ -50,10 +50,10 @@ from dw_sales.domain.handoffs import (
     Handoff,
     HandoffKind,
     carries_contact,
-    line_number_of,
     locate,
     quantity_at,
 )
+from dw_sales.domain.named_lines import LineNames, named_line
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN as _AN
 from dw_sales.evals.graders import CALLERS, GIANG
@@ -488,8 +488,11 @@ def test_spans_quantities_lines_and_contacts_are_read_by_code() -> None:
     assert locate(part, "VLX-PO-2608-0102", bounded=True) is not None
     assert locate(part, "2.000", bounded=True) is not None
     assert locate(part, "000", bounded=True) is None
-    named = ("2", "Dòng 1 (VX-C4B22)", "Line 12", "2行目", "VX-C4B22", "12 cuộn")
-    assert [line_number_of(s) for s in named] == [2, 1, 12, 2, None, None]
+    # Which line, as every reader of a line's words answers it
+    # (`named_lines`): an ERP order's twelve lines, known by no code here.
+    lines = [LineNames(n, frozenset()) for n in range(1, 13)]
+    named = ("2", "Dòng 1 (VX-C4B22)", "Line 12", "2行目", "VX-C4B22", "2 cuộn và 3 cuộn")
+    assert [named_line(lines, s) for s in named] == [2, 1, 12, 2, None, None]
     assert carries_contact("send it to qa@velatrix.example")
     assert carries_contact("see https://example.test/form")
     assert carries_contact("call +84 28 3812 3456")

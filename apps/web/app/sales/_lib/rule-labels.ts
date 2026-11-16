@@ -117,6 +117,23 @@ export const PLACEHOLDER: Record<string, string> = {
   checker: "Người kiểm chéo",
   reason: "Lý do",
   summary: "Tóm tắt",
+  // The follow-ups' words (`reminder_copy.py`).
+  ref: "Số PO hoặc số yêu cầu báo giá",
+  since: "Bắt đầu chờ từ",
+  hours: "Số giờ đã chờ",
+  due: "Ngày hạn",
+  next_step: "Việc cần làm tiếp",
+  day: "Ngày",
+  new: "Số hồ sơ mới",
+  new_orders: "Số đơn hàng mới",
+  new_quotes: "Số báo giá mới",
+  whose: "Của ai",
+  waiting: "Số hồ sơ đang chờ từng bên",
+  soon_orders: "Số đơn hàng sắp đến hạn",
+  soon_quotes: "Số báo giá sắp đến hạn",
+  late_orders: "Số đơn hàng quá hạn",
+  late_quotes: "Số báo giá quá hạn",
+  count: "Số việc",
 };
 
 /** "{po_no}", "${po_no}" or "po_no" → "Số PO", or the name itself. */
@@ -127,6 +144,8 @@ export function placeholderLabel(name: string): string {
 
 const TEMPLATE_HELP =
   "Giá trị trong ${…} do hệ thống điền từ hồ sơ; chỉ dùng giá trị mà mẫu này có.";
+const REMINDER_HELP =
+  "Giá trị trong {…} do hệ thống điền từ hồ sơ; mỗi mẫu chỉ dùng giá trị mà lời nhắc đó có.";
 
 export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
   sales_order_rules: {
@@ -602,6 +621,30 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_pc.remind.notify": { label: "Nhắc ai" },
+    waiting_design_code: {
+      label: "Đơn hàng chờ Design tạo mã",
+      help: "Sales đã đề nghị Design tạo mã PRV cho một dòng mà dòng vẫn chưa có mã. DW1 chỉ nhắc người phụ trách, không tự gửi cho Design.",
+    },
+    "waiting_design_code.enabled": { label: "Bật nhắc chờ Design tạo mã" },
+    "waiting_design_code.remind": { label: "Lời nhắc" },
+    "waiting_design_code.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc ghi đã gửi Design, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "waiting_design_code.remind.notify": { label: "Nhắc ai" },
+    waiting_quote: {
+      label: "Đơn hàng chờ báo giá mở từ đơn",
+      help: "Báo giá mở từ đơn chưa được duyệt hoặc từ chối, nên đơn chưa chuẩn bị được.",
+    },
+    "waiting_quote.enabled": { label: "Bật nhắc đơn chờ báo giá" },
+    "waiting_quote.remind": { label: "Lời nhắc" },
+    "waiting_quote.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc mở báo giá từ đơn, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "waiting_quote.remind.notify": { label: "Nhắc ai" },
     implied_acceptance: {
       label: "Khách im lặng quá hạn xác nhận",
       help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 báo một lần cho Sales phụ trách. DW1 không tự ghi đồng ý ngầm.",
@@ -658,6 +701,205 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Ghi số PO, số yêu cầu báo giá trên màn hình khóa",
       help: "Tắt thì thông báo chỉ ghi loại việc.",
     },
+  },
+  sales_reminders: {
+    reminders: {
+      label: "Lời nhắc",
+      help: "Một mẫu cho mỗi loại lời nhắc. Khi nào nhắc và nhắc ai đặt ở Nhắc việc và tóm tắt buổi sáng.",
+    },
+    "reminders.your_turn_order_head": {
+      label: "Đơn chờ Trưởng bộ phận kiểm chéo",
+    },
+    "reminders.your_turn_order_head.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_order_head.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_quote_head": {
+      label: "Báo giá chờ Trưởng bộ phận duyệt",
+    },
+    "reminders.your_turn_quote_head.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_quote_head.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_order": {
+      label: "Đến lượt Sales phụ trách: đơn hàng",
+    },
+    "reminders.your_turn_order.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_order.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_quote": { label: "Đến lượt Sales phụ trách: báo giá" },
+    "reminders.your_turn_quote.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.your_turn_quote.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.order_unconfirmed_remind": {
+      label: "PO chưa xác nhận: lần nhắc đầu",
+    },
+    "reminders.order_unconfirmed_remind.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.order_unconfirmed_remind.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.order_unconfirmed_escalate": {
+      label: "PO chưa xác nhận: báo lên cấp trên",
+    },
+    "reminders.order_unconfirmed_escalate.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.order_unconfirmed_escalate.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_waiting_design": { label: "Yêu cầu báo giá chờ Design" },
+    "reminders.quote_waiting_design.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_waiting_design.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_deadline_soon": { label: "Sắp đến hạn báo giá" },
+    "reminders.quote_deadline_soon.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_deadline_soon.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_deadline_late": { label: "Quá hạn báo giá" },
+    "reminders.quote_deadline_late.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.quote_deadline_late.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_pc": { label: "Chờ PC trả ngày giao" },
+    "reminders.waiting_pc.title": { label: "Tiêu đề", help: REMINDER_HELP },
+    "reminders.waiting_pc.body": { label: "Nội dung", help: REMINDER_HELP },
+    "reminders.implied_acceptance": { label: "Khách im lặng quá hạn xác nhận" },
+    "reminders.implied_acceptance.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.implied_acceptance.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_change": {
+      label: "Chờ khách quyết định về thay đổi",
+    },
+    "reminders.waiting_customer_change.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_change.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_correction": { label: "Chờ khách sửa PO" },
+    "reminders.waiting_customer_correction.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_correction.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_spec": { label: "Chờ khách thống nhất spec" },
+    "reminders.waiting_customer_spec.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_customer_spec.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_design_code": { label: "Chờ Design tạo mã mới" },
+    "reminders.waiting_design_code.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_design_code.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_quote": { label: "Đơn chờ báo giá mở từ đơn" },
+    "reminders.waiting_quote.title": { label: "Tiêu đề", help: REMINDER_HELP },
+    "reminders.waiting_quote.body": { label: "Nội dung", help: REMINDER_HELP },
+    next_steps: {
+      label: "Việc cần làm tiếp",
+      help: "Câu nói Sales làm gì tiếp khi đến lượt, ghi trong lời nhắc và bản tin.",
+    },
+    "next_steps.ycbg_drafted": { label: "Khi DW1 đã soạn YCBG" },
+    "next_steps.design_replied": { label: "Khi Design đã trả lời" },
+    "next_steps.other": { label: "Các trường hợp khác" },
+    brief: {
+      label: "Bản tin buổi sáng",
+      help: "Tiêu đề và ba dòng số đếm. Không có số tiền.",
+    },
+    "brief.title": { label: "Tiêu đề", help: REMINDER_HELP },
+    "brief.new_line": { label: "Dòng hồ sơ mới", help: REMINDER_HELP },
+    "brief.due_line": {
+      label: "Dòng sắp đến hạn và quá hạn",
+      help: REMINDER_HELP,
+    },
+    "brief.waiting_line": { label: "Dòng đang chờ", help: REMINDER_HELP },
+    "brief.workspace": { label: "Bản tin của Trưởng bộ phận gọi là" },
+    "brief.mine": { label: "Bản tin của Sales phụ trách gọi là" },
+    "brief.nothing": { label: "Khi không có hồ sơ nào đang chờ" },
+    "brief.waits_on": {
+      label: "Tên bên hồ sơ đang chờ",
+      item: "Bên",
+      value: "Gọi là",
+    },
+    push: {
+      label: "Thông báo trên điện thoại",
+      help: "Vài chữ về loại việc. Không ghi tên khách, giá hay lời của khách; số hồ sơ do hệ thống thêm sau tên loại hồ sơ khi được phép.",
+    },
+    "push.your_turn": { label: "Đến lượt bạn" },
+    "push.head_order": { label: "Chờ Trưởng bộ phận kiểm chéo" },
+    "push.head_quote": { label: "Chờ Trưởng bộ phận duyệt" },
+    "push.order_unconfirmed_remind": { label: "PO sắp quá hạn xác nhận" },
+    "push.order_unconfirmed_escalate": { label: "PO quá hạn xác nhận" },
+    "push.quote_waiting_design": { label: "Chờ Design quá lâu" },
+    "push.quote_deadline": { label: "Sắp đến hạn báo giá" },
+    "push.waiting_customer": { label: "Chờ khách quá lâu" },
+    "push.waiting_pc": { label: "Chờ PC quá lâu" },
+    "push.implied_acceptance": { label: "Khách im lặng quá hạn" },
+    "push.waiting_design_code": { label: "Chờ Design tạo mã quá lâu" },
+    "push.waiting_quote": { label: "Chờ báo giá quá lâu" },
+    "push.batch_title": {
+      label: "Tiêu đề khi có nhiều việc cùng lúc",
+      help: REMINDER_HELP,
+    },
+    "push.batch_body": { label: "Nội dung khi có nhiều việc cùng lúc" },
+    "push.order": { label: "Tên loại hồ sơ: đơn hàng" },
+    "push.quote": { label: "Tên loại hồ sơ: báo giá" },
   },
 };
 
@@ -743,6 +985,12 @@ const VALUES: Record<string, string> = {
   destination: "Nơi giao",
   shipment_type: "Loại lô hàng",
   common: "Phần chung của mọi phiếu",
+  // Whom a case waits on (the brief's words, `sales_reminders`).
+  dw: "DW1",
+  sales: "Sales",
+  design: "Design",
+  approver: "Người duyệt",
+  customer: "Khách hàng",
   ...FIELD,
   ...LANGUAGE,
   ...FINDING_CODE,

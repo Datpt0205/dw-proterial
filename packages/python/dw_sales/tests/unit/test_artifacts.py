@@ -126,7 +126,9 @@ from dw_sales.domain.orders import (
     LinePo,
     MappingStatus,
     OrderCase,
+    OrderLine,
     OrderStatus,
+    PcAnswer,
 )
 from dw_sales.domain.quotes import (
     DeclineReason,
@@ -170,7 +172,7 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
-FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.4.0.yaml")
+FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.6.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
     emails=load_copy(COPY / "sales_emails@1.5.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.3.0.yaml", SalesDocumentCopy),
@@ -1604,6 +1606,24 @@ async def test_an_order_confirmation_renders_in_each_language(
 
 async def _confirmed_cvg() -> OrderCase:
     return confirmed(decided_all(await in_review("M02")))
+
+
+async def test_a_line_pc_cancelled_is_confirmed_with_no_date() -> None:
+    """Ticket 10: a line PC cancelled whole (its answer gives no delivery)
+    is not in the confirmation's lines, which every other line still is."""
+    case = await _confirmed_m01()
+    none = PcAnswer(deliveries=(), by=AN, at=T0)
+    lines = tuple(
+        OrderLine.model_validate({**dict(line), "pc_answer": none, "confirmed_delivery_dates": ()})
+        if line.line_no == 2
+        else line
+        for line in case.lines
+    )
+    body = _body(
+        await _one(case.model_validate({**dict(case), "lines": lines}), "confirmation_draft")
+    )
+
+    assert "Dòng 1:" in body and "Dòng 2:" not in body
 
 
 # ---------------------------------------------------------------- quotation --

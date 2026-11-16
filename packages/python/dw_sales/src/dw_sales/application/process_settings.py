@@ -101,7 +101,9 @@ from dw_sales.domain.orders import (
     OrderStatus,
     UpdateStep,
     changeable_statuses,
+    design_wait_statuses,
     order_moves,
+    quote_wait_statuses,
     update_loop_moves,
     update_loop_statuses,
 )
@@ -188,11 +190,13 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "legacy_encoding",
                 ),
             ),
-            # The PRV code from the convert list.
+            # The PRV code from the convert list, and how long DW1 waits on
+            # Design's new code before reminding the PIC (ticket 06).
             _step(
                 StepId.O2,
                 _in(_ORDER, "model_assist.description_attributes"),
                 _severities("code_unmapped", "code_ambiguous"),
+                _in(_FOLLOWUPS, "waiting_design_code"),
             ),
             # Enter the PO: a new layout's first POs and a PO written in the
             # mail, read value by value.
@@ -216,7 +220,8 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                 _in(_FOLLOWUPS, "waiting_pc"),
             ),
             _step(StepId.O5),
-            # The check against the quotation.
+            # The check against the quotation, and how long an order waits on
+            # a quote opened from it before DW1 reminds the PIC (ticket 09).
             _step(
                 StepId.O6,
                 _in(_ORDER, "price.relative_tolerance", "lme_band.months_before_po_date"),
@@ -231,6 +236,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "reel_length_mismatch",
                     "spec_mismatch",
                 ),
+                _in(_FOLLOWUPS, "waiting_quote"),
             ),
             # The upload file: filled by the customer's SalesOrder skill where
             # that step is on and meets its bar, by the learned rules
@@ -675,7 +681,8 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
             for path in ("schema_version", "copy_id", "version", "mock", "description")
         },
         **{
-            Placement(RuleKey.HANDOFFS, path): _VERSION
+            Placement(key, path): _VERSION
+            for key in (RuleKey.HANDOFFS, RuleKey.REMINDERS)
             for path in ("schema_version", "copy_id", "version")
         },
         Placement(RuleKey.EMAILS, "sender"): _COPY,
@@ -690,6 +697,10 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         Placement(RuleKey.HANDOFFS, "templates"): _COPY,
         Placement(RuleKey.HANDOFFS, "pc_request"): _COPY,
         Placement(RuleKey.HANDOFFS, "design_request"): _COPY,
+        Placement(RuleKey.REMINDERS, "reminders"): _COPY,
+        Placement(RuleKey.REMINDERS, "next_steps"): _COPY,
+        Placement(RuleKey.REMINDERS, "brief"): _COPY,
+        Placement(RuleKey.REMINDERS, "push"): _COPY,
         **{
             Placement(RuleKey.SALESORDER_RULES, path): _VERSION
             for path in ("schema_version", "policy_id", "policy_version", "mock", "description")
@@ -730,6 +741,10 @@ class SubflowKey(StrEnum):
     CHANGE_REQUEST = "change_request"
     # The update loop on an order whose confirmation has left (29).
     UPDATE = "update"
+    # Sales asked Design for a new PRV code for a line (06).
+    DESIGN_CODE = "design_code"
+    # A quote case opened from the order, not yet approved or declined (09).
+    QUOTE = "quote"
 
 
 @dataclass(frozen=True, slots=True)
@@ -769,6 +784,16 @@ SUBFLOWS: Final[Mapping[CaseKind, Mapping[SubflowKey, Subflow]]] = MappingProxyT
                     steps=_UPDATE_STEPS,
                     statuses=update_loop_statuses(),
                     moves=update_loop_moves(),
+                ),
+                SubflowKey.DESIGN_CODE: Subflow(
+                    steps=("waiting_design",),
+                    statuses={"waiting_design": design_wait_statuses()},
+                    moves={},
+                ),
+                SubflowKey.QUOTE: Subflow(
+                    steps=("waiting_quote",),
+                    statuses={"waiting_quote": quote_wait_statuses()},
+                    moves={},
                 ),
             }
         ),

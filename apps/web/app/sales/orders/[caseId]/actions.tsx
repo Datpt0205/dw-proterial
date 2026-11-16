@@ -595,8 +595,10 @@ function ConfirmDrawer({
   const [form] = Form.useForm<Record<string, unknown>>();
   const [failed, setFailed] = useState(0);
   const copy = order.confirmation_copy;
+  // A line PC cancelled (ticket 10) is delivered never: no date to confirm.
+  const delivered = order.lines.filter((l) => !l.cancelled);
   const initial: Record<string, unknown> = {};
-  for (const l of order.lines) {
+  for (const l of delivered) {
     const split = deliveriesOf(l);
     if (split) {
       split.forEach((s, index) => {
@@ -658,7 +660,7 @@ function ConfirmDrawer({
           form.setFieldsValue(
             Object.fromEntries(
               dates.flatMap((d) => {
-                const line = order.lines.find((l) => l.line_no === d.line_no);
+                const line = delivered.find((l) => l.line_no === d.line_no);
                 if (!line) return [];
                 const name = deliveriesOf(line)
                   ? dateField(line, d.delivery - 1)
@@ -691,7 +693,7 @@ function ConfirmDrawer({
           const body = {
             case_version: order.case_version,
             ...(copy ? { sent_message_id: copy.message_id } : {}),
-            delivery_dates: order.lines.map((l) => {
+            delivery_dates: delivered.map((l) => {
               const split = deliveriesOf(l);
               return split
                 ? {
@@ -717,7 +719,7 @@ function ConfirmDrawer({
           size="small"
           rowKey="line_no"
           pagination={false}
-          dataSource={order.lines}
+          dataSource={delivered}
           scroll={{ x: "max-content" }}
           columns={[
             { title: "Dòng", dataIndex: "line_no" },

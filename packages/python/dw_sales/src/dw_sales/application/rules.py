@@ -53,7 +53,7 @@ overview), since ticket 19; the quote rules and the pricing policy (the
 quotation flow), the e-mail and document copy and the Bravo upload template
 (every artifact), and the hand-off copy (the inbox), since ticket 36; the
 follow-ups and the morning brief (the worker's `sales_followups` lane), since
-ticket 42.
+ticket 42, and their words (`sales_reminders`, the same lane) since its family 6.
 Proposing any other key is refused (422): a stored version nothing reads would
 look like a safeguard and be none (failure-modes #1).
 
@@ -124,6 +124,7 @@ from dw_sales.application.model_readiness import (
 )
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
+from dw_sales.application.reminder_copy import ReminderCopy
 from dw_sales.application.salesorder_rules import SalesOrderRules
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
@@ -178,6 +179,7 @@ class RuleKey(StrEnum):
     HANDOFFS = "sales_handoffs"
     FOLLOWUPS = "sales_followups"
     SALESORDER_RULES = "sales_salesorder_rules"
+    REMINDERS = "sales_reminders"
 
 
 type Policy = (
@@ -191,6 +193,7 @@ type Policy = (
     | HandoffCopy
     | SalesFollowups
     | SalesOrderRules
+    | ReminderCopy
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -206,6 +209,7 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.HANDOFFS: HandoffCopy,
         RuleKey.FOLLOWUPS: SalesFollowups,
         RuleKey.SALESORDER_RULES: SalesOrderRules,
+        RuleKey.REMINDERS: ReminderCopy,
     }
 )
 # The keys a version may be drafted for from the company's own file ("Tạo từ
@@ -243,8 +247,8 @@ class TenantRuleBook(RuleBook):
 
     Each reader asks through its own port, which a typed method here
     satisfies: `KpiPort`, `QuotePoliciesPort`, `ArtifactCopyPort` and
-    `HandoffCopyPort`, `FollowupPolicyPort` and `LocalZonePort`; `OrderRulesPort` through
-    `RuleBookOrderRules`."""
+    `HandoffCopyPort`, `FollowupPolicyPort`, `ReminderCopyPort` and
+    `LocalZonePort`; `OrderRulesPort` through `RuleBookOrderRules`."""
 
     schemas: Mapping[Any, type[BaseModel]] = field(default_factory=_sales_schemas)
 
@@ -280,6 +284,11 @@ class TenantRuleBook(RuleBook):
     async def followups(self, scope: SalesScope) -> SalesFollowups:
         policy = (await self.current(scope, RuleKey.FOLLOWUPS)).policy
         assert isinstance(policy, SalesFollowups)
+        return policy
+
+    async def reminder_copy(self, scope: SalesScope) -> ReminderCopy:
+        policy = (await self.current(scope, RuleKey.REMINDERS)).policy
+        assert isinstance(policy, ReminderCopy)
         return policy
 
     async def salesorder_rules(self, scope: SalesScope) -> SalesOrderRules:

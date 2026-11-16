@@ -40,6 +40,11 @@ cases: reference, customer code, who it waits on, due date, next step; never
 an amount or a name). The counts follow either way, and a writer that
 declines or fails leaves the brief as it always was.
 
+**Its words are the tenant's copy** (`sales_reminders`, ticket 42 family 6):
+read once per tick through the rule book like the timings, the tenant's
+approved version else the platform's file. Code picks the template and fills
+it; nothing a template says decides anything.
+
 **Paused DW1 reminds nobody.** The pause stops what DW1 does (decided
 2026-10-12, extended to rendering by `f4705f9`); a reminder owed meanwhile
 is sent when DW1 is resumed, if the case still waits.
@@ -54,7 +59,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from types import MappingProxyType
@@ -69,6 +74,18 @@ from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.overview_ports import BUCKETS, Bucket, FollowupPolicyPort
 from dw_sales.application.overview_service import STATUS_BUCKETS, WHOSE_TURN
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
+from dw_sales.application.reminder_copy import (
+    BriefWords,
+    DueReminder,
+    HoursReminder,
+    NextSteps,
+    PushWords,
+    ReminderCopy,
+    ReminderCopyPort,
+    ReminderWords,
+    SinceReminder,
+    TurnReminder,
+)
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
     Audience,
@@ -99,13 +116,6 @@ _PICS: Final = frozenset({SalesScopes.ORDER_PREPARE.value, SalesScopes.QUOTE_PRE
 # status a follow-up watches is one (`test_followups.py` holds the two).
 LOADED: Final[Mapping[CaseKind, frozenset[str]]] = {
     kind: frozenset(statuses) for kind, statuses in STATUS_BUCKETS.items()
-}
-_BUCKET_WORDS: Final[Mapping[Bucket, str]] = {
-    "dw": "DW1",
-    "sales": "Sales",
-    "design": "Design",
-    "approver": "Người duyệt",
-    "customer": "Khách",
 }
 _REFERENCE_LIMIT: Final = 60
 # How long a brief's record is kept: only today's is asked for.
@@ -228,6 +238,11 @@ def lane_context(scope: SalesScope) -> AccessContext:
     )
 
 
+class FollowupRulesPort(FollowupPolicyPort, ReminderCopyPort, Protocol):
+    """The tenant's follow-up timings and their words, both through the rule
+    book (`TenantRuleBook`)."""
+
+
 class BriefWriterPort(Protocol):
     """The opening of ``person``'s brief, written from ``facts``; None to send
     the brief as it is (`dw_sales.application.brief_writing.BriefWriter`)."""
@@ -265,7 +280,7 @@ class PushNoticePort(Protocol):
 @dataclass(frozen=True)
 class FollowupLane:
     uow: SalesUnitOfWorkFactory
-    policies: FollowupPolicyPort
+    policies: FollowupRulesPort
     holders: ScopeHoldersPort
     notifications: NotificationSenderPort
     clock: UtcClock
@@ -277,6 +292,7 @@ class FollowupLane:
 
     async def tick(self, scope: SalesScope) -> FollowupTick:
         policy = await self.policies.followups(scope)
+        copy = await self.policies.reminder_copy(scope)
         now = self.clock.now()
         slot = brief_slot(policy, now)
         async with self.uow(scope) as work:
@@ -298,16 +314,16 @@ class FollowupLane:
         # many (ticket 48: several within a tick's few minutes ring once).
         told: dict[uuid.UUID, list[Due]] = {}
         for due in pending:
-            delivered = await self._remind(scope, policy, due, now)
+            delivered = await self._remind(scope, policy, copy, due, now)
             if delivered is not None:
                 key, recipients = delivered
                 sent.append(key)
                 for person in recipients:
                     told.setdefault(person, []).append(due)
         if told and self.push is not None:
-            await self._push(scope, policy, told, now)
+            await self._push(scope, policy, copy.push, told, now)
         if slot is not None and brief_key is not None and brief_key not in done:
-            briefed = await self._brief(scope, policy, slot, brief_key, cases, now)
+            briefed = await self._brief(scope, policy, copy, slot, brief_key, cases, now)
             if briefed is not None:
                 sent.append(briefed)
         return FollowupTick(sent=tuple(sent), deferred=deferred)
@@ -315,7 +331,12 @@ class FollowupLane:
     # ------------------------------------------------------------- stages --
 
     async def _remind(
-        self, scope: SalesScope, policy: SalesFollowups, due: Due, now: datetime
+        self,
+        scope: SalesScope,
+        policy: SalesFollowups,
+        copy: ReminderCopy,
+        due: Due,
+        now: datetime,
     ) -> tuple[str, list[uuid.UUID]] | None:
         """The source key and whom it told, when this tick recorded it; None
         when not delivered, or recorded already by another worker (which
@@ -324,7 +345,7 @@ class FollowupLane:
         if not recipients:
             return None
         key = key_of(due)
-        title, body = reminder_text(policy, due, now)
+        title, body = reminder_text(copy, policy, due, now)
         try:
             await self.notifications.deliver(
                 lane_context(scope),
@@ -406,6 +427,7 @@ class FollowupLane:
         self,
         scope: SalesScope,
         policy: SalesFollowups,
+        words: PushWords,
         told: Mapping[uuid.UUID, Sequence[Due]],
         now: datetime,
     ) -> None:
@@ -414,7 +436,7 @@ class FollowupLane:
         one that fails is logged and not tried again."""
         assert self.push is not None
         for person, dues in told.items():
-            notice = push_notice(dues, case_number=policy.push.case_number)
+            notice = push_notice(words, dues, case_number=policy.push.case_number)
             try:
                 outcome = await self.push.push(
                     scope.tenant_id.value, scope.workspace_id.value, person, notice.payload()
@@ -452,6 +474,7 @@ class FollowupLane:
         self,
         scope: SalesScope,
         policy: SalesFollowups,
+        copy: ReminderCopy,
         slot: BriefSlot,
         key: FollowupKey,
         cases: Sequence[WaitingCase],
@@ -470,9 +493,11 @@ class FollowupLane:
             brief = brief_of(cases, slot, policy, whose)
             if brief.empty:
                 continue
-            title, body = brief_text(brief, slot, workspace=whose is None)
+            title, body = brief_text(copy, brief, slot, workspace=whose is None)
             opening = (
-                await self._opening(scope, person, brief_facts(brief, cases, slot, policy, whose))
+                await self._opening(
+                    scope, person, brief_facts(copy, brief, cases, slot, policy, whose)
+                )
                 if policy.morning_brief.model_opening
                 else None
             )
@@ -543,109 +568,78 @@ def _day(day: date) -> str:
 
 # What the person does next, where DW1 has done the step before it: said in
 # the notice itself, so nobody has to open the case to learn it.
-_NEXT_STEP: Final[Mapping[tuple[CaseKind, str], str]] = MappingProxyType(
+_NEXT_STEP: Final[Mapping[tuple[CaseKind, str], Callable[[NextSteps], str]]] = MappingProxyType(
     {
-        (CaseKind.QUOTE, QuoteStatus.YCBG_DRAFTED.value): (
-            "DW1 đã soạn YCBG: nhập vào Bravo rồi ghi số YCBG để gửi Design."
-        ),
-        (CaseKind.QUOTE, QuoteStatus.DESIGN_REPLIED.value): (
-            "Design đã trả lời: quyết định giá, DW1 đã gợi ý giá kèm căn cứ."
-        ),
+        (CaseKind.QUOTE, QuoteStatus.YCBG_DRAFTED.value): lambda w: w.ycbg_drafted,
+        (CaseKind.QUOTE, QuoteStatus.DESIGN_REPLIED.value): lambda w: w.design_replied,
     }
 )
 
 
-def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str, str]:
-    """A reminder's title and body: the case's number and customer code, when
-    the wait began and how long the threshold is. Never an amount."""
+def _next_step(words: NextSteps, case: WaitingCase) -> str | None:
+    step = _NEXT_STEP.get((case.kind, case.status))
+    return None if step is None else step(words)
+
+
+type Template = SinceReminder | HoursReminder | DueReminder | TurnReminder
+
+
+def reminder_text(
+    copy: ReminderCopy, policy: SalesFollowups, due: Due, now: datetime
+) -> tuple[str, str]:
+    """A reminder's title and body, in the tenant's words: the case's number
+    and customer code, when the wait began and how long the threshold is.
+    Never an amount. Which template, and every value in it, is code's; a
+    template names only its own (`reminder_copy`), so the rest go unused."""
     case = due.case
-    ref, customer = _reference(case), case.customer_code
-    since = _local(due.since, policy)
+    template, hours = _template(copy.reminders, policy, due, now)
+    values: dict[str, object] = {
+        "ref": _reference(case),
+        "customer": case.customer_code,
+        "since": _local(due.since, policy),
+        "next_step": _next_step(copy.next_steps, case) or copy.next_steps.other,
+        "hours": hours,
+        "due": _day(case.due) if case.due is not None else None,
+    }
+    return template.title.format(**values), template.body.format(**values)
+
+
+def _template(
+    words: ReminderWords, policy: SalesFollowups, due: Due, now: datetime
+) -> tuple[Template, int | None]:
+    """The template ``due`` is said with, and the threshold it counts in
+    hours where it counts one."""
+    case = due.case
+    order = case.kind is CaseKind.ORDER
     match due.followup, due.stage:
+        case Followup.YOUR_TURN, _ if due.notify == ("head",):
+            return (words.your_turn_order_head if order else words.your_turn_quote_head), None
         case Followup.YOUR_TURN, _:
-            what = "PO" if case.kind is CaseKind.ORDER else "Báo giá"
-            if due.notify == ("head",):
-                step = "kiểm chéo" if case.kind is CaseKind.ORDER else "duyệt"
-                return (
-                    f"{what} {ref} chờ {step}",
-                    f"{what} {ref} của khách {customer} chờ {step} từ {since}. "
-                    "Mở hồ sơ để giao hoặc tự xử lý.",
-                )
-            step = _NEXT_STEP.get((case.kind, case.status), "Mở hồ sơ để xem việc cần làm.")
-            return (
-                f"Đến lượt bạn: {what} {ref}",
-                f"DW1 đã xong phần của mình; {what.lower()} {ref} của khách {customer} "
-                f"chờ bạn từ {since}. {step}",
-            )
+            return (words.your_turn_order if order else words.your_turn_quote), None
         case Followup.ORDER_UNCONFIRMED, Stage.REMIND:
-            hours = policy.order_unconfirmed.remind.after_hours
-            return (
-                f"Nhắc: PO {ref} chưa xác nhận",
-                f"PO {ref} của khách {customer} đến lúc {since}, đã hơn {hours} giờ mà "
-                "chưa xác nhận. Mở hồ sơ để xử lý.",
-            )
+            return words.order_unconfirmed_remind, policy.order_unconfirmed.remind.after_hours
         case Followup.ORDER_UNCONFIRMED, _:
-            hours = policy.order_unconfirmed.escalate.after_hours
-            return (
-                f"PO {ref} quá {hours} giờ chưa xác nhận",
-                f"PO {ref} của khách {customer} đến lúc {since}, đã hơn {hours} giờ mà "
-                "Sales chưa xác nhận.",
-            )
+            return words.order_unconfirmed_escalate, policy.order_unconfirmed.escalate.after_hours
         case Followup.QUOTE_WAITING_DESIGN, _:
-            hours = policy.quote_waiting_design.remind.after_hours
-            return (
-                f"Nhắc: báo giá {ref} đang chờ Design",
-                f"Yêu cầu báo giá {ref} của khách {customer} chờ Design (mã BP, spec) từ "
-                f"{since}, đã hơn {hours} giờ. DW1 không gửi thư cho Design: bạn quyết "
-                "định có nhắc Design hay không.",
-            )
+            return words.quote_waiting_design, policy.quote_waiting_design.remind.after_hours
         case Followup.QUOTE_DEADLINE, _:
             assert case.due is not None  # a deadline stage is owed only on a due date
             late = now >= due.since
-            return (
-                f"{'Quá hạn' if late else 'Sắp đến hạn'} báo giá {ref}: {_day(case.due)}",
-                f"Báo giá {ref} của khách {customer} "
-                f"{'đã quá hạn' if late else 'đến hạn'} ngày {_day(case.due)} mà chưa gửi khách.",
-            )
+            return (words.quote_deadline_late if late else words.quote_deadline_soon), None
         case Followup.WAITING_PC, _:
-            hours = policy.waiting_pc.remind.after_hours
-            return (
-                f"Nhắc: PO {ref} đang chờ PC trả ngày giao",
-                f"Đã hỏi PC ngày giao cho PO {ref} của khách {customer} từ {since}, hơn "
-                f"{hours} giờ chưa ghi được ngày PC trả lời. DW1 không gửi thư cho PC: "
-                "bạn quyết định có nhắc PC hay không.",
-            )
+            return words.waiting_pc, policy.waiting_pc.remind.after_hours
         case Followup.IMPLIED_ACCEPTANCE, _:
-            return (
-                f"PO {ref}: khách im lặng quá hạn",
-                f"Khách {customer} chưa trả lời xác nhận PO {ref}, đã quá số ngày được coi là "
-                f"đồng ý (từ {since}). DW1 không tự ghi: mở hồ sơ để ghi khách đồng ý ngầm, "
-                "hoặc hỏi lại khách.",
-            )
+            return words.implied_acceptance, None
+        case Followup.WAITING_DESIGN_CODE, _:
+            return words.waiting_design_code, policy.waiting_design_code.remind.after_hours
+        case Followup.WAITING_QUOTE, _:
+            return words.waiting_quote, policy.waiting_quote.remind.after_hours
         case Followup.WAITING_CUSTOMER, _ if case.customer_asked_at is not None:
-            hours = policy.waiting_customer.remind.after_hours
-            return (
-                f"Nhắc: PO {ref} đang chờ khách trả lời về thay đổi",
-                f"Đã gửi khách {customer} trả lời về thay đổi PO {ref} từ {since}, hơn "
-                f"{hours} giờ chưa ghi được khách quyết định. DW1 không gửi thư cho khách: "
-                "bạn quyết định có nhắc khách hay không.",
-            )
-        case Followup.WAITING_CUSTOMER, _ if case.kind is CaseKind.ORDER:
-            hours = policy.waiting_customer.remind.after_hours
-            return (
-                f"Nhắc: PO {ref} đang chờ khách sửa",
-                f"Đã yêu cầu khách {customer} sửa PO {ref} từ {since}, hơn {hours} giờ "
-                "chưa có PO sửa. DW1 không gửi thư cho khách: bạn quyết định có nhắc "
-                "khách hay không.",
-            )
+            return words.waiting_customer_change, policy.waiting_customer.remind.after_hours
+        case Followup.WAITING_CUSTOMER, _ if order:
+            return words.waiting_customer_correction, policy.waiting_customer.remind.after_hours
         case _:
-            hours = policy.waiting_customer.remind.after_hours
-            return (
-                f"Nhắc: báo giá {ref} đang chờ khách thống nhất spec",
-                f"Báo giá {ref} của khách {customer} chờ khách thống nhất spec từ {since}, "
-                f"hơn {hours} giờ. DW1 không gửi thư cho khách: bạn quyết định có nhắc "
-                "khách hay không.",
-            )
+            return words.waiting_customer_spec, policy.waiting_customer.remind.after_hours
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,6 +709,7 @@ _KIND_WORDS: Final[Mapping[CaseKind, str]] = {
 
 
 def brief_facts(
+    copy: ReminderCopy,
     brief: Brief,
     cases: Sequence[WaitingCase],
     slot: BriefSlot,
@@ -724,7 +719,9 @@ def brief_facts(
     """What a writer is told: the brief's counts and the most pressing of
     ``person``'s cases (the workspace's for None), overdue first, then due
     soon, then the longest waiting. References and customer codes, never an
-    amount or a name."""
+    amount or a name. Whom a case waits on and its next step in the tenant's
+    words, as its reminders say them."""
+    waits_on = copy.brief.waits_on
     mine = [
         (c, b)
         for c in cases
@@ -750,65 +747,84 @@ def brief_facts(
         "overdue": {_KIND_WORDS[k]: n for k, n in brief.overdue.items()},
         "due_within_days": policy.morning_brief.due_within_days,
         "due_soon": {_KIND_WORDS[k]: n for k, n in brief.due_soon.items()},
-        "waiting_on": {_BUCKET_WORDS[b]: n for b, n in brief.waiting.items()},
+        "waiting_on": {waits_on[b]: n for b, n in brief.waiting.items()},
         "cases": [
             {
                 "reference": _reference(case),
                 "kind": _KIND_WORDS[case.kind],
                 "customer_code": case.customer_code,
-                "waits_on": _BUCKET_WORDS[bucket],
+                "waits_on": waits_on[bucket],
                 "due": _day(case.due) if case.due else None,
                 "overdue": case.due is not None and case.due < slot.day,
-                "next_step": _NEXT_STEP.get((case.kind, case.status)),
+                "next_step": _next_step(copy.next_steps, case),
             }
             for case, bucket in shown
         ],
     }
 
 
-def _buckets(counts: Mapping[Bucket, int]) -> str:
-    shown = [f"{_BUCKET_WORDS[b]} {counts[b]}" for b in BUCKETS if counts.get(b)]
-    return " · ".join(shown) if shown else "không có"
+def _buckets(words: BriefWords, counts: Mapping[Bucket, int]) -> str:
+    shown = [f"{words.waits_on[b]} {counts[b]}" for b in BUCKETS if counts.get(b)]
+    return " · ".join(shown) if shown else words.nothing
 
 
-def brief_text(brief: Brief, slot: BriefSlot, *, workspace: bool) -> tuple[str, str]:
-    """The brief's title and body, in counts."""
+def brief_text(
+    copy: ReminderCopy, brief: Brief, slot: BriefSlot, *, workspace: bool
+) -> tuple[str, str]:
+    """The brief's title and body, in counts, in the tenant's words."""
+    words = copy.brief
     new = brief.new_orders + brief.new_quotes
-    whose = "bộ phận Sales" if workspace else "hồ sơ của bạn"
-    title = f"Tóm tắt sáng {slot.day.strftime('%d/%m')}: {new} hồ sơ mới ({whose})"
-    since = slot.since.strftime("%H:%M %d/%m")
+    title = words.title.format(
+        day=slot.day.strftime("%d/%m"),
+        new=new,
+        whose=words.workspace if workspace else words.mine,
+    )
     lines = [
-        f"Từ {since}: {new} hồ sơ mới ({brief.new_orders} đơn hàng, "
-        f"{brief.new_quotes} báo giá); đang chờ: {_buckets(brief.new_waiting)}.",
-        f"Sắp đến hạn: {brief.due_soon[CaseKind.ORDER]} đơn hàng, "
-        f"{brief.due_soon[CaseKind.QUOTE]} báo giá; quá hạn: "
-        f"{brief.overdue[CaseKind.ORDER]} đơn hàng, {brief.overdue[CaseKind.QUOTE]} báo giá.",
-        f"Đang chờ: {_buckets(brief.waiting)}.",
+        words.new_line.format(
+            since=slot.since.strftime("%H:%M %d/%m"),
+            new=new,
+            new_orders=brief.new_orders,
+            new_quotes=brief.new_quotes,
+            waiting=_buckets(words, brief.new_waiting),
+        ),
+        words.due_line.format(
+            soon_orders=brief.due_soon[CaseKind.ORDER],
+            soon_quotes=brief.due_soon[CaseKind.QUOTE],
+            late_orders=brief.overdue[CaseKind.ORDER],
+            late_quotes=brief.overdue[CaseKind.QUOTE],
+        ),
+        words.waiting_line.format(waiting=_buckets(words, brief.waiting)),
     ]
     return title, "\n".join(lines)
 
 
 # ------------------------------------------------------------- the push --
 
-# What a push says, per follow-up and stage: the kind of work in a few words,
-# and of the case nothing but its number (ticket 48).
-_PUSH_KIND: Final[Mapping[tuple[Followup, Stage], str]] = MappingProxyType(
+# What a push says, per follow-up and stage: the kind of work in a few words
+# (the tenant's), and of the case nothing but its number (ticket 48).
+type _PushWord = Callable[[PushWords], str]
+_PUSH_KIND: Final[Mapping[tuple[Followup, Stage], _PushWord]] = MappingProxyType(
     {
-        (Followup.YOUR_TURN, Stage.NOTIFY): "Đến lượt bạn",
-        (Followup.ORDER_UNCONFIRMED, Stage.REMIND): "Sắp quá hạn xác nhận",
-        (Followup.ORDER_UNCONFIRMED, Stage.ESCALATE): "Quá hạn xác nhận",
-        (Followup.QUOTE_WAITING_DESIGN, Stage.REMIND): "Chờ Design quá lâu",
-        (Followup.QUOTE_DEADLINE, Stage.WARN): "Sắp đến hạn báo giá",
-        (Followup.WAITING_CUSTOMER, Stage.REMIND): "Chờ khách quá lâu",
-        (Followup.WAITING_PC, Stage.REMIND): "Chờ PC quá lâu",
-        (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY): "Khách im lặng quá hạn",
+        (Followup.YOUR_TURN, Stage.NOTIFY): lambda w: w.your_turn,
+        (Followup.ORDER_UNCONFIRMED, Stage.REMIND): lambda w: w.order_unconfirmed_remind,
+        (Followup.ORDER_UNCONFIRMED, Stage.ESCALATE): lambda w: w.order_unconfirmed_escalate,
+        (Followup.QUOTE_WAITING_DESIGN, Stage.REMIND): lambda w: w.quote_waiting_design,
+        (Followup.QUOTE_DEADLINE, Stage.WARN): lambda w: w.quote_deadline,
+        (Followup.WAITING_CUSTOMER, Stage.REMIND): lambda w: w.waiting_customer,
+        (Followup.WAITING_PC, Stage.REMIND): lambda w: w.waiting_pc,
+        (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY): lambda w: w.implied_acceptance,
+        (Followup.WAITING_DESIGN_CODE, Stage.REMIND): lambda w: w.waiting_design_code,
+        (Followup.WAITING_QUOTE, Stage.REMIND): lambda w: w.waiting_quote,
     }
 )
-_HEAD_TURN: Final[Mapping[CaseKind, str]] = {
-    CaseKind.ORDER: "Chờ bạn kiểm chéo",
-    CaseKind.QUOTE: "Chờ bạn duyệt",
+_HEAD_TURN: Final[Mapping[CaseKind, _PushWord]] = {
+    CaseKind.ORDER: lambda w: w.head_order,
+    CaseKind.QUOTE: lambda w: w.head_quote,
 }
-_PUSH_CASE: Final[Mapping[CaseKind, str]] = {CaseKind.ORDER: "PO", CaseKind.QUOTE: "Báo giá"}
+_PUSH_CASE: Final[Mapping[CaseKind, _PushWord]] = {
+    CaseKind.ORDER: lambda w: w.order,
+    CaseKind.QUOTE: lambda w: w.quote,
+}
 # A case number fit for a lock screen: what a PO or quote request number
 # looks like. A reference read from a customer's document that is anything
 # else (words, spaces, a long string) is left out, never shown: a push never
@@ -845,15 +861,15 @@ def item_link(kind: CaseKind, case_id: uuid.UUID) -> str:
     return f"{FEED_LINK}?item={kind.value}:{case_id}"
 
 
-def push_notice(dues: Sequence[Due], *, case_number: bool) -> PushNotice:
+def push_notice(words: PushWords, dues: Sequence[Due], *, case_number: bool) -> PushNotice:
     """The push for what one person was told in one tick: one item named by
     its kind and, where the tenant allows it and it looks like one, its
     number; several, counted. Never a price, an amount, a customer or their
-    text."""
+    text: ``words`` name no placeholder but the batch's count."""
     if len(dues) > 1:
         return PushNotice(
-            title=f"{len(dues)} việc mới",
-            body="Mở DW1 để xem và quyết định.",
+            title=words.batch_title.format(count=len(dues)),
+            body=words.batch_body,
             link=FEED_LINK,
             items=len(dues),
             tag="sales:batch",
@@ -861,10 +877,10 @@ def push_notice(dues: Sequence[Due], *, case_number: bool) -> PushNotice:
     (due,) = dues
     case = due.case
     if due.followup is Followup.YOUR_TURN and due.notify == ("head",):
-        title = _HEAD_TURN[case.kind]
+        title = _HEAD_TURN[case.kind](words)
     else:
-        title = _PUSH_KIND[(due.followup, due.stage)]
-    what = _PUSH_CASE[case.kind]
+        title = _PUSH_KIND[(due.followup, due.stage)](words)
+    what = _PUSH_CASE[case.kind](words)
     number = case.reference if _PUSH_NUMBER.fullmatch(case.reference) else None
     return PushNotice(
         title=title,

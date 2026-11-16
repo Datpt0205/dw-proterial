@@ -879,6 +879,9 @@ class OrderLineView(BaseModel):
     # Every date Sales confirmed, one per delivery (`OrderLine.deliveries`):
     # a line PC split is confirmed per PC delivery (ticket 07).
     confirmed_delivery_dates: list[date] = []
+    # PC cancelled the whole line (ticket 10): delivered never, confirmed
+    # with no date, changed no more.
+    cancelled: bool = False
 
 
 def _line_states(case: OrderCase, line: OrderLine, checked: OpenedSources) -> dict[str, ValueState]:
@@ -1043,6 +1046,7 @@ def order_line(
             PcAnswerView.model_validate(line.pc_answer.model_dump()) if line.pc_answer else None
         ),
         confirmed_delivery_dates=list(line.confirmed_delivery_dates),
+        cancelled=line.cancelled,
     )
 
 

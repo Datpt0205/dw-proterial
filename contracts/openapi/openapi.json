@@ -8231,14 +8231,19 @@
       },
       "InternalLine": {
         "additionalProperties": false,
-        "description": "One line a person applies, with its deliveries in PC's order.",
+        "description": "One line a person applies, with its deliveries in PC's order; or\n``cancelled``, PC cancelling the whole line, with none. A line without\na delivery is a cancel only where it says so: an empty list alone is\nrefused, never read as one.",
         "properties": {
+          "cancelled": {
+            "default": false,
+            "title": "Cancelled",
+            "type": "boolean"
+          },
           "deliveries": {
+            "default": [],
             "items": {
               "$ref": "#/components/schemas/InternalDelivery"
             },
             "maxItems": 99,
-            "minItems": 1,
             "title": "Deliveries",
             "type": "array"
           },
@@ -8250,8 +8255,7 @@
           }
         },
         "required": [
-          "line_no",
-          "deliveries"
+          "line_no"
         ],
         "title": "InternalLine",
         "type": "object"
@@ -12980,6 +12984,11 @@
           },
           "basis": {
             "$ref": "#/components/schemas/LineBasisView"
+          },
+          "cancelled": {
+            "default": false,
+            "title": "Cancelled",
+            "type": "boolean"
           },
           "changes": {
             "default": [],
@@ -19025,7 +19034,8 @@
           "sales_bravo_upload",
           "sales_handoffs",
           "sales_followups",
-          "sales_salesorder_rules"
+          "sales_salesorder_rules",
+          "sales_reminders"
         ],
         "title": "RuleKey",
         "type": "string"
@@ -21407,7 +21417,9 @@
           "thread",
           "pc_request",
           "change_request",
-          "update"
+          "update",
+          "design_code",
+          "quote"
         ],
         "title": "SubflowKey",
         "type": "string"

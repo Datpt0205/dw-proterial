@@ -712,6 +712,27 @@
         "title": "WaitingCustomerRule",
         "type": "object"
       },
+      "WaitingDesignCodeRule": {
+        "additionalProperties": false,
+        "description": "An order line Sales asked Design to create a PRV code for, with no\ncode yet. DW1 never mails Design: it reminds the person, who chases.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc đơn hàng đang chờ Design tạo mã.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi đã đề nghị Design tạo mã mà sau số giờ này dòng vẫn chưa có mã."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "WaitingDesignCodeRule",
+        "type": "object"
+      },
       "WaitingPcRule": {
         "additionalProperties": false,
         "description": "An order whose delivery dates Sales asked PC for, with no answer yet.\nDW1 never mails PC: it reminds the person, who chases PC.",
@@ -731,6 +752,27 @@
           "remind"
         ],
         "title": "WaitingPcRule",
+        "type": "object"
+      },
+      "WaitingQuoteRule": {
+        "additionalProperties": false,
+        "description": "An order waiting on a quote case opened from it, not yet approved or\ndeclined: the order cannot be prepared meanwhile.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc đơn hàng đang chờ báo giá mở từ đơn.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi báo giá mở từ đơn chưa được duyệt hoặc từ chối sau số giờ này."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "WaitingQuoteRule",
         "type": "object"
       },
       "WorkingHours": {
@@ -852,9 +894,17 @@
         "$ref": "#/$defs/WaitingCustomerRule",
         "description": "Hồ sơ đang chờ khách hàng."
       },
+      "waiting_design_code": {
+        "$ref": "#/$defs/WaitingDesignCodeRule",
+        "description": "Đơn hàng đang chờ Design tạo mã PRV."
+      },
       "waiting_pc": {
         "$ref": "#/$defs/WaitingPcRule",
         "description": "Hồ sơ đang chờ PC trả ngày giao."
+      },
+      "waiting_quote": {
+        "$ref": "#/$defs/WaitingQuoteRule",
+        "description": "Đơn hàng đang chờ báo giá mở từ đơn."
       },
       "working_hours": {
         "$ref": "#/$defs/WorkingHours",
@@ -877,7 +927,9 @@
       "waiting_customer",
       "waiting_pc",
       "implied_acceptance",
-      "your_turn"
+      "your_turn",
+      "waiting_design_code",
+      "waiting_quote"
     ],
     "title": "SalesFollowups",
     "type": "object"
@@ -1995,6 +2047,519 @@
       "design_mailboxes"
     ],
     "title": "QuoteRules",
+    "type": "object"
+  },
+  "sales_reminders": {
+    "$defs": {
+      "BriefWords": {
+        "additionalProperties": false,
+        "description": "The morning brief's counts, a title and three lines. ``{day}`` the\nbrief's day, ``{since}`` the previous brief's slot, ``{whose}`` the\n`workspace` or `mine` words, ``{waiting}`` the counts per whom the cases\nwait on (`waits_on`, else `nothing`); every other placeholder a count.",
+        "properties": {
+          "due_line": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Due Line",
+            "type": "string",
+            "x-placeholders": [
+              "{late_orders}",
+              "{late_quotes}",
+              "{soon_orders}",
+              "{soon_quotes}"
+            ]
+          },
+          "mine": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Mine",
+            "type": "string"
+          },
+          "new_line": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "New Line",
+            "type": "string",
+            "x-placeholders": [
+              "{new}",
+              "{new_orders}",
+              "{new_quotes}",
+              "{since}",
+              "{waiting}"
+            ]
+          },
+          "nothing": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Nothing",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string",
+            "x-placeholders": [
+              "{day}",
+              "{new}",
+              "{whose}"
+            ]
+          },
+          "waiting_line": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Waiting Line",
+            "type": "string",
+            "x-placeholders": [
+              "{waiting}"
+            ]
+          },
+          "waits_on": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "dw",
+                "sales",
+                "design",
+                "approver",
+                "customer"
+              ]
+            },
+            "title": "Waits On",
+            "type": "object"
+          },
+          "workspace": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "new_line",
+          "due_line",
+          "waiting_line",
+          "workspace",
+          "mine",
+          "nothing",
+          "waits_on"
+        ],
+        "title": "BriefWords",
+        "type": "object"
+      },
+      "DueReminder": {
+        "additionalProperties": false,
+        "description": "``{ref}``, ``{customer}`` and ``{due}``: the quote's due date.",
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{due}",
+              "{ref}"
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{due}",
+              "{ref}"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "DueReminder",
+        "type": "object"
+      },
+      "HoursReminder": {
+        "additionalProperties": false,
+        "description": "As `SinceReminder`, and ``{hours}``: the tenant's threshold in hours.",
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{hours}",
+              "{ref}",
+              "{since}"
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{hours}",
+              "{ref}",
+              "{since}"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "HoursReminder",
+        "type": "object"
+      },
+      "NextSteps": {
+        "additionalProperties": false,
+        "description": "What the person does next on their turn, where DW1 did the step before\nit: said in the reminder (and told to the brief's writer), so nobody has\nto open the case to learn it. No placeholder.",
+        "properties": {
+          "design_replied": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Design Replied",
+            "type": "string"
+          },
+          "other": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Other",
+            "type": "string"
+          },
+          "ycbg_drafted": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Ycbg Drafted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ycbg_drafted",
+          "design_replied",
+          "other"
+        ],
+        "title": "NextSteps",
+        "type": "object"
+      },
+      "PushWords": {
+        "additionalProperties": false,
+        "description": "What a push says (ticket 48): the kind of work, never a customer, a\nprice or their text. No placeholder but the batch's ``{count}``; the\ncase's number follows `order` or `quote` where the tenant allows it.",
+        "properties": {
+          "batch_body": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Batch Body",
+            "type": "string"
+          },
+          "batch_title": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Batch Title",
+            "type": "string",
+            "x-placeholders": [
+              "{count}"
+            ]
+          },
+          "head_order": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Head Order",
+            "type": "string"
+          },
+          "head_quote": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Head Quote",
+            "type": "string"
+          },
+          "implied_acceptance": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Implied Acceptance",
+            "type": "string"
+          },
+          "order": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Order",
+            "type": "string"
+          },
+          "order_unconfirmed_escalate": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Order Unconfirmed Escalate",
+            "type": "string"
+          },
+          "order_unconfirmed_remind": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Order Unconfirmed Remind",
+            "type": "string"
+          },
+          "quote": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Quote",
+            "type": "string"
+          },
+          "quote_deadline": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Quote Deadline",
+            "type": "string"
+          },
+          "quote_waiting_design": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Quote Waiting Design",
+            "type": "string"
+          },
+          "waiting_customer": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Waiting Customer",
+            "type": "string"
+          },
+          "waiting_design_code": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Waiting Design Code",
+            "type": "string"
+          },
+          "waiting_pc": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Waiting Pc",
+            "type": "string"
+          },
+          "waiting_quote": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Waiting Quote",
+            "type": "string"
+          },
+          "your_turn": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Your Turn",
+            "type": "string"
+          }
+        },
+        "required": [
+          "your_turn",
+          "head_order",
+          "head_quote",
+          "order_unconfirmed_remind",
+          "order_unconfirmed_escalate",
+          "quote_waiting_design",
+          "quote_deadline",
+          "waiting_customer",
+          "waiting_pc",
+          "implied_acceptance",
+          "waiting_design_code",
+          "waiting_quote",
+          "batch_title",
+          "batch_body",
+          "order",
+          "quote"
+        ],
+        "title": "PushWords",
+        "type": "object"
+      },
+      "ReminderWords": {
+        "additionalProperties": false,
+        "description": "One reminder per follow-up, and per way it reads (`followups.Followup`;\nwhich one a case gets is code's, `followups.reminder_text`).",
+        "properties": {
+          "implied_acceptance": {
+            "$ref": "#/$defs/SinceReminder"
+          },
+          "order_unconfirmed_escalate": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "order_unconfirmed_remind": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "quote_deadline_late": {
+            "$ref": "#/$defs/DueReminder"
+          },
+          "quote_deadline_soon": {
+            "$ref": "#/$defs/DueReminder"
+          },
+          "quote_waiting_design": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_customer_change": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_customer_correction": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_customer_spec": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_design_code": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_pc": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "waiting_quote": {
+            "$ref": "#/$defs/HoursReminder"
+          },
+          "your_turn_order": {
+            "$ref": "#/$defs/TurnReminder"
+          },
+          "your_turn_order_head": {
+            "$ref": "#/$defs/SinceReminder"
+          },
+          "your_turn_quote": {
+            "$ref": "#/$defs/TurnReminder"
+          },
+          "your_turn_quote_head": {
+            "$ref": "#/$defs/SinceReminder"
+          }
+        },
+        "required": [
+          "your_turn_order_head",
+          "your_turn_quote_head",
+          "your_turn_order",
+          "your_turn_quote",
+          "order_unconfirmed_remind",
+          "order_unconfirmed_escalate",
+          "quote_waiting_design",
+          "quote_deadline_soon",
+          "quote_deadline_late",
+          "waiting_pc",
+          "implied_acceptance",
+          "waiting_customer_change",
+          "waiting_customer_correction",
+          "waiting_customer_spec",
+          "waiting_design_code",
+          "waiting_quote"
+        ],
+        "title": "ReminderWords",
+        "type": "object"
+      },
+      "SinceReminder": {
+        "additionalProperties": false,
+        "description": "``{ref}`` the case's number, ``{customer}`` its customer code,\n``{since}`` when the wait began (local time).",
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{ref}",
+              "{since}"
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{ref}",
+              "{since}"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "SinceReminder",
+        "type": "object"
+      },
+      "TurnReminder": {
+        "additionalProperties": false,
+        "description": "As `SinceReminder`, and ``{next_step}``: one of `NextSteps`.",
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{next_step}",
+              "{ref}",
+              "{since}"
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{next_step}",
+              "{ref}",
+              "{since}"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "TurnReminder",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "`configs/copy/sales_reminders@<version>.yaml`: the follow-ups' words.",
+    "properties": {
+      "brief": {
+        "$ref": "#/$defs/BriefWords"
+      },
+      "copy_id": {
+        "pattern": "^sales_reminders$",
+        "title": "Copy Id",
+        "type": "string"
+      },
+      "next_steps": {
+        "$ref": "#/$defs/NextSteps"
+      },
+      "push": {
+        "$ref": "#/$defs/PushWords"
+      },
+      "reminders": {
+        "$ref": "#/$defs/ReminderWords"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "copy_id",
+      "version",
+      "reminders",
+      "next_steps",
+      "brief",
+      "push"
+    ],
+    "title": "ReminderCopy",
     "type": "object"
   },
   "sales_salesorder_rules": {

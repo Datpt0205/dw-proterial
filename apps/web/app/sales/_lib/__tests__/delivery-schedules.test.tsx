@@ -192,3 +192,49 @@ describe("a split line is confirmed per schedule (ticket 35)", () => {
     expect(cells.getByText("Đã xác nhận theo 2 đợt")).toBeTruthy();
   });
 });
+
+describe("a line PC cancelled whole (ticket 10)", () => {
+  it("is tagged on the order and asked no confirmed date", async () => {
+    api.confirm.mockResolvedValue({});
+    api.artifacts.mockResolvedValue({
+      case_version: 9,
+      available: [],
+      artifacts: [],
+    });
+    const base = order();
+    const [line] = base.lines;
+    if (line === undefined) throw new Error("no line");
+    const crossed = {
+      ...base,
+      status: "cross_checked",
+      findings: [],
+      lines: [line, { ...line, line_no: 2, cancelled: true }],
+    } as ReturnType<typeof order>;
+    renderLines(crossed);
+    expect(screen.getByText("PC đã huỷ cả dòng")).toBeTruthy();
+    cleanup();
+    render(
+      <UiProvider>
+        <OrderActions
+          order={crossed}
+          viewer={PIC}
+          sourceOpened
+          onChanged={() => {}}
+        />
+      </UiProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Đã gửi xác nhận$/ }));
+    expect(screen.getByLabelText("Ngày xác nhận dòng 1")).toBeTruthy();
+    expect(screen.queryByLabelText("Ngày xác nhận dòng 2")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Ghi đã gửi xác nhận$/ }),
+    );
+    await waitFor(() => expect(api.confirm).toHaveBeenCalledTimes(1));
+    const [, body] = api.confirm.mock.calls[0] as [string, unknown];
+    expect(body).toEqual({
+      case_version: crossed.case_version,
+      delivery_dates: [{ line_no: 1, confirmed_date: "2026-10-14" }],
+    });
+  });
+});

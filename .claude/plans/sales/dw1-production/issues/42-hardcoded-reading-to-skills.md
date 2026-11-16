@@ -1,6 +1,6 @@
 # 42 — Hard-coded reading moved to skills, one family at a time
 
-Status: in progress (families 1, 3 and 5 done 2026-11-16; families 2, 4 and 6 left, each after its skill passes its bar on Strata)
+Status: in progress (families 1, 3 and 5 done 2026-11-16; family 6's follow-up wording done 2026-11-16; families 2, 4 and the rest of 6 left, each after its skill passes its bar on Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -280,3 +280,82 @@ Under dw_sales ADR 0014 ("Applied 2026-11-16: the hand-off and reply kinds").
   platform words (the `sales_handoffs` copy is keyed by the three kinds;
   keying it by kind is a copy schema change, left for a decision); no
   Design recipient (none in master data).
+
+## Done: family 6, one answer to "which line" (2026-11-16)
+
+- **One function**, `domain/named_lines.py` `named_line(lines, words)`, over
+  the order's lines by number and the codes each is known by
+  (`LineNames`; a case's line by `names_of`: the customer's code as entered
+  and the PRV code its checks ran against; an ERP sales order's line by its
+  PRV code). It replaces `domain/handoffs.py` `line_number_of` (removed, with
+  its word list `dòng|line|ln|no|#|行`) and `change_requests.named_line`
+  (moved). Callers: the hand-off (`HandoffReader._order_line`; the
+  customer's conversion list still turns words naming nothing into a PRV
+  code, read by the same function), the customer's change request
+  (`model_changes`) and PC's internal change (`read_internal`).
+- **The rule**: a code of the order written whole in the words names its
+  line; else the one number the words state, a number of its own (not part
+  of a code such as `KMH-21-0077`, nor of `1.5` or `1,200`; `No.2` is 2);
+  where both are there they must agree (a code of one line beside another
+  line's number names neither, refused; among lines sharing a code, the
+  number tells them apart). No word list decides which words announce a
+  line number: the model chose the words.
+- **Where the answers differed**, and what each caller now gets: the
+  hand-off took the number first and a code only as the whole words
+  (`cáp VX-C2F05`, `品番CVG-0005` named no line; now they do where the code
+  is one the order's line is known by); a quantity's
+  words given as a line's (`12 cuộn`) named no line there and line 12 in the
+  change request (now line 12 everywhere: the model said those words name
+  the line, and the line must exist); a code of one line beside another
+  line's number was the number's line in the hand-off and the code's in the
+  change request (now refused); digits of a code (`2行目（KMH-21-0077）`
+  with the code not the order's) were three numbers in the change request
+  (now the 2).
+- **Measured on recorded answers**: `sales_handoff` 7/7 (right 0.849, as
+  before), `sales_handoff_kinds` 6/6 (0.863, as before),
+  `sales_change_request` 6/6, `sales_internal_change` 5/5.
+  Tests: `test_named_lines.py`, `test_handoffs.py`, the change request and
+  internal change suites.
+- **Left on purpose**: `change_requests._row_line`, which reads a mail
+  TABLE's row, answers a different question: no model chose its cells as
+  the line's words, so it takes a line only from a cell that IS a code of
+  the order (a line number among the cells only tells apart lines sharing
+  it). Reading a lone number in a row as the line, as words are read, would
+  take a quantity or an id for a line.
+
+## Done: family 6, the follow-ups' words (2026-11-16)
+
+- **The copy**: `configs/copy/sales_reminders@1.0.0.yaml`, read by
+  `application/reminder_copy.py` (`ReminderCopy`): a title and body per
+  reminder and per way it reads (16 templates, the two new waits of tickets
+  06 and 09 among them), the next-step sentences, the morning brief's title,
+  three count lines and its words for whom a case waits on, and every push
+  word. The platform's words are today's, unchanged: 87 renderings of every
+  reminder variant, push, brief and the brief writer's facts compared equal
+  to the code's before the move (one-off check against `HEAD`); the existing
+  lane, push and feed tests assert them too. That includes the lowercase
+  "po" in the PIC's "your turn" reminder, as the code wrote it; a tenant's
+  copy may say "PO".
+- **The tenant's**: `RuleKey.REMINDERS` (`sales_reminders`), a copy key like
+  the hand-off copy: proposed and approved on /sales/rules, in words
+  through `rule_words.COPY_KEYS`, resolved per tenant by the rule book
+  (`TenantRuleBook.reminder_copy`), read once per tick by the lane
+  (`FollowupRulesPort`). A version written before a template existed reads
+  it as the platform's (`read_over`). Not price-bearing (counts and
+  placeholders only). Migration `57bbf61ae6b8` admits the key in
+  `ck_rule_versions_key` and `ck_rule_drafts_rule_key`.
+- **Guards stay code**: which template a case gets, every value in it, who
+  is told and when. A template may name only its own reminder's
+  placeholders, `{name}` and nothing else (the hand-off copy's one check,
+  `handoffs._plain_placeholders`); a push's words take none (the lane adds
+  the number where the policy allows), so a lock screen still never shows a
+  customer, a price or their text.
+- **Web**: `rule-labels.ts` labels every field and placeholder; the key is
+  under "Nâng cao" (`ADVANCED_RULES`).
+- Tests: `test_followup_waits.py` (a tenant's words said, a template it
+  lacks is the platform's, another tenant's never reached, a foreign or
+  attribute placeholder refused, every follow-up has words).
+- **Not moved, on purpose**: the brief writer's own fact labels ("đơn hàng",
+  "báo giá", "bộ phận Sales"/"bạn": the model's input, not a sentence a
+  person reads), `OPENING_PREFIX` (the feed parses it), and, as asked, the
+  assistant's fixed sentences and `QuestionKind`.

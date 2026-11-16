@@ -24,6 +24,10 @@ Two doors, as item 7 has for PC's dates (`pc_dates`):
   cross-checked by someone who made none of it, and the confirmation sent
   again, which ends the loop (`update_loop.py`, ticket 29). The notice to
   the customer is the draft `internal_change_notice`, which a person sends.
+  A line PC cancels whole (W07 "cancel all") is applied as PC's answer of
+  no delivery (`OrderLine.cancelled`): its row in the change list holds
+  nothing, the notice says it is cancelled, and the confirmation sent again
+  names no date for it.
 
 Both need `sales.order.prepare`, the PIC's, on an order of the caller's
 workspace (another tenant's is not found). The audit row names ids, the
@@ -37,9 +41,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Final, Literal
+from typing import Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_agent_runtime.context import caller_run
 from dw_agent_runtime.model.interpretation import (
@@ -141,12 +145,22 @@ class InternalDelivery(BaseModel):
 
 
 class InternalLine(BaseModel):
-    """One line a person applies, with its deliveries in PC's order."""
+    """One line a person applies, with its deliveries in PC's order; or
+    ``cancelled``, PC cancelling the whole line, with none. A line without
+    a delivery is a cancel only where it says so: an empty list alone is
+    refused, never read as one."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     line_no: int = Field(ge=1, le=99_999)
-    deliveries: list[InternalDelivery] = Field(min_length=1, max_length=PC_DELIVERIES_MAX)
+    deliveries: list[InternalDelivery] = Field(default=[], max_length=PC_DELIVERIES_MAX)
+    cancelled: bool = False
+
+    @model_validator(mode="after")
+    def _a_cancel_has_no_delivery(self) -> Self:
+        if self.cancelled == bool(self.deliveries):
+            raise ValueError("a line is cancelled with no delivery, or delivered at least once")
+        return self
 
 
 @dataclass(frozen=True)

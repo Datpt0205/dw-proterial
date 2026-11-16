@@ -12,9 +12,9 @@ words naming it and, per delivery, the words of its quantity and of its date
 - **The words are the paste's**: each span is in the pasted text, whole
   (never inside a longer number, date or code). A span that is not, and the
   change it carries, is dropped and counted.
-- **The line is code's**: from a customer item code or PRV code of the order
-  in the line's words, else the one whole number in them
-  (`change_requests.named_line`). Words naming no line of the order are
+- **The line is code's**: the line its words name (`named_lines.named_line`,
+  the one answer every reader of a line's words shares: a code of the
+  order in them, else the one number they state). Words naming no line of the order are
   refused and shown as such, never matched to the nearest line. The model is
   shown no line of the order, so it cannot pick one either.
 - **Each value is parsed** through the paste's own notation
@@ -42,7 +42,8 @@ from typing import Annotated, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from dw_platform.domain.notation import Notation, notation_of
-from dw_sales.domain.change_requests import named_line, parse_asked, same_unit
+from dw_sales.domain.change_requests import parse_asked, same_unit
+from dw_sales.domain.named_lines import case_lines, named_line
 from dw_sales.domain.orders import OrderCase, OrderLine
 from dw_sales.domain.spans import FoldedText
 
@@ -143,6 +144,7 @@ def read_internal(
     folded = FoldedText(text)
     notation = notation_of(text)
     held = {line.line_no: line for line in case.lines}
+    known = case_lines(case)
     grouped: dict[int, tuple[str, list[ReadDelivery | None]]] = {}
     refused: list[ReadLine] = []
     dropped = 0
@@ -151,7 +153,7 @@ def read_internal(
         if not _written(folded, words):
             dropped += 1
             continue
-        line_no = named_line(case, words)
+        line_no = named_line(known, words)
         if line_no is None or line_no not in held:
             refused.append(ReadLine(None, words, (), "no_such_line"))
             continue
