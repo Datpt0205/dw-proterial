@@ -353,6 +353,23 @@ context. All five are done and on `main`. The full narrative is at
           (12) the portal usable within ~10 minutes. If (1) fails, the
           consumer SSD lied about its flushes: a UPS and/or an SSD with
           power-loss protection, before go-live.
+          **Mail-drop session prepared (17:05):** `11-mail-sync-session.ps1`:
+          OneDrive 26.198 for all users and Sysinternals Autologon 3.10 (both
+          Microsoft-signed), a standard user `dwmail` signed in at every boot
+          and locked at once (task), OneDrive started in that session by its
+          own logon task (the per-machine installer registers one only for
+          the account that ran it; and `Start-Process -Wait` hung on the
+          OneDrive.Sync.Service it leaves), Files On-Demand off, disconnected
+          RDP sessions never ended. After a restart: dwmail on the console,
+          LogonUI up, OneDrive running, with nobody touching it. The password
+          is kept for the machine (DPAPI) and read by an administrator at the
+          console with `show-dwmail-password.ps1`. Left for people (the
+          flows are 11-17/18): the private Team and its folders, each
+          person's flow, then a Team owner RDPs in as dwmail over Tailscale,
+          signs OneDrive in (MFA), adds `DW-mail` with "Add shortcut to My
+          files", leaves by Disconnect; then the read-only share to the VM
+          and its mount (to build, after the folder exists). The VM is
+          pre-pulling the stack's pinned images.
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
           crowds the host, switch to Gyro-S.** Measure Q2_0 with the VM
           running first. Tailscale key expiry is off (checked from the laptop).
