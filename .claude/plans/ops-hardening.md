@@ -411,7 +411,26 @@ context. All five are done and on `main`. The full narrative is at
           owner deleting files older than 30 days (not 7: an outage longer
           than the window would delete unread mail); Purview retention needs
           an M365 admin; DW deleting would need write access it is
-          deliberately denied. (c) few Windows admins,
+          deliberately denied. **Decided by Đạt (11-16): the 30-day cleanup
+          flow** (its steps go with the mail flows on 11-17/18). **The bulk
+          handover, described to Đạt for review (not decided):** pick leaver
+          A and successor B; a preview lists what moves and every warning;
+          one confirm moves it all with an audit row "handover A -> B by X"
+          and tells B. Moves: open order and quote cases assigned to A
+          (`assigned_to`); customers whose Sales PIC is A, so new POs route to
+          B; mail A pressed to send that has not gone (`outbound_mails`)
+          cancelled back to a draft for B, since it would leave from A's
+          mailbox; A's reminders (`reminder_marks`); in DW2, open requests and
+          RFQs where A is the buyer, unsent RFQs back to drafts. Stays:
+          history and audit (who did what), A's private assistant chats.
+          Warnings: A the only holder of a scope (an approver), B lacking the
+          scope for the work, B with no mail folder or flow, IT to forward A's
+          mailbox. Guard: A cannot be deactivated while owning open work.
+          Advised: the head presses it for their department, IT as fallback,
+          as a granted scope. Why DW2 lacks managers: the platform answers
+          `visible_owners`, each context applies it to its own lists; DW1 did
+          (10-28), DW2's rebuild (11-13) has not. Open vs restricted explained
+          to Đạt; the choice is Proterial's. (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
