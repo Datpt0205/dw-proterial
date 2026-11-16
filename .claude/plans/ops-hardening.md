@@ -295,6 +295,26 @@ context. All five are done and on `main`. The full narrative is at
           and the HDD's uncorrected read errors rising; its boot grace now
           covers Tailscale and lasts 10 minutes (an update boot took ~5 and
           reported Tailscale down twice).
+          **Windows fully patched (14:45):** round 2 installed the 2026-11
+          security update (KB5131080); after the third restart, build
+          26100.33822 and nothing left. Each restart brought the VM and
+          Strata back unattended (Strata serving 271 s after the last).
+          **Live evals on the plant's Strata found a conflict (14:47):**
+          `structured_extraction` asks `logprobs: true` on every call
+          (onprem.yaml 1.4.0, ticket 44), and Strata with `--parallel 3`
+          answers "400 invalid request: logprobs is available with parallel
+          (batch slots) only for max_tokens 1" (its server log, `%LOCALAPPDATA%\Strata\runtime`).
+          So every DW1 reading on that route failed and the breaker opened
+          (`sales_descriptions` 0 of 67 lines; `sales_intent`, another route,
+          passed 7/7 at 0.989). Giang's lab ran without `--parallel`, which
+          is why it never showed. Strata now runs `--parallel 1`
+          (`strata-watchdog.ps1`; a logprobs call answers 200); one slot is
+          also faster per request (~190 tok/s alone vs ~76 with three
+          sharing). **Owed by Đạt:** one slot with logprobs (ticket 44's
+          auto-apply works, requests queue) or three without (every result
+          to a person); advised: one slot. The full run is going again on
+          one slot. Also: an eval run started while an update installed had
+          its first calls fail; updates belong in the agreed window.
           **BIOS confirmed by Đạt (11-16):** Restore AC Power Loss = Power On,
           so after a power cut the host starts by itself and the VM, Strata
           and Tailscale follow. Still to run: the whole-host restart drill
