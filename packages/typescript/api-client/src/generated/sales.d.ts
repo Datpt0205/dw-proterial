@@ -261,6 +261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/customers/{customer_code}/salesorder-pairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Salesorder Pairs */
+        get: operations["salesorder_pairs_api_v1_sales_customers__customer_code__salesorder_pairs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox": {
         parameters: {
             query?: never;
@@ -2333,6 +2350,23 @@ export interface paths {
         /** Submit Salesorder Example */
         post: operations["submit_salesorder_example_api_v1_sales_salesorder_examples__example_id__submissions_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/salesorder-pairs/{pair_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw Salesorder Pair */
+        delete: operations["withdraw_salesorder_pair_api_v1_sales_salesorder_pairs__pair_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8064,6 +8098,10 @@ export interface components {
          * @description A skill as it applies to the tenant now.
          */
         SkillView: {
+            /** Customer Code */
+            customer_code?: string | null;
+            /** Customer Name */
+            customer_name?: string | null;
             /** Description */
             description: string;
             /** Instructions */
@@ -8082,6 +8120,11 @@ export interface components {
         };
         /** SkillsView */
         SkillsView: {
+            /**
+             * Customer Skills
+             * @default []
+             */
+            customer_skills: components["schemas"]["SkillView"][];
             /** Skills */
             skills: components["schemas"]["SkillView"][];
             /** Versions */
@@ -9026,6 +9069,43 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * WorkedPairView
+         * @description A pair as the customer's screen lists it: which PO, when, how many
+         *     rows; never a cell (module docstring).
+         */
+        WorkedPairView: {
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /**
+             * Added By
+             * Format: uuid
+             */
+            added_by: string;
+            /** Customer Code */
+            customer_code: string;
+            /** Example Id */
+            example_id: string | null;
+            /**
+             * Pair Id
+             * Format: uuid
+             */
+            pair_id: string;
+            /** Po No */
+            po_no: string;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Replayed */
+            replayed: boolean;
+            /** Rows */
+            rows: number;
+        };
         /** WorkerStateView */
         WorkerStateView: {
             /** Changed At */
@@ -9595,6 +9675,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalesOrderExampleView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    salesorder_pairs_api_v1_sales_customers__customer_code__salesorder_pairs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkedPairView"][];
                 };
             };
             /** @description Validation Error */
@@ -13916,6 +14027,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleVersionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_salesorder_pair_api_v1_sales_salesorder_pairs__pair_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                pair_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkedPairView"];
                 };
             };
             /** @description Validation Error */

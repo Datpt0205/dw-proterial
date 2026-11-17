@@ -21463,6 +21463,28 @@
       "SkillView": {
         "description": "A skill as it applies to the tenant now.",
         "properties": {
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -21505,6 +21527,14 @@
       },
       "SkillsView": {
         "properties": {
+          "customer_skills": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SkillView"
+            },
+            "title": "Customer Skills",
+            "type": "array"
+          },
           "skills": {
             "items": {
               "$ref": "#/components/schemas/SkillView"
@@ -25089,6 +25119,72 @@
           "assigned_to"
         ],
         "title": "WorkItem",
+        "type": "object"
+      },
+      "WorkedPairView": {
+        "description": "A pair as the customer's screen lists it: which PO, when, how many\nrows; never a cell (module docstring).",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by": {
+            "format": "uuid",
+            "title": "Added By",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "example_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Id"
+          },
+          "pair_id": {
+            "format": "uuid",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "po_no": {
+            "title": "Po No",
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pair_id",
+          "example_id",
+          "customer_code",
+          "po_no",
+          "received_on",
+          "rows",
+          "added_by",
+          "added_at",
+          "replayed"
+        ],
+        "title": "WorkedPairView",
         "type": "object"
       },
       "WorkerStateView": {
@@ -31740,6 +31836,53 @@
           }
         },
         "summary": "Request Salesorder Example",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/customers/{customer_code}/salesorder-pairs": {
+      "get": {
+        "operationId": "salesorder_pairs_api_v1_sales_customers__customer_code__salesorder_pairs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkedPairView"
+                  },
+                  "title": "Response Salesorder Pairs Api V1 Sales Customers  Customer Code  Salesorder Pairs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Salesorder Pairs",
         "tags": [
           "sales"
         ]
@@ -39420,6 +39563,67 @@
           }
         },
         "summary": "Submit Salesorder Example",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/salesorder-pairs/{pair_id}": {
+      "delete": {
+        "operationId": "withdraw_salesorder_pair_api_v1_sales_salesorder_pairs__pair_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkedPairView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Salesorder Pair",
         "tags": [
           "sales"
         ]

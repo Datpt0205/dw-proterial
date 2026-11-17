@@ -8,7 +8,7 @@ import json
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,21 +17,33 @@ from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import PromptRef
-from dw_kernel.errors import ConflictError
+from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
-from dw_platform.application.rule_versions import ContextScope
-from dw_sales.application.access import SalesScopes
+from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.rule_versions import ContextScope, Resolved
+from dw_platform.domain.audit import system_actor
+from dw_sales.application.access import Gate, SalesScopes
+from dw_sales.application.ports import SalesScope
+from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_fill import (
     SalesOrderFiller,
     po_rows,
     prepared_calls,
 )
-from dw_sales.application.salesorder_pairs import SalesOrderSkillReplayer
+from dw_sales.application.salesorder_learning import LearningRulesPort, WorkedPair
+from dw_sales.application.salesorder_pairs import (
+    SALESORDER_PAIRS_RETENTION_LANE,
+    SalesOrderSkillReplayer,
+    WorkedPairRetention,
+    WorkedPairs,
+)
 from dw_sales.application.salesorder_rules import CustomerSalesOrderRules
 from dw_sales.application.salesorder_skills import customer_skill
 from dw_sales.application.skills import PAIRS_BROKEN, SkillProposal, salesorder_key
+from dw_sales.domain.order_checks import Learning
 from dw_sales.evals.graders import AN as _AN
-from dw_sales.evals.graders import CALLERS, GIANG
+from dw_sales.evals.graders import CALLERS, GIANG, READER
+from dw_sales.evals.rule_drafts import ALPHA_OTHER
 from dw_sales.evals.salesorder_rules import Bench, load_cases, pair
 from dw_sales.evals.salesorder_skill import gold_answer, kept_pair, load_skill_cases, tools_for
 from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, World, open_world
@@ -202,3 +214,122 @@ async def test_the_lane_replays_only_customers_salesorder_skills_of_its_tenant()
     assert await replayer.tick(BETA) == 0
     assert await replayer.tick(ALPHA) == 0
     assert salesorder_key("KHB") == "sales_skill_salesorder_khb"
+
+
+# ------------------------------------- a pair withdrawn, or past its term --
+
+NOW = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
+WITHDRAWN = "sales.salesorder_pair.withdrawn"
+
+
+def _pairs(bench: Bench) -> WorkedPairs:
+    return WorkedPairs(
+        bench.store, Gate(ScopeAuthorizationService()), FixedClock(NOW), Uuid4Generator()
+    )
+
+
+async def _keep(bench: Bench, scope: SalesScope, pair_: WorkedPair, **update: Any) -> WorkedPair:
+    kept = pair_.model_copy(update={"pair_id": uuid.uuid4(), **update})
+    async with bench.store(scope) as work:
+        await work.pairs.add(kept)
+        await work.commit()
+    return kept
+
+
+async def test_a_withdrawn_pair_is_audited_and_no_longer_replayed() -> None:
+    world = _world()
+    bench, answers = await _bench_with_pairs("SR02")
+    pairs = _pairs(bench)
+    (listed,) = await pairs.for_customer(AN.context(), "KHB")
+    assert (listed.customer_code, listed.replayed) == ("KHB", True)
+    assert listed.rows == len(bench.store.state(ALPHA).pairs[0].expected)
+
+    withdrawn = await pairs.withdraw(AN.context(), listed.pair_id)
+    assert withdrawn.pair_id == listed.pair_id
+    assert await pairs.for_customer(AN.context(), "KHB") == []
+    (event,) = [e for e in bench.store.audit.events if e.action == WITHDRAWN]
+    assert (event.actor_id.value, event.resource_id) == (AN.user_id, str(listed.pair_id))
+    assert event.details["customer_code"] == "KHB"
+    # Ids, a day and a count: never a cell of the PO or of the PIC's file.
+    assert set(event.details) == {"customer_code", "example_id", "received_on", "rows", "added_by"}
+    # The customer's next version is replayed on the pairs left: none.
+    proposed = await _propose(world, "KHB", CASES["skills"]["KHB"])
+    await _replayer(world, bench, answers).tick(ALPHA)
+    stored = await world.store.skill_replays.stored(ALPHA, [proposed.version_id])
+    assert stored[proposed.version_id].messages == 0
+
+
+async def test_a_pair_is_withdrawn_by_a_proposer_who_reads_prices_in_its_workspace_only() -> None:
+    bench, _ = await _bench_with_pairs("SR02")
+    pairs = _pairs(bench)
+    (listed,) = await pairs.for_customer(AN.context(), "KHB")
+    no_prices = replace(AN, scopes=AN.scopes - {SalesScopes.PRICE_READ})
+    for caller in (_AN, READER, no_prices):
+        with pytest.raises(PermissionDeniedError):
+            await pairs.withdraw(caller.context(), listed.pair_id)
+        with pytest.raises(PermissionDeniedError):
+            await pairs.for_customer(caller.context(), "KHB")
+    # Another tenant's proposer, and another workspace of the tenant, find
+    # none of it, and withdraw nothing.
+    for scope in (BETA, ALPHA_OTHER):
+        with pytest.raises(NotFoundError):
+            await pairs.withdraw(GIANG.context(scope), listed.pair_id)
+        assert await pairs.for_customer(GIANG.context(scope), "KHB") == []
+    assert [p.pair_id for p in await pairs.for_customer(AN.context(), "KHB")] == [listed.pair_id]
+    assert not [e for e in bench.store.audit.events if e.action == WITHDRAWN]
+    # Withdrawn once; a second withdrawal finds nothing.
+    await pairs.withdraw(AN.context(), listed.pair_id)
+    with pytest.raises(NotFoundError):
+        await pairs.withdraw(AN.context(), listed.pair_id)
+
+
+@dataclass
+class _Term:
+    """The tenant's rules, with its own term for pairs where ``days`` says."""
+
+    inner: LearningRulesPort
+    days: int | None = None
+
+    async def current(self, scope: SalesScope, key: RuleKey) -> Resolved:
+        resolved = await self.inner.current(scope, key)
+        if key is not RuleKey.ORDER_RULES or self.days is None:
+            return resolved
+        rules = resolved.policy
+        learning = rules.learning.model_copy(update={"salesorder_pairs_kept_days": self.days})
+        return Resolved(rules.model_copy(update={"learning": learning}), "tenant")
+
+
+def _retention(bench: Bench, days: int | None = None) -> WorkedPairRetention:
+    return WorkedPairRetention(
+        bench.store, _Term(bench.rules(), days), FixedClock(NOW), Uuid4Generator()
+    )
+
+
+async def test_pairs_past_the_tenants_term_are_dropped_in_their_own_scope_by_the_lane() -> None:
+    bench, _ = await _bench_with_pairs("SR02")
+    (first,) = bench.store.state(ALPHA).pairs
+    recent = await _keep(bench, ALPHA, first, added_at=NOW - timedelta(days=40))
+    old = await _keep(bench, ALPHA, first, added_at=NOW - timedelta(days=366))
+    beta_old = await _keep(bench, BETA, first, added_at=NOW - timedelta(days=366))
+    # A year by default: only the pair older than that.
+    assert await _retention(bench).tick(ALPHA) == 1
+    assert old not in bench.store.state(ALPHA).pairs
+    assert recent in bench.store.state(ALPHA).pairs
+    (event,) = [e for e in bench.store.audit.events if e.action == "sales.salesorder_pairs.pruned"]
+    assert event.actor_id == system_actor(SALESORDER_PAIRS_RETENTION_LANE)
+    assert (event.details["pairs"], event.details["kept_days"]) == (1, 365)
+    # Another tenant's pair of the same age waits for its own tenant's tick.
+    assert bench.store.state(BETA).pairs == [beta_old]
+    # The tenant's own term, shorter: the 40-day-old pair goes too.
+    assert await _retention(bench, days=30).tick(ALPHA) == 1
+    assert recent not in bench.store.state(ALPHA).pairs
+    # Nothing past the term: nothing dropped and nothing audited.
+    assert await _retention(bench, days=30).tick(ALPHA) == 0
+    assert len([e for e in bench.store.audit.events if e.action.endswith(".pruned")]) == 2
+
+
+def test_the_term_is_tenant_config_with_a_conservative_default() -> None:
+    assert Learning().salesorder_pairs_kept_days == 365
+    for days in (29, 1096):
+        with pytest.raises(ValueError):
+            Learning(salesorder_pairs_kept_days=days)

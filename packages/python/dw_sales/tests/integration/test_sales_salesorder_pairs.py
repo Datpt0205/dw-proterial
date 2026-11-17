@@ -4,9 +4,11 @@ isolation is the question.
 
 A worked pair is written by the worker in the transaction that settles the
 example it was read from, read back under the workspace's RLS only, and never
-changed or removed by the application. A customer's SalesOrder skill is a
-rule version under ``sales_skill_salesorder_<code>``: the key's CHECK admits
-that family and nothing else of its shape.
+changed by the application; it is removed only in its own workspace, withdrawn
+by a person or dropped past the tenant's term (migration 985e4fa0cd4f). A
+customer's SalesOrder skill is a rule version under
+``sales_skill_salesorder_<code>``: the key's CHECK admits that family and
+nothing else of its shape.
 """
 
 from __future__ import annotations
@@ -75,22 +77,67 @@ async def test_a_pair_is_kept_and_read_back_in_its_workspace_only(
             assert await work.pairs.for_customer("KHB", 20) == []
 
 
-async def test_a_pair_is_never_changed_or_removed_by_the_application(
+async def test_a_pair_is_never_changed_and_an_unscoped_delete_removes_nothing(
     world: World,
     uow: SqlCatalogUnitOfWorkFactory,
     app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
 ) -> None:
     kept = await _a_pair()
     async with uow(world.alpha) as work:
         await work.pairs.add(kept)
         await work.commit()
-    for statement in (
-        "UPDATE sales.salesorder_pairs SET customer_code = 'KHA'",
-        "DELETE FROM sales.salesorder_pairs",
-    ):
-        with pytest.raises(DBAPIError, match="permission denied"):
-            async with app_sessions() as session, session.begin():
-                await session.execute(sa.text(statement))
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with app_sessions() as session, session.begin():
+            await session.execute(
+                sa.text("UPDATE sales.salesorder_pairs SET customer_code = 'KHA'")
+            )
+    # DELETE is granted (withdrawal, the term), and RLS leaves a connection
+    # that never scoped itself nothing to delete.
+    async with app_sessions() as session, session.begin():
+        await session.execute(sa.text("DELETE FROM sales.salesorder_pairs"))
+    async with migrator.connect() as conn:
+        assert (
+            await conn.scalar(
+                sa.text("SELECT count(*) FROM sales.salesorder_pairs WHERE id = :id"),
+                {"id": kept.pair_id},
+            )
+            == 1
+        )
+
+
+async def test_a_pair_is_withdrawn_and_pruned_in_its_own_workspace_only(
+    world: World, uow: SqlCatalogUnitOfWorkFactory
+) -> None:
+    kept = await _a_pair()
+    old = (await _a_pair()).model_copy(
+        update={"pair_id": uuid.uuid4(), "added_at": datetime(2025, 1, 2, tzinfo=UTC)}
+    )
+    for scope, pair_ in ((world.alpha, kept), (world.alpha, old), (world.beta, old)):
+        async with uow(scope) as work:
+            await work.pairs.add(pair_.model_copy(update={"pair_id": uuid.uuid4()}))
+            await work.commit()
+    async with uow(world.alpha) as work:
+        alphas = list(await work.pairs.for_customer("KHB", 20))
+    async with uow(world.beta) as work:
+        (betas,) = await work.pairs.for_customer("KHB", 20)
+    # Another tenant's, and another workspace of the tenant, withdraw nothing.
+    for other in (world.beta, world.alpha_other):
+        async with uow(other) as work:
+            assert await work.pairs.withdraw(alphas[0].pair_id) is None
+            await work.commit()
+    async with uow(world.alpha) as work:
+        withdrawn = await work.pairs.withdraw(alphas[0].pair_id)
+        await work.commit()
+    assert withdrawn == alphas[0]
+    # Past the term: alpha's old pair is dropped, beta's of the same age kept.
+    async with uow(world.alpha) as work:
+        assert await work.pairs.prune(datetime(2026, 1, 1, tzinfo=UTC)) == 1
+        await work.commit()
+    async with uow(world.alpha) as work:
+        assert await work.pairs.for_customer("KHB", 20) == []
+    async with uow(world.beta) as work:
+        assert await work.pairs.for_customer("KHB", 20) == [betas]
 
 
 async def test_a_pair_from_another_workspace_is_refused_by_rls(

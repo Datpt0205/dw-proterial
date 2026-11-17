@@ -157,7 +157,10 @@ from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.salesorder_fill import SalesOrderFiller
 from dw_sales.application.salesorder_learning import SalesOrderLearning
-from dw_sales.application.salesorder_pairs import SalesOrderSkillReplayer
+from dw_sales.application.salesorder_pairs import (
+    SalesOrderSkillReplayer,
+    WorkedPairRetention,
+)
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.skill_pick import PickModelPort, SkillPicker
@@ -262,6 +265,9 @@ class Dw1Mount:
     # customer's worked pairs, for the head to see (ticket 41): built where
     # the one-call door is.
     salesorder_skill_replay: SalesOrderSkillReplayer | None = None
+    # What drops a customer's worked pairs past the tenant's term (ticket
+    # 41): built wherever DW1 is, since pairs are kept with or without a model.
+    salesorder_pairs_retention: WorkedPairRetention | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -807,6 +813,9 @@ def build_dw1(
                 worker_id=worker.worker_id,
                 worker_version=worker.worker_version,
             )
+        ),
+        salesorder_pairs_retention=WorkedPairRetention(
+            pairs=catalog_uow, rules=book, clock=clock, ids=ids
         ),
         prompt_optimiser=(
             None

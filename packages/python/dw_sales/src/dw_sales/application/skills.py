@@ -45,7 +45,10 @@ holds its own version of a skill in its data.
 - **A customer's SalesOrder skill** (ticket 41) is a skill like these,
   ``salesorder-<customer code>`` (`salesorder_skills`), replayed on the
   customer's worked pairs instead: the head may approve a version only where
-  every pair came out as the PIC's file (`SkillDecisions`).
+  every pair came out as the PIC's file (`SkillDecisions`). The skills list
+  holds one per customer of the caller's workspace (`SkillsView.
+  customer_skills`), each in force as the tenant holds it, and every version
+  of theirs beside DW1's; a version is proposed through the same door.
 """
 
 from __future__ import annotations
@@ -83,8 +86,9 @@ from dw_platform.domain.approval import ApprovalRequest, decided_event_type
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.ports import MemberDirectoryPort, SalesScope
+from dw_sales.application.ports import MemberDirectoryPort, SalesScope, Snapshot
 from dw_sales.application.rules import ProposerNames, rule_work
+from dw_sales.domain.catalog import Customer
 from dw_sales.domain.document_forms import DOCUMENT_FORMS, document_forms_of
 from dw_sales.domain.handoff_kinds import HANDOFFS, handoff_kinds_of
 from dw_sales.domain.mail_kinds import MAIL_KINDS, ReadRoute, mail_kinds_of
@@ -100,6 +104,7 @@ __all__ = [
     "Dw1Skills",
     "SkillBook",
     "SkillComparison",
+    "SkillCustomersPort",
     "SkillDecisions",
     "SkillDocument",
     "SkillReplay",
@@ -415,13 +420,20 @@ class SkillView(BaseModel):
     instructions: str
     # The ref the platform ships, what a tenant version may not reuse.
     platform_ref: str
+    # A customer's SalesOrder skill's customer (ticket 41); None for DW1's.
+    customer_code: str | None = None
+    customer_name: str | None = None
 
 
 class SkillsView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     skills: list[SkillView]
+    # Every version of DW1's skills and of the customers' SalesOrder skills.
     versions: list[SkillVersionView]
+    # Each customer of the caller's workspace's SalesOrder skill, in force,
+    # by customer code (ticket 41).
+    customer_skills: list[SkillView] = []
 
 
 class SkillComparison(BaseModel):
@@ -448,6 +460,13 @@ class SkillProposal(BaseModel):
     # The mail whose triage card it is proposed from (ticket 34): the
     # server finds it, with its card, in the proposer's own workspace.
     from_message: str | None = Field(default=None, pattern=r"^[!-~]{1,512}$")
+
+
+class SkillCustomersPort(Protocol):
+    """The customers of a workspace (`SalesCatalogPort.customers`): whose
+    SalesOrder skills the list holds."""
+
+    async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]: ...
 
 
 def _version_view(version: RuleVersion, replay: SkillReplay | None = None) -> SkillVersionView:
@@ -481,6 +500,7 @@ class SkillsService:
     ids: IdGenerator
     directory: MemberDirectoryPort
     replays: SkillReplayStorePort
+    customers: SkillCustomersPort
 
     @property
     def _engine(self) -> RuleVersionEngine:
@@ -494,18 +514,34 @@ class SkillsService:
         )
 
     async def list(self, context: AccessContext) -> SkillsView:
-        """Each skill as the tenant holds it now, and every version of its."""
+        """Each skill as the tenant holds it now, each customer's SalesOrder
+        skill of the caller's workspace too, and every version of theirs."""
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         scope: RuleScope = ContextScope.of(context)
         keys = sorted(self.book.platform)
         skills = [await self._in_force(scope, key) for key in keys]
-        versions = await self._engine.list_all(context, keys=keys)
+        customers = sorted(
+            (await self.customers.customers(sales_scope(context))).data, key=lambda c: c.code
+        )
+        customer_keys = {salesorder_key(c.code): c for c in customers}
+        versions = await self._engine.list_all(context, keys=[*keys, *customer_keys])
         replays = await self.replays.stored(
             sales_scope(context), [v.version_id for v in versions if v.status == "proposed"]
         )
+        # A customer's key no version was ever approved under is the
+        # platform's generic skill (`RuleBook.current`), read without a
+        # lookup per customer: a group may hold a hundred and more.
+        approved = {v.key for v in versions if v.status == "approved"}
+        customer_skills = [
+            (
+                await self._in_force(scope, key) if key in approved else self._platform(key)
+            ).model_copy(update={"customer_code": c.code, "customer_name": c.name})
+            for key, c in customer_keys.items()
+        ]
         return SkillsView(
             skills=skills,
             versions=[_version_view(v, replays.get(v.version_id)) for v in versions],
+            customer_skills=customer_skills,
         )
 
     async def compared(self, context: AccessContext, version_id: UUID) -> SkillComparison:
@@ -532,10 +568,19 @@ class SkillsService:
         resolved = await self.book.current(scope, key)
         document = resolved.policy
         assert isinstance(document, SkillDocument)
+        return self._view(document, resolved.layer, key)
+
+    def _platform(self, key: str) -> SkillView:
+        """The platform's skill under ``key``."""
+        document = self.book.platform[key]
+        assert isinstance(document, SkillDocument)
+        return self._view(document, "platform", key)
+
+    def _view(self, document: SkillDocument, layer: Layer, key: str) -> SkillView:
         return SkillView(
             name=document.name,
             ref=document.ref,
-            layer=resolved.layer,
+            layer=layer,
             description=document.description,
             instructions=document.instructions,
             platform_ref=self.book.platform[key].ref,

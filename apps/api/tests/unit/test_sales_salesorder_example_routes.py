@@ -1,7 +1,8 @@
 """The worked-example routes (ticket 38, dw_sales ADR 0013), over the
 in-memory Sales services: "Gửi duyệt" refused at the route for a replay that
 differs, the scopes asked, another tenant finding nothing, and the rules
-editor's own door refusing the key. Before any database."""
+editor's own door refusing the key; and a customer's worked pairs listed and
+one withdrawn (ticket 41). Before any database."""
 
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ from dw_sales.application.salesorder_learning import Replay, SalesOrderExample
 from dw_sales.application.salesorder_rules import CustomerSalesOrderRules
 from dw_sales.evals.graders import CALLERS, GIANG, READER, Caller
 from dw_sales.evals.graders import OUTSIDER as _OUTSIDER
+from dw_sales.evals.salesorder_rules import Bench, load_cases, pair
+from dw_sales.evals.salesorder_skill import kept_pair
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
 from dw_sales.presentation.routes import build_router
 
@@ -192,3 +195,35 @@ async def test_a_pair_is_queued_for_the_worker_and_listed_on_the_customer(world:
     assert (queued.json()["status"], queued.json()["submittable"]) == ("queued", False)
     assert [e["example_id"] for e in listed.json()] == [queued.json()["example_id"]]
     assert (wrong.status_code, wrong.json()["details"]["rule"]) == (422, "file_type")
+
+
+async def _a_pair(world: World) -> uuid.UUID:
+    """A customer's worked pair as the learning keeps one (ticket 41)."""
+    kept = await kept_pair(Bench.of(REPO, None, (GIANG,)), pair(load_cases(REPO), "SR02"))
+    async with world.example_store(ALPHA) as work:
+        await work.pairs.add(kept)
+        await work.commit()
+    return kept.pair_id
+
+
+async def test_a_pair_is_listed_and_withdrawn_by_a_proposer_who_reads_prices(
+    world: World,
+) -> None:
+    pair_id = await _a_pair(world)
+    no_price = replace(GIANG, scopes=GIANG.scopes - {SalesScopes.PRICE_READ})
+    for caller in (READER, no_price):
+        async with _client(_app(world, caller)) as client:
+            assert (await client.get(f"{BASE}/customers/KHB/salesorder-pairs")).status_code == 403
+            assert (await client.delete(f"{BASE}/salesorder-pairs/{pair_id}")).status_code == 403
+    # Beta's proposer finds none of alpha's pairs, and withdraws nothing.
+    async with _client(_app(world, OUTSIDER, BETA)) as client:
+        assert (await client.get(f"{BASE}/customers/KHB/salesorder-pairs")).json() == []
+        assert (await client.delete(f"{BASE}/salesorder-pairs/{pair_id}")).status_code == 404
+    async with _client(_app(world, GIANG)) as client:
+        listed = await client.get(f"{BASE}/customers/KHB/salesorder-pairs")
+        withdrawn = await client.delete(f"{BASE}/salesorder-pairs/{pair_id}")
+        after = await client.get(f"{BASE}/customers/KHB/salesorder-pairs")
+    assert [p["pair_id"] for p in listed.json()] == [str(pair_id)]
+    assert "expected" not in listed.json()[0] and "document" not in listed.json()[0]
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert after.json() == []

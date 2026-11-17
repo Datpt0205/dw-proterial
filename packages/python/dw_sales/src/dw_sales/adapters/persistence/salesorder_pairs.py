@@ -4,14 +4,18 @@
 `SqlWorkedPairs` is a unit of work's `pairs`, beside its `examples`
 (`SqlCatalogUnitOfWork`): the worker writes a pair in the transaction that
 settles the example it was read from. `sales.salesorder_pairs` is narrowed
-by tenant and workspace by RLS, and append-only (`dw_app` holds SELECT and
-INSERT); every query here names the scope too.
+by tenant and workspace by RLS; a row is never changed (`dw_app` holds
+SELECT, INSERT and DELETE, migration 985e4fa0cd4f's grant): a pair is only
+withdrawn by a person or dropped past the tenant's term. Every query here
+names the scope too.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import RowMapping
@@ -77,3 +81,28 @@ class SqlWorkedPairs:
             .limit(limit)
         )
         return [_pair(row) for row in rows.mappings()]
+
+    async def withdraw(self, pair_id: UUID) -> WorkedPair | None:
+        rows = await self.session.execute(
+            sa.delete(_P)
+            .where(
+                _P.c.tenant_id == self.scope.tenant_id.value,
+                _P.c.workspace_id == self.scope.workspace_id.value,
+                _P.c.id == pair_id,
+            )
+            .returning(*_P.c)
+        )
+        found = rows.mappings().one_or_none()
+        return None if found is None else _pair(found)
+
+    async def prune(self, before: datetime) -> int:
+        rows = await self.session.execute(
+            sa.delete(_P)
+            .where(
+                _P.c.tenant_id == self.scope.tenant_id.value,
+                _P.c.workspace_id == self.scope.workspace_id.value,
+                _P.c.added_at < before,
+            )
+            .returning(_P.c.id)
+        )
+        return len(rows.all())

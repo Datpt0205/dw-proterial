@@ -248,8 +248,14 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     # A proposed skill version's replay (ticket 40): a fact about one version.
     assert {verb for tbl, verb in held if tbl == "skill_replays"} == {"SELECT", "INSERT"}
-    # A customer's worked pair (ticket 41): a PO and the file the PIC made.
-    assert {verb for tbl, verb in held if tbl == "salesorder_pairs"} == {"SELECT", "INSERT"}
+    # A customer's worked pair (ticket 41): a PO and the file the PIC made,
+    # never changed; withdrawn by a person or dropped past the tenant's term
+    # (migration 985e4fa0cd4f).
+    assert {verb for tbl, verb in held if tbl == "salesorder_pairs"} == {
+        "SELECT",
+        "INSERT",
+        "DELETE",
+    }
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:

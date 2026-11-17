@@ -185,7 +185,14 @@ recorded here because no rule above moved.
   written knowing the pairs are a small set: the step stays off until a
   tenant's attested measurement on the plant's model, and its own customers'
   pairs, say otherwise.
-- **Not built yet**: listing and proposing a customer's SalesOrder skill on
-  the skills page, with its pair replay (the skills API proposes one by name;
-  the approval inbox shows its approval); withdrawing a wrong pair; a PO
-  column the reading does not keep is still no source.
+- **Built 2026-11-17**: the skills page lists each customer's SalesOrder
+  skill of the workspace, in force, and its versions with their pair replay,
+  and proposes one through the same door. A wrong pair is withdrawn by a
+  person who proposes rules and reads prices (a DELETE, audited in their
+  name with ids and counts, migration `985e4fa0cd4f`); pairs older than the
+  tenant's `learning.salesorder_pairs_kept_days` (365 by default, 30 to
+  1095) are dropped hourly by the `sales_salesorder_pairs_retention` lane in
+  each workspace's scope. A replay stored before a pair left keeps the
+  counts it was stored with.
+- **Not built yet**: a PO column the reading does not keep is still no
+  source.
