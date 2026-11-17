@@ -195,5 +195,8 @@ Left:
 - Done with it: the contract snapshot and types regenerated (they carry
   ticket 05's committed routes too), release manifest for order rules
   1.15.0, and the layout screen's optional "Điều kiện giao hàng" field.
-- Not yet: a PO written in the mail body (`po_body_reading`) and a portal export read
-  no term yet; nor does the model's layout proposal.
+- Done 2026-11-17: a PO written in the mail body reads its term (`delivery_term_span`,
+  prompt `sales.po_body_extraction@1.1.0`), anchored and flagged like its other
+  values; a span not in the mail drops only the term. The step's live attestation
+  was on 1.0.0, so a tenant turning it on needs `--attest` again.
+- Not yet: a portal export reads no term; nor does the model's layout proposal.

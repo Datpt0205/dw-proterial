@@ -14,7 +14,7 @@ offsets an anchor stores are offsets into what the model saw and what the
 case keeps (`PoDocument.body`).
 
 **What the model gives** (`ModelPoBody`): span text only. The PO's number,
-date, currency and total as written, and for each line the line as written
+date, currency, total and term of delivery as written, and for each line the line as written
 and, within it, the customer's item code, the description, the quantity, the
 unit, the unit price, the amount and the requested date. Never a parsed
 value, a customer, an item code of ours or a route.
@@ -125,6 +125,9 @@ class ModelPoBody(BaseModel):
     po_date_span: Span | None = _SPAN
     currency_span: Span | None = _SPAN
     total_span: Span | None = _SPAN
+    # The term of delivery as written ("FCA Haiphong"); compared with the
+    # customer's by `order_checks.check_customer` (ticket 02).
+    delivery_term_span: Span | None = _SPAN
     lines: tuple[ModelPoLine, ...] = Field(max_length=MAX_LINES)
 
 
@@ -267,6 +270,9 @@ def read_po_body(
         starts.add(start.start)
         lines.append(line)
     total = header(answer.total_span, parse_price, "total")
+    # Unlike the number or the currency, a term not found leaves the PO read
+    # without one: a PO need not state it (`PoHeader.delivery_term`).
+    term = header(answer.delivery_term_span, lambda s, _n: _printed(s), "delivery_term")
     document = PoDocument(
         attachment_id=None,
         attachment_sha256=body.sha256,
@@ -281,7 +287,9 @@ def read_po_body(
                 revision=po_no.anchor,
                 po_date=po_date.anchor if po_date is not None else po_no.anchor,
                 currency=currency.anchor,
+                delivery_term=term.anchor if term is not None else None,
             ),
+            delivery_term=term.value if term is not None else None,
         ),
         lines=tuple(lines),
         rows_printed=len(lines),

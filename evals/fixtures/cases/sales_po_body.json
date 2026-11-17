@@ -17,6 +17,7 @@
         "po_date_span": "01/10/2026",
         "currency_span": "USD",
         "total_span": null,
+        "delivery_term_span": null,
         "lines": [
           {
             "line_span": "1. VX-W24-BK dây điện AWG24 đen: 6.100 m, đơn giá 0,0420, giao ngày 20/10/2026",
@@ -58,7 +59,7 @@
         "sender": "hana.westbrook@norvanta.example",
         "subject": "Purchase order NRV-PO-26-1044",
         "received_at": "2026-10-02T10:40:00+07:00",
-        "body": "Hi team,\n\nPlease accept our purchase order NRV-PO-26-1044 dated 2026-10-02. Prices in USD.\nItem NV-HW22-BK, hook-up wire 22AWG black, qty 8,000 m @ 0.0510 = 408.00, delivery 2026-10-30\nItem NV-CB4-22-GY, 4-core cable 22AWG grey, qty 4,000 m @ 0.6980 = 2,792.00, delivery 2026-11-13\nTotal: 3,200.00\n\nBest regards,\nHana Westbrook",
+        "body": "Hi team,\n\nPlease accept our purchase order NRV-PO-26-1044 dated 2026-10-02. Prices in USD.\nItem NV-HW22-BK, hook-up wire 22AWG black, qty 8,000 m @ 0.0510 = 408.00, delivery 2026-10-30\nItem NV-CB4-22-GY, 4-core cable 22AWG grey, qty 4,000 m @ 0.6980 = 2,792.00, delivery 2026-11-13\nTotal: 3,200.00\nDelivery terms: FCA Haiphong\n\nBest regards,\nHana Westbrook",
         "authentication": {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
       },
       "answer": {
@@ -66,6 +67,7 @@
         "po_date_span": "2026-10-02",
         "currency_span": "USD",
         "total_span": "3,200.00",
+        "delivery_term_span": "FCA Haiphong",
         "lines": [
           {
             "line_span": "Item NV-HW22-BK, hook-up wire 22AWG black, qty 8,000 m @ 0.0510 = 408.00, delivery 2026-10-30",
@@ -94,6 +96,7 @@
         "po_date": "2026-10-02",
         "currency": "USD",
         "total": "3200.00",
+        "delivery_term": "FCA Haiphong",
         "lines": [
           {"customer_item_code": "NV-HW22-BK", "quantity": "8000", "uom": "m", "unit_price": "0.0510", "amount": "408.00", "requested_date": "2026-10-30"},
           {"customer_item_code": "NV-CB4-22-GY", "quantity": "4000", "uom": "m", "unit_price": "0.6980", "amount": "2792.00", "requested_date": "2026-11-13"}
@@ -116,6 +119,7 @@
         "po_date_span": "2026年10月1日",
         "currency_span": "USD",
         "total_span": null,
+        "delivery_term_span": null,
         "lines": [
           {
             "line_span": "1. KMH-21-0077 フックアップ線 数量 5,000m 単価 0.0330 納期 10月25日",
@@ -164,6 +168,7 @@
       "po_date_span": "02/10/2026",
       "currency_span": "USD",
       "total_span": null,
+      "delivery_term_span": null,
       "lines": [
         {
           "line_span": "1. VX-C4B22 cáp 4 lõi: 3.000 m, đơn giá 0,7120, giao ngày 12/11/2026",
@@ -201,6 +206,7 @@
       "po_date_span": "02/10/2026",
       "currency_span": "USD",
       "total_span": null,
+      "delivery_term_span": null,
       "lines": [
         {
           "line_span": "1. VX-W24-RD dây AWG24 đỏ: 6.100 m, giao ngày 25/10/2026",
