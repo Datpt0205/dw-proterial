@@ -699,6 +699,15 @@ class WorkedPairStorePort(Protocol):
         """The customer's pairs, newest first."""
         ...
 
+    async def withdraw(self, pair_id: uuid.UUID) -> WorkedPair | None:
+        """Drops the pair (ticket 41's leftovers): the pair it was, or None
+        where the scope holds no such pair."""
+        ...
+
+    async def prune(self, before: datetime) -> int:
+        """Drops the pairs added before ``before``; how many."""
+        ...
+
 
 class ExampleUnitOfWork(Protocol):
     """One transaction in one workspace; leaving without `commit` rolls back."""

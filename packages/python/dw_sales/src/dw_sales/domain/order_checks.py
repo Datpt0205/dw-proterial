@@ -301,6 +301,13 @@ class Learning(BaseModel):
     # How many newly decided lines a step needs before DW1 tries a better
     # version of its prompt on all of them, for the head to approve.
     new_cases_to_retrain: int = Field(default=50, ge=20, le=5000)
+    # How many days a customer's worked pair (a PO and the SalesOrder file
+    # the PIC made from it, ticket 41) is kept to replay the customer's
+    # SalesOrder skill on; the worker drops an older one
+    # (`salesorder_pairs.WorkedPairRetention`). A year where a version does
+    # not say, as none of the platform's versions does: the pairs carry
+    # prices, and a year still holds every season's PO shapes.
+    salesorder_pairs_kept_days: int = Field(default=365, ge=30, le=1095)
 
 
 class LayoutOnboarding(BaseModel):

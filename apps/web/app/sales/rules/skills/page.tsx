@@ -47,6 +47,12 @@ const ONE_WAITING =
  * `sales.rules.propose` proposes a whole new text; it opens a `sales.skills`
  * approval the head decides on `/approvals`, never the proposer, and only
  * once the replay is stored (the server refuses before). Nothing here decides.
+ *
+ * Each customer's SalesOrder skill (ticket 41) is listed below DW1's: how
+ * that customer's PO becomes Bravo's SalesOrder, the platform's generic one
+ * until the company approves its own. Proposed through the same door; its
+ * replay fills the customer's worked pairs, and the head may approve only a
+ * version that reproduced every one (the server refuses otherwise).
  */
 export default function SkillsPage() {
   return (
@@ -76,6 +82,7 @@ function Skills() {
   const versions = view?.versions ?? [];
   const waiting = versions.filter((v) => v.status === "proposed").length;
   const own = list.filter((s) => s.layer === "tenant").length;
+  const customers = view?.customer_skills ?? [];
 
   return (
     <div className="space-y-4">
@@ -86,7 +93,7 @@ function Skills() {
         )}
         title="Kỹ năng của DW1"
         subtitle={`${own}/${list.length} kỹ năng đang dùng bản riêng · ${waiting} phiên bản chờ duyệt`}
-        help="Kỹ năng là lời hướng dẫn DW1 đọc một loại thư. Bản đề xuất được chạy thử trên thư mẫu, rồi Trưởng bộ phận duyệt; người đề xuất không tự duyệt. Kỹ năng chỉ là lời: không thêm công cụ, quyền, người nhận hay con số nào."
+        help="Kỹ năng là lời hướng dẫn DW1 đọc một loại thư, hoặc điền SalesOrder cho một khách. Bản đề xuất được chạy thử (trên thư mẫu, hoặc trên các cặp ví dụ của khách), rồi Trưởng bộ phận duyệt; người đề xuất không tự duyệt. Kỹ năng chỉ là lời: không thêm công cụ, quyền, người nhận hay con số nào."
       />
       {skills.error ? (
         <LoadError error={skills.error} onRetry={skills.reload} />
@@ -175,6 +182,96 @@ function Skills() {
             )}
           />
           <Typography.Title level={4} className="mb-0!">
+            Kỹ năng SalesOrder của từng khách
+          </Typography.Title>
+          <Table<Skill>
+            rowKey="name"
+            loading={skills.loading}
+            dataSource={customers}
+            pagination={false}
+            scroll={table.scroll()}
+            tableLayout={table.tableLayout}
+            locale={{
+              emptyText: skills.loading
+                ? " "
+                : "Dữ liệu chủ chưa có khách hàng nào.",
+            }}
+            footer={() => `${customers.length} khách`}
+            expandable={{
+              expandedRowRender: (s) => (
+                <Instructions
+                  label={`Lời hướng dẫn ${s.ref}`}
+                  text={s.instructions}
+                />
+              ),
+            }}
+            columns={phone(
+              [
+                {
+                  title: "Khách",
+                  key: "customer",
+                  render: (_, s) => (
+                    <span className="flex flex-col">
+                      <Typography.Text strong>
+                        {s.customer_code}
+                      </Typography.Text>
+                      <Typography.Text
+                        ellipsis={{ tooltip: s.customer_name }}
+                        className="max-w-xl"
+                      >
+                        {s.customer_name}
+                      </Typography.Text>
+                      {isPhone ? (
+                        <span className="mt-1">
+                          <StatusTag
+                            tone={s.layer === "tenant" ? "ok" : "gray"}
+                          >
+                            {SKILL_LAYER[s.layer]}
+                          </StatusTag>
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                },
+                {
+                  title: "Đang dùng",
+                  key: "in_force",
+                  render: (_, s) => (
+                    <span className="flex flex-col items-start gap-1">
+                      <StatusTag tone={s.layer === "tenant" ? "ok" : "gray"}>
+                        {SKILL_LAYER[s.layer]}
+                      </StatusTag>
+                      <Typography.Text code>{s.ref}</Typography.Text>
+                    </span>
+                  ),
+                },
+                {
+                  title: "Đề xuất",
+                  key: "propose",
+                  fixed: "right",
+                  render: (_, s) => (
+                    <GuardedButton
+                      size="small"
+                      reason={
+                        versionsOf(s, versions).some(
+                          (v) => v.status === "proposed",
+                        )
+                          ? ONE_WAITING
+                          : null
+                      }
+                      inlineReason={false}
+                      onClick={() => setEditing(s)}
+                      aria-label={`Đề xuất sửa kỹ năng SalesOrder của khách ${s.customer_code}`}
+                    >
+                      Đề xuất sửa
+                    </GuardedButton>
+                  ),
+                },
+              ],
+              ["propose"],
+            )}
+          />
+          <Typography.Title level={4} className="mb-0!">
             Các phiên bản của công ty
           </Typography.Title>
           <Table<SkillVersion>
@@ -221,7 +318,7 @@ function Skills() {
                   ),
                 },
                 {
-                  title: "Chạy thử trên thư mẫu",
+                  title: "Chạy thử",
                   key: "replay",
                   render: (_, v) => <SkillReplayResult version={v} />,
                 },

@@ -1,6 +1,6 @@
 # 41 — A customer's SalesOrder made by a skill with tools, every cell traced by code
 
-Status: done (2026-11-16)
+Status: done (2026-11-17); left: a PO column the reading does not keep (PRS number) is still not a source
 Blocked by: 40 (the skill store and the deep agent)
 Category: enhancement
 
@@ -120,3 +120,38 @@ source.
   tag says "Đang chạy thử" (no longer "trên thư mẫu", wrong for pairs).
 - Contracts owe a regeneration (a new route and `SkillComparison`); the
   web's typecheck needs it for `salesApi().skillVersion`.
+
+## Done: the leftovers (2026-11-17)
+
+- **The skills page lists and proposes a customer's SalesOrder skill.**
+  `SkillsView.customer_skills`: one `salesorder-<code>` skill per customer
+  of the caller's workspace (`SkillCustomersPort`, the catalog), in force as
+  the tenant holds it (`RuleBook.current` for a key with an approved
+  version, the platform's generic one otherwise, read without a lookup per
+  customer), with `customer_code`/`customer_name`; `versions` now holds
+  their versions with the pairs replay. Proposed through the same
+  `POST /sales/skills/{name}/versions`, replayed by the same lane, decided
+  on the same `sales.skills` approval (no second path). Web: a "Kỹ năng
+  SalesOrder của từng khách" table on `/sales/rules/skills`
+  (`ProposeSkill` says "chạy thử trên các cặp ví dụ của khách"). Tests in
+  `test_skills.py` (listed with versions and replay, approved by another
+  person, another tenant lists none).
+- **A wrong pair is withdrawn.** `WorkedPairs` (`salesorder_pairs.py`):
+  `GET /sales/customers/{code}/salesorder-pairs` (newest 50: PO number,
+  day, row count, who added it, whether a replay reads it; never a cell)
+  and `DELETE /sales/salesorder-pairs/{pair_id}`, both `sales.rules.propose`
+  + `sales.price.read` as the examples' routes; the DELETE and its audit
+  row (`sales.salesorder_pair.withdrawn`, ids and counts) in one
+  transaction; another workspace's or tenant's pair is not found. Web: "Cặp
+  ví dụ của khách" in the customer's SalesOrder drawer, a confirmation
+  naming the PO (`_components/salesorder-pairs.tsx`).
+- **Retention.** `OrderRules.learning.salesorder_pairs_kept_days` (365 by
+  default, 30-1095; placed with the learning settings, words in
+  `rule-labels.ts`); the worker's `sales_salesorder_pairs_retention` lane
+  (`WorkedPairRetention`, hourly, every workspace in its own scope,
+  registered with or without a model) drops older pairs and audits as
+  itself with the count. Migration `985e4fa0cd4f` (parent `b01dba5d0433`)
+  grants `dw_app` DELETE on `sales.salesorder_pairs`; UPDATE stays revoked.
+- A replay stored beside a waiting version before a pair left keeps the
+  counts it was stored with (a version is replayed once); a version proposed
+  after is replayed on the pairs left.

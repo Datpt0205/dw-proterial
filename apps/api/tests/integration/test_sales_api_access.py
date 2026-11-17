@@ -50,6 +50,8 @@ _PARAMS = {
     "name": "thread-intents",
     # A sales order example (salesorder learning).
     "example_id": str(uuid.uuid4()),
+    # A customer's worked pair (ticket 41).
+    "pair_id": str(uuid.uuid4()),
 }
 
 
@@ -98,6 +100,8 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
         method, path = route
         if path.startswith("/rules/drafts/"):
             return method, "/rules/drafts/{draft_id}"
+        if path.startswith("/skills/versions/"):
+            return method, "/skills/versions/{version_id}"
         return route
 
     assert {named(route) for route, status in answers.items() if status != 403} == {
@@ -113,6 +117,8 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
         # same scope; the walk's body is no proposal, so it is refused (422).
         ("GET", "/skills"),
         ("POST", "/skills/thread-intents/versions"),
+        # One skill version compared (ticket 41): the walk's id is random (404).
+        ("GET", "/skills/versions/{version_id}"),
     }
 
 

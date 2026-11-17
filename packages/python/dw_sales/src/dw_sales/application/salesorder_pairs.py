@@ -28,6 +28,20 @@ no scope: the fill's tools are code's, called before the turn, and need none.
 
 A replay in which some fill got no usable answer is stored ``incomplete``
 with the count, and an incomplete replay is not one the head may approve on.
+
+**A pair leaves two ways** (ticket 41's leftovers), and is then neither
+replayed nor listed:
+
+- **withdrawn** by a person who proposes rules and reads prices, as the
+  examples' own screen asks (`WorkedPairs.withdraw`): a pair whose PIC's file
+  was wrong would fail every replay of the customer's skill for good. Audited
+  in that person's name: the pair, its customer, its day and its row count,
+  never a cell. A replay already stored beside a waiting version stays what
+  it was: it counted the pair, and is read as it was stored.
+- **dropped past the tenant's term** (`OrderRules.learning.
+  salesorder_pairs_kept_days`) by the worker's
+  `sales_salesorder_pairs_retention` lane (`WorkedPairRetention`), hourly, in
+  each workspace's own scope, audited as the lane with the count.
 """
 
 from __future__ import annotations
@@ -35,15 +49,21 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from typing import Final, Protocol
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
-from dw_kernel.errors import QuotaExceededError
+from dw_kernel.errors import NotFoundError, QuotaExceededError
+from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import RuleStatus, RuleVersion
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import BravoUploadLayout
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope, Snapshot
@@ -71,8 +91,17 @@ from dw_sales.application.skills import (
     salesorder_key,
 )
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
+from dw_sales.domain.order_checks import OrderRules
 
-__all__ = ["PAIRS_REPLAYED", "SALESORDER_SKILL_REPLAY_LANE", "SalesOrderSkillReplayer"]
+__all__ = [
+    "PAIRS_REPLAYED",
+    "SALESORDER_PAIRS_RETENTION_LANE",
+    "SALESORDER_SKILL_REPLAY_LANE",
+    "SalesOrderSkillReplayer",
+    "WorkedPairRetention",
+    "WorkedPairView",
+    "WorkedPairs",
+]
 
 _LOG = logging.getLogger("dw_sales.salesorder_pairs")
 
@@ -81,6 +110,10 @@ SALESORDER_SKILL_REPLAY_LANE: Final = "sales_salesorder_skill_replay"
 PAIRS_REPLAYED: Final = 20
 # The versions a replay is for: those waiting on the head.
 _WAITING: Final[tuple[RuleStatus, ...]] = ("proposed",)
+SALESORDER_PAIRS_RETENTION_LANE: Final = "sales_salesorder_pairs_retention"
+# The customer's newest pairs its screen lists.
+PAIRS_LISTED: Final = 50
+_PAIR_RESOURCE: Final = "sales_salesorder_pair"
 
 
 class PairCatalogPort(Protocol):
@@ -266,3 +299,140 @@ def _lane_context(scope: SalesScope) -> AccessContext:
         scopes=frozenset(),
         plan_id="background",
     )
+
+
+# ------------------------------------------------ a pair withdrawn or dropped --
+
+
+class WorkedPairView(BaseModel):
+    """A pair as the customer's screen lists it: which PO, when, how many
+    rows; never a cell (module docstring)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    pair_id: UUID
+    example_id: UUID | None
+    customer_code: str
+    po_no: str
+    received_on: date
+    rows: int
+    added_by: UUID
+    added_at: datetime
+    # Among the customer's newest `PAIRS_REPLAYED`: what a replay reads.
+    replayed: bool
+
+
+def _pair_view(pair: WorkedPair, replayed: bool) -> WorkedPairView:
+    return WorkedPairView(
+        pair_id=pair.pair_id,
+        example_id=pair.example_id,
+        customer_code=pair.customer_code,
+        po_no=str(pair.document.header.po_no),
+        received_on=pair.received_on,
+        rows=len(pair.expected),
+        added_by=pair.added_by,
+        added_at=pair.added_at,
+        replayed=replayed,
+    )
+
+
+def _pair_details(pair: WorkedPair) -> dict[str, object]:
+    """What an audit row says of a pair: ids, its day and row count."""
+    return {
+        "customer_code": pair.customer_code,
+        "example_id": None if pair.example_id is None else str(pair.example_id),
+        "received_on": pair.received_on.isoformat(),
+        "rows": len(pair.expected),
+        "added_by": str(pair.added_by),
+    }
+
+
+@dataclass(frozen=True)
+class WorkedPairs:
+    """The customer's screen's side: the customer's pairs, and one withdrawn
+    (module docstring). Whoever may upload an example: `sales.rules.propose`
+    and `sales.price.read`, since a pair is a priced file."""
+
+    uow: ExampleUnitOfWorkFactory
+    gate: Gate
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def _require(self, context: AccessContext, pair_id: UUID | None = None) -> None:
+        await self.gate.require(
+            context,
+            SalesScopes.RULES_PROPOSE,
+            SalesScopes.PRICE_READ,
+            resource_type=_PAIR_RESOURCE,
+            resource_id=None if pair_id is None else str(pair_id),
+        )
+
+    async def for_customer(
+        self, context: AccessContext, customer_code: str
+    ) -> list[WorkedPairView]:
+        """The customer's newest pairs in the caller's workspace (RLS)."""
+        await self._require(context)
+        async with self.uow(sales_scope(context)) as work:
+            pairs = await work.pairs.for_customer(customer_code, PAIRS_LISTED)
+        return [_pair_view(p, i < PAIRS_REPLAYED) for i, p in enumerate(pairs)]
+
+    async def withdraw(self, context: AccessContext, pair_id: UUID) -> WorkedPairView:
+        """The pair dropped, with its audit row, in one transaction. Another
+        workspace's or tenant's pair, or one already gone, is not found
+        alike: RLS leaves it out."""
+        await self._require(context, pair_id)
+        async with self.uow(sales_scope(context)) as work:
+            pair = await work.pairs.withdraw(pair_id)
+            if pair is None:
+                raise NotFoundError("no such pair", details={"pair_id": str(pair_id)})
+            await work.audit.append(
+                AuditEvent(
+                    id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    actor_id=UserId(context.principal_id),
+                    action="sales.salesorder_pair.withdrawn",
+                    resource_type=_PAIR_RESOURCE,
+                    resource_id=str(pair_id),
+                    occurred_at=self.clock.now(),
+                    details=_pair_details(pair),
+                )
+            )
+            await work.commit()
+        return _pair_view(pair, replayed=False)
+
+
+@dataclass(frozen=True)
+class WorkedPairRetention:
+    """The `sales_salesorder_pairs_retention` lane's work for one scope: the
+    pairs older than the tenant's term dropped (module docstring)."""
+
+    pairs: ExampleUnitOfWorkFactory
+    rules: LearningRulesPort
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def tick(self, scope: SalesScope) -> int:
+        """Drops ``scope``'s pairs past the term; how many."""
+        rules = (await self.rules.current(scope, RuleKey.ORDER_RULES)).policy
+        assert isinstance(rules, OrderRules)
+        days = rules.learning.salesorder_pairs_kept_days
+        now = self.clock.now()
+        async with self.pairs(scope) as work:
+            dropped = await work.pairs.prune(now - timedelta(days=days))
+            if dropped:
+                await work.audit.append(
+                    lane_audit_event(
+                        lane=SALESORDER_PAIRS_RETENTION_LANE,
+                        event_id=self.ids.new_uuid(),
+                        tenant_id=scope.tenant_id,
+                        workspace_id=scope.workspace_id,
+                        action="sales.salesorder_pairs.pruned",
+                        resource_type=_PAIR_RESOURCE,
+                        resource_id=str(scope.workspace_id.value),
+                        occurred_at=now,
+                        details={"pairs": dropped, "kept_days": days},
+                    )
+                )
+            await work.commit()
+        return dropped

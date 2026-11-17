@@ -260,6 +260,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Số dòng mới quyết trước khi DW thử lời nhắc tốt hơn",
       help: "Từ 20 trở lên. Phiên bản thử chỉ được đề xuất khi đúng hơn trên mọi dòng đã quyết và qua mọi ca bảo mật.",
     },
+    "learning.salesorder_pairs_kept_days": {
+      label: "Số ngày giữ cặp ví dụ SalesOrder của khách",
+      help: "Cặp ví dụ (PO và tệp SalesOrder PIC đã làm) cũ hơn số ngày này tự được xóa và không còn dùng để chạy thử kỹ năng SalesOrder của khách. Từ 30 đến 1095 ngày; mặc định 365.",
+    },
     model_assist: {
       label: "Bước có mô hình hỗ trợ",
       help: "Nền tảng tắt tất cả. Chỉ bật một bước khi đánh giá thực tế của bước đó đạt yêu cầu; mọi giá trị mô hình đọc vẫn cần Sales xác nhận.",

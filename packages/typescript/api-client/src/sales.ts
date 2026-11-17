@@ -1634,6 +1634,29 @@ export class SalesApi {
       key,
     );
   }
+
+  /**
+   * The customer's worked pairs (ticket 41), newest first: which PO, when,
+   * how many rows, and whether a replay of its SalesOrder skill reads it.
+   */
+  salesOrderPairs(customerCode: string) {
+    return this.get<"/api/v1/sales/customers/{customer_code}/salesorder-pairs">(
+      `/api/v1/sales/customers/${enc(customerCode)}/salesorder-pairs`,
+    );
+  }
+
+  /** A wrong pair withdrawn (audited): no replay reads it any more. */
+  withdrawSalesOrderPair(
+    pairId: string,
+    idempotencyKey: string,
+  ): Promise<SalesSchemas["WorkedPairView"]> {
+    return this.client.request(
+      "DELETE",
+      `/api/v1/sales/salesorder-pairs/${enc(pairId)}`,
+      shaped<SalesSchemas["WorkedPairView"]>(),
+      { idempotencyKey },
+    );
+  }
 }
 
 /** A page of a PDF, or a sheet of a workbook: what the source route opens. */

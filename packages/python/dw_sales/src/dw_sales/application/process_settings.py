@@ -625,6 +625,8 @@ PROCESS_SETTINGS: Final[tuple[Placement, ...]] = _in(
     # reading is shown, and when a better prompt is tried; every reading's.
     "learning.examples_per_line",
     "learning.new_cases_to_retrain",
+    # How long a customer's worked pairs are kept (ticket 41).
+    "learning.salesorder_pairs_kept_days",
 )
 
 

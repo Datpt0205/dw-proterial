@@ -31,6 +31,11 @@ export function nextSkillVersion(
   ]).replace(/^.*@/, "");
 }
 
+/** A customer's SalesOrder skill (ticket 41): its replay reads the customer's worked pairs. */
+export function isCustomerSkill(skill: Pick<Skill, "customer_code">): boolean {
+  return skill.customer_code != null;
+}
+
 /** The versions of ``skill``, as listed (newest first by the server). */
 export function versionsOf(
   skill: Skill,

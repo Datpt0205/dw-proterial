@@ -4,7 +4,8 @@ Holds the SQL store's contract, not only the happy path: each scope's
 examples are its own (what RLS gives the SQL store), `settle` writes only an
 example still queued and drops its files, `submit` only a replayed one,
 `prune` drops an example never sent with its files, a worked pair is its
-scope's (ticket 41), and a transaction that does not commit writes nothing.
+scope's (ticket 41) and is withdrawn or pruned only there, and a transaction
+that does not commit writes nothing.
 The platform's audit and outbox are written at once, as the eval store's
 are.
 """
@@ -104,6 +105,18 @@ class _Pairs:
     async def for_customer(self, customer_code: str, limit: int) -> Sequence[WorkedPair]:
         found = [p for p in self._state.pairs if p.customer_code == customer_code]
         return sorted(found, key=lambda p: p.added_at, reverse=True)[:limit]
+
+    async def withdraw(self, pair_id: uuid.UUID) -> WorkedPair | None:
+        found = next((p for p in self._state.pairs if p.pair_id == pair_id), None)
+        if found is not None:
+            self._state.pairs.remove(found)
+        return found
+
+    async def prune(self, before: datetime) -> int:
+        kept = [p for p in self._state.pairs if p.added_at >= before]
+        dropped = len(self._state.pairs) - len(kept)
+        self._state.pairs[:] = kept
+        return dropped
 
 
 class _Work:

@@ -29,6 +29,7 @@ import {
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
 import { GuardedButton } from "../_components/guarded-button";
+import { SalesOrderPairs } from "../_components/salesorder-pairs";
 import { SalesOrderReplay } from "../_components/salesorder-replay";
 
 // How often an example the worker is still reading is asked about again.
@@ -234,6 +235,7 @@ export function SalesOrderLearning({
             title="Khách này chưa có ví dụ nào: tệp SalesOrder theo mẫu tệp nhập của công ty."
           />
         )}
+        <SalesOrderPairs customerCode={customerCode} />
       </Flex>
     </Drawer>
   );

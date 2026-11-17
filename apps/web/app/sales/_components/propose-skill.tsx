@@ -6,6 +6,7 @@ import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
 import { messageRef } from "../_lib/messages";
 import {
+  isCustomerSkill,
   nextSkillVersion,
   type Skill,
   type SkillVersion,
@@ -58,7 +59,7 @@ export function ProposeSkill({
       id,
       { name: skill.name, ...body },
       (key) => salesApi().proposeSkill(skill.name, body, key),
-      `Đã gửi duyệt kỹ năng "${skill.name}" ${values.version}. DW1 chạy thử trên thư mẫu${fromMessage ? " và thư này" : ""}, rồi Trưởng bộ phận duyệt trên trang Duyệt.`,
+      `Đã gửi duyệt kỹ năng "${skill.name}" ${values.version}. DW1 chạy thử ${isCustomerSkill(skill) ? "trên các cặp ví dụ của khách" : `trên thư mẫu${fromMessage ? " và thư này" : ""}`}, rồi Trưởng bộ phận duyệt trên trang Duyệt.`,
     );
     if (result.ok) return onProposed();
     setError(result.error);

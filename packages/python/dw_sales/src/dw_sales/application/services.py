@@ -88,6 +88,7 @@ from dw_sales.application.salesorder_learning import (
     ExampleUnitOfWorkFactory,
     SalesOrderExamples,
 )
+from dw_sales.application.salesorder_pairs import WorkedPairs
 from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.skills import (
@@ -139,6 +140,8 @@ class SalesServices:
     rule_drafts: RuleDraftService
     # A customer's SalesOrder rules learned from a worked example (ticket 38).
     salesorder_examples: SalesOrderExamples
+    # A customer's worked pairs, listed and one withdrawn (ticket 41).
+    salesorder_pairs: WorkedPairs
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
     # Bravo's YCBG export, uploaded for Design's results to be read (ticket 16).
@@ -366,6 +369,7 @@ def assemble(
         convert_gaps=ConvertGapService(gaps, gate),
         read_backs=ReadBackService(uow, read_back_uow, gate),
         salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
+        salesorder_pairs=WorkedPairs(example_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         finding_explanations=FindingExplanations(
             uow, gate, catalog, one_call, clock, ids, worker_id, worker_version
@@ -461,7 +465,7 @@ def assemble(
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
-        skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays),
+        skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays, catalog),
         prompts=PromptVersionsService(uow, gate, prompts),
         today=TodayService(gate, clock, notices, reminder_marks, book),
         order_quotes=order_quotes,

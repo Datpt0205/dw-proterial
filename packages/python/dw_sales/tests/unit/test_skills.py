@@ -277,9 +277,10 @@ def _salesorder(version: str, words: str) -> SkillProposal:
 
 
 async def test_a_customers_salesorder_version_is_compared_with_the_customers_in_force() -> None:
-    """Ticket 41's versions are not on the skills list, so the approval's
-    panel reads the one version: beside the generic skill while the customer
-    has none of its own, then beside the customer's approved version."""
+    """The approval's panel reads the one version: beside the generic skill
+    while the customer has none of its own, then beside the customer's
+    approved version. KHB is no customer of this workspace, so the skills
+    list does not hold its version."""
     world = _world()
     first = await world.services.skills.propose(
         AN.context(), SALESORDER, _salesorder("1.0.1", "Words A.")
@@ -314,6 +315,71 @@ async def test_a_customers_salesorder_version_is_compared_with_the_customers_in_
         "tenant",
         "Words A.",
     )
+
+
+async def test_each_customers_salesorder_skill_is_listed_with_its_versions_and_replay() -> None:
+    """Ticket 41's leftovers: one SalesOrder skill per customer of the
+    caller's workspace, in force as the tenant holds it, and its versions
+    with their pairs replay among the list's; proposed through the same
+    door, decided by another person."""
+    world = _world()
+    listed = await world.services.skills.list(GIANG.context())
+    assert [s.customer_code for s in listed.customer_skills] == [
+        "BRN",
+        "CVG",
+        "KMH",
+        "NRV",
+        "QRL",
+        "TZ2609",
+        "VLX",
+    ]
+    assert all(s.customer_code is None for s in listed.skills)
+    vlx = next(s for s in listed.customer_skills if s.customer_code == "VLX")
+    assert (vlx.name, vlx.ref, vlx.layer, vlx.platform_ref) == (
+        "salesorder-vlx",
+        "sales_skill_salesorder_vlx@1.0.0",
+        "platform",
+        "sales_skill_salesorder_vlx@1.0.0",
+    )
+    assert vlx.customer_name
+
+    proposed = await world.services.skills.propose(
+        AN.context(), "salesorder-vlx", _salesorder("1.0.1", "Words A.")
+    )
+    (version,) = [
+        v
+        for v in (await world.services.skills.list(GIANG.context())).versions
+        if v.version_id == proposed.version_id
+    ]
+    assert (version.name, version.status, version.replay) == ("salesorder-vlx", "proposed", None)
+    replay = await _replayed(world, proposed.version_id, pairs=True)
+    (version,) = [
+        v
+        for v in (await world.services.skills.list(GIANG.context())).versions
+        if v.version_id == proposed.version_id
+    ]
+    assert version.replay == replay
+
+    await world.decide_skill(HUONG, proposed.version_id, approve=True, comment="Đồng ý")
+    listed = await world.services.skills.list(GIANG.context())
+    vlx = next(s for s in listed.customer_skills if s.customer_code == "VLX")
+    assert (vlx.ref, vlx.layer, vlx.instructions) == (
+        "sales_skill_salesorder_vlx@1.0.1",
+        "tenant",
+        "Words A.",
+    )
+    # Every other customer stays on the platform's generic skill.
+    assert {s.layer for s in listed.customer_skills if s.customer_code != "VLX"} == {"platform"}
+
+
+async def test_another_tenant_lists_none_of_a_tenants_customer_skills() -> None:
+    world = _world()
+    proposed = await world.services.skills.propose(
+        AN.context(), "salesorder-vlx", _salesorder("1.0.1", "Words A.")
+    )
+    beta = await world.services.skills.list(GIANG.context(BETA))
+    assert proposed.version_id not in {v.version_id for v in beta.versions}
+    assert beta.customer_skills == []
 
 
 async def test_a_dw1_skill_version_is_compared_as_the_list_shows_it() -> None:

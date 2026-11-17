@@ -102,6 +102,7 @@ from dw_sales.application.rules import (
     RuleVersionView,
 )
 from dw_sales.application.salesorder_learning import SalesOrderExampleView
+from dw_sales.application.salesorder_pairs import WorkedPairView
 from dw_sales.application.screening_followups import FollowupDraftView
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
@@ -2514,6 +2515,29 @@ def build_router(
         return await idem.record(
             await svc.salesorder_examples.submit(context, example_id, body.version)
         )
+
+    # A customer's worked pairs (ticket 41), which its SalesOrder skill is
+    # replayed on: listed, and a wrong one withdrawn (audited), by whoever may
+    # upload an example; another workspace's pair is not found.
+    @router.get(
+        "/customers/{customer_code}/salesorder-pairs",
+        response_model=list[WorkedPairView],
+        dependencies=learner_scope,
+    )
+    async def salesorder_pairs(
+        customer_code: CustomerCode, context: Ctx, svc: Svc
+    ) -> list[WorkedPairView]:
+        return await svc.salesorder_pairs.for_customer(context, customer_code)
+
+    @router.delete(
+        "/salesorder-pairs/{pair_id}",
+        response_model=WorkedPairView,
+        dependencies=learner_scope,
+    )
+    async def withdraw_salesorder_pair(
+        pair_id: uuid.UUID, context: Ctx, svc: Svc, idem: Idem
+    ) -> WorkedPairView:
+        return await idem.record(await svc.salesorder_pairs.withdraw(context, pair_id))
 
     return router
 

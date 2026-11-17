@@ -175,7 +175,10 @@ from dw_sales.application.prompt_versions import PROMPTS_DECIDED
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
-from dw_sales.application.salesorder_pairs import SALESORDER_SKILL_REPLAY_LANE
+from dw_sales.application.salesorder_pairs import (
+    SALESORDER_PAIRS_RETENTION_LANE,
+    SALESORDER_SKILL_REPLAY_LANE,
+)
 from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
 from dw_worker.composition import (
@@ -245,6 +248,7 @@ from dw_worker.consumers.sales_mail_drop import INTERVAL_SECONDS as SALES_MAIL_D
 from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
 from dw_worker.consumers.sales_outbound import INTERVAL_SECONDS as SALES_OUTBOUND_INTERVAL_SECONDS
 from dw_worker.consumers.sales_outbound import build_sales_outbound_consumer
+from dw_worker.consumers.sales_pairs_retention import build_sales_pairs_retention_consumer
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -894,6 +898,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     sales_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
     # A customer's SalesOrder skill replayed on its worked pairs (ticket 41).
     sales_salesorder_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_pairs_retention_consumer: Callable[[], Awaitable[None]] | None = None
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
@@ -1233,6 +1238,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     sales_salesorder_skill_replay_consumer = build_sales_skill_replay_consumer(
                         mount.salesorder_skill_replay, threshold_scopes
                     )
+                if mount.salesorder_pairs_retention is not None:
+                    sales_pairs_retention_consumer = build_sales_pairs_retention_consumer(
+                        mount.salesorder_pairs_retention, threshold_scopes
+                    )
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
@@ -1405,6 +1414,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "sales_step_outcomes_retention",
             build_retention_consumer(sales_step_outcomes_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+
+    # And a customer's worked pairs past the tenant's term (ticket 41),
+    # hourly like every retention lane, each workspace in its own scope.
+    if sales_pairs_retention_consumer is not None:
+        registry.register(
+            SALESORDER_PAIRS_RETENTION_LANE,
+            sales_pairs_retention_consumer,
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
 

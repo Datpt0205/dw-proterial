@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   incompleteLine,
+  isCustomerSkill,
   nextSkillVersion,
   replayLine,
   securityLine,
@@ -130,5 +131,13 @@ describe("skills", () => {
       { op: "remove", text: "10" },
       { op: "add", text: "10.0" },
     ]);
+  });
+});
+
+describe("a customer's SalesOrder skill (ticket 41)", () => {
+  it("is told from DW1's own skills by its customer", () => {
+    expect(isCustomerSkill({ customer_code: "KHB" })).toBe(true);
+    expect(isCustomerSkill({ customer_code: null })).toBe(false);
+    expect(isCustomerSkill({})).toBe(false);
   });
 });

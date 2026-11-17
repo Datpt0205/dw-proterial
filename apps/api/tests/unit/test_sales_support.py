@@ -79,6 +79,8 @@ _PARAMS = {
     "prv_code": "CB-2006",
     # A customer's worked example, learned from (ticket 38).
     "example_id": str(uuid.uuid4()),
+    # A customer's worked pair (ticket 41).
+    "pair_id": str(uuid.uuid4()),
 }
 
 
