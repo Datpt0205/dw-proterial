@@ -477,7 +477,12 @@ context. All five are done and on `main`. The full narrative is at
           and the vEthernet showed 0 bytes SENT this morning, so the host
           may not transmit at all (the I226-V on the I226-LM driver):
           asked for a laptop on the same cable and the adapter's sent
-          counters before blaming the port. The
+          counters before blaming the port. **Result: another machine
+          on the same cable fails too**, so the host is cleared: the
+          cable, wall socket or switch port is dead or shut (the host's
+          `Ethernet` reads "Not connected"; MAC B0:82:E2:C5:77:92; static
+          .234/25 gw .253 DNS .245/.251 set again). Needs whoever can
+          patch or test that run to a live port. The
           script (scratchpad `fix-network-dw-B.ps1`) goes into
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
