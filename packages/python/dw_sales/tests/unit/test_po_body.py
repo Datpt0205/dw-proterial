@@ -47,6 +47,8 @@ FIXTURE = json.loads(
 # customers write them: what tells code that its "6.100 m" is six thousand one
 # hundred (audit 11-13, finding 8).
 VI = FIXTURE["golden"][0]
+# Prints its term of delivery, "FCA Haiphong" (ticket 02).
+EN = FIXTURE["golden"][1]
 
 
 def _point_priced(spec: dict[str, Any]) -> dict[str, Any]:
@@ -212,6 +214,28 @@ def test_an_amount_reads_by_the_platform_rule_for_separators() -> None:
     assert parse_number("1.200,5") == Decimal("1200.5")
 
 
+def test_the_term_of_delivery_is_read_where_the_mail_writes_it_and_flagged() -> None:
+    document = _read(EN["answer"], EN["message"]).document
+    assert document is not None
+    header = document.header
+    assert header.delivery_term == "FCA Haiphong"
+    assert header.anchors.delivery_term is not None
+    assert header.anchors.delivery_term.quote == "FCA Haiphong"
+    assert RegionFlag.MODEL_READ in {f.flag for f in header.flags if f.field == "delivery_term"}
+
+
+def test_a_term_the_mail_does_not_write_leaves_the_po_read_without_one() -> None:
+    """A PO need not state a term, so a span not in the mail drops only the
+    term: the order is still read (unlike its number or its currency)."""
+    for span in (None, "DAP Hanoi"):
+        verdict = _read(EN["answer"] | {"delivery_term_span": span}, EN["message"])
+        assert verdict.document is not None
+        header = verdict.document.header
+        assert header.delivery_term is None and header.anchors.delivery_term is None
+        assert "delivery_term" not in {f.field for f in header.flags}
+        assert verdict.refused["delivery_term_not_found"] == (span is not None)
+
+
 # ---------------------------------------------------- the document's rules --
 
 
@@ -254,6 +278,24 @@ async def test_a_po_in_the_mail_opens_a_case_whose_every_value_sales_confirms() 
     uncertain = {f.line_no for f in case.findings if f.code is FindingCode.VALUE_UNCERTAIN}
     assert uncertain == {None, 1, 2}
     assert required_regions(case) == {MESSAGE_TEXT}
+
+
+async def test_a_term_in_the_mail_other_than_the_customers_is_an_error_finding() -> None:
+    """Ticket 02 for a PO written in the mail: its term is compared with the
+    customer's as a file's is, by Incoterms rule ("FCA Haiphong" is not DAP)."""
+    spec = EN["message"]
+    with SampleWith([spec]) as sample:
+        path = sample.data_dir / "customers.json"
+        customers = json.loads(path.read_text(encoding="utf-8"))
+        for customer in customers:
+            if customer["code"] == "NRV":
+                customer["delivery_term"] = "DAP"
+        path.write_text(json.dumps(customers, ensure_ascii=False), encoding="utf-8")
+        world = open_world(REPO, sample, CALLERS, model=_model(EN["answer"]))
+        disposition, case = (await world.process_each(AN, [spec["message_id"]]))[spec["message_id"]]
+    assert disposition.kind == "case_created" and isinstance(case, OrderCase)
+    assert case.header.delivery_term == "FCA Haiphong"
+    assert FindingCode.DELIVERY_TERM_MISMATCH in {f.code for f in case.findings}
 
 
 async def test_a_model_down_sends_the_mail_to_sales_with_why() -> None:

@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 # The prompt a PO in the mail is read with, and the reader the PO is stamped
 # with (`PoDocument.parser_version`). Its file is
-# `configs/prompts/sales/po_body_extraction@1.0.0.yaml`; a test holds the two
+# `configs/prompts/sales/po_body_extraction@1.1.0.yaml`; a test holds the two
 # together, and holds the prompt's rendered size under `PROMPT_TOKENS`.
-PO_BODY_EXTRACTION: Final = PromptRef("sales.po_body_extraction", "1.0.0")
+PO_BODY_EXTRACTION: Final = PromptRef("sales.po_body_extraction", "1.1.0")
 PROMPT_TOKENS: Final = 1800
 # Room for `MAX_LINES` lines (about 120 tokens each) and the PO's own values.
 _OUTPUT_TOKENS: Final = 2000

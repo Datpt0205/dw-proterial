@@ -60,7 +60,7 @@ _RUN = RunContext(
     scopes=frozenset(),
     trace_id="eval-ai-item-4",
 )
-_HEADER = ("po_no", "po_date", "currency")
+_HEADER = ("po_no", "po_date", "currency", "delivery_term")
 _LINE = ("customer_item_code", "quantity", "uom", "unit_price", "amount", "requested_date")
 
 

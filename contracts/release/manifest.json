@@ -816,7 +816,7 @@
           "path": "evals/expected/sales_po_body.json"
         },
         {
-          "checksum": "94f46892c59b02b7cc273921a43ab118fd644096b4de64060176e47f7c8df783",
+          "checksum": "7f704fd8d62183ec0be7fd7415a7f02aa009c79cb67fc06e55aeb52508d13b3c",
           "path": "evals/fixtures/cases/sales_po_body.json"
         }
       ],
@@ -1129,7 +1129,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "f82bc72000f70819990bc65e80c5a60e451c7c24",
+  "git_sha": "fff90fb85155bdfd067ea61cf31273ec0be9f837",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1607,6 +1607,11 @@
       "checksum": "ff50101e5d03d9ce10d2f58e49c4f8eb49e55f5ad53d42ab5c0f03efb12ab0fa",
       "prompt_id": "sales.po_body_extraction",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "57f4b009baa2ad1a5d1bf95f92793efd6e234f6d76cc33b80702da0b1d18ea3a",
+      "prompt_id": "sales.po_body_extraction",
+      "version": "1.1.0"
     },
     {
       "checksum": "e6d0b5c04acea026f0708dbe42135b0b3e9f6b487609e6684d55b0c311cbcd2b",
