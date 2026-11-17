@@ -112,6 +112,10 @@ and its result screen.
   the screen; 3: with nothing read the case says so and the manual entry
   stays.
 
-Left: the vendor's API adapter (R10); filling `bravo_so_no` from Bravo when
-equal (the PIC types it today, the panel shows Bravo's); the decision in
-PLAN.md on blocking the cross-check.
+- 2026-11-17: "Ghi số đơn Bravo" fills the SO number from the case's
+  latest read-back, saying so under the field; the PIC still reads it, may
+  change it and records it with the comparison (nothing is sent before the
+  press; `bravo-so-prefill.test.tsx`, shown red without the fill).
+
+Left: the vendor's API adapter (R10); the decision in PLAN.md on blocking
+the cross-check.
