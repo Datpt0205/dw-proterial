@@ -439,7 +439,18 @@ context. All five are done and on `main`. The full narrative is at
           `updated_since` (request G05 already asks it of every list API)
           plus a nightly full read, no webhook (no inbound port, nothing
           lost while DW is down). Not built; needs R01. The dwmail password
-          was shown in the chat at Đạt's request (11-17). (c) few Windows admins,
+          was shown in the chat at Đạt's request (11-17). **Incident
+          11-17 ~08:56: the host lost its network when IT moved it to the
+          83.x LAN** (Tailscale offline, SSH timed out; nothing reachable
+          from here). Likely cause: with the External vSwitch the host's IP
+          lives on `vEthernet (DW-External)`, and an IP set the usual way on
+          `Ethernet` (now a switch port) does nothing; or 83.x has no DHCP,
+          or a tagged VLAN. IT was never told this before the move (our
+          miss). Sent to IT: set the static 83.x address on the vEthernet
+          adapter (ncpa.cpl or `New-NetIPAddress`), leave `Ethernet` alone,
+          give the VLAN id if tagged (`Set-VMNetworkAdapterVlan -ManagementOS`
+          and for the VM). Owed after it is back: the VM's 83.x address,
+          the checks, and this step in the IT runbook. (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
