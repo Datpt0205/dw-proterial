@@ -354,6 +354,10 @@ class QuoteRequest(BaseModel):
     # The message's newest part, when a value was read from it.
     body: MessageText | None = None
     reading: RequestReading | None = None
+    # A request taken from an order's PO written in the mail (ticket 09): the
+    # reader that PO was read with. The model step was the order's, counted
+    # there; values Sales has not settled on the order come flagged.
+    order_reader: VersionRef | None = None
 
     @model_validator(mode="after")
     def _read_from_this_message(self) -> Self:
@@ -374,9 +378,11 @@ class QuoteRequest(BaseModel):
         if self.attachment is None and self.body is None:
             raise ValueError("a request is read from a file or from the message")
         if (self.body is not None or self.document.flags or self._any_item_flag()) and (
-            self.reading is None
+            self.reading is None and self.order_reader is None
         ):
             raise ValueError("a request read by a model says how")
+        if self.reading is not None and self.order_reader is not None:
+            raise ValueError("a request is read from the mail or taken from an order, not both")
         if self.customer_from == "named_buyer" and self.document.buyer is None:
             raise ValueError("a customer found by the buyer's name needs the name the file prints")
         return self

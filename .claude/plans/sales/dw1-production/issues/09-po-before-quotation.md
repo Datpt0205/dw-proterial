@@ -50,9 +50,8 @@ first. DW1 flags the line (no quotation) and stops there.
   lines (a mapping, a correction, a revision) reads it too.
 - **Web**: the button on the finding, "Báo giá mở từ đơn này" on the order
   (status, link, "Đơn chờ báo giá"), "Mở từ đơn hàng PO …" on the quote.
-- Left: a PO read from the mail's text (no file) opens no quote
-  (`quote_po_not_a_file`). (The reminder and the map, left here before, are
-  done below.)
+- A PO written in the mail opens a quote too (2026-11-17, below). (The
+  reminder and the map, left here before, are done below.)
 
 ## Done: the reminder and the map (2026-11-16)
 
@@ -78,3 +77,22 @@ Migration `57bbf61ae6b8` (from `1f037954f3d9`).
   for approved, sent, recorded, declined; another tenant's quote reads
   nothing).
 
+## Done: a PO written in the mail (2026-11-17)
+
+- "Mở báo giá" on a PO the customer wrote in the mail (AI item 4): the quote's
+  request holds the mail's text the order holds (`QuoteRequest.body`, no
+  attachment), every anchor the order's.
+- Each value a model read that Sales did not correct on the order (and no
+  confirmed change replaced) comes `model_read` on the request, so Sales
+  confirms it before the YCBG is drafted. The unit is the item's own, never
+  flagged. The PO's price is only `stated_target_price`, as a request a model
+  read holds it: it never reaches price evidence.
+- `QuoteRequest.order_reader` stamps the PO's reader
+  (`sales.po_body_extraction@…`). The request has no `reading` of its own: the
+  model step was the order's, counted there, and neither the activity log nor
+  the labelled cases count it twice. `reading` and `order_reader` together are
+  refused.
+- `quote_po_not_a_file` now means only that the PO's file is no longer on its
+  message.
+- Mutations: corrections ignored, the price as a target, no flags, both
+  stamps allowed: each turns a test red.
