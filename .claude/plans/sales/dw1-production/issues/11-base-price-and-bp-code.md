@@ -69,3 +69,26 @@ Left:
   (`.claude/PLAN.md` "Decisions Đạt owes"), not a judgement made mid-slice.
   Meanwhile the price evidence and Design's result are both on the case,
   and Sales records Design's reply from its mail as before.
+
+- 2026-11-17, **the two-file premise above was wrong; no new anchor kind is
+  needed** (Đạt left ticket 11's ADR to the agent's recommendation). Bravo's
+  "RFQ List" export (B16, row 4 titles) carries every value a Design reply
+  line holds, in one file: "Base price code", "Bản vẽ/ Specification" (the
+  spec number, `SPV-…`), "CU WT: (KG/BP Unit)", "Unit BP", "Giá cơ bản",
+  "LME of BP"; ticket 16's reader takes only some of them. So a QUOTE read
+  from Bravo becomes a `DesignReply` anchored by cell in the export file,
+  the same rule as a reply's own Excel (dw_sales ADR 0005 unchanged). What
+  it needs, the next slice:
+  1. Keep the export's bytes for a case it answers. Today
+     `SqlBravoExports.settle` deletes them once read. Recommended: the
+     worker stores them as the case's Design source in the attachment store
+     the source pane already reads (`inbox.read_attachment`, keyed by
+     tenant/workspace), never as a mailbox message to triage.
+  2. Read the three columns with each cell's place (`TableRow` row number
+     plus the column's letter) into `DesignCheckLine`.
+  3. "Dùng kết quả Design trên Bravo" on the case, by a person with
+     `sales.quote.prepare`, records the `DesignReply` and moves the case to
+     `design_replied`; ticket 16's rule that a read moves no status stays.
+  4. Copper per km from CU WT per BP unit: only when "Unit BP" is km (the
+     B21 convert rate says 1 km = 1,000 m); any other unit leaves copper
+     unknown rather than converted by a guess.

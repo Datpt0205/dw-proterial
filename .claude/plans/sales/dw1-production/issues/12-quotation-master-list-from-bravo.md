@@ -1,7 +1,7 @@
 # 12 — The quotation master list read from Bravo, not kept twice
 
-Status: ready-for-agent for the reader (2026-11-16: B07 "Master list báo giá Bravo", key RowIdSQ, Quote No. + Stt); what a price check does with it waits on ADR 0008
-Blocked by: dw_sales ADR 0008 for the price check only; which of Excel (2,521 rows) or Bravo owns quotation history (Đạt owes)
+Status: reader done; the price check waits on Bravo's band table (its API or its printed quotation): ADR 0008 decided A on 2026-11-17
+Blocked by: a readable band table from Bravo (B07 alone cannot answer a PO's price without DW1 computing one)
 Category: enhancement
 
 ## Why
@@ -43,5 +43,11 @@ drift (failure-modes #2).
   price scopes (every customer's centre price).
 - **Measured outside git: B07, 161 of 161 rows read.**
 
-Left: what a price check does with it waits on ADR 0008; which of Excel
-(2,521 rows) or Bravo owns quotation history is Đạt's to say.
+Left: the price check against Bravo's prices, once Bravo's band table can be
+read. Decided 2026-11-17 (dw_sales ADR 0008, A, Đạt left it to the agent):
+Bravo computes, DW1 reads; Bravo owns quotation history from go-live, the
+Excel history stays read-only evidence. Measured on B07 why the master list
+alone is not enough: no PRV item (a BP shared by up to 56 items in B06), up
+to 10 rows per customer and BP, a centre price at LME 7,750 only. Until
+then the check keeps its stand-in (Sales' valid-quotation list plus the
+rows DW1 records after approval), replaced when Bravo's read arrives.
