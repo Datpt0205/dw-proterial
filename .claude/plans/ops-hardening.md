@@ -472,7 +472,12 @@ context. All five are done and on `main`. The full narrative is at
           whoever runs Proterial's network; meanwhile the cable back on the
           temporary 192.168.1.x network, if it still exists, with
           `dhcp.ps1`. No workaround around their port control (no MAC
-          spoofing). Owed by Proterial: who grants it, and when. The
+          spoofing). Owed by Proterial: who grants it, and when. But
+          Đạt says it is the same single cable and only the IP changed,
+          and the vEthernet showed 0 bytes SENT this morning, so the host
+          may not transmit at all (the I226-V on the I226-LM driver):
+          asked for a laptop on the same cable and the adapter's sent
+          counters before blaming the port. The
           script (scratchpad `fix-network-dw-B.ps1`) goes into
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
