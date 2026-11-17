@@ -466,7 +466,13 @@ context. All five are done and on `main`. The full narrative is at
           (`dhcp.ps1`, same cable): no DHCP address either, so the port is
           not on the old network; the host now sits on DHCP, and IT was
           asked to check the port (VLAN, port security) with its MAC. When
-          IT is done, rerun `fix-network-dw-B.ps1` for the static .234. The
+          IT is done, rerun `fix-network-dw-B.ps1` for the static .234.
+          On-site IT has no rights on the switch: the request (device, MAC,
+          .234, LAN like a workstation, no inbound firewall port) goes up to
+          whoever runs Proterial's network; meanwhile the cable back on the
+          temporary 192.168.1.x network, if it still exists, with
+          `dhcp.ps1`. No workaround around their port control (no MAC
+          spoofing). Owed by Proterial: who grants it, and when. The
           script (scratchpad `fix-network-dw-B.ps1`) goes into
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
