@@ -11,6 +11,7 @@ import { usePeople } from "../../_lib/people";
 import { RULE_STATUS } from "../../_lib/rules";
 import {
   SKILL_LAYER,
+  skillTitle,
   versionsOf,
   type Skill,
   type SkillVersion,
@@ -126,10 +127,10 @@ function Skills() {
                     <span className="flex flex-col">
                       <Typography.Text strong>{s.name}</Typography.Text>
                       <Typography.Text
-                        ellipsis={{ tooltip: s.description }}
+                        ellipsis={{ tooltip: skillTitle(s) }}
                         className="max-w-xl"
                       >
-                        {s.description}
+                        {skillTitle(s)}
                       </Typography.Text>
                       {isPhone ? (
                         <span className="mt-1">

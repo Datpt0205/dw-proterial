@@ -5,6 +5,7 @@ import {
   nextSkillVersion,
   replayLine,
   securityLine,
+  skillTitle,
   triggerLine,
   wordsChanges,
   type Skill,
@@ -139,5 +140,29 @@ describe("a customer's SalesOrder skill (ticket 41)", () => {
     expect(isCustomerSkill({ customer_code: "KHB" })).toBe(true);
     expect(isCustomerSkill({ customer_code: null })).toBe(false);
     expect(isCustomerSkill({})).toBe(false);
+  });
+});
+
+describe("skillTitle", () => {
+  it("names each platform skill in Vietnamese, not its English model description", () => {
+    for (const name of [
+      "document-forms",
+      "handoffs",
+      "mail-kinds",
+      "reply-drafts",
+      "thread-intents",
+    ]) {
+      const title = skillTitle({ name, description: "For the model." });
+      expect(title).not.toBe("For the model.");
+    }
+    expect(skillTitle(SKILL)).toBe(
+      "Hiểu từng thư trong một chuỗi thư với khách",
+    );
+  });
+
+  it("shows a skill it has no title for by its own description", () => {
+    expect(skillTitle({ name: "new-skill", description: "Đọc thư mới." })).toBe(
+      "Đọc thư mới.",
+    );
   });
 });
