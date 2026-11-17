@@ -749,6 +749,7 @@ class _Followups:
                 and e.from_status != e.to_status
             ]
             pc_asked_at = customer_asked_at = design_asked_at = quote_open_since = None
+            pcs_price_asked_at = None
             design_checked = False
             if isinstance(case, OrderCase):
                 reference, customer, due = case.header.po_no, case.customer_code, case.due
@@ -771,6 +772,9 @@ class _Followups:
                 )
             else:
                 design_checked = case.design_check is not None
+                # A pcs case waiting for the GM's price (ticket 05).
+                if case.waits_on_pcs_price and case.production_type_set is not None:
+                    pcs_price_asked_at = case.production_type_set.at
                 quote_due = case.request.document.quote_due
                 reference = case.request.reference
                 customer = case.request.customer_code
@@ -792,6 +796,7 @@ class _Followups:
                     design_asked_at=design_asked_at,
                     quote_open_since=quote_open_since,
                     design_checked=design_checked,
+                    pcs_price_asked_at=pcs_price_asked_at,
                 )
             )
         return found

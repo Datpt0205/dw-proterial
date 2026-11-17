@@ -1,0 +1,126 @@
+schema_version: "1.0"
+policy_id: sales_followups
+policy_version: "1.7.0"
+
+# When DW1 reminds a person, and whom (Sales ticket 42). Validated by
+# `dw_sales.domain.followups.SalesFollowups`. The numbers are the ones FPT's
+# DW1 proposal promises; a customer's own timings arrive as the tenant's
+# version of this policy (/sales/rules), never as an edit to this file.
+#
+# A reminder is an in-app notification to a member of the workspace. DW1
+# never mails the customer or Design: it reminds the person, who decides.
+# "pic" is the case's assigned Sales PIC (the head while nobody is
+# assigned); "head" is Trưởng bộ phận Sales. Times are HH:MM, quoted (a bare
+# 07:30 is a number in YAML), in `working_hours.time_zone`.
+
+# 1.2.0 (Đạt, 2026-11-13: DW runs 24/7 by default): reminders go out at any
+# hour, every day, and the morning brief goes every day. A tenant that wants
+# them only in its working hours narrows these as a rule version
+# (/sales/rules). Outside the hours a due reminder is deferred to the next
+# open minute, never dropped. The clock caps at 23:59 and `end` itself is
+# outside, so the one minute 23:59-00:00 defers to 00:00.
+working_hours:
+  time_zone: Asia/Ho_Chi_Minh
+  days: [mon, tue, wed, thu, fri, sat, sun]
+  start: "00:00"
+  end: "23:59"
+
+# 07:30 each working day: what came in since the last brief and its state,
+# what is due soon, what waits on whom. Counts only, never an amount.
+morning_brief:
+  enabled: true
+  at: "07:30"
+  notify: [pic, head]
+  due_within_days: 2
+
+# A PO not confirmed 4 h after it arrived: remind the PIC; past 1 day: tell
+# the head.
+order_unconfirmed:
+  enabled: true
+  remind:
+    after_hours: 4
+    notify: [pic]
+  escalate:
+    after_hours: 24
+    notify: [head]
+
+# A quote request (YCBG) waiting on Design (BP code, spec): remind the PIC,
+# who chases Design.
+quote_waiting_design:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# The quote deadline under 2 days away and the quotation not yet sent: tell
+# Sales.
+quote_deadline:
+  enabled: true
+  warn:
+    hours_before_due: 48
+    notify: [pic]
+
+# A case waiting on the customer (a PO correction, a spec discussed) past 1
+# day: remind the PIC.
+waiting_customer:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# 1.3.0 (ticket 07): an order whose delivery dates Sales asked PC for, with
+# PC's answer not yet recorded for every line asked, past 1 day: remind the
+# PIC, who chases PC. DW1 never mails PC.
+waiting_pc:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# 1.4.0 (ticket 28, dw_sales ADR 0011): an order whose confirmation left and
+# whose customer has days of silence in the order rules (implied_acceptance,
+# none by default): once the days pass with no answer recorded, tell the PIC
+# once, who records the customer's agreement. DW1 never records it.
+implied_acceptance:
+  enabled: true
+
+# 1.1.0 (2026-10-28): a case DW1 has done its part on and that now waits on
+# a person is told to them at once: the PIC for a step on their own case,
+# the head for a cross-check or an approval. Once per status the case enters;
+# quiet hours defer it like every reminder.
+your_turn:
+  enabled: true
+
+# 1.6.0 (ticket 06): an order line Sales asked Design to create a PRV code
+# for, still without a code past 1 day: remind the PIC, who chases Design.
+# DW1 never mails Design.
+waiting_design_code:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# 1.6.0 (ticket 09): an order waiting on a quote case opened from it, the
+# quote not yet approved or declined past 1 day: remind the PIC. The order
+# cannot be prepared meanwhile.
+waiting_quote:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# 1.7.0 (ticket 05): a quote case marked pcs, still without the price
+# GM/BC Manager decided past 1 day: remind the PIC, who chases the GM.
+# Sales may not price the case meanwhile. DW1 never mails the GM.
+waiting_pcs_price:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# 1.5.0 (ticket 48): a push to the person's phone names the kind of work and,
+# with this on, the case number (the PO or quote request number). Never a
+# price, an amount or anything the customer wrote. Off: the lock screen shows
+# the kind of work only.
+push:
+  case_number: true

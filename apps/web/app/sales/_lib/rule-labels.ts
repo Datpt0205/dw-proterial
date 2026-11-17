@@ -645,6 +645,18 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_quote.remind.notify": { label: "Nhắc ai" },
+    waiting_pcs_price: {
+      label: "Báo giá hàng pcs chờ giá GM",
+      help: "Báo giá đã đánh dấu pcs mà chưa ghi giá GM/BC Manager đã chốt, nên chưa định giá được.",
+    },
+    "waiting_pcs_price.enabled": { label: "Bật nhắc báo giá pcs chờ giá GM" },
+    "waiting_pcs_price.remind": { label: "Lời nhắc" },
+    "waiting_pcs_price.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc đánh dấu pcs, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "waiting_pcs_price.remind.notify": { label: "Nhắc ai" },
     implied_acceptance: {
       label: "Khách im lặng quá hạn xác nhận",
       help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 báo một lần cho Sales phụ trách. DW1 không tự ghi đồng ý ngầm.",
@@ -851,6 +863,15 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "reminders.waiting_quote": { label: "Đơn chờ báo giá mở từ đơn" },
     "reminders.waiting_quote.title": { label: "Tiêu đề", help: REMINDER_HELP },
     "reminders.waiting_quote.body": { label: "Nội dung", help: REMINDER_HELP },
+    "reminders.waiting_pcs_price": { label: "Báo giá hàng pcs chờ giá GM" },
+    "reminders.waiting_pcs_price.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.waiting_pcs_price.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
     next_steps: {
       label: "Việc cần làm tiếp",
       help: "Câu nói Sales làm gì tiếp khi đến lượt, ghi trong lời nhắc và bản tin.",
@@ -893,6 +914,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "push.implied_acceptance": { label: "Khách im lặng quá hạn" },
     "push.waiting_design_code": { label: "Chờ Design tạo mã quá lâu" },
     "push.waiting_quote": { label: "Chờ báo giá quá lâu" },
+    "push.waiting_pcs_price": { label: "Chờ giá GM quá lâu" },
     "push.batch_title": {
       label: "Tiêu đề khi có nhiều việc cùng lúc",
       help: REMINDER_HELP,

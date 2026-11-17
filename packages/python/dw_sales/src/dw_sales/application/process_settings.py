@@ -282,7 +282,8 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             _step(StepId.Q4),
             _step(StepId.Q5),
             _step(StepId.Q6, _in(_FOLLOWUPS, "waiting_customer")),
-            # The price and its evidence.
+            # The price and its evidence, and how long a pcs case waits on
+            # the GM's price before DW1 reminds the PIC (ticket 05).
             _step(
                 StepId.Q7,
                 _in(
@@ -292,6 +293,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "copper_basis",
                 ),
                 _in(_PRICING, "copper_adders", "floor_margin", "freight"),
+                _in(_FOLLOWUPS, "waiting_pcs_price"),
             ),
             _step(StepId.Q8),
             # Approval: how long the approved quotation is valid.

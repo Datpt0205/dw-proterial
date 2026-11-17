@@ -635,6 +635,8 @@ def _template(
             return words.waiting_design_code, policy.waiting_design_code.remind.after_hours
         case Followup.WAITING_QUOTE, _:
             return words.waiting_quote, policy.waiting_quote.remind.after_hours
+        case Followup.WAITING_PCS_PRICE, _:
+            return words.waiting_pcs_price, policy.waiting_pcs_price.remind.after_hours
         case Followup.WAITING_CUSTOMER, _ if case.customer_asked_at is not None:
             return words.waiting_customer_change, policy.waiting_customer.remind.after_hours
         case Followup.WAITING_CUSTOMER, _ if order:
@@ -816,6 +818,7 @@ _PUSH_KIND: Final[Mapping[tuple[Followup, Stage], _PushWord]] = MappingProxyType
         (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY): lambda w: w.implied_acceptance,
         (Followup.WAITING_DESIGN_CODE, Stage.REMIND): lambda w: w.waiting_design_code,
         (Followup.WAITING_QUOTE, Stage.REMIND): lambda w: w.waiting_quote,
+        (Followup.WAITING_PCS_PRICE, Stage.REMIND): lambda w: w.waiting_pcs_price,
     }
 )
 _HEAD_TURN: Final[Mapping[CaseKind, _PushWord]] = {

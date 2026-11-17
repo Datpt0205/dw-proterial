@@ -101,6 +101,11 @@
       "checksum": "540a20a9572ac152e5d3d48e1e341e1c410dc25d988e11ce47583b70fe7b5fd8",
       "copy_id": "sales_reminders",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "8662169e75ba3f12cc1ddd809c838dc5b949b48527618751cd1d784f75f0a824",
+      "copy_id": "sales_reminders",
+      "version": "1.1.0"
     }
   ],
   "eval_datasets": [
@@ -1124,7 +1129,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "3730ca0c985a9377fec8c7bb874928e32a179770",
+  "git_sha": "f82bc72000f70819990bc65e80c5a60e451c7c24",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1315,6 +1320,11 @@
       "checksum": "46def0eae682ddd724f6e2fe794bfba609a635716bd0fb88a01dced9dae6fef6",
       "policy_id": "sales_followups",
       "version": "1.6.0"
+    },
+    {
+      "checksum": "3734620c148728eca9c47b80e7991eb27c53b39a47b35627f172fe7aa9a28a43",
+      "policy_id": "sales_followups",
+      "version": "1.7.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",

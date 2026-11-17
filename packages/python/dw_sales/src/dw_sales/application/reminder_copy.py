@@ -118,6 +118,8 @@ class ReminderWords(BaseModel):
     waiting_customer_spec: HoursReminder
     waiting_design_code: HoursReminder
     waiting_quote: HoursReminder
+    # A pcs quote waiting for the GM's price (ticket 05).
+    waiting_pcs_price: HoursReminder
 
 
 def _plain(max_length: int) -> Any:
@@ -228,6 +230,7 @@ class PushWords(BaseModel):
     implied_acceptance: str = _plain(60)
     waiting_design_code: str = _plain(60)
     waiting_quote: str = _plain(60)
+    waiting_pcs_price: str = _plain(60)
     batch_title: str = Field(min_length=1, max_length=60, json_schema_extra=_named(_BATCH))
     batch_body: str = _plain(120)
     # The case's kind, before its number.
@@ -252,6 +255,7 @@ class PushWords(BaseModel):
         "implied_acceptance",
         "waiting_design_code",
         "waiting_quote",
+        "waiting_pcs_price",
         "batch_body",
         "order",
         "quote",

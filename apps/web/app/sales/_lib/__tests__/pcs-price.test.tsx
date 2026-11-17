@@ -35,7 +35,7 @@ function waiting() {
     ...pendingQuote(),
     status: "design_replied",
     pricing: null,
-    production_type: "pcs",
+    production_type: "pcs" as const,
     production_type_set: { by: DIEU, at: "2026-11-16T02:00:00Z" },
     waits_on_pcs_price: true,
     pcs_price: null,
@@ -68,7 +68,7 @@ describe("ticket 05: a pcs case waits for the GM's price", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: "Ghi giá GM" }));
     await waitFor(() => expect(api.pcsPrice).toHaveBeenCalledTimes(1));
-    const [, body] = api.pcsPrice.mock.calls[0];
+    const [, body] = api.pcsPrice.mock.calls[0] ?? [];
     expect(body.lines.map((l: { line_no: number }) => l.line_no)).toEqual(
       quote.lines.map((l) => l.line_no),
     );

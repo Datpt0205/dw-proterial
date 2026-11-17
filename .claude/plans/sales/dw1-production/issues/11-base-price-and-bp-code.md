@@ -57,3 +57,15 @@ Left:
   `Sourced` fields can hold it. Next slice.
 - Base price and BP code read from a Design reply *mail* (the form and mail
   readers): unchanged.
+- 2026-11-17 (dw-proterial-33), **why the QUOTE-to-pricing slice stops
+  here**: `design_replied` needs a `DesignReply`, every value `Sourced` and
+  read from one file (`DesignReplyDocument._one_file_and_distinct_lines`).
+  The BP code is in the YCBG export, the spec number and copper weight in
+  the Base price list: two files, neither a case attachment nor the mail,
+  which is all a `SourceAnchor` can point at. Making it work means a new
+  anchor kind for a value read from a master list (which snapshot, which
+  row, its hash), served on the source pane like a page crop: a change to
+  dw_sales ADR 0005's provenance rule, so it is an ADR, owed by Đạt
+  (`.claude/PLAN.md` "Decisions Đạt owes"), not a judgement made mid-slice.
+  Meanwhile the price evidence and Design's result are both on the case,
+  and Sales records Design's reply from its mail as before.
