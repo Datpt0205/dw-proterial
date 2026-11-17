@@ -45,6 +45,9 @@ from dw_sales.domain.orders import (
     Finding,
     FindingCode,
     FlaggedValue,
+    LineCheck,
+    LineMapping,
+    MappingStatus,
     OrderCase,
     OrderStatus,
     PoDocument,
@@ -171,6 +174,48 @@ async def test_m44_asked_of_the_customer_goes_back_to_them() -> None:
     asked = case.dispose(MISSING, AskCustomer(by=AN.user_id, at=T0), ACTOR)
 
     assert asked.request_correction().status is OrderStatus.CORRECTION_REQUESTED
+
+
+async def test_confirming_the_lines_code_keeps_its_missing_date_and_the_decision_on_it() -> None:
+    """A line whose code Sales confirms is checked again for its item only:
+    its missing date, which blocks, keeps its finding and Sales' decision."""
+    world = _world()
+    case = await _case(world, "M44")
+    line = case.line(2)
+    asked = AskCustomer(by=AN.user_id, at=T0)
+    ambiguous = OrderCase.model_validate(
+        {
+            **dict(case),
+            "lines": tuple(
+                x.model_copy(
+                    update={
+                        "mapping": LineMapping(
+                            status=MappingStatus.AMBIGUOUS, candidates=("CB-2007", "CB-2003")
+                        )
+                    }
+                )
+                if x.line_no == 2
+                else x
+                for x in case.lines
+            ),
+            "findings": (
+                *(
+                    f.model_copy(update={"disposition": asked}) if f.key == MISSING else f
+                    for f in case.findings
+                ),
+                _missing(
+                    code=FindingCode.CODE_AMBIGUOUS,
+                    rule_version=case.rules_version,
+                    actual=line.po_line.customer_item_code,
+                ),
+            ),
+        }
+    )
+
+    confirmed = ambiguous.confirm_mapping(2, "CB-2007", ACTOR, T0, LineCheck(line=line))
+
+    (missing,) = (f for f in confirmed.findings if f.key == MISSING)
+    assert missing.disposition == asked
 
 
 # ------------------------------------- a form read through an approved layout --
