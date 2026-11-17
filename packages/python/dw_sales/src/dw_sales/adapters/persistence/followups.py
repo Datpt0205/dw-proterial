@@ -114,6 +114,14 @@ def _quote_open_since() -> sa.ScalarSelect[datetime]:
     )
 
 
+def _pcs_price_asked_at() -> sa.ColumnElement[datetime]:
+    """When a quote case was marked pcs, while no GM price is recorded on it
+    (`QuoteCase.waits_on_pcs_price`, ticket 05); NULL otherwise."""
+    body = _Q.c.body
+    waits = sa.and_(body["production_type"].astext == "pcs", body["pcs_price"].astext.is_(None))
+    return sa.case((waits, _at(body[("production_type_set", "at")].astext)), else_=sa.null())
+
+
 def _day(text: str | None) -> date | None:
     return None if text is None else date.fromisoformat(text)
 
@@ -135,6 +143,7 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         design_asked_at=row["design_asked_at"],
         quote_open_since=row["quote_open_since"],
         design_checked=bool(row["design_checked"]),
+        pcs_price_asked_at=row["pcs_price_asked_at"],
     )
 
 
@@ -171,6 +180,7 @@ class SqlFollowupStore:
             _design_asked_at().label("design_asked_at"),
             _quote_open_since().label("quote_open_since"),
             sa.false().label("design_checked"),
+            sa.null().label("pcs_price_asked_at"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),
@@ -202,6 +212,8 @@ class SqlFollowupStore:
             sa.null().label("quote_open_since"),
             # Design's result read from Bravo's YCBG export (ticket 16).
             _Q.c.body["design_check"].astext.isnot(None).label("design_checked"),
+            # A pcs case waiting for the GM's price (ticket 05).
+            _pcs_price_asked_at().label("pcs_price_asked_at"),
         ).where(
             sa.or_(
                 _Q.c.status.in_(sorted(statuses.get(CaseKind.QUOTE, frozenset()))),

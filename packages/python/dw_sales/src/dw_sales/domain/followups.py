@@ -41,6 +41,9 @@ on a case changes because a reminder went out. The person decides.
   09), from the oldest such link whose quote is still open, while the order
   is before its self-check. Whether the quote is open is its own status,
   read when the cases are read, never a copy on the order.
+- ``waiting_pcs_price``: a quote case marked pcs without the GM/BC Manager's
+  price recorded (ticket 05), from when it was marked, while it is not yet
+  sent. Sales may not price it meanwhile; DW1 never mails the GM.
 
 ``quote_waiting_design`` stops once Design's result was read from Bravo's
 YCBG export (`QuoteCase.design_check`, ticket 16): the status stays
@@ -108,6 +111,8 @@ class Followup(StrEnum):
     WAITING_DESIGN_CODE = "waiting_design_code"
     # An order waits on a quote case opened from it (ticket 09).
     WAITING_QUOTE = "waiting_quote"
+    # A pcs quote case waits for the GM/BC Manager's price (ticket 05).
+    WAITING_PCS_PRICE = "waiting_pcs_price"
 
 
 class Stage(StrEnum):
@@ -272,6 +277,18 @@ class WaitingQuoteRule(BaseModel):
     enabled: bool = Field(description="Bật hoặc tắt nhắc đơn hàng đang chờ báo giá mở từ đơn.")
     remind: AfterStage = Field(
         description="Nhắc khi báo giá mở từ đơn chưa được duyệt hoặc từ chối sau số giờ này."
+    )
+
+
+class WaitingPcsPriceRule(BaseModel):
+    """A quote case marked pcs whose GM/BC Manager price is not recorded:
+    Sales may not price it meanwhile (ticket 05)."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(description="Bật hoặc tắt nhắc báo giá hàng pcs đang chờ giá GM.")
+    remind: AfterStage = Field(
+        description="Nhắc khi báo giá đã đánh dấu pcs mà sau số giờ này chưa ghi giá GM."
     )
 
 
@@ -449,6 +466,11 @@ class SalesFollowups(BaseModel):
         description="Đơn hàng đang chờ Design tạo mã PRV."
     )
     waiting_quote: WaitingQuoteRule = Field(description="Đơn hàng đang chờ báo giá mở từ đơn.")
+    # 1.7.0 (ticket 05): a version written before it reads it as the
+    # platform's current version has it (`read_over`).
+    waiting_pcs_price: WaitingPcsPriceRule = Field(
+        description="Báo giá hàng pcs đang chờ giá GM/BC Manager."
+    )
     # 1.5.0 (ticket 48): a version written before the field shows the number,
     # as every push before it would have.
     push: PushRule = Field(
@@ -507,6 +529,9 @@ class WaitingCase:
     # Design's result was read from Bravo's YCBG export onto the quote case
     # (`QuoteCase.design_check`, ticket 16).
     design_checked: bool = False
+    # When a quote case was marked pcs, while its GM price is not recorded
+    # (`QuoteCase.waits_on_pcs_price`, ticket 05); None otherwise.
+    pcs_price_asked_at: datetime | None = None
 
 
 # The statuses each follow-up watches.
@@ -738,6 +763,20 @@ def owed(
                 Followup.WAITING_QUOTE,
                 ((Stage.REMIND, quote.remind),),
                 case.quote_open_since,
+                now,
+            )
+        pcs = policy.waiting_pcs_price
+        if (
+            pcs.enabled
+            and not order
+            and case.status in _BEFORE_SENT
+            and case.pcs_price_asked_at is not None
+        ):
+            found += _after(
+                case,
+                Followup.WAITING_PCS_PRICE,
+                ((Stage.REMIND, pcs.remind),),
+                case.pcs_price_asked_at,
                 now,
             )
         pc = policy.waiting_pc

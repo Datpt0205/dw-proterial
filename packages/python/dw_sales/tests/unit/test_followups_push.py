@@ -220,6 +220,7 @@ _STAGES: tuple[tuple[Followup, Stage, tuple[Audience, ...]], ...] = (
     (Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY, ("pic",)),
     (Followup.WAITING_DESIGN_CODE, Stage.REMIND, ("pic",)),
     (Followup.WAITING_QUOTE, Stage.REMIND, ("pic",)),
+    (Followup.WAITING_PCS_PRICE, Stage.REMIND, ("pic",)),
 )
 T0 = datetime(2026, 9, 21, 1, 12, tzinfo=UTC)
 
@@ -227,7 +228,8 @@ T0 = datetime(2026, 9, 21, 1, 12, tzinfo=UTC)
 def _due(followup: Followup, stage: Stage, notify: tuple[Audience, ...], *, ref: str) -> Due:
     kind = (
         CaseKind.QUOTE
-        if followup in {Followup.QUOTE_WAITING_DESIGN, Followup.QUOTE_DEADLINE}
+        if followup
+        in {Followup.QUOTE_WAITING_DESIGN, Followup.QUOTE_DEADLINE, Followup.WAITING_PCS_PRICE}
         else CaseKind.ORDER
     )
     case = WaitingCase(

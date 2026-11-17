@@ -44,8 +44,9 @@ POLICY_FILE = REPO / "configs" / "policies" / "sales_followups@1.1.0.yaml"
 PC_FILE = REPO / "configs" / "policies" / "sales_followups@1.3.0.yaml"
 # And the implied acceptance's (ticket 28), 1.4.0's.
 IMPLIED_FILE = REPO / "configs" / "policies" / "sales_followups@1.4.0.yaml"
-# And the waits on Design's new code and on a linked quote (tickets 06, 09).
-WAITS_FILE = REPO / "configs" / "policies" / "sales_followups@1.6.0.yaml"
+# And the waits on Design's new code and on a linked quote (tickets 06, 09),
+# and on the GM's price for a pcs quote (ticket 05).
+WAITS_FILE = REPO / "configs" / "policies" / "sales_followups@1.7.0.yaml"
 # Monday 19 October 2026, 08:00 in Ho Chi Minh City (UTC+7).
 MONDAY_8 = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -59,7 +60,7 @@ def _document() -> dict[str, Any]:
     implied = yaml.safe_load(IMPLIED_FILE.read_bytes())["implied_acceptance"]
     loaded.setdefault("implied_acceptance", implied)
     waits = yaml.safe_load(WAITS_FILE.read_bytes())
-    for name in ("waiting_design_code", "waiting_quote"):
+    for name in ("waiting_design_code", "waiting_quote", "waiting_pcs_price"):
         loaded.setdefault(name, waits[name])
     return loaded
 
@@ -118,10 +119,11 @@ def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.6.0"
+    assert policy.ref == "sales_followups@1.7.0"
     # 1.6.0 (tickets 06 and 09): one reminder to the PIC after a day of
     # waiting on Design's new code, or on a quote opened from the order.
-    for wait in (policy.waiting_design_code, policy.waiting_quote):
+    # 1.7.0 (ticket 05): the same after a day of waiting on the GM's price.
+    for wait in (policy.waiting_design_code, policy.waiting_quote, policy.waiting_pcs_price):
         assert wait.enabled
         assert wait.remind.after_hours == 24
         assert wait.remind.notify == ("pic",)
@@ -369,6 +371,7 @@ def test_followups_name_the_stage_they_are_owed_at() -> None:
         "implied_acceptance",
         "waiting_design_code",
         "waiting_quote",
+        "waiting_pcs_price",
     }
 
 

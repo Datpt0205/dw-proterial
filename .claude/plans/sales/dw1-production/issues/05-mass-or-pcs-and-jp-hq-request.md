@@ -1,6 +1,6 @@
 # 05 — Mass or pcs, and the request to JP & HQ for a pcs price
 
-Status: ready-for-agent: acceptances 1 and 2 met; the JP & HQ mail, its follow-up and the model's proposal owed (see Comments)
+Status: ready-for-agent: acceptances 1 and 2 met, the wait reminded; the JP & HQ mail and the model's proposal owed (see Comments)
 Blocked by: none; open questions for Sales: are SGA/loyalty/profit rates fixed per pcs order, is "JP & HQ" the GM at PRV, the assembly-cable variant
 Category: enhancement
 
@@ -60,3 +60,14 @@ carries the type ("Mass production").
   per line, and "Xem bảng hỏi giá GM" (the cost sheet). The price form is
   not drawn while the case waits; the server refuses it anyway. (e)
   contracts regenerated. Still owed: (b), (c), (d).
+- 2026-11-17 (dw-proterial-33): (c) done. `waiting_pcs_price` reminds the
+  PIC 24 h after a case was marked pcs while no GM price is recorded and
+  the case is not sent (`sales_followups@1.7.0`, words
+  `sales_reminders@1.1.0`, a tenant version written before reads both as
+  the platform has them); the wait is read from the quote's body
+  (`SqlFollowupStore`, the world the same), and migration `b01dba5d0433`
+  lets the record and the feed's marks hold it. Its setting sits on step
+  Q7. Mutation-checked: the rule (unit) and the SQL read (PostgreSQL).
+  Still owed: (b) the mail to the GM needs one real example (ADR 0006),
+  asked of Sales; (d) proposing the type from history; the process map
+  draws no wait for a quote case yet (no quote subflow exists).

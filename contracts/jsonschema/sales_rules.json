@@ -754,6 +754,27 @@
         "title": "WaitingPcRule",
         "type": "object"
       },
+      "WaitingPcsPriceRule": {
+        "additionalProperties": false,
+        "description": "A quote case marked pcs whose GM/BC Manager price is not recorded:\nSales may not price it meanwhile (ticket 05).",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc báo giá hàng pcs đang chờ giá GM.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi báo giá đã đánh dấu pcs mà sau số giờ này chưa ghi giá GM."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "WaitingPcsPriceRule",
+        "type": "object"
+      },
       "WaitingQuoteRule": {
         "additionalProperties": false,
         "description": "An order waiting on a quote case opened from it, not yet approved or\ndeclined: the order cannot be prepared meanwhile.",
@@ -902,6 +923,10 @@
         "$ref": "#/$defs/WaitingPcRule",
         "description": "Hồ sơ đang chờ PC trả ngày giao."
       },
+      "waiting_pcs_price": {
+        "$ref": "#/$defs/WaitingPcsPriceRule",
+        "description": "Báo giá hàng pcs đang chờ giá GM/BC Manager."
+      },
       "waiting_quote": {
         "$ref": "#/$defs/WaitingQuoteRule",
         "description": "Đơn hàng đang chờ báo giá mở từ đơn."
@@ -929,7 +954,8 @@
       "implied_acceptance",
       "your_turn",
       "waiting_design_code",
-      "waiting_quote"
+      "waiting_quote",
+      "waiting_pcs_price"
     ],
     "title": "SalesFollowups",
     "type": "object"
@@ -2341,6 +2367,12 @@
             "title": "Waiting Pc",
             "type": "string"
           },
+          "waiting_pcs_price": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Waiting Pcs Price",
+            "type": "string"
+          },
           "waiting_quote": {
             "maxLength": 60,
             "minLength": 1,
@@ -2367,6 +2399,7 @@
           "implied_acceptance",
           "waiting_design_code",
           "waiting_quote",
+          "waiting_pcs_price",
           "batch_title",
           "batch_body",
           "order",
@@ -2412,6 +2445,9 @@
           "waiting_pc": {
             "$ref": "#/$defs/HoursReminder"
           },
+          "waiting_pcs_price": {
+            "$ref": "#/$defs/HoursReminder"
+          },
           "waiting_quote": {
             "$ref": "#/$defs/HoursReminder"
           },
@@ -2444,7 +2480,8 @@
           "waiting_customer_correction",
           "waiting_customer_spec",
           "waiting_design_code",
-          "waiting_quote"
+          "waiting_quote",
+          "waiting_pcs_price"
         ],
         "title": "ReminderWords",
         "type": "object"
