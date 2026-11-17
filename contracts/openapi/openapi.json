@@ -14516,6 +14516,11 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "unsettled": {
+            "default": 0,
+            "title": "Unsettled",
+            "type": "integer"
           }
         },
         "required": [

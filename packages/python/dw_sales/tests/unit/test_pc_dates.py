@@ -179,6 +179,21 @@ async def test_a_date_the_mail_does_not_settle_goes_to_sales_unread() -> None:
         world, case = await _order(Answering({"dates": [guess]}))
         view = await _read(world, case, text=mail)
         assert (view.status, view.dates, view.dropped) == ("nothing", [], 1)
+        # Counted apart, so Sales is told the date is there and is theirs to
+        # read, not that PC gave none.
+        assert view.unsettled == 1
+
+
+async def test_a_dropped_date_the_mail_settles_is_not_counted_as_unsettled() -> None:
+    """Only a numeric date the mail leaves open is "unsettled": words the
+    mail does not hold, or a day it writes otherwise, are plain drops."""
+    for wrong in (
+        {"line_no": 1, "delivery": 1, "date_text": "31/10/2026", "date": "2026-10-31"},
+        {"line_no": 2, "delivery": 1, "date_text": "05/11", "date": "2026-05-11"},
+    ):
+        world, case = await _order(Answering({"dates": [wrong]}))
+        view = await _read(world, case)
+        assert (view.dropped, view.unsettled) == (1, 0)
 
 
 async def test_only_who_prepares_the_order_asks_and_only_at_the_version_they_saw() -> None:

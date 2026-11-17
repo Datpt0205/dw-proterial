@@ -35,7 +35,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Final, Literal
+from typing import Final, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,7 +51,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
-from dw_platform.domain.notation import Notation, notation_of
+from dw_platform.domain.notation import DateOrder, Notation, notation_of
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesCatalogPort
@@ -111,6 +111,9 @@ class PcDatesView(BaseModel):
     dates: list[PcDateView] = []
     # Dates the model gave that the text or the case did not bear out.
     dropped: int = 0
+    # Of those, dates the mail writes on a line of the case in an order its
+    # other dates do not settle (``03/04``): there, and Sales' to read.
+    unsettled: int = 0
     prompt_ref: str | None = None
     model_profile: str | None = None
 
@@ -149,21 +152,38 @@ def written_in(words: str, text: str) -> bool:
     return False
 
 
+def unsettled(words: str, notation: Notation) -> bool:
+    """Whether ``words`` is a numeric date ``notation`` leaves open: a day
+    read day first or month first, and none in the mail's own order."""
+    return written_date(words, notation) is None and any(
+        written_date(words, Notation(date_orders=frozenset({order}))) is not None
+        for order in get_args(DateOrder)
+    )
+
+
 def deliveries(case: OrderCase) -> dict[int, int]:
     """Per line, how many deliveries it is confirmed in (`OrderLine.deliveries`:
     PC's split once recorded, ticket 07)."""
     return {line.line_no: line.deliveries for line in case.lines}
 
 
-def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDateView], int]:
+def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDateView], int, int]:
     """The dates whose words are in ``text`` as written, read as that day, on
-    a line and delivery of the case; and how many were dropped. A line and
-    delivery named twice keeps neither: the mail did not settle it."""
+    a line and delivery of the case; how many were dropped; and how many of
+    those the mail writes in an order it does not settle (`unsettled`). A
+    line and delivery named twice keeps neither: the mail did not settle it."""
     counts = deliveries(case)
     notation = notation_of(text)
     seen: dict[tuple[int, int], int] = {}
     for item in answer.dates:
         seen[(item.line_no, item.delivery)] = seen.get((item.line_no, item.delivery), 0) + 1
+    placed = [
+        item
+        for item in answer.dates
+        if item.delivery <= counts.get(item.line_no, 0)
+        and seen[(item.line_no, item.delivery)] == 1
+        and written_in(item.date_text, text)
+    ]
     kept = [
         PcDateView(
             line_no=item.line_no,
@@ -171,13 +191,11 @@ def checked(answer: ModelPcDates, text: str, case: OrderCase) -> tuple[list[PcDa
             date=item.date,
             quote=item.date_text,
         )
-        for item in answer.dates
-        if item.delivery <= counts.get(item.line_no, 0)
-        and seen[(item.line_no, item.delivery)] == 1
-        and written_in(item.date_text, text)
-        and reads_as(item.date_text, item.date, notation)
+        for item in placed
+        if reads_as(item.date_text, item.date, notation)
     ]
-    return kept, len(answer.dates) - len(kept)
+    left_open = sum(unsettled(item.date_text, notation) for item in placed)
+    return kept, len(answer.dates) - len(kept), left_open
 
 
 def _facts(case: OrderCase) -> list[dict[str, object]]:
@@ -319,7 +337,11 @@ class PcDateReplies:
             )
         except (ModelUnavailableError, QuotaExceededError):
             return PcDatesView(**stamp, status="unavailable")
-        dates, dropped = checked(answer, pasted, case)
+        dates, dropped, left_open = checked(answer, pasted, case)
         return PcDatesView(
-            **stamp, status="read" if dates else "nothing", dates=dates, dropped=dropped
+            **stamp,
+            status="read" if dates else "nothing",
+            dates=dates,
+            dropped=dropped,
+            unsettled=left_open,
         )

@@ -6224,6 +6224,11 @@ export interface components {
              * @enum {string}
              */
             status: "read" | "nothing" | "unavailable";
+            /**
+             * Unsettled
+             * @default 0
+             */
+            unsettled: number;
         };
         /**
          * PcDeliveryBody
