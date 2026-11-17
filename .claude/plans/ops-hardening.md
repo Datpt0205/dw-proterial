@@ -482,7 +482,15 @@ context. All five are done and on `main`. The full narrative is at
           cable, wall socket or switch port is dead or shut (the host's
           `Ethernet` reads "Not connected"; MAC B0:82:E2:C5:77:92; static
           .234/25 gw .253 DNS .245/.251 set again). Needs whoever can
-          patch or test that run to a live port. The
+          patch or test that run to a live port. **Resolved ~11:00: IT
+          reseated the cable/port, the LAN is back** — but IT also
+          **uninstalled Tailscale** (the node shows offline, last seen 1h,
+          on the laptop's `tailscale status`), so remote SSH is gone;
+          a connection test timed out, nothing was run on the host.
+          Getting back in needs a console visit: reinstall Tailscale and
+          sign in (it runs hidden), or another agreed path. The static
+          .234/25 config stands; the VM-over-NAT wiring and the full
+          re-check are still owed, blocked on remote access. The
           script (scratchpad `fix-network-dw-B.ps1`) goes into
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
