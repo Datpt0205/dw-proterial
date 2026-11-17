@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -319,6 +319,18 @@ function BravoDialog({
 }: DialogProps & { change: boolean }) {
   const [form] = Form.useForm<{ so_no?: string; compared: boolean }>();
   const id = change ? "applyChange" : "bravo";
+  // The SO number Bravo was read back with (ticket 03) fills the field; the
+  // PIC still reads it, may change it, and records it with the comparison.
+  const readBack = useResource(
+    `sales/order/${order.case_id}/bravo-read-back`,
+    useCallback(() => salesApi().bravoReadBack(order.case_id), [order.case_id]),
+    { enabled: open && !change },
+  ).data?.read_back;
+  const fromBravo = readBack?.so_no ?? null;
+  useEffect(() => {
+    if (open && fromBravo && !form.isFieldTouched("so_no"))
+      form.setFieldsValue({ so_no: fromBravo });
+  }, [open, fromBravo, form]);
   return (
     <Modal
       open={open}
@@ -360,6 +372,11 @@ function BravoDialog({
           <Form.Item
             name="so_no"
             label="Số đơn bán hàng trên Bravo"
+            extra={
+              readBack
+                ? `Lấy từ lần đọc lại SO từ Bravo lúc ${formatDateTime(readBack.read_at)}.`
+                : undefined
+            }
             rules={[
               {
                 required: true,
