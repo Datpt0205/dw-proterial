@@ -23,6 +23,9 @@ pytestmark = pytest.mark.integration
 
 _DB = "dw_test_sales_stamp_migration"
 _BEFORE = "9c8b75ac5f91"
+# Up to the revision under test only: a later one-way revision (7c6ad2350566)
+# refuses a downgrade across it.
+_REVISION = "ac31ff0f2087"
 _TENANT = sid("tenant", "tenant-alpha")
 _WORKSPACE = sid("workspace", "tenant-alpha:main")
 
@@ -85,7 +88,7 @@ async def test_the_stamp_moves_into_the_column_and_back_on_downgrade() -> None:
     pending = await _insert(urls, {"decide_scope": "sales.quote.approve", "makers": []})
     decided = await _insert(urls, {"decide_scope": "sales.order.cross_check"}, status="approved")
 
-    assert run_alembic(["upgrade", "head"], urls.migrator).returncode == 0
+    assert run_alembic(["upgrade", _REVISION], urls.migrator).returncode == 0
 
     for approval_id, scope in (
         (pending, "sales.quote.approve"),

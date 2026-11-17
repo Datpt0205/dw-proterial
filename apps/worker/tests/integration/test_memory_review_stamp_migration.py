@@ -22,6 +22,9 @@ pytestmark = pytest.mark.integration
 
 _DB = "dw_test_memory_review_stamp_migration"
 _BEFORE = "271bdb87af91"
+# Up to the revision under test only: a later one-way revision (7c6ad2350566)
+# refuses a downgrade across it.
+_REVISION = "445f93c2ea2a"
 _TENANT = sid("tenant", "tenant-alpha")
 _WORKSPACE = sid("workspace", "tenant-alpha:main")
 
@@ -77,7 +80,7 @@ async def test_reviews_written_unstamped_are_stamped_and_unstamped_on_downgrade(
     pending = await _insert(urls, "pending")
     decided = await _insert(urls, "approved")
 
-    upgraded = run_alembic(["upgrade", "head"], urls.migrator)
+    upgraded = run_alembic(["upgrade", _REVISION], urls.migrator)
     assert upgraded.returncode == 0, upgraded.stderr
     assert await _stamps(urls, pending, decided) == ["memory.review", "memory.review"]
 

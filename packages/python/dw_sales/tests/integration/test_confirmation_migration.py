@@ -24,6 +24,9 @@ pytestmark = pytest.mark.integration
 
 _DB = "dw_test_sales_confirmation_migration"
 _BEFORE = "0d1d0e4eb203"
+# Up to the revision under test only: a later one-way revision (7c6ad2350566)
+# refuses a downgrade across it.
+_REVISION = "64d50dbc1d00"
 _TENANT = sid("tenant", "tenant-alpha")
 _WORKSPACE = sid("workspace", "tenant-alpha:main")
 _AN, _DIEU = uuid.UUID(int=0xA1), uuid.UUID(int=0xD1)
@@ -119,7 +122,7 @@ async def test_a_confirmed_order_was_a_confirmation_sent_and_back_on_downgrade()
     case_id = await _old_confirmed(urls)
     untouched = await _old_confirmed(urls, status="cross_checked")
 
-    result = run_alembic(["upgrade", "head"], urls.migrator)
+    result = run_alembic(["upgrade", _REVISION], urls.migrator)
     assert result.returncode == 0, result.stderr
 
     row = await _row(urls, case_id)
