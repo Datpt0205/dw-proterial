@@ -430,7 +430,16 @@ context. All five are done and on `main`. The full narrative is at
           as a granted scope. Why DW2 lacks managers: the platform answers
           `visible_owners`, each context applies it to its own lists; DW1 did
           (10-28), DW2's rebuild (11-13) has not. Open vs restricted explained
-          to Đạt; the choice is Proterial's. (c) few Windows admins,
+          to Đạt; the choice is Proterial's. **New customer code (Đạt,
+          11-17):** a PO from an unknown or temporary customer goes to a
+          person (`customer_unknown`, `customer_temporary`) and nothing
+          resumes it once accounting creates the code in Bravo; Đạt chose
+          DW noticing the new code itself in "Danh mục đối tượng" (Bravo
+          API R01) and resuming the case, telling the PIC: polling with
+          `updated_since` (request G05 already asks it of every list API)
+          plus a nightly full read, no webhook (no inbound port, nothing
+          lost while DW is down). Not built; needs R01. The dwmail password
+          was shown in the chat at Đạt's request (11-17). (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
