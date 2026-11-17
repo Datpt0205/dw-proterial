@@ -446,6 +446,8 @@ export const CASE_EVENT = {
   "quote.finding_answered": "Trả lời một cờ",
   "quote.value_confirmed": "Xác nhận một giá trị",
   "quote.priced": "Định giá",
+  "quote.production_type_set": "Chọn mass hay pcs",
+  "quote.pcs_price_recorded": "Ghi giá GM cho hàng pcs",
   "quote.submitted": "Trình duyệt",
   "quote.approved": "Duyệt báo giá",
   "quote.returned": "Trả lại định giá",

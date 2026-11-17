@@ -1,6 +1,6 @@
 # 05 — Mass or pcs, and the request to JP & HQ for a pcs price
 
-Status: ready-for-agent: domain, commands, routes done 2026-11-16; view field, web, mail template, follow-up and the model's proposal owed (see Comments)
+Status: ready-for-agent: acceptances 1 and 2 met; the JP & HQ mail, its follow-up and the model's proposal owed (see Comments)
 Blocked by: none; open questions for Sales: are SGA/loyalty/profit rates fixed per pcs order, is "JP & HQ" the GM at PRV, the assembly-cable variant
 Category: enhancement
 
@@ -52,3 +52,11 @@ carries the type ("Mass production").
 - Asked of Sales (Decisions Đạt owes): are SGA, loyalty and profit rates
   fixed per pcs order; is "JP & HQ" the GM at PRV; the assembly-cable
   variant.
+- 2026-11-17 (dw-proterial-33): (a) done. `QuoteCaseView` carries
+  `production_type`, who set it, `waits_on_pcs_price` and `pcs_price`, its
+  amounts behind `prices.amounts` (mutation-checked). The quote page's
+  "Mass hay pcs" card: a `Segmented` (disabled with its reason for a caller
+  without quote.prepare or once priced), the wait in words, "Ghi giá GM"
+  per line, and "Xem bảng hỏi giá GM" (the cost sheet). The price form is
+  not drawn while the case waits; the server refuses it anyway. (e)
+  contracts regenerated. Still owed: (b), (c), (d).

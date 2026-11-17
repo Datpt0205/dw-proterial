@@ -78,6 +78,7 @@ import { MessageTextDrawer } from "./model-read";
 import { ApprovalPanel } from "./approval";
 import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
+import { PcsPricePanel } from "./pcs-price";
 import { SendPanel, SIGNABLE } from "./send-panel";
 
 export default function QuotePage() {
@@ -658,6 +659,10 @@ function QuoteDetail() {
         ) : null}
       </Card>
 
+      <Card size="small" title="Mass hay pcs">
+        <PcsPricePanel quote={data} onDone={reload} />
+      </Card>
+
       <Card size="small" title="Căn cứ giá">
         <EvidencePanel quote={data} />
       </Card>
@@ -718,7 +723,11 @@ function QuoteDetail() {
         </Card>
       ) : null}
 
-      {showPricing ? <PricingForm quote={data} onDone={reload} /> : null}
+      {/* A pcs case is priced once the GM's price is recorded (ticket 05):
+          the panel above says so, and the server refuses before it. */}
+      {showPricing && !data.waits_on_pcs_price ? (
+        <PricingForm quote={data} onDone={reload} />
+      ) : null}
 
       <ArtifactsPanel
         kind="quote"

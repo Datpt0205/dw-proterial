@@ -1068,6 +1068,36 @@ export class SalesApi {
     );
   }
 
+  productionType(
+    caseId: string,
+    body: Body<"/api/v1/sales/quotes/{case_id}/production-type">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/quotes/{case_id}/production-type">(
+      `/api/v1/sales/quotes/${enc(caseId)}/production-type`,
+      body,
+      key,
+    );
+  }
+
+  pcsPrice(
+    caseId: string,
+    body: Body<"/api/v1/sales/quotes/{case_id}/pcs-price">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/quotes/{case_id}/pcs-price">(
+      `/api/v1/sales/quotes/${enc(caseId)}/pcs-price`,
+      body,
+      key,
+    );
+  }
+
+  pcsPriceRequest(caseId: string) {
+    return this.get<"/api/v1/sales/quotes/{case_id}/pcs-price-request">(
+      `/api/v1/sales/quotes/${enc(caseId)}/pcs-price-request`,
+    );
+  }
+
   submit(
     caseId: string,
     body: Body<"/api/v1/sales/quotes/{case_id}/submit">,

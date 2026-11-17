@@ -6333,6 +6333,31 @@ export interface components {
             /** Unit Price */
             unit_price: number | string;
         };
+        /** PcsPriceLineView */
+        PcsPriceLineView: {
+            /** Line No */
+            line_no: number;
+            unit_price: components["schemas"]["Amount"];
+        };
+        /**
+         * PcsPriceView
+         * @description The GM/BC Manager's price for a pcs case (ticket 05), as recorded;
+         *     its amounts hidden from a caller who may not read prices.
+         */
+        PcsPriceView: {
+            /** Lines */
+            lines: components["schemas"]["PcsPriceLineView"][];
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /**
+             * Recorded By
+             * Format: uuid
+             */
+            recorded_by: string;
+        };
         /**
          * PendingDecisionView
          * @description The platform approval a case waits on: the decision is made there
@@ -6926,7 +6951,11 @@ export interface components {
             overdue: boolean;
             /** Parser Version */
             parser_version: string;
+            pcs_price?: components["schemas"]["PcsPriceView"] | null;
             pricing: components["schemas"]["PricingView"] | null;
+            /** Production Type */
+            production_type?: ("mass" | "pcs") | null;
+            production_type_set?: components["schemas"]["StampView"] | null;
             /** Quote Due */
             quote_due: string | null;
             reading?: components["schemas"]["RequestReading"] | null;
@@ -6967,6 +6996,11 @@ export interface components {
              * @default []
              */
             thread_sent: components["schemas"]["SentMessageView"][];
+            /**
+             * Waits On Pcs Price
+             * @default false
+             */
+            waits_on_pcs_price: boolean;
             /** Ycbg No */
             ycbg_no: string | null;
             /** Ycbg Recorded At */

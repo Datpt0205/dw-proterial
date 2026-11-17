@@ -14883,6 +14883,52 @@
         "title": "PcsPriceLineBody",
         "type": "object"
       },
+      "PcsPriceLineView": {
+        "properties": {
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "line_no",
+          "unit_price"
+        ],
+        "title": "PcsPriceLineView",
+        "type": "object"
+      },
+      "PcsPriceView": {
+        "description": "The GM/BC Manager's price for a pcs case (ticket 05), as recorded;\nits amounts hidden from a caller who may not read prices.",
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PcsPriceLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "format": "uuid",
+            "title": "Recorded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lines",
+          "recorded_by",
+          "recorded_at"
+        ],
+        "title": "PcsPriceView",
+        "type": "object"
+      },
       "PendingDecisionView": {
         "description": "The platform approval a case waits on: the decision is made there\n(`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales\nroute. Present only while the case is in the state that waits on it.",
         "properties": {
@@ -17547,10 +17593,45 @@
             "title": "Parser Version",
             "type": "string"
           },
+          "pcs_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PcsPriceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pricing": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PricingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "production_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mass",
+                  "pcs"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Type"
+          },
+          "production_type_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StampView"
               },
               {
                 "type": "null"
@@ -17690,6 +17771,11 @@
             },
             "title": "Thread Sent",
             "type": "array"
+          },
+          "waits_on_pcs_price": {
+            "default": false,
+            "title": "Waits On Pcs Price",
+            "type": "boolean"
           },
           "ycbg_no": {
             "anyOf": [
