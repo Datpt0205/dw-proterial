@@ -78,7 +78,19 @@ function ReadBack({
           type="error"
           showIcon
           title={`Bravo lệch bản đã duyệt ở ${back.differences.length} chỗ`}
-          description={meta}
+          description={
+            view.stale ? (
+              meta
+            ) : (
+              <>
+                <div>
+                  Chưa thể kiểm chéo đạt: sửa trên Bravo rồi đọc lại SO, hoặc
+                  trả lại hồ sơ.
+                </div>
+                <div>{meta}</div>
+              </>
+            )
+          }
         />
       ) : (
         <Alert

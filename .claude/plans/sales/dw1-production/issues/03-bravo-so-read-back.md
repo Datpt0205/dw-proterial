@@ -35,8 +35,11 @@ file for import, not after. The exports share one shape (row 1 the screen's
 title, row 2 the header; "Customer order information", "Cancelled order
 information", "Báo giá, chào hàng", "Danh mục Base price", "Black list"),
 described outside git in `Downloads\proterial\Bravo-export\_ANH.md`.
-Still owed: the import's "2. Thiết lập import" (Layout1's column mapping)
-and its result screen.
+Layout1's mapping is no longer asked (2026-11-17): the B41 SalesOrder files
+Sales imports with it carry its shape (title row 1, blocks on row 2, the 39
+titles on row 3, data from row 4; one formula, `L = A`), and that shape is
+what `sales_bravo_upload` writes; whether Bravo took every row is this
+read-back's question, not the layout's.
 
 ## Acceptance
 
@@ -117,5 +120,13 @@ and its result screen.
   change it and records it with the comparison (nothing is sent before the
   press; `bravo-so-prefill.test.tsx`, shown red without the fill).
 
-Left: the vendor's API adapter (R10); the decision in PLAN.md on blocking
-the cross-check.
+- 2026-11-17, **decided (Đạt left it to the agent's recommendation): a
+  read-back that differs at the version being cross-checked refuses "Kiểm
+  chéo đạt"** (`require_bravo_agrees`, in `CaseDecisions._decide`, so the
+  platform's guard refuses it before the decision is recorded; reason code
+  `bravo_read_back_differs`). Nothing read, or read at an older version,
+  refuses nothing; "Trả lại" stays. The read-back panel says so beside the
+  difference. `test_read_back_blocks_cross_check.py`, both conditions
+  mutation-checked.
+
+Left: the vendor's API adapter (R10).

@@ -109,6 +109,25 @@ class BravoReadBack(BaseModel):
         return not self.differences
 
 
+def require_bravo_agrees(read_back: BravoReadBack | None, case: OrderCase) -> None:
+    """ "Kiểm chéo đạt" is refused while Bravo's sales order, read back at this
+    case version, differs from the paste sheet (decided 2026-11-17): Bravo's
+    import skips a refused row without a log, so a difference is a line Bravo
+    lost or holds wrong. Nothing read, or read at an older version, refuses
+    nothing: the case page says which, and the manual path stays."""
+    if read_back is None or read_back.equal or read_back.case_version != case.case_version:
+        return
+    raise ConflictError(
+        f"SO {read_back.so_no} đọc lại từ Bravo khác bản đã duyệt ở "
+        f"{len(read_back.differences)} chỗ: sửa trên Bravo rồi đọc lại, hoặc trả lại hồ sơ",
+        details={
+            "rule": "bravo_read_back_differs",
+            "case_id": str(case.case_id),
+            "differences": len(read_back.differences),
+        },
+    )
+
+
 # ------------------------------------------------------------------ ports --
 
 
