@@ -405,6 +405,8 @@ export const CASE_EVENT = {
   "order.value_corrected": "Sửa một giá trị",
   "order.mapping_confirmed": "Xác nhận mã PRV",
   "order.mapping_rejected": "Bỏ mã ứng viên (không phải mã này)",
+  "order.mapping_applied": "DW tự áp mã PRV",
+  "order.mapping_undone": "Hoàn tác mã PRV DW đã áp",
   "order.pc_date_recorded": "Ghi PC đồng ý lead time ngắn",
   "order.pc_asked": "Ghi đã hỏi PC ngày giao",
   "order.design_asked": "Ghi đã gửi Design đề nghị tạo mã",
