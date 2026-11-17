@@ -155,3 +155,15 @@ source.
 - A replay stored beside a waiting version before a pair left keeps the
   counts it was stored with (a version is replayed once); a version proposed
   after is replayed on the pairs left.
+
+## The PRS number: waits on Proterial (2026-11-17)
+
+Looked at B01's PCS PO (`grdDetail`, column titles only) and B41's
+SalesOrder-PCS: no column is titled PRS. The PO grid prints `Other
+infomation1`, `Destination` and `Sale order No`, which the reading does not
+keep, and Bravo's sheet has `Other infomation1-4`. The grid also prints no
+unit price and no unit, so no Excel layout reads it today. Columns a layout
+keeps by a name a person gives (a line's extra values with their anchors, a
+`po` source for the skill) are the likely shape, but building them before
+PCS's PO is read at all would be a guess. Asked of Proterial: which PCS
+column is the PRS number, and where PCS's price and unit come from.
