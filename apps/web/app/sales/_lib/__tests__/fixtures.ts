@@ -285,6 +285,7 @@ export function pendingQuote(): Quote {
     replies: [],
     thread_before: [],
     thread_sent: [],
+    waits_on_pcs_price: false,
   };
 }
 

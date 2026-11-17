@@ -16,6 +16,7 @@ import pytest
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_sales.application.quotes_service import PricedLine
+from dw_sales.application.views import HIDDEN
 from dw_sales.domain.catalog import LmeBand
 from dw_sales.domain.quotes import (
     PcsPrice,
@@ -238,3 +239,34 @@ async def test_another_tenants_pic_finds_no_case_to_mark_or_ask_about() -> None:
             OUTSIDER.context(BETA), case_id, case_version=version, kind="pcs"
         )
     assert world.quote(case_id).production_type is None
+
+
+async def test_the_case_shows_pcs_and_the_wait_and_the_gm_price_only_to_a_price_reader() -> None:
+    world = _world()
+    case_id = await _designed(world)
+    commands = world.services.quote_commands
+
+    def version() -> int:
+        return world.quote(case_id).case_version
+
+    await commands.production_type(DIEU.context(), case_id, case_version=version(), kind="pcs")
+    waiting = await world.services.quotes.get(READER.context(), case_id)
+    assert (waiting.production_type, waiting.waits_on_pcs_price) == ("pcs", True)
+    assert waiting.production_type_set is not None
+    assert waiting.production_type_set.by == DIEU.user_id
+
+    await commands.pcs_price(
+        DIEU.context(),
+        case_id,
+        case_version=version(),
+        lines=[
+            PcsPriceLine(line_no=n, unit_price=Decimal("12.40"))
+            for n in sorted(world.quote(case_id).request.document.line_numbers())
+        ],
+    )
+    hidden = await world.services.quotes.get(READER.context(), case_id)
+    shown = await world.services.quotes.get(DIEU.context(), case_id)
+    assert hidden.pcs_price is not None and shown.pcs_price is not None
+    assert not hidden.waits_on_pcs_price
+    assert {line.unit_price for line in hidden.pcs_price.lines} == {HIDDEN}
+    assert {line.unit_price for line in shown.pcs_price.lines} == {Decimal("12.40")}

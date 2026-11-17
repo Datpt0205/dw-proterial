@@ -117,6 +117,7 @@ from dw_sales.domain.quotes import (
     FromOrder,
     PriceEvidence,
     PriceSuggestion,
+    ProductionType,
     QuoteCase,
     QuoteFinding,
     RequestReading,
@@ -1924,6 +1925,24 @@ class StampView(BaseModel):
     at: datetime
 
 
+class PcsPriceLineView(BaseModel):
+    model_config = _VIEW
+
+    line_no: int
+    unit_price: Amount
+
+
+class PcsPriceView(BaseModel):
+    """The GM/BC Manager's price for a pcs case (ticket 05), as recorded;
+    its amounts hidden from a caller who may not read prices."""
+
+    model_config = _VIEW
+
+    lines: list[PcsPriceLineView]
+    recorded_by: uuid.UUID
+    recorded_at: datetime
+
+
 class DeclineView(BaseModel):
     model_config = _VIEW
 
@@ -2181,6 +2200,12 @@ class QuoteCaseView(BaseModel):
     thread_sent: list[SentMessageView] = []
     # The order case it was opened from (ticket 09); None for a request.
     from_order: FromOrder | None = None
+    # Mass or pcs, and who set it (ticket 05); None until a person does.
+    production_type: ProductionType | None = None
+    production_type_set: StampView | None = None
+    # A pcs case waits for the GM's price before Sales may price it.
+    waits_on_pcs_price: bool = False
+    pcs_price: PcsPriceView | None = None
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -2426,6 +2451,26 @@ def quote_case(
         thread_before=[thread_message(m) for m in thread.before] if thread else [],
         thread_sent=talk.sent,
         from_order=case.from_order,
+        production_type=case.production_type,
+        production_type_set=(
+            StampView(**case.production_type_set.model_dump()) if case.production_type_set else None
+        ),
+        waits_on_pcs_price=case.waits_on_pcs_price,
+        pcs_price=(
+            PcsPriceView(
+                lines=[
+                    PcsPriceLineView(
+                        line_no=line.line_no,
+                        unit_price=_shown(line.unit_price, prices.amounts),
+                    )
+                    for line in case.pcs_price.lines
+                ],
+                recorded_by=case.pcs_price.recorded_by,
+                recorded_at=case.pcs_price.recorded_at,
+            )
+            if case.pcs_price
+            else None
+        ),
     )
 
 
