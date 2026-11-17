@@ -25,7 +25,7 @@ export function SkillReplayResult({ version }: { version: SkillVersion }) {
     if (version.status !== "proposed") return null;
     return (
       <span className="flex flex-col items-start gap-1">
-        <Tag color="processing">Đang chạy thử trên thư mẫu</Tag>
+        <Tag color="processing">Đang chạy thử</Tag>
         <Typography.Text>
           Trưởng bộ phận chỉ duyệt được khi có kết quả.
         </Typography.Text>
@@ -39,10 +39,18 @@ export function SkillReplayResult({ version }: { version: SkillVersion }) {
     <span className="flex flex-col items-start gap-1">
       <span className="inline-flex items-center gap-1">
         <Typography.Text>{replayLine(replay)}</Typography.Text>
-        <InfoTip label="Thư mẫu nào?">
-          Chạy trên thư mẫu của nền tảng (chưa có thư công ty đã kiểm): mỗi thư
-          được đọc một lần với bản đề xuất và một lần với bản đang dùng.
-        </InfoTip>
+        {replay.source === "customer_pairs" ? (
+          <InfoTip label="Cặp ví dụ nào?">
+            Mỗi cặp là một PO của khách và file SalesOrder PIC đã sửa: PO được
+            điền một lần với bản đề xuất và một lần với bản đang dùng. Chỉ duyệt
+            được khi bản đề xuất điền đúng mọi cặp.
+          </InfoTip>
+        ) : (
+          <InfoTip label="Thư mẫu nào?">
+            Chạy trên thư mẫu của nền tảng (chưa có thư công ty đã kiểm): mỗi
+            thư được đọc một lần với bản đề xuất và một lần với bản đang dùng.
+          </InfoTip>
+        )}
       </span>
       {taught ? <Typography.Text>{taught}</Typography.Text> : null}
       {incomplete ? <Alert type="warning" showIcon title={incomplete} /> : null}

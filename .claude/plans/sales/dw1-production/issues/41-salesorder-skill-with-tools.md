@@ -100,7 +100,23 @@ recorded in dw_sales ADR 0013 "Applied 2026-11-16: the skill with tools".
   model.
 
 Not built: the skills page listing and proposing a customer's SalesOrder
-skill and showing its pair replay (the API route of ticket 40 proposes one by
-name today; the approval inbox shows the approval); withdrawing a wrong
-pair; a PO column the reading does not keep (PRS number) is still not a
+skill (the API route of ticket 40 proposes one by name today); withdrawing a
+wrong pair; a PO column the reading does not keep (PRS number) is still not a
 source.
+
+## Done: the approval compares a customer's version (2026-11-17)
+
+- `GET /sales/skills/versions/{version_id}` (`SkillsService.compared`,
+  `SkillComparison`): one version of any skill, a customer's SalesOrder
+  skill's included, beside the skill in force under its key (the
+  customer's approved version, else the generic one), with its stored
+  replay. Scope `sales.rules.propose`; another tenant's version, a rule
+  version that is not a skill's and an unknown id are not found alike; no
+  write. Tests in `test_skills.py`.
+- `/approvals`' `sales.skills` panel (`_meta/skill-approval.tsx`) reads
+  that route instead of the skills list, so every skill version is compared
+  with `SkillChanges`; a pairs replay reads "Điền đúng x/n cặp ví dụ của
+  khách…" with its own explanation (`skills.replayLine`), and the pending
+  tag says "Đang chạy thử" (no longer "trên thư mẫu", wrong for pairs).
+- Contracts owe a regeneration (a new route and `SkillComparison`); the
+  web's typecheck needs it for `salesApi().skillVersion`.

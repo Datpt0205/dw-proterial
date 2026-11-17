@@ -12,12 +12,12 @@ import { SkillChanges } from "../_components/skill-changes";
 import { SCOPE } from "../_components/sales-frame";
 
 /**
- * A `sales.skills` approval's version beside the skill in force (ticket 40),
- * where the head decides it (`/approvals`): the payload names the version
- * only, so its words are read through `/sales/skills`, which answers only
- * holders of `sales.rules.propose` (the head holds it); anyone else is told
- * why it is not shown. A customer's SalesOrder skill is not on that list,
- * so its version is said not to be compared here.
+ * A `sales.skills` approval's version beside the skill in force under its key
+ * (ticket 40), where the head decides it (`/approvals`): the payload names the
+ * version only, so it is read through `/sales/skills/versions/{id}`, which
+ * holds a customer's SalesOrder skill's version too (ticket 41) and answers
+ * only holders of `sales.rules.propose` (the head holds it); anyone else is
+ * told why it is not shown.
  */
 export function SkillApprovalChanges({ approval }: { approval: Approval }) {
   const { hasScope } = useAuth();
@@ -25,7 +25,7 @@ export function SkillApprovalChanges({ approval }: { approval: Approval }) {
   const versionId = String(approval.payload.version_id ?? "");
   const loaded = useResource(
     `sales/skills/approval/${approval.id}`,
-    useCallback(() => salesApi().skills(), []),
+    useCallback(() => salesApi().skillVersion(versionId), [versionId]),
     { enabled: allowed },
   );
 
@@ -39,15 +39,7 @@ export function SkillApprovalChanges({ approval }: { approval: Approval }) {
   if (loaded.error)
     return <LoadError error={loaded.error} onRetry={loaded.reload} />;
   if (!loaded.data) return <Skeleton active paragraph={{ rows: 4 }} />;
-  const version = loaded.data.versions.find((v) => v.version_id === versionId);
-  const skill = loaded.data.skills.find((s) => s.name === version?.name);
-  if (!version || !skill)
-    return (
-      <Typography.Text>
-        Phiên bản này không có trong danh sách kỹ năng của DW1, nên không so
-        sánh được ở đây.
-      </Typography.Text>
-    );
+  const { skill, version } = loaded.data;
   if (version.status !== "proposed")
     return (
       <Typography.Text>

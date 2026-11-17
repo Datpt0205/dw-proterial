@@ -2355,6 +2355,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/skills/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Skill Version */
+        get: operations["skill_version_api_v1_sales_skills_versions__version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/skills/{name}/versions": {
         parameters: {
             query?: never;
@@ -7938,6 +7955,17 @@ export interface components {
              * Format: uuid
              */
             uploaded_by: string;
+        };
+        /**
+         * SkillComparison
+         * @description One version beside the skill in force under its key, as a
+         *     `sales.skills` approval is decided on /approvals: any skill's version,
+         *     a customer's SalesOrder skill's too (ticket 41), which `SkillsView`
+         *     does not list.
+         */
+        SkillComparison: {
+            skill: components["schemas"]["SkillView"];
+            version: components["schemas"]["SkillVersionView"];
         };
         /**
          * SkillProposal
@@ -13917,6 +13945,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillsView"];
+                };
+            };
+        };
+    };
+    skill_version_api_v1_sales_skills_versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

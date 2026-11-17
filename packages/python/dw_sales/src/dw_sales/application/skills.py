@@ -99,6 +99,7 @@ __all__ = [
     "WORDS_UNREADABLE",
     "Dw1Skills",
     "SkillBook",
+    "SkillComparison",
     "SkillDecisions",
     "SkillDocument",
     "SkillReplay",
@@ -423,6 +424,18 @@ class SkillsView(BaseModel):
     versions: list[SkillVersionView]
 
 
+class SkillComparison(BaseModel):
+    """One version beside the skill in force under its key, as a
+    `sales.skills` approval is decided on /approvals: any skill's version,
+    a customer's SalesOrder skill's too (ticket 41), which `SkillsView`
+    does not list."""
+
+    model_config = ConfigDict(frozen=True)
+
+    skill: SkillView
+    version: SkillVersionView
+
+
 class SkillProposal(BaseModel):
     """What a person proposes: the skill's new words and a version number of
     the tenant's own."""
@@ -485,21 +498,7 @@ class SkillsService:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         scope: RuleScope = ContextScope.of(context)
         keys = sorted(self.book.platform)
-        skills = []
-        for key in keys:
-            resolved = await self.book.current(scope, key)
-            document = resolved.policy
-            assert isinstance(document, SkillDocument)
-            skills.append(
-                SkillView(
-                    name=document.name,
-                    ref=document.ref,
-                    layer=resolved.layer,
-                    description=document.description,
-                    instructions=document.instructions,
-                    platform_ref=self.book.platform[key].ref,
-                )
-            )
+        skills = [await self._in_force(scope, key) for key in keys]
         versions = await self._engine.list_all(context, keys=keys)
         replays = await self.replays.stored(
             sales_scope(context), [v.version_id for v in versions if v.status == "proposed"]
@@ -507,6 +506,39 @@ class SkillsService:
         return SkillsView(
             skills=skills,
             versions=[_version_view(v, replays.get(v.version_id)) for v in versions],
+        )
+
+    async def compared(self, context: AccessContext, version_id: UUID) -> SkillComparison:
+        """The version ``version_id`` of any skill, a customer's SalesOrder
+        skill included, beside the skill in force under its key, with its
+        replay where the worker stored one. Read in the caller's tenant only
+        (RLS): another tenant's version, a rule version that is not a
+        skill's, or none at all, is not found alike."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        async with rule_work(self.uow)(context) as work:
+            version = await work.rule_versions.get(version_id)
+        if version is None or not (
+            version.key.startswith(SKILL_PREFIX) and self.book.knows(version.key)
+        ):
+            raise NotFoundError("no such skill version", details={"version_id": str(version_id)})
+        replays = await self.replays.stored(sales_scope(context), [version_id])
+        return SkillComparison(
+            skill=await self._in_force(ContextScope.of(context), version.key),
+            version=_version_view(version, replays.get(version_id)),
+        )
+
+    async def _in_force(self, scope: RuleScope, key: str) -> SkillView:
+        """The skill under ``key`` as ``scope``'s tenant holds it now."""
+        resolved = await self.book.current(scope, key)
+        document = resolved.policy
+        assert isinstance(document, SkillDocument)
+        return SkillView(
+            name=document.name,
+            ref=document.ref,
+            layer=resolved.layer,
+            description=document.description,
+            instructions=document.instructions,
+            platform_ref=self.book.platform[key].ref,
         )
 
     async def propose(

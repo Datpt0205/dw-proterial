@@ -63,6 +63,16 @@ describe("skills", () => {
     );
     expect(securityLine(REPLAY)).toBeNull();
     expect(incompleteLine(REPLAY)).toBeNull();
+    // A customer's SalesOrder skill counts its worked pairs (ticket 41).
+    const pairs = { ...REPLAY, source: "customer_pairs" as const };
+    expect(
+      replayLine({ ...pairs, messages: 3, right_with: 3, right_without: 2 }),
+    ).toBe(
+      "Điền đúng 3/3 cặp ví dụ của khách với bản đề xuất · 2/3 với bản đang dùng",
+    );
+    expect(
+      replayLine({ ...pairs, messages: 0, right_with: 0, right_without: 0 }),
+    ).toBe("Khách chưa có cặp ví dụ nào: chưa chạy thử được");
     const bad = {
       ...REPLAY,
       outcome: "incomplete" as const,

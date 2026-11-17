@@ -1,6 +1,6 @@
 # 42 — Hard-coded reading moved to skills, one family at a time
 
-Status: in progress (families 1, 3 and 5 done 2026-11-16; family 6's follow-up wording done 2026-11-16; families 2, 4 and the rest of 6 left, each after its skill passes its bar on Strata)
+Status: in progress (families 1, 3 and 5 done 2026-11-16; family 6's follow-up wording done 2026-11-16, its revision hints 2026-11-17; families 2, 4 and the rest of 6 (item names, the assistant's sentences and `QuestionKind`) left, each after its skill passes its bar on Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -359,3 +359,31 @@ Under dw_sales ADR 0014 ("Applied 2026-11-16: the hand-off and reply kinds").
   "báo giá", "bộ phận Sales"/"bạn": the model's input, not a sentence a
   person reads), `OPENING_PREFIX` (the feed parses it), and, as asked, the
   assistant's fixed sentences and `QuestionKind`.
+
+## Done: family 6, the revision hints' marks (2026-11-17)
+
+- **Decided: tenant configuration, not a skill.** A file-name revision mark
+  (`R`, `RV`, `RE`, `REV`) is a few letters a company's customers write
+  after the PO number, read by a fixed rule, and only a hint beside what
+  decides: no language for a model to interpret, and a model step would
+  add a call, a bar and an eval to read four letters. Like the catalog's
+  values (item 4), it is the tenant's data: `OrderRules.revision_marks`
+  in `sales_order_rules`, proposed and approved on /sales/rules like any
+  rule (two people), placed at step O1 on the process page beside the
+  shared mail domains, labelled in `rule-labels.ts`. No model step, so
+  nothing to measure on Strata.
+- **Off is today**: no platform version states the field; its default is
+  `revision_hints.REVISION_MARKS`, today's four, so every name reads as
+  before (`test_the_platforms_rules_read_todays_marks`, and the ticket 22
+  tests unchanged).
+- **Guards stay code**: a mark is 1-5 capital ASCII letters, named once,
+  at most 20; refused when a version is proposed (the rules' schema) and
+  by the reader itself (`is_revision_mark`), so a mark never becomes a
+  pattern; still read only after the PO number; the bare 1-2 digits stay
+  read whatever the marks; the hint decides nothing (a duplicate stays a
+  duplicate).
+- Tests: `test_several_pos.py` (a tenant's `SUA` read and the platform's
+  marks then not; refused marks; through intake with an approved version,
+  still a duplicate).
+- Contracts owe a regeneration: `contracts/jsonschema/sales_rules.json`
+  gains `revision_marks`.

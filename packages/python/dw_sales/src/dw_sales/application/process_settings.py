@@ -160,14 +160,15 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
     dict(
         (
             # Receive the PO: intake caps, the mail domains no customer is
-            # known by, the model steps reading a message, and what the
-            # intake raises.
+            # known by, the marks of a revised file's name, the model steps
+            # reading a message, and what the intake raises.
             _step(
                 StepId.O1,
                 _in(
                     _ORDER,
                     "intake",
                     "shared_mail_domains",
+                    "revision_marks",
                     "model_assist.message_intent",
                     "model_assist.unread_retry_hours",
                     "model_assist.reply_intent",

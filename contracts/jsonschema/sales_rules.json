@@ -1757,6 +1757,20 @@
       "price": {
         "$ref": "#/$defs/PriceRule"
       },
+      "revision_marks": {
+        "default": [
+          "R",
+          "RV",
+          "RE",
+          "REV"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "title": "Revision Marks",
+        "type": "array"
+      },
       "schema_version": {
         "pattern": "^1\\.0$",
         "title": "Schema Version",

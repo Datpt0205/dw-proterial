@@ -1365,7 +1365,7 @@ class OrderIntake:
         rules: OrderRules,
         run: RunContext | None,
     ) -> IntakeOutcome:
-        document = _named_revision(message, document)
+        document = _named_revision(message, document, rules.revision_marks)
         header = document.header
         earlier = await self.cases.cases_for_po(scope, customer.code, header.po_no)
         seen = {
@@ -2076,14 +2076,17 @@ async def _unless_unconnected[T](
         return None
 
 
-def _named_revision(message: InboundMessage, document: PoDocument) -> PoDocument:
-    """The PO with the revision its file's name suggests (ticket 22), a hint
-    shown beside what decides; as it was when the name suggests none."""
+def _named_revision(
+    message: InboundMessage, document: PoDocument, marks: Sequence[str]
+) -> PoDocument:
+    """The PO with the revision its file's name suggests with the tenant's
+    ``marks`` (ticket 22; ticket 42 family 6), a hint shown beside what
+    decides; as it was when the name suggests none."""
     name = next(
         (a.name for a in message.attachments if a.attachment_id == document.attachment_id),
         None,
     )
-    hint = None if name is None else name_revision(name, document.header.po_no)
+    hint = None if name is None else name_revision(name, document.header.po_no, marks)
     if hint is None or hint == document.name_revision:
         return document
     return document.model_copy(update={"name_revision": hint})

@@ -16,8 +16,10 @@ from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.domain.audit import lane_audit_event
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
+from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.access import SalesScopes
+from dw_sales.application.rules import RuleKey
 from dw_sales.application.skills import (
     NOT_REPLAYED,
     SkillDocument,
@@ -160,8 +162,9 @@ async def test_the_proposer_cannot_approve_their_own_skill() -> None:
     assert {s.layer for s in listed.skills} == {"platform"}
 
 
-async def _replayed(world: World, version_id: uuid.UUID) -> SkillReplay:
-    """The worker's replay of ``version_id``, stored as its lane stores one."""
+async def _replayed(world: World, version_id: uuid.UUID, *, pairs: bool = False) -> SkillReplay:
+    """The worker's replay of ``version_id``, stored as its lane stores one;
+    ``pairs``: a customer's SalesOrder skill's, every pair reproduced."""
     replay = SkillReplay(
         version_id=version_id,
         replayed_at=datetime(2026, 11, 16, 9, 0, tzinfo=UTC),
@@ -173,6 +176,15 @@ async def _replayed(world: World, version_id: uuid.UUID) -> SkillReplay:
         unanswered=0,
         security_failed=("RP31",),
     )
+    if pairs:
+        replay = replay.model_copy(
+            update={
+                "source": "customer_pairs",
+                "messages": 2,
+                "right_with": 2,
+                "security_failed": (),
+            }
+        )
     audit = lane_audit_event(
         lane="sales_skill_replay",
         event_id=uuid.uuid4(),
@@ -250,6 +262,88 @@ async def test_one_proposal_waits_per_skill() -> None:
     with pytest.raises(ConflictError) as refused:
         await world.services.skills.propose(AN.context(), NAME, _proposal("1.2.0"))
     assert refused.value.details["rule"] == "one_open_proposal"
+
+
+# ---------------------------------------------- one version, compared --
+
+SALESORDER = "salesorder-khb"
+COPY = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").handoff_copy
+
+
+def _salesorder(version: str, words: str) -> SkillProposal:
+    return SkillProposal(
+        version=version, description="KHB's PO to the SalesOrder.", instructions=words
+    )
+
+
+async def test_a_customers_salesorder_version_is_compared_with_the_customers_in_force() -> None:
+    """Ticket 41's versions are not on the skills list, so the approval's
+    panel reads the one version: beside the generic skill while the customer
+    has none of its own, then beside the customer's approved version."""
+    world = _world()
+    first = await world.services.skills.propose(
+        AN.context(), SALESORDER, _salesorder("1.0.1", "Words A.")
+    )
+    assert first.version_id not in {
+        v.version_id for v in (await world.services.skills.list(GIANG.context())).versions
+    }
+    compared = await world.services.skills.compared(GIANG.context(), first.version_id)
+    assert (compared.version.ref, compared.version.instructions) == (
+        "sales_skill_salesorder_khb@1.0.1",
+        "Words A.",
+    )
+    assert (compared.skill.name, compared.skill.ref, compared.skill.layer) == (
+        SALESORDER,
+        "sales_skill_salesorder_khb@1.0.0",
+        "platform",
+    )
+    assert compared.version.replay is None
+    # Every pair reproduced (`every_pair`), so the head may approve it.
+    replay = await _replayed(world, first.version_id, pairs=True)
+    assert (
+        await world.services.skills.compared(GIANG.context(), first.version_id)
+    ).version.replay == replay
+
+    await world.decide_skill(HUONG, first.version_id, approve=True, comment="Đồng ý")
+    second = await world.services.skills.propose(
+        AN.context(), SALESORDER, _salesorder("1.0.2", "Words C.")
+    )
+    compared = await world.services.skills.compared(GIANG.context(), second.version_id)
+    assert (compared.skill.ref, compared.skill.layer, compared.skill.instructions) == (
+        "sales_skill_salesorder_khb@1.0.1",
+        "tenant",
+        "Words A.",
+    )
+
+
+async def test_a_dw1_skill_version_is_compared_as_the_list_shows_it() -> None:
+    world = _world()
+    proposed = await world.services.skills.propose(AN.context(), NAME, _proposal("1.1.0"))
+    compared = await world.services.skills.compared(GIANG.context(), proposed.version_id)
+    listed = await world.services.skills.list(GIANG.context())
+    assert compared.version == listed.versions[0]
+    assert compared.skill == next(s for s in listed.skills if s.name == NAME)
+
+
+async def test_one_version_is_read_by_a_proposer_of_its_own_tenant_only() -> None:
+    """Without `sales.rules.propose` it is refused; another tenant's version,
+    a rule version that is not a skill's, and an unknown id are not found
+    alike."""
+    world = _world()
+    proposed = await world.services.skills.propose(
+        AN.context(), SALESORDER, _salesorder("1.0.1", "Words A.")
+    )
+    for caller in (_AN, READER):
+        with pytest.raises(PermissionDeniedError):
+            await world.services.skills.compared(caller.context(), proposed.version_id)
+    with pytest.raises(NotFoundError):
+        await world.services.skills.compared(GIANG.context(BETA), proposed.version_id)
+    rules = await world.services.rules.propose(
+        AN.context(), RuleKey.HANDOFFS, {**COPY.model_dump(mode="json"), "version": "9.0.1"}
+    )
+    for version_id in (rules.version_id, uuid.uuid4()):
+        with pytest.raises(NotFoundError):
+            await world.services.skills.compared(GIANG.context(), version_id)
 
 
 def test_a_skill_is_words_held_to_their_length() -> None:
