@@ -48,7 +48,12 @@ describe("DW1 đọc ngày giao trong thư PC (AI item 7)", () => {
     const dates = [
       { line_no: 1, delivery: 1, date: "2026-11-10", quote: "10/11/2026" },
     ];
-    readPcDates.mockResolvedValue({ status: "read", dates, dropped: 1 });
+    readPcDates.mockResolvedValue({
+      status: "read",
+      dates,
+      dropped: 1,
+      unsettled: 0,
+    });
     const onDates = renderIt();
     fireEvent.change(
       await screen.findByRole("textbox", { name: "Thư trả lời của PC" }),
@@ -66,6 +71,27 @@ describe("DW1 đọc ngày giao trong thư PC (AI item 7)", () => {
       "Dòng 1: 10/11/2026",
       expect.any(String),
     );
+  });
+
+  it("says a date written 03/04 is there for Sales to read, not that PC gave none", async () => {
+    readPcDates.mockResolvedValue({
+      status: "nothing",
+      dates: [],
+      dropped: 2,
+      unsettled: 1,
+    });
+    const onDates = renderIt();
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Thư trả lời của PC" }),
+      { target: { value: "Dòng 1 giao 03/04/2027" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "DW1 đọc ngày" }));
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("DW1 không điền được ngày nào.");
+    expect(status.textContent).toContain("1 ngày PC viết kiểu 03/04");
+    expect(status.textContent).toContain("1 ngày bị bỏ vì không khớp thư");
+    expect(status.textContent).not.toContain("không thấy ngày nào");
+    expect(onDates).not.toHaveBeenCalled();
   });
 
   it("holds the paste to the limit the API serves, no copy of its own", async () => {

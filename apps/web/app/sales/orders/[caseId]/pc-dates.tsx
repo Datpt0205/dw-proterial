@@ -60,14 +60,24 @@ export function PcDatesReader({
     if (result.value.dates.length) onDates(result.value.dates);
   };
 
+  // A date the mail writes in an order it does not settle (03/04) is
+  // dropped too, but it is there: Sales is told to read it, never that PC
+  // gave no date.
+  const drops = (v: Dates) =>
+    (v.unsettled
+      ? ` ${v.unsettled} ngày PC viết kiểu 03/04 mà thư không cho biết ngày hay tháng đứng trước: bạn tự điền.`
+      : "") +
+    (v.dropped > v.unsettled
+      ? ` ${v.dropped - v.unsettled} ngày bị bỏ vì không khớp thư hoặc không đúng dòng.`
+      : "");
   const said = (v: Dates) =>
     v.status === "read"
       ? `Đã điền ${v.dates.length} ngày từ thư PC (máy đọc) vào cột Ngày xác nhận: kiểm từng ngày trước khi ghi.` +
-        (v.dropped
-          ? ` ${v.dropped} ngày bị bỏ vì không khớp thư hoặc không đúng dòng.`
-          : "")
+        drops(v)
       : v.status === "nothing"
-        ? "DW1 không thấy ngày nào PC cho từng dòng trong thư này."
+        ? v.dropped
+          ? `DW1 không điền được ngày nào.${drops(v)}`
+          : "DW1 không thấy ngày nào PC cho từng dòng trong thư này."
         : "DW1 chưa đọc được lúc này: máy chưa có mô hình hoặc mô hình không trả lời.";
 
   return (
