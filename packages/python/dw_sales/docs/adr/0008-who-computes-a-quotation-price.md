@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-11-10
+decided: 2026-11-17
 source:
     - ../../../../../.claude/plans/sales/dw1-production/spec.md
     - ../../../../../.claude/plans/sales/dw1-production/issues/13-suggested-price.md
@@ -63,3 +64,26 @@ compute a price.
 **Recommended: A** (Bravo computes, DW1 reads its band table and checks an
 order against it), since Bravo already holds and prints it and a second
 formula in DW1 would disagree with Bravo's rounding. Still Đạt's call.
+
+## Decision 2026-11-17
+
+**A.** Đạt left the choice to the agent's recommendation ("tự khuyến nghị
+rồi làm theo"), and the recommendation was A:
+
+- Bravo computes a quotation's price and band table; DW1 never computes
+  one, and the model never does.
+- The price check reads Bravo's prices once Bravo's band table can be read
+  (its API, or the quotation document Bravo prints). Bravo's "Master list
+  báo giá" alone does not answer it, measured on B07 (161 rows): it names no
+  PRV item, only a BP code that up to 56 items share (B06), holds up to 10
+  rows per customer and BP, and gives a centre price at LME 7,750 only, so
+  a price for another month's band would be DW1's computation, which this
+  decision rules out.
+- Until then the check stays what it is: the valid-quotation list Sales
+  keeps (Excel, "pass SC") plus the rows DW1 records once a quotation is
+  approved, each priced per band by a person. That stand-in is replaced,
+  not kept beside Bravo's, when Bravo's read arrives (ticket 12).
+- Quotation history is Bravo's from the module's go-live; the Excel history
+  (2,521 rows) stays read-only evidence for `suggest_price`.
+- Ticket 13 (a suggested price from the LME band, margin and rate) is not
+  built in DW1: what it would compute is Bravo's.

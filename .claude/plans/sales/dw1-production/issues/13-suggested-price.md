@@ -1,7 +1,7 @@
 # 13 — A suggested price from the LME band, the customer's margin and the rate
 
-Status: needs-info
-Blocked by: dw_sales ADR 0008 (who computes the price); the pricing sheet
+Status: wontfix (2026-11-17: dw_sales ADR 0008 decided A, Bravo computes the price; DW1 reads it, ticket 12)
+Blocked by: none; not built in DW1
 Category: enhancement
 
 ## Why
