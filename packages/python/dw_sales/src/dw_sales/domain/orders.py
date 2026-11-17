@@ -2594,7 +2594,9 @@ class OrderCase(BaseModel):
         source = "candidate" if mapping.candidates else "PRV code typed by Sales (item master)"
         kept: list[Finding] = []
         for f in self.findings:
-            if f.line_no != line_no or f.code in EITHER_LEVEL_FINDINGS:
+            # The line's item checks are `rechecked`'s; every other finding of
+            # the line (its values', a missing date) keeps its decision.
+            if f.line_no != line_no or f.code not in MAPPING_FINDINGS | ITEM_FINDINGS:
                 kept.append(f)
             elif f.code in MAPPING_FINDINGS:
                 corrected = CorrectedBySales(value=prv_code, source=source, by=actor.user_id, at=at)
