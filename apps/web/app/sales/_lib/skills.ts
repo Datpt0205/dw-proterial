@@ -16,6 +16,24 @@ export const SKILL_LAYER: Record<Skill["layer"], string> = {
 };
 
 /**
+ * What each platform skill is for, in the page's words. A skill's own
+ * `description` is written for the model that picks it (English); a name
+ * not listed here shows that description.
+ */
+const SKILL_TITLE: Record<string, string> = {
+  "document-forms": "Đọc mẫu yêu cầu báo giá riêng của khách",
+  handoffs: "Chép yêu cầu chuyển cho PC, Design từ thư khách",
+  "mail-kinds": "Phân loại thư không kèm tài liệu đọc được",
+  "reply-drafts": "Soạn thư trả lời khách về một đơn hàng",
+  "thread-intents": "Hiểu từng thư trong một chuỗi thư với khách",
+};
+
+/** A skill's line on the rules page: its Vietnamese title, or its own description. */
+export function skillTitle(skill: Pick<Skill, "name" | "description">): string {
+  return SKILL_TITLE[skill.name] ?? skill.description;
+}
+
+/**
  * The number a new version of ``skill`` is offered: one patch above every
  * number it has used, the platform's and the company's, since the server
  * refuses a number already used (the rules' own `nextVersion`).
