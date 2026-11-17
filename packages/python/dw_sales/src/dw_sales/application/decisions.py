@@ -46,6 +46,11 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
+from dw_sales.application.bravo_sales_orders import (
+    BravoReadBack,
+    ReadBackUnitOfWorkFactory,
+    require_bravo_agrees,
+)
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import InboxProcessing
 from dw_sales.application.order_quotes import OrderQuotes
@@ -104,6 +109,9 @@ class CaseDecisions:
     inbox: InboxProcessing
     # The pricer is told when their quotation is approved (2026-10-28).
     notifications: NotificationSenderPort
+    # Bravo's sales order read back (ticket 03): one that differs at the
+    # version being cross-checked refuses "Kiểm chéo đạt".
+    read_backs: ReadBackUnitOfWorkFactory
     # The order a quote was opened from has its lines checked again once the
     # quote is approved (ticket 09). None: nothing is checked here, and the
     # order waits for a person's "Kiểm tra lại".
@@ -355,6 +363,10 @@ class CaseDecisions:
         # a decision already taken acts for the workspace.
         seer = None if write else decider
         quoted: QuoteCase | None = None
+        read_back: BravoReadBack | None = None
+        if asked.case_kind is CaseKind.ORDER and decision.approve:
+            async with self.read_backs(sales_scope(decider)) as backs:
+                read_back = await backs.read_backs.get(asked.case_id)
         async with self.uow(sales_scope(decider)) as work:
             if asked.case_kind is CaseKind.QUOTE:
                 quote = (await stored_quote(work, asked.case_id, viewer=seer)).case
@@ -369,6 +381,8 @@ class CaseDecisions:
                 # The cross-checker opened the original at this version
                 # (spec decision 12), whichever way they decide.
                 await require_served(work, decider.principal_id, order)
+                if decision.approve:
+                    require_bravo_agrees(read_back, order)
                 ordered, action = _on_order(order, decision, now)
                 if write:
                     event = person_event(action, decider, now)

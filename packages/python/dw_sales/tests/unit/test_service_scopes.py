@@ -37,6 +37,7 @@ from dw_sales.application.worker_service import WorkerService
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CloseReason
 from dw_sales.domain.quotes import DeclineReason
+from dw_sales.testing.bravo_export_store import MemoryBravoExportStore
 
 pytestmark = pytest.mark.unit
 
@@ -78,7 +79,7 @@ quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STO
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
 # "DW xử lý" queues (ticket 25): it checks before reading the mailbox too.
 processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
-steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, MemoryBravoExportStore())
 RUN = uuid.UUID(int=10)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache())
 artifacts = ArtifactService(

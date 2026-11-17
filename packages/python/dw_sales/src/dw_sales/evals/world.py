@@ -1345,6 +1345,8 @@ class World:
     skill_settlement: SkillSettlement | None = None
     # Each customer's notation record (ticket 37), every scope's in one store.
     notations: MemoryCustomerNotations = field(default_factory=MemoryCustomerNotations)
+    # Bravo's exports and the sales orders read back from them (ticket 03).
+    bravo_store: MemoryBravoExportStore = field(default_factory=MemoryBravoExportStore)
 
     async def decide_layout(
         self,
@@ -1925,6 +1927,7 @@ def open_world(
         executions,
         SkillSettlement(store, skills, clock, ids),
         notations=notations,
+        bravo_store=bravo_store,
     )
 
 

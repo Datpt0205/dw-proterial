@@ -472,7 +472,7 @@ def assemble(
         gate=gate,
     )
     decisions = CaseDecisions(
-        uow, gate, clock, ids, quotation, processing, notifications, order_quotes
+        uow, gate, clock, ids, quotation, processing, notifications, read_back_uow, order_quotes
     )
     return SalesAssembly(
         services=services,
