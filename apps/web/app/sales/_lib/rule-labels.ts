@@ -205,6 +205,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Tên miền nhiều công ty cùng dùng, như của công ty và các công ty trong tập đoàn. Thư từ đây chỉ nhận ra khách theo địa chỉ người gửi (liên hệ của khách, hoặc địa chỉ Sales đã xác nhận); địa chỉ khác chuyển Sales là chưa xác định được khách hàng.",
       item: "Tên miền",
     },
+    revision_marks: {
+      label: "Chữ đánh dấu file PO sửa",
+      help: "Chữ khách viết sau số PO trong tên file để báo bản sửa, như R trong PO123-R1.xlsx. Chỉ là gợi ý hiện cạnh PO; bản sửa vẫn do số revision in trên PO và các dòng quyết định. Mỗi chữ 1–5 chữ cái in hoa.",
+      item: "Chữ đánh dấu",
+    },
     implied_acceptance: {
       label: "Khách im lặng được coi là đồng ý",
       help: "Theo từng khách: sau số ngày này mà khách không trả lời xác nhận đơn, DW1 báo Sales phụ trách để ghi khách đồng ý ngầm. Khách không có trong danh sách thì không bao giờ đồng ý ngầm.",

@@ -39,10 +39,17 @@ export function versionsOf(
   return versions.filter((v) => v.name === skill.name);
 }
 
-/** A replay in one line: "Đúng 50/60 với bản đề xuất · 48/60 với bản đang dùng". */
+/**
+ * A replay in one line: "Đúng 50/60 với bản đề xuất · 48/60 với bản đang
+ * dùng"; a customer's SalesOrder skill's (ticket 41) counts the customer's
+ * worked pairs instead of mails.
+ */
 export function replayLine(replay: SkillReplay): string {
   const n = replay.messages;
-  return `Đúng ${replay.right_with}/${n} với bản đề xuất · ${replay.right_without}/${n} với bản đang dùng`;
+  if (replay.source !== "customer_pairs")
+    return `Đúng ${replay.right_with}/${n} với bản đề xuất · ${replay.right_without}/${n} với bản đang dùng`;
+  if (n === 0) return "Khách chưa có cặp ví dụ nào: chưa chạy thử được";
+  return `Điền đúng ${replay.right_with}/${n} cặp ví dụ của khách với bản đề xuất · ${replay.right_without}/${n} với bản đang dùng`;
 }
 
 /** The security cases a proposal failed, said plainly; null when none. */

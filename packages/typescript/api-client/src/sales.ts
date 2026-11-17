@@ -1427,6 +1427,17 @@ export class SalesApi {
     return this.get<"/api/v1/sales/skills">("/api/v1/sales/skills");
   }
 
+  /**
+   * One version of any skill, a customer's SalesOrder skill's too (ticket
+   * 41), beside the skill in force under its key, with its replay: what a
+   * `sales.skills` approval is decided on.
+   */
+  skillVersion(versionId: string) {
+    return this.get<"/api/v1/sales/skills/versions/{version_id}">(
+      `/api/v1/sales/skills/versions/${enc(versionId)}`,
+    );
+  }
+
   // ---- DW1's prompt versions (ticket 43) -------------------------------------
 
   /**

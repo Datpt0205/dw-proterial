@@ -65,6 +65,7 @@ from dw_sales.domain.orders import (
     Severity,
     diff_lines,
 )
+from dw_sales.domain.revision_hints import REVISION_MARKS, is_revision_mark
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -359,6 +360,12 @@ class OrderRules(BaseModel):
     # How readings learn from decided cases (ticket 43). The defaults where a
     # version does not say, as none of the platform's versions does.
     learning: Learning = Field(default_factory=Learning)
+    # The letters this company's customers write after a PO number in a
+    # file's name to mark it revised (``-R1``, ``_REV2``; ticket 22,
+    # `revision_hints`): a hint shown beside what decides, never a decision.
+    # Today's four where a version does not say, as none of the platform's
+    # versions does (ticket 42 family 6).
+    revision_marks: tuple[str, ...] = Field(default=REVISION_MARKS, max_length=20)
 
     @model_validator(mode="before")
     @classmethod
@@ -378,6 +385,16 @@ class OrderRules(BaseModel):
                 raise ValueError(f"shared_mail_domains[{index}] is not a lowercase domain")
         if len(set(value)) != len(value):
             raise ValueError("shared_mail_domains repeat")
+        return value
+
+    @field_validator("revision_marks")
+    @classmethod
+    def _marks_are_letters(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for index, mark in enumerate(value):
+            if not is_revision_mark(mark):
+                raise ValueError(f"revision_marks[{index}] is not 1-5 capital letters")
+        if len(set(value)) != len(value):
+            raise ValueError("revision_marks repeat")
         return value
 
     @model_validator(mode="after")

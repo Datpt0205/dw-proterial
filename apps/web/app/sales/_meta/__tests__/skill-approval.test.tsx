@@ -44,9 +44,15 @@ const version = (status: string) => ({
   },
   trigger: null,
 });
-let versions = [version("proposed")];
+let compared: { skill: unknown; version: unknown } = {
+  skill: SKILL,
+  version: version("proposed"),
+};
 const api = {
-  skills: vi.fn(async () => ({ skills: [SKILL], versions })),
+  skillVersion: vi.fn(async (versionId: string) => {
+    if (versionId !== PROPOSED) throw new Error("not found");
+    return compared;
+  }),
 };
 vi.mock("../../_lib/api", () => ({ salesApi: () => api }));
 
@@ -87,7 +93,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   scopes = ["sales.rules.propose", "sales.rules.approve"];
-  versions = [version("proposed")];
+  compared = { skill: SKILL, version: version("proposed") };
 });
 
 describe("a skill version where the head decides it (ticket 40)", () => {
@@ -122,11 +128,11 @@ describe("a skill version where the head decides it (ticket 40)", () => {
     scopes = ["sales.rules.approve"];
     draw();
     expect(screen.getByText(/Chỉ người có quyền đề xuất quy tắc/)).toBeTruthy();
-    expect(api.skills).not.toHaveBeenCalled();
+    expect(api.skillVersion).not.toHaveBeenCalled();
   });
 
   it("compares nothing once the version is decided", async () => {
-    versions = [version("approved")];
+    compared = { skill: SKILL, version: version("approved") };
     draw();
     expect(
       await screen.findByText(
@@ -136,13 +142,65 @@ describe("a skill version where the head decides it (ticket 40)", () => {
     expect(screen.queryByLabelText("Lời hướng dẫn")).toBeNull();
   });
 
-  it("says a version the skills list does not hold is not compared here", async () => {
+  it("reads the approval's own version", async () => {
+    draw();
+    await screen.findByLabelText("Lời hướng dẫn");
+    expect(api.skillVersion).toHaveBeenCalledWith(PROPOSED);
+  });
+
+  it("compares a customer's SalesOrder version with the customer's in force (ticket 41)", async () => {
+    compared = {
+      skill: {
+        name: "salesorder-khb",
+        ref: "sales_skill_salesorder_khb@1.0.1",
+        platform_ref: "sales_skill_salesorder_khb@1.0.0",
+        layer: "tenant",
+        description: "PO của KHB thành SalesOrder.",
+        instructions: "Cột AF: ngày giao\nĐơn vị: cuộn",
+      },
+      version: {
+        ...version("proposed"),
+        name: "salesorder-khb",
+        ref: "sales_skill_salesorder_khb@1.0.2",
+        description: "PO của KHB thành SalesOrder.",
+        instructions: "Cột AF: ngày giao trừ 2 ngày\nĐơn vị: cuộn",
+        replay: {
+          version_id: PROPOSED,
+          replayed_at: "2026-11-16T02:00:00Z",
+          source: "customer_pairs",
+          outcome: "replayed",
+          messages: 3,
+          right_with: 2,
+          right_without: 3,
+          unanswered: 0,
+          security_failed: [],
+        },
+      },
+    };
     draw({
       ...APPROVAL,
-      payload: { ...APPROVAL.payload, version_id: "other" },
+      payload: {
+        key: "sales_skill_salesorder_khb",
+        version: "1.0.2",
+        version_id: PROPOSED,
+      },
     } as Approval);
     expect(
-      await screen.findByText(/không có trong danh sách kỹ năng của DW1/),
+      await screen.findByText(
+        "Điền đúng 2/3 cặp ví dụ của khách với bản đề xuất · 3/3 với bản đang dùng",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("sales_skill_salesorder_khb@1.0.1")).toBeTruthy();
+    expect(screen.getByText(/riêng của công ty/)).toBeTruthy();
+    const words = screen.getByLabelText("Lời hướng dẫn");
+    expect(
+      within(words).getByText("Lời hướng dẫn: thêm 1 dòng, bỏ 1 dòng"),
+    ).toBeTruthy();
+    expect(
+      within(words).getByText("Cột AF: ngày giao").closest("del"),
+    ).toBeTruthy();
+    expect(
+      within(words).getByText("Cột AF: ngày giao trừ 2 ngày"),
     ).toBeTruthy();
   });
 });

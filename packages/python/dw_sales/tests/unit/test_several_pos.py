@@ -26,7 +26,7 @@ from dw_agent_runtime.model.interpretation import InterpretationPort, ModelUnava
 from dw_kernel.errors import ConflictError
 from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
-from dw_sales.adapters.order_rules import load_order_rules
+from dw_sales.adapters.order_rules import load_order_rules, load_tenant_order_rules
 from dw_sales.adapters.readers.export import read_export
 from dw_sales.application.views import message_disposition
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
@@ -480,6 +480,75 @@ async def test_two_files_of_one_po_printing_other_revisions_route_the_mail_whole
 
 def test_a_rev1_file_name_after_the_po_number_is_a_hint() -> None:
     assert name_revision("M07_NRV-PO-26-0457-Rev1.xlsx", "NRV-PO-26-0457") == "REV1"
+
+
+# ------------------------------- ticket 42 family 6: the tenant's marks --
+
+
+@pytest.mark.parametrize(
+    ("name", "hint"),
+    [
+        ("PO123-SUA1.xlsx", "SUA1"),
+        ("PO123_sua 2.xlsx", "SUA2"),
+        ("PO123-R1.xlsx", None),
+        ("PO123-2.xlsx", "2"),
+        ("PO123-SUAX.xlsx", None),
+    ],
+)
+def test_a_tenants_marks_replace_the_platforms(name: str, hint: str | None) -> None:
+    """A company whose customers write ``SUA`` for a revised file lists it
+    in its order rules; the marks it does not list are not read, the bare
+    number still is, and nothing else changes in the rule."""
+    assert name_revision(name, "PO123", ("SUA",)) == hint
+
+
+def test_the_platforms_rules_read_todays_marks() -> None:
+    """Acceptance 1: no version of the platform states the marks, so every
+    name reads as it did before they were the tenant's."""
+    assert RULES.revision_marks == ("R", "RV", "RE", "REV")
+    for name in ("PO123-R1.xlsx", "PO123-RE11.xlsx", "po123_rev 2.xlsx", "PO 123 RV.xlsx"):
+        assert name_revision(name, "PO123", RULES.revision_marks) == name_revision(name, "PO123")
+
+
+@pytest.mark.parametrize(
+    "marks",
+    [["R1"], ["rev"], ["R|.*"], ["REVISE"], [""], ["R", "R"], ["Ử"]],
+)
+def test_a_mark_is_capital_letters_named_once(marks: list[str]) -> None:
+    """A mark is never a pattern, a digit, a long word or a repeat: refused
+    when a version is proposed (the rules' schema) and when served."""
+    document = RULES.model_dump(mode="json")
+    with pytest.raises(ValueError, match="revision_marks"):
+        type(RULES).model_validate({**document, "revision_marks": marks})
+
+
+def test_the_reader_takes_no_mark_that_is_not_letters() -> None:
+    """The reader refuses one on its own too: a mark never becomes a
+    pattern, whatever handed it over."""
+    with pytest.raises(ValueError):
+        name_revision("PO123-R1.xlsx", "PO123", ("R|.*",))
+
+
+async def test_a_file_named_with_the_tenants_mark_is_shown_as_a_revision() -> None:
+    """Through intake: the tenant's approved rules name ``SUA``, and the
+    second file's name is hinted ``SUA1``; another tenant keeps the
+    platform's marks. The hint still decides nothing: a duplicate."""
+    named = _mail("N1", 60, files=["M21_VLX-PO-2609-0131.xlsx"])
+    named["attachments"][0]["name"] = "VLX-PO-2609-0131-SUA1.xlsx"
+    with SampleWith([*MAILS_NAMED, named]) as sample:
+        world = _world(sample)
+        own = load_tenant_order_rules(sample.data_dir / "policies")
+        assert own is not None
+        world.store.rule_versions.seed_approved(
+            ALPHA.tenant_id.value,
+            own.model_copy(update={"policy_version": "1.5.9", "revision_marks": ("SUA",)}),
+        )
+        seen = await world.process_each(AN, ["N0", "N1"])
+
+    second = seen["N1"][1]
+    assert isinstance(second, OrderCase)
+    assert second.document.name_revision == "SUA1"
+    assert FindingCode.DUPLICATE_PO in {f.code for f in second.findings}
 
 
 async def test_the_processing_audit_names_every_case_of_the_mail(sample: Any) -> None:

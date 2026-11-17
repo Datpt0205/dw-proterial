@@ -21220,6 +21220,23 @@
         "title": "SignedCopyView",
         "type": "object"
       },
+      "SkillComparison": {
+        "description": "One version beside the skill in force under its key, as a\n`sales.skills` approval is decided on /approvals: any skill's version,\na customer's SalesOrder skill's too (ticket 41), which `SkillsView`\ndoes not list.",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillView"
+          },
+          "version": {
+            "$ref": "#/components/schemas/SkillVersionView"
+          }
+        },
+        "required": [
+          "skill",
+          "version"
+        ],
+        "title": "SkillComparison",
+        "type": "object"
+      },
       "SkillProposal": {
         "additionalProperties": false,
         "description": "What a person proposes: the skill's new words and a version number of\nthe tenant's own.",
@@ -39424,6 +39441,49 @@
           }
         },
         "summary": "Skills In Force",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/skills/versions/{version_id}": {
+      "get": {
+        "operationId": "skill_version_api_v1_sales_skills_versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillComparison"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Skill Version",
         "tags": [
           "sales"
         ]

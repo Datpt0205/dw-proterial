@@ -105,7 +105,12 @@ from dw_sales.application.salesorder_learning import SalesOrderExampleView
 from dw_sales.application.screening_followups import FollowupDraftView
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
-from dw_sales.application.skills import SkillProposal, SkillsView, SkillVersionView
+from dw_sales.application.skills import (
+    SkillComparison,
+    SkillProposal,
+    SkillsView,
+    SkillVersionView,
+)
 from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.thread_summaries import ThreadSummaryView
 from dw_sales.application.today import MarkIn, TodayView
@@ -2324,6 +2329,17 @@ def build_router(
     )
     async def skills_in_force(context: Ctx, svc: Svc) -> SkillsView:
         return await svc.skills.list(context)
+
+    # One version of any skill beside the skill in force under its key, for
+    # its `sales.skills` approval on /approvals: a customer's SalesOrder
+    # skill's too, which the list above does not hold (ticket 41).
+    @router.get(
+        "/skills/versions/{version_id}",
+        response_model=SkillComparison,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def skill_version(version_id: uuid.UUID, context: Ctx, svc: Svc) -> SkillComparison:
+        return await svc.skills.compared(context, version_id)
 
     @router.post(
         "/skills/{name}/versions",
