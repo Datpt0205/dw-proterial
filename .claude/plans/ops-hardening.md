@@ -462,7 +462,11 @@ context. All five are done and on `main`. The full narrative is at
           00-15-5D MAC appeared on the port beside the host's) or a VLAN
           not moved; asked IT to check the port with the host's MAC.
           Fallback offered: DHCP on `Ethernet` and the cable back on the
-          temporary network (192.168.1.x) until IT opens the port. The
+          temporary network (192.168.1.x) until IT opens the port. Tried
+          (`dhcp.ps1`, same cable): no DHCP address either, so the port is
+          not on the old network; the host now sits on DHCP, and IT was
+          asked to check the port (VLAN, port security) with its MAC. When
+          IT is done, rerun `fix-network-dw-B.ps1` for the static .234. The
           script (scratchpad `fix-network-dw-B.ps1`) goes into
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
