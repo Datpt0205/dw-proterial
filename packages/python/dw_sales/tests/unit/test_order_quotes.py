@@ -10,6 +10,8 @@ line 2 again with the approved terms, and the finding is gone.
 
 from __future__ import annotations
 
+import copy
+import json
 import uuid
 from dataclasses import replace
 from datetime import date
@@ -17,9 +19,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.domain.messages import Attachment
+from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import FixedCopper
@@ -39,11 +43,14 @@ from dw_sales.domain.quotes import (
     DesignReplyDocument,
     DesignReplyLine,
     QuoteCase,
+    QuoteRequest,
     QuoteStatus,
+    RequestReading,
     Sourced,
 )
 from dw_sales.evals.graders import AN, CALLERS, KHOA, OUTSIDER, READER
-from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, World, open_world
+from dw_sales.evals.recorded import ByPrompt, Recorded
+from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, SampleWith, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -511,7 +518,7 @@ async def test_another_customers_approved_quote_is_never_this_orders_quotation()
     assert found is not None and found.quote_no == "Q26-0901"
 
 
-async def test_a_po_read_from_the_mail_text_opens_no_quote() -> None:
+async def test_a_po_whose_file_is_gone_from_its_message_opens_no_quote() -> None:
     world = _world()
     case_id = await _m03(world)
     order = world.order(case_id)
@@ -522,6 +529,79 @@ async def test_a_po_read_from_the_mail_text_opens_no_quote() -> None:
         request_from_order(order, (2,), message.model_copy(update={"attachments": ()}))
 
     assert refused.value.details["rule"] == "quote_po_not_a_file"
+
+
+# ----------------------------------------------- a PO written in the mail --
+
+# The fictional Velatrix PO written in the mail (`sales_po_body.json`), dated
+# after every quotation its items have: both lines raise `quotation_missing`.
+_PO_BODY = json.loads(
+    (REPO / "evals" / "fixtures" / "cases" / "sales_po_body.json").read_text(encoding="utf-8")
+)["golden"][0]
+
+
+async def _po_in_the_mail() -> tuple[World, uuid.UUID]:
+    spec, answer = copy.deepcopy(_PO_BODY["message"]), copy.deepcopy(_PO_BODY["answer"])
+    spec["body"] = spec["body"].replace("ngày 01/10/2026", "ngày 01/10/2029")
+    answer["po_date_span"] = "01/10/2029"
+    intent = Recorded(raw={"language": "vi", "referenced_number_spans": [], "kind": "po"})
+    model = ByPrompt(
+        {"sales.message_intent": intent, PO_BODY_EXTRACTION.prompt_id: Recorded(raw=answer)}
+    )
+    with SampleWith([spec]) as sample:
+        world = open_world(REPO, sample, CALLERS, model=model)
+        ((_, case),) = (await world.process_each(AN, [spec["message_id"]])).values()
+    assert isinstance(case, OrderCase) and case.document.from_message
+    assert case.quote_lines() == (1, 2)
+    return world, case.case_id
+
+
+async def test_a_po_written_in_the_mail_opens_a_quote_whose_model_values_sales_confirms() -> None:
+    world, case_id = await _po_in_the_mail()
+    order = world.order(case_id)
+    # Sales typed line 1's quantity on the order: settled, so not asked again.
+    await world.services.order_commands.correct_value(
+        AN.context(),
+        case_id,
+        "value_uncertain:1",
+        case_version=order.case_version,
+        field="quantity",
+        value="6200",
+    )
+
+    quote_id = await _open(world, case_id)
+
+    request = world.quote(quote_id).request
+    assert request.attachment is None and request.body == order.document.body
+    assert request.order_reader == order.document.parser_version and request.reading is None
+    first, second = request.document.items
+    assert first.quantity.value == Decimal(6200)
+    assert first.model_read == {"customer_item_code", "description", "needed_by"}
+    assert second.model_read == {"customer_item_code", "description", "quantity", "needed_by"}
+    # A price a model read is the customer's statement, never a target.
+    assert (first.target_price, first.stated_target_price is not None) == (None, True)
+    # Flagged values wait for Sales: no YCBG is drafted before they are confirmed.
+    assert world.quote(quote_id).ycbg is None
+
+
+async def test_a_request_is_read_from_the_mail_or_taken_from_an_order_not_both() -> None:
+    world, case_id = await _po_in_the_mail()
+    order = world.order(case_id)
+    message = await world.inbox.get_message(ALPHA, order.message_id)
+    assert message is not None
+    taken = dict(request_from_order(order, (1,), message))
+    reading = RequestReading(
+        prompt="sales.rfq_extraction@1.0.0",
+        model_profile="p",
+        route="r",
+        rules="sales_quote_rules@1.0.0",
+        calls=1,
+    )
+
+    with pytest.raises(ValidationError, match="not both"):
+        QuoteRequest.model_validate({**taken, "reading": reading})
+    with pytest.raises(ValidationError, match="says how"):
+        QuoteRequest.model_validate({**taken, "order_reader": None})
 
 
 # ----------------------------------------------- both case views name it --
