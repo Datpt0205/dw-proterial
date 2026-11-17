@@ -449,8 +449,25 @@ context. All five are done and on `main`. The full narrative is at
           miss). Sent to IT: set the static 83.x address on the vEthernet
           adapter (ncpa.cpl or `New-NetIPAddress`), leave `Ethernet` alone,
           give the VLAN id if tagged (`Set-VMNetworkAdapterVlan -ManagementOS`
-          and for the VM). Owed after it is back: the VM's 83.x address,
-          the checks, and this step in the IT runbook. (c) few Windows admins,
+          and for the VM). Then, at the console from a USB script: the
+          IP on the vEthernet got no traffic either (0 bytes; `Ethernet` had
+          both `ms_tcpip` and `vms_pp` on), so **option B was applied
+          (11-17 ~09:40)**: DW-External removed with the VM's adapter on
+          it; `Ethernet` a plain card, 10.110.83.234/25 gw .253 DNS
+          .245/.251 (mask is /25, not /24); DW-Internal 10.250.0.1/30 back;
+          WinNAT `DWNat` 10.250.0.0/30 with 80/443 mapped to 10.250.0.2,
+          firewall rule "DW web to VM (80,443)". VM answers on 10.250.0.2.
+          After a restart the host still gets **no ARP reply from .253**:
+          the switch port, not Windows. Suspected port security (the VM's
+          00-15-5D MAC appeared on the port beside the host's) or a VLAN
+          not moved; asked IT to check the port with the host's MAC.
+          Fallback offered: DHCP on `Ethernet` and the cable back on the
+          temporary network (192.168.1.x) until IT opens the port. The
+          script (scratchpad `fix-network-dw-B.ps1`) goes into
+          `windows-host/` once verified. Owed after it is back: the VM's
+          default route and DNS via 10.250.0.1 (NAT), the checks, this
+          step in the IT runbook; the host now shows one MAC to the LAN.
+          (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
           **Decided (Đạt, 11-16 13:00): no RAM upgrade is possible; if Q2_0
