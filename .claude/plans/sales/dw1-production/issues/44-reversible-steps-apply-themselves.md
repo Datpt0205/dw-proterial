@@ -177,3 +177,12 @@ the `AutoApply` effect (refused at the effect for a person-approved step and
 for a field the rule excludes), "Hoàn tác" and "DW đã tự làm" on the order's
 values, and a live check that Strata's tokens score these spans (`--live
 onprem` on `sales_po_body`).
+
+**Live check, 2026-11-18** (Strata, qwen3.8-flash-next-q2_0, prompt
+`po_body_extraction@1.1.0`, the golden's `vi_list` and `en_lines` through
+`PoBodyReader` and the onprem adapter; a scratch script, numbers only):
+every `model_read` value of both POs got a confidence, so Strata's tokens
+reach the spans through the adapter. Most are 0.99 to 1.0; the outliers are
+both POs' first line's `quantity` (0.47 and 0.67) and one `line_no` (0.88):
+the values a threshold would send to a person. Slice 1's live check is done;
+slice 2's remains.
