@@ -778,7 +778,7 @@ function WordsRequest({
           : "Viết bằng lời thường, ví dụ “nhắc PIC sau 6 giờ thay vì 4 giờ”. DW1 soạn bản nháp; bạn xem thay đổi rồi mới gửi."
       }
     >
-      <Space direction="vertical" className="w-full">
+      <Space orientation="vertical" className="w-full">
         {holder ? (
           <Select
             aria-label={isMail ? "Loại thư" : "Loại chứng từ"}

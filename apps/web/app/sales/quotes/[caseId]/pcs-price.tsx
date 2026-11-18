@@ -99,7 +99,7 @@ export function PcsPricePanel({
   };
 
   return (
-    <Space direction="vertical" className="w-full">
+    <Space orientation="vertical" className="w-full">
       <Space wrap>
         <Typography.Text>Loại hàng</Typography.Text>
         <Tooltip title={blocked}>
@@ -199,7 +199,7 @@ export function PcsPricePanel({
         width={720}
       >
         {sheet ? (
-          <Space direction="vertical" className="w-full">
+          <Space orientation="vertical" className="w-full">
             <Typography.Text>
               {sheet.customer_code}
               {sheet.rfq_no ? ` · ${sheet.rfq_no}` : ""}
