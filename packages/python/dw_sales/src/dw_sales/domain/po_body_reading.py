@@ -57,7 +57,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Final
@@ -219,13 +219,17 @@ def read_po_body(
     *,
     parser_version: str,
     record: Notation = UNSTATED,
+    confidences: Mapping[str, float] | None = None,
+    model_profile: str | None = None,
 ) -> PoBodyVerdict:
     """What of ``answer`` code accepts of the PO written in ``text`` (module
     docstring, checks 1-5). ``text`` is the message's newest part as
     `mail_parts.newest_part` gives it, NFKC-normalised; ``parser_version``
     the prompt it was read under, stamped on the PO; ``record`` the
-    customer's notation record (ticket 37). Never raises on the model's
-    answer."""
+    customer's notation record (ticket 37); ``confidences`` how sure the
+    model was of each value, by the answer's path (ticket 44), stamped on
+    each `model_read` flag with ``model_profile`` on the PO. Never raises on
+    the model's answer."""
     body = _Body(text)
     # How this mail writes "1.250" and "05/11": its own other values say,
     # else the customer's record.
@@ -296,9 +300,55 @@ def read_po_body(
         regions=(MESSAGE_TEXT_REGION,),
         total=PrintedTotal(amount=total.value, anchor=total.anchor) if total else None,
         body=MessageText(text=text, sha256=body.sha256),
+        model_profile=model_profile,
     )
-    flagged = flagged_everywhere(document, RegionFlag.MODEL_READ)
+    flagged = _scored(flagged_everywhere(document, RegionFlag.MODEL_READ), confidences)
     return PoBodyVerdict(_from_record(flagged, reading.by_record), None, refused)
+
+
+# The answer's span a flagged field was read from, where its name differs:
+# the revision is the PO number's, a line's number its ``line_span``.
+_SPAN_OF: Final = {"revision": "po_no", "line_no": "line"}
+
+
+def _scored(document: PoDocument, confidences: Mapping[str, float] | None) -> PoDocument:
+    """``document`` with each `model_read` flag's confidence, the probability
+    of the span its value was read from (ticket 44). The document's lines are
+    the answer's, in order (`read_po_body` refuses the PO otherwise), so line
+    ``k`` is ``lines.k``. A span with no score leaves its flag without one."""
+    if not confidences:
+        return document
+
+    def scored(flags: tuple[FlaggedValue, ...], prefix: str) -> list[FlaggedValue]:
+        return [
+            f.model_copy(
+                update={
+                    "confidence": confidences.get(f"{prefix}{_SPAN_OF.get(f.field, f.field)}_span")
+                }
+            )
+            if f.flag is RegionFlag.MODEL_READ
+            else f
+            for f in flags
+        ]
+
+    dumped = document.model_dump()
+    dumped["header"]["flags"] = scored(document.header.flags, "")
+    dumped["lines"] = [
+        {**line.model_dump(), "flags": scored(line.flags, f"lines.{k}.")}
+        for k, line in enumerate(document.lines)
+    ]
+    if document.total is not None:
+        total = document.total
+        dumped["total"] = {
+            **total.model_dump(),
+            "flags": [
+                f.model_copy(update={"confidence": confidences.get("total_span")})
+                if f.flag is RegionFlag.MODEL_READ
+                else f
+                for f in total.flags
+            ],
+        }
+    return PoDocument.model_validate(dumped)
 
 
 # What a field read is called where it is flagged: the line's ``date`` is

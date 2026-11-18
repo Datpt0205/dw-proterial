@@ -16,6 +16,7 @@ notation, the customer's notation record settles (ticket 37,
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Final
@@ -25,6 +26,7 @@ from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
+    ScoredInterpretationPort,
     estimated_tokens,
 )
 from dw_platform.domain.mail_parts import newest_part
@@ -70,14 +72,29 @@ class PoBodyReader:
         text = normalised(newest_part(message).text)
         if estimated_tokens(text) > self.model.max_input_tokens - PROMPT_TOKENS:
             return "too_long"
+        scores: Mapping[str, float] | None = None
         try:
-            answer = await self.model.interpret(
-                PO_BODY_EXTRACTION,
-                {"mail": text},
-                ModelPoBody,
-                run=run,
-                max_output_tokens=_OUTPUT_TOKENS,
-            )
+            # Scored where the door can score (ticket 44): the same call, with
+            # each value's probability from its tokens, which the threshold
+            # of a value applying itself is measured on.
+            if isinstance(self.model, ScoredInterpretationPort):
+                scored = await self.model.interpret_scored(
+                    PO_BODY_EXTRACTION,
+                    {"mail": text},
+                    ModelPoBody,
+                    run=run,
+                    max_output_tokens=_OUTPUT_TOKENS,
+                )
+                answer = scored.answer
+                scores = scored.confidences
+            else:
+                answer = await self.model.interpret(
+                    PO_BODY_EXTRACTION,
+                    {"mail": text},
+                    ModelPoBody,
+                    run=run,
+                    max_output_tokens=_OUTPUT_TOKENS,
+                )
         except ModelUnavailableError:
             return "unavailable"
         verdict = read_po_body(
@@ -86,6 +103,8 @@ class PoBodyReader:
             received_on,
             parser_version=str(PO_BODY_EXTRACTION),
             record=await record_for(self.records, scope, customer_code),
+            confidences=scores,
+            model_profile=self.model.model_profile,
         )
         if verdict.refused:
             # Counts by reason only: a refusal names no customer word.

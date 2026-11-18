@@ -144,6 +144,10 @@ class FlaggedValue(BaseModel):
 
     field: str = Field(pattern=r"^[a-z_]{1,32}$")
     flag: RegionFlag
+    # A `model_read` value's probability from the call's tokens (ticket 44,
+    # `dw_agent_runtime.model.scoring`); None: the call gave none, or the
+    # flag is not a model's. Nothing without one applies itself.
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class LegacyText(BaseModel):
@@ -867,6 +871,9 @@ class PoDocument(BaseModel):
     derivation: Derivation | None = None
     # The message's newest part a PO written in the mail was read from.
     body: MessageText | None = None
+    # The model profile a PO written in the mail was read on (ticket 44): a
+    # step's threshold is measured per prompt and profile. None: no model.
+    model_profile: str | None = Field(default=None, min_length=1, max_length=64)
     # Rows the file marks as other than a firm order (ticket 18: a customer
     # portal's export mixes forecast rows with firm ones): counted and shown,
     # never read as lines and never ordered.

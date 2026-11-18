@@ -134,3 +134,46 @@ Follow-up (2026-11-16, uncommitted until reviewed):
   their share is the principled fix if the threshold drifts.
 - `order_artifacts`' "who confirmed" line names the lane's id for an applied
   code (no person behind it).
+
+## Decided: a PO written in the mail (Đạt, 2026-11-18, "1 theo đề xuất")
+
+Which values of `po_body_extraction` may apply themselves, each only when
+the gate lets it (its confidence clears the step's certified threshold for
+the prompt and model profile, the step is not stopped, the value was not
+sampled for the audit), and never before a threshold is measured on Strata:
+
+- **The PO's own values** (`po_no`, `revision`, `po_date`, `currency`,
+  `delivery_term`): where code found the value's words in the mail (every
+  value read is) and no open finding other than its own `value_uncertain`
+  concerns the field (a currency or term the customer's master data
+  disagrees with stays a person's).
+- **A line's `unit_price` and `quantity`**: only where they equal the linked
+  quote's or the master's exactly (no price finding open on the line).
+- **Everything else** (a line's code, description, unit, dates; the total):
+  a person's, as today (fail closed until decided otherwise).
+- Applying a value is DW recording the read value as Sales would (the
+  `value_uncertain` finding settled with that value), as the lane, undoable,
+  the undo a labelled case.
+
+## Done: a PO in the mail, slice 1, measured before it acts (2026-11-18)
+
+- `PoBodyReader` asks the scored call where the model can score
+  (`ScoredInterpretationPort`), as `DescriptionReader` does.
+- `read_po_body(confidences=, model_profile=)` stamps each `model_read`
+  flag's `FlaggedValue.confidence` with its own span's probability
+  (`lines.k.<field>_span`; the revision is the PO number's span, a line's
+  number its `line_span`, the total `total_span`), and `PoDocument.model_profile`.
+- `po_value_label` carries both, so every value Sales settles from now on is
+  a labelled case the step's threshold can be measured on (it had
+  `model_profile=None` and no confidence: none of them could have counted).
+- Nothing applies itself yet. Tests: `test_po_body.py` (scores by span, none
+  without token probabilities, the reader asks the scored call),
+  `test_labelled_cases.py` (the label carries the confidence; red with it
+  dropped).
+
+Left for slice 2: the eligibility rule above in the domain, the gate per
+value at intake (`autonomy.route`, item key per message, line and field),
+the `AutoApply` effect (refused at the effect for a person-approved step and
+for a field the rule excludes), "Hoàn tác" and "DW đã tự làm" on the order's
+values, and a live check that Strata's tokens score these spans (`--live
+onprem` on `sales_po_body`).
