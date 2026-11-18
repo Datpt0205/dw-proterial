@@ -6919,7 +6919,7 @@ export interface components {
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
          */
-        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "out_of_scope";
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
@@ -8812,6 +8812,8 @@ export interface components {
             /** Cites */
             cites: components["schemas"]["CaseRefView"][];
             kind: components["schemas"]["QuestionKind"];
+            /** Offer */
+            offer?: ("reply_draft" | "customer_reminder" | "thread_summary") | null;
             /** Question */
             question: string;
             /** Seq */

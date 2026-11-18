@@ -83,6 +83,14 @@ class AssistantWords(BaseModel):
     # A mail waiting on the person, and what they do with it.
     mail_work: str = _words(max_length=60)
     mail_step: str = _words(max_length=60)
+    # A step of a case asked for (ticket 46): said above the case page's own
+    # control in its conversation; in the general one, where to ask.
+    offer_reply: str = _words()
+    offer_reminder: str = _words()
+    offer_thread: str = _words()
+    act_in_case: str = _words()
+    # ``{what}`` in `not_found` for a step naming a number no case holds.
+    case_word: str = _words(max_length=60)
     # What the chat shows while a turn is worked on.
     step_read: str = _words(max_length=60)
     step_look: str = _words(max_length=60)

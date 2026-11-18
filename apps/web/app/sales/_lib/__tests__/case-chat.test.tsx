@@ -24,7 +24,12 @@ vi.mock("../api", () => ({
   salesApi: () => ({ assistantStream, assistantConversation }),
 }));
 
-import { WithCaseChat } from "../../_components/case-chat";
+import { useMemo } from "react";
+import {
+  WithCaseChat,
+  useCaseChatOffers,
+  type CaseOffers,
+} from "../../_components/case-chat";
 
 const CASE = "ca5e0000-0000-4000-8000-000000000001";
 const ON_CASE = { kind: "order" as const, caseId: CASE };
@@ -121,5 +126,58 @@ describe("The case is its conversation (ticket 46)", () => {
     );
     expect(await screen.findByText(TURN.answer)).toBeTruthy();
     expect(assistantConversation).toHaveBeenCalledWith(ON_CASE);
+  });
+});
+
+/** A case page registering its own controls, as the order page does. */
+function Page({ offers }: { offers: CaseOffers }) {
+  const memo = useMemo(() => offers, [offers]);
+  useCaseChatOffers(memo);
+  return <p>Nội dung hồ sơ</p>;
+}
+
+const OFFERS: CaseOffers = {
+  thread_summary: <button type="button">DW1 tóm tắt</button>,
+};
+
+describe("A step asked of the case offers the page's own control (ticket 46)", () => {
+  it("draws the control the page registered under the answer", async () => {
+    widthOf(1280);
+    assistantConversation.mockResolvedValue({
+      case: { kind: "order", case_id: CASE, label: "PO NRV-PO-26-0457" },
+      turns: [
+        {
+          ...TURN,
+          question: "Tóm tắt chuỗi thư",
+          kind: "explain_thread",
+          answer: "Bấm nút dưới đây để DW1 tóm tắt chuỗi thư của hồ sơ này.",
+          offer: "thread_summary",
+        },
+        {
+          ...TURN,
+          seq: 2,
+          question: "Nhắc khách",
+          kind: "remind_customer",
+          answer: "Bấm nút dưới đây để DW1 soạn thư nhắc khách.",
+          offer: "customer_reminder",
+        },
+      ],
+    });
+    render(
+      <UiProvider>
+        <WithCaseChat onCase={ON_CASE}>
+          <Page offers={OFFERS} />
+        </WithCaseChat>
+      </UiProvider>,
+    );
+    await screen.findByRole("complementary", { name: "Hỏi DW1 về hồ sơ này" });
+    await screen.findByRole("button", { name: "DW1 tóm tắt" });
+    // The page draws no reminder at this point of the case: the chat says so
+    // instead of drawing one of its own.
+    expect(
+      screen.getByText(
+        "Ở bước hiện tại, trang hồ sơ không có nút cho việc này.",
+      ),
+    ).toBeTruthy();
   });
 });

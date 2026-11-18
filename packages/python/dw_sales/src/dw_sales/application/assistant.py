@@ -82,9 +82,11 @@ from dw_sales.application.views import OrderSummaryView, QuoteSummaryView
 from dw_sales.domain.assistant import (
     ACTION,
     HISTORY_TURNS,
+    OFFERS,
     ORDER_STATE,
     QUOTE_STATE,
     CaseKey,
+    CaseOffer,
     CaseRef,
     QuestionIntent,
     QuestionKind,
@@ -97,10 +99,11 @@ from dw_sales.domain.assistant import (
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.process import DW_NAMES
 
-# The prompts. Their files are `configs/prompts/sales/question_intent@1.0.0.yaml`
+# The prompts. Their files are `configs/prompts/sales/question_intent@1.1.0.yaml`
 # and `assistant_answer@1.0.0.yaml`; a test holds each to its file and its
 # rendered size under `*_TOKENS`.
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.0.0")
+# 1.1.0 (ticket 46): the three steps of a case a person may ask for.
+QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.1.0")
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
 INTENT_TOKENS: Final = 1100
 ANSWER_TOKENS: Final = 900
@@ -189,6 +192,9 @@ class TurnView(BaseModel):
     # "model": the model's wording, checked against the facts; "code": DW1's
     # own sentence. Either way the facts are code's.
     answered_by: Literal["model", "code"]
+    # In a case's conversation, the case page's own control for the step
+    # asked (ticket 46); the page draws it where it has one.
+    offer: CaseOffer | None = None
 
 
 class ConversationView(BaseModel):
@@ -222,7 +228,7 @@ def _ref_view(ref: CaseRef) -> CaseRefView:
     return CaseRefView(kind=ref.kind.value, case_id=ref.case_id, label=ref.label)
 
 
-def _turn_view(turn: Turn) -> TurnView:
+def _turn_view(turn: Turn, *, on_case: bool) -> TurnView:
     return TurnView(
         seq=turn.seq,
         asked_at=turn.asked_at.isoformat(),
@@ -231,12 +237,14 @@ def _turn_view(turn: Turn) -> TurnView:
         answer=turn.answer,
         cites=[_ref_view(c) for c in turn.cites],
         answered_by=turn.answered_by,
+        offer=OFFERS.get(turn.kind) if on_case else None,
     )
 
 
 def _conversation_view(case: CaseRef | None, turns: Sequence[Turn]) -> ConversationView:
     return ConversationView(
-        case=_ref_view(case) if case else None, turns=[_turn_view(t) for t in turns]
+        case=_ref_view(case) if case else None,
+        turns=[_turn_view(t, on_case=case is not None) for t in turns],
     )
 
 
@@ -501,7 +509,7 @@ class AssistantService:
             if opened is not None:
                 await store.open(opened)
             await store.add(turn)
-        yield ChatDone(AnswerView(turn=_turn_view(turn)))
+        yield ChatDone(AnswerView(turn=_turn_view(turn, on_case=ref is not None)))
         # Reached only once the answer has been handed on: a person who left
         # before it arrived finds the case marked unread.
         async with self.store(context) as store:
@@ -596,6 +604,12 @@ class AssistantService:
                 return await self._quote(context, intent, focus, words)
             case QuestionKind.MY_WORK | QuestionKind.OVERDUE:
                 return await self._work(context, intent.kind, words)
+            case (
+                QuestionKind.DRAFT_REPLY
+                | QuestionKind.REMIND_CUSTOMER
+                | QuestionKind.EXPLAIN_THREAD
+            ):
+                return await self._step(context, intent, focus, words)
 
     async def _order(
         self,
@@ -636,6 +650,38 @@ class AssistantService:
         if not matches:
             return _not_found(words, words.quote_word, intent.reference)
         return _linked(_quote_ref(max(matches, key=lambda q: q.received_at)), words)
+
+    async def _step(
+        self,
+        context: AccessContext,
+        intent: QuestionIntent,
+        focus: CaseRef | None,
+        words: AssistantWords,
+    ) -> _Found:
+        """A step of a case asked in the general conversation (ticket 46): a
+        link to the case's own conversation, where its page's buttons are,
+        found among the cases the caller may read; nothing is done here."""
+        if intent.reference is not None:
+            orders = [
+                o
+                for o in await self.orders.summaries(context)
+                if same_reference(intent.reference, o.po_no)
+            ]
+            if orders:
+                return _linked(_order_ref(max(orders, key=lambda o: o.received_at)), words)
+            quotes = [
+                q
+                for q in await self.quotes.summaries(context)
+                if same_reference(intent.reference, q.rfq_no)
+            ]
+            if quotes:
+                return _linked(_quote_ref(max(quotes, key=lambda q: q.received_at)), words)
+            return _not_found(words, words.case_word, intent.reference)
+        if intent.about_previous and focus is not None:
+            readable = await self._readable(context, {focus.kind})
+            if focus.case_id in readable:
+                return _linked(readable[focus.case_id], words)
+        return _Found(words.act_in_case)
 
     async def _work(
         self, context: AccessContext, kind: QuestionKind, words: AssistantWords
@@ -749,11 +795,24 @@ def _in_case(intent: QuestionIntent | None, bound: _Bound, words: AssistantWords
             return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
         case QuestionKind.MY_WORK | QuestionKind.OVERDUE:
             return _Found(words.elsewhere)
+        case QuestionKind.DRAFT_REPLY | QuestionKind.REMIND_CUSTOMER | QuestionKind.EXPLAIN_THREAD:
+            # The page's own control, drawn under this sentence; the
+            # chat starts nothing, and no fact is worded.
+            said = getattr(words, _OFFER_WORDS[OFFERS[intent.kind]])
+            return _Found(said, None, (bound.ref,), bound.ref)
         case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
             if intent.reference is not None and not same_reference(intent.reference, bound.number):
                 only = words.say("only_this_case", case=bound.ref.label)
                 return _Found(f"{only} {words.elsewhere}")
             return _Found(bound.sentence(words), bound.facts, (bound.ref,), bound.ref)
+
+
+# The sentence above each offered control (`AssistantWords`).
+_OFFER_WORDS: Final[dict[CaseOffer, str]] = {
+    "reply_draft": "offer_reply",
+    "customer_reminder": "offer_reminder",
+    "thread_summary": "offer_thread",
+}
 
 
 def _held(session: Session | None, context: AccessContext, ref: CaseRef | None) -> Session | None:

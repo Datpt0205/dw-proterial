@@ -1,0 +1,61 @@
+schema_version: "1.0"
+copy_id: sales_assistant
+version: "1.1.0"
+
+# The words DW1's assistant says in its own sentences (ticket 42 family 6;
+# dw_sales ADR 0007). Validated by
+# `dw_sales.application.assistant_copy.AssistantCopy`. What the assistant
+# answers and from which case is code's (`QuestionKind`); this file only says
+# it, where code answers without the model or replaces a wording that did not
+# pass its check.
+#
+# 1.1.0 (ticket 46): the three steps of a case a person may ask for, said above
+# the case page's own control in its conversation; the case's catalog names them.
+#
+# Platform layer. A tenant's own wording arrives as its own version of this
+# file (/sales/rules), never as an edit to this one.
+#
+# Code fills each placeholder from what it looked up: a case's number, its
+# customer code, status words, dates (dd/mm/yyyy, local) and counts. Never an
+# amount. A sentence may name only its own placeholders, written {name}.
+# Parts of one answer are joined with a space; work items with a new line.
+words:
+  catalog: "DW1 trả lời được: trạng thái một PO (ghi số PO), trạng thái một yêu cầu báo giá (ghi số yêu cầu), việc đang chờ bạn, và việc đã quá hạn."
+  case_catalog: "Ở đây DW1 trả lời về hồ sơ này: trạng thái, các mốc ngày và cờ đang mở; nhờ soạn thư cho khách, nhắc khách hoặc tóm tắt chuỗi thư thì DW1 đưa nút của hồ sơ."
+  elsewhere: "Hỏi hồ sơ khác hoặc việc của bạn ở trang Hỏi đáp DW1."
+  not_understood: "DW1 chưa hiểu câu hỏi lúc này."
+  out_of_scope: "Câu này ngoài những gì DW1 trả lời."
+  out_of_scope_case: "Câu này ngoài những gì DW1 trả lời ở đây."
+  which_order: "Bạn hỏi PO nào? Hãy ghi số PO."
+  which_quote: "Bạn hỏi yêu cầu báo giá nào? Hãy ghi số yêu cầu."
+  not_found: "Không tìm thấy {what} {reference} trong các hồ sơ bạn được xem. Kiểm tra lại số, hoặc hồ sơ thuộc người khác."
+  order_word: "PO"
+  quote_word: "yêu cầu báo giá"
+  only_this_case: "Cuộc trò chuyện này chỉ về {case}."
+  linked: "{case}: hỏi trong cuộc trò chuyện của hồ sơ này."
+  order_status: "PO {po_no} (rev {revision}) của khách {customer}: {status}. Nhận ngày {received_on}."
+  order_flags: "Còn {open_flags} cờ đang mở, {blocking_flags} cờ chặn."
+  order_cross_check: "Đang chờ kiểm chéo."
+  quote_status: "Yêu cầu báo giá {request_no} của khách {customer}: {status}. Nhận ngày {received_on}."
+  no_number: "(chưa số)"
+  quote_due: "Hạn báo giá {due}."
+  quote_late: "Hạn báo giá {due} (đã quá hạn)."
+  quote_ycbg: "Số YCBG {ycbg_no}."
+  quote_flags: "Còn {open_flags} cờ đang mở."
+  no_work: "Bạn không có việc nào đang chờ."
+  no_overdue: "Bạn không có việc nào quá hạn."
+  work_head: "Bạn có {count} việc đang chờ:"
+  overdue_head: "Bạn có {count} việc quá hạn:"
+  work_item: "- {what} (khách {customer}): {next_step}"
+  work_item_due: "- {what} (khách {customer}): {next_step}, hạn {due}"
+  unknown_customer: "chưa rõ"
+  work_more: "- và {more} việc khác trong Việc cần làm."
+  mail_work: "Thư cần xử lý"
+  mail_step: "Xử lý thư"
+  offer_reply: "Bấm nút dưới đây để DW1 soạn thư cho khách; DW1 không gửi gì, bạn mở thư bằng chương trình thư của mình."
+  offer_reminder: "Bấm nút dưới đây để DW1 soạn thư nhắc khách; DW1 không gửi gì."
+  offer_thread: "Bấm nút dưới đây để DW1 tóm tắt chuỗi thư của hồ sơ này; mỗi ý dẫn tới thư của nó."
+  act_in_case: "Việc này làm trong hồ sơ: mở hồ sơ rồi nhờ DW1 ở đó. Hãy ghi số PO hoặc số yêu cầu để DW1 đưa đường dẫn."
+  case_word: "hồ sơ"
+  step_read: "Đang đọc câu hỏi"
+  step_look: "Đang tra trong phạm vi bạn được xem"

@@ -1,10 +1,11 @@
 """Status questions DW1 answers from live data (dw_sales ADR 0007; the
 contract's DW01 criterion 6).
 
-A catalog, not a chat: four kinds of question, and `out_of_scope` for
-everything else. The model only reads a question into a `QuestionIntent`;
-code finds the case among those the caller may see and builds the facts. An
-answer carries no amount, whoever asks and whatever the channel.
+A catalog, not a chat: four kinds of question, three steps of a case a
+person may ask for (ticket 46), and `out_of_scope` for everything else.
+The model only reads a question into a `QuestionIntent`; code finds the
+case among those the caller may see and builds the facts. An answer carries
+no amount, whoever asks and whatever the channel.
 
 The labels below are the glossary's (`CONTEXT.md`, "Order case states",
 "Quote case states") and the work list's own words (`labels.ts`'s `ACTION`);
@@ -16,9 +17,11 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +43,12 @@ class QuestionKind(StrEnum):
     QUOTE_STATUS = "quote_status"
     MY_WORK = "my_work"
     OVERDUE = "overdue"
+    # A step of a case the person asks DW1 for (ticket 46): answered with
+    # the case page's own button, in that case's conversation; DW1 itself
+    # does nothing from the chat.
+    DRAFT_REPLY = "draft_reply"
+    REMIND_CUSTOMER = "remind_customer"
+    EXPLAIN_THREAD = "explain_thread"
     OUT_OF_SCOPE = "out_of_scope"
 
 
@@ -54,6 +63,19 @@ class QuestionIntent(BaseModel):
     # The PO or request number as written, when the question names one.
     reference: str | None = Field(default=None, min_length=1, max_length=64)
     about_previous: bool = False
+
+
+# The case page's own control a case conversation offers for a step asked
+# of it (ticket 46): the page draws it, with its own gate and API, where
+# it has one; the chat starts nothing.
+CaseOffer = Literal["reply_draft", "customer_reminder", "thread_summary"]
+OFFERS: Final[Mapping[QuestionKind, CaseOffer]] = MappingProxyType(
+    {
+        QuestionKind.DRAFT_REPLY: "reply_draft",
+        QuestionKind.REMIND_CUSTOMER: "customer_reminder",
+        QuestionKind.EXPLAIN_THREAD: "thread_summary",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

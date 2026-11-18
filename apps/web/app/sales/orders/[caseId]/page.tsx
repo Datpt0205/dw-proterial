@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -61,7 +67,11 @@ import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
-import { WithCaseChat } from "../../_components/case-chat";
+import {
+  WithCaseChat,
+  useCaseChatOffers,
+  type CaseOffers,
+} from "../../_components/case-chat";
 import {
   SourceDrawer,
   type SourceTarget,
@@ -97,6 +107,19 @@ export default function OrderPage() {
       </WithCaseChat>
     </ScopeGate>
   );
+}
+
+/** "Bản AI soạn" beside a template draft the model may word (ticket 32),
+ * or null: one answer for the files panel and the case's conversation. */
+function agentDraft(caseId: string, kind: string): ReactNode {
+  return AGENT_KINDS.has(kind) ? (
+    <AgentReply key={kind} caseId={caseId} kind={kind as ReplyKind} />
+  ) : null;
+}
+
+/** The order waits on the customer's corrected PO: a reminder may be drafted. */
+function waitsOnCustomer(status: Order["status"]): boolean {
+  return status === "correction_requested";
 }
 
 /** Where a value of the order was read: a header field, or a line's field. */
@@ -168,6 +191,28 @@ function OrderDetail() {
     (version: number) => markMailServed(caseId, version),
     [caseId],
   );
+  // The page's own controls for a step asked in its conversation (ticket
+  // 46), under the same conditions the page draws them with below.
+  const status = data?.status;
+  const available = artifacts.data?.available;
+  const offers = useMemo<CaseOffers>(() => {
+    if (status === undefined) return {};
+    const drafts = (available ?? [])
+      .map((k) => agentDraft(caseId, k))
+      .filter((node) => node !== null);
+    return {
+      thread_summary: <ThreadSummary kind="order" caseId={caseId} />,
+      ...(waitsOnCustomer(status)
+        ? {
+            customer_reminder: (
+              <CustomerReminder kind="order" caseId={caseId} />
+            ),
+          }
+        : {}),
+      ...(drafts.length ? { reply_draft: <>{drafts}</> } : {}),
+    };
+  }, [caseId, status, available]);
+  useCaseChatOffers(offers);
 
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
@@ -509,11 +554,7 @@ function OrderDetail() {
         renderReason="Bạn không có quyền soạn tệp của đơn hàng (cần vai Sales phụ trách)."
         language={customer?.language}
         list={artifacts}
-        besideDraft={(k) =>
-          AGENT_KINDS.has(k) ? (
-            <AgentReply caseId={data.case_id} kind={k as ReplyKind} />
-          ) : null
-        }
+        besideDraft={(k) => agentDraft(data.case_id, k)}
       />
 
       {data.changes.length ? (
@@ -549,7 +590,7 @@ function OrderDetail() {
         </Card>
       ) : null}
 
-      {data.status === "correction_requested" ? (
+      {waitsOnCustomer(data.status) ? (
         <CustomerReminder kind="order" caseId={data.case_id} />
       ) : null}
 

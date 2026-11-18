@@ -17338,6 +17338,9 @@
           "quote_status",
           "my_work",
           "overdue",
+          "draft_reply",
+          "remind_customer",
+          "explain_thread",
           "out_of_scope"
         ],
         "title": "QuestionKind",
@@ -24292,6 +24295,22 @@
           },
           "kind": {
             "$ref": "#/components/schemas/QuestionKind"
+          },
+          "offer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reply_draft",
+                  "customer_reminder",
+                  "thread_summary"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer"
           },
           "question": {
             "title": "Question",
