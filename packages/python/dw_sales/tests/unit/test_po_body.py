@@ -7,6 +7,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -15,6 +16,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import (
     ModelUnavailableError,
     estimated_tokens,
@@ -33,7 +35,7 @@ from dw_sales.domain.po_body_reading import ModelPoBody, read_po_body
 from dw_sales.domain.rfq_reading import normalised, parse_number, parse_price
 from dw_sales.evals.graders import AN, CALLERS, OUTSIDER, READER
 from dw_sales.evals.recorded import ByPrompt, Recorded
-from dw_sales.evals.world import BETA, SampleWith, World, open_world
+from dw_sales.evals.world import ALPHA, BETA, SampleWith, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -64,8 +66,8 @@ RECEIVED = date(2026, 10, 2)
 PARSER = str(PO_BODY_EXTRACTION)
 
 
-def _text(spec: dict[str, Any]) -> str:
-    message = InboundMessage(
+def _message(spec: dict[str, Any]) -> InboundMessage:
+    return InboundMessage(
         message_id=spec["message_id"],
         sender=EmailAddress(address=spec["sender"]),
         subject=spec["subject"],
@@ -73,7 +75,10 @@ def _text(spec: dict[str, Any]) -> str:
         body_text=spec["body"],
         authentication=MailAuthentication(**spec["authentication"]),
     )
-    return normalised(newest_part(message).text)
+
+
+def _text(spec: dict[str, Any]) -> str:
+    return normalised(newest_part(_message(spec)).text)
 
 
 def _read(answer: dict[str, Any], spec: dict[str, Any] = VI["message"]) -> Any:
@@ -403,3 +408,87 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
         tenant_id=None,
     )
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS
+
+
+# ------------------------------------------- how sure the model was (44) --
+
+
+SCORES = {
+    "po_no_span": 0.99,
+    "currency_span": 0.7,
+    "lines.0.line_span": 0.95,
+    "lines.0.unit_price_span": 0.5,
+    "lines.0.quantity_span": 0.42,
+}
+
+
+def _confidence(flags: Any, field: str) -> float | None:
+    (flag,) = [f for f in flags if f.field == field and f.flag is RegionFlag.MODEL_READ]
+    return flag.confidence  # type: ignore[no-any-return]
+
+
+def test_each_value_read_carries_the_probability_of_the_span_it_came_from() -> None:
+    """Ticket 44: the threshold of a value applying itself is measured on
+    this, so each `model_read` flag holds its own span's score, the PO its
+    model profile; a span the call gave no score for holds none."""
+    document = read_po_body(
+        _text(VI["message"]),
+        ModelPoBody.model_validate(VI["answer"]),
+        RECEIVED,
+        parser_version=PARSER,
+        confidences=SCORES,
+        model_profile="onprem",
+    ).document
+    assert document is not None and document.model_profile == "onprem"
+    header, line = document.header.flags, document.lines[0].flags
+    assert _confidence(header, "po_no") == 0.99
+    assert _confidence(header, "revision") == 0.99  # the PO number's span
+    assert _confidence(header, "currency") == 0.7
+    assert _confidence(header, "po_date") is None
+    assert _confidence(line, "line_no") == 0.95
+    assert (_confidence(line, "unit_price"), _confidence(line, "quantity")) == (0.5, 0.42)
+    assert _confidence(document.lines[1].flags, "quantity") is None  # line 2's own span
+
+
+def test_a_call_without_token_probabilities_stamps_no_confidence() -> None:
+    document = _read(VI["answer"]).document
+    assert document is not None and document.model_profile is None
+    flags = [*document.header.flags, *(f for line in document.lines for f in line.flags)]
+    assert flags and all(f.confidence is None for f in flags)
+
+
+async def test_the_reader_asks_a_scored_call_where_the_model_can_score() -> None:
+    from dw_agent_runtime.model.scoring import Scored
+    from dw_sales.application.po_body_reading import PoBodyReader
+    from dw_sales.testing.customer_notations import MemoryCustomerNotations
+
+    class ScoredModel:
+        model_profile, route, max_input_tokens = "onprem", "structured_extraction", 6000
+
+        async def interpret_scored(self, *args: Any, **kwargs: Any) -> Any:
+            return Scored(ModelPoBody.model_validate(VI["answer"]), SCORES)
+
+        async def interpret(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("a model that scores is asked the scored call")
+
+    read = await PoBodyReader(ScoredModel(), MemoryCustomerNotations()).read(
+        _message(VI["message"]),
+        scope=ALPHA,
+        customer_code="NRV",
+        received_on=RECEIVED,
+        run=RunContext(
+            run_id=uuid.UUID(int=0x44),
+            tenant_id=ALPHA.tenant_id.value,
+            workspace_id=ALPHA.workspace_id.value,
+            actor_id=uuid.UUID(int=0xA1),
+            worker_id="sales-dw1",
+            worker_version="1.0.0",
+            channel="web",
+            plan_id="professional",
+            roles=frozenset(),
+            scopes=frozenset(),
+            trace_id="t44",
+        ),
+    )
+    assert isinstance(read, PoDocument) and read.model_profile == "onprem"
+    assert _confidence(read.lines[0].flags, "quantity") == 0.42

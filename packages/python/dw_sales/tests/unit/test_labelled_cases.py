@@ -312,7 +312,10 @@ async def test_a_po_value_typed_as_read_is_confirmed_and_another_is_a_correction
         value_text(read + 1),
     )
     assert (second.line_no, second.field, second.attachment_id) == (1, "quantity", None)
-    assert second.prompt == case.document.parser_version and second.model_profile is None
+    assert second.prompt == case.document.parser_version
+    # The profile the PO was read on, and the call's confidence where it
+    # gave one (this replay gives none): what ticket 44's threshold groups by.
+    assert (second.model_profile, second.confidence) == ("onprem", None)
 
 
 # ------------------------------------------------- a request for quotation --
@@ -456,3 +459,33 @@ async def test_the_counts_and_the_heads_view_add_up_per_step() -> None:
         await world.store.latest(ALPHA, ModelStep.DESCRIPTION_ATTRIBUTES, customer_code="NRV") == []
     )
     assert len(await world.store.latest(ALPHA, ModelStep.DESCRIPTION_ATTRIBUTES, limit=1)) == 1
+
+
+async def test_a_po_value_label_carries_how_sure_the_model_was() -> None:
+    """Ticket 44's threshold is measured on these: the confidence the scored
+    call gave the value's own span reaches its label."""
+    from dw_agent_runtime.model.scoring import Scored
+    from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
+    from dw_sales.evals.recorded import ByPrompt, Recorded
+
+    class Sure(ByPrompt):
+        async def interpret_scored(self, prompt: Any, inputs: Any, schema: Any, **kw: Any) -> Any:
+            answer = await self.interpret(prompt, inputs, schema, **kw)
+            return Scored(answer, {"lines.0.quantity_span": 0.42})
+
+    intent = Recorded(raw={"language": "vi", "referenced_number_spans": [], "kind": "po"})
+    model = Sure(
+        {"sales.message_intent": intent, PO_BODY_EXTRACTION.prompt_id: Recorded(raw=VI["answer"])}
+    )
+    world, _, case = await _process(model)
+    assert isinstance(case, OrderCase)
+    await world.services.order_commands.correct_value(
+        AN.context(),
+        case.case_id,
+        "value_uncertain:1",
+        case_version=case.case_version,
+        field="quantity",
+        value=str(case.line(1).po_line.quantity),
+    )
+    (label,) = _labels(world)
+    assert (label.verdict, label.confidence, label.model_profile) == ("confirmed", 0.42, "onprem")

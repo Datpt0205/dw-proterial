@@ -7517,6 +7517,19 @@
         "additionalProperties": false,
         "description": "One value read from a flagged region, by the field it fills.",
         "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
           "field": {
             "pattern": "^[a-z_]{1,32}$",
             "title": "Field",

@@ -4534,6 +4534,8 @@ export interface components {
          * @description One value read from a flagged region, by the field it fills.
          */
         FlaggedValue: {
+            /** Confidence */
+            confidence?: number | null;
             /** Field */
             field: string;
             flag: components["schemas"]["RegionFlag"];

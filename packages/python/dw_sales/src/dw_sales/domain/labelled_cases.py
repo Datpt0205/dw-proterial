@@ -251,7 +251,10 @@ def po_value_label(
     if correction is None:
         return None
     holder = before.header if finding.line_no is None else before.line(finding.line_no).po_line
-    if not any(f.field == field and f.flag is RegionFlag.MODEL_READ for f in holder.flags):
+    flag = next(
+        (f for f in holder.flags if f.field == field and f.flag is RegionFlag.MODEL_READ), None
+    )
+    if flag is None:
         return None
     read = getattr(holder, field)
     typed = getattr(value_with_correction(holder, correction), field)
@@ -269,9 +272,12 @@ def po_value_label(
         proposed=value_text(read),
         kept=value_text(typed),
         prompt=before.document.parser_version,
-        model_profile=None,
+        model_profile=before.document.model_profile,
         rules=before.rules_version,
         decided_by=correction.by,
+        # How sure the model was (ticket 44): what the step's threshold is
+        # measured on; None where the call gave no token probabilities.
+        confidence=flag.confidence,
     )
 
 
