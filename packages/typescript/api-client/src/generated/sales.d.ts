@@ -4067,10 +4067,18 @@ export interface components {
         DesignCheckLine: {
             /** Bp Code */
             bp_code?: string | null;
+            /** Bp Unit */
+            bp_unit?: string | null;
+            /** Copper Kg Per Bp Unit */
+            copper_kg_per_bp_unit?: string | null;
             /** Line No */
             line_no: number;
             /** Reason */
             reason?: string | null;
+            /** Row */
+            row?: number | null;
+            /** Spec No */
+            spec_no?: string | null;
             /**
              * Verdict
              * @enum {string}
