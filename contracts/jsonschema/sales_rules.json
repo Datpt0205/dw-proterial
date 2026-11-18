@@ -5,10 +5,24 @@
         "additionalProperties": false,
         "description": "Every sentence the assistant's code says, by what it answers.",
         "properties": {
+          "act_in_case": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Act In Case",
+            "type": "string",
+            "x-placeholders": []
+          },
           "case_catalog": {
             "maxLength": 300,
             "minLength": 1,
             "title": "Case Catalog",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "case_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Case Word",
             "type": "string",
             "x-placeholders": []
           },
@@ -84,6 +98,27 @@
             "maxLength": 300,
             "minLength": 1,
             "title": "Not Understood",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "offer_reminder": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Offer Reminder",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "offer_reply": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Offer Reply",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "offer_thread": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Offer Thread",
             "type": "string",
             "x-placeholders": []
           },
@@ -321,6 +356,11 @@
           "work_more",
           "mail_work",
           "mail_step",
+          "offer_reply",
+          "offer_reminder",
+          "offer_thread",
+          "act_in_case",
+          "case_word",
           "step_read",
           "step_look"
         ],

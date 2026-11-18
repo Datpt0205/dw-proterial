@@ -53,6 +53,7 @@ REPO = Path(__file__).resolve().parents[5]
 WORDS = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").assistant
 CATALOG, CASE_CATALOG = WORDS.words.catalog, WORDS.words.case_catalog
 ELSEWHERE = WORDS.words.elsewhere
+WORDS_NOW = WORDS.words
 
 Reading = Callable[[str, dict[str, Any]], dict[str, Any]]
 
@@ -375,10 +376,16 @@ def test_the_words_are_the_glossarys_and_the_work_lists() -> None:
 
 
 def test_the_kinds_are_the_ones_the_table_admits() -> None:
-    migration = next((REPO / "db/migrations/versions").glob("e0940c90ce04_*.py"))
+    versions = REPO / "db/migrations/versions"
+    migration = next(versions.glob("e0940c90ce04_*.py"))
     admitted = re.search(r'_KINDS = "\(([^)]*)\)"', migration.read_text(encoding="utf-8"))
     assert admitted is not None
-    assert set(re.findall(r"'([a-z_]+)'", admitted.group(1))) == {k.value for k in QuestionKind}
+    # Ticket 46's three steps, admitted by `e31ed3f062a1`.
+    steps = re.search(r"_NEW = \(([^)]*)\)", next(versions.glob("e31ed3f062a1_*.py")).read_text())
+    assert steps is not None
+    kinds = set(re.findall(r"'([a-z_]+)'", admitted.group(1)))
+    kinds |= set(re.findall(r'"([a-z_]+)"', steps.group(1)))
+    assert kinds == {k.value for k in QuestionKind}
 
 
 @pytest.mark.parametrize(
@@ -690,3 +697,68 @@ async def test_a_tenants_own_words_are_said_and_another_tenants_never() -> None:
 def test_a_sentence_naming_what_it_does_not_fill_is_refused(words: dict[str, str]) -> None:
     with pytest.raises(ValidationError):
         AssistantWords.model_validate(WORDS.words.model_dump() | words)
+
+
+def _steps(question: str, history: dict[str, Any]) -> dict[str, Any]:
+    """A reader of ticket 46's steps; the rest as `_reads`."""
+    found = re.search(r"([A-Za-z]{2,4}[\s-]+(?:PO|RFQ)[\w\s-]*\d)", question, re.IGNORECASE)
+    reference = {"reference": found.group(1)} if found else {}
+    if "nhắc khách" in question.casefold():
+        return {"kind": "remind_customer", **reference}
+    if "chuỗi thư" in question:
+        return {"kind": "explain_thread", **reference}
+    if "soạn" in question.casefold():
+        return {"kind": "draft_reply", **reference, "about_previous": "đó" in question}
+    return _reads(question, history)
+
+
+@pytest.mark.parametrize(
+    ("question", "kind", "offer", "said"),
+    [
+        ("Soạn thư xác nhận cho khách", "draft_reply", "reply_draft", "offer_reply"),
+        ("Nhắc khách gửi lại PO", "remind_customer", "customer_reminder", "offer_reminder"),
+        ("Tóm tắt chuỗi thư", "explain_thread", "thread_summary", "offer_thread"),
+    ],
+)
+async def test_a_step_asked_of_a_case_is_offered_its_pages_own_control(
+    question: str, kind: str, offer: str, said: str
+) -> None:
+    """Ticket 46: the case's conversation answers a step with the page's own
+    control and code's sentence; nothing is worded by the model, nothing is
+    done, and reading the conversation again offers it again."""
+    model = Scripted(_steps)
+    world = await _orders(_world(model))
+    nrv = await _order(world, NRV)
+    view = await world.services.assistant.ask(AN.context(), question, nrv)
+    turn = view.turn
+    assert (turn.kind.value, turn.offer, turn.answered_by) == (kind, offer, "code")
+    assert turn.answer == getattr(WORDS_NOW, said)
+    assert [c.label for c in turn.cites] == [f"PO {NRV}"]
+    assert [c[0] for c in model.calls] == [QUESTION_INTENT]
+    again = await world.services.assistant.conversation(AN.context(), nrv)
+    assert [t.offer for t in again.turns] == [offer]
+
+
+async def test_a_step_asked_in_the_general_conversation_links_its_case_and_offers_nothing() -> None:
+    model = Scripted(_steps)
+    world = await _orders(_world(model))
+    named = await world.services.assistant.ask(AN.context(), f"Soạn thư xác nhận PO {NRV}")
+    assert named.turn.offer is None
+    assert [c.label for c in named.turn.cites] == [f"PO {NRV}"]
+    assert named.turn.answer == WORDS_NOW.say("linked", case=f"PO {NRV}")
+    follow = await world.services.assistant.ask(AN.context(), "Soạn thư cho PO đó")
+    assert [c.label for c in follow.turn.cites] == [f"PO {NRV}"]
+    unnamed = await world.services.assistant.ask(AN.context(), "Soạn thư cho khách")
+    assert unnamed.turn.cites == [] and unnamed.turn.answer == WORDS_NOW.act_in_case
+    missing = await world.services.assistant.ask(AN.context(), "Soạn thư PO NRV-PO-26-9999")
+    assert missing.turn.cites == []
+    assert missing.turn.answer == WORDS_NOW.say(
+        "not_found", what=WORDS_NOW.case_word, reference="NRV-PO-26-9999"
+    )
+
+
+async def test_a_step_names_no_case_the_caller_may_not_read() -> None:
+    """Another tenant naming the sample's PO for a step finds nothing."""
+    world = await _orders(_world(Scripted(_steps)))
+    outsider = await world.services.assistant.ask(OUTSIDER.context(BETA), f"Soạn thư PO {NRV}")
+    assert outsider.turn.cites == [] and NRV in outsider.turn.answer

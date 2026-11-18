@@ -1,6 +1,6 @@
 # 46 — One conversation per case, on the case page; one general one per person
 
-Status: in progress (slice built 2026-11-16, looked at in a browser 2026-11-18; left: T0 buttons from the chat, explaining the thread; see "Done")
+Status: in progress (slice built 2026-11-16; the case's steps offered as its page's own controls 2026-11-18; left: the unread mark's later use, a look in a browser at the offered controls; see "Done")
 Blocked by: 40 (skills), 44 (tiers)
 Category: enhancement
 
@@ -90,11 +90,9 @@ Slice built 2026-11-16 (recorded in dw_sales ADR 0007, addendum of
 
 Left:
 
-- Starting a T0 action from the chat through the case's own buttons is not
-  built: the chat starts nothing (the buttons sit beside it on the page).
-- The answers stay ADR 0007's catalog for the bound case (status, dates,
-  flags); "explain the thread / the PO as read" through ticket 31's tools is
-  not wired (those steps are off on the plant's model).
+- ~~Starting a T0 action from the chat through the case's own buttons~~ and
+  ~~explaining the thread~~: done 2026-11-18, below. "The PO as read"
+  stays the case page's (its lines and sources); no kind was added for it.
 - 2026-11-18, **looked at in a browser** (local stack, dev sign-in, the
   Sales head; screenshots in `.playwright-mcp/t46-*.png`, not committed):
   the order and quote case pages at 1440 px (the conversation open beside
@@ -108,3 +106,44 @@ Left:
   antd 6.6 deprecates `List` for `Listy` (the assistant page warns).
 - The unread mark only shows when a turn is kept and its answer never
   delivered; it matters once an answer can arrive while the person is away.
+
+## Done: the case's steps, offered as its page's own controls (2026-11-18)
+
+Đạt, 2026-11-18, on the proposal ("2 theo đề xuất"); dw_sales ADR 0007,
+addendum of 2026-11-18.
+
+- **Reading**: `QuestionKind` gains `draft_reply`, `remind_customer` and
+  `explain_thread` (`sales.question_intent@1.1.0`; a request to send, approve
+  or enter stays `out_of_scope`). Migration `e31ed3f062a1` admits them in
+  `ck_assistant_turns_kind`; `test_sales_schema.py` now holds that CHECK to
+  `QuestionKind` (it held nothing before: a kind added without a migration
+  failed only at the first write).
+- **A case's conversation**: code's sentence (copy `sales_assistant@1.1.0`:
+  `offer_reply`, `offer_reminder`, `offer_thread`) and `TurnView.offer`, read
+  from the kind (`assistant.OFFERS`), so a conversation read again offers
+  again; no model wording, nothing done.
+- **The general conversation**: a step naming a number, or "PO đó", links the
+  case's conversation (among the cases the caller may read, else not found
+  under `case_word`); otherwise `act_in_case`.
+- **Web**: `WithCaseChat` holds the page's controls in a context; the order
+  and quote pages register theirs with `useCaseChatOffers`, under the same
+  conditions they draw them with (`agentDraft` for each draft the files panel
+  offers one beside, `waitsOnCustomer` for the reminder, `ThreadSummary`), so
+  the chat never decides which exist. `@dw/ui`'s `ChatTurn.action` draws it
+  under the answer; a step the page has no control for at that point is said
+  in words ("Ở bước hiện tại, trang hồ sơ không có nút cho việc này."). A
+  quote has no model-worded customer mail, so `reply_draft` is never offered
+  there.
+- **Tests**: `test_assistant.py` (each step offered, no model wording, offered
+  again on reading; the general conversation links, says where, or not found;
+  another tenant naming the sample's PO finds nothing), `case-chat.test.tsx`
+  (the registered control drawn; a missing one said; red with the footer's
+  `action` removed), eval `sales_assistant@1.0.0` (fixture's
+  `case_conversations`: three steps, one in Japanese, and "send and enter in
+  Bravo" out of scope, offered nothing; 5/5 scripted).
+- **Strata, live**: 2026-11-18 (qwen3.8-flash-next-q2_0, the assistant has no
+  bar of its own and runs on every deployment, so this is its measurement):
+  13/13 turns read right on prompt 1.1.0, the five new among them (one in
+  Japanese; "send and enter in Bravo" out of scope); injection, missing
+  evidence, cross-tenant and degrade pass; p50 3.06 s, p95 5.93 s over 13
+  calls (one at 34 s).

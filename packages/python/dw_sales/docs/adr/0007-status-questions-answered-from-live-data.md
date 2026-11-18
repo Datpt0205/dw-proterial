@@ -190,3 +190,28 @@ conversation is found and what it may answer.
   to extend by copy. A new kind is a code change, measured like this one's.
 - The status words (`ORDER_STATE`, `QUOTE_STATE`, `ACTION`) stay code: they
   are the product's terms, the same the pages show.
+
+## Addendum 2026-11-18: a case's steps are offered as its page's own controls
+
+Đạt, 2026-11-18 (ticket 46, "2 theo đề xuất"):
+
+- **Three kinds join the catalog**, read by `sales.question_intent@1.1.0`:
+  `draft_reply`, `remind_customer`, `explain_thread`, a step of a case the
+  person asks DW1 for. A request to send, approve or enter anything stays
+  `out_of_scope`.
+- **In a case's conversation the answer is the page's own control.** Code says
+  its sentence (copy `sales_assistant@1.1.0`) and the turn carries `offer`
+  (`reply_draft`, `customer_reminder`, `thread_summary`, read from the kind,
+  `assistant.OFFERS`); the web draws, under the answer, the very control the
+  case page draws, registered by the page under the page's own conditions
+  (`useCaseChatOffers`): "Bản AI soạn" for each draft the files panel offers
+  one beside, the customer reminder while the case waits on the customer, "DW1
+  tóm tắt". Where the page has none at that point, the chat says so and draws
+  nothing of its own. Pressing it is the page's action, with the page's gate,
+  API and idempotency: **the chat still starts nothing**, and no fact is worded
+  by the model for these turns.
+- **In the general conversation** a step links to the case's conversation (a
+  number or "PO đó" resolved among the cases the caller may read, else not
+  found), or says the step is done in the case.
+- Migration `e31ed3f062a1` admits the kinds in `ck_assistant_turns_kind`, which
+  `test_sales_schema.py` now holds to `QuestionKind`.

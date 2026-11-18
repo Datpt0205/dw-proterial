@@ -33,6 +33,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "dfb9880becf1d68aca4eb8ff5231975ead2667c72a260d510402fe96e02d1041",
+      "copy_id": "sales_assistant",
+      "version": "1.1.0"
+    },
+    {
       "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
       "copy_id": "sales_documents",
       "version": "1.0.0"
@@ -443,7 +448,7 @@
           "path": "evals/expected/sales_assistant.json"
         },
         {
-          "checksum": "5bf9f8a402483832e23fdf72a1d43c23246301d58efd043dc31200f211a27309",
+          "checksum": "8fca5a8712dab581221e8564ddb65381b49cbe526f798eef2ec0f4b4be9571ba",
           "path": "evals/fixtures/cases/sales_assistant.json"
         }
       ],
@@ -1134,7 +1139,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "e7cffd2b21872f59400f1b5a33959e5fb87de5a6",
+  "git_sha": "a33dae99c6b1a4c8128d0386b9f24fa7ca8c0df0",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1627,6 +1632,11 @@
       "checksum": "9e6672a45600ca54b5553c7f7e967269266f9adc22bbc78930457a1f9a68d33a",
       "prompt_id": "sales.question_intent",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "91700d2f3dcb90761b3884af67c78bb261cd0148b4cdd79a7b4674ca6861b754",
+      "prompt_id": "sales.question_intent",
+      "version": "1.1.0"
     },
     {
       "checksum": "5c0bd624d3852ac7bd851c684de12b1d2b6376612aff93ca0359f59fb4203481",

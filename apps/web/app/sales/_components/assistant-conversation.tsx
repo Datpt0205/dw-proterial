@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Tag } from "antd";
+import { Tag, Typography } from "antd";
 import type { AssistantCase, SalesSchemas } from "@dw/api-client";
 import {
   AssistantChat,
@@ -16,6 +16,7 @@ import { useIdempotencyKeys } from "../../../lib/idempotency";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
 import { useResource } from "../_lib/use-resource";
+import type { CaseOffers } from "./case-chat";
 
 type Turn = SalesSchemas["TurnView"];
 type CaseRef = SalesSchemas["CaseRefView"];
@@ -38,11 +39,17 @@ const READ_AS: Record<Turn["kind"], string> = {
   quote_status: "Hiểu là hỏi trạng thái một yêu cầu báo giá",
   my_work: "Hiểu là hỏi việc đang chờ bạn",
   overdue: "Hiểu là hỏi việc quá hạn",
+  draft_reply: "Hiểu là nhờ soạn thư cho khách",
+  remind_customer: "Hiểu là nhờ nhắc khách",
+  explain_thread: "Hiểu là nhờ tóm tắt chuỗi thư",
   out_of_scope: "Câu này ngoài những gì DW1 trả lời",
 };
 
+/** Said where the page has no control for the step at this point of the case. */
+const NOT_HERE = "Ở bước hiện tại, trang hồ sơ không có nút cho việc này.";
+
 /** What DW1 did, from what the server returned: never more than it says. */
-function chatTurn(turn: Turn): ChatTurn {
+function chatTurn(turn: Turn, offers: CaseOffers | undefined): ChatTurn {
   const steps = [{ key: "read", title: READ_AS[turn.kind] }];
   if (turn.kind !== "out_of_scope")
     steps.push({
@@ -64,6 +71,10 @@ function chatTurn(turn: Turn): ChatTurn {
     answer: turn.answer,
     byModel: turn.answered_by === "model",
     steps,
+    // The case page's own control for a step asked of it (ticket 46).
+    action: turn.offer
+      ? (offers?.[turn.offer] ?? <Typography.Text>{NOT_HERE}</Typography.Text>)
+      : undefined,
     cites: turn.cites.map((ref) => ({
       key: ref.case_id,
       label: (
@@ -88,11 +99,14 @@ export function AssistantConversation({
   examples,
   catalog,
   onAnswered,
+  offers,
 }: {
   onCase: AssistantCase | null;
   examples: string[];
   catalog?: string;
   onAnswered?: () => void;
+  /** The case page's own controls (`useCaseChatOffers`). */
+  offers?: CaseOffers;
 }) {
   const online = useOnline();
   const keys = useIdempotencyKeys();
@@ -144,7 +158,7 @@ export function AssistantConversation({
       worker="DW1"
       catalog={catalog}
       examples={examples}
-      turns={turns.map(chatTurn)}
+      turns={turns.map((turn) => chatTurn(turn, offers))}
       loading={loaded.loading}
       pending={busy}
       live={live}

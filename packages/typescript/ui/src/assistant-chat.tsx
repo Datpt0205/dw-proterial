@@ -58,6 +58,9 @@ export interface ChatTurn {
   steps: ChatStep[];
   /** The records the answer rests on, each a link the app renders. */
   cites: { key: string; label: ReactNode }[];
+  /** A control the app offers under the answer (a case page's own button),
+   * with that page's gate and API; the chat itself starts nothing. */
+  action?: ReactNode;
 }
 
 /** The turn being answered, as far as it has come. */
@@ -204,6 +207,7 @@ export function AssistantChat({
                             ))}
                           </Space>
                         ) : null}
+                        {turn.action ?? null}
                       </Flex>
                     }
                   />

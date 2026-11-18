@@ -32,6 +32,7 @@ from dw_sales.application.rules import RuleKey
 from dw_sales.application.salesorder_learning import ExampleStatus
 from dw_sales.application.today import REMINDERS
 from dw_sales.domain import dispositions, followups, orders, quotes
+from dw_sales.domain.assistant import QuestionKind
 from dw_sales.domain.customer_notation import NotationCaseKind, NotationSource
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
@@ -97,6 +98,8 @@ _SETS: dict[str, set[str]] = {
     # Every key: a draft in words may be of any (ADR 0006); from a file, only
     # `DRAFTABLE`'s, which the service refuses for the rest.
     "ck_rule_drafts_rule_key": _values(RuleKey),
+    # What the assistant read each question as (ADR 0007; ticket 46's steps).
+    "ck_assistant_turns_kind": _values(QuestionKind),
     # A worked example's status (ticket 38).
     "ck_salesorder_examples_status": set(get_args(ExampleStatus)),
     # A Bravo YCBG export's status (ticket 16).
