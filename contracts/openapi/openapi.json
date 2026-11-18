@@ -7513,15 +7513,12 @@
         "title": "FixedCopper",
         "type": "object"
       },
-      "FlaggedValue": {
-        "additionalProperties": false,
-        "description": "One value read from a flagged region, by the field it fills.",
+      "FlaggedValueView": {
+        "description": "A flagged value as the case page is served it: the field, why it is\nflagged, and a model's confidence. Never the gate (ticket 44): a value\nsampled for the audit must reach its person as any other does, or the\naudit would not be blind.",
         "properties": {
           "confidence": {
             "anyOf": [
               {
-                "maximum": 1.0,
-                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -7531,7 +7528,6 @@
             "title": "Confidence"
           },
           "field": {
-            "pattern": "^[a-z_]{1,32}$",
             "title": "Field",
             "type": "string"
           },
@@ -7543,7 +7539,7 @@
           "field",
           "flag"
         ],
-        "title": "FlaggedValue",
+        "title": "FlaggedValueView",
         "type": "object"
       },
       "FollowupDraftView": {
@@ -13237,7 +13233,7 @@
           },
           "header_flags": {
             "items": {
-              "$ref": "#/components/schemas/FlaggedValue"
+              "$ref": "#/components/schemas/FlaggedValueView"
             },
             "title": "Header Flags",
             "type": "array"
@@ -13733,7 +13729,7 @@
           },
           "flags": {
             "items": {
-              "$ref": "#/components/schemas/FlaggedValue"
+              "$ref": "#/components/schemas/FlaggedValueView"
             },
             "title": "Flags",
             "type": "array"

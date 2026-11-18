@@ -489,3 +489,6 @@ async def test_a_po_value_label_carries_how_sure_the_model_was() -> None:
     )
     (label,) = _labels(world)
     assert (label.verdict, label.confidence, label.model_profile) == ("confirmed", 0.42, "onprem")
+    # Line 1 is short of its lead time, so the gate kept it a person's, and
+    # the label carries that stamp: a label with no gate is measured on nothing.
+    assert label.gate == "person"

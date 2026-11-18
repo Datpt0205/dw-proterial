@@ -4530,10 +4530,13 @@ export interface components {
             kind: "fixed";
         };
         /**
-         * FlaggedValue
-         * @description One value read from a flagged region, by the field it fills.
+         * FlaggedValueView
+         * @description A flagged value as the case page is served it: the field, why it is
+         *     flagged, and a model's confidence. Never the gate (ticket 44): a value
+         *     sampled for the audit must reach its person as any other does, or the
+         *     audit would not be blind.
          */
-        FlaggedValue: {
+        FlaggedValueView: {
             /** Confidence */
             confidence?: number | null;
             /** Field */
@@ -5866,7 +5869,7 @@ export interface components {
             /** Header Corrections */
             header_corrections: components["schemas"]["ValueCorrectionView"][];
             /** Header Flags */
-            header_flags: components["schemas"]["FlaggedValue"][];
+            header_flags: components["schemas"]["FlaggedValueView"][];
             /**
              * Internal Change Open
              * @default false
@@ -5999,7 +6002,7 @@ export interface components {
             /** Description */
             description: string;
             /** Flags */
-            flags: components["schemas"]["FlaggedValue"][];
+            flags: components["schemas"]["FlaggedValueView"][];
             /** Line No */
             line_no: number;
             mapping: components["schemas"]["MappingView"];
