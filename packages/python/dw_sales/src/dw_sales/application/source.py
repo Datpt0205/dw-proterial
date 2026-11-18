@@ -56,7 +56,7 @@ from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CorrectedBySales, OrderCase, PoDocument
-from dw_sales.domain.quotes import QuoteCase, QuoteFindingCode, Sourced
+from dw_sales.domain.quotes import ExportSnapshot, QuoteCase, QuoteFindingCode, Sourced
 
 _VIEW = ConfigDict(frozen=True)
 
@@ -417,6 +417,32 @@ def value_unserved(
     return None if region is None or region in served else region
 
 
+async def require_bravo_rows_served(
+    work: SalesUnitOfWork, principal_id: uuid.UUID, case: QuoteCase
+) -> None:
+    """409 "chưa mở nguồn" until ``principal_id`` was served, at the case's
+    current version, the request's rows of Bravo's export that Design's
+    result is read from (ticket 11): what "Dùng kết quả Design trên Bravo"
+    records. Nothing kept to open is the case's to refuse, not this gate's."""
+    check = case.design_check
+    snapshot = check.snapshot if check is not None else None
+    if snapshot is None:
+        return
+    region = SourceRegion(snapshot.attachment_id, None, snapshot.sheet)
+    served = await work.served.served(principal_id, CaseKind.QUOTE, case.case_id, case.case_version)
+    if region in served:
+        return
+    raise ConflictError(
+        "chưa mở nguồn: mở các dòng YCBG trên Bravo, ở phiên bản hồ sơ này, trước khi dùng kết quả",
+        details={
+            "case_id": str(case.case_id),
+            "case_version": case.case_version,
+            "rule": "source_not_served",
+            "missing": [_missing(region)],
+        },
+    )
+
+
 async def require_value_served(
     work: SalesUnitOfWork,
     principal_id: uuid.UUID,
@@ -513,6 +539,8 @@ class _Source:
     attachment_id: str
     sha256: str
     anchors: list[LabelledAnchor]
+    # Rows kept on the case instead of a file (ticket 11): drawn, never read.
+    snapshot: ExportSnapshot | None = None
 
 
 def _quote_sources(case: QuoteCase) -> list[_Source]:
@@ -524,7 +552,7 @@ def _quote_sources(case: QuoteCase) -> list[_Source]:
         for reply in case.design_replies
         if reply.attachment is not None
     ]
-    return [
+    sources = [
         _Source(
             message_id,
             attachment.attachment_id,
@@ -533,6 +561,81 @@ def _quote_sources(case: QuoteCase) -> list[_Source]:
         )
         for message_id, attachment in files
     ]
+    check = case.design_check
+    snapshot = check.snapshot if check is not None else None
+    if check is None or snapshot is None:
+        return sources
+    # Design's result read from Bravo: the request's own rows of the export,
+    # openable before and after "Dùng kết quả Design trên Bravo" records it.
+    kept = [s for s in sources if s.attachment_id != snapshot.attachment_id]
+    recorded = next((s for s in sources if s.attachment_id == snapshot.attachment_id), None)
+    anchors = (
+        recorded.anchors
+        if recorded is not None
+        else [
+            LabelledAnchor(
+                field=field,
+                line_no=line.line_no,
+                anchor=SourceAnchor(
+                    attachment_id=snapshot.attachment_id,
+                    attachment_sha256=snapshot.file_sha256,
+                    cell_ref=snapshot.cell_ref(place),
+                ),
+            )
+            for line in check.lines
+            for field, place in line.places.items()
+            if field in _BRAVO_FIELDS
+        ]
+    )
+    return [
+        *kept,
+        _Source(
+            f"bravo:{check.ycbg_no}",
+            snapshot.attachment_id,
+            snapshot.file_sha256,
+            anchors,
+            snapshot=snapshot,
+        ),
+    ]
+
+
+# What of Design's export row is shown anchored before the reply is recorded.
+_BRAVO_FIELDS: Final = frozenset({"bp_code", "spec_no", "copper_kg_per_bp_unit", "complete_date"})
+
+
+def _snapshot_grid(snapshot: ExportSnapshot) -> SheetGrid:
+    """The kept rows as the source pane draws a sheet: only those rows, at
+    the export's own row numbers and column letters."""
+    cells = [
+        SheetCell(
+            ref=f"{_column_letter(index)}{row.row}",
+            row=row.row,
+            column=index + 1,
+            text=text,
+            text_unseen=False,
+        )
+        for row in snapshot.rows
+        for index, text in enumerate(row.cells)
+        if text is not None
+    ]
+    return SheetGrid(
+        sheet=snapshot.sheet,
+        hidden_sheet=False,
+        rows=max(row.row for row in snapshot.rows),
+        columns=max((len(row.cells) for row in snapshot.rows), default=0),
+        truncated=False,
+        cells=cells,
+        sheets=[snapshot.sheet],
+    )
+
+
+def _column_letter(index: int) -> str:
+    name = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        name = chr(ord("A") + rest) + name
+    return name
 
 
 # How many pages or sheets DW1 reads ahead for one case: the ones its values
@@ -685,6 +788,10 @@ class SourceService:
         if (page is None) == (sheet is None):
             raise DomainError("a source is opened at one page or one sheet", details=details)
         scope = sales_scope(context)
+        if source.snapshot is not None:
+            return await self._serve_snapshot(
+                context, case_kind, case_id, case_version, source, source.snapshot, sheet
+            )
         content = await self.inbox.read_attachment(scope, source.message_id, attachment_id)
         if content is None:
             raise NotFoundError("the attachment is no longer in the mailbox", details=details)
@@ -754,6 +861,55 @@ class SourceService:
             await work.commit()
         return view
 
+    async def _serve_snapshot(
+        self,
+        context: AccessContext,
+        case_kind: CaseKind,
+        case_id: uuid.UUID,
+        case_version: int,
+        source: _Source,
+        snapshot: ExportSnapshot,
+        sheet: str | None,
+    ) -> SourceView:
+        """The rows kept on the case (ticket 11), drawn and recorded as
+        served like a sheet of a file; no file is read."""
+        if sheet != snapshot.sheet:
+            raise NotFoundError(
+                "the file has no such sheet",
+                details={"case_id": str(case_id), "attachment_id": source.attachment_id},
+            )
+        now = self.clock.now()
+        grid = _snapshot_grid(snapshot)
+        view = SourceView(
+            case_kind=case_kind,
+            case_id=case_id,
+            case_version=case_version,
+            attachment_id=source.attachment_id,
+            attachment_sha256=source.sha256,
+            kind="sheet",
+            sheet=snapshot.sheet,
+            sheets=grid.sheets,
+            grid=grid,
+            anchors=[a for a in source.anchors if a.anchor.sheet == snapshot.sheet],
+            served_at=now,
+        )
+        async with self.uow(sales_scope(context)) as work:
+            await work.served.record(
+                ServedSource(
+                    principal_id=context.principal_id,
+                    case_kind=case_kind,
+                    case_id=case_id,
+                    case_version=case_version,
+                    attachment_id=source.attachment_id,
+                    attachment_sha256=source.sha256,
+                    page=None,
+                    sheet=snapshot.sheet,
+                    served_at=now,
+                )
+            )
+            await work.commit()
+        return view
+
     async def warm(self, scope: SalesScope, case: OrderCase | QuoteCase) -> None:
         """Reads the pages and sheets the case's values sit on into the cache
         as DW1 opens or revises it, so whoever opens its source next finds it
@@ -773,7 +929,7 @@ class SourceService:
                     if a.anchor.page is not None or a.anchor.sheet is not None
                 )
             )[:left]
-            if not regions:
+            if not regions or source.snapshot is not None:
                 continue
             content = await self.inbox.read_attachment(
                 scope, source.message_id, source.attachment_id

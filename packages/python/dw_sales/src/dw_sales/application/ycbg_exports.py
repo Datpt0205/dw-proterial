@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
@@ -56,17 +57,20 @@ from dw_sales.application.worker_service import require_running
 from dw_sales.domain.bravo_exports import (
     CellValue,
     ExportColumn,
+    Header,
     ImportedTable,
     TableRow,
     find_header,
     header_key,
 )
-from dw_sales.domain.master_data import RejectedRow
+from dw_sales.domain.master_data import CellError, RejectedRow, read_date
 from dw_sales.domain.quotes import (
     YCBG_NO_PATTERN,
     DesignCheck,
     DesignCheckLine,
     DesignVerdict,
+    ExportSnapshot,
+    ExportSnapshotRow,
     QuoteStatus,
     RfqDocument,
 )
@@ -98,6 +102,11 @@ COLUMNS: Final[Mapping[str, ExportColumn]] = MappingProxyType(
             "CU WT: (KG/BP Unit)", aliases=("CU WT",), required=False
         ),
         "bp_unit": ExportColumn("Unit BP", aliases=("BP Unit",), required=False),
+        "complete_date": ExportColumn(
+            "Ngày hoàn thành BP/ Complete date",
+            aliases=("Ngày hoàn thành BP", "Complete date"),
+            required=False,
+        ),
     }
 )
 # Bravo's own values of a line's status and Design Check (Box 11-10, B16),
@@ -137,6 +146,9 @@ class BravoYcbgLine(BaseModel):
     bp_unit: str | None = Field(default=None, max_length=16)
     # The export row it was read from; None from a source with no rows.
     row: int | None = Field(default=None, ge=1)
+    complete_date: date | None = None
+    # Where each value sits on the export (field -> ``B5``), for anchoring.
+    places: dict[str, str] = Field(default_factory=dict)
 
 
 # ------------------------------------------------------------------ ports --
@@ -153,9 +165,14 @@ class ExportedYcbg:
     """`BravoYcbgPort` over one export a person uploaded: its lines as read."""
 
     lines: tuple[BravoYcbgLine, ...]
+    # Each request's own rows of the export, by YCBG number (ticket 11).
+    snapshots: Mapping[str, ExportSnapshot] = field(default_factory=dict)
 
     async def ycbg_lines(self, scope: SalesScope) -> Sequence[BravoYcbgLine]:
         return self.lines
+
+    def snapshot(self, ycbg_no: str) -> ExportSnapshot | None:
+        return self.snapshots.get(ycbg_no)
 
 
 # --------------------------------------------------------- reading a table --
@@ -168,6 +185,10 @@ class ParsedExport(BaseModel):
 
     lines: tuple[BravoYcbgLine, ...]
     rejected: tuple[RejectedRow, ...]
+    # The spreadsheet row Bravo's titles are on, and the positions of the
+    # columns read (`COLUMNS`): all a kept snapshot may show (ticket 11).
+    title_row: int | None = None
+    read_columns: tuple[int, ...] = ()
 
 
 def _text(cell: CellValue) -> str | None:
@@ -219,6 +240,91 @@ def _closed(cell: CellValue, values: Mapping[str, str], field: str) -> str | Non
     return found
 
 
+def _day(cell: CellValue) -> date | None:
+    try:
+        return read_date(cell)
+    except CellError:
+        raise ValueError("complete_date") from None
+
+
+def _letter(index: int) -> str:
+    """A 0-based column index as Excel names it (0 -> ``A``, 26 -> ``AA``)."""
+    name = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        name = chr(ord("A") + rest) + name
+    return name
+
+
+def _letters(header: Header) -> dict[str, str]:
+    """Each field's column letter, at its first title."""
+    found: dict[str, str] = {}
+    for index, column in sorted(header.at.items()):
+        for name, known in COLUMNS.items():
+            if known is column and name not in found:
+                found[name] = _letter(index)
+    return found
+
+
+def _shown(cell: CellValue) -> str | None:
+    """A cell as the source pane prints it."""
+    if cell is None or isinstance(cell, bool):
+        return None if cell is None else str(cell)
+    if isinstance(cell, float) and cell.is_integer():
+        cell = int(cell)
+    text = str(cell)
+    return text if text.strip() else None
+
+
+def snapshots_of(
+    table: ImportedTable, parsed: ParsedExport, file_sha256: str
+) -> dict[str, ExportSnapshot]:
+    """Each request's own rows of the export, under its title row (ticket
+    11): never another request's (`ExportSnapshot`)."""
+    if parsed.title_row is None:
+        return {}
+    by_row = {row.row: row for row in table.rows}
+    title = by_row[parsed.title_row]
+    # Only the columns DW1 reads: Bravo's other columns carry the target
+    # price, the base price and its cost split, which a case reader may not
+    # be allowed to see (ui-quality §6).
+    keep = frozenset(parsed.read_columns)
+    rows: dict[str, list[int]] = {}
+    for line in parsed.lines:
+        if line.row is not None:
+            rows.setdefault(line.ycbg_no, []).append(line.row)
+    return {
+        number: ExportSnapshot(
+            file_sha256=file_sha256,
+            sheet=table.sheet,
+            rows=tuple(
+                ExportSnapshotRow(
+                    row=r.row,
+                    cells=tuple(
+                        _shown(c) if i in keep else None for i, c in enumerate(r.cells[:200])
+                    ),
+                )
+                for r in (title, *(by_row[n] for n in sorted(set(numbers))))
+            ),
+        )
+        for number, numbers in rows.items()
+    }
+
+
+def snapshot_of(source: BravoYcbgPort, number: str) -> ExportSnapshot | None:
+    return source.snapshot(number) if isinstance(source, ExportedYcbg) else None
+
+
+def same_result(held: Sequence[DesignCheckLine], read: Sequence[DesignCheckLine]) -> bool:
+    """Design's result, compared without where it sat on the export: the
+    same answer read from a re-sorted export is the same answer."""
+    where = {"row", "places"}
+    return [line.model_dump(exclude=where) for line in held] == [
+        line.model_dump(exclude=where) for line in read
+    ]
+
+
 def parse_export(table: ImportedTable) -> ParsedExport:
     """The export's YCBG lines, by Bravo's column titles (`COLUMNS`). Raises
     `MissingColumnsError` naming a column the file does not title. A row
@@ -227,6 +333,7 @@ def parse_export(table: ImportedTable) -> ParsedExport:
     and not on others. A request whose rows are all unnumbered has its lines
     numbered in the order listed (module docstring)."""
     header = find_header(table.rows, tuple(COLUMNS.values()))
+    letters = _letters(header)
     by_number: dict[str, list[tuple[TableRow, dict[str, object]]]] = {}
     rejected: list[RejectedRow] = []
     for row in table.rows[header.index + 1 :]:
@@ -250,7 +357,9 @@ def parse_export(table: ImportedTable) -> ParsedExport:
                     cells["copper_kg_per_bp_unit"], "copper_kg_per_bp_unit"
                 ),
                 "bp_unit": _text(cells["bp_unit"]),
+                "complete_date": _day(cells["complete_date"]),
                 "row": row.row,
+                "places": {field: f"{letter}{row.row}" for field, letter in letters.items()},
             }
         except ValueError as refused:
             rejected.append(_rejected(row.row, str(refused)))
@@ -272,7 +381,12 @@ def parse_export(table: ImportedTable) -> ParsedExport:
             except ValidationError as refused:
                 errors = refused.errors()
                 rejected.append(_rejected(row.row, str(errors[0]["loc"][0]) if errors else None))
-    return ParsedExport(lines=tuple(lines), rejected=tuple(sorted(rejected, key=lambda r: r.row)))
+    return ParsedExport(
+        lines=tuple(lines),
+        rejected=tuple(sorted(rejected, key=lambda r: r.row)),
+        title_row=table.rows[header.index].row,
+        read_columns=tuple(sorted(header.at)),
+    )
 
 
 def _rejected(row: int, field: str | None) -> RejectedRow:
@@ -302,6 +416,8 @@ def _check_lines(lines: Sequence[BravoYcbgLine]) -> tuple[DesignCheckLine, ...] 
                         "copper_kg_per_bp_unit": line.copper_kg_per_bp_unit,
                         "bp_unit": line.bp_unit,
                         "row": line.row,
+                        "complete_date": line.complete_date,
+                        "places": line.places,
                     }
                     if line.verdict == "quote"
                     else {}
@@ -352,7 +468,9 @@ class DesignChecks:
             by_number.setdefault(line.ycbg_no, []).append(line)
         return tuple(
             [
-                await self._one(context, scope, number, lines, file_sha256)
+                await self._one(
+                    context, scope, number, lines, file_sha256, snapshot_of(source, number)
+                )
                 for number, lines in by_number.items()
             ]
         )
@@ -364,6 +482,7 @@ class DesignChecks:
         number: str,
         lines: Sequence[BravoYcbgLine],
         file_sha256: str,
+        snapshot: ExportSnapshot | None,
     ) -> ExportOutcome:
         if any(line.status != "close" for line in lines):
             return ExportOutcome(key=number, outcome="pending")
@@ -376,7 +495,7 @@ class DesignChecks:
             return ExportOutcome(key=number, outcome="no_case")
         found = await self.cases.cases_for_ycbg(scope, number)
         for case in found:
-            if case.design_check is not None and case.design_check.lines == checked:
+            if case.design_check is not None and same_result(case.design_check.lines, checked):
                 return ExportOutcome(
                     key=number,
                     outcome="unchanged",
@@ -398,6 +517,7 @@ class DesignChecks:
             file_sha256=file_sha256,
             read_by=context.principal_id,
             read_at=now,
+            snapshot=snapshot,
         )
         async with self.uow(scope) as work:
             await require_running(work)
@@ -429,7 +549,6 @@ class YcbgScreen:
         self, context: AccessContext, table: ImportedTable, *, file_sha256: str
     ) -> tuple[tuple[ExportOutcome, ...], tuple[RejectedRow, ...]]:
         parsed = parse_export(table)
-        outcomes = await self.checks.take(
-            context, ExportedYcbg(parsed.lines), file_sha256=file_sha256
-        )
+        source = ExportedYcbg(parsed.lines, snapshots_of(table, parsed, file_sha256))
+        outcomes = await self.checks.take(context, source, file_sha256=file_sha256)
         return outcomes, parsed.rejected

@@ -58,7 +58,7 @@ import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
 import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
-import { DesignCheckPanel } from "./design-check";
+import { DesignCheckPanel, DesignFromBravo } from "./design-check";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
@@ -657,6 +657,18 @@ function QuoteDetail() {
             prices={data.design_prices}
           />
         ) : null}
+        <DesignFromBravo
+          quote={data}
+          onOpenRows={() => {
+            const sheet = data.design_check?.snapshot?.sheet;
+            if (sheet && data.design_check_source)
+              setSource({
+                region: { sheet },
+                attachmentId: data.design_check_source,
+              });
+          }}
+          onDone={reload}
+        />
       </Card>
 
       <Card size="small" title="Mass hay pcs">

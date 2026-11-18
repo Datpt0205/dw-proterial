@@ -1875,6 +1875,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/design-from-bravo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Design From Bravo
+         * @description Ticket 11: Design's QUOTE read from Bravo recorded as its reply.
+         */
+        post: operations["design_from_bravo_api_v1_sales_quotes__case_id__design_from_bravo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/design-sent": {
         parameters: {
             query?: never;
@@ -4055,6 +4075,7 @@ export interface components {
              * Format: uuid
              */
             read_by: string;
+            snapshot?: components["schemas"]["ExportSnapshot"] | null;
             /** Ycbg No */
             ycbg_no: string;
         };
@@ -4069,10 +4090,16 @@ export interface components {
             bp_code?: string | null;
             /** Bp Unit */
             bp_unit?: string | null;
+            /** Complete Date */
+            complete_date?: string | null;
             /** Copper Kg Per Bp Unit */
             copper_kg_per_bp_unit?: string | null;
             /** Line No */
             line_no: number;
+            /** Places */
+            places?: {
+                [key: string]: string;
+            };
             /** Reason */
             reason?: string | null;
             /** Row */
@@ -4436,6 +4463,33 @@ export interface components {
             step_id: string;
             /** Times */
             times: number;
+        };
+        /**
+         * ExportSnapshot
+         * @description The rows of one YCBG as Bravo's "RFQ List" export held them (ticket
+         *     11): the title row and the request's own rows, never another request's,
+         *     since one export lists every open YCBG and other customers' among them.
+         *     Kept on the case instead of the file, it is the place Design's values
+         *     are anchored in and what the source pane draws; ``file_sha256`` binds it
+         *     to the export it was read from.
+         */
+        ExportSnapshot: {
+            /** File Sha256 */
+            file_sha256: string;
+            /** Rows */
+            rows: components["schemas"]["ExportSnapshotRow"][];
+            /** Sheet */
+            sheet: string;
+        };
+        /**
+         * ExportSnapshotRow
+         * @description One row of a Bravo export as the reader sandbox read it, as text.
+         */
+        ExportSnapshotRow: {
+            /** Cells */
+            cells: (string | null)[];
+            /** Row */
+            row: number;
         };
         /**
          * FindingCode
@@ -6987,6 +7041,8 @@ export interface components {
             decision?: components["schemas"]["PendingDecisionView"] | null;
             decline: components["schemas"]["DeclineView"] | null;
             design_check?: components["schemas"]["DesignCheck"] | null;
+            /** Design Check Source */
+            design_check_source?: string | null;
             /** Design Prices */
             design_prices?: components["schemas"]["DesignBasePriceView"][] | null;
             /** Design Replies */
@@ -13074,6 +13130,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DeclineBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_from_bravo_api_v1_sales_quotes__case_id__design_from_bravo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
             };
         };
         responses: {

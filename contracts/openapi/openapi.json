@@ -5803,6 +5803,16 @@
             "title": "Read By",
             "type": "string"
           },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ycbg_no": {
             "pattern": "^RFQ[0-9]{6}-[0-9]{3}$",
             "title": "Ycbg No",
@@ -5848,6 +5858,18 @@
             ],
             "title": "Bp Unit"
           },
+          "complete_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Date"
+          },
           "copper_kg_per_bp_unit": {
             "anyOf": [
               {
@@ -5865,6 +5887,14 @@
             "minimum": 1.0,
             "title": "Line No",
             "type": "integer"
+          },
+          "places": {
+            "additionalProperties": {
+              "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$",
+              "type": "string"
+            },
+            "title": "Places",
+            "type": "object"
           },
           "reason": {
             "anyOf": [
@@ -7181,6 +7211,70 @@
           "manual_baseline_minutes"
         ],
         "title": "ExportRow",
+        "type": "object"
+      },
+      "ExportSnapshot": {
+        "additionalProperties": false,
+        "description": "The rows of one YCBG as Bravo's \"RFQ List\" export held them (ticket\n11): the title row and the request's own rows, never another request's,\nsince one export lists every open YCBG and other customers' among them.\nKept on the case instead of the file, it is the place Design's values\nare anchored in and what the source pane draws; ``file_sha256`` binds it\nto the export it was read from.",
+        "properties": {
+          "file_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ExportSnapshotRow"
+            },
+            "maxItems": 201,
+            "minItems": 2,
+            "title": "Rows",
+            "type": "array"
+          },
+          "sheet": {
+            "pattern": "^[^\\[\\]:*?/\\\\']{1,31}$",
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_sha256",
+          "sheet",
+          "rows"
+        ],
+        "title": "ExportSnapshot",
+        "type": "object"
+      },
+      "ExportSnapshotRow": {
+        "additionalProperties": false,
+        "description": "One row of a Bravo export as the reader sandbox read it, as text.",
+        "properties": {
+          "cells": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 200,
+            "title": "Cells",
+            "type": "array"
+          },
+          "row": {
+            "minimum": 1.0,
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "cells"
+        ],
+        "title": "ExportSnapshotRow",
         "type": "object"
       },
       "FeedbackAttachmentView": {
@@ -17539,6 +17633,17 @@
                 "type": "null"
               }
             ]
+          },
+          "design_check_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Check Source"
           },
           "design_prices": {
             "anyOf": [
@@ -37981,6 +38086,78 @@
           }
         },
         "summary": "Decline",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/design-from-bravo": {
+      "post": {
+        "description": "Ticket 11: Design's QUOTE read from Bravo recorded as its reply.",
+        "operationId": "design_from_bravo_api_v1_sales_quotes__case_id__design_from_bravo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design From Bravo",
         "tags": [
           "sales"
         ]
