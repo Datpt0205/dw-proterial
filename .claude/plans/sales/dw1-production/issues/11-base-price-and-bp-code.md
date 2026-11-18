@@ -1,6 +1,6 @@
 # 11 — Base price and BP code from Design's reply
 
-Status: ready-for-agent (2026-11-16: the Excel path; B21 "Danh mục Base price" columns known, B07's BP-latest block and B16's YCBG rows carry the BP code)
+Status: done for the Excel path (2026-11-18): a QUOTE on Bravo becomes Design's reply on a person's press; the reply read from a Design mail is unchanged
 Blocked by: none to build; the full Base price list (B21 holds the latest 100) is requested from Proterial Sales
 Category: enhancement
 
@@ -116,3 +116,20 @@ Left:
   bound to the export's sha256. `DesignReply` gains this third origin
   beside a file and a mail text; dw_sales ADR 0005's rule (every value opens
   where it was read) is kept, with the snapshot as the place.
+- 2026-11-18, **steps 1 and 3 done: a QUOTE on Bravo becomes Design's
+  reply**. The YCBG reader keeps, per request, its title row and its own
+  rows (`ExportSnapshot` on `DesignCheck`, case body, no migration), only
+  the columns DW1 reads (B16's target price, base price and cost split are
+  never kept; mutation-checked), with each value's cell and "Ngày hoàn thành
+  BP". The source pane draws those rows (`_serve_snapshot`, recorded as
+  served; another request's rows never shown, mutation-checked). "Dùng kết
+  quả Design trên Bravo" (`POST /quotes/{id}/design-from-bravo`,
+  `sales.quote.prepare`) refuses until the person opened them at this
+  version (`require_bravo_rows_served`, mutation-checked), refuses over a
+  DECLINE or without kept rows, and records `DesignReply` anchored by cell
+  (`RFQ List!H4`), the case to `design_replied`; copper per km only where
+  Bravo states km. Reader refused, another workspace not found (tested).
+  A result re-read from a re-sorted export is the same result
+  (`same_result`, cells aside). Left: a check recorded before rows were
+  kept has none, and Design's result is recorded once, so such a case goes
+  the mail way (only cases from 11-16/17).

@@ -1080,6 +1080,18 @@ export class SalesApi {
     );
   }
 
+  designFromBravo(
+    caseId: string,
+    body: Body<"/api/v1/sales/quotes/{case_id}/design-from-bravo">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/quotes/{case_id}/design-from-bravo">(
+      `/api/v1/sales/quotes/${enc(caseId)}/design-from-bravo`,
+      body,
+      key,
+    );
+  }
+
   pcsPrice(
     caseId: string,
     body: Body<"/api/v1/sales/quotes/{case_id}/pcs-price">,

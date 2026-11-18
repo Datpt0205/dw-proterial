@@ -2030,6 +2030,20 @@ def build_router(
         return await idem.record(change)
 
     @router.post(
+        "/quotes/{case_id}/design-from-bravo",
+        response_model=CaseChangeView,
+        dependencies=quote_scope,
+    )
+    async def design_from_bravo(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        """Ticket 11: Design's QUOTE read from Bravo recorded as its reply."""
+        change = await svc.quote_commands.design_from_bravo(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
         "/quotes/{case_id}/pcs-price", response_model=CaseChangeView, dependencies=quote_scope
     )
     async def pcs_price(

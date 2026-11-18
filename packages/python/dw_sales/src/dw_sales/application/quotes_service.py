@@ -52,7 +52,7 @@ from dw_sales.application.runs import (
     subject_of,
     withdraw_if_left,
 )
-from dw_sales.application.source import require_value_served
+from dw_sales.application.source import require_bravo_rows_served, require_value_served
 from dw_sales.application.support import (
     decided,
     person_event,
@@ -473,6 +473,22 @@ class QuoteCommands:
             "quote.production_type_set",
             lambda case, actor, at: case.set_production_type(kind, by=actor.user_id, at=at),
             reason_code=kind,
+        )
+
+    async def design_from_bravo(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> CaseChangeView:
+        """ "Dùng kết quả Design trên Bravo" (ticket 11): Design's QUOTE read
+        from Bravo recorded as its reply, by a person who opened the
+        request's rows of the export at this version."""
+        return await self._decide(
+            context,
+            case_id,
+            case_version,
+            "quote.design_replied",
+            lambda case, actor, at: case.design_from_bravo(),
+            reason_code="bravo",
+            guard=lambda work, case: require_bravo_rows_served(work, context.principal_id, case),
         )
 
     async def pcs_price(

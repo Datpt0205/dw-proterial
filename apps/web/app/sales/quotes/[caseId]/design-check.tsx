@@ -1,12 +1,19 @@
 "use client";
 
-import { Alert, Table, Tag, Typography } from "antd";
+import { useState } from "react";
+import { Alert, Button, Space, Table, Tag, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { MaskedValue } from "@dw/ui";
 import { formatDateTime } from "../../../../lib/dates";
 import { formatMoney, formatQuantity } from "../../../../lib/money";
+import { salesApi } from "../../_lib/api";
+import { ActionError } from "../../_lib/errors";
+import { useAction } from "../../_lib/use-action";
+import { useSalesViewer } from "../../_lib/viewer";
+import { GuardedButton } from "../../_components/guarded-button";
 
 type Check = SalesSchemas["DesignCheck"];
+type Quote = SalesSchemas["QuoteCaseView"];
 type BasePrice = SalesSchemas["DesignBasePriceView"];
 
 // Who sees a base price: said once, beside the column (ui-quality §6).
@@ -111,6 +118,60 @@ export function DesignCheckPanel({
           },
         ]}
       />
+    </div>
+  );
+}
+
+/**
+ * Ticket 11: Design's QUOTE read from Bravo recorded as its reply, by a
+ * person who opened the request's rows of the export first (the server
+ * refuses otherwise, `source_not_served`). Offered only while the case waits
+ * on Design and the rows were kept.
+ */
+export function DesignFromBravo({
+  quote,
+  onOpenRows,
+  onDone,
+}: {
+  quote: Quote;
+  onOpenRows: () => void;
+  onDone: () => void;
+}) {
+  const viewer = useSalesViewer();
+  const { run, pending } = useAction();
+  const [error, setError] = useState<unknown>(null);
+  const check = quote.design_check;
+  if (!check?.snapshot || quote.status !== "sent_to_design") return null;
+  const reason = !viewer.hasScope("sales.quote.prepare")
+    ? "Cần quyền chuẩn bị báo giá"
+    : check.lines.some((l) => l.verdict === "decline")
+      ? "Design từ chối một dòng: Sales quyết định trả lời khách."
+      : null;
+  const use = async () => {
+    const body = { case_version: quote.case_version };
+    const result = await run(
+      "design_from_bravo",
+      body,
+      (key) => salesApi().designFromBravo(quote.case_id, body, key),
+      "Đã ghi phản hồi của Design từ Bravo",
+    );
+    setError(result.ok ? null : result.error);
+    if (result.ok) onDone();
+  };
+  return (
+    <div className="space-y-2">
+      <Space wrap>
+        <Button onClick={onOpenRows}>Mở các dòng YCBG</Button>
+        <GuardedButton
+          type="primary"
+          reason={reason}
+          loading={pending === "design_from_bravo"}
+          onClick={use}
+        >
+          Dùng kết quả Design trên Bravo
+        </GuardedButton>
+      </Space>
+      {error ? <ActionError error={error} /> : null}
     </div>
   );
 }

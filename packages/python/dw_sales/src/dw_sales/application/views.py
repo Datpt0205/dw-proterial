@@ -2176,6 +2176,9 @@ class QuoteCaseView(BaseModel):
     design_replies: int
     # Design's result as Bravo holds it, read from an export (ticket 16).
     design_check: DesignCheck | None = None
+    # The id the request's kept rows of that export open by in the source
+    # pane (ticket 11); None when no rows were kept.
+    design_check_source: str | None = None
     # Each QUOTE line's base price from Bravo's list (ticket 11); None for a
     # caller who may not read prices, as for a case with no result read.
     design_prices: list[DesignBasePriceView] | None = None
@@ -2385,6 +2388,11 @@ def quote_case(
         ),
         design_replies=len(case.design_replies),
         design_check=case.design_check,
+        design_check_source=(
+            case.design_check.snapshot.attachment_id
+            if case.design_check is not None and case.design_check.snapshot is not None
+            else None
+        ),
         design_prices=list(design_prices) if prices.amounts and design_prices is not None else None,
         pricing=(
             PricingView(

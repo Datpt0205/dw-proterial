@@ -546,6 +546,53 @@ class DesignReply(BaseModel):
 # What Design writes in a YCBG line's Design Check in Bravo (Box B16).
 DesignVerdict = Literal["quote", "decline"]
 
+# A cell as Excel names it (``B5``): where a value sits on its export row.
+_CELL_PLACE: Final = r"^[A-Z]{1,3}[1-9][0-9]{0,6}$"
+_XLSX: Final = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class ExportSnapshotRow(BaseModel):
+    """One row of a Bravo export as the reader sandbox read it, as text."""
+
+    model_config = _FROZEN
+
+    row: int = Field(ge=1)
+    cells: tuple[str | None, ...] = Field(max_length=200)
+
+
+class ExportSnapshot(BaseModel):
+    """The rows of one YCBG as Bravo's "RFQ List" export held them (ticket
+    11): the title row and the request's own rows, never another request's,
+    since one export lists every open YCBG and other customers' among them.
+    Kept on the case instead of the file, it is the place Design's values
+    are anchored in and what the source pane draws; ``file_sha256`` binds it
+    to the export it was read from."""
+
+    model_config = _FROZEN
+
+    file_sha256: Sha256Hex
+    sheet: str = Field(pattern=r"^[^\[\]:*?/\\']{1,31}$")
+    rows: tuple[ExportSnapshotRow, ...] = Field(min_length=2, max_length=201)
+
+    @property
+    def attachment_id(self) -> str:
+        """The id the case's sources name it by: the export's, by its hash."""
+        return f"bravo-ycbg-{self.file_sha256[:16]}"
+
+    def attachment(self, ycbg_no: str) -> Attachment:
+        """The snapshot described as a file the case was read from. Its bytes
+        are not kept (``size`` 0): the source pane draws ``rows``."""
+        return Attachment(
+            attachment_id=self.attachment_id,
+            name=f"Bravo RFQ List {ycbg_no}.xlsx",
+            media_type=_XLSX,
+            size=0,
+            sha256=self.file_sha256,
+        )
+
+    def cell_ref(self, place: str) -> str:
+        return f"{self.sheet}!{place}"
+
 
 class DesignCheckLine(BaseModel):
     """Design's result on one line of the YCBG, as Bravo holds it once the
@@ -566,6 +613,10 @@ class DesignCheckLine(BaseModel):
     copper_kg_per_bp_unit: Decimal | None = Field(default=None, ge=0)
     bp_unit: str | None = Field(default=None, min_length=1, max_length=16)
     row: int | None = Field(default=None, ge=1)
+    # The day Design completed the BP ("Ngày hoàn thành BP"), and where each
+    # value sits on the export (field -> ``B5``), for anchoring (ticket 11).
+    complete_date: date | None = None
+    places: dict[str, Annotated[str, Field(pattern=_CELL_PLACE)]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _verdict_carries_its_value(self) -> Self:
@@ -592,11 +643,16 @@ class DesignCheck(BaseModel):
     file_sha256: Sha256Hex
     read_by: uuid.UUID
     read_at: AwareDatetime
+    # The request's own rows of the export (ticket 11); None for a check
+    # read before they were kept, or from a source with no rows.
+    snapshot: ExportSnapshot | None = None
 
     @model_validator(mode="after")
     def _distinct_lines(self) -> Self:
         if not _distinct(line.line_no for line in self.lines):
             raise ValueError("Design's check answers a line twice")
+        if self.snapshot is not None and self.snapshot.file_sha256 != self.file_sha256:
+            raise ValueError("Design's check keeps rows of the export it was read from")
         return self
 
     @property
@@ -2394,6 +2450,85 @@ class QuoteCase(BaseModel):
                 details={"case_id": str(self.case_id), "status": self.status.value},
             )
         return self._changed(design_check=check)
+
+    def design_from_bravo(self) -> QuoteCase:
+        """Design's QUOTE read from Bravo, recorded as its reply (ticket 11):
+        each value anchored in the request's own rows of the export
+        (`ExportSnapshot`), the case to `design_replied`. A person asks for
+        it, having opened those rows (the command's gate); here, whether the
+        result is one to record: every line a QUOTE stating its BP code,
+        spec number and the day Design completed it. Copper is taken per km
+        only where Bravo states it per km; otherwise it stays unknown."""
+        check = self.design_check
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status is not QuoteStatus.SENT_TO_DESIGN or check is None:
+            raise ConflictError(
+                "kết quả Design trên Bravo được dùng khi hồ sơ đang chờ Design và đã đọc kết quả",
+                details={**details, "status": self.status.value},
+            )
+        snapshot = check.snapshot
+        if snapshot is None:
+            raise ConflictError(
+                "tải lại tệp xuất YCBG từ Bravo: lần đọc này không giữ các dòng làm nguồn",
+                details={**details, "rule": "no_snapshot"},
+            )
+        if check.declined:
+            raise ConflictError(
+                "Design từ chối một dòng: Sales quyết định trả lời khách",
+                details={**details, "rule": "design_declined"},
+            )
+
+        def at(line: DesignCheckLine, field: str) -> SourceAnchor:
+            place = line.places.get(field)
+            if place is None:
+                raise DomainError(
+                    f"dòng {line.line_no}: tệp xuất không có ô {field}",
+                    details={**details, "field": field, "line_no": line.line_no},
+                )
+            return SourceAnchor(
+                attachment_id=snapshot.attachment_id,
+                attachment_sha256=snapshot.file_sha256,
+                cell_ref=snapshot.cell_ref(place),
+            )
+
+        lines: list[DesignReplyLine] = []
+        completed: list[tuple[date, SourceAnchor]] = []
+        for line in check.lines:
+            if line.spec_no is None or line.complete_date is None:
+                raise DomainError(
+                    f"dòng {line.line_no}: Bravo chưa ghi bản vẽ hoặc ngày hoàn thành BP",
+                    details={**details, "line_no": line.line_no},
+                )
+            copper = line.copper_kg_per_bp_unit
+            per_km = copper is not None and copper > 0 and (line.bp_unit or "").lower() == "km"
+            lines.append(
+                DesignReplyLine.model_validate(
+                    {
+                        "line_no": line.line_no,
+                        "bp_code": {"value": line.bp_code, "source": at(line, "bp_code")},
+                        "spec_no": {"value": line.spec_no, "source": at(line, "spec_no")},
+                        "copper_kg_per_km": (
+                            {"value": copper, "source": at(line, "copper_kg_per_bp_unit")}
+                            if per_km
+                            else None
+                        ),
+                    }
+                )
+            )
+            completed.append((line.complete_date, at(line, "complete_date")))
+        first = check.lines[0]
+        day, day_at = max(completed, key=lambda c: c[0])
+        reply = DesignReply(
+            message_id=f"bravo:{check.ycbg_no}",
+            received_at=check.read_at,
+            attachment=snapshot.attachment(check.ycbg_no),
+            document=DesignReplyDocument(
+                ycbg_no=Sourced(value=check.ycbg_no, source=at(first, "ycbg_no")),
+                reply_date=Sourced(value=day, source=day_at),
+                lines=tuple(lines),
+            ),
+        )
+        return self.record_design_reply(reply)
 
     def discuss_spec(self) -> QuoteCase:
         return self._moved(QuoteStatus.SPEC_DISCUSSION)

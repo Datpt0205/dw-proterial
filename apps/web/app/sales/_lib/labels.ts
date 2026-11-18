@@ -523,6 +523,8 @@ export const FIELD = {
   spec_no: "Số spec",
   prv_code: "Mã PRV",
   copper_kg_per_km: "Đồng (kg/km)",
+  copper_kg_per_bp_unit: "Đồng (kg/đơn vị BP)",
+  complete_date: "Ngày hoàn thành BP",
 } as const;
 
 /** Waits the overview measures apart from DW1's own time. */
