@@ -278,6 +278,9 @@ def po_value_label(
         # How sure the model was (ticket 44): what the step's threshold is
         # measured on; None where the call gave no token probabilities.
         confidence=flag.confidence,
+        # What the gate did with it: a label with no gate is measured on
+        # nothing (`GatedLabelsPort`).
+        gate=flag.gate,
     )
 
 

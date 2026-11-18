@@ -186,3 +186,42 @@ reach the spans through the adapter. Most are 0.99 to 1.0; the outliers are
 both POs' first line's `quantity` (0.47 and 0.67) and one `line_no` (0.88):
 the values a threshold would send to a person. Slice 1's live check is done;
 slice 2's remains.
+
+## Done: a PO in the mail, slice 2, gated in shadow (2026-11-18)
+
+- **The rule in code**: `domain/po_body_autonomy.py` (`may_apply_itself`,
+  `model_read_values`), Đạt's rule above read as: the PO's own values while
+  no other open finding of the PO stands; a line's `unit_price` only where
+  it equals the `QuotationBasis` the line was checked against (price,
+  currency, unit), its `quantity` only where the item master states both MOQ
+  and pack multiple (so both checks ran), either only while no other open
+  finding of the line stands; nothing else, and never a PO read from a file.
+  "The master" has no price here (`ItemBasis` holds none), so a price
+  applies itself only against a quotation.
+- **The gate at intake**: `OrderIntake._value_gates`, after the checks and
+  before the case is first stored, stamps each `model_read` value's new
+  `FlaggedValue.gate` (`OrderCase.with_value_gates`, document and lines
+  alike): `person` where the rule keeps it a person's or there is no
+  profile, else `autonomy.route`'s route, **with `applied` logged as
+  `shadow`**: nothing applies a PO's value by itself until slice 3 brings
+  the effect and its undo.
+- **Labels**: `po_value_label` carries the gate, so Sales' settlements are
+  now counted by `GatedLabelsPort` (which reads only gated labels) and the
+  `sales_auto_apply` lane sets the step's threshold from them.
+- **Blind audit kept**: the case page is served `FlaggedValueView` (field,
+  flag, confidence), never the gate.
+- Tests: `test_po_body_autonomy.py` (the rule, line by line; `person` with no
+  threshold; above a certified one `shadow`, never `applied`, red without
+  the shadow guard; the served view has no gate, red serving the domain
+  flag), `test_labelled_cases.py` (the label's gate).
+
+Left, slice 3: the effect (`AutoApply` settling the `value_uncertain` value
+with the read value as the lane, through `OrderIntake.correct_value`,
+refused at the effect for a value the rule or the tier excludes), "Hoàn tác"
+(reopening the value, a labelled case), "DW đã tự làm" on the order's
+values, then lifting the shadow guard. It applies nothing in practice until
+a tenant has the labels a 5% target needs (59 per prompt and profile).
+
+Noticed: `QuoteLineView` serves the domain `DescriptionReading`, gate
+included. No quote reading is gated today, so it is always empty; a quote
+step gated later must serve a view without it, as the order's does.

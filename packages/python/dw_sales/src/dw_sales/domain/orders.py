@@ -49,7 +49,7 @@ from dw_sales.domain.catalog import (
     PrvCode,
     Uom,
 )
-from dw_sales.domain.description_reading import DescriptionReading
+from dw_sales.domain.description_reading import DescriptionReading, GateRoute
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.legacy_fonts import LegacyEncoding
 
@@ -148,6 +148,9 @@ class FlaggedValue(BaseModel):
     # `dw_agent_runtime.model.scoring`); None: the call gave none, or the
     # flag is not a model's. Nothing without one applies itself.
     confidence: float | None = Field(default=None, ge=0, le=1)
+    # What code's gate did with it (ticket 44, `po_body_autonomy`): the
+    # stamp its labelled case carries. None: no gate saw it.
+    gate: GateRoute | None = None
 
 
 class LegacyText(BaseModel):
@@ -2309,6 +2312,35 @@ class OrderCase(BaseModel):
     @property
     def header(self) -> PoHeader:
         return self.document.header
+
+    def with_value_gates(self, gates: Mapping[tuple[int | None, str], GateRoute]) -> Self:
+        """The case with each `model_read` value in ``gates`` stamped with
+        what code's gate did with it (ticket 44), by line (None: the PO's
+        own) and field, in the document and its lines alike. Nothing
+        else changes."""
+        if not gates:
+            return self
+
+        def stamp(flags: tuple[FlaggedValue, ...], at: int | None) -> tuple[FlaggedValue, ...]:
+            return tuple(
+                f.model_copy(update={"gate": gates[(at, f.field)]})
+                if f.flag is RegionFlag.MODEL_READ and (at, f.field) in gates
+                else f
+                for f in flags
+            )
+
+        document = self.document
+        header = document.header.model_copy(update={"flags": stamp(document.header.flags, None)})
+        po_lines = tuple(
+            line.model_copy(update={"flags": stamp(line.flags, line.line_no)})
+            for line in document.lines
+        )
+        stamped = document.model_copy(update={"header": header, "lines": po_lines})
+        lines = tuple(
+            line.model_copy(update={"po_line": po_line})
+            for line, po_line in zip(self.lines, po_lines, strict=True)
+        )
+        return self.model_copy(update={"document": stamped, "lines": lines})
 
     @property
     def effective_header(self) -> PoHeader:

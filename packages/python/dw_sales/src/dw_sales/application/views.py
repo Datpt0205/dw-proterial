@@ -107,6 +107,7 @@ from dw_sales.domain.orders import (
     PoDocument,
     PoLineAnchors,
     PrintCopy,
+    RegionFlag,
     UpdateStep,
     ValueCorrection,
 )
@@ -839,6 +840,23 @@ def update_loop_view(case: OrderCase) -> UpdateLoopView | None:
     )
 
 
+class FlaggedValueView(BaseModel):
+    """A flagged value as the case page is served it: the field, why it is
+    flagged, and a model's confidence. Never the gate (ticket 44): a value
+    sampled for the audit must reach its person as any other does, or the
+    audit would not be blind."""
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    flag: RegionFlag
+    confidence: float | None = None
+
+
+def served_flags(flags: Sequence[FlaggedValue]) -> list[FlaggedValueView]:
+    return [FlaggedValueView(field=f.field, flag=f.flag, confidence=f.confidence) for f in flags]
+
+
 class OrderLineView(BaseModel):
     model_config = _VIEW
 
@@ -861,7 +879,7 @@ class OrderLineView(BaseModel):
     schedules: list[DeliveryScheduleView]
     printed_schedules: bool
     anchors: dict[str, SourceAnchor]
-    flags: list[FlaggedValue]
+    flags: list[FlaggedValueView]
     # What Sales typed for flagged values; the values above stay as read.
     corrections: list[ValueCorrectionView]
     # What a person confirmed of the customer's change requests (ticket 27).
@@ -1025,7 +1043,7 @@ def order_line(
         ],
         printed_schedules=po.prints_schedules,
         anchors=_seen_anchors(po.anchors, prices),
-        flags=list(po.flags),
+        flags=served_flags(po.flags),
         corrections=_corrections(line.corrections, prices),
         changes=[AppliedChangeView.model_validate(c.model_dump()) for c in line.changes],
         value_states=_line_states(case, line, checked),
@@ -1158,7 +1176,7 @@ class OrderCaseView(BaseModel):
     attachment_id: str | None
     attachment_sha256: str
     header_anchors: dict[str, SourceAnchor]
-    header_flags: list[FlaggedValue]
+    header_flags: list[FlaggedValueView]
     # What Sales typed for the header values and the total (`total`) the
     # PO-level `value_uncertain` flagged; the values here stay as read.
     header_corrections: list[ValueCorrectionView]
@@ -1578,7 +1596,7 @@ def order_case(
         attachment_id=document.attachment_id,
         attachment_sha256=document.attachment_sha256,
         header_anchors=dict(case.header.anchors.stated()),
-        header_flags=list(case.header.flags),
+        header_flags=served_flags(case.header.flags),
         header_corrections=_corrections(case.header_corrections, prices),
         buyer=document.buyer,
         buyer_anchor=document.buyer_anchor,

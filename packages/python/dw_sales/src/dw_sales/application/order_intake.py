@@ -146,6 +146,7 @@ from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.threads import ThreadedCase, named_cases
 from dw_sales.application.triage import TriageReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item, LmeMonth, customers_named
+from dw_sales.domain.description_reading import GateRoute
 from dw_sales.domain.dispositions import (
     MAX_MESSAGE_CASES,
     SALES_PIC_POOL,
@@ -203,6 +204,7 @@ from dw_sales.domain.orders import (
     Unreadable,
     ValueCorrection,
 )
+from dw_sales.domain.po_body_autonomy import may_apply_itself, model_read_values
 from dw_sales.domain.po_groups import ReadFile, one_per_po
 from dw_sales.domain.reply_intent import AgentFallback, Author, CaseReply, ReplyReading
 from dw_sales.domain.revision_hints import name_revision
@@ -1487,6 +1489,9 @@ class OrderIntake:
             duplicate_of_so=history.duplicate_of_so,
             base_so_no=history.base_so_no,
         )
+        checked = await self._value_gates(
+            scope, checked, rules, item=f"{message.message_id}:{document.attachment_id or '-'}"
+        )
         if history.base is None:
             return self._on_case(message, kind, DispositionKind.CASE_CREATED, checked)
         try:
@@ -1821,6 +1826,38 @@ class OrderIntake:
             )
             gated[line_no] = mapped._replace(reading=reading.model_copy(update={"gate": route}))
         return gated
+
+    async def _value_gates(
+        self, scope: SalesScope, case: OrderCase, rules: OrderRules, *, item: str
+    ) -> OrderCase:
+        """Each value a model read of a PO written in the mail, stamped with
+        what code's gate does with it (ticket 44): `person` where Đạt's rule
+        keeps it a person's (`po_body_autonomy.may_apply_itself`), else the
+        gate's route for its confidence. Nothing applies a PO's value by itself
+        yet (the effect, its undo and its screen are the next slice), so a
+        value that clears the threshold is logged as `shadow`: measured, and
+        decided by a person as before. Stamped so every value Sales settles is
+        a labelled case the step's threshold is measured on."""
+        if self.autonomy is None or not case.document.from_message:
+            return case
+        step = ModelStep.PO_BODY_EXTRACTION
+        profile = case.document.model_profile
+        gates: dict[tuple[int | None, str], GateRoute] = {}
+        for line_no, field, confidence in model_read_values(case):
+            if profile is None or not may_apply_itself(case, line_no, field):
+                gates[(line_no, field)] = "person"
+                continue
+            route = await self.autonomy.route(
+                scope,
+                rules,
+                step,
+                prompt=case.document.parser_version,
+                model_profile=profile,
+                confidence=confidence,
+                item_key=f"{item}:{line_no or 0}:{field}:{step.value}",
+            )
+            gates[(line_no, field)] = "shadow" if route == "applied" else route
+        return case.with_value_gates(gates)
 
     async def implied_term(
         self, scope: SalesScope, case: OrderCase
