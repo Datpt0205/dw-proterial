@@ -511,6 +511,17 @@ context. All five are done and on `main`. The full narrative is at
           dev path into the VM (a tunnel ending in the VM, or SSH forwarded
           to it) so work is private and above-board, not on the monitored
           host. Claude Code runs in the VM, reached by SSH, not on the host.
+          **11-18, the plant inspects SSL and blocks external DNS.** The VM
+          reaches the internet only through the host's NAT, and on that path
+          the plant forces its own resolver (public DNS to 8.8.8.8 times out)
+          and MITMs HTTPS with a corporate root CA (curl sees a self-signed
+          cert). A server here goes online only with the host's own two
+          settings: the internal DNS (10.110.83.245 / .251) and Proterial's
+          inspection root CA -- both read off the host, no IT ticket needed.
+          DNS set on the VM resolves; trusting the CA is in progress. Note:
+          Claude Code here routes its Anthropic traffic through that
+          inspecting proxy -- Đạt's call whether that sits with the on-prem
+          "no external API" posture.
           (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
