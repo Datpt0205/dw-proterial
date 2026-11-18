@@ -518,7 +518,13 @@ context. All five are done and on `main`. The full narrative is at
           cert). A server here goes online only with the host's own two
           settings: the internal DNS (10.110.83.245 / .251) and Proterial's
           inspection root CA -- both read off the host, no IT ticket needed.
-          DNS set on the VM resolves; trusting the CA is in progress. Note:
+          The CA is Cato Networks' (the plant's SASE/SSE gateway). DNS, the
+          default route out through the host's NAT, and the Cato root CA are
+          now persisted in the VM's netplan (`60-dw-internal.yaml`), with
+          cloud-init's network config disabled so a reseed cannot undo them
+          again; api.anthropic.com and github.com both answer over TLS.
+          Remaining: install Claude Code in the VM (Node 22,
+          `NODE_EXTRA_CA_CERTS` pointed at the system CA bundle). Note:
           Claude Code here routes its Anthropic traffic through that
           inspecting proxy -- Đạt's call whether that sits with the on-prem
           "no external API" posture.
