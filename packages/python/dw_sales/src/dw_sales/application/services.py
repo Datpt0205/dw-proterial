@@ -461,6 +461,7 @@ def assemble(
             ids,
             worker_id,
             worker_version,
+            book,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled

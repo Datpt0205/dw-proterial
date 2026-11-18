@@ -113,6 +113,7 @@ from dw_sales.application.artifact_content import (
     SalesDocumentCopy,
     SalesEmailCopy,
 )
+from dw_sales.application.assistant_copy import AssistantCopy
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.handoffs import HandoffCopy
@@ -180,6 +181,7 @@ class RuleKey(StrEnum):
     FOLLOWUPS = "sales_followups"
     SALESORDER_RULES = "sales_salesorder_rules"
     REMINDERS = "sales_reminders"
+    ASSISTANT = "sales_assistant"
 
 
 type Policy = (
@@ -194,6 +196,7 @@ type Policy = (
     | SalesFollowups
     | SalesOrderRules
     | ReminderCopy
+    | AssistantCopy
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -210,6 +213,7 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.FOLLOWUPS: SalesFollowups,
         RuleKey.SALESORDER_RULES: SalesOrderRules,
         RuleKey.REMINDERS: ReminderCopy,
+        RuleKey.ASSISTANT: AssistantCopy,
     }
 )
 # The keys a version may be drafted for from the company's own file ("Tạo từ
@@ -247,7 +251,7 @@ class TenantRuleBook(RuleBook):
 
     Each reader asks through its own port, which a typed method here
     satisfies: `KpiPort`, `QuotePoliciesPort`, `ArtifactCopyPort` and
-    `HandoffCopyPort`, `FollowupPolicyPort`, `ReminderCopyPort` and
+    `HandoffCopyPort`, `FollowupPolicyPort`, `ReminderCopyPort`, `AssistantCopyPort` and
     `LocalZonePort`; `OrderRulesPort` through `RuleBookOrderRules`."""
 
     schemas: Mapping[Any, type[BaseModel]] = field(default_factory=_sales_schemas)
@@ -289,6 +293,11 @@ class TenantRuleBook(RuleBook):
     async def reminder_copy(self, scope: SalesScope) -> ReminderCopy:
         policy = (await self.current(scope, RuleKey.REMINDERS)).policy
         assert isinstance(policy, ReminderCopy)
+        return policy
+
+    async def assistant_copy(self, scope: SalesScope) -> AssistantCopy:
+        policy = (await self.current(scope, RuleKey.ASSISTANT)).policy
+        assert isinstance(policy, AssistantCopy)
         return policy
 
     async def salesorder_rules(self, scope: SalesScope) -> SalesOrderRules:

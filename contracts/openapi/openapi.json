@@ -20152,7 +20152,8 @@
           "sales_handoffs",
           "sales_followups",
           "sales_salesorder_rules",
-          "sales_reminders"
+          "sales_reminders",
+          "sales_assistant"
         ],
         "title": "RuleKey",
         "type": "string"

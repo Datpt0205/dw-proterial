@@ -1,6 +1,6 @@
 # 42 — Hard-coded reading moved to skills, one family at a time
 
-Status: in progress (families 1, 3 and 5 done 2026-11-16; family 6's follow-up wording done 2026-11-16, its revision hints 2026-11-17; families 2, 4 and the rest of 6 (item names, the assistant's sentences and `QuestionKind`) left, each after its skill passes its bar on Strata)
+Status: in progress (families 1, 3 and 5 done 2026-11-16; family 6 done 2026-11-18: the follow-up wording, the revision hints, the assistant's sentences; item names and `QuestionKind` decided to stay code; family 2 is ticket 40's, family 4 deferred by Đạt 2026-11-18)
 Blocked by: 40
 Category: enhancement
 
@@ -387,3 +387,30 @@ Under dw_sales ADR 0014 ("Applied 2026-11-16: the hand-off and reply kinds").
   still a duplicate).
 - Contracts owe a regeneration: `contracts/jsonschema/sales_rules.json`
   gains `revision_marks`.
+
+## Done: family 6, the assistant's sentences; item names and `QuestionKind` stay code (2026-11-18)
+
+Đạt, 2026-11-18, on the proposals: "3, 5 theo đề xuất; 4 để sau".
+
+- **The assistant's sentences are copy** (dw_sales ADR 0007, addendum of
+  2026-11-18): `configs/copy/sales_assistant@1.0.0.yaml`, read through
+  `AssistantCopyPort` (`TenantRuleBook.assistant_copy`) once per turn;
+  `RuleKey.ASSISTANT` (`sales_assistant`), a copy key like the reminders'
+  (`rule_words.COPY_KEYS`, not price-bearing, off the process page, under
+  "Nâng cao" on /sales/rules with every field labelled). Each sentence names
+  only its own placeholders, read from the field's own schema
+  (`x-placeholders`), so the editor lists the set the check holds. Migration
+  `0b6574e8974d` admits the key in `ck_rule_versions_key` and
+  `ck_rule_drafts_rule_key`. The platform's words are the code's: 51
+  renderings (every branch of the order, quote and work sentences, the link,
+  not found) compared equal before the move. Tests: `test_assistant.py` (a
+  tenant's words said, another tenant's never; five refused sentences),
+  `test_sales_schema.py` (the key admitted).
+- **`QuestionKind` stays code**: it decides which data a question reaches,
+  a guard, not wording (ADR 0007's addendum). The status words stay code.
+- **Item names stay code** (`domain/item_names.py`): it reads the plant's own
+  item master names by a fixed grammar and leaves blank what it does not
+  know; a model reading every master item adds a call per item and reads no
+  customer's language. Its colour words follow family 4's decision.
+- **Family 4 deferred** (Đạt, 2026-11-18): the item wording and the catalog's
+  values as tenant reference data, proposed and waiting.

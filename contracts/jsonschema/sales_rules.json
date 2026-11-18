@@ -1,4 +1,364 @@
 {
+  "sales_assistant": {
+    "$defs": {
+      "AssistantWords": {
+        "additionalProperties": false,
+        "description": "Every sentence the assistant's code says, by what it answers.",
+        "properties": {
+          "case_catalog": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Case Catalog",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "catalog": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Catalog",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "elsewhere": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Elsewhere",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "linked": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Linked",
+            "type": "string",
+            "x-placeholders": [
+              "{case}"
+            ]
+          },
+          "mail_step": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Mail Step",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "mail_work": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Mail Work",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "no_number": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "No Number",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "no_overdue": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "No Overdue",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "no_work": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "No Work",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "not_found": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Not Found",
+            "type": "string",
+            "x-placeholders": [
+              "{reference}",
+              "{what}"
+            ]
+          },
+          "not_understood": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Not Understood",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "only_this_case": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Only This Case",
+            "type": "string",
+            "x-placeholders": [
+              "{case}"
+            ]
+          },
+          "order_cross_check": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Order Cross Check",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "order_flags": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Order Flags",
+            "type": "string",
+            "x-placeholders": [
+              "{blocking_flags}",
+              "{open_flags}"
+            ]
+          },
+          "order_status": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Order Status",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{po_no}",
+              "{received_on}",
+              "{revision}",
+              "{status}"
+            ]
+          },
+          "order_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Order Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "out_of_scope": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Out Of Scope",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "out_of_scope_case": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Out Of Scope Case",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "overdue_head": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Overdue Head",
+            "type": "string",
+            "x-placeholders": [
+              "{count}"
+            ]
+          },
+          "quote_due": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote Due",
+            "type": "string",
+            "x-placeholders": [
+              "{due}"
+            ]
+          },
+          "quote_flags": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote Flags",
+            "type": "string",
+            "x-placeholders": [
+              "{open_flags}"
+            ]
+          },
+          "quote_late": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote Late",
+            "type": "string",
+            "x-placeholders": [
+              "{due}"
+            ]
+          },
+          "quote_status": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote Status",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{received_on}",
+              "{request_no}",
+              "{status}"
+            ]
+          },
+          "quote_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Quote Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "quote_ycbg": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote Ycbg",
+            "type": "string",
+            "x-placeholders": [
+              "{ycbg_no}"
+            ]
+          },
+          "step_look": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Step Look",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "step_read": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Step Read",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "unknown_customer": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Unknown Customer",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "which_order": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Which Order",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "which_quote": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Which Quote",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "work_head": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Work Head",
+            "type": "string",
+            "x-placeholders": [
+              "{count}"
+            ]
+          },
+          "work_item": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Work Item",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{next_step}",
+              "{what}"
+            ]
+          },
+          "work_item_due": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Work Item Due",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{due}",
+              "{next_step}",
+              "{what}"
+            ]
+          },
+          "work_more": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Work More",
+            "type": "string",
+            "x-placeholders": [
+              "{more}"
+            ]
+          }
+        },
+        "required": [
+          "catalog",
+          "case_catalog",
+          "elsewhere",
+          "not_understood",
+          "out_of_scope",
+          "out_of_scope_case",
+          "which_order",
+          "which_quote",
+          "not_found",
+          "order_word",
+          "quote_word",
+          "only_this_case",
+          "linked",
+          "order_status",
+          "order_flags",
+          "order_cross_check",
+          "quote_status",
+          "no_number",
+          "quote_due",
+          "quote_late",
+          "quote_ycbg",
+          "quote_flags",
+          "no_work",
+          "no_overdue",
+          "work_head",
+          "overdue_head",
+          "work_item",
+          "work_item_due",
+          "unknown_customer",
+          "work_more",
+          "mail_work",
+          "mail_step",
+          "step_read",
+          "step_look"
+        ],
+        "title": "AssistantWords",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "`configs/copy/sales_assistant@<version>.yaml`: the assistant's words.",
+    "properties": {
+      "copy_id": {
+        "pattern": "^sales_assistant$",
+        "title": "Copy Id",
+        "type": "string"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Version",
+        "type": "string"
+      },
+      "words": {
+        "$ref": "#/$defs/AssistantWords"
+      }
+    },
+    "required": [
+      "schema_version",
+      "copy_id",
+      "version",
+      "words"
+    ],
+    "title": "AssistantCopy",
+    "type": "object"
+  },
   "sales_bravo_upload": {
     "$defs": {
       "BannerCell": {

@@ -175,15 +175,8 @@ ACTION: Final[dict[str, str]] = {
     "record_master_list": "Xác nhận master list",
 }
 
-# What DW1 answers, said whenever a question is outside it.
-CATALOG: Final = (
-    "DW1 trả lời được: trạng thái một PO (ghi số PO), trạng thái một yêu cầu báo giá "
-    "(ghi số yêu cầu), việc đang chờ bạn, và việc đã quá hạn."
-)
-
-# What a case's own conversation answers (ticket 46), and where the rest is asked.
-CASE_CATALOG: Final = "Ở đây DW1 trả lời về hồ sơ này: trạng thái, các mốc ngày và cờ đang mở."
-ELSEWHERE: Final = "Hỏi hồ sơ khác hoặc việc của bạn ở trang Hỏi đáp DW1."
+# What DW1 answers and every sentence code says are the tenant's copy
+# (`application.assistant_copy`, `configs/copy/sales_assistant@<v>.yaml`).
 
 
 def day(value: date) -> str:

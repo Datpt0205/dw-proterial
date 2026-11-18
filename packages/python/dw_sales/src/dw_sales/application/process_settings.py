@@ -688,7 +688,7 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         },
         **{
             Placement(key, path): _VERSION
-            for key in (RuleKey.HANDOFFS, RuleKey.REMINDERS)
+            for key in (RuleKey.HANDOFFS, RuleKey.REMINDERS, RuleKey.ASSISTANT)
             for path in ("schema_version", "copy_id", "version")
         },
         Placement(RuleKey.EMAILS, "sender"): _COPY,
@@ -707,6 +707,7 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         Placement(RuleKey.REMINDERS, "next_steps"): _COPY,
         Placement(RuleKey.REMINDERS, "brief"): _COPY,
         Placement(RuleKey.REMINDERS, "push"): _COPY,
+        Placement(RuleKey.ASSISTANT, "words"): _COPY,
         **{
             Placement(RuleKey.SALESORDER_RULES, path): _VERSION
             for path in ("schema_version", "policy_id", "policy_version", "mock", "description")

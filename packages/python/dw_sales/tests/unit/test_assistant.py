@@ -8,11 +8,13 @@ import json
 import re
 import uuid
 from collections.abc import AsyncGenerator, Callable
-from datetime import timedelta
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from dw_agent_runtime.model.interpretation import (
     ModelUnavailableError,
@@ -21,17 +23,18 @@ from dw_agent_runtime.model.interpretation import (
 from dw_agent_runtime.model.streaming import ChatDelta, ChatDone, ChatReplace, ChatStep
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.rule_versions import RuleScope, RuleVersion
+from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.application.assistant import (
     ANSWER_TOKENS,
     ASSISTANT_ANSWER,
     INTENT_TOKENS,
     QUESTION_INTENT,
 )
+from dw_sales.application.assistant_copy import AssistantWords
+from dw_sales.application.rules import RuleKey
 from dw_sales.domain.assistant import (
     ACTION,
-    CASE_CATALOG,
-    CATALOG,
-    ELSEWHERE,
     ORDER_STATE,
     QUOTE_STATE,
     CaseKey,
@@ -46,6 +49,10 @@ from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, World, open_wor
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
+# The platform's words (`configs/copy/sales_assistant@<v>.yaml`).
+WORDS = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").assistant
+CATALOG, CASE_CATALOG = WORDS.words.catalog, WORDS.words.case_catalog
+ELSEWHERE = WORDS.words.elsewhere
 
 Reading = Callable[[str, dict[str, Any]], dict[str, Any]]
 
@@ -421,6 +428,7 @@ async def test_the_service_refuses_another_persons_session_even_from_a_leaky_sto
         service.ids,
         service.worker_id,
         service.worker_version,
+        service.copy,
     )
     nrv = await _order(world, NRV)
     await leaky.ask(AN.context(), "PO NRV-PO-26-0457?", nrv)
@@ -614,3 +622,71 @@ def _restricted(caller: Caller) -> AccessContext:
     return caller.context().model_copy(
         update={"record_visibility": "restricted", "visible_owners": frozenset({caller.user_id})}
     )
+
+
+class StoredWords:
+    """`RuleVersionLookupPort` holding one tenant's approved version of the
+    assistant's words, and nothing else of anyone's."""
+
+    def __init__(self, tenant_id: uuid.UUID, words: dict[str, str]) -> None:
+        self.tenant_id = tenant_id
+        document = WORDS.model_dump(mode="json")
+        document["version"] = "1.0.1"
+        document["words"] |= words
+        self.document = document
+
+    def _version(self, scope: RuleScope, key: str) -> RuleVersion | None:
+        if scope.tenant_id.value != self.tenant_id or key != RuleKey.ASSISTANT.value:
+            return None
+        at = datetime(2026, 11, 18, tzinfo=UTC)
+        return RuleVersion(
+            version_id=uuid.UUID(int=0x46),
+            key=key,
+            version="1.0.1",
+            document=self.document,
+            status="approved",
+            proposed_by=uuid.UUID(int=1),
+            proposed_at=at,
+            decided_by=uuid.UUID(int=2),
+            decided_at=at,
+        )
+
+    async def approved(self, scope: RuleScope, key: str) -> RuleVersion | None:
+        return self._version(scope, key)
+
+    async def find(self, scope: RuleScope, key: str, version: str) -> RuleVersion | None:
+        found = self._version(scope, key)
+        return found if found is not None and found.version == version else None
+
+
+async def test_a_tenants_own_words_are_said_and_another_tenants_never() -> None:
+    """Ticket 42 family 6: code's sentences are the tenant's copy; another
+    tenant's version is never read, and a tenant without one is said the
+    platform's words."""
+    world = await _orders(_world(Scripted(_reads)))
+    nrv = await _order(world, NRV)
+    ours = {"out_of_scope_case": "Ngoài phạm vi.", "case_catalog": "Hỏi trạng thái hồ sơ."}
+
+    def asking(tenant_id: uuid.UUID) -> Any:
+        book = rule_book(world.policies, StoredWords(tenant_id, ours))
+        return replace(world.services.assistant, copy=book)
+
+    said = await asking(ALPHA.tenant_id.value).ask(AN.context(), "Cáp CB-2006 giá bao nhiêu?", nrv)
+    assert said.turn.answer == "Ngoài phạm vi. Hỏi trạng thái hồ sơ."
+    other = await asking(BETA.tenant_id.value).ask(AN.context(), "Cáp CB-2006 giá bao nhiêu?", nrv)
+    assert other.turn.answer == f"{WORDS.words.out_of_scope_case} {CASE_CATALOG}"
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        {"linked": "{case} của {customer}"},  # another sentence's placeholder
+        {"linked": "{case!r}"},  # a conversion
+        {"not_found": "{what:>40} {reference}"},  # a format spec
+        {"catalog": "Hỏi {anything}"},  # a sentence that names none
+        {"catalog": ""},
+    ],
+)
+def test_a_sentence_naming_what_it_does_not_fill_is_refused(words: dict[str, str]) -> None:
+    with pytest.raises(ValidationError):
+        AssistantWords.model_validate(WORDS.words.model_dump() | words)
