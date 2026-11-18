@@ -495,6 +495,22 @@ context. All five are done and on `main`. The full narrative is at
           `windows-host/` once verified. Owed after it is back: the VM's
           default route and DNS via 10.250.0.1 (NAT), the checks, this
           step in the IT runbook; the host now shows one MAC to the LAN.
+          **11-18, back in over an IT bridge, not Tailscale.** IT did not
+          restore Tailscale; remote now runs through an IT-provided,
+          monitored path -- UltraViewer to an intermediate machine, then RDP
+          to the host -- so host work is visible to IT. The DW VM stays
+          key-only (`lock_passwd`), reached by SSH from the host over the
+          internal link; the host was given an authorized key by editing the
+          cloud-init seed (new `instance-id`, host public key added), no
+          private key leaving the laptop. First SSH to 10.250.0.2 timed out:
+          the host's `vEthernet (DW-Internal)` is Not Present after the LAN
+          move, so the host has no internal address -- restoring the Internal
+          switch's management vNIC and 10.250.0.1/30 is in progress, and the
+          VM's own 10.250.0.2 may need re-applying via a seed network-config.
+          **Owed (Đạt):** whether to ask Proterial for a sanctioned direct
+          dev path into the VM (a tunnel ending in the VM, or SSH forwarded
+          to it) so work is private and above-board, not on the monitored
+          host. Claude Code runs in the VM, reached by SSH, not on the host.
           (c) few Windows admins,
           FPT on its own account: only an admin can Turn Off the VM, which
           equals a power cut for it (committed data survives, as drilled).
