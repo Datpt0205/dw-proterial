@@ -102,3 +102,17 @@ Left:
   status moves. `test_ycbg_design_values.py`, `design-check-values.test.tsx`.
   Next: steps 1 and 3 (keep the export's bytes for the case; "Dùng kết quả
   Design trên Bravo").
+- 2026-11-18, **step 1 decided (the agent's call, as Đạt asked): keep a
+  snapshot of the case's own rows, never the export file.** One "RFQ List"
+  export holds every open YCBG, other customers' among them, so the whole
+  file on a case would show a case reader rows of customers they were never
+  sent (ui-quality §6's side door). What the case keeps instead: the export's
+  sha256, its sheet name, the title row and the rows of that YCBG only, as
+  the sandbox read them, on `DesignCheck` (case body, no migration). It
+  lives as long as the case, so nothing new needs a retention rule. The
+  source pane draws it as a sheet grid, the person opens it (a served
+  record, as for a file) before "Dùng kết quả Design trên Bravo" records the
+  reply; each value's anchor is `RFQ List!<column><row>` in that snapshot,
+  bound to the export's sha256. `DesignReply` gains this third origin
+  beside a file and a mail text; dw_sales ADR 0005's rule (every value opens
+  where it was read) is kept, with the snapshot as the place.
