@@ -558,6 +558,14 @@ class DesignCheckLine(BaseModel):
     verdict: DesignVerdict
     bp_code: BpCode | None = None
     reason: Reason | None = None
+    # What else Design states on a QUOTE line in the same export (ticket 11):
+    # the spec number, copper per BP unit and the BP unit, as Bravo prints
+    # them, and the export row they were read from. None where the export
+    # has no such column (one from before them) or leaves it blank.
+    spec_no: str | None = Field(default=None, pattern=r"^[!-~](?:[ -~]{0,62}[!-~])?$")
+    copper_kg_per_bp_unit: Decimal | None = Field(default=None, ge=0)
+    bp_unit: str | None = Field(default=None, min_length=1, max_length=16)
+    row: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _verdict_carries_its_value(self) -> Self:
@@ -565,6 +573,9 @@ class DesignCheckLine(BaseModel):
             raise ValueError(f"line {self.line_no}: a QUOTE names its BP code")
         if self.verdict == "decline" and self.reason is None:
             raise ValueError(f"line {self.line_no}: a DECLINE gives Design's reason")
+        stated = (self.spec_no, self.copper_kg_per_bp_unit, self.bp_unit)
+        if self.verdict == "decline" and any(v is not None for v in stated):
+            raise ValueError(f"line {self.line_no}: a DECLINE states no specification")
         return self
 
 

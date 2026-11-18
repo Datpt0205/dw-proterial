@@ -92,3 +92,13 @@ Left:
   4. Copper per km from CU WT per BP unit: only when "Unit BP" is km (the
      B21 convert rate says 1 km = 1,000 m); any other unit leaves copper
      unknown rather than converted by a guess.
+- 2026-11-18, **step 2 of the slice above done**: the YCBG reader takes
+  "Bản vẽ/ Specification", "CU WT: (KG/BP Unit)" and "Unit BP" (optional,
+  so an older export reads as before; copper a plain number with "." or
+  the row is rejected naming the column), and each QUOTE line's
+  `DesignCheckLine` keeps them with its export row; a DECLINE states none
+  (mutation-checked). The quote page shows them beside the BP code ("Bản
+  vẽ · Cu (Design)"); copper is not an amount, as on a Design reply. No
+  status moves. `test_ycbg_design_values.py`, `design-check-values.test.tsx`.
+  Next: steps 1 and 3 (keep the export's bytes for the case; "Dùng kết quả
+  Design trên Bravo").

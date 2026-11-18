@@ -5835,6 +5835,31 @@
             ],
             "title": "Bp Code"
           },
+          "bp_unit": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bp Unit"
+          },
+          "copper_kg_per_bp_unit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copper Kg Per Bp Unit"
+          },
           "line_no": {
             "maximum": 9999.0,
             "minimum": 1.0,
@@ -5854,6 +5879,30 @@
               }
             ],
             "title": "Reason"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          },
+          "spec_no": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~](?:[ -~]{0,62}[!-~])?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec No"
           },
           "verdict": {
             "enum": [

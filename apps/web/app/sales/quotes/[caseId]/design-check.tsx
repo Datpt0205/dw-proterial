@@ -67,6 +67,24 @@ export function DesignCheckPanel({
             render: (c: string | null) => c ?? "—",
           },
           {
+            // Design's spec number and copper on the same export row (ticket 11).
+            title: "Bản vẽ · Cu (Design)",
+            key: "spec",
+            render: (_: unknown, line: Check["lines"][number]) => {
+              if (line.verdict !== "quote") return "—";
+              const cu =
+                line.copper_kg_per_bp_unit == null
+                  ? null
+                  : `Cu ${formatQuantity(line.copper_kg_per_bp_unit)} kg/${line.bp_unit ?? "?"}`;
+              return (
+                <div>
+                  <div>{line.spec_no ?? "Tệp xuất không ghi bản vẽ"}</div>
+                  {cu ? <div>{cu}</div> : null}
+                </div>
+              );
+            },
+          },
+          {
             title: "Giá cơ bản (Bravo)",
             key: "base_price",
             render: (_: unknown, line: Check["lines"][number]) => {
@@ -75,7 +93,9 @@ export function DesignCheckPanel({
               const bp = byLine.get(line.line_no);
               if (!bp?.found || bp.base_price == null)
                 return (
-                  <Tag color="warning">Không có trong danh mục Base price đã đọc</Tag>
+                  <Tag color="warning">
+                    Không có trong danh mục Base price đã đọc
+                  </Tag>
                 );
               const cu =
                 bp.copper_kg == null

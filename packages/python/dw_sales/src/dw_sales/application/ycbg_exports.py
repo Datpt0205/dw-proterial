@@ -38,6 +38,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
@@ -88,6 +89,15 @@ COLUMNS: Final[Mapping[str, ExportColumn]] = MappingProxyType(
         "design_check": ExportColumn("Design check"),
         "reason": ExportColumn("Decline reason", aliases=("Lý do",)),
         "bp_code": ExportColumn("Base price code", aliases=("Mã BP", "BP Code")),
+        # Design's own values on a QUOTE line (ticket 11): optional, so an
+        # export from before them reads as it did.
+        "spec_no": ExportColumn(
+            "Bản vẽ/ Specification", aliases=("Specification",), required=False
+        ),
+        "copper_kg_per_bp_unit": ExportColumn(
+            "CU WT: (KG/BP Unit)", aliases=("CU WT",), required=False
+        ),
+        "bp_unit": ExportColumn("Unit BP", aliases=("BP Unit",), required=False),
     }
 )
 # Bravo's own values of a line's status and Design Check (Box 11-10, B16),
@@ -121,6 +131,12 @@ class BravoYcbgLine(BaseModel):
     # The customer's item description, as Sales entered it from DW1's draft:
     # what tells which of the request's lines it is.
     description: str | None = Field(default=None, max_length=1000)
+    # Design's values on a QUOTE line, as `DesignCheckLine` holds them.
+    spec_no: str | None = Field(default=None, max_length=64)
+    copper_kg_per_bp_unit: Decimal | None = Field(default=None, ge=0)
+    bp_unit: str | None = Field(default=None, max_length=16)
+    # The export row it was read from; None from a source with no rows.
+    row: int | None = Field(default=None, ge=1)
 
 
 # ------------------------------------------------------------------ ports --
@@ -172,6 +188,26 @@ def _line_no(cell: CellValue) -> int | None:
     return int(text)
 
 
+_PLAIN_NUMBER: Final = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
+
+
+def _quantity(cell: CellValue, field: str) -> Decimal | None:
+    """A non-negative number as Bravo writes it: a number cell, or text with
+    "." as its decimal mark. A comma or a sign is refused, never guessed."""
+    if cell is None or (isinstance(cell, str) and not cell.strip()):
+        return None
+    if isinstance(cell, bool):
+        raise ValueError(field)
+    if isinstance(cell, int | float):
+        if cell < 0:
+            raise ValueError(field)
+        return Decimal(str(cell))
+    text = str(cell).strip()
+    if _PLAIN_NUMBER.fullmatch(text) is None:
+        raise ValueError(field)
+    return Decimal(text)
+
+
 def _closed(cell: CellValue, values: Mapping[str, str], field: str) -> str | None:
     """One of Bravo's own values of the field, or None for a blank cell."""
     text = _text(cell)
@@ -209,6 +245,12 @@ def parse_export(table: ImportedTable) -> ParsedExport:
                 "bp_code": _text(cells["bp_code"]),
                 "reason": _text(cells["reason"]),
                 "description": _text(cells["description"]),
+                "spec_no": _text(cells["spec_no"]),
+                "copper_kg_per_bp_unit": _quantity(
+                    cells["copper_kg_per_bp_unit"], "copper_kg_per_bp_unit"
+                ),
+                "bp_unit": _text(cells["bp_unit"]),
+                "row": row.row,
             }
         except ValueError as refused:
             rejected.append(_rejected(row.row, str(refused)))
@@ -254,6 +296,16 @@ def _check_lines(lines: Sequence[BravoYcbgLine]) -> tuple[DesignCheckLine, ...] 
                 verdict=line.verdict,
                 bp_code=line.bp_code if line.verdict == "quote" else None,
                 reason=line.reason,
+                **(
+                    {
+                        "spec_no": line.spec_no,
+                        "copper_kg_per_bp_unit": line.copper_kg_per_bp_unit,
+                        "bp_unit": line.bp_unit,
+                        "row": line.row,
+                    }
+                    if line.verdict == "quote"
+                    else {}
+                ),
             )
             for line in sorted(lines, key=lambda line: line.line_no)
             if line.verdict is not None
