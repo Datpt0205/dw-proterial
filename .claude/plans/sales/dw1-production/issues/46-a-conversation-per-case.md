@@ -1,6 +1,6 @@
 # 46 — One conversation per case, on the case page; one general one per person
 
-Status: in progress (slice built 2026-11-16; left: T0 buttons from the chat, Playwright at 390 px; see "Done")
+Status: in progress (slice built 2026-11-16, looked at in a browser 2026-11-18; left: T0 buttons from the chat, explaining the thread; see "Done")
 Blocked by: 40 (skills), 44 (tiers)
 Category: enhancement
 
@@ -95,7 +95,16 @@ Left:
 - The answers stay ADR 0007's catalog for the bound case (status, dates,
   flags); "explain the thread / the PO as read" through ticket 31's tools is
   not wired (those steps are off on the plant's model).
-- Playwright at desktop and 390 px was not run (no local stack up); the
-  layouts are held by `case-chat.test.tsx` at 1280 and 390 px.
+- 2026-11-18, **looked at in a browser** (local stack, dev sign-in, the
+  Sales head; screenshots in `.playwright-mcp/t46-*.png`, not committed):
+  the order and quote case pages at 1440 px (the conversation open beside
+  the case), the order page at 390 px (the button bottom right, the bottom
+  sheet showing the same conversation asked on the desktop, Esc closing it
+  with focus back on the button) and at 320 px (no sideways scroll), the
+  assistant page (general conversation, the recent case a real link to its
+  page). With no model reachable the answer was the "DW1 chưa hiểu" sentence,
+  as designed. Fixed on the way: three `Space direction=` (deprecated in
+  antd 6) printed a console error on the quote page. Seen, not changed:
+  antd 6.6 deprecates `List` for `Listy` (the assistant page warns).
 - The unread mark only shows when a turn is kept and its answer never
   delivered; it matters once an answer can arrive while the person is away.

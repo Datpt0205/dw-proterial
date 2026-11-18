@@ -62,7 +62,7 @@ export function MailTextDrawer({
     const text = served.data?.text;
     if (text === undefined || !target) return null;
     return (
-      <Space direction="vertical" className="w-full">
+      <Space orientation="vertical" className="w-full">
         <Typography.Text type="secondary">
           Đoạn mới nhất của thư, như DW1 đã đọc (phần trích dẫn thư cũ đã được
           cắt theo cấu trúc thư).
