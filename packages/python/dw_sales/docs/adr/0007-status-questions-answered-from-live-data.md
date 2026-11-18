@@ -170,3 +170,23 @@ conversation is found and what it may answer.
   the chat: their bound customer would be the case's, as ticket 31 binds it,
   but on the plant's model they are off (ticket 30), and decision 1's catalog
   is what is measured.
+
+## Addendum 2026-11-18: code's sentences are the tenant's copy; the catalog stays code
+
+Đạt, 2026-11-18 (ticket 42 family 6, "5 theo đề xuất"):
+
+- **Every sentence code says is copy.** The catalog's words, "not
+  understood", "which PO", "not found", the status sentences, the work list's
+  lines and the chat's step titles are `configs/copy/sales_assistant@1.0.0.yaml`
+  (`application.assistant_copy.AssistantCopy`), a rule key
+  (`RuleKey.ASSISTANT`, migration `0b6574e8974d`) a tenant words for itself
+  through /sales/rules, two people deciding like every rule version. Each
+  sentence names only the placeholders code fills for it (refused when
+  proposed otherwise). The platform's words are the ones the code said: all
+  51 renderings compared equal before the move.
+- **What the assistant answers stays code.** `QuestionKind` is decision 1's
+  catalog: it decides which data a question may reach (decision 2's lookups,
+  decision 3's facts), so it is a guard, not wording, and it is not a tenant's
+  to extend by copy. A new kind is a code change, measured like this one's.
+- The status words (`ORDER_STATE`, `QUOTE_STATE`, `ACTION`) stay code: they
+  are the product's terms, the same the pages show.

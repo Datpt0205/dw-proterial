@@ -147,6 +147,9 @@ const TEMPLATE_HELP =
 const REMINDER_HELP =
   "Giá trị trong {…} do hệ thống điền từ hồ sơ; mỗi mẫu chỉ dùng giá trị mà lời nhắc đó có.";
 
+const ASSISTANT_HELP =
+  "Giá trị trong {…} do hệ thống điền từ hồ sơ; mỗi câu chỉ dùng giá trị mà câu đó có.";
+
 export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
   sales_order_rules: {
     price: { label: "Đơn giá" },
@@ -931,6 +934,91 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "push.batch_body": { label: "Nội dung khi có nhiều việc cùng lúc" },
     "push.order": { label: "Tên loại hồ sơ: đơn hàng" },
     "push.quote": { label: "Tên loại hồ sơ: báo giá" },
+  },
+  sales_assistant: {
+    words: {
+      label: "Câu chữ của Hỏi đáp DW1",
+      help: "Câu DW1 tự nói khi trả lời mà không dùng mô hình. DW1 trả lời được câu hỏi nào là do hệ thống quyết định, không ở đây.",
+    },
+    "words.catalog": { label: "DW1 trả lời được gì (trang Hỏi đáp)" },
+    "words.case_catalog": { label: "DW1 trả lời được gì (trong hồ sơ)" },
+    "words.elsewhere": { label: "Chỉ chỗ hỏi hồ sơ khác" },
+    "words.not_understood": { label: "Khi DW1 chưa hiểu câu hỏi" },
+    "words.out_of_scope": { label: "Câu hỏi ngoài phạm vi (trang Hỏi đáp)" },
+    "words.out_of_scope_case": { label: "Câu hỏi ngoài phạm vi (trong hồ sơ)" },
+    "words.which_order": { label: "Hỏi lại số PO" },
+    "words.which_quote": { label: "Hỏi lại số yêu cầu báo giá" },
+    "words.not_found": {
+      label: "Không tìm thấy hồ sơ",
+      help: ASSISTANT_HELP,
+    },
+    "words.order_word": { label: "Tên gọi PO trong câu" },
+    "words.quote_word": { label: "Tên gọi yêu cầu báo giá trong câu" },
+    "words.only_this_case": {
+      label: "Hỏi hồ sơ khác trong cuộc trò chuyện của một hồ sơ",
+      help: ASSISTANT_HELP,
+    },
+    "words.linked": {
+      label: "Chỉ tới cuộc trò chuyện của hồ sơ",
+      help: ASSISTANT_HELP,
+    },
+    "words.order_status": {
+      label: "Trạng thái PO",
+      help: ASSISTANT_HELP,
+    },
+    "words.order_flags": {
+      label: "Số cờ của PO",
+      help: ASSISTANT_HELP,
+    },
+    "words.order_cross_check": { label: "PO đang chờ kiểm chéo" },
+    "words.quote_status": {
+      label: "Trạng thái yêu cầu báo giá",
+      help: ASSISTANT_HELP,
+    },
+    "words.no_number": { label: "Yêu cầu chưa có số" },
+    "words.quote_due": {
+      label: "Hạn báo giá",
+      help: ASSISTANT_HELP,
+    },
+    "words.quote_late": {
+      label: "Hạn báo giá đã qua",
+      help: ASSISTANT_HELP,
+    },
+    "words.quote_ycbg": {
+      label: "Số YCBG",
+      help: ASSISTANT_HELP,
+    },
+    "words.quote_flags": {
+      label: "Số cờ của báo giá",
+      help: ASSISTANT_HELP,
+    },
+    "words.no_work": { label: "Không có việc đang chờ" },
+    "words.no_overdue": { label: "Không có việc quá hạn" },
+    "words.work_head": {
+      label: "Mở đầu danh sách việc đang chờ",
+      help: ASSISTANT_HELP,
+    },
+    "words.overdue_head": {
+      label: "Mở đầu danh sách việc quá hạn",
+      help: ASSISTANT_HELP,
+    },
+    "words.work_item": {
+      label: "Một việc",
+      help: ASSISTANT_HELP,
+    },
+    "words.work_item_due": {
+      label: "Một việc có hạn",
+      help: ASSISTANT_HELP,
+    },
+    "words.unknown_customer": { label: "Khi chưa rõ khách" },
+    "words.work_more": {
+      label: "Các việc còn lại",
+      help: ASSISTANT_HELP,
+    },
+    "words.mail_work": { label: "Tên một thư cần xử lý" },
+    "words.mail_step": { label: "Việc cần làm với thư" },
+    "words.step_read": { label: "Dòng trạng thái khi đọc câu hỏi" },
+    "words.step_look": { label: "Dòng trạng thái khi tra hồ sơ" },
   },
 };
 

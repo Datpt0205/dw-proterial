@@ -73,6 +73,7 @@ from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.assistant_copy import AssistantCopyPort, AssistantWords
 from dw_sales.application.local_time import local_day
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
@@ -80,9 +81,6 @@ from dw_sales.application.quotes_service import QuoteQueries
 from dw_sales.application.views import OrderSummaryView, QuoteSummaryView
 from dw_sales.domain.assistant import (
     ACTION,
-    CASE_CATALOG,
-    CATALOG,
-    ELSEWHERE,
     HISTORY_TURNS,
     ORDER_STATE,
     QUOTE_STATE,
@@ -286,16 +284,28 @@ def order_facts(order: OrderSummaryView, zone: ZoneInfo) -> dict[str, Any]:
     }
 
 
-def order_sentence(facts: dict[str, Any]) -> str:
-    text = (
-        f"PO {facts['po_no']} (rev {facts['revision']}) của khách {facts['customer_code']}: "
-        f"{facts['status']}. Nhận ngày {facts['received_on']}."
-    )
+def order_sentence(facts: dict[str, Any], words: AssistantWords) -> str:
+    parts = [
+        words.say(
+            "order_status",
+            po_no=facts["po_no"],
+            revision=facts["revision"],
+            customer=facts["customer_code"],
+            status=facts["status"],
+            received_on=facts["received_on"],
+        )
+    ]
     if facts["open_flags"]:
-        text += f" Còn {facts['open_flags']} cờ đang mở, {facts['blocking_flags']} cờ chặn."
+        parts.append(
+            words.say(
+                "order_flags",
+                open_flags=facts["open_flags"],
+                blocking_flags=facts["blocking_flags"],
+            )
+        )
     if facts["awaits_cross_check"]:
-        text += " Đang chờ kiểm chéo."
-    return text
+        parts.append(words.order_cross_check)
+    return " ".join(parts)
 
 
 def quote_facts(quote: QuoteSummaryView, zone: ZoneInfo) -> dict[str, Any]:
@@ -312,33 +322,43 @@ def quote_facts(quote: QuoteSummaryView, zone: ZoneInfo) -> dict[str, Any]:
     }
 
 
-def quote_sentence(facts: dict[str, Any]) -> str:
-    text = (
-        f"Yêu cầu báo giá {facts['request_no'] or '(chưa số)'} của khách "
-        f"{facts['customer_code']}: {facts['status']}. Nhận ngày {facts['received_on']}."
-    )
+def quote_sentence(facts: dict[str, Any], words: AssistantWords) -> str:
+    parts = [
+        words.say(
+            "quote_status",
+            request_no=facts["request_no"] or words.no_number,
+            customer=facts["customer_code"],
+            status=facts["status"],
+            received_on=facts["received_on"],
+        )
+    ]
     if facts["quote_due"]:
-        late = " (đã quá hạn)" if facts["overdue"] else ""
-        text += f" Hạn báo giá {facts['quote_due']}{late}."
+        late = "quote_late" if facts["overdue"] else "quote_due"
+        parts.append(words.say(late, due=facts["quote_due"]))
     if facts["ycbg_no"]:
-        text += f" Số YCBG {facts['ycbg_no']}."
+        parts.append(words.say("quote_ycbg", ycbg_no=facts["ycbg_no"]))
     if facts["open_flags"]:
-        text += f" Còn {facts['open_flags']} cờ đang mở."
-    return text
+        parts.append(words.say("quote_flags", open_flags=facts["open_flags"]))
+    return " ".join(parts)
 
 
-def work_sentence(facts: dict[str, Any]) -> str:
+def work_sentence(facts: dict[str, Any], words: AssistantWords) -> str:
     overdue = facts["question_kind"] == "overdue"
     if not facts["count"]:
-        return "Bạn không có việc nào quá hạn." if overdue else "Bạn không có việc nào đang chờ."
-    head = f"Bạn có {facts['count']} việc {'quá hạn' if overdue else 'đang chờ'}:"
+        return words.no_overdue if overdue else words.no_work
+    head = words.say("overdue_head" if overdue else "work_head", count=facts["count"])
     lines = [
-        f"- {item['what']} (khách {item['customer_code'] or 'chưa rõ'}): {item['next_step']}"
-        + (f", hạn {item['due']}" if item["due"] else "")
+        words.say(
+            "work_item_due" if item["due"] else "work_item",
+            what=item["what"],
+            customer=item["customer_code"] or words.unknown_customer,
+            next_step=item["next_step"],
+            due=item["due"],
+        )
         for item in facts["items"]
     ]
     if facts["more"]:
-        lines.append(f"- và {facts['more']} việc khác trong Việc cần làm.")
+        lines.append(words.say("work_more", more=facts["more"]))
     return "\n".join([head, *lines])
 
 
@@ -359,6 +379,8 @@ class AssistantService:
     ids: IdGenerator
     worker_id: str
     worker_version: str
+    # The tenant's words for code's own sentences (ticket 42 family 6).
+    copy: AssistantCopyPort
 
     async def conversation(
         self, context: AccessContext, case: CaseKey | None = None
@@ -427,6 +449,7 @@ class AssistantService:
         they may not read) raises before the first event, while the route can
         still answer with a status."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
+        words = (await self.copy.assistant_copy(sales_scope(context))).words
         bound = await self._bound(context, case) if case is not None else None
         ref = bound.ref if bound is not None else None
         now = self.clock.now()
@@ -445,13 +468,13 @@ class AssistantService:
                 case=ref,
             )
         focus = ref or (earlier[-1].focus if earlier else None)
-        yield ChatStep(key="read", title="Đang đọc câu hỏi")
+        yield ChatStep(key="read", title=words.step_read)
         intent = await self._intent(context, question, earlier, focus)
-        yield ChatStep(key="look", title="Đang tra trong phạm vi bạn được xem")
+        yield ChatStep(key="look", title=words.step_look)
         if bound is not None:
-            found = _in_case(intent, bound)
+            found = _in_case(intent, bound, words)
         else:
-            found = await self._find(context, intent, focus)
+            found = await self._find(context, intent, focus, words)
         answer: str = found.sentence
         by: Literal["model", "code"] = "code"
         async with aclosing(self._worded(context, question, found)) as wording:
@@ -492,13 +515,11 @@ class AssistantService:
         if case.kind is CaseKind.ORDER:
             for order in await self.orders.summaries(context):
                 if order.case_id == case.case_id:
-                    facts = order_facts(order, zone)
-                    return _Bound(_order_ref(order), order.po_no, facts, order_sentence(facts))
+                    return _Bound(_order_ref(order), order.po_no, order_facts(order, zone))
         else:
             for quote in await self.quotes.summaries(context):
                 if quote.case_id == case.case_id:
-                    facts = quote_facts(quote, zone)
-                    return _Bound(_quote_ref(quote), quote.rfq_no, facts, quote_sentence(facts))
+                    return _Bound(_quote_ref(quote), quote.rfq_no, quote_facts(quote, zone))
         raise NotFoundError(
             "no such case", details={"kind": case.kind.value, "case_id": str(case.case_id)}
         )
@@ -558,22 +579,30 @@ class AssistantService:
             return None
 
     async def _find(
-        self, context: AccessContext, intent: QuestionIntent | None, focus: CaseRef | None
+        self,
+        context: AccessContext,
+        intent: QuestionIntent | None,
+        focus: CaseRef | None,
+        words: AssistantWords,
     ) -> _Found:
         if intent is None:
-            return _Found(f"DW1 chưa hiểu câu hỏi lúc này. {CATALOG}")
+            return _Found(f"{words.not_understood} {words.catalog}")
         match intent.kind:
             case QuestionKind.OUT_OF_SCOPE:
-                return _Found(f"Câu này ngoài những gì DW1 trả lời. {CATALOG}")
+                return _Found(f"{words.out_of_scope} {words.catalog}")
             case QuestionKind.ORDER_STATUS:
-                return await self._order(context, intent, focus)
+                return await self._order(context, intent, focus, words)
             case QuestionKind.QUOTE_STATUS:
-                return await self._quote(context, intent, focus)
+                return await self._quote(context, intent, focus, words)
             case QuestionKind.MY_WORK | QuestionKind.OVERDUE:
-                return await self._work(context, intent.kind)
+                return await self._work(context, intent.kind, words)
 
     async def _order(
-        self, context: AccessContext, intent: QuestionIntent, focus: CaseRef | None
+        self,
+        context: AccessContext,
+        intent: QuestionIntent,
+        focus: CaseRef | None,
+        words: AssistantWords,
     ) -> _Found:
         """The order a general question names, as a link to its conversation
         (ticket 46): found among the orders the caller may read, answered
@@ -584,14 +613,18 @@ class AssistantService:
         elif intent.about_previous and focus is not None and focus.kind is CaseKind.ORDER:
             matches = [o for o in orders if o.case_id == focus.case_id]
         else:
-            return _Found("Bạn hỏi PO nào? Hãy ghi số PO.")
+            return _Found(words.which_order)
         if not matches:
-            return _not_found("PO", intent.reference)
+            return _not_found(words, words.order_word, intent.reference)
         # A PO sent twice is two cases; the latest is the one in play.
-        return _linked(_order_ref(max(matches, key=lambda o: o.received_at)))
+        return _linked(_order_ref(max(matches, key=lambda o: o.received_at)), words)
 
     async def _quote(
-        self, context: AccessContext, intent: QuestionIntent, focus: CaseRef | None
+        self,
+        context: AccessContext,
+        intent: QuestionIntent,
+        focus: CaseRef | None,
+        words: AssistantWords,
     ) -> _Found:
         quotes = await self.quotes.summaries(context)
         if intent.reference is not None:
@@ -599,12 +632,14 @@ class AssistantService:
         elif intent.about_previous and focus is not None and focus.kind is CaseKind.QUOTE:
             matches = [q for q in quotes if q.case_id == focus.case_id]
         else:
-            return _Found("Bạn hỏi yêu cầu báo giá nào? Hãy ghi số yêu cầu.")
+            return _Found(words.which_quote)
         if not matches:
-            return _not_found("yêu cầu báo giá", intent.reference)
-        return _linked(_quote_ref(max(matches, key=lambda q: q.received_at)))
+            return _not_found(words, words.quote_word, intent.reference)
+        return _linked(_quote_ref(max(matches, key=lambda q: q.received_at)), words)
 
-    async def _work(self, context: AccessContext, kind: QuestionKind) -> _Found:
+    async def _work(
+        self, context: AccessContext, kind: QuestionKind, words: AssistantWords
+    ) -> _Found:
         today = local_day(self.clock.now(), await self.overview.time_zone(sales_scope(context)))
         items = list((await self.overview.my_work(context, limit=_WORK_PAGE)).items)
         if kind is QuestionKind.OVERDUE:
@@ -615,11 +650,11 @@ class AssistantService:
             "question_kind": kind.value,
             "today": day(today),
             "count": len(items),
-            "items": [_work_item(i, names, today) for i in listed],
+            "items": [_work_item(i, names, today, words) for i in listed],
             "more": max(len(items) - _LISTED, 0),
         }
         cites = tuple(names[i.id] for i in listed if i.id in names)
-        return _Found(work_sentence(facts), facts, cites)
+        return _Found(work_sentence(facts, words), facts, cites)
 
     async def _names(self, context: AccessContext, items: list[WorkItem]) -> dict[str, CaseRef]:
         """The cases the work names, by id, as their pages call them."""
@@ -692,29 +727,33 @@ class AssistantService:
 @dataclass(frozen=True)
 class _Bound:
     """The case a conversation is bound to: what it is called, its number as
-    a person would write it, and code's facts and sentence about it."""
+    a person would write it, and code's facts about it."""
 
     ref: CaseRef
     number: str | None
     facts: dict[str, Any]
-    sentence: str
+
+    def sentence(self, words: AssistantWords) -> str:
+        said = order_sentence if self.ref.kind is CaseKind.ORDER else quote_sentence
+        return said(self.facts, words)
 
 
-def _in_case(intent: QuestionIntent | None, bound: _Bound) -> _Found:
+def _in_case(intent: QuestionIntent | None, bound: _Bound, words: AssistantWords) -> _Found:
     """A case conversation's answer: the bound case's facts, or a pointer
     elsewhere. Nothing here looks another case up, whatever the question
     names, so nothing of another case or customer can reach the answer."""
     if intent is None:
-        return _Found(f"DW1 chưa hiểu câu hỏi lúc này. {CASE_CATALOG}")
+        return _Found(f"{words.not_understood} {words.case_catalog}")
     match intent.kind:
         case QuestionKind.OUT_OF_SCOPE:
-            return _Found(f"Câu này ngoài những gì DW1 trả lời ở đây. {CASE_CATALOG}")
+            return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
         case QuestionKind.MY_WORK | QuestionKind.OVERDUE:
-            return _Found(ELSEWHERE)
+            return _Found(words.elsewhere)
         case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
             if intent.reference is not None and not same_reference(intent.reference, bound.number):
-                return _Found(f"Cuộc trò chuyện này chỉ về {bound.ref.label}. {ELSEWHERE}")
-            return _Found(bound.sentence, bound.facts, (bound.ref,), bound.ref)
+                only = words.say("only_this_case", case=bound.ref.label)
+                return _Found(f"{only} {words.elsewhere}")
+            return _Found(bound.sentence(words), bound.facts, (bound.ref,), bound.ref)
 
 
 def _held(session: Session | None, context: AccessContext, ref: CaseRef | None) -> Session | None:
@@ -729,27 +768,26 @@ def _held(session: Session | None, context: AccessContext, ref: CaseRef | None) 
     return session
 
 
-def _linked(ref: CaseRef) -> _Found:
+def _linked(ref: CaseRef, words: AssistantWords) -> _Found:
     """A case the general conversation names: a link, none of its data."""
-    return _Found(f"{ref.label}: hỏi trong cuộc trò chuyện của hồ sơ này.", None, (ref,), ref)
+    return _Found(words.say("linked", case=ref.label), None, (ref,), ref)
 
 
-def _not_found(what: str, reference: str | None) -> _Found:
-    return _Found(
-        f"Không tìm thấy {what} {reference} trong các hồ sơ bạn được xem. "
-        "Kiểm tra lại số, hoặc hồ sơ thuộc người khác."
-    )
+def _not_found(words: AssistantWords, what: str, reference: str | None) -> _Found:
+    return _Found(words.say("not_found", what=what, reference=reference))
 
 
-def _work_item(item: WorkItem, names: dict[str, CaseRef], today: date) -> dict[str, Any]:
+def _work_item(
+    item: WorkItem, names: dict[str, CaseRef], today: date, words: AssistantWords
+) -> dict[str, Any]:
     named = names.get(item.id)
-    what = named.label if named else ("Thư cần xử lý" if item.kind == "message" else item.id)
+    what = named.label if named else (words.mail_work if item.kind == "message" else item.id)
     return {
         "what": what,
         "customer_code": item.customer_code,
         # A routed mail's action names its routing reason (`handle_<reason>`):
         # the work list draws the mail, the answer says what it is.
-        "next_step": "Xử lý thư" if item.kind == "message" else label(ACTION, item.action),
+        "next_step": words.mail_step if item.kind == "message" else label(ACTION, item.action),
         "due": day(item.due) if item.due else None,
         "overdue": item.due is not None and item.due < today,
     }

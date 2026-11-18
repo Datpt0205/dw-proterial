@@ -21,6 +21,7 @@ from dw_sales.application.artifact_content import (
     SalesDocumentCopy,
     SalesEmailCopy,
 )
+from dw_sales.application.assistant_copy import AssistantCopy
 from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.application.reminder_copy import ReminderCopy
@@ -68,7 +69,7 @@ def load_bravo_upload(path: Path) -> BravoUploadLayout:
     return load_policy(path, BravoUploadLayout)
 
 
-def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy, ReminderCopy)](
+def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy, ReminderCopy, AssistantCopy)](
     path: Path, model: type[T]
 ) -> T:
     """``configs/copy/<copy_id>@<version>.yaml``, refused when named for
@@ -99,6 +100,8 @@ class SalesPolicies:
     followups: SalesFollowups
     # What those reminders and the brief say (ticket 42 family 6).
     reminders: ReminderCopy
+    # What the assistant's code says (ticket 42 family 6).
+    assistant: AssistantCopy
     # Each customer's own SalesOrder rules (ticket 38): none on the platform.
     salesorder: SalesOrderRules
     # Every version of each key the checkout ships, by ref, the ones above
@@ -118,6 +121,7 @@ class SalesPolicies:
             RuleKey.FOLLOWUPS: self.followups,
             RuleKey.SALESORDER_RULES: self.salesorder,
             RuleKey.REMINDERS: self.reminders,
+            RuleKey.ASSISTANT: self.assistant,
         }
 
 
@@ -139,6 +143,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.2.0.yaml", HandoffCopy),
         followups=load_followups(policies_dir / "sales_followups@1.7.0.yaml"),
         reminders=load_copy(copy_dir / "sales_reminders@1.1.0.yaml", ReminderCopy),
+        assistant=load_copy(copy_dir / "sales_assistant@1.0.0.yaml", AssistantCopy),
         salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
         released={},
     )

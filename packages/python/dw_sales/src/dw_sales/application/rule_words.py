@@ -70,7 +70,7 @@ OUTPUT_TOKENS: Final = 2500
 
 # The keys whose texts are the company's copy: what a draft prints.
 COPY_KEYS: Final = frozenset(
-    {RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.HANDOFFS, RuleKey.REMINDERS}
+    {RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.HANDOFFS, RuleKey.REMINDERS, RuleKey.ASSISTANT}
 )
 
 

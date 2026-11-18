@@ -7639,7 +7639,7 @@ export interface components {
          * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
          */
-        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_salesorder_rules" | "sales_reminders";
+        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_salesorder_rules" | "sales_reminders" | "sales_assistant";
         /**
          * RuleProposalBody
          * @description A whole policy document for one key, validated by that key's schema.
