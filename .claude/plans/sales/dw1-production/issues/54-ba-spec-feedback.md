@@ -1,6 +1,6 @@
 # 54 — Feedback to the BA on the DW1 spec of 20.11, with Bravo's evidence
 
-Status: ready-for-agent
+Status: in progress (document written 2026-11-20: `docs/proterial/Gop-y-dac-ta-DW1_2026-11-20.docx`, gitignored; Đạt sends it to the BA)
 Blocked by: none
 Category: documentation
 
