@@ -21,8 +21,7 @@ no vendor API. Tickets 50–53 cannot start before the decision changes.
   - phase-2 writes go through a staging table in `GetData` and an Agent job,
     under the PIC's Bravo user (Đạt, 11-20), after portal approval and UAT.
 - Constraints the ADR records: DW's logins never hold a right on Bravo's
-  tables or an admin role; `CONTEXT_INFO 0x55555` (Bravo's trigger bypass) is
-  never used.
+  tables or an admin role; Bravo's trigger-bypass context value is never used.
 - Narrow the architecture test instead of deleting it. Only the Bravo adapter
   package may import the SQL Server driver; every other package still fails
   the test. A mutation (an import in `dw_sales.application`) turns it red.
