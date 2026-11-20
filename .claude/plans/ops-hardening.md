@@ -759,6 +759,31 @@ context. All five are done and on `main`. The full narrative is at
       key) and 16 common requirements; yellow cells for Proterial and the
       vendor. Fields come from the import sheets and Bravo layouts in code.
       It supersedes the workbook's "Tài liệu cần gửi" sheet (10 rows).
+      **Database route instead of the API, proposed 11-20 (Đạt; Proterial
+      IT allowed the survey):** the 48 needs of `API-Bravo_DW1-DW2_2026-11-18_v2.xlsx`
+      met from what Bravo's SQL Server already has. Surveyed read-only
+      (structure, config, Import templates, layouts) and traced on UAT
+      while a person saved SO and YCBG changes; scripts and results stay in
+      `docs/proterial/sql/` and Đạt's `Downloads/DB-Bravo` (gitignored:
+      they describe Proterial's server). Findings: Bravo's client writes
+      plain parameterised INSERT/UPDATE with an optimistic `timestamp`
+      check, no save procedure; the user is only the Id in `Context_Info`
+      (`…@<id>@…`) plus `CreatedBy`/`ModifiedBy`, rights are checked in the
+      client; one context value switches every trigger off (never used);
+      Bravo's own Import templates exist for SO, items, customers,
+      converting and Base price, none for YCBG, quotations, PR, PO;
+      snapshot isolation is allowed; dedicated Bravo users for DW1 and DW2
+      already exist. Design for IT and the vendor:
+      `docs/proterial/Thiet-ke-ket-noi-DW-Bravo_2026-11-20.docx`. Reads:
+      views in a `dw` schema inside Bravo's database, a SELECT-only login,
+      snapshot reads of changed rows into DW's PostgreSQL. Writes phase 1:
+      DW exports Bravo's Import template, the PIC imports. Phase 2: a
+      staging table and an Agent job write **under the PIC's Bravo user**
+      (Đạt, 11-20: Proterial accepts it; no "DW" marker) only after the
+      PIC approves on the portal and the operation passes UAT; DW's login
+      holds no right on Bravo's tables. Owed: IT and vendor review, the
+      PR/PO save trace, and amending ADR 0026 plus
+      `test_no_bravo_database.py` before any adapter code.
     - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
       principle. The API's rate limit keys on the bearer token and
       Keycloak's lockout on the account, so one shared plant IP throttles
