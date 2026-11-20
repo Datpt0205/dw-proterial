@@ -54,6 +54,20 @@ the PIC telling the chat or DW polling Bravo, and finds the chat riskier.
   - A changed price leads to a drafted "price updated" mail with the new
     quotation, for the PIC to send.
 
+Checked in Bravo's code on 11-20:
+
+- The customer screen labels `B20Customer.SalesTempCode` "TDC code", so the
+  old TDC code lives there. Confirmed.
+- The quotation's type is the header field `TypeCustomer` ("Quotation type"),
+  picked from `B20Class` where `ParentCode = 'TypeCustomer'`; it drives the
+  number (`ufn_B30BizDoc_DefaultDocNo_QS`).
+- A separate header field `ClassCode3` ("Báo giá đặc biệt") picks from
+  `B20Class` where `ParentCode = 'SQSepcial'`.
+- No item-master flag for "special" was found.
+- `docs/proterial/sql/05-chot-cac-diem-con-treo.sql` (one run, read-only)
+  counts the quotations and items per type, to settle the QN/QM/QS mapping and
+  the special marker from data.
+
 ## Acceptance
 
 1. Each type comes out right for one item per case, on UAT data.
