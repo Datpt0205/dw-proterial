@@ -17,9 +17,16 @@ no vendor API. Tickets 50–53 cannot start before the decision changes.
 - Amend ADR 0026, or supersede it with a new ADR:
   - reads go through views in a `dw` schema inside Bravo's database, with a
     SELECT-only login and snapshot isolation;
-  - phase-1 writes use Bravo's own Import, pressed by a person;
-  - phase-2 writes go through a staging table in `GetData` and an Agent job,
-    under the PIC's Bravo user (Đạt, 11-20), after portal approval and UAT.
+  - DW performs the writes itself, after the PIC approves on the portal; it
+    does not stop at a proposal (Đạt, 11-20);
+  - creating a document goes through Bravo's own engine. The ways, in order of
+    preference:
+    1. a vendor procedure, or Bravo's own automation (ticket 60);
+    2. UI automation of the Import button;
+    3. DW's runner of Bravo's XML rules (ticket 59);
+  - changes to an existing document go through a staging table in `GetData`
+    and an Agent job, under the PIC's Bravo user (Đạt, 11-20), after portal
+    approval and UAT.
 - Constraints the ADR records: DW's logins never hold a right on Bravo's
   tables or an admin role; Bravo's trigger-bypass context value is never used.
 - Narrow the architecture test instead of deleting it. Only the Bravo adapter

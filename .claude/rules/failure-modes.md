@@ -16,7 +16,7 @@ checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
-## 0. A check that cannot see the thing it checks (found 3×)
+## 0. A check that cannot see the thing it checks (found 4×)
 
 Numbered zero because it comes before the rest: a check you trust that is blind
 to part of what it covers makes every finding below it unreliable.
@@ -45,7 +45,14 @@ the tenant rules route that decided a version ended in `/decision`: a
 checker's decision on a Sales route, passing the test written to forbid it,
 from ticket 19 until ticket 38 removed it.
 
-**Ask:** what can this check NOT see? A check over source text cannot see what the
+The fourth was a reading of someone else's system (2026-11-20). "Proterial's
+GetData integration never writes Base price into the YCBG" was concluded from
+the procedure that the disabled Agent job calls. A trigger on the staging table
+wrote Base price, a dozen BP fields and `Status = 'CLOSE'` on every insert.
+The conclusion went into a review before the trigger was read.
+
+**Ask:** what can this check NOT see? When reading an integration, list
+everything that can fire: jobs, triggers and the procedures both call. A check over source text cannot see what the
 database creates on its own. Where the truth lives in a running system, ask the
 running system — `test_rls_coverage.py` walks `pg_class`, partitions included.
 
