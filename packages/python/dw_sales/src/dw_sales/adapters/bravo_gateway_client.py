@@ -13,7 +13,9 @@ What it answers:
   employee record's columns (ticket 50), so it answers "could not ask";
 - `BravoGatewayPort`: a write, with the gateway's answer;
 - `BravoCustomerPoPort`: a customer's PO as Bravo holds it, for the
-  read-back (`so.by_customer_po`, ticket 51).
+  read-back (`so.by_customer_po`, ticket 51);
+- `dw_bravo.sync.SyncSource`: the facts DW copies (`sync.changes`, ticket
+  50), for the `bravo_sync` lane of this client's tenant.
 
 No answer, a timeout or a 5xx is "could not ask" (`BravoUnreachableError`),
 never a pass.
@@ -46,6 +48,7 @@ from dw_bravo.contract import (
     SalesOrderState,
     canonical_json,
 )
+from dw_bravo.sync import SyncPage, SyncQuery, SyncUnavailableError
 from dw_kernel.errors import ConflictError
 from dw_sales.application.bravo_line_writes import (
     BravoSo,
@@ -159,6 +162,15 @@ class BravoGatewayClient:
 
     async def codes_for_email(self, tenant_id: uuid.UUID, email: str) -> Sequence[str]:
         raise BravoPeopleUnavailableError()
+
+    # ---- ticket 50's `dw_bravo.sync.SyncSource`, for the lane of this
+    # client's own tenant
+
+    async def changes(self, query: SyncQuery) -> SyncPage:
+        try:
+            return _parsed(SyncPage, await self._read(query))
+        except BravoUnreachableError as down:
+            raise SyncUnavailableError(str(down)) from None
 
     # ---- writes
 

@@ -27,6 +27,7 @@ from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
 from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.bravo_exports import BravoExportService, BravoExportUnitOfWorkFactory
+from dw_sales.application.bravo_facts import BravoFactsService, BravoFactsStorePort
 from dw_sales.application.bravo_line_writes import (
     BravoCommandsPort,
     BravoLineWrites,
@@ -207,6 +208,8 @@ class SalesServices:
     order_quotes: OrderQuotes
     # The Bravo change watch: its state, and a baseline accepted (ticket 65).
     bravo_watch: BravoWatchService
+    # How fresh DW's copy of Bravo's facts is, per table (ticket 50).
+    bravo_facts: BravoFactsService
     # An SO line's change proposed for writing into Bravo (ticket 53).
     bravo_writes: BravoLineWrites
     gate: Gate
@@ -243,6 +246,8 @@ def assemble(
     quotation: QuotationService,
     # The Bravo change watch's tables (ticket 65).
     bravo_watch_store: BravoWatchStorePort,
+    # DW's copy of Bravo's facts (ticket 50).
+    bravo_facts_store: BravoFactsStorePort,
     # An SO in Bravo, read through the gateway, and the unit of work that
     # holds a proposed write with its approval (ticket 53).
     bravo_orders: BravoOrdersPort,
@@ -504,6 +509,7 @@ def assemble(
         today=TodayService(gate, clock, notices, reminder_marks, book),
         order_quotes=order_quotes,
         bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
+        bravo_facts=BravoFactsService(bravo_facts_store, gate, clock),
         bravo_writes=BravoLineWrites(
             bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids
         ),

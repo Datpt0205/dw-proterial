@@ -79,6 +79,7 @@ from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.autonomy import AutonomyGate, VersionKey
+from dw_sales.application.bravo_facts import TableState
 from dw_sales.application.bravo_line_writes import (
     BravoLineWrite,
     BravoNotConnected,
@@ -209,6 +210,13 @@ class NoEmployeeCodes:
 
     async def employee_code(self, tenant_id: uuid.UUID, subject: uuid.UUID) -> str | None:
         return None
+
+
+class NoBravoCopy:
+    """No Bravo table is copied in the evals (ticket 50)."""
+
+    async def state(self, tenant_id: uuid.UUID) -> list[TableState]:
+        return []
 
 
 class NoBravoMeasured:
@@ -1884,6 +1892,7 @@ def open_world(
     assembly = assemble(
         uow=store,
         bravo_watch_store=NoBravoMeasured(),
+        bravo_facts_store=NoBravoCopy(),
         bravo_orders=BravoNotConnected(),
         bravo_commands=BravoNotConnected(),
         bravo_po=None,

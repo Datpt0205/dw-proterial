@@ -70,6 +70,7 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.assistant import SqlAssistantStoreFactory
+from dw_sales.adapters.persistence.bravo_mirror import SqlBravoMirror
 from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.catalog import (
     OutboxFactory,
@@ -586,6 +587,7 @@ def build_dw1(
         intake=intake,
         quotation=quotation,
         bravo_watch_store=SqlBravoWatch(session_factory, audit),
+        bravo_facts_store=SqlBravoMirror(session_factory),
         bravo_orders=bravo,
         bravo_commands=BravoContract(),
         bravo_po=bravo_gateway,

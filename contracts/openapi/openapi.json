@@ -23811,6 +23811,72 @@
         "title": "SwitchesView",
         "type": "object"
       },
+      "TableStateView": {
+        "properties": {
+          "gone": {
+            "title": "Gone",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_full_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Full At"
+          },
+          "last_read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read At"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "rows",
+          "gone",
+          "last_read_at",
+          "last_full_at",
+          "stale",
+          "last_error"
+        ],
+        "title": "TableStateView",
+        "type": "object"
+      },
       "TargetView": {
         "description": "A target beside what was measured end to end (waits included).",
         "properties": {
@@ -32464,6 +32530,31 @@
           }
         },
         "summary": "Upload Bravo Export",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/bravo/facts": {
+      "get": {
+        "operationId": "bravo_facts_api_v1_sales_bravo_facts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TableStateView"
+                  },
+                  "title": "Response Bravo Facts Api V1 Sales Bravo Facts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bravo Facts",
         "tags": [
           "sales"
         ]

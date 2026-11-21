@@ -20,6 +20,7 @@ from dw_bravo.contract import (
     SoLineState,
     content_hash,
 )
+from dw_bravo.sync import SyncPage, SyncQuery, SyncRow, SyncUnavailableError
 from dw_bravo_gateway.api import create_app
 from dw_bravo_gateway.pipeline import WriteResult
 from dw_bravo_gateway.ports import BravoUser, DocumentNotFoundError
@@ -183,3 +184,27 @@ async def test_another_tenant_is_not_connected_and_nothing_is_sent() -> None:
     with pytest.raises(BravoUnreachableError):
         await client.by_customer_po(SalesScope(TenantId(other), SCOPE.workspace_id), "FG1", "PO-1")
     assert sent == []
+
+
+async def test_the_sync_lane_reads_its_page_and_a_silent_gateway_is_could_not_read() -> None:
+    class _Sync:
+        async def changes(self, query: SyncQuery) -> SyncPage:
+            return SyncPage((SyncRow(3, "0x0000000000000003", {"Code": "X"}),))
+
+    app = create_app(_Pipeline(), sync=_Sync())  # type: ignore[arg-type]
+    client = BravoGatewayClient(
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app)), "http://g", TENANT
+    )
+
+    page = await client.changes(SyncQuery("B20BlackList"))
+
+    assert page.rows[0].row_id == 3
+
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    silent = BravoGatewayClient(
+        httpx.AsyncClient(transport=httpx.MockTransport(down)), "http://g", TENANT
+    )
+    with pytest.raises(SyncUnavailableError):
+        await silent.changes(SyncQuery("B20BlackList"))

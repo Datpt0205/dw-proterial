@@ -66,6 +66,7 @@ from dw_sales.application.assistant import (
     ConversationView,
 )
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
+from dw_sales.application.bravo_facts import TableStateView
 from dw_sales.application.bravo_line_writes import BravoLineWriteView, LineChange
 from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.bravo_watch import BaselineAcceptedView, WatchStateView
@@ -2513,6 +2514,16 @@ def build_router(
     )
     async def bravo_watch(context: Ctx, svc: Svc) -> WatchStateView:
         return WatchStateView.of(await svc.bravo_watch.state(context))
+
+    # When DW last read each of Bravo's fact tables (ticket 50): pages read
+    # DW's copy and say how fresh it is.
+    @router.get(
+        "/bravo/facts",
+        response_model=list[TableStateView],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def bravo_facts(context: Ctx, svc: Svc) -> list[TableStateView]:
+        return await svc.bravo_facts.state(context)
 
     @router.post(
         "/bravo/watch/baseline",

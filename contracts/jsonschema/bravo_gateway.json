@@ -890,6 +890,62 @@
     ],
     "type": "object"
   },
+  "sync.changes@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: `sync.changes@1`: rows of ``table`` past ``after`` (None: from the",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "`sync.changes@1`: rows of ``table`` past ``after`` (None: from the\nstart), at most ``limit``, in rowversion order.",
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "After"
+          },
+          "limit": {
+            "default": 1000,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "table": {
+            "enum": [
+              "B20LME",
+              "B20BlackList",
+              "B20ExportControlList"
+            ],
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "SyncQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "sync.changes"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
   "user.by_employee_code@1": {
     "$defs": {},
     "additionalProperties": false,
