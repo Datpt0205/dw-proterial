@@ -54,9 +54,10 @@ can be fixed alone when Bravo changes. It serves DW1 and DW2.
      `timestamp` condition, and the approval id as the idempotency key
      (ledger in DW's PostgreSQL). It is read back and reconciled column by
      column.
-- **Fingerprint.** The hashes of the layouts, Import templates and table
-  columns the gateway depends on. A hash different from the one proven on
-  UAT stops writes (reads go on) and opens a notice to a person.
+- **Fingerprint.** The gateway computes it, for the watch lane (ticket 65),
+  and compares it before each write. What a change does (goes on with a
+  notice, or pauses only the dependent write kinds) is ticket 65's table.
+  Each write kind declares what it depends on.
 - **Load.** One write at a time per document. Writes are throttled during
   8–18h (Vietnam time). A Bravo that does not answer is a "could not
   check", never a pass (ADR 0026's rule 5, kept).
@@ -77,7 +78,7 @@ can be fixed alone when Bravo changes. It serves DW1 and DW2.
 2. Each check above refuses in a test of its own: a bad signature, a changed
    content hash, an expired token, a user changed since approval, a user
    without the right, a blocking validator, a locked document, a stale
-   `timestamp`, a repeated approval id, a changed fingerprint.
+   `timestamp`, a repeated approval id, a write kind paused by the watch.
 3. Replaying the 11-20 UAT trace through the gateway produces the client's
    statements for every saved SO UPDATE.
 4. On UAT (after ticket 52), each write kind:
