@@ -10,6 +10,7 @@ from dw_agent_runtime.approval_flow import (
     CHANNEL_DECIDED_ACTION,
     DECIDED_ACTION,
     ApprovalDecisionGuard,
+    ApprovalDecisionStamp,
     ApproveAndResumeService,
     ProposedDecision,
 )
@@ -1324,3 +1325,96 @@ async def test_a_channel_decision_keeps_its_own_audit_and_writes_one_row() -> No
     )
 
     assert [event.action for event in audit.events] == [CHANNEL_DECIDED_ACTION]
+
+
+# ------------------------------------- a context's stamp on the approval --
+
+
+@dataclass
+class FakeStamp:
+    """A context's `ApprovalDecisionStamp`: what it signs, or a refusal."""
+
+    refuse: bool = False
+    seen: list[tuple[ApprovalRequest, ApprovalDecision]] = field(default_factory=list)
+
+    async def stamp(
+        self, request: ApprovalRequest, decision: ApprovalDecision, context: AccessContext
+    ) -> dict[str, object]:
+        self.seen.append((request, decision))
+        if self.refuse:
+            raise ConflictError("the Bravo user could not be resolved")
+        return {"token": f"signed:{request.id}:{decision.id}"}
+
+
+def _stamped_service(
+    request: ApprovalRequest, stamp: ApprovalDecisionStamp
+) -> tuple[ApproveAndResumeService, FakeApprovalRepo, FakeOutbox]:
+    repo, outbox = FakeApprovalRepo(request=request), FakeOutbox()
+    service = make_service(request, frozenset(), repo=repo, outbox=outbox)
+    service.decision_stamps["sales.bravo_write"] = stamp
+    return service, repo, outbox
+
+
+async def test_an_approval_carries_its_contexts_stamp_made_in_the_transaction() -> None:
+    request = make_request("sales.bravo_write")
+    stamp = FakeStamp()
+    service, repo, outbox = _stamped_service(request, stamp)
+
+    await decide(service, APPROVER, "")
+
+    [decision] = repo.decisions
+    assert [(r.id, d.id) for r, d in stamp.seen] == [(request.id, decision.id)]
+    assert outbox.added_after_commit == []
+    [event] = outbox.events
+    assert event.payload["stamp"] == {"token": f"signed:{request.id}:{decision.id}"}
+
+
+async def test_a_stamp_that_cannot_be_made_records_nothing() -> None:
+    request = make_request("sales.bravo_write")
+    service, repo, outbox = _stamped_service(request, FakeStamp(refuse=True))
+
+    with pytest.raises(ConflictError, match="could not be resolved"):
+        await decide(service, APPROVER, "")
+
+    assert repo.decisions == [] and outbox.events == [] and outbox.added_after_commit == []
+
+
+async def test_a_rejection_is_not_stamped() -> None:
+    request = make_request("sales.bravo_write")
+    stamp = FakeStamp()
+    service, _, outbox = _stamped_service(request, stamp)
+
+    await service.decide(
+        approval_id=uuid.UUID(int=10),
+        approve=False,
+        comment="không",
+        context=make_context(APPROVER),
+        authorization=ScopeAuthorizationService(),
+    )
+
+    assert stamp.seen == []
+    assert "stamp" not in outbox.events[0].payload
+
+
+async def test_a_stamped_type_raised_with_a_run_refuses_rather_than_drop_the_stamp() -> None:
+    request = make_request("sales.bravo_write", run_id=RUN_ID)
+    stamp = FakeStamp()
+    repo = FakeApprovalRepo(request=request)
+    service = make_service(request, frozenset(), runner=FakeRunner(hosted=True), repo=repo)
+    service.decision_stamps["sales.bravo_write"] = stamp
+
+    with pytest.raises(ConflictError, match="run-less"):
+        await decide(service, APPROVER, "")
+
+    assert repo.decisions == [] and stamp.seen == []
+
+
+async def test_a_stamp_is_asked_only_about_its_own_prefix() -> None:
+    request = make_request("memory.review")
+    stamp = FakeStamp()
+    service = make_service(request, frozenset())
+    service.decision_stamps["sales.bravo_write"] = stamp
+
+    await decide(service, APPROVER, "")
+
+    assert stamp.seen == []

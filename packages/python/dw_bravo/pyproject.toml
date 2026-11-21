@@ -3,9 +3,11 @@ name = "dw-bravo"
 version = "0.1.0"
 description = "Bravo shared by DW1 and DW2: a screen's own XML rules, run from its layout (sales ticket 59)"
 requires-python = ">=3.12"
-# Standard library only: the runner reads XML and evaluates expressions. What
-# it asks Bravo goes through `dw_bravo.ports`, never a driver (ADR 0026).
-dependencies = []
+# The runner is standard library only: it reads XML and evaluates expressions,
+# and what it asks Bravo goes through `dw_bravo.ports`, never a driver (the
+# driver is the gateway's alone, ADR 0027). `cryptography` signs and verifies
+# the approval token (`dw_bravo.approval_token`, ticket 63).
+dependencies = ["cryptography>=44,<51"]
 
 [build-system]
 requires = ["hatchling>=1.26"]

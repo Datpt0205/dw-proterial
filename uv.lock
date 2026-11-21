@@ -979,6 +979,12 @@ requires-dist = [
 name = "dw-bravo"
 version = "0.1.0"
 source = { editable = "packages/python/dw_bravo" }
+dependencies = [
+    { name = "cryptography" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cryptography", specifier = ">=44,<51" }]
 
 [[package]]
 name = "dw-connectors"
