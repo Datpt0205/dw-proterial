@@ -72,19 +72,22 @@ def _text(name: str, value: str | None) -> None:
 
 @dataclass(frozen=True)
 class LineRef:
-    """One SO line as DW read it: the document, the line, and both rowversions."""
+    """One SO line as DW read it: the document, the line, and the line's
+    rowversion when the PIC saw it. A line changed since is refused. The
+    header's rowversion is not carried: Bravo rewrites the header on every
+    save of any line, so an approval bound to it would be spent by a
+    colleague's save on another line; the gateway holds the header's
+    condition from its own read, as the client does from its load."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
 
     so_id: int  # B30BizDoc.Id
     line_id: int  # B30BizDocDetailSO.Id
-    header_rowversion: str  # B30BizDoc.timestamp, as read
     line_rowversion: str  # B30BizDocDetailSO.timestamp, as read
 
     def __post_init__(self) -> None:
         if self.so_id <= 0 or self.line_id <= 0:
             raise ContractError("so_id and line_id are Bravo's positive ids")
-        _rowversion("header_rowversion", self.header_rowversion)
         _rowversion("line_rowversion", self.line_rowversion)
 
 
@@ -148,7 +151,9 @@ class SetQuantity:
 @dataclass(frozen=True)
 class CancelLine:
     """The whole line cancelled (`IsCancel`); a partial cancel is a split,
-    then this on the part that goes (ticket 53)."""
+    then this on the part that goes (ticket 53). What the client writes for a
+    cancel is not yet traced (the 11-20 trace holds only a cancel cleared), so
+    the gateway refuses this kind until it is (`WriteKind.pending`)."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
     kind: ClassVar[str] = "so.line.cancel"
@@ -225,13 +230,15 @@ class WriteKind:
     `screen` is the `B00Command` key whose layout's rules the write runs;
     `tables` are the tables it writes. A change to that layout, to a column
     or trigger of those tables, or to a routine the layout calls, concerns
-    this kind and no other (ticket 65).
+    this kind and no other (ticket 65). `pending` says why the gateway may
+    not run the kind yet: what the client writes for it is not measured.
     """
 
     command: type[Any]
     screen: str
     tables: frozenset[str]
     operation: Literal["update", "insert"]
+    pending: str | None = None
 
     @property
     def key(self) -> str:
@@ -243,13 +250,33 @@ _SO_TABLES: Final = frozenset({"B30BizDoc", "B30BizDocDetailSO"})
 WRITE_KINDS: Final[dict[str, WriteKind]] = {
     k.key: k
     for k in (
+        # Traced 11-20: the person typed Quantity9, or EstimatedTimeDelivery,
+        # and the layout computed the rest of what the client wrote.
         WriteKind(SetConfirmedDate, "EDIT_BizDocSO", _SO_TABLES, "update"),
         WriteKind(SetQuantity, "EDIT_BizDocSO", _SO_TABLES, "update"),
-        WriteKind(CancelLine, "EDIT_BizDocSO", _SO_TABLES, "update"),
+        WriteKind(
+            CancelLine,
+            "EDIT_BizDocSO",
+            _SO_TABLES,
+            "update",
+            pending="a real cancel's save is not traced (ticket 52 item 2)",
+        ),
         # A split's further parts are new lines, and creation is an INSERT:
-        # both wait on the shared template (script 03c) before they can run.
-        WriteKind(SplitLine, "EDIT_BizDocSO", _SO_TABLES, "insert"),
-        WriteKind(CreateSalesOrder, "EDIT_BizDocSO", _SO_TABLES, "insert"),
+        # both wait on the shared template before their columns are known.
+        WriteKind(
+            SplitLine,
+            "EDIT_BizDocSO",
+            _SO_TABLES,
+            "insert",
+            pending="a new line's columns wait on the shared template (script 03c)",
+        ),
+        WriteKind(
+            CreateSalesOrder,
+            "EDIT_BizDocSO",
+            _SO_TABLES,
+            "insert",
+            pending="a new SO's columns wait on the shared template (script 03c)",
+        ),
     )
 }
 

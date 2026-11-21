@@ -280,7 +280,7 @@ def test_an_edited_copy_of_the_layout_changes_the_check() -> None:
 )
 def test_every_saved_so_update_in_the_uat_trace_is_reproduced_column_for_column() -> None:
     from dw_bravo.testing import sql_trace
-    from dw_bravo.testing.replay import ScreenReplay, group_saves, session_from, unknown_columns
+    from dw_bravo.testing.replay import group_saves, so_screen_replay
 
     statements = sql_trace.read(Path(TRACE or ""))
     saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
@@ -291,40 +291,7 @@ def test_every_saved_so_update_in_the_uat_trace_is_reproduced_column_for_column(
     assert context is not None
     user_id, branch = int(context.group(1)), context.group(2)
 
-    def derive_header(row: dict[str, object]) -> dict[str, object]:
-        out = unknown_columns(
-            ["MoneyDiffValue", "VATDiffValue", "MoneyDiffValue0", "VATDiffValue0", "AutoNumbering"]
-        )
-        out["UserId"] = row.get("ModifiedBy")  # the view: ModifiedBy AS UserId
-        # Inferred from the trace, not read from Bravo: UnitCost is written as
-        # OriginalUnitCost / ExchangeRate, so the operator is "not multiply"
-        # (any value but 1 takes that branch), and the document currency's
-        # amounts are written as integers.
-        out["ExchangeRateOperator"] = Decimal(2)
-        out["DecimalRound"] = Decimal(0)
-        return out
-
-    def derive_line(row: dict[str, object]) -> dict[str, object]:
-        # The view's own columns: `Quantity9 AS Quantity_Edit`,
-        # `OriginalUnitCost AS UnitPrice_price`; the tax joined on TaxCode,
-        # NULL for an empty code (assumed: no tax is coded '').
-        out = unknown_columns(["Name_Item", "Unit_Item", "PackingNote", "CoilBox", "Forwarder"])
-        out.update(Quantity_Edit=row.get("Quantity9"), UnitPrice_price=row.get("OriginalUnitCost"))
-        out["ItemName"] = row.get("Description")
-        if row.get("TaxCode") in (None, ""):
-            out.update(TaxRate=None, TaxType=None, PriceIncludeTax=None)
-        return out
-
-    replay = ScreenReplay(
-        so_layout(),
-        "B30BizDoc",
-        "B30BizDocDetailSO",
-        "Detail",
-        # Amount9 = Quantity9 x UnitCost is written with 2 places.
-        session_for=lambda save: session_from(save, user_id, branch, {"DecimalRound": Decimal(2)}),
-        derive_header=derive_header,
-        derive_line=derive_line,
-    )
+    replay = so_screen_replay(so_layout(), user_id, branch)
     results = replay.replay(saves, calls)
     updates = [s for s in saves if all(w.kind == "update" for w in s.writes)]
     assert len(results) == len(updates) == 6

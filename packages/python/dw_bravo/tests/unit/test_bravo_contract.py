@@ -30,7 +30,6 @@ pytestmark = pytest.mark.unit
 LINE = LineRef(
     so_id=10,
     line_id=20,
-    header_rowversion="0x00000000000007D1",
     line_rowversion="0x00000000000007D2",
 )
 
@@ -47,7 +46,6 @@ def test_the_same_command_hashes_the_same_and_quantities_hash_by_value() -> None
             "line": {
                 "so_id": 10,
                 "line_id": 20,
-                "header_rowversion": "0x00000000000007D1",
                 "line_rowversion": "0x00000000000007D2",
             },
             "quantity": "1.5",
@@ -129,5 +127,10 @@ def test_every_kind_is_keyed_by_its_name_and_version() -> None:
     assert {k for k, w in WRITE_KINDS.items() if w.operation == "insert"} == {
         "so.line.split@1",
         "so.create@1",
+    }
+    # Only what the 11-20 trace shows a PIC saving may run.
+    assert {k for k, w in WRITE_KINDS.items() if w.pending is None} == {
+        "so.line.set_confirmed_date@1",
+        "so.line.set_quantity@1",
     }
     assert len(READ_KINDS) == 6

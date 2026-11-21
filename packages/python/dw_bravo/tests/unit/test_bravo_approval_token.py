@@ -30,7 +30,6 @@ COMMAND = SetConfirmedDate(
     line=LineRef(
         so_id=1,
         line_id=2,
-        header_rowversion="0x00000000000007D1",
         line_rowversion="0x00000000000007D2",
     ),
     confirmed_date=date(2026, 12, 1),

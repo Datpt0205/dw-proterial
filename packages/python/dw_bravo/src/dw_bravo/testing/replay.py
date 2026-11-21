@@ -32,7 +32,7 @@ from itertools import combinations
 
 from dw_bravo.expression import UNKNOWN, RuleRefusedError, UndecidableError
 from dw_bravo.layout import PARENT, Layout
-from dw_bravo.ports import Session
+from dw_bravo.ports import ProcedurePort, Session
 from dw_bravo.runner import Document, Finding, Row, RuleRunner, WriteCommand, _same
 from dw_bravo.testing.sql_trace import ProcedureCall, Write
 
@@ -43,6 +43,14 @@ _AUDIT = {"modifiedat", "modifiedby", "createdby"}
 class SaveGroup:
     at: datetime
     writes: list[Write]
+
+
+@dataclass
+class SaveState:
+    save: SaveGroup
+    header: dict[str, object]  # the header before the save
+    lines: dict[object, dict[str, object]]  # BuiltinOrder -> the line before the save
+    window: list[ProcedureCall]
 
 
 @dataclass
@@ -167,9 +175,18 @@ class ScreenReplay:
     def replay(
         self, saves: Sequence[SaveGroup], calls: Sequence[ProcedureCall]
     ) -> list[ReplayResult]:
+        return [
+            self._replay_update(state.save, state.header, state.lines, state.window)
+            for state in self.states(saves, calls)
+        ]
+
+    def states(self, saves: Sequence[SaveGroup], calls: Sequence[ProcedureCall]) -> list[SaveState]:
+        """Each UPDATE save with the document as it stood before it and the
+        procedure calls the client made since the previous save: what the
+        Bravo gateway's replay (ticket 63) runs its own commands against."""
         header: dict[str, object] | None = None
         lines: dict[object, dict[str, object]] = {}  # BuiltinOrder -> values
-        results: list[ReplayResult] = []
+        states: list[SaveState] = []
         previous_at: datetime | None = None
         for position, save in enumerate(saves):
             window = [
@@ -180,7 +197,9 @@ class ScreenReplay:
             ]
             inserts = [w for w in save.writes if w.kind == "insert"]
             if not inserts and header is not None:
-                results.append(self._replay_update(save, header, lines, window))
+                states.append(
+                    SaveState(save, dict(header), {k: dict(v) for k, v in lines.items()}, window)
+                )
             for write in save.writes:
                 values = dict(write.values)
                 if write.kind == "insert":
@@ -190,7 +209,25 @@ class ScreenReplay:
                 elif write.table == self.detail_table:
                     lines[write.values.get("BuiltinOrder")] = values
             previous_at = save.at
-        return results
+        return states
+
+    def before_after(
+        self, state: SaveState
+    ) -> tuple[
+        dict[str, object],
+        list[dict[str, object]],
+        dict[str, object],
+        list[dict[str, object]],
+        dict[str, Write],
+    ]:
+        return self._before_after(state.save, state.header, state.lines)
+
+    def procedures(self, state: SaveState) -> ProcedurePort:
+        """Answers only the calls the client made before this save."""
+        _, _, after_h, after_l, _ = self.before_after(state)
+        return _ReplayProcedures(
+            self.layout, state.window, {PARENT: [after_h], self.detail_key: after_l}
+        )
 
     def _reloaded(self, insert: Write, later: Sequence[SaveGroup]) -> dict[str, object]:
         """An inserted row as the client reloads it: its Id and the database's
@@ -363,3 +400,46 @@ def session_from(
 ) -> Session:
     day = save.at.replace(hour=0, minute=0, second=0, microsecond=0)
     return Session(user={"Id": Decimal(user_id)}, branch=branch, now=day, currency=currency)
+
+
+def so_screen_replay(layout: Layout, user_id: int, branch: str) -> ScreenReplay:
+    """The SO screen's replay, with what its load view adds to a stored row.
+
+    Shared by the runner's own replay test and the gateway's (ticket 63), so
+    the two replay one reading of the trace, not two.
+    """
+
+    def derive_header(row: dict[str, object]) -> dict[str, object]:
+        out = unknown_columns(
+            ["MoneyDiffValue", "VATDiffValue", "MoneyDiffValue0", "VATDiffValue0", "AutoNumbering"]
+        )
+        out["UserId"] = row.get("ModifiedBy")  # the view: ModifiedBy AS UserId
+        # Inferred from the trace, not read from Bravo: UnitCost is written as
+        # OriginalUnitCost / ExchangeRate, so the operator is "not multiply"
+        # (any value but 1 takes that branch), and the document currency's
+        # amounts are written as integers.
+        out["ExchangeRateOperator"] = Decimal(2)
+        out["DecimalRound"] = Decimal(0)
+        return out
+
+    def derive_line(row: dict[str, object]) -> dict[str, object]:
+        # The view's own columns: `Quantity9 AS Quantity_Edit`,
+        # `OriginalUnitCost AS UnitPrice_price`; the tax joined on TaxCode,
+        # NULL for an empty code (assumed: no tax is coded '').
+        out = unknown_columns(["Name_Item", "Unit_Item", "PackingNote", "CoilBox", "Forwarder"])
+        out.update(Quantity_Edit=row.get("Quantity9"), UnitPrice_price=row.get("OriginalUnitCost"))
+        out["ItemName"] = row.get("Description")
+        if row.get("TaxCode") in (None, ""):
+            out.update(TaxRate=None, TaxType=None, PriceIncludeTax=None)
+        return out
+
+    return ScreenReplay(
+        layout,
+        "B30BizDoc",
+        "B30BizDocDetailSO",
+        "Detail",
+        # Amount9 = Quantity9 x UnitCost is written with 2 places.
+        session_for=lambda save: session_from(save, user_id, branch, {"DecimalRound": Decimal(2)}),
+        derive_header=derive_header,
+        derive_line=derive_line,
+    )

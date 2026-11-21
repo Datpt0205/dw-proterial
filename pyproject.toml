@@ -9,7 +9,14 @@ license = { text = "Proprietary" }
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "apps/docgen", "apps/reader", "apps/worker", "packages/python/*"]
+members = [
+    "apps/api",
+    "apps/bravo-gateway",
+    "apps/docgen",
+    "apps/reader",
+    "apps/worker",
+    "packages/python/*",
+]
 
 [tool.uv.sources]
 dw-kernel = { workspace = true }
@@ -24,6 +31,7 @@ dw-evals = { workspace = true }
 dw-purchasing = { workspace = true }
 dw-sales = { workspace = true }
 dw-api = { workspace = true }
+dw-bravo-gateway = { workspace = true }
 dw-docgen = { workspace = true }
 dw-reader = { workspace = true }
 dw-worker = { workspace = true }
@@ -66,6 +74,7 @@ target-version = "py312"
 src = [
     "packages/python/*/src",
     "apps/api/src",
+    "apps/bravo-gateway/src",
     "apps/docgen/src",
     "apps/reader/src",
     "apps/worker/src",
@@ -112,6 +121,7 @@ known-first-party = [
     "dw_observability",
     "dw_evals",
     "dw_api",
+    "dw_bravo_gateway",
     "dw_purchasing",
     "dw_sales",
     "dw_docgen",
@@ -138,6 +148,7 @@ plugins = ["pydantic.mypy"]
 files = [
     "packages/python",
     "apps/api/src",
+    "apps/bravo-gateway/src",
     "apps/docgen/src",
     "apps/reader/src",
     "apps/worker/src",
@@ -157,6 +168,7 @@ mypy_path = [
     "packages/python/dw_purchasing/src",
     "packages/python/dw_sales/src",
     "apps/api/src",
+    "apps/bravo-gateway/src",
     "apps/docgen/src",
     "apps/reader/src",
     "apps/worker/src",
@@ -211,6 +223,7 @@ addopts = "-q --strict-markers -p no:anyio"
 testpaths = [
     "packages/python",
     "apps/api/tests",
+    "apps/bravo-gateway/tests",
     "apps/docgen/tests",
     "apps/reader/tests",
     "apps/worker/tests",
@@ -246,6 +259,7 @@ source = [
     "packages/python/dw_observability/src",
     "packages/python/dw_platform/src",
     "apps/api/src",
+    "apps/bravo-gateway/src",
     "packages/python/dw_purchasing/src",
     "packages/python/dw_sales/src",
     "apps/docgen/src",
@@ -283,6 +297,7 @@ root_packages = [
     "dw_api",
     "dw_worker",
     "dw_purchasing",
+    "dw_bravo_gateway",
 ]
 
 [[tool.importlinter.contracts]]
@@ -423,6 +438,29 @@ source_modules = [
     "dw_purchasing.presentation",
 ]
 forbidden_modules = ["dw_bravo"]
+
+[[tool.importlinter.contracts]]
+# ADR 0027: the gateway is reached over HTTP through a port each context
+# declares, never imported. A package importing it would hold the code that
+# holds Bravo's credential, and two processes would then be one.
+name = "Nothing imports the Bravo gateway"
+type = "forbidden"
+source_modules = [
+    "dw_kernel",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_bravo",
+    "dw_observability",
+    "dw_evals",
+    "dw_sales",
+    "dw_purchasing",
+    "dw_api",
+    "dw_worker",
+]
+forbidden_modules = ["dw_bravo_gateway"]
 
 [[tool.importlinter.contracts]]
 name = "Kernel is pure (stdlib only)"
