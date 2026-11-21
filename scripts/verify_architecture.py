@@ -59,6 +59,7 @@ IMPORT_TO_DIST = {
     "dw_knowledge": "dw-knowledge",
     "dw_memory": "dw-memory",
     "dw_connectors": "dw-connectors",
+    "dw_bravo": "dw-bravo",
     "dw_observability": "dw-observability",
     "dw_evals": "dw-evals",
     "dw_api": "dw-api",
