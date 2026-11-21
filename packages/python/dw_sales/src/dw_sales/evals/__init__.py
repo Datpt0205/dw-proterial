@@ -12,6 +12,7 @@ message read with read-only tools, and `reply_drafts` for ticket 32's mail to
 a customer worded beside the template's draft)."""
 
 from dw_sales.evals.assistant import GRADERS as ASSISTANT_GRADERS
+from dw_sales.evals.case_chat import GRADERS as CASE_CHAT_GRADERS
 from dw_sales.evals.catalog_columns import GRADERS as COLUMN_GRADERS
 from dw_sales.evals.change_requests import GRADERS as CHANGE_REQUEST_GRADERS
 from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
@@ -78,6 +79,7 @@ GRADERS = {
         **CHANGE_REQUEST_GRADERS,
         **REMINDER_GRADERS,
         **ASSISTANT_GRADERS,
+        **CASE_CHAT_GRADERS,
         **THREAD_AGENT_GRADERS,
         **REPLY_DRAFT_GRADERS,
         **SKILL_INTENT_GRADERS,
