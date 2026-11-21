@@ -71,10 +71,13 @@ IMPORT_TO_DIST = {
 }
 
 
-# ADR 0026: DW never connects to Bravo's SQL Server, not even read-only;
-# every read goes through the vendor's API (dw_sales ticket 14). A driver for
-# it may not be imported, declared, locked or named in a URL anywhere, tests
-# and `testing` helpers included. Import name -> distribution name.
+# ADR 0027 (supersedes 0026): one process holds a way into Bravo's SQL Server,
+# the gateway. A driver may be imported, declared or named in a URL inside
+# `apps/bravo-gateway` only, and `uv.lock` may lock one only while the gateway
+# is the one package that depends on it: a library pulling a driver in
+# transitively is a second door, whoever declared it. Tests and `testing`
+# helpers elsewhere are refused like any other file.
+# Import name -> distribution name.
 SQL_SERVER_DRIVERS = {
     "pyodbc": "pyodbc",
     "pymssql": "pymssql",
@@ -84,27 +87,33 @@ SQL_SERVER_DRIVERS = {
     "aiomssql": "aiomssql",
 }
 _SQL_SERVER_URL = "mssql+"
+BRAVO_GATEWAY = Path("apps") / "bravo-gateway"
+BRAVO_GATEWAY_DIST = "dw-bravo-gateway"
+_RULE = "ADR 0027: only apps/bravo-gateway reaches Bravo's database"
+
+
+def _inside_gateway(root: Path, path: Path) -> bool:
+    return path.is_relative_to(root / BRAVO_GATEWAY)
 
 
 def bravo_database_violations(root: Path) -> list[str]:
-    """Every way into a SQL Server database the tree holds (`SQL_SERVER_DRIVERS`)."""
+    """Every way into a SQL Server database outside the gateway (`SQL_SERVER_DRIVERS`)."""
     found: list[str] = []
     dists = set(SQL_SERVER_DRIVERS.values())
-    rule = "ADR 0026: DW reads Bravo through its vendor's API, never its database"
     for base in (root / "packages", root / "apps"):
         if not base.is_dir():
             continue
         for pyproject in base.rglob("pyproject.toml"):
-            if "node_modules" in pyproject.parts:
+            if "node_modules" in pyproject.parts or _inside_gateway(root, pyproject):
                 continue
             for name in sorted(declared_dependencies(pyproject) & dists):
-                found.append(f"{pyproject.relative_to(root)} declares {name!r} ({rule})")
+                found.append(f"{pyproject.relative_to(root)} declares {name!r} ({_RULE})")
         for py_file in base.rglob("*.py"):
-            if "node_modules" in py_file.parts:
+            if "node_modules" in py_file.parts or _inside_gateway(root, py_file):
                 continue
             text = py_file.read_text(encoding="utf-8", errors="replace")
             if _SQL_SERVER_URL in text and py_file.name != Path(__file__).name:
-                found.append(f"{py_file.relative_to(root)} names a SQL Server URL ({rule})")
+                found.append(f"{py_file.relative_to(root)} names a SQL Server URL ({_RULE})")
                 continue
             try:
                 tree = ast.parse(text)
@@ -120,12 +129,33 @@ def bravo_database_violations(root: Path) -> list[str]:
                 )
                 for module in names:
                     if module.split(".")[0] in SQL_SERVER_DRIVERS:
-                        found.append(f"{py_file.relative_to(root)} imports {module!r} ({rule})")
-    lock = root / "uv.lock"
-    if lock.exists():
-        for line in lock.read_text(encoding="utf-8").splitlines():
-            if line.startswith("name = ") and line.split('"')[1] in dists:
-                found.append(f"uv.lock locks {line.split(chr(34))[1]!r} ({rule})")
+                        found.append(f"{py_file.relative_to(root)} imports {module!r} ({_RULE})")
+    found.extend(_locked_drivers(root / "uv.lock", dists))
+    return found
+
+
+def _locked_drivers(lock: Path, dists: set[str]) -> list[str]:
+    """A locked driver is allowed only while the gateway is its one dependent."""
+    if not lock.exists():
+        return []
+    packages = tomllib.loads(lock.read_text(encoding="utf-8")).get("package", [])
+    found: list[str] = []
+    for driver in sorted(dists & {p.get("name") for p in packages}):
+        dependents = sorted(
+            p["name"]
+            for p in packages
+            if any(d.get("name") == driver for d in p.get("dependencies", []))
+            or any(
+                d.get("name") == driver
+                for group in p.get("optional-dependencies", {}).values()
+                for d in group
+            )
+        )
+        if dependents != [BRAVO_GATEWAY_DIST]:
+            found.append(
+                f"uv.lock locks {driver!r} for {dependents or ['nothing that declares it']}"
+                f" ({_RULE})"
+            )
     return found
 
 
