@@ -1,0 +1,353 @@
+# ruff: noqa: E501 - SQL kept on the lines a reader runs it from
+"""The gateway's SQL Server adapter on a real SQL Server 2017, end to end.
+
+A throwaway container (`DW_BRAVO_TEST_MSSQL` = `host,port,sa-password`) and a
+minimal schema written for this test in Bravo's names: no table, column or
+row of Proterial's. It shows what only a running server can: the PIC's
+context reaching a trigger under a login holding column grants only, the
+rowversion condition refusing a stale row, `ufn_Prevent_Edit` locking a line,
+`usp_sys_GetControlPermission` barring a column, and the layout read from
+`B00LayoutData`. Skipped where no such server is given (CI has none); ticket
+63's Comments record the run.
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import secrets
+import zipfile
+from dataclasses import replace
+from datetime import date
+from decimal import Decimal
+from typing import Literal
+
+import mssql_python
+import pytest
+from gateway_fakes import (
+    LAYOUT,
+    NOW,
+    TENANT,
+    TEST_SCREENS,
+    VERIFIER,
+    FakeLedger,
+    FakeSwitches,
+    token,
+)
+
+from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
+from dw_bravo_gateway.adapters.sqlserver import Login, SqlServerBravo
+from dw_bravo_gateway.pipeline import WritePace, WritePipeline
+from dw_bravo_gateway.ports import CommandRight
+
+SERVER = os.environ.get("DW_BRAVO_TEST_MSSQL")
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not SERVER, reason="no throwaway SQL Server (DW_BRAVO_TEST_MSSQL)"),
+]
+
+DB = "BravoGatewayTest"
+
+
+def _sa(database: str = "master") -> object:
+    host, port, password = (SERVER or ",,").split(",", 2)
+    return mssql_python.connect(
+        f"Server={host},{port};Database={database};UID=sa;PWD={password};"
+        "Encrypt=yes;TrustServerCertificate=yes",
+        autocommit=True,
+    )
+
+
+def _run(database: str, *statements: str) -> None:
+    connection = _sa(database)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    for statement in statements:
+        cursor.execute(statement)
+    connection.close()  # type: ignore[attr-defined]
+
+
+def _zipped(text: str) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("Xml", text)
+    return buffer.getvalue()
+
+
+@pytest.fixture(scope="module")
+def logins() -> tuple[Login, Login]:
+    host, port, _ = (SERVER or ",,").split(",", 2)
+    read_pw, write_pw = f"R{secrets.token_hex(12)}a!", f"W{secrets.token_hex(12)}a!"
+    _run(
+        "master",
+        f"IF DB_ID('{DB}') IS NOT NULL BEGIN ALTER DATABASE {DB} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE {DB}; END",
+        f"CREATE DATABASE {DB}",
+        f"ALTER DATABASE {DB} SET ALLOW_SNAPSHOT_ISOLATION ON",
+        "IF SUSER_ID('dw_test_read') IS NOT NULL DROP LOGIN dw_test_read",
+        "IF SUSER_ID('dw_test_write') IS NOT NULL DROP LOGIN dw_test_write",
+        f"CREATE LOGIN dw_test_read WITH PASSWORD = '{read_pw}', CHECK_POLICY = OFF",
+        f"CREATE LOGIN dw_test_write WITH PASSWORD = '{write_pw}', CHECK_POLICY = OFF",
+    )
+    _run(
+        DB,
+        "CREATE TABLE dbo.B00UserList (Id int PRIMARY KEY, ParentId int, IsGroup bit,"
+        " UserName varchar(24), Ma_CbNv varchar(24), Expire tinyint, IsActive bit)",
+        "INSERT INTO dbo.B00UserList VALUES (2413, NULL, 0, 'pic', 'NV001', NULL, 1),"
+        " (2414, NULL, 0, 'old', 'NV001', NULL, 0), (2415, NULL, 0, 'exp', 'NV002', 1, 1)",
+        "CREATE TABLE dbo.B30BizDoc (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
+        " BranchCode varchar(3), DocDate datetime, TotalQuantity numeric(18,4), ModifiedBy int,"
+        " ModifiedAt datetime DEFAULT GETDATE(), timestamp rowversion)",
+        "CREATE TABLE dbo.B30BizDocDetailSO (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
+        " RowId varchar(16), BuiltinOrder smallint, Quantity9 numeric(18,4),"
+        " OriginalUnitCost numeric(18,4), Amount9 numeric(18,4), Made numeric(18,4),"
+        " EstimatedTimeDelivery datetime, ModifiedBy int, ModifiedAt datetime DEFAULT GETDATE(),"
+        " timestamp rowversion)",
+        "CREATE TABLE dbo.ChangeLog (Id int IDENTITY PRIMARY KEY, RowId int, UserId int)",
+        "CREATE TABLE dbo.Rights (UserId int, TableName varchar(48), ColumnName varchar(48),"
+        " NoAddNew tinyint, NoEdit tinyint)",
+        "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64),"
+        " IsActive bit)",
+        "CREATE TABLE dbo.B00LayoutData (Id int PRIMARY KEY, LayoutData varbinary(max))",
+        "CREATE FUNCTION dbo.ufn_sys_GetUserIdFromContext_Info (@_ci varbinary(512)) RETURNS int AS"
+        " BEGIN DECLARE @c varchar(512) = CAST(@_ci AS varchar(512)); DECLARE @p int = CHARINDEX('@', @c);"
+        " IF @p <= 0 RETURN -1; SET @c = STUFF(@c, 1, @p, ''); SET @p = CHARINDEX('@', @c);"
+        " IF @p <= 0 RETURN -1; RETURN CAST(LEFT(@c, @p - 1) AS int) END",
+        "CREATE TRIGGER dbo.DML_B30BizDocDetailSO_ChangeLog ON dbo.B30BizDocDetailSO AFTER UPDATE AS"
+        " INSERT INTO dbo.ChangeLog (RowId, UserId)"
+        " SELECT Id, dbo.ufn_sys_GetUserIdFromContext_Info(CONTEXT_INFO()) FROM inserted",
+        "CREATE FUNCTION dbo.ufn_Prevent_Edit (@_BizDocId varchar(16) = '', @_RowId varchar(16) = '',"
+        " @_DocCode varchar(2) = 'SO') RETURNS int AS"
+        " BEGIN RETURN CASE WHEN @_RowId = 'LOCKED' THEN 1 ELSE 0 END END",
+        "CREATE PROCEDURE dbo.usp_sys_GetControlPermission @_UserId int, @_CommandKey varchar(24) AS"
+        " SELECT TableName, ColumnName, NoAddNew, NoEdit FROM dbo.Rights WHERE UserId = @_UserId",
+        "INSERT INTO dbo.B30BizDoc (BizDocId, BranchCode, DocDate, TotalQuantity, ModifiedBy)"
+        f" VALUES ('D1', 'A01', '{NOW.year}-11-20', 3, 1)",
+        "INSERT INTO dbo.B30BizDocDetailSO (BizDocId, RowId, BuiltinOrder, Quantity9,"
+        " OriginalUnitCost, Amount9, Made, ModifiedBy) VALUES ('D1', 'R1', 1, 3, 2, 6, 2, 1),"
+        " ('D1', 'LOCKED', 2, 1, 2, 2, 0, 1)",
+        "CREATE USER dw_test_read FOR LOGIN dw_test_read",
+        "CREATE USER dw_test_write FOR LOGIN dw_test_write",
+        "GRANT SELECT ON dbo.B00UserList (Id, IsGroup, UserName, Ma_CbNv, Expire, IsActive) TO dw_test_read",
+        "GRANT SELECT ON dbo.B30BizDoc TO dw_test_read",
+        "GRANT SELECT ON dbo.B30BizDocDetailSO TO dw_test_read",
+        "GRANT SELECT ON dbo.B00Layout TO dw_test_read",
+        "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
+        "GRANT EXECUTE ON dbo.usp_sys_GetControlPermission TO dw_test_read",
+        "GRANT EXECUTE ON dbo.ufn_Prevent_Edit TO dw_test_read",
+        "GRANT VIEW DEFINITION ON dbo.B30BizDoc TO dw_test_read",
+        "GRANT VIEW DEFINITION ON dbo.B30BizDocDetailSO TO dw_test_read",
+        # The write login: the columns the writes touch, and the WHERE's.
+        "GRANT SELECT ON dbo.B30BizDoc (Id, timestamp) TO dw_test_write",
+        "GRANT SELECT ON dbo.B30BizDocDetailSO (Id, timestamp) TO dw_test_write",
+        "GRANT UPDATE ON dbo.B30BizDoc (TotalQuantity, ModifiedBy, ModifiedAt) TO dw_test_write",
+        "GRANT UPDATE ON dbo.B30BizDocDetailSO (Quantity9, Amount9, EstimatedTimeDelivery,"
+        " ModifiedBy, ModifiedAt) TO dw_test_write",
+    )
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("INSERT INTO dbo.B00Layout VALUES (1, 0, 'EDIT_BizDocSO', 1)")
+    cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (1, ?)", (_zipped(LAYOUT),))
+    connection.close()  # type: ignore[attr-defined]
+    return (
+        Login(host, int(port), DB, "dw_test_read", read_pw),
+        Login(host, int(port), DB, "dw_test_write", write_pw),
+    )
+
+
+class _Allowed(SqlServerBravo):
+    """The live command right is unmeasured and answers "unknown"; these
+    tests take it as allowed to reach the checks after it."""
+
+    async def command_right(
+        self, user_id: int, command_key: str, operation: Literal["update", "insert"]
+    ) -> CommandRight:
+        return "allowed"
+
+
+def _pipeline(bravo: SqlServerBravo) -> WritePipeline:
+    return WritePipeline(
+        verifier=VERIFIER,
+        switches=FakeSwitches(),
+        ledger=FakeLedger(),
+        directory=bravo,
+        rights=bravo,
+        documents=bravo,
+        engine=bravo,
+        writer=bravo,
+        now=lambda: NOW,
+        tenant_id=TENANT,
+        screens=TEST_SCREENS,
+        pace=WritePace(),
+    )
+
+
+async def _line(bravo: SqlServerBravo, row_id: str) -> LineRef:
+    document = await bravo.load("EDIT_BizDocSO", 1)
+    line = next(x for x in document.lines if x["RowId"] == row_id)
+    return LineRef(so_id=1, line_id=int(line["Id"]), line_rowversion=str(line["timestamp"]))  # type: ignore[call-overload]
+
+
+def _logged_users() -> list[int]:
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("SELECT UserId FROM dbo.ChangeLog ORDER BY Id")
+    users = [row[0] for row in cursor.fetchall()]
+    connection.close()  # type: ignore[attr-defined]
+    return users
+
+
+async def test_the_pics_write_under_column_grants_reaches_bravos_trigger(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = _Allowed(*logins, missing_templates={})
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(5))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert result.outcome == "written", result
+    after = await bravo.load("EDIT_BizDocSO", 1)
+    line = next(x for x in after.lines if x["RowId"] == "R1")
+    assert (line["Quantity9"], line["Amount9"], line["ModifiedBy"]) == (5, 10, 2413)
+    assert after.header["TotalQuantity"] == 6
+    assert _logged_users()[-1] == 2413  # the trigger read the PIC from the context
+
+
+async def test_a_stale_line_is_refused_by_the_rowversion(logins: tuple[Login, Login]) -> None:
+    bravo = _Allowed(*logins, missing_templates={})
+    approved = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
+    _run(DB, "UPDATE dbo.B30BizDocDetailSO SET Made = Made WHERE RowId = 'R1'")  # a colleague saved
+
+    result = await _pipeline(bravo).execute(approved, token(approved))
+
+    assert (result.check, result.reason) == ("rules", "line_changed_since_approval")
+
+
+async def test_a_line_on_a_cdo_is_locked_by_bravos_function(logins: tuple[Login, Login]) -> None:
+    bravo = _Allowed(*logins, missing_templates={})
+    command = SetConfirmedDate(line=await _line(bravo, "LOCKED"), confirmed_date=date(2026, 12, 1))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert (result.check, result.reason) == ("lock", "line_locked_or_could_not_check")
+
+
+async def test_a_column_bravo_bars_the_user_from_is_refused(logins: tuple[Login, Login]) -> None:
+    _run(
+        DB,
+        "INSERT INTO dbo.Rights VALUES (2413, 'B30BizDocDetailSO', 'EstimatedTimeDelivery', 0, 1)",
+    )
+    bravo = _Allowed(*logins, missing_templates={})
+    command = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
+    try:
+        result = await _pipeline(bravo).execute(command, token(command))
+    finally:
+        _run(DB, "DELETE FROM dbo.Rights")
+
+    assert (result.check, result.reason) == ("right", "no_right_on_EstimatedTimeDelivery")
+
+
+async def test_the_live_command_right_is_unmeasured_and_refuses(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins, missing_templates={})
+    command = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert (result.check, result.reason) == ("right", "command_right_unknown")
+
+
+async def test_identity_reads_one_active_user_per_employee_code(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins)
+
+    users = await bravo.users_by_employee_code("NV001")
+    expired = await bravo.users_by_employee_code("NV002")
+
+    assert sorted((u.id, u.active) for u in users) == [(2413, True), (2414, False)]
+    assert [(u.id, u.active) for u in expired] == [(2415, False)]
+
+
+async def test_the_write_login_cannot_touch_a_column_it_was_not_granted(
+    logins: tuple[Login, Login],
+) -> None:
+    _, write = logins
+    connection = mssql_python.connect(write.connection_string(), autocommit=True)
+    cursor = connection.cursor()
+    with pytest.raises(Exception, match="permission was denied"):
+        cursor.execute("UPDATE dbo.B30BizDocDetailSO SET Made = 0 WHERE Id = 1")
+    connection.close()
+
+
+async def test_a_wrong_password_is_bravo_not_answering(logins: tuple[Login, Login]) -> None:
+    read, write = logins
+    bravo = SqlServerBravo(replace(read, password="wrong"), write)
+    command = SetConfirmedDate(
+        line=LineRef(so_id=1, line_id=1, line_rowversion="0x0000000000000001"),
+        confirmed_date=date(2026, 12, 1),
+    )
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert (result.outcome, result.reason) == ("refused", "bravo_unreachable_could_not_check")
+
+
+async def test_the_shipped_adapter_holds_the_so_screen_provisional(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = _Allowed(*logins)  # the shipped default: BizDocEditor not in hand
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert result.check == "rules" and (result.reason or "").startswith("provisional:")
+
+
+async def test_a_row_saved_between_the_read_and_the_write_writes_nothing(
+    logins: tuple[Login, Login],
+) -> None:
+    from dw_bravo_gateway.ports import Batch, StaleRowError
+    from dw_bravo_gateway.statements import context_line, render_update
+
+    bravo = SqlServerBravo(*logins, missing_templates={})
+    document = await bravo.load("EDIT_BizDocSO", 1)
+    line = next(x for x in document.lines if x["RowId"] == "R1")
+    _run(DB, "UPDATE dbo.B30BizDocDetailSO SET Made = Made WHERE RowId = 'R1'")  # the race
+    statement = render_update(
+        "B30BizDocDetailSO",
+        {"Quantity9": Decimal(9), "ModifiedBy": 2413},
+        document.column_order["B30BizDocDetailSO"],
+        row_id=line["Id"],
+        rowversion=str(line["timestamp"]),
+        read_back_key="RowId",
+    )
+    batch = Batch(context_line("EDIT_BizDocSO", "Edit", 2413, "A01", NOW.year), [statement])
+
+    with pytest.raises(StaleRowError):
+        await bravo.execute(batch)
+
+    after = await bravo.load("EDIT_BizDocSO", 1)
+    assert next(x for x in after.lines if x["RowId"] == "R1")["Quantity9"] != 9
+
+
+async def test_two_active_layouts_for_the_screen_refuse_rather_than_pick_one(
+    logins: tuple[Login, Login],
+) -> None:
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("INSERT INTO dbo.B00Layout VALUES (2, 0, 'EDIT_BizDocSO', 1)")
+    cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (2, ?)", (_zipped(LAYOUT),))
+    connection.close()  # type: ignore[attr-defined]
+    bravo = _Allowed(*logins, missing_templates={})
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
+    try:
+        result = await _pipeline(bravo).execute(command, token(command))
+    finally:
+        _run(
+            DB,
+            "DELETE FROM dbo.B00LayoutData WHERE Id = 2",
+            "DELETE FROM dbo.B00Layout WHERE Id = 2",
+        )
+
+    assert result.check == "rules" and (result.reason or "").startswith("layout_could_not_be_read")

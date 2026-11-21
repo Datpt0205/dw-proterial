@@ -137,7 +137,7 @@ def stored() -> StoredDocument:
 class FakeSwitches:
     state_: SwitchState = "enabled"
 
-    async def state(self, tenant_id: uuid.UUID, kind: str) -> SwitchState:
+    async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         return self.state_
 
 
@@ -271,6 +271,7 @@ def gateway(**over: object) -> Gateway:
         engine=FakeEngine(),
         writer=bravo,
         now=lambda: NOW,
+        tenant_id=TENANT,
         screens=TEST_SCREENS,
         pace=WritePace(),
     )

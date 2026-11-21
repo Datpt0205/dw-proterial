@@ -34,6 +34,7 @@ from dw_sales.application.rules import (
     read_over,
 )
 from dw_sales.application.salesorder_rules import SalesOrderRules
+from dw_sales.domain.bravo_writes import BravoWrites
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -104,6 +105,8 @@ class SalesPolicies:
     assistant: AssistantCopy
     # Each customer's own SalesOrder rules (ticket 38): none on the platform.
     salesorder: SalesOrderRules
+    # Which Bravo writes DW1 performs (ticket 63): every kind off here.
+    bravo_writes: BravoWrites
     # Every version of each key the checkout ships, by ref, the ones above
     # included: what a case stamped before a release is read with after it.
     released: Mapping[str, Policy]
@@ -122,6 +125,7 @@ class SalesPolicies:
             RuleKey.SALESORDER_RULES: self.salesorder,
             RuleKey.REMINDERS: self.reminders,
             RuleKey.ASSISTANT: self.assistant,
+            RuleKey.BRAVO_WRITES: self.bravo_writes,
         }
 
 
@@ -145,6 +149,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         reminders=load_copy(copy_dir / "sales_reminders@1.1.0.yaml", ReminderCopy),
         assistant=load_copy(copy_dir / "sales_assistant@1.2.0.yaml", AssistantCopy),
         salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
+        bravo_writes=load_policy(policies_dir / "sales_bravo_writes@1.0.0.yaml", BravoWrites),
         released={},
     )
     released = load_released(current.current(), policies_dir, copy_dir)

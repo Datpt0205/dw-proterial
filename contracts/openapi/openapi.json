@@ -20377,7 +20377,8 @@
           "sales_followups",
           "sales_salesorder_rules",
           "sales_reminders",
-          "sales_assistant"
+          "sales_assistant",
+          "sales_bravo_writes"
         ],
         "title": "RuleKey",
         "type": "string"

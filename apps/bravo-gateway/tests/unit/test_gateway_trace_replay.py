@@ -204,6 +204,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
             engine=bravo,
             writer=bravo,
             now=_fixed(at),
+            tenant_id=TENANT,
             screens=screens,
             pace=WritePace(),
         )

@@ -20,6 +20,7 @@ WORKDIR /app
 # Dependency layers first for cache efficiency
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
+COPY apps/bravo-gateway/pyproject.toml apps/bravo-gateway/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY packages/python/dw_kernel/pyproject.toml packages/python/dw_kernel/pyproject.toml
 COPY packages/python/dw_platform/pyproject.toml packages/python/dw_platform/pyproject.toml

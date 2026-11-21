@@ -636,6 +636,7 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
         RuleKey.REMINDERS,
         # The assistant's words: statuses, dates and counts, never an amount.
         RuleKey.ASSISTANT,
+        RuleKey.BRAVO_WRITES,
     }
     # The search can fail: a PIC, who reads prices, is shown them.
     assert {v.key for v in (await rules.list(AN.context())).versions} >= (

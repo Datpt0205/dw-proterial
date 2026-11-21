@@ -127,6 +127,7 @@ from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.application.reminder_copy import ReminderCopy
 from dw_sales.application.salesorder_rules import SalesOrderRules
+from dw_sales.domain.bravo_writes import BravoWrites
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -182,6 +183,7 @@ class RuleKey(StrEnum):
     SALESORDER_RULES = "sales_salesorder_rules"
     REMINDERS = "sales_reminders"
     ASSISTANT = "sales_assistant"
+    BRAVO_WRITES = "sales_bravo_writes"
 
 
 type Policy = (
@@ -197,6 +199,7 @@ type Policy = (
     | SalesOrderRules
     | ReminderCopy
     | AssistantCopy
+    | BravoWrites
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -214,6 +217,7 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.SALESORDER_RULES: SalesOrderRules,
         RuleKey.REMINDERS: ReminderCopy,
         RuleKey.ASSISTANT: AssistantCopy,
+        RuleKey.BRAVO_WRITES: BravoWrites,
     }
 )
 # The keys a version may be drafted for from the company's own file ("Tạo từ

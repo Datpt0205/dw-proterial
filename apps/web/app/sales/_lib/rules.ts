@@ -26,6 +26,7 @@ export const RULE_KEY: Record<RuleKey, string> = {
   sales_salesorder_rules: "Quy tắc SalesOrder của từng khách",
   sales_reminders: "Lời nhắc việc và bản tin buổi sáng",
   sales_assistant: "Câu chữ của Hỏi đáp DW1",
+  sales_bravo_writes: "DW1 tự ghi vào Bravo",
 };
 
 export const RULE_STATUS: Record<RuleVersion["status"], string> = {
@@ -87,6 +88,8 @@ export const RULE_ABOUT: Record<RuleKey, string> = {
     "Câu DW1 tự nói trong Hỏi đáp DW1: trạng thái hồ sơ, việc đang chờ, khi chưa hiểu câu hỏi.",
   sales_salesorder_rules:
     "Cách tệp SalesOrder của từng khách khác mẫu chung: học từ một PO và tệp PIC đã làm.",
+  sales_bravo_writes:
+    "Loại thay đổi nào DW1 tự ghi vào Bravo sau khi PIC duyệt; mỗi loại phải chứng minh trên UAT trước.",
 };
 
 /** Rules that read as engineering: under "Nâng cao", not the first screen. */
@@ -98,6 +101,7 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
   "sales_salesorder_rules",
   "sales_reminders",
   "sales_assistant",
+  "sales_bravo_writes",
 ]);
 
 /**

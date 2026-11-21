@@ -1039,6 +1039,18 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     "words.decide_done": { label: "Báo đã ghi quyết định" },
   },
+  sales_bravo_writes: {
+    kinds: {
+      label: "Loại ghi vào Bravo",
+      help: "Mỗi loại tắt cho tới khi đã chạy đúng như PIC lưu tay trên Bravo UAT. Khi tắt, PIC nhập tay vào Bravo.",
+      item: "Loại ghi",
+    },
+    "kinds.*.enabled": { label: "DW1 tự ghi" },
+    "kinds.*.uat_proof": {
+      label: "Bằng chứng trên UAT",
+      help: "Lần chạy trên Bravo UAT đã khớp từng cột với lần PIC lưu tay; bắt buộc khi bật.",
+    },
+  },
 };
 
 /**
@@ -1074,6 +1086,12 @@ export function lockReason(reason: LockReason): string {
  * mean the same wherever they appear.
  */
 const VALUES: Record<string, string> = {
+  // The Bravo write kinds (`sales_bravo_writes`, ticket 63).
+  "so.line.set_confirmed_date@1": "Đổi ngày XN giao hàng của một dòng SO",
+  "so.line.set_quantity@1": "Đổi số lượng của một dòng SO",
+  "so.line.cancel@1": "Huỷ một dòng SO",
+  "so.line.split@1": "Tách một dòng SO",
+  "so.create@1": "Tạo SO mới",
   pic: "Sales phụ trách",
   head: "Trưởng bộ phận",
   mon: "Thứ Hai",
