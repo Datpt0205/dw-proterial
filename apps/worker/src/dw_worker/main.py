@@ -40,6 +40,7 @@ from dw_agent_runtime.channel_decisions import (
     ChannelDecisionCommand,
 )
 from dw_agent_runtime.model.profiles import Provider
+from dw_bravo.sync import BRAVO_SYNC_LANE, BravoSync
 from dw_bravo.watch_lane import BRAVO_WATCH_LANE, BravoWatch
 from dw_connectors.adapters.zalo_bot import ZaloBotClient
 from dw_connectors.adapters.zalo_inbound import ZaloInbound
@@ -152,6 +153,7 @@ from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.bravo_mirror import SqlBravoMirror
 from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.labelled_cases import RETENTION_KEY as LABELLED_CASES_KEY
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseRetention
@@ -200,6 +202,10 @@ from dw_worker.composition import (
     release_manifest_ref,
 )
 from dw_worker.consumers import ConsumerRegistry
+from dw_worker.consumers.bravo_sync import (
+    BRAVO_SYNC_INTERVAL_SECONDS,
+    build_bravo_sync_consumer,
+)
 from dw_worker.consumers.bravo_watch import (
     BRAVO_WATCH_INTERVAL_SECONDS,
     build_bravo_watch_consumer,
@@ -1344,6 +1350,23 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     )
                 ),
                 interval_seconds=BRAVO_WATCH_INTERVAL_SECONDS,
+            )
+        # Bravo's facts copied into DW by rowversion (sales ticket 50): the
+        # gateway's one tenant, its copy under that tenant's row security.
+        if settings.bravo_gateway_url and settings.bravo_tenant_id is not None:
+            registry.register(
+                BRAVO_SYNC_LANE,
+                build_bravo_sync_consumer(
+                    BravoSync(
+                        source=BravoGatewayClient(
+                            httpx.AsyncClient(),
+                            settings.bravo_gateway_url,
+                            settings.bravo_tenant_id,
+                        ),
+                        store=SqlBravoMirror(sessions).for_tenant(settings.bravo_tenant_id),
+                    )
+                ),
+                interval_seconds=BRAVO_SYNC_INTERVAL_SECONDS,
             )
         # What the dispatcher gave up on, told to the tenant's administrators
         # (2026-10-29): a stopped event is never only a log line.

@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/bravo/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Facts */
+        get: operations["bravo_facts_api_v1_sales_bravo_facts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/bravo/watch": {
         parameters: {
             query?: never;
@@ -8845,6 +8862,23 @@ export interface components {
             /** @default superseded */
             value_state: components["schemas"]["ValueState"];
         };
+        /** TableStateView */
+        TableStateView: {
+            /** Gone */
+            gone: number;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Full At */
+            last_full_at: string | null;
+            /** Last Read At */
+            last_read_at: string | null;
+            /** Rows */
+            rows: number;
+            /** Stale */
+            stale: boolean;
+            /** Table */
+            table: string;
+        };
         /**
          * TargetView
          * @description A target beside what was measured end to end (waits included).
@@ -9956,6 +9990,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bravo_facts_api_v1_sales_bravo_facts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableStateView"][];
                 };
             };
         };

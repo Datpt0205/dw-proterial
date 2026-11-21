@@ -118,6 +118,14 @@ def logins() -> tuple[Login, Login]:
         "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64), ModifiedBy int DEFAULT 1, ModifiedAt smalldatetime DEFAULT GETDATE(),"
         " IsActive bit)",
         "CREATE TABLE dbo.B00LayoutData (Id int PRIMARY KEY, LayoutData varbinary(max))",
+        # One of ticket 50's tables, with a column the sync does not read.
+        "CREATE TABLE dbo.B20LME (Id int IDENTITY PRIMARY KEY, IsGroup bit DEFAULT 0,"
+        " BranchCode nvarchar(3) DEFAULT 'A01', Code varchar(24), Name nvarchar(64),"
+        " Name2 nvarchar(64) DEFAULT 'not read', DocDate smalldatetime,"
+        " LMEActual numeric(18,2), LMECenter numeric(18,2), IsActive bit DEFAULT 1,"
+        " timestamp rowversion)",
+        "INSERT INTO dbo.B20LME (Code, Name, DocDate, LMEActual, LMECenter) VALUES"
+        " ('L1', N'Đồng', '2026-11-01', 9123.50, 9100.00), ('L2', N'Nhôm', '2026-11-02', 2500.10, 2490.00)",
         "CREATE TABLE dbo.B00ImportSetting (Id int PRIMARY KEY, CommandKey varchar(24),"
         " IsActive bit, LayoutData varbinary(8000))",
         "CREATE FUNCTION dbo.ufn_sys_GetUserIdFromContext_Info (@_ci varbinary(512)) RETURNS int AS"
@@ -161,6 +169,8 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B30BizDocDetailSO TO dw_test_read",
         "GRANT SELECT ON dbo.B00Layout TO dw_test_read",
         "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
+        "GRANT SELECT ON dbo.B20LME (Id, timestamp, IsGroup, BranchCode, Code, Name, DocDate,"
+        " LMEActual, LMECenter, IsActive) TO dw_test_read",
         "GRANT SELECT ON dbo.B00ImportSetting (Id, CommandKey, IsActive, LayoutData) TO dw_test_read",
         "GRANT EXECUTE ON dbo.usp_sys_GetControlPermission TO dw_test_read",
         "GRANT EXECUTE ON dbo.ufn_Prevent_Edit TO dw_test_read",
@@ -496,6 +506,27 @@ async def test_the_fingerprint_sees_an_import_template_change_and_names_one_it_c
     [changed] = [c for c in diff(before, after) if c.kind == "template"]
     assert changed.after is not None and changed.after.unknown[0].startswith("template 8")
     assert "so.create@1" in react(diff(before, after), {}).paused
+
+
+async def test_the_copy_reads_allowlisted_columns_in_rowversion_order_from_a_cursor(
+    logins: tuple[Login, Login],
+) -> None:
+    from dw_bravo.sync import SyncQuery
+
+    bravo = SqlServerBravo(*logins)
+
+    first = await bravo.changes(SyncQuery("B20LME", limit=1))
+    rest = await bravo.changes(SyncQuery("B20LME", after=first.rows[0].row_version))
+
+    assert [r.data["Code"] for r in (*first.rows, *rest.rows)] == ["L1", "L2"]
+    assert first.rows[0].data["LMEActual"] == "9123.50" and first.rows[0].data["Name"] == "Đồng"
+    assert "Name2" not in first.rows[0].data  # the login holds no grant on it either
+    assert first.rows[0].row_version < rest.rows[0].row_version
+    _run(DB, "UPDATE dbo.B20LME SET LMEActual = 9200 WHERE Code = 'L1'")
+    changed = await bravo.changes(SyncQuery("B20LME", after=rest.rows[-1].row_version))
+    assert [r.data["Code"] for r in changed.rows] == ["L1"]
+    # From the start, in rowversion order: the row changed last comes last.
+    assert [r.data["Code"] for r in (await bravo.changes(SyncQuery("B20LME"))).rows] == ["L2", "L1"]
 
 
 async def test_a_definition_the_read_login_cannot_see_is_could_not_check(

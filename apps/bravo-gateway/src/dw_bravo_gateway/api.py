@@ -9,8 +9,8 @@ Reads take the same typed envelope with no token: a read changes nothing,
 and the read login holds SELECT on named columns only. Served so far: the
 two a proposed write needs (ticket 53), `so.by_number` and
 `user.by_employee_code`, and a PO's SO lines for the read-back
-(`so.by_customer_po`, ticket 51); every other read kind answers 501 until
-ticket 50.
+(`so.by_customer_po`, ticket 51), and the facts DW copies by rowversion
+(`sync.changes`, ticket 50); every other read kind answers 501.
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from dw_bravo.contract import (
     SalesOrderQuery,
     WriteCommand,
 )
+from dw_bravo.sync import SyncQuery
 from dw_bravo.watch import Fingerprint
 from dw_bravo_gateway.pipeline import WritePipeline
 from dw_bravo_gateway.ports import (
@@ -41,6 +42,7 @@ from dw_bravo_gateway.ports import (
     Directory,
     DocumentNotFoundError,
     SalesOrders,
+    SyncTables,
 )
 
 _TOKEN_LIMIT = 4096
@@ -98,6 +100,7 @@ def create_app(
     fingerprints: FingerprintSource | None = None,
     orders: SalesOrders | None = None,
     directory: Directory | None = None,
+    sync: SyncTables | None = None,
     environment: Literal["uat", "production"] = "production",
     max_request_bytes: int = 64 * 1024,
     docs: bool = False,
@@ -150,6 +153,8 @@ def create_app(
                 result = await orders.sales_order(query.so_no)
             elif isinstance(query, CustomerPoQuery) and orders is not None:
                 result = await orders.customer_po(query.customer_code, query.po_no)
+            elif isinstance(query, SyncQuery) and sync is not None:
+                result = await sync.changes(query)
             elif isinstance(query, BravoUserQuery) and directory is not None:
                 users = await directory.users_by_employee_code(query.employee_code)
                 result = BravoUsers(tuple(sorted(u.id for u in users if u.active)))

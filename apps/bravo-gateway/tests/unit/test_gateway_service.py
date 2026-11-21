@@ -22,6 +22,7 @@ from dw_bravo.contract import (
     SoLineState,
     canonical_json,
 )
+from dw_bravo.sync import SyncPage, SyncQuery, SyncRow
 from dw_bravo_gateway.api import create_app
 from dw_bravo_gateway.ports import (
     AmbiguousDocumentError,
@@ -322,3 +323,23 @@ async def test_a_customers_po_is_read_with_its_prices_exact_and_none_is_empty() 
     assert found.status_code == 200 and found.json()["rows"][0]["unit_price"] == "4.3285"
     assert none.status_code == 200 and none.json() == {"rows": []}
     assert (await _read(query, orders=_Orders(down=True))).status_code == 503
+
+
+class _Sync:
+    async def changes(self, query: SyncQuery) -> SyncPage:
+        rows = (SyncRow(1, "0x00000000000007D1", {"Code": "CU", "LMEActual": "9123.50"}),)
+        return SyncPage(rows if query.after is None else ())
+
+
+async def test_the_copy_is_read_by_rowversion_from_allowlisted_tables_only() -> None:
+    query = {"kind": "sync.changes", "version": 1, "content": {"table": "B20LME"}}
+
+    first = await _read(query, sync=_Sync())
+    after = await _read(
+        {**query, "content": {"table": "B20LME", "after": "0x00000000000007D1"}}, sync=_Sync()
+    )
+    other = await _read({**query, "content": {"table": "B00UserList"}}, sync=_Sync())
+
+    assert first.status_code == 200 and first.json()["rows"][0]["data"]["LMEActual"] == "9123.50"
+    assert after.json() == {"rows": []}
+    assert other.status_code == 422

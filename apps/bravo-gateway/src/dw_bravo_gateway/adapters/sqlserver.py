@@ -48,6 +48,7 @@ from dw_bravo.expression import RuleRefusedError, UndecidableError
 from dw_bravo.import_template import read_import_template
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
+from dw_bravo.sync import SYNC_TABLES, SyncPage, SyncQuery, SyncRow, as_text
 from dw_bravo.watch import Component, Fingerprint
 from dw_bravo_gateway.ports import (
     AmbiguousDocumentError,
@@ -204,6 +205,30 @@ class SqlServerBravo:
             )
         )
         return CustomerPoRows(tuple(_po_row(row) for row in rows))
+
+    async def changes(self, query: SyncQuery) -> SyncPage:
+        """`SYNC_TABLES`' columns of one table past ``query.after``, in
+        rowversion order (ticket 50). Table and column names come from the
+        allowlist only, never from the request."""
+        columns = SYNC_TABLES[query.table]
+        listed = ", ".join(f"[{c}]" for c in columns)
+        where = "" if query.after is None else " WHERE [timestamp] > CONVERT(binary(8), ?, 1)"
+        sql = (
+            f"SELECT TOP ({int(query.limit)}) [Id], [timestamp], {listed}"
+            f" FROM dbo.[{query.table}]{where} ORDER BY [timestamp]"
+        )
+        params: tuple[object, ...] = () if query.after is None else (query.after,)
+        rows = await self._in_thread(lambda: self._rows(sql, params))
+        return SyncPage(
+            tuple(
+                SyncRow(
+                    row_id=int(row["Id"]),  # type: ignore[call-overload]
+                    row_version=str(rowversion(row["timestamp"])),
+                    data={c: as_text(row[c]) for c in columns},
+                )
+                for row in rows
+            )
+        )
 
     # ------------------------------------------------------------- rights
 

@@ -31,6 +31,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar, Final, Literal
 
+# Ticket 50's read, owned by `dw_bravo.sync` with its allowlist of tables.
+from dw_bravo.sync import SyncPage, SyncQuery
+
 # Bravo's `timestamp` column is SQL Server's rowversion: 8 bytes, written by
 # the client as a hex literal. Carried so a write holds the condition the
 # client holds: the row is as the PIC saw it, or nothing is written.
@@ -439,6 +442,7 @@ ReadQuery = (
     | SalesOrderQuery
     | CustomerPoQuery
     | BravoUserQuery
+    | SyncQuery
 )
 
 READ_KINDS: Final[dict[str, type[Any]]] = {
@@ -453,6 +457,7 @@ READ_KINDS: Final[dict[str, type[Any]]] = {
         SalesOrderQuery,
         CustomerPoQuery,
         BravoUserQuery,
+        SyncQuery,
     )
 }
 
@@ -528,6 +533,7 @@ class CustomerPoRows:
 
 
 READ_RESULTS: Final[dict[str, type[Any]]] = {
+    f"{SyncQuery.kind}@{SyncQuery.version}": SyncPage,
     f"{CustomerPoQuery.kind}@{CustomerPoQuery.version}": CustomerPoRows,
     f"{SalesOrderQuery.kind}@{SalesOrderQuery.version}": SalesOrderState,
     f"{BravoUserQuery.kind}@{BravoUserQuery.version}": BravoUsers,

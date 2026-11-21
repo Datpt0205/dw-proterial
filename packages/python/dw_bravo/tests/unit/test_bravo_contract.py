@@ -143,4 +143,7 @@ def test_every_kind_is_keyed_by_its_name_and_version() -> None:
         # The two a proposed write needs (ticket 53), served by the gateway.
         "so.by_number@1",
         "user.by_employee_code@1",
+        "so.by_customer_po@1",
+        # Ticket 50's copy by rowversion.
+        "sync.changes@1",
     }

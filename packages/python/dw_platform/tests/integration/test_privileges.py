@@ -855,3 +855,32 @@ async def test_a_model_steps_measurement_is_never_rewritten_or_removed(
     finally:
         await migrator.dispose()
     assert held == {"SELECT", "INSERT"}
+
+
+async def test_dws_copy_of_bravo_is_marked_never_deleted(db_urls: DatabaseUrls) -> None:
+    """Migration ffd0c95da906 (sales ticket 50): the copy of Bravo's read
+    tables and its cursors take SELECT, INSERT and UPDATE; a row Bravo
+    deleted is marked gone, so the application holds no DELETE."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            held = {
+                (row.tbl, row.verb)
+                for row in await conn.execute(
+                    sa.text(
+                        """
+                        SELECT c.relname AS tbl, v.verb
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'])
+                            AS v(verb)
+                        WHERE n.nspname = 'bravo' AND c.relname LIKE 'mirror_%'
+                          AND has_table_privilege('dw_app', c.oid, v.verb)
+                        """
+                    )
+                )
+            }
+    finally:
+        await migrator.dispose()
+    for table in ("mirror_rows", "mirror_cursors"):
+        assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT", "UPDATE"}, table

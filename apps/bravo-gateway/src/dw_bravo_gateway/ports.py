@@ -22,6 +22,7 @@ from dw_bravo.approval_token import ApprovalClaims
 from dw_bravo.contract import CustomerPoRows, SalesOrderState
 from dw_bravo.layout import Layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
+from dw_bravo.sync import SyncPage, SyncQuery
 
 
 class BravoUnavailableError(Exception):
@@ -66,6 +67,12 @@ class SalesOrders(Protocol):
     async def customer_po(self, customer_code: str, po_no: str) -> CustomerPoRows:
         """Every SO line of the PO; none is an empty answer, not an error."""
         ...
+
+
+class SyncTables(Protocol):
+    """Rows of an allowlisted table past a rowversion (ticket 50)."""
+
+    async def changes(self, query: SyncQuery) -> SyncPage: ...
 
 
 @dataclass(frozen=True)

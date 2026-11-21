@@ -71,6 +71,7 @@ def main() -> int:
         fingerprints=bravo,
         orders=bravo,
         directory=bravo,
+        sync=bravo,
         environment=settings.environment,
         max_request_bytes=settings.max_request_bytes,
         docs=not settings.is_deployed,
