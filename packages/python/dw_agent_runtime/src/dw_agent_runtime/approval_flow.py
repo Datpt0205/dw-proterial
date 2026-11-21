@@ -116,6 +116,30 @@ class ApprovalDecisionGuard(Protocol):
     ) -> None: ...
 
 
+class ApprovalDecisionStamp(Protocol):
+    """What a context signs onto an approval of one of its types, as it is made.
+
+    Declared here, by the consumer, and satisfied by the context at the
+    composition root (`decision_stamps`, by approval-type prefix like
+    `decision_guards`). Called for an approval only, after the decision is
+    built and before anything is written, inside the decision's transaction:
+    a raise records nothing, so an approval whose stamp cannot be made (the
+    Bravo user cannot be resolved, the write kind is off) stays pending. What
+    it returns is carried on the `<type>.decided` event as `stamp`, for the
+    context's handler; it must hold identifiers and proofs, never business
+    data (the outbox is read by a dispatcher serving every tenant).
+
+    Run-less approvals only: a run resumes with its own payload, and a stamp
+    registered for a type that raised one with a run refuses the decision
+    rather than drop the stamp (the Bravo gateway's token, ADR 0027
+    decision 3, is the first user).
+    """
+
+    async def stamp(
+        self, request: ApprovalRequest, decision: ApprovalDecision, context: AccessContext
+    ) -> Mapping[str, object]: ...
+
+
 @dataclass
 class ApproveAndResumeService:
     uow_factory: PlatformUnitOfWorkFactory
@@ -130,6 +154,9 @@ class ApproveAndResumeService:
     # written: a rule the inbox merely hides a button for is a rule a direct
     # POST walks past.
     decision_guards: dict[str, ApprovalDecisionGuard] = field(default_factory=dict)
+    # By approval-type prefix too: what a context signs onto an approval of
+    # its type in the decision's transaction (`ApprovalDecisionStamp`).
+    decision_stamps: dict[str, ApprovalDecisionStamp] = field(default_factory=dict)
 
     def is_strict(self, approval_type: str) -> bool:
         """Whether this type demands a second person and a written reason.
@@ -294,10 +321,11 @@ class ApproveAndResumeService:
                 comment=comment,
                 channel=channel,
             )
+            stamp = await self._stamp(request, decision, context) if approve else None
             await uow.approvals.save(request)
             await uow.approvals.add_decision(decision)
             if request.run_id is None:
-                await uow.outbox.add(self._decided_event(request, decision))
+                await uow.outbox.add(self._decided_event(request, decision, stamp))
             # Before the commit, in the decision's transaction: a decision with
             # no trail, or a trail for a decision rolled back, is not possible.
             await uow.audit.append(
@@ -443,10 +471,39 @@ class ApproveAndResumeService:
         matches = [prefix for prefix in self.decision_guards if approval_type.startswith(prefix)]
         return self.decision_guards[max(matches, key=len)] if matches else None
 
-    def _decided_event(self, request: ApprovalRequest, decision: ApprovalDecision) -> OutboxEvent:
+    async def _stamp(
+        self, request: ApprovalRequest, decision: ApprovalDecision, context: AccessContext
+    ) -> Mapping[str, object] | None:
+        matches = [
+            prefix for prefix in self.decision_stamps if request.approval_type.startswith(prefix)
+        ]
+        if not matches:
+            return None
+        if request.run_id is not None:
+            raise ConflictError(
+                "this approval type is stamped when decided, and only a run-less one can be",
+                details={"approval_id": str(request.id), "approval_type": request.approval_type},
+            )
+        return await self.decision_stamps[max(matches, key=len)].stamp(request, decision, context)
+
+    def _decided_event(
+        self,
+        request: ApprovalRequest,
+        decision: ApprovalDecision,
+        stamp: Mapping[str, object] | None = None,
+    ) -> OutboxEvent:
         """Identifiers and the outcome only. The comment and the request's payload
         stay where their readers are authorized: the outbox is read by a
-        dispatcher that serves every tenant, not by a person with a scope."""
+        dispatcher that serves every tenant, not by a person with a scope.
+        A context's stamp, when its type has one, rides along (`decision_stamps`)."""
+        payload: dict[str, object] = {
+            "approval_id": str(request.id),
+            "decision_id": str(decision.id),
+            "outcome": decision.outcome.value,
+            "decided_by": str(decision.decided_by.value),
+        }
+        if stamp is not None:
+            payload["stamp"] = dict(stamp)
         return OutboxEvent(
             id=self.id_generator.new_uuid(),
             tenant_id=request.tenant_id,
@@ -455,12 +512,7 @@ class ApproveAndResumeService:
             schema_version=DECIDED_EVENT_SCHEMA,
             aggregate_id=request.id,
             occurred_at=decision.decided_at,
-            payload={
-                "approval_id": str(request.id),
-                "decision_id": str(decision.id),
-                "outcome": decision.outcome.value,
-                "decided_by": str(decision.decided_by.value),
-            },
+            payload=payload,
             actor_id=decision.decided_by.value,
         )
 
