@@ -1,45 +1,44 @@
-# 49 — ADR 0026 amended: Bravo read through a `dw` schema, written by Import or a staged job
+# 49 — ADR 0026 superseded: Bravo reached through one gateway over its database
 
-Status: needs-info (waits on Proterial IT's and the Bravo vendor's review of the design)
-Blocked by: none in code; the review of `docs/proterial/Thiet-ke-ket-noi-DW-Bravo_2026-11-20.docx`
+Status: done (2026-11-21: `docs/adr/0027-bravo-is-reached-through-one-gateway-over-its-database.md`, accepted by Đạt; IT reviews the grants before production)
+Blocked by: none
 Category: architecture decision
 
 ## Why
 
-ADR 0026 says "no database access, ever", and `apps/api/tests/unit/test_no_bravo_database.py`
-(through `scripts/verify_architecture.py` `bravo_database_violations`) refuses
-any SQL Server driver. The 11-19/20 survey (`ops-hardening.md`, 11-20 entry)
-showed the 48 needs can be met from what Bravo's SQL Server already has, with
-no vendor API. Tickets 50–53 cannot start before the decision changes.
+ADR 0026 said "no database access, ever". The 11-19/20 survey showed the 48
+needs can be met from Bravo's SQL Server with no vendor API, and IT agreed.
 
-## Shape
+## Decision (ADR 0027, 2026-11-21)
 
-- Amend ADR 0026, or supersede it with a new ADR:
-  - reads go through views in a `dw` schema inside Bravo's database, with a
-    SELECT-only login and snapshot isolation;
-  - DW performs the writes itself, after the PIC approves on the portal; it
-    does not stop at a proposal (Đạt, 11-20);
-  - creating a document goes through Bravo's own engine. The ways, in order of
-    preference:
-    1. a vendor procedure, or Bravo's own automation (ticket 60);
-    2. UI automation of the Import button;
-    3. DW's runner of Bravo's XML rules (ticket 59);
-  - changes to an existing document go through a staging table in `GetData`
-    and an Agent job, under the PIC's Bravo user (Đạt, 11-20), after portal
-    approval and UAT.
-- Constraints the ADR records: DW's logins never hold a right on Bravo's
-  tables or an admin role; Bravo's trigger-bypass context value is never used.
-- Narrow the architecture test instead of deleting it. Only the Bravo adapter
-  package may import the SQL Server driver; every other package still fails
-  the test. A mutation (an import in `dw_sales.application`) turns it red.
+Every option is written out with its verdict in the ADR. Briefly:
 
-## Acceptance
+- **One gateway** (`apps/bravo-gateway`) is the only holder of a Bravo
+  credential or a SQL Server driver. It runs `dw_bravo` (ticket 59) on the
+  live layouts, and contexts reach it through their ports with typed
+  commands. Ticket 63.
+- **Nothing of DW's inside Bravo's database.** No `dw` views, procedures,
+  staging table or Agent job: those were the 11-20 design, now rejected. Two
+  logins have table- and column-level grants.
+- **Creation:** DW's rule runner computes the INSERT by default; the vendor's
+  automatic Import (ticket 60) is used when it exists; UI automation is the
+  last resort.
+- **The PIC's own Bravo user on every write.** It is proven by:
+  - a signed approval token;
+  - a live identity check;
+  - Bravo's own rights, read live;
+  - the screen's rules, the lock check and the `timestamp` condition, with a
+    read-back after the write.
+- **Identity anchored on the employee code.** Keycloak is federated with
+  Proterial's AD; links are made automatically when unambiguous, and the
+  admin queue takes the rest. Ticket 64.
+- **Fail closed** when a layout, template or column changes, until UAT proves
+  the new version again.
 
-1. The ADR states:
-   - the decision;
-   - the rejected options: a vendor API, writing Bravo's tables directly, DW
-     holding sysadmin;
-   - the conditions.
-2. The test refuses a driver outside the adapter package, shown red then green.
+## Moved
+
+The architecture test is narrowed, not deleted. A driver is allowed only in
+`apps/bravo-gateway`. Shown red with a probe import elsewhere, it is ticket
+63's first slice, so the allowance arrives together with the code it allows.
 
 ## Comments

@@ -1,7 +1,7 @@
 # 53 — SO adjustments written into Bravo under the PIC's user (phase 2)
 
-Status: needs-info (the Bravo vendor approves the procedure; Proterial confirms in writing)
-Blocked by: 49, 52, the PIC ↔ Bravo user list
+Status: ready-for-agent (offline against the trace; UAT after ticket 52)
+Blocked by: 63 (the gateway), 64 (identity; replaces the hand-made PIC ↔ Bravo user list)
 Category: enhancement
 
 ## Why
@@ -12,21 +12,15 @@ manual step left.
 
 ## Shape
 
-- **Staging.** DW stages one approved command per change. The login
-  `dw_write` holds INSERT on `GetData.dw.lenh_ghi`, SELECT on `dw.ket_qua`,
-  and nothing on Bravo. Each command carries:
-  - an idempotency key;
-  - the line's `timestamp` when DW read it;
-  - the PIC's Bravo user id;
-  - the approval id and the content hash.
-- **The job.** An Agent job runs `dw.usp_ApDungLenhGhi` every minute. For each
-  command it:
-  - checks the PIC's right with `usp_sys_GetControlPermission`;
+- **Through the gateway (ADR 0027, 2026-11-21).** The 11-20 design's staging
+  table and Agent job are dropped. Each change is one typed command to the
+  gateway, carrying the approval token. The gateway then:
+  - checks the PIC's right from Bravo's own permission rows;
   - refuses a line that sits on a CDO (`ufn_Prevent_Edit`);
-  - sets `Context_Info` in the client's format, with the PIC's id;
+  - runs the screen's rules (`dw_bravo`);
   - writes exactly what the client writes for that operation (as traced),
-    under the `timestamp` condition;
-  - records the result.
+    under the PIC's user and the `timestamp` condition;
+  - reads the result back.
 - **Operations, in order.**
   - "XN giao hàng" (`EstimatedTimeDelivery`), keeping the first confirmed
     date (`OriginalConfirmedDate`).
@@ -41,8 +35,10 @@ manual step left.
   - no edit during approval;
   - no item change after PRS.
 - Bravo is updated before the customer is told, in one mail (Đạt, 11-20).
-- **Stop.** Any one of these halts writing: IT disables the job, DW turns its
-  flag off, or `dw_write` is revoked.
+- **Stop.** Any one of these halts writing:
+  - IT disables the write login;
+  - DW turns the write kind off;
+  - the gateway's fingerprint changes.
 
 ## Acceptance
 
