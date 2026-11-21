@@ -1,6 +1,6 @@
 # 65 — Watch Bravo for change, and say so before a PIC meets it
 
-Status: ready-for-agent (offline against recorded definitions; live after IT's read login)
+Status: in-progress — the table, the lane, the store, the acceptance and the gateway's measurement built (2026-11-21); left: the nightly replay of recorded saves (until it exists every changed layout pauses its screen), the UAT database read for the early warning (a second read login), the client version (VIEW SERVER STATE), the Import templates (ticket 51), a page for the watch; live after IT's read login
 Blocked by: 63 (the gateway computes the fingerprint; only it holds the credential)
 Category: enhancement (ADR 0027, decision 4)
 
@@ -80,6 +80,48 @@ writes that depend on it, before a PIC's write meets it.
    person without it is refused where the baseline is written.
 3. Mutation: an unchanged-on-error default, or a resume without acceptance,
    turns a test red.
+
+## Done (2026-11-21)
+
+- **The table** (`dw_bravo.watch`, `1bf3f52e`): `diff` of two fingerprints
+  and `react`, row by row; a test per row (acceptance 1); 11 mutations red.
+- **The lane's tick** (`dw_bravo.watch_lane.BravoWatch`): measure production,
+  keep it if it differs, compare with the accepted baseline, pause, tell;
+  no baseline pauses every kind; Bravo unread is "could not check since",
+  past two hours every kind pauses; UAT ahead is an early warning; a tick
+  never lifts a pause. 8 tests, 4 mutations red.
+- **Store** (migration `6b0f375184fb`, `bravo.watch_fingerprints`
+  append-only history, `watch_pauses`, `watch_baselines` append-only,
+  `watch_reads`; tenant only, RLS forced; FKs to the evidence RESTRICT):
+  `dw_sales.adapters.persistence.bravo_watch`, the one place that writes them.
+- **The way back** (acceptance 2): `BravoWatchService.accept` checks
+  `sales.bravo.watch.accept` where the baseline is written, takes only the
+  latest production fingerprint, lifts every pause and writes the audit row
+  in one transaction. Scopes `sales.bravo.watch.read`/`.accept` join
+  `sales_head`. Routes `GET /api/v1/sales/bravo/watch`,
+  `POST /api/v1/sales/bravo/watch/baseline` (scope before idempotency key,
+  members only). PostgreSQL: a person without the right refused and nothing
+  lifted, a stale fingerprint refused, another tenant sees and accepts
+  nothing, history and baselines append-only; 3 mutations red.
+- **The gateway** measures (`SqlServerBravo.fingerprint`, `GET
+  /v1/fingerprint/<env>`): layouts (with a parse check), `B00Command`, the
+  written tables' columns and triggers (enabled flag in the digest), the
+  context parser and the rights and lock routines. A definition the read
+  login cannot see is "could not check", never a constant. On a throwaway
+  SQL Server 2017: a column added and a trigger disabled are the only two
+  changes found, and the dependent kinds pause; 2 mutations red. It reads
+  pauses before each write (a paused kind reads `paused` even switched on).
+- **Worker**: lane `bravo_watch`, every 30 min 07-19h Vietnam time and once
+  at 02:00, registered only with `DW_WORKER_BRAVO_GATEWAY_URL`, tenant and
+  workspace; notices to holders of `sales.bravo.watch.read`, once per
+  fingerprint, audited as `system:bravo_watch`. Found on the way: compose
+  passes an unset value as "", which a UUID setting refused at start; read
+  as unset now, in the worker and the gateway, each with a test.
+
+Decided alone, for Đạt to review: with no nightly replay yet, every layout
+change pauses its screen until a person accepts (fail closed); the history
+is not partitioned (bounded by Bravo's change rate); FPT support is not
+notified (no FPT principal in the tenant; holders of the read scope only).
 
 ## Comments
 

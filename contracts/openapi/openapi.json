@@ -1511,6 +1511,45 @@
         "title": "BaStepView",
         "type": "object"
       },
+      "BaselineAcceptedView": {
+        "properties": {
+          "lifted": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lifted",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lifted"
+        ],
+        "title": "BaselineAcceptedView",
+        "type": "object"
+      },
+      "BaselineBody": {
+        "additionalProperties": false,
+        "description": "Accept the latest Bravo fingerprint as the watch's new baseline\n(ticket 65): which one, and why (the UAT replay that passed).",
+        "properties": {
+          "fingerprint_id": {
+            "format": "uuid",
+            "title": "Fingerprint Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint_id",
+          "reason"
+        ],
+        "title": "BaselineBody",
+        "type": "object"
+      },
       "Body_submit_feedback_api_v1_feedback_post": {
         "properties": {
           "images": {
@@ -25409,6 +25448,115 @@
         "title": "WaiverDecisionBody",
         "type": "object"
       },
+      "WatchPauseView": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "paused_at": {
+            "format": "date-time",
+            "title": "Paused At",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "reasons",
+          "paused_at"
+        ],
+        "title": "WatchPauseView",
+        "type": "object"
+      },
+      "WatchStateView": {
+        "description": "The watch as its readers see it: what is paused and why, the latest\nfingerprint (the one a baseline accepts) and when Bravo was last read.",
+        "properties": {
+          "baseline_accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Accepted At"
+          },
+          "baseline_fingerprint": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Fingerprint"
+          },
+          "last_read": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read"
+          },
+          "latest_fingerprint": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Fingerprint"
+          },
+          "latest_taken_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Taken At"
+          },
+          "pauses": {
+            "items": {
+              "$ref": "#/components/schemas/WatchPauseView"
+            },
+            "title": "Pauses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pauses",
+          "latest_fingerprint",
+          "latest_taken_at",
+          "baseline_fingerprint",
+          "baseline_accepted_at",
+          "last_read"
+        ],
+        "title": "WatchStateView",
+        "type": "object"
+      },
       "Words": {
         "anyOf": [
           {
@@ -32114,6 +32262,88 @@
           }
         },
         "summary": "Upload Bravo Export",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/bravo/watch": {
+      "get": {
+        "operationId": "bravo_watch_api_v1_sales_bravo_watch_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bravo Watch",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/bravo/watch/baseline": {
+      "post": {
+        "operationId": "accept_bravo_baseline_api_v1_sales_bravo_watch_baseline_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaselineBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaselineAcceptedView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Bravo Baseline",
         "tags": [
           "sales"
         ]

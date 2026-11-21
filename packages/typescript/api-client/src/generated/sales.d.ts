@@ -225,6 +225,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/bravo/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Watch */
+        get: operations["bravo_watch_api_v1_sales_bravo_watch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/bravo/watch/baseline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Bravo Baseline */
+        post: operations["accept_bravo_baseline_api_v1_sales_bravo_watch_baseline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/customers/{customer_code}/notation": {
         parameters: {
             query?: never;
@@ -2872,6 +2906,25 @@ export interface components {
             code: string;
             /** Label */
             label: string;
+        };
+        /** BaselineAcceptedView */
+        BaselineAcceptedView: {
+            /** Lifted */
+            lifted: string[];
+        };
+        /**
+         * BaselineBody
+         * @description Accept the latest Bravo fingerprint as the watch's new baseline
+         *     (ticket 65): which one, and why (the UAT replay that passed).
+         */
+        BaselineBody: {
+            /**
+             * Fingerprint Id
+             * Format: uuid
+             */
+            fingerprint_id: string;
+            /** Reason */
+            reason: string;
         };
         /** BravoEntryBody */
         BravoEntryBody: {
@@ -9237,6 +9290,37 @@ export interface components {
             /** Case Version */
             case_version: number;
         };
+        /** WatchPauseView */
+        WatchPauseView: {
+            /** Kind */
+            kind: string;
+            /**
+             * Paused At
+             * Format: date-time
+             */
+            paused_at: string;
+            /** Reasons */
+            reasons: string[];
+        };
+        /**
+         * WatchStateView
+         * @description The watch as its readers see it: what is paused and why, the latest
+         *     fingerprint (the one a baseline accepts) and when Bravo was last read.
+         */
+        WatchStateView: {
+            /** Baseline Accepted At */
+            baseline_accepted_at: string | null;
+            /** Baseline Fingerprint */
+            baseline_fingerprint: string | null;
+            /** Last Read */
+            last_read: string | null;
+            /** Latest Fingerprint */
+            latest_fingerprint: string | null;
+            /** Latest Taken At */
+            latest_taken_at: string | null;
+            /** Pauses */
+            pauses: components["schemas"]["WatchPauseView"][];
+        };
         Words: string | components["schemas"]["Hidden"];
         /** WorkItem */
         WorkItem: {
@@ -9744,6 +9828,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BravoExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bravo_watch_api_v1_sales_bravo_watch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchStateView"];
+                };
+            };
+        };
+    };
+    accept_bravo_baseline_api_v1_sales_bravo_watch_baseline_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BaselineBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaselineAcceptedView"];
                 };
             };
             /** @description Validation Error */

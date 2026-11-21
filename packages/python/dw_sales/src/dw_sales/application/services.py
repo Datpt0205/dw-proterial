@@ -28,6 +28,7 @@ from dw_sales.application.assistant import AssistantService, AssistantStoreFacto
 from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.bravo_exports import BravoExportService, BravoExportUnitOfWorkFactory
 from dw_sales.application.bravo_sales_orders import ReadBackService, ReadBackUnitOfWorkFactory
+from dw_sales.application.bravo_watch import BravoWatchService, BravoWatchStorePort
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.catalog_imports import (
     CatalogDecisions,
@@ -193,6 +194,8 @@ class SalesServices:
     # A quote case opened from an order's lines with no valid quotation, and
     # those lines checked again once it is approved (ticket 09).
     order_quotes: OrderQuotes
+    # The Bravo change watch: its state, and a baseline accepted (ticket 65).
+    bravo_watch: BravoWatchService
     gate: Gate
 
 
@@ -222,6 +225,8 @@ def assemble(
     threads: ThreadMembersPort,
     intake: OrderIntake,
     quotation: QuotationService,
+    # The Bravo change watch's tables (ticket 65).
+    bravo_watch_store: BravoWatchStorePort,
     files: SourceViewPort,
     source_cache: SourceCachePort,
     book: TenantRuleBook,
@@ -474,6 +479,7 @@ def assemble(
         prompts=PromptVersionsService(uow, gate, prompts),
         today=TodayService(gate, clock, notices, reminder_marks, book),
         order_quotes=order_quotes,
+        bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
         gate=gate,
     )
     decisions = CaseDecisions(

@@ -67,6 +67,7 @@ from dw_sales.application.assistant import (
 )
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
 from dw_sales.application.bravo_sales_orders import ReadBackView
+from dw_sales.application.bravo_watch import BaselineAcceptedView, WatchStateView
 from dw_sales.application.catalog_imports import (
     CatalogImportView,
     CatalogPreviewView,
@@ -279,6 +280,16 @@ class RuleWordsBody(BaseModel):
 
     request: Annotated[str, Field(min_length=1, max_length=2000)]
     focus: Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.]*$", max_length=200)] | None = None
+
+
+class BaselineBody(BaseModel):
+    """Accept the latest Bravo fingerprint as the watch's new baseline
+    (ticket 65): which one, and why (the UAT replay that passed)."""
+
+    model_config = _BODY
+
+    fingerprint_id: uuid.UUID
+    reason: Annotated[str, Field(min_length=1, max_length=500)]
 
 
 class RuleDraftBody(BaseModel):
@@ -2428,6 +2439,27 @@ def build_router(
     )
     async def prompt_versions(context: Ctx, svc: Svc) -> PromptsView:
         return await svc.prompts.list(context)
+
+    # The Bravo change watch (ticket 65): what is paused and why; and the
+    # one way back, a new baseline, refused here without the right.
+    @router.get(
+        "/bravo/watch",
+        response_model=WatchStateView,
+        dependencies=[scopes(SalesScopes.BRAVO_WATCH_READ)],
+    )
+    async def bravo_watch(context: Ctx, svc: Svc) -> WatchStateView:
+        return WatchStateView.of(await svc.bravo_watch.state(context))
+
+    @router.post(
+        "/bravo/watch/baseline",
+        response_model=BaselineAcceptedView,
+        dependencies=[scopes(SalesScopes.BRAVO_WATCH_ACCEPT)],
+    )
+    async def accept_bravo_baseline(
+        body: BaselineBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> BaselineAcceptedView:
+        lifted = await svc.bravo_watch.accept(context, body.fingerprint_id, body.reason)
+        return await idem.record(BaselineAcceptedView(lifted=list(lifted)))
 
     # "Tạo từ tệp mẫu": a company's template, kept for the worker to draft a
     # version of the key from (202). A draft is a start for the editor, never

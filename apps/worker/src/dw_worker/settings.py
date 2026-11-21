@@ -45,6 +45,20 @@ class WorkerSettings(BaseSettings):
         validation_alias=AliasChoices("DW_WORKER_PROFILE", "DW_API_PROFILE"),
     )
 
+    # The Bravo change watch (sales ticket 65): the gateway to ask for
+    # Bravo's fingerprint, and the one tenant and workspace whose Bravo it
+    # reaches. All three, or the lane does not run (and the gateway, with no
+    # baseline accepted, keeps every write kind paused).
+    bravo_gateway_url: str | None = None
+    bravo_tenant_id: uuid.UUID | None = None
+    bravo_workspace_id: uuid.UUID | None = None
+
+    @field_validator("bravo_gateway_url", "bravo_tenant_id", "bravo_workspace_id", mode="before")
+    @classmethod
+    def _unset_when_empty(cls, value: object) -> object:
+        # Compose passes an unset variable as "" (`${VAR:-}`): not configured.
+        return None if value == "" else value
+
     # The cache the API reads a source page from: DW1 reads a new case's pages
     # into it ahead of the person who opens them (2026-10-28). Absent → no
     # reading ahead; the API reads each page when it is opened.

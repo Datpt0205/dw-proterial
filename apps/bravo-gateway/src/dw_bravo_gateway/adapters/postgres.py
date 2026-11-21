@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Final
+from typing import Final, Protocol
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -104,6 +104,28 @@ class SqlLedger:
             raise RuntimeError(f"approval {claims.approval_id} was not claimed, or was settled")
 
 
+class Pauses(Protocol):
+    async def paused(self, tenant_id: uuid.UUID, kind: str) -> bool: ...
+
+
+@dataclass
+class SqlPauses:
+    """`bravo.watch_pauses`, which the `bravo_watch` lane writes and only a
+    person accepting a baseline clears (`dw_sales.adapters.persistence.bravo_watch`)."""
+
+    session_factory: async_sessionmaker[AsyncSession]
+
+    async def paused(self, tenant_id: uuid.UUID, kind: str) -> bool:
+        async with tenant_session(
+            self.session_factory, TenantScope(tenant_id=tenant_id)
+        ) as session:
+            found = await session.scalar(
+                sa.text("SELECT count(*) FROM bravo.watch_pauses WHERE kind = :kind"),
+                {"kind": kind},
+            )
+        return bool(found)
+
+
 # Which rule key switches a kind on, by the kind's prefix: DW1's SO writes
 # are Sales' (`dw_sales.domain.bravo_writes`). A kind no key covers is off.
 SWITCH_KEYS: Final[Mapping[str, str]] = {"so.": "sales_bravo_writes"}
@@ -127,11 +149,16 @@ class SqlSwitches:
     """
 
     lookup: SqlRuleVersionLookup
+    pauses: Pauses
 
     async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         key = next((k for prefix, k in SWITCH_KEYS.items() if kind.startswith(prefix)), None)
         if key is None:
             return "off"
+        # Paused by the change watch (ticket 65) until a person accepts a new
+        # baseline; read before the switch, so a paused kind reads paused.
+        if await self.pauses.paused(tenant_id, kind):
+            return "paused"
         version = await self.lookup.approved(
             _Scope(TenantId(tenant_id), WorkspaceId(workspace_id)), key
         )
