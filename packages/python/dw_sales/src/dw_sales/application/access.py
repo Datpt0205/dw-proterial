@@ -61,6 +61,9 @@ class SalesScopes(StrEnum):
     # watch's state; accepting a new baseline, which lifts its pauses.
     BRAVO_WATCH_READ = "sales.bravo.watch.read"
     BRAVO_WATCH_ACCEPT = "sales.bravo.watch.accept"
+    # Linking a person to an employee code by hand, and the queue of what
+    # DW would not link itself (ticket 64).
+    IDENTITY_LINK = "sales.identity.link"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR
