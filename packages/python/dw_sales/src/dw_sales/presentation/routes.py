@@ -1456,8 +1456,10 @@ def build_router(
     async def order_line_trail(
         case_id: uuid.UUID,
         line_no: Annotated[int, PathParam(ge=1, le=99_999)],
-        context: ReadCtx,
-        svc: ReadSvc,
+        # Members only: a support grant reads the routes the platform lists
+        # (SUPPORT_ALLOWED_ROUTES), and a line's trail is not among them.
+        context: Ctx,
+        svc: Svc,
     ) -> LineTrailView:
         return await svc.orders.line_trail(context, case_id, line_no)
 
