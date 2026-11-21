@@ -97,8 +97,10 @@ COPY --from=builder --chown=root:root /app/.venv /app/.venv
 # process on a read-only root where PYTHONDONTWRITEBYTECODE holds, so nothing
 # is ever cached at run time: without this each one compiled its imports from
 # source (the reader: 4.3 s of a 4.6 s read, measured). The stdlib's own tests
-# and lib2to3 hold files that do not compile on purpose, and are not imported.
-RUN python -m compileall -q -j 0 -x '(/tests?/|/lib2to3/)' \
+# and lib2to3 hold files that do not compile on purpose, and are not imported;
+# so does olefile's `olefile2.py`, its Python 2 module (`0x...L` literals),
+# which `olefile` never imports.
+RUN python -m compileall -q -j 0 -x '(/tests?/|/lib2to3/|/olefile/olefile2\.py$)' \
         /app/.venv/lib/python3.12/site-packages /usr/local/lib/python3.12
 
 ENV PATH="/app/.venv/bin:$PATH" \
