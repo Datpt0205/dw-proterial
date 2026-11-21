@@ -26,6 +26,7 @@ members = [
     "dw-agent-runtime",
     "dw-api",
     "dw-bravo",
+    "dw-bravo-gateway",
     "dw-connectors",
     "dw-docgen",
     "dw-evals",
@@ -985,6 +986,31 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "cryptography", specifier = ">=44,<51" }]
+
+[[package]]
+name = "dw-bravo-gateway"
+version = "0.1.0"
+source = { editable = "apps/bravo-gateway" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "dw-bravo" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30,<1" },
+    { name = "dw-bravo", editable = "packages/python/dw_bravo" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pydantic-settings", specifier = ">=2.7,<3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
+]
 
 [[package]]
 name = "dw-connectors"

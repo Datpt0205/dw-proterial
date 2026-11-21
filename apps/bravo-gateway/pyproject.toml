@@ -1,0 +1,24 @@
+[project]
+name = "dw-bravo-gateway"
+version = "0.1.0"
+description = "The one process that reads and writes Bravo's database: typed commands in, the PIC's own save out (ADR 0027, sales ticket 63)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    # The contract, the approval token and Bravo's own rule runner, shared
+    # with the contexts' adapters (ticket 59).
+    "dw-bravo",
+    # The idempotency ledger lives in DW's PostgreSQL, under RLS, as `dw_app`.
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "asyncpg>=0.30,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dw_bravo_gateway"]
