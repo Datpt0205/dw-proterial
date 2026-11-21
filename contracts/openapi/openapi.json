@@ -10517,6 +10517,33 @@
         "title": "LineDate",
         "type": "object"
       },
+      "LineTrailView": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TrailStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "line_no",
+          "steps"
+        ],
+        "title": "LineTrailView",
+        "type": "object"
+      },
       "LinkedCount": {
         "properties": {
           "count": {
@@ -24065,6 +24092,192 @@
         "title": "TodayView",
         "type": "object"
       },
+      "TrailStepView": {
+        "description": "One step of a line's trail. ``code`` is the rule's, check's or\nmodel step's own code; the other fields are what the step rests on.",
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "cell": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "decided_by": {
+            "enum": [
+              "rule",
+              "model",
+              "dw",
+              "person"
+            ],
+            "title": "Decided By",
+            "type": "string"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate"
+          },
+          "kind": {
+            "enum": [
+              "read",
+              "convert",
+              "model_reading",
+              "mapping",
+              "quotation",
+              "checks",
+              "finding",
+              "finding_decided",
+              "correction",
+              "change",
+              "design_asked",
+              "pc_asked",
+              "pc_short_lead",
+              "pc_answer",
+              "model_step",
+              "bravo_recorded",
+              "cross_checked",
+              "confirmed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "rule_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Version"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "decided_by"
+        ],
+        "title": "TrailStepView",
+        "type": "object"
+      },
       "TriageCardView": {
         "description": "A message's triage card as the inbox shows it: what it seems to be\n(the skill's kind, its label where the skill gives one, and the route\nthe skill maps it onto), the one step suggested, the case it names\nwhere the caller may see it, and the decision once made.",
         "properties": {
@@ -35826,6 +36039,60 @@
           }
         },
         "summary": "Pc Answer",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
+      "get": {
+        "operationId": "order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 99999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineTrailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Line Trail",
         "tags": [
           "sales"
         ]

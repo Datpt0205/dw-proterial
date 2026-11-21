@@ -1289,6 +1289,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Line Trail */
+        get: operations["order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/message-text": {
         parameters: {
             query?: never;
@@ -5352,6 +5369,18 @@ export interface components {
             /** Schedule Dates */
             schedule_dates?: string[] | null;
         };
+        /** LineTrailView */
+        LineTrailView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Line No */
+            line_no: number;
+            /** Steps */
+            steps: components["schemas"]["TrailStepView"][];
+        };
         /** LinkedCount */
         LinkedCount: {
             /** Count */
@@ -8758,6 +8787,49 @@ export interface components {
             reminders: components["schemas"]["ReminderView"][];
         };
         /**
+         * TrailStepView
+         * @description One step of a line's trail. ``code`` is the rule's, check's or
+         *     model step's own code; the other fields are what the step rests on.
+         */
+        TrailStepView: {
+            /** Actor User Id */
+            actor_user_id?: string | null;
+            /** At */
+            at?: string | null;
+            /** Cell */
+            cell?: string | null;
+            /** Code */
+            code: string;
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Decided By
+             * @enum {string}
+             */
+            decided_by: "rule" | "model" | "dw" | "person";
+            /** Gate */
+            gate?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "read" | "convert" | "model_reading" | "mapping" | "quotation" | "checks" | "finding" | "finding_decided" | "correction" | "change" | "design_asked" | "pc_asked" | "pc_short_lead" | "pc_answer" | "model_step" | "bravo_recorded" | "cross_checked" | "confirmed";
+            /** Outcome */
+            outcome?: string | null;
+            /** Page */
+            page?: number | null;
+            /** Rule Version */
+            rule_version?: string | null;
+            /** Severity */
+            severity?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
          * TriageCardView
          * @description A message's triage card as the inbox shows it: what it seems to be
          *     (the skill's kind, its label where the skill gives one, and the route
@@ -11895,6 +11967,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineTrailView"];
                 };
             };
             /** @description Validation Error */

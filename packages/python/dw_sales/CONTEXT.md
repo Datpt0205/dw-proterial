@@ -731,6 +731,41 @@ sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử
 | `corrected_by_sales` | Sales sửa giá trị    |
 | `ask_customer`       | Yêu cầu khách sửa    |
 
+## Line trail steps
+
+Why a PO line went the way it did (ticket 62): each step a line took, read
+from what the case stamps on the line, never kept a second time.
+
+| Step              | Label                          |
+| ----------------- | ------------------------------ |
+| `read`            | Đọc dòng từ PO                 |
+| `convert`         | Đổi mã theo convert list       |
+| `model_reading`   | Mô hình đọc mô tả              |
+| `mapping`         | Mã PRV của dòng                |
+| `quotation`       | Đối chiếu báo giá              |
+| `checks`          | Các bước kiểm                  |
+| `finding`         | Phát hiện                      |
+| `finding_decided` | Quyết định về phát hiện        |
+| `correction`      | Sales sửa giá trị              |
+| `change`          | Khách yêu cầu thay đổi         |
+| `design_asked`    | Hỏi Design tạo mã              |
+| `pc_asked`        | Hỏi PC ngày giao               |
+| `pc_short_lead`   | PC đồng ý lead time ngắn       |
+| `pc_answer`       | PC trả lời ngày giao           |
+| `model_step`      | Bước mô hình                   |
+| `bravo_recorded`  | Nhập vào Bravo                 |
+| `cross_checked`   | Kiểm tra chéo                  |
+| `confirmed`       | Xác nhận với khách             |
+
+## Who decided a step
+
+| Decided by | Label   |
+| ---------- | ------- |
+| `rule`     | Luật    |
+| `model`    | Mô hình |
+| `dw`       | DW tự áp dụng |
+| `person`   | Người   |
+
 ## Finding codes
 
 | Code                       | Label                                |
