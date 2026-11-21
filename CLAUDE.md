@@ -259,6 +259,11 @@ kind of change nobody makes and everybody works around.
   Unix socket), and an import-linter contract keeps every parser out of
   `dw_api`. Work that reads files is queued for the worker, not awaited by a
   request (sales ticket 25).
+- Bravo's screen rules (validators, field rules) are run from Bravo's own
+  layout XML by `dw_bravo` (sales ticket 59, shared by DW1 and DW2), never
+  retyped as code. A context reaches it through a port it declares, from its
+  adapters only (import-linter); what the runner cannot decide it refuses, and
+  a plan made without the screen's shared template never writes.
 - Channels are reached through a port, never a provider's client. `ChatSenderPort`
   is the narrow intersection every channel can satisfy; code needing one
   provider's own features takes that provider's client and says so in its type.

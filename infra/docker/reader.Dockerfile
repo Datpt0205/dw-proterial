@@ -35,6 +35,7 @@ COPY packages/python/dw_agent_runtime/pyproject.toml packages/python/dw_agent_ru
 COPY packages/python/dw_knowledge/pyproject.toml packages/python/dw_knowledge/pyproject.toml
 COPY packages/python/dw_memory/pyproject.toml packages/python/dw_memory/pyproject.toml
 COPY packages/python/dw_connectors/pyproject.toml packages/python/dw_connectors/pyproject.toml
+COPY packages/python/dw_bravo/pyproject.toml packages/python/dw_bravo/pyproject.toml
 COPY packages/python/dw_observability/pyproject.toml packages/python/dw_observability/pyproject.toml
 COPY packages/python/dw_evals/pyproject.toml packages/python/dw_evals/pyproject.toml
 COPY packages/python/dw_sales/pyproject.toml packages/python/dw_sales/pyproject.toml

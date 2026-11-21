@@ -18,6 +18,7 @@ dw-agent-runtime = { workspace = true }
 dw-knowledge = { workspace = true }
 dw-memory = { workspace = true }
 dw-connectors = { workspace = true }
+dw-bravo = { workspace = true }
 dw-observability = { workspace = true }
 dw-evals = { workspace = true }
 dw-purchasing = { workspace = true }
@@ -107,6 +108,7 @@ known-first-party = [
     "dw_knowledge",
     "dw_memory",
     "dw_connectors",
+    "dw_bravo",
     "dw_observability",
     "dw_evals",
     "dw_api",
@@ -149,6 +151,7 @@ mypy_path = [
     "packages/python/dw_knowledge/src",
     "packages/python/dw_memory/src",
     "packages/python/dw_connectors/src",
+    "packages/python/dw_bravo/src",
     "packages/python/dw_observability/src",
     "packages/python/dw_evals/src",
     "packages/python/dw_purchasing/src",
@@ -233,7 +236,9 @@ asyncio_default_fixture_loop_scope = "function"
 # never-imported modules under the <pkg>/src/ layout from the denominator.
 source = [
     "packages/python/dw_agent_runtime/src",
+    "packages/python/dw_bravo/src",
     "packages/python/dw_connectors/src",
+    "packages/python/dw_bravo/src",
     "packages/python/dw_evals/src",
     "packages/python/dw_kernel/src",
     "packages/python/dw_knowledge/src",
@@ -271,6 +276,7 @@ root_packages = [
     "dw_knowledge",
     "dw_memory",
     "dw_connectors",
+    "dw_bravo",
     "dw_observability",
     "dw_evals",
     "dw_sales",
@@ -393,10 +399,30 @@ source_modules = [
     "dw_knowledge",
     "dw_memory",
     "dw_connectors",
+    "dw_bravo",
     "dw_observability",
     "dw_evals",
 ]
 forbidden_modules = ["dw_sales", "dw_purchasing"]
+
+[[tool.importlinter.contracts]]
+# Bravo is shared by DW1 and DW2 (sales ticket 59): a context reaches it
+# through a Protocol the context declares, satisfied in its adapters or at a
+# composition root. A domain, application, workflow or route importing it
+# would be a context deciding with Bravo's engine in hand instead of a port.
+name = "Contexts reach Bravo only through their adapters"
+type = "forbidden"
+source_modules = [
+    "dw_sales.domain",
+    "dw_sales.application",
+    "dw_sales.workflows",
+    "dw_sales.presentation",
+    "dw_purchasing.domain",
+    "dw_purchasing.application",
+    "dw_purchasing.workflows",
+    "dw_purchasing.presentation",
+]
+forbidden_modules = ["dw_bravo"]
 
 [[tool.importlinter.contracts]]
 name = "Kernel is pure (stdlib only)"
@@ -541,6 +567,7 @@ source_modules = [
     "dw_knowledge",
     "dw_memory",
     "dw_connectors",
+    "dw_bravo",
     "dw_observability",
 ]
 forbidden_modules = ["dw_api", "dw_worker", "dw_docgen", "dw_reader"]

@@ -1,6 +1,6 @@
 # 59 — A Bravo rule runner: execute the screen's own XML rules, not a copy of them
 
-Status: ready-for-agent (the SO screen's layout, its 22 procedures and the UAT save trace are in hand; the shared templates come with script 03c)
+Status: in-progress — the SO screen's slice is done (2026-11-21); YCBG, quotation, PR and PO next. pending: script 03c (the shared template `BizDocEditor`) for creating an SO and for a line split
 Blocked by: 49 before anything runs against Bravo; none for building it offline
 Category: enhancement
 
@@ -49,6 +49,55 @@ configuration as it changes.
 2. Each validator in the SO layout has a test that fires it.
 3. A layout changed in Bravo changes the runner's behaviour with no code change
    (test with an edited copy).
+
+## Done (2026-11-21, the SO screen, offline)
+
+- `packages/python/dw_bravo` — Bravo shared by DW1 and DW2, standard library
+  only, no driver (ADR 0026 untouched; ticket 49 still owes the amendment):
+  - `layout.py` reads a `<DataSource>` layout as data: tables, per-column
+    `ColumnChanging`/`ColumnChanged`, row events, rules defined in
+    `Evaluators`/`EvaluatorGroups` or inline at first use, validators,
+    defaults, computed columns, temp columns; a DOCTYPE is refused; a rule
+    defined twice differently refuses when used.
+  - `expression.py` evaluates Bravo's language (ADO.NET DataColumn syntax plus
+    Bravo's functions, `{=...}` substituted from the row). It refuses, never
+    guesses: unknown syntax or function, CHARINDEX (base unmeasured), a value not
+    in hand (`UNKNOWN` is never NULL), a case-only string difference, rounding
+    on the half, mismatched types. A NULL rule condition reads as not true
+    (ADO.NET's filter rule; the SO layout's `PriceIncludeTax=1` relies on it); a
+    validator's NULL stays undecided.
+  - `runner.py` is the client's engine: `load` (ServerLoaded; what cannot be
+    learnt stays UNKNOWN), `edit` (cascading events), `check` (block, warning,
+    undecided), `save` (ServerUpdating, then the exact UPDATE/INSERT column
+    sets), and a trail of every value set, by rule or person (for ticket 62).
+    Fail closed: an undecided blocking validator blocks; a plan made without
+    the shared template is `provisional` and `may_write` is false.
+  - `ports.py`: `ProcedurePort`, `ReferencePort`, `Session`; the offline
+    adapter `adapters/recorded.py` answers only calls recorded with exactly
+    these parameters. `testing/sql_trace.py` and `testing/replay.py` read an
+    Extended Events CSV and replay a screen's saves; no data is in git.
+- Contexts reach it only through their adapters: import-linter contract
+  "Contexts reach Bravo only through their adapters" (shown BROKEN by a probe
+  import in `dw_sales.application`, then kept).
+- Measured on the 2026-11-20 UAT trace (`DW_BRAVO_TRACE`, local only): all
+  6 saved SO UPDATEs reproduced column for column, each procedure the runner
+  called matched one the client made with the same parameters; the person's
+  edits were 8 columns in all, the other 17 written columns computed by
+  the layout. The 2 INSERT saves (create, line split) are not replayed:
+  `ConvertRate9` and `QuantityBox` of a new line are set by no rule in layout
+  8212, so by the template (script 03c) or a lookup.
+- Validators: 27 (17 block, 10 warning), each with a test (`DW_BRAVO_LAYOUTS`,
+  local only): 20 fire; `CheckBizProcess` passes for the creator and is
+  undecided otherwise (CHARINDEX); 6 have no `ClassName` (`NotNull` on the
+  header and on lines, `NotNull_DocNo`, `LME`, `ItemCodeTmp_CheckEdit`,
+  `NotnullCatalogry`) and are undecided until the template shows their kind.
+- An edited copy of the real layout (the price band 150 → 250) changes the
+  check with no code change; the same holds on the CI layout (rounding 2 → 0).
+- Mutation check: 10 guards broken one at a time (fail-closed save,
+  provisional write, template rule, case compare, half rounding, unrecorded
+  call, DOCTYPE, NULL condition, UNKNOWN-as-NULL, money NULL), each turned a
+  test red. CI runs 33 tests on a layout written for them; 30 more run where
+  the data is.
 
 ## Comments
 

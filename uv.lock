@@ -25,6 +25,7 @@ members = [
     "digital-worker-platform",
     "dw-agent-runtime",
     "dw-api",
+    "dw-bravo",
     "dw-connectors",
     "dw-docgen",
     "dw-evals",
@@ -973,6 +974,11 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36,<2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
 ]
+
+[[package]]
+name = "dw-bravo"
+version = "0.1.0"
+source = { editable = "packages/python/dw_bravo" }
 
 [[package]]
 name = "dw-connectors"
