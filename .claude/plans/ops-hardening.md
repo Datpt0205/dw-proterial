@@ -784,6 +784,17 @@ context. All five are done and on `main`. The full narrative is at
       holds no right on Bravo's tables. Owed: IT and vendor review, the
       PR/PO save trace, and amending ADR 0026 plus
       `test_no_bravo_database.py` before any adapter code.
+      **Superseded 11-21 by ADR 0027** (Đạt: build on the best option):
+      - one gateway (`apps/bravo-gateway`) holds the only Bravo credential;
+      - nothing of DW's is created in Bravo's database: no views, staging
+        table or job;
+      - two logins with table- and column-level grants;
+      - creation through DW's rule runner;
+      - identity anchored on the employee code, with Keycloak federated to
+        the AD.
+
+      Tickets 63 and 64; 50–53 rewritten. The 11-20 docx describes the old
+      write path and needs a new version before IT and the vendor review it.
     - **Cato (SASE) on the plant's PCs, heard 11-09:** DW is unaffected in
       principle. The API's rate limit keys on the bearer token and
       Keycloak's lockout on the account, so one shared plant IP throttles

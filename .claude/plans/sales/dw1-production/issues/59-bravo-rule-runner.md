@@ -35,8 +35,8 @@ configuration as it changes.
     CHARINDEX, CONVERT, UPDATEDCOLUMN, USER, GETDATE;
   - `Parent.<col>` for the header and `Exists(Detail)` for the lines.
   - Unknown syntax refuses the run; it never guesses.
-- Server constraints call the same procedures, read-only, under `dw_read`'s
-  sibling login.
+- Server constraints call the same procedures, read-only, through the
+  gateway's read login (ticket 63, ADR 0027).
 - Output: the exact column set the client would `INSERT`/`UPDATE`, the warnings
   for the PIC, and the blocking reasons.
 - Scope order: SO lines (dates, split, cancel, quantity), then SO creation,

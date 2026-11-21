@@ -8,6 +8,24 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-11-21, **Bravo through one gateway, ADR 0027 (Đạt: take the best option now and build on it; supersedes ADR 0026 and the 11-20 views + staging-job design).**
+  - One `apps/bravo-gateway` holds the only Bravo credential and driver, and runs `dw_bravo` on the live layouts.
+  - Nothing of DW's is inside Bravo's database: two logins with table- and column-level grants.
+  - Creation goes through DW's rule runner. The vendor's automatic Import is used if ticket 60 brings one; UI automation is the last resort.
+  - Every write is the PIC's own, checked by the gateway in order:
+    1. the signed approval token;
+    2. the live identity;
+    3. Bravo's own rights, through its functions;
+    4. the screen rules;
+    5. the lock.
+
+    It then writes under the PIC's context and the `timestamp` condition, with an idempotency key, and reads the result back.
+  - Identity is anchored on the employee code (`B00UserList.Ma_CbNv`). Keycloak is federated with the AD. Unambiguous links are made automatically; the rest go to an admin queue.
+  - A changed fingerprint stops writes.
+  - Tickets 63 (gateway) and 64 (identity) were added; 49 is done; 50, 51 and 53 are rewritten onto the gateway and are ready-for-agent; 52 gains scripts 06 (users and rights, counts only) and 07 (UAT: a column-granted login saving an SO line with Bravo's triggers, rolled back) and three questions for IT about the AD.
+  - Unmeasured assumptions are listed in the ADR. Đạt decided to build on them; a failed one changes only the gateway's adapter or its grants.
+  - The 11-20 design docx describes the old write path and needs a new version before IT and the vendor review it.
+
 - 2026-11-21, **how every DW1/DW2 step is built (Đạt):** rules first, the model second, a person last.
   - **Rules** come from their owners: Bravo's own rules and procedures (ticket 59), tenant parameters, and the BA's BR-* codes. They are never if/else typed into code.
   - **The model** is called only where the rules cannot decide: unstructured text, ambiguity, drafting, chat. It returns typed output with a confidence.

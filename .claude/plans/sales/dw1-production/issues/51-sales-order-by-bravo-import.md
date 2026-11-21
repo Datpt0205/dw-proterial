@@ -1,7 +1,7 @@
 # 51 — DW creates the sales order itself, through Bravo's own Import engine
 
-Status: needs-info (the path depends on ticket 60's answer; 52 measures Import)
-Blocked by: 50 (read-back), 52 (does Import keep DW's price, does it run the validators), 60 (vendor's path) or 59 (rule runner)
+Status: ready-for-agent (path 2 by default, ADR 0027; creation's columns wait on script 03c)
+Blocked by: 63 (the gateway), 59 (creation needs the shared template, script 03c); 60 only adds a path
 Category: enhancement
 
 ## Why
@@ -14,11 +14,15 @@ author. Whatever path DW takes must keep that engine, or reproduce it exactly
 
 ## Shape
 
-- **Paths**, picked by ticket 60:
-  1. a vendor procedure, or Bravo's own scheduled Import;
-  2. UI automation of the client's Import button. The authorship question is
-     open there: the robot account versus the PIC;
-  3. DW's rule runner (ticket 59) writing through the staged job.
+- **Paths** (ADR 0027, 2026-11-21):
+  1. **The default, built now:** the gateway's `so.create`. DW's rule runner
+     (ticket 59) computes the exact INSERT from the live layout and the shared
+     template, under the PIC's user, with the checks in ticket 63.
+  2. **When the vendor offers it (ticket 60):** the vendor's automatic Import
+     or procedure, as a second creation path inside the gateway. Contexts do
+     not change.
+  3. **Last resort only:** UI automation of the Import button. It would need
+     the PIC's Bravo password to author as the PIC.
 - **The file** is still produced for each path, and for the manual fallback.
   - At export, DW reads the template in use from `B00ImportSetting` (template
     72 today) and writes exactly its columns.

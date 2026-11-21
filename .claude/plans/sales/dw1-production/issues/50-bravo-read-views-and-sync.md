@@ -1,7 +1,7 @@
-# 50 — Read Bravo through `dw` views, synced into DW, with a daily drift check
+# 50 — Read Bravo through the gateway, synced into DW, with a drift check
 
-Status: needs-info (IT creates the `dw` schema and `dw_read` on UAT from FPT's script)
-Blocked by: 49
+Status: ready-for-agent (offline against the recorded schema; live waits on IT's read login on UAT)
+Blocked by: 63 (the gateway's read queries)
 Category: enhancement
 
 ## Why
@@ -13,10 +13,11 @@ already hold these facts.
 
 ## Shape
 
-- **Views and login.**
-  - FPT writes the view script (`dw.v_*`, only the columns DW needs). IT
-    reviews it and creates it on UAT, then on production.
-  - `dw_read` holds CONNECT and `SELECT ON SCHEMA::dw` only.
+- **No views (ADR 0027, 2026-11-21).** The gateway's read login holds
+  SELECT on exactly the tables and columns below, granted by FPT's script and
+  reviewed by IT. Nothing is created inside Bravo's database. The 11-20
+  design's `dw` views are dropped, so there is no object of DW's inside a
+  vendor database to survive upgrades and UAT restores.
 - **Sync.**
   - A worker lane reads changed rows by each table's `timestamp` (rowversion),
     under SNAPSHOT isolation, every 5–15 minutes in working hours.
@@ -37,7 +38,7 @@ already hold these facts.
   - The masterlist is `vB30BizDocDetailSQ_MasterList_HCV`. The Excel
     masterlist is read only when Bravo has no quotation (Đạt, 11-20).
 - **Time zone.** Bravo stores UTC; DW shows and compares in Vietnam time.
-- **Daily drift check.**
+- **Drift check** (the gateway's fingerprint, ticket 63).
   - It compares Bravo's client version, the hash of the Import templates and
     layouts DW uses (validators included), and the columns of every view.
   - A change stops writes (tickets 51 and 53) and tells a person. Reads go on
@@ -46,7 +47,7 @@ already hold these facts.
 ## Acceptance
 
 1. Every P1 read's figures match Bravo's screen on UAT.
-2. `dw_read` cannot select a Bravo table (negative test on UAT).
+2. The read login cannot select a column outside its grants (negative test on UAT).
 3. A changed layout hash stops writes in a test.
 
 ## Comments

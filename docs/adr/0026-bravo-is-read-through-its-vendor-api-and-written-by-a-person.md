@@ -1,11 +1,17 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-11-10
 accepted: 2026-11-10 (Proterial IT, 11-09: no database login, an API over Bravo's stored procedures; Đạt: DW only reads)
+superseded_by: 0027-bravo-is-reached-through-one-gateway-over-its-database.md
 source:
     - ../../.claude/plans/ops-hardening.md
     - ../../.claude/plans/sales/dw1-production/spec.md
 ---
+
+> **Superseded 2026-11-21 by [ADR 0027](0027-bravo-is-reached-through-one-gateway-over-its-database.md).**
+> No vendor API came; Proterial IT agreed to database access on UAT first.
+> DW now reads and writes Bravo through one gateway, under the PIC's own
+> Bravo user. Decision 5 (no answer from Bravo means no answer) carries over.
 
 # Bravo is read through its vendor's API and written by a person
 

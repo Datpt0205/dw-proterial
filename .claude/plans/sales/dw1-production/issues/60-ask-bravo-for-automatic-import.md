@@ -19,8 +19,9 @@ Three questions to the vendor:
 2. Would they write one procedure that creates an SO from a staging table under
    their own rules, as they did for Base price (`usp_B20BasePrice_GetData`
    behind GetData)? PR and PO would follow.
-3. Do they accept DW's own rule runner (ticket 59) writing through a staged job,
-   and will they review it?
+3. Do they accept DW's own rule runner (ticket 59) writing through DW's gateway
+   (ADR 0027: column-level grants, nothing created in Bravo's database), and
+   will they review it?
 
 Fallback while waiting: drive the client's Import button by UI automation on a
 Windows host. This uses 100% of Bravo's engine. The document is then authored
