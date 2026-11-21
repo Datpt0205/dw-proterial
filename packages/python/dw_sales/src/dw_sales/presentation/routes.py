@@ -59,7 +59,12 @@ from dw_sales.application.activity import ActivityService
 from dw_sales.application.activity_ports import CaseListActivity, HandledBy
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
-from dw_sales.application.assistant import AnswerView, CaseConversationView, ConversationView
+from dw_sales.application.assistant import (
+    AnswerView,
+    CaseConversationView,
+    ConfirmedView,
+    ConversationView,
+)
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
 from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.catalog_imports import (
@@ -427,6 +432,15 @@ class AskBody(BaseModel):
 
     question: Annotated[str, Field(min_length=1, max_length=QUESTION_CHARS)]
 
+
+class DecisionConfirmBody(BaseModel):
+    """The PIC confirms the decision a turn stated (ticket 56): its hash,
+    which binds the confirmation to exactly the words said. What is decided
+    is the stored turn's, never anything this body sends."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
 class SignedCopyBody(VersionBody):
@@ -1178,6 +1192,26 @@ def build_router(
             svc.assistant.stream(context, body.question, CaseKey(kind, case_id)), idem.record
         )
         return StreamingResponse(frames, media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS)
+
+    # A flag's decision stated in the case's conversation, recorded when the
+    # PIC confirms the statement's hash (ticket 56): the same command, scope
+    # and version check as the page's button.
+    @router.post(
+        "/assistant/cases/{kind}/{case_id}/turns/{seq}/confirm",
+        response_model=ConfirmedView,
+        dependencies=prepare_scope,
+    )
+    async def assistant_confirm(
+        kind: CaseKind,
+        case_id: uuid.UUID,
+        seq: Annotated[int, PathParam(ge=1, le=100_000)],
+        body: DecisionConfirmBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> ConfirmedView:
+        view = await svc.assistant.confirm(context, CaseKey(kind, case_id), seq, body.content_hash)
+        return await idem.record(view)
 
     # A case's mail thread summarised by the model, on request (AI item 8):
     # each point cites its mails, and nothing is stored.

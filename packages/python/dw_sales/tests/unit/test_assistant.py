@@ -383,15 +383,19 @@ def test_the_kinds_are_the_ones_the_table_admits() -> None:
     # Ticket 46's three steps, admitted by `e31ed3f062a1`.
     steps = re.search(r"_NEW = \(([^)]*)\)", next(versions.glob("e31ed3f062a1_*.py")).read_text())
     assert steps is not None
+    # Ticket 56's flag decision, admitted by `3187714cd75c`.
+    decide = re.search(r"_NEW = \(([^)]*)\)", next(versions.glob("3187714cd75c_*.py")).read_text())
+    assert decide is not None
     kinds = set(re.findall(r"'([a-z_]+)'", admitted.group(1)))
     kinds |= set(re.findall(r'"([a-z_]+)"', steps.group(1)))
+    kinds |= set(re.findall(r'"([a-z_]+)"', decide.group(1)))
     assert kinds == {k.value for k in QuestionKind}
 
 
 @pytest.mark.parametrize(
     "ref, budget, variables",
     [
-        (QUESTION_INTENT, INTENT_TOKENS, {"question": "", "history": ""}),
+        (QUESTION_INTENT, INTENT_TOKENS, {"question": "", "history": "", "flags": ""}),
         (ASSISTANT_ANSWER, ANSWER_TOKENS, {"question": "", "facts": ""}),
     ],
 )

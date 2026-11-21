@@ -7,6 +7,7 @@ unread mark, and gone thirty days after the last turn."""
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -19,7 +20,7 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention, SqlAssistantStoreFactory
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.assistant import CaseRef, QuestionKind, Session, Turn
+from dw_sales.domain.assistant import CaseRef, ProposedDecision, QuestionKind, Session, Turn
 from dw_sales.domain.dispositions import CaseKind
 
 pytestmark = pytest.mark.integration
@@ -254,3 +255,36 @@ async def test_a_session_goes_thirty_days_after_its_last_turn_with_its_turns(
             {"s": old.session_id},
         )
         assert left.scalar() == 0
+
+
+async def test_a_stated_decision_is_kept_with_its_turn_and_only_on_a_decision(
+    world: World, migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """Ticket 56 (migration 3187714cd75c): the decision a turn stated reads
+    back whole, so its hash is the one the PIC was shown; a proposal on a
+    turn of any other kind is refused by the table itself."""
+    an = await _person(migrator)
+    stores = SqlAssistantStoreFactory(app_sessions)
+    session = _session(an)
+    proposal = ProposedDecision(
+        case_kind=CaseKind.ORDER,
+        case_id=CASE,
+        case_version=3,
+        finding_key="requested_date_short_lt:3",
+        decision="accepted",
+        reason="khách đã đồng ý lead time",
+    )
+    stated = replace(
+        _turn(session), kind=QuestionKind.DECIDE_FINDING, reference=None, proposal=proposal
+    )
+    async with stores(_context(world.alpha, an)) as store:
+        await store.open(session)
+        await store.add(stated)
+    async with stores(_context(world.alpha, an)) as store:
+        (turn,) = await store.turns(session.session_id)
+    assert turn.proposal == proposal
+    assert turn.proposal.content_hash == proposal.content_hash
+    wrong = replace(_turn(session, seq=2), proposal=proposal)  # an order_status turn
+    with pytest.raises(DBAPIError, match="ck_assistant_turns_proposal"):
+        async with stores(_context(world.alpha, an)) as store:
+            await store.add(wrong)

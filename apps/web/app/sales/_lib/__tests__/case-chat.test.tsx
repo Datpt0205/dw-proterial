@@ -20,13 +20,19 @@ vi.mock("../../../../lib/auth/auth-context", () => ({
 
 const assistantStream = vi.fn();
 const assistantConversation = vi.fn();
+const assistantConfirm = vi.fn();
 vi.mock("../api", () => ({
-  salesApi: () => ({ assistantStream, assistantConversation }),
+  salesApi: () => ({
+    assistantStream,
+    assistantConversation,
+    assistantConfirm,
+  }),
 }));
 
 import { useMemo } from "react";
 import {
   WithCaseChat,
+  useCaseChatDecided,
   useCaseChatOffers,
   type CaseOffers,
 } from "../../_components/case-chat";
@@ -68,7 +74,9 @@ function widthOf(width: number) {
 afterEach(() => {
   cleanup();
   window.matchMedia = original;
-  [assistantStream, assistantConversation].forEach((m) => m.mockReset());
+  [assistantStream, assistantConversation, assistantConfirm].forEach((m) =>
+    m.mockReset(),
+  );
 });
 
 function renderIt(turns: unknown[] = []) {
@@ -180,4 +188,72 @@ describe("A step asked of the case offers the page's own control (ticket 46)", (
       ),
     ).toBeTruthy();
   });
+});
+
+const HASH = "ab12cd34".repeat(8);
+const STATED = {
+  ...TURN,
+  seq: 2,
+  kind: "decide_finding",
+  question: "chấp nhận cờ ngày giao, khách đồng ý",
+  answer:
+    "DW1 sẽ ghi cho cờ requested_date_short_lt (dòng 3): chấp nhận (lý do: khách đồng ý). Bấm Xác nhận để ghi; DW1 không ghi gì khi chưa xác nhận.",
+  proposal: {
+    finding_key: "requested_date_short_lt:3",
+    decision: "accepted",
+    reason: "khách đồng ý",
+    case_version: 4,
+    content_hash: HASH,
+  },
+};
+
+/** A case page that reloads when the chat records a decision. */
+function Reloading({ reload }: { reload: () => void }) {
+  useCaseChatDecided(reload);
+  return <p>Nội dung hồ sơ</p>;
+}
+
+describe("A flag decided in the case's conversation (ticket 56)", () => {
+  it("records nothing until confirmed, then sends the statement's hash and reloads the page", async () => {
+    widthOf(1280);
+    assistantConversation.mockResolvedValue({
+      case: { kind: "order", case_id: CASE, label: "PO NRV-PO-26-0457" },
+      turns: [STATED],
+    });
+    assistantConfirm.mockResolvedValue({
+      answer: "Đã ghi cho cờ requested_date_short_lt (dòng 3): chấp nhận.",
+      case_version: 5,
+    });
+    const reload = vi.fn();
+    render(
+      <UiProvider>
+        <WithCaseChat onCase={ON_CASE}>
+          <Reloading reload={reload} />
+        </WithCaseChat>
+      </UiProvider>,
+    );
+    expect(await screen.findByText(STATED.answer)).toBeTruthy();
+    // What is confirmed is shown: the case's version and the hash.
+    expect(screen.getByText(/Hồ sơ phiên bản 4/)).toBeTruthy();
+    expect(screen.getByText(HASH.slice(0, 8))).toBeTruthy();
+    expect(assistantConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));
+    await waitFor(() => expect(assistantConfirm).toHaveBeenCalledTimes(1));
+    expect(assistantConfirm.mock.calls[0]!.slice(0, 3)).toEqual([
+      ON_CASE,
+      2,
+      HASH,
+    ]);
+    expect(
+      await screen.findByText(
+        "Đã ghi cho cờ requested_date_short_lt (dòng 3): chấp nhận.",
+      ),
+    ).toBeTruthy();
+    expect(reload).toHaveBeenCalled();
+    // Recorded once: the button does not send it again.
+    expect(
+      (screen.getByRole("button", { name: "Xác nhận" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  }, 30_000);
 });

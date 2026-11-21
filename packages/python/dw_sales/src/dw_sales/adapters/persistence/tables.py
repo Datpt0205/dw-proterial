@@ -797,4 +797,7 @@ assistant_turns = sa.Table(
     sa.Column("focus_case_id", UUID(as_uuid=True)),
     sa.Column("focus_label", sa.Text),
     sa.Column("answered_by", sa.Text, nullable=False),
+    # A flag's decision stated for the PIC to confirm (ticket 56): the
+    # `ProposedDecision` it records, only on a `decide_finding` turn.
+    sa.Column("proposal", JSONB(none_as_null=True)),
 )

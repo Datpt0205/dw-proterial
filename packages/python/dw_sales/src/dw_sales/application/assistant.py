@@ -69,7 +69,7 @@ from dw_agent_runtime.model.streaming import (
     WordingRefusedError,
     released,
 )
-from dw_kernel.errors import NotFoundError, QuotaExceededError
+from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
@@ -78,7 +78,7 @@ from dw_sales.application.local_time import local_day
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
 from dw_sales.application.quotes_service import QuoteQueries
-from dw_sales.application.views import OrderSummaryView, QuoteSummaryView
+from dw_sales.application.views import CaseChangeView, OrderSummaryView, QuoteSummaryView
 from dw_sales.domain.assistant import (
     ACTION,
     HISTORY_TURNS,
@@ -88,6 +88,8 @@ from dw_sales.domain.assistant import (
     CaseKey,
     CaseOffer,
     CaseRef,
+    ChatDecision,
+    ProposedDecision,
     QuestionIntent,
     QuestionKind,
     Session,
@@ -103,11 +105,12 @@ from dw_sales.domain.process import DW_NAMES
 # and `assistant_answer@1.0.0.yaml`; a test holds each to its file and its
 # rendered size under `*_TOKENS`.
 # 1.1.0 (ticket 46): the three steps of a case a person may ask for.
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.1.0")
+# 1.2.0 (ticket 56): a decision on one of the case's open flags (FLAGS).
+QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.2.0")
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
-INTENT_TOKENS: Final = 1100
+INTENT_TOKENS: Final = 1500
 ANSWER_TOKENS: Final = 900
-_INTENT_OUTPUT: Final = 200
+_INTENT_OUTPUT: Final = 300
 _ANSWER_OUTPUT: Final = 500
 # The work an answer lists; the rest are counted.
 _LISTED: Final = 10
@@ -195,6 +198,28 @@ class TurnView(BaseModel):
     # In a case's conversation, the case page's own control for the step
     # asked (ticket 46); the page draws it where it has one.
     offer: CaseOffer | None = None
+    # A flag's decision stated for the PIC to confirm (ticket 56): exactly
+    # what `POST .../turns/{seq}/confirm` records, bound by ``content_hash``.
+    proposal: ProposalView | None = None
+
+
+class ProposalView(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    finding_key: str
+    decision: ChatDecision
+    reason: str | None
+    case_version: int
+    content_hash: str
+
+
+class ConfirmedView(BaseModel):
+    """A confirmed decision: DW1's sentence, and the case's new version."""
+
+    model_config = ConfigDict(frozen=True)
+
+    answer: str
+    case_version: int
 
 
 class ConversationView(BaseModel):
@@ -238,6 +263,17 @@ def _turn_view(turn: Turn, *, on_case: bool) -> TurnView:
         cites=[_ref_view(c) for c in turn.cites],
         answered_by=turn.answered_by,
         offer=OFFERS.get(turn.kind) if on_case else None,
+        proposal=_proposal_view(turn.proposal) if on_case and turn.proposal else None,
+    )
+
+
+def _proposal_view(proposal: ProposedDecision) -> ProposalView:
+    return ProposalView(
+        finding_key=proposal.finding_key,
+        decision=proposal.decision,
+        reason=proposal.reason,
+        case_version=proposal.case_version,
+        content_hash=proposal.content_hash,
     )
 
 
@@ -268,6 +304,7 @@ class _Found:
     facts: dict[str, Any] | None = None
     cites: tuple[CaseRef, ...] = ()
     focus: CaseRef | None = None
+    proposal: ProposedDecision | None = None
 
 
 def _order_ref(order: OrderSummaryView) -> CaseRef:
@@ -373,6 +410,34 @@ def work_sentence(facts: dict[str, Any], words: AssistantWords) -> str:
 # ------------------------------------------------------------- service --
 
 
+class FindingDecisionPort(Protocol):
+    """Records one flag's decision as the page's button does (ticket 56): the
+    command checks the caller's scope, the case's version and the decision."""
+
+    async def dispose(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        finding_key: str,
+        *,
+        case_version: int,
+        disposition: Literal["open", "accepted", "corrected_by_sales", "ask_customer"],
+        reason: str | None = None,
+        value: str | None = None,
+        source: str | None = None,
+    ) -> CaseChangeView: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _Flag:
+    """An open flag of the bound case, as the model is shown it."""
+
+    key: str
+    code: str
+    line_no: int | None
+    allowed: frozenset[str]
+
+
 @dataclass(frozen=True)
 class AssistantService:
     """`/sales/assistant/*` (module docstring)."""
@@ -389,6 +454,9 @@ class AssistantService:
     worker_version: str
     # The tenant's words for code's own sentences (ticket 42 family 6).
     copy: AssistantCopyPort
+    # Where a confirmed flag decision is recorded (ticket 56); None: the
+    # chat states no decision.
+    decisions: FindingDecisionPort | None = None
 
     async def conversation(
         self, context: AccessContext, case: CaseKey | None = None
@@ -450,6 +518,53 @@ class AssistantService:
             raise AssertionError("a turn always ends in ChatDone")
         return view
 
+    async def confirm(
+        self, context: AccessContext, case: CaseKey, seq: int, content_hash: str
+    ) -> ConfirmedView:
+        """Records the decision turn ``seq`` of the caller's own conversation
+        on ``case`` stated, when ``content_hash`` is that statement's (ticket
+        56). Another person's turn, another case's, or a turn that stated no
+        decision is not found; a hash that is not the statement's, or a case
+        that moved since, is a conflict. The command itself checks the
+        caller's scope and the case's version, as the page's button does."""
+        await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
+        if self.decisions is None:
+            raise NotFoundError("no such decision")
+        words = (await self.copy.assistant_copy(sales_scope(context))).words
+        bound = await self._bound(context, case)
+        async with self.store(context) as store:
+            session = _held(await store.conversation(bound.ref.case_id), context, bound.ref)
+            turns: Sequence[Turn] = await store.turns(session.session_id) if session else ()
+        turn = next((t for t in turns if t.seq == seq), None)
+        proposal = turn.proposal if turn is not None else None
+        if (
+            proposal is None
+            or proposal.case_id != bound.ref.case_id
+            or proposal.case_kind is not bound.ref.kind
+        ):
+            raise NotFoundError("no such decision", details={"seq": seq})
+        if proposal.content_hash != content_hash:
+            raise ConflictError("the decision confirmed is not the one stated")
+        if proposal.case_version != bound.version:
+            raise ConflictError("the case changed since the decision was stated")
+        flag = next((f for f in bound.flags if f.key == proposal.finding_key), None)
+        if flag is None:
+            raise ConflictError("the flag is no longer open")
+        change = await self.decisions.dispose(
+            context,
+            proposal.case_id,
+            proposal.finding_key,
+            case_version=proposal.case_version,
+            disposition=proposal.decision,
+            reason=proposal.reason,
+        )
+        answer = words.say(
+            "decide_done",
+            flag=_flag_words(flag),
+            decision=_decision_word(proposal.decision, words),
+        )
+        return ConfirmedView(answer=answer, case_version=change.case_version)
+
     async def stream(
         self, context: AccessContext, question: str, case: CaseKey | None = None
     ) -> AsyncGenerator[ChatEvent[AnswerView], None]:
@@ -477,10 +592,17 @@ class AssistantService:
             )
         focus = ref or (earlier[-1].focus if earlier else None)
         yield ChatStep(key="read", title=words.step_read)
-        intent = await self._intent(context, question, earlier, focus)
+        intent = await self._intent(
+            context, question, earlier, focus, bound.flags if bound is not None else ()
+        )
         yield ChatStep(key="look", title=words.step_look)
         if bound is not None:
-            found = _in_case(intent, bound, words)
+            # A decision is stated only to someone the command would let
+            # record it; anyone else hears it is not theirs to decide here.
+            deciding = self.decisions is not None and self.gate.allows(
+                context, SalesScopes.ORDER_PREPARE
+            )
+            found = _in_case(intent, bound, words, deciding=deciding)
         else:
             found = await self._find(context, intent, focus, words)
         answer: str = found.sentence
@@ -504,6 +626,7 @@ class AssistantService:
             # nothing in particular keeps the case it last linked.
             focus=ref or found.focus or focus,
             answered_by=by,
+            proposal=found.proposal,
         )
         async with self.store(context) as store:
             if opened is not None:
@@ -523,7 +646,19 @@ class AssistantService:
         if case.kind is CaseKind.ORDER:
             for order in await self.orders.summaries(context):
                 if order.case_id == case.case_id:
-                    return _Bound(_order_ref(order), order.po_no, order_facts(order, zone))
+                    whole = await self.orders.get(context, case.case_id)
+                    flags = tuple(
+                        _Flag(f.key, f.code.value, f.line_no, frozenset(f.allowed))
+                        for f in whole.findings
+                        if f.disposition.kind == "open"
+                    )
+                    return _Bound(
+                        _order_ref(order),
+                        order.po_no,
+                        order_facts(order, zone),
+                        version=whole.case_version,
+                        flags=flags,
+                    )
         else:
             for quote in await self.quotes.summaries(context):
                 if quote.case_id == case.case_id:
@@ -560,8 +695,10 @@ class AssistantService:
         question: str,
         earlier: Sequence[Turn],
         focus: CaseRef | None,
+        flags: Sequence[_Flag] = (),
     ) -> QuestionIntent | None:
-        """The question as the model reads it; None when there is no reading."""
+        """The question as the model reads it; None when there is no reading.
+        ``flags``: the bound case's open flags, codes and lines only."""
         if self.model is None:
             return None
         history = json.dumps(
@@ -575,10 +712,11 @@ class AssistantService:
             ensure_ascii=False,
             indent=1,
         )
+        shown = json.dumps([{"code": f.code, "line": f.line_no} for f in flags], ensure_ascii=False)
         try:
             return await self.model.interpret(
                 QUESTION_INTENT,
-                {"question": question, "history": history},
+                {"question": question, "history": history, "flags": shown},
                 QuestionIntent,
                 run=self._run(context, "sales-assistant-intent"),
                 max_output_tokens=_INTENT_OUTPUT,
@@ -608,7 +746,10 @@ class AssistantService:
                 QuestionKind.DRAFT_REPLY
                 | QuestionKind.REMIND_CUSTOMER
                 | QuestionKind.EXPLAIN_THREAD
+                | QuestionKind.DECIDE_FINDING
             ):
+                # A flag is decided in its case's own conversation (ticket
+                # 56): here, the link to it, nothing recorded.
                 return await self._step(context, intent, focus, words)
 
     async def _order(
@@ -778,13 +919,18 @@ class _Bound:
     ref: CaseRef
     number: str | None
     facts: dict[str, Any]
+    # An order's version and open flags (ticket 56); a quote's are not read.
+    version: int = 0
+    flags: tuple[_Flag, ...] = ()
 
     def sentence(self, words: AssistantWords) -> str:
         said = order_sentence if self.ref.kind is CaseKind.ORDER else quote_sentence
         return said(self.facts, words)
 
 
-def _in_case(intent: QuestionIntent | None, bound: _Bound, words: AssistantWords) -> _Found:
+def _in_case(
+    intent: QuestionIntent | None, bound: _Bound, words: AssistantWords, *, deciding: bool = False
+) -> _Found:
     """A case conversation's answer: the bound case's facts, or a pointer
     elsewhere. Nothing here looks another case up, whatever the question
     names, so nothing of another case or customer can reach the answer."""
@@ -800,11 +946,73 @@ def _in_case(intent: QuestionIntent | None, bound: _Bound, words: AssistantWords
             # chat starts nothing, and no fact is worded.
             said = getattr(words, _OFFER_WORDS[OFFERS[intent.kind]])
             return _Found(said, None, (bound.ref,), bound.ref)
+        case QuestionKind.DECIDE_FINDING:
+            if not deciding:
+                return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
+            return _decision(intent, bound, words)
         case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
             if intent.reference is not None and not same_reference(intent.reference, bound.number):
                 only = words.say("only_this_case", case=bound.ref.label)
                 return _Found(f"{only} {words.elsewhere}")
             return _Found(bound.sentence(words), bound.facts, (bound.ref,), bound.ref)
+
+
+def _flag_words(flag: _Flag) -> str:
+    return flag.code if flag.line_no is None else f"{flag.code} (dòng {flag.line_no})"
+
+
+def _decision(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -> _Found:
+    """A flag's decision the PIC stated, said back for them to confirm; or
+    the one question that lets DW1 say it. The flag is one of the bound
+    case's open flags, never a code the model made up: a code it names that
+    the case does not hold open asks which, as a missing one does."""
+    if bound.ref.kind is not CaseKind.ORDER:
+        return _Found(words.decide_orders_only)
+    if intent.reference is not None and not same_reference(intent.reference, bound.number):
+        # Another PO named in this case's conversation: never decided here,
+        # and never taken as this case's flag.
+        only = words.say("only_this_case", case=bound.ref.label)
+        return _Found(f"{only} {words.elsewhere}")
+    if not bound.flags:
+        return _Found(words.decide_no_flag)
+    named = [f for f in bound.flags if f.code == intent.finding_code]
+    if intent.finding_code is None and len(bound.flags) == 1:
+        named = list(bound.flags)
+    listed = ", ".join(_flag_words(f) for f in bound.flags)
+    if len(named) != 1:
+        return _Found(words.say("decide_which_flag", flags=listed))
+    (flag,) = named
+    decision = intent.decision
+    if decision is None or decision not in flag.allowed:
+        return _Found(words.say("decide_which_way", flag=_flag_words(flag)))
+    reason = intent.reason.strip() if intent.reason else None
+    if decision == "accepted" and not reason:
+        return _Found(words.say("decide_need_reason", flag=_flag_words(flag)))
+    proposal = ProposedDecision(
+        case_kind=bound.ref.kind,
+        case_id=bound.ref.case_id,
+        case_version=bound.version,
+        finding_key=flag.key,
+        decision=decision,
+        reason=reason,
+    )
+    return _Found(
+        _proposal_sentence(proposal, flag, words), None, (bound.ref,), bound.ref, proposal
+    )
+
+
+def _decision_word(decision: ChatDecision, words: AssistantWords) -> str:
+    return words.decide_accept_word if decision == "accepted" else words.decide_ask_word
+
+
+def _proposal_sentence(proposal: ProposedDecision, flag: _Flag, words: AssistantWords) -> str:
+    reason = words.say("decide_reason", reason=proposal.reason) if proposal.reason else ""
+    return words.say(
+        "decide_confirm",
+        flag=_flag_words(flag),
+        decision=_decision_word(proposal.decision, words),
+        reason=reason,
+    )
 
 
 # The sentence above each offered control (`AssistantWords`).

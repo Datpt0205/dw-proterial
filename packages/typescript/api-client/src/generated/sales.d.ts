@@ -156,6 +156,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/turns/{seq}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Confirm */
+        post: operations["assistant_confirm_api_v1_sales_assistant_cases__kind___case_id__turns__seq__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/assistant/conversation": {
         parameters: {
             query?: never;
@@ -3638,6 +3655,16 @@ export interface components {
             term: components["schemas"]["ImpliedTermView"] | null;
         };
         /**
+         * ConfirmedView
+         * @description A confirmed decision: DW1's sentence, and the case's new version.
+         */
+        ConfirmedView: {
+            /** Answer */
+            answer: string;
+            /** Case Version */
+            case_version: number;
+        };
+        /**
          * Constant
          * @description The value is this fixed text.
          */
@@ -3900,6 +3927,16 @@ export interface components {
             day: string;
             /** Steps */
             steps: components["schemas"]["DayStepView"][];
+        };
+        /**
+         * DecisionConfirmBody
+         * @description The PIC confirms the decision a turn stated (ticket 56): its hash,
+         *     which binds the confirmation to exactly the words said. What is decided
+         *     is the stored turn's, never anything this body sends.
+         */
+        DecisionConfirmBody: {
+            /** Content Hash */
+            content_hash: string;
         };
         /** DeclineBody */
         DeclineBody: {
@@ -6948,12 +6985,28 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["PromptVersionView"][];
         };
+        /** ProposalView */
+        ProposalView: {
+            /** Case Version */
+            case_version: number;
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accepted" | "ask_customer";
+            /** Finding Key */
+            finding_key: string;
+            /** Reason */
+            reason: string | null;
+        };
         /**
          * QuestionKind
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
          */
-        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "out_of_scope";
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
@@ -8891,6 +8944,7 @@ export interface components {
             kind: components["schemas"]["QuestionKind"];
             /** Offer */
             offer?: ("reply_draft" | "customer_reminder" | "thread_summary") | null;
+            proposal?: components["schemas"]["ProposalView"] | null;
             /** Question */
             question: string;
             /** Seq */
@@ -9543,6 +9597,46 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_confirm_api_v1_sales_assistant_cases__kind___case_id__turns__seq__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                kind: components["schemas"]["CaseKind"];
+                case_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionConfirmBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmedView"];
                 };
             };
             /** @description Validation Error */

@@ -2,7 +2,8 @@
 contract's DW01 criterion 6).
 
 A catalog, not a chat: four kinds of question, three steps of a case a
-person may ask for (ticket 46), and `out_of_scope` for everything else.
+person may ask for (ticket 46), a decision on one of the case's flags stated
+for the PIC to confirm (ticket 56), and `out_of_scope` for everything else.
 The model only reads a question into a `QuestionIntent`; code finds the
 case among those the caller may see and builds the facts. An answer carries
 no amount, whoever asks and whatever the channel.
@@ -15,6 +16,8 @@ it red instead of drifting (failure-modes #2).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import uuid
 from collections.abc import Mapping
@@ -49,7 +52,17 @@ class QuestionKind(StrEnum):
     DRAFT_REPLY = "draft_reply"
     REMIND_CUSTOMER = "remind_customer"
     EXPLAIN_THREAD = "explain_thread"
+    # The PIC states a decision on one of the case's open flags (ticket 56):
+    # DW1 says back exactly what it would record, and records it only when
+    # the PIC confirms that statement (`ProposedDecision.content_hash`).
+    DECIDE_FINDING = "decide_finding"
     OUT_OF_SCOPE = "out_of_scope"
+
+
+# What a PIC may decide on a flag from the chat: the finding dispositions
+# that need no typed value (`orders.DispositionKind`), in the API's words.
+ChatDecision = Literal["accepted", "ask_customer"]
+REASON_CHARS: Final = 200
 
 
 class QuestionIntent(BaseModel):
@@ -63,6 +76,72 @@ class QuestionIntent(BaseModel):
     # The PO or request number as written, when the question names one.
     reference: str | None = Field(default=None, min_length=1, max_length=64)
     about_previous: bool = False
+    # `decide_finding` only: the flag's code as the case lists it to the
+    # model, which code then looks for among the case's open flags; the
+    # decision; and the reason as the person gave it.
+    finding_code: str | None = Field(default=None, pattern=r"^[a-z_]{1,64}$")
+    decision: ChatDecision | None = None
+    reason: str | None = Field(default=None, min_length=1, max_length=REASON_CHARS)
+
+
+@dataclass(frozen=True, slots=True)
+class ProposedDecision:
+    """A flag's decision DW1 states in a case's conversation (ticket 56).
+
+    Bound to the case, its version and the exact words: the PIC confirms
+    `content_hash`, and code records only a decision whose content still
+    hashes to it on a case still at ``case_version``. Nothing a model wrote
+    names the case or the flag: the case is the conversation's, the flag one
+    of its open findings.
+    """
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    case_version: int
+    finding_key: str
+    decision: ChatDecision
+    reason: str | None
+
+    @property
+    def content_hash(self) -> str:
+        content = {
+            "case_kind": self.case_kind.value,
+            "case_id": str(self.case_id),
+            "case_version": self.case_version,
+            "finding_key": self.finding_key,
+            "decision": self.decision,
+            "reason": self.reason,
+        }
+        canonical = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def stored(self) -> dict[str, object]:
+        return {
+            "case_kind": self.case_kind.value,
+            "case_id": str(self.case_id),
+            "case_version": self.case_version,
+            "finding_key": self.finding_key,
+            "decision": self.decision,
+            "reason": self.reason,
+        }
+
+    @classmethod
+    def from_stored(cls, row: Mapping[str, object]) -> ProposedDecision:
+        decision = str(row["decision"])
+        if decision not in ("accepted", "ask_customer"):
+            raise ValueError(f"unknown decision {decision!r}")
+        version = row["case_version"]
+        if not isinstance(version, int):
+            raise ValueError("case_version is not an integer")
+        reason = row.get("reason")
+        return cls(
+            case_kind=CaseKind(str(row["case_kind"])),
+            case_id=uuid.UUID(str(row["case_id"])),
+            case_version=version,
+            finding_key=str(row["finding_key"]),
+            decision=decision,  # type: ignore[arg-type]
+            reason=None if reason is None else str(reason),
+        )
 
 
 # The case page's own control a case conversation offers for a step asked
@@ -111,6 +190,8 @@ class Turn:
     # The case the conversation is on after this turn, if any.
     focus: CaseRef | None
     answered_by: Literal["model", "code"]
+    # A decision stated for the PIC to confirm (ticket 56); None otherwise.
+    proposal: ProposedDecision | None = None
 
 
 @dataclass(frozen=True, slots=True)

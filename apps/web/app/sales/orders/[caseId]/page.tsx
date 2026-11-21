@@ -68,6 +68,7 @@ import { FindingWords, Money } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
 import {
+  useCaseChatDecided,
   WithCaseChat,
   useCaseChatOffers,
   type CaseOffers,
@@ -183,6 +184,8 @@ function OrderDetail() {
     order.reload();
     work.reload();
   }, [order, work]);
+  // A flag decided in the case's conversation (ticket 56) shows at once.
+  useCaseChatDecided(reload);
   const loadMail = useCallback(
     () => salesApi().orderMessageText(caseId),
     [caseId],
