@@ -48,3 +48,17 @@ With `docs/proterial/sql/02a`/`02b` recording, on Bravo UAT:
 - Each question above has its answer recorded in this ticket.
 
 ## Comments
+
+**2026-11-21, from building the gateway (ticket 63).** Added to what UAT must answer:
+- Script 07: do Bravo's `DML_*_ChangeLog` triggers write to `<db>_Log`? Measured on a
+  throwaway SQL Server: a trigger writing another database fails (error 916) under a
+  login with column grants only, so the write login would need a user there.
+- A save of an **existing** SO in the trace (open it, change a date, save): the trace
+  holds only saves after `EDIT_BizDocSO|New`, so the context's event word for an
+  existing document is unknown and the gateway refuses it.
+- Which `ufn_B00Permission_Getdata` rows the client applies when a user opens and saves
+  the SO screen (its `@_PermissionType`): until known the gateway's command right
+  answers "unknown" and refuses.
+- A real cancel (item 2 above): the trace's one cancel save clears `IsCancel`; nothing
+  shows what a cancel writes.
+- `B00UserList.Expire` (tinyint): the gateway reads a set value as an inactive user.

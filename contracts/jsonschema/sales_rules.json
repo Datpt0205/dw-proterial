@@ -699,6 +699,79 @@
     "title": "BravoUploadLayout",
     "type": "object"
   },
+  "sales_bravo_writes": {
+    "$defs": {
+      "BravoWriteSwitch": {
+        "additionalProperties": false,
+        "description": "One kind: on or off, and the UAT run that proved it when on.\n\n``uat_proof`` names where the proof is kept (the UAT trace and the\nreplay that matched a PIC's own save), so whoever reads the version\nlater can find it; a kind cannot be on without one.",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "uat_proof": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Uat Proof"
+          }
+        },
+        "title": "BravoWriteSwitch",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "kinds": {
+        "additionalProperties": {
+          "$ref": "#/$defs/BravoWriteSwitch"
+        },
+        "propertyNames": {
+          "enum": [
+            "so.line.set_confirmed_date@1",
+            "so.line.set_quantity@1",
+            "so.line.cancel@1",
+            "so.line.split@1",
+            "so.create@1"
+          ]
+        },
+        "title": "Kinds",
+        "type": "object"
+      },
+      "policy_id": {
+        "const": "sales_bravo_writes",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "kinds"
+    ],
+    "title": "BravoWrites",
+    "type": "object"
+  },
   "sales_documents": {
     "$defs": {
       "DocumentTemplate": {

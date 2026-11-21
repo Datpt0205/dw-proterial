@@ -377,3 +377,23 @@ async def test_a_blocking_validator_that_cannot_be_decided_refuses_like_a_block(
 
     assert (result.check, result.reason) == ("rules", "undecided: QtyNotBelowMade")
     assert gw.bravo.batches == []
+
+
+async def test_another_tenants_signed_approval_is_refused() -> None:
+    gw = gateway()
+    gw.pipeline.tenant_id = uuid.uuid4()  # this gateway's Bravo belongs to someone else
+
+    result = await gw.pipeline.execute(SET_DATE, token())
+
+    assert (result.check, result.reason) == ("token", "another_tenants_approval")
+    assert gw.bravo.batches == []
+
+
+async def test_a_documents_lock_is_gone_once_no_write_holds_it() -> None:
+    import gc
+
+    gw = gateway()
+    await gw.pipeline.execute(SET_QUANTITY, token(SET_QUANTITY))
+    gc.collect()
+
+    assert len(gw.pipeline.pace._locks) == 0

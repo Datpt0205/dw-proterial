@@ -372,6 +372,25 @@ jobs:
         # --retry-all-errors: docker-proxy answers "connection reset" (exit 56)
         # before the container listens, which --retry-connrefused does not cover.
         run: curl --fail --retry 40 --retry-delay 5 --retry-connrefused --retry-all-errors -o /dev/null http://localhost:3000
+      - name: "Smoke: the Bravo gateway image"
+        # ADR 0027, sales ticket 63. Not in `full` (it starts where IT issued
+        # Bravo's logins), so built here for the scan below. Two facts checked
+        # on the image itself: the driver loads its ODBC library, and the
+        # gateway refuses to start unconfigured, deployed without its key.
+        run: |
+          docker build -f infra/docker/bravo-gateway.Dockerfile -t dw-bravo-gateway:local .
+          docker run --rm --entrypoint python dw-bravo-gateway:local -c '
+          import mssql_python
+          try:
+              mssql_python.connect("Server=127.0.0.1,1;Database=x;UID=x;PWD=y;Encrypt=no")
+          except Exception as e:
+              assert "load the driver" not in str(e), e
+          '
+          set +e
+          docker run --rm -e DW_BRAVO_GATEWAY_PROFILE=production dw-bravo-gateway:local
+          code=$?
+          set -e
+          test "$code" = 2
       - name: trivy (image vulnerabilities, HIGH+ with a fix available)
         # Here rather than in the security job because this is where the images
         # already exist; building them twice to scan them costs four minutes.
@@ -391,7 +410,7 @@ jobs:
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz trivy
           ./trivy --version
-          for image in dw-api:local dw-worker:local dw-docgen:local dw-reader:local dw-web:local; do
+          for image in dw-api:local dw-worker:local dw-docgen:local dw-reader:local dw-web:local dw-bravo-gateway:local; do
             echo "== $image"
             ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
               --exit-code 1 --quiet "$image"

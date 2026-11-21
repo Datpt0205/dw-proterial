@@ -26,6 +26,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
+COPY apps/bravo-gateway/pyproject.toml apps/bravo-gateway/pyproject.toml
 COPY apps/docgen/pyproject.toml apps/docgen/pyproject.toml
 COPY apps/reader/pyproject.toml apps/reader/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml

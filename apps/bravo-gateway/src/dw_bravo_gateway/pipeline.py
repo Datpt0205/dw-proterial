@@ -24,6 +24,8 @@ A Bravo that does not answer at any step is "could not check" and refuses.
 from __future__ import annotations
 
 import asyncio
+import uuid
+import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
@@ -130,11 +132,18 @@ class WritePace:
 
     busy_gap: timedelta = timedelta(seconds=2)
     busy_hours: tuple[int, int] = (8, 18)
-    _locks: dict[tuple[str, int], asyncio.Lock] = field(default_factory=dict)
+    # Weak: a document's lock lives while a write holds it, then goes, so
+    # the map never grows past the writes in flight.
+    _locks: weakref.WeakValueDictionary[tuple[str, int], asyncio.Lock] = field(
+        default_factory=weakref.WeakValueDictionary
+    )
     _last: datetime | None = None
 
     def lock(self, screen: str, doc_id: int) -> asyncio.Lock:
-        return self._locks.setdefault((screen, doc_id), asyncio.Lock())
+        lock = self._locks.get((screen, doc_id))
+        if lock is None:
+            lock = self._locks[(screen, doc_id)] = asyncio.Lock()
+        return lock
 
     def wait_for(self, now: datetime) -> timedelta:
         local = now.astimezone(VIETNAM)
@@ -157,6 +166,9 @@ class WritePipeline:
     engine: Engine
     writer: Writer
     now: Callable[[], datetime]
+    # The one DW tenant whose Bravo this gateway reaches: a token another
+    # tenant's approval signed is refused, whatever its switches say.
+    tenant_id: uuid.UUID
     screens: Mapping[str, ScreenTables] = field(default_factory=lambda: dict(SCREENS))
     pace: WritePace = field(default_factory=WritePace)
 
@@ -204,6 +216,8 @@ class WritePipeline:
         except TokenRefusedError as refused:
             raise _RefusedError("token", refused.reason) from None
         key = f"{type(command).kind}@{type(command).version}"
+        if claims.tenant_id != self.tenant_id:
+            raise _RefusedError("token", "another_tenants_approval")
         if claims.kind != key:
             raise _RefusedError("token", "kind_not_approved")
         if claims.content_hash != content_hash(command):
@@ -213,7 +227,7 @@ class WritePipeline:
     async def _kind(self, claims: ApprovalClaims, kind: WriteKind) -> None:
         if kind.pending is not None:
             raise _RefusedError("kind", f"pending: {kind.pending}")
-        state = await self.switches.state(claims.tenant_id, claims.kind)
+        state = await self.switches.state(claims.tenant_id, claims.workspace_id, claims.kind)
         if state != "enabled":
             raise _RefusedError("switch", f"write_kind_{state}")
 
@@ -305,7 +319,10 @@ class WritePipeline:
         self, kind: WriteKind, command: WriteCommand, stored: StoredDocument, user: BravoUser
     ) -> tuple[SavePlan, tuple[str, ...], _RefusedError | None]:
         """4: the plan, and the rules' refusal of it if any (raised by the caller)."""
-        layout = await self.engine.layout(kind.screen)
+        try:
+            layout = await self.engine.layout(kind.screen)
+        except (RuleRefusedError, UndecidableError) as refused:
+            raise _RefusedError("rules", f"layout_could_not_be_read: {refused}") from None
         branch = str(stored.header.get("BranchCode") or "")
         session = await self.engine.session(user, branch, self.now())
         runner = RuleRunner(layout, self.engine.procedures(), self.engine.references(), session)

@@ -167,4 +167,6 @@ class Switches(Protocol):
     """Whether a tenant's write kind may run: off until a person with the
     right enables it after UAT (ticket 63 g), paused by the watch (ticket 65)."""
 
-    async def state(self, tenant_id: uuid.UUID, kind: str) -> SwitchState: ...
+    async def state(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str
+    ) -> SwitchState: ...

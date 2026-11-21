@@ -11,9 +11,21 @@ dependencies = [
     # The contract, the approval token and Bravo's own rule runner, shared
     # with the contexts' adapters (ticket 59).
     "dw-bravo",
-    # The idempotency ledger lives in DW's PostgreSQL, under RLS, as `dw_app`.
+    # The idempotency ledger lives in DW's PostgreSQL, under RLS, as `dw_app`,
+    # bound per transaction by the platform's tenant session; the switches are
+    # the tenant's approved rule version, read through the platform's lookup.
+    "dw-kernel",
+    "dw-platform",
     "sqlalchemy[asyncio]>=2.0,<3",
     "asyncpg>=0.30,<1",
+    # The one SQL Server driver in the repository (ADR 0027;
+    # scripts/verify_architecture.py refuses one anywhere else). Chosen by
+    # measuring it in this image's base against SQL Server 2017 (ticket 63,
+    # Comments): pymssql's wheel bundles OpenSSL 1.1.1k and does not build on
+    # Debian's FreeTDS; python-tds mishandles rowversion. Its ODBC driver is
+    # Microsoft's, under Microsoft's licence; it needs libltdl7, libkrb5-3 and
+    # libgssapi-krb5-2 from the image.
+    "mssql-python==1.18.0",
 ]
 
 [build-system]

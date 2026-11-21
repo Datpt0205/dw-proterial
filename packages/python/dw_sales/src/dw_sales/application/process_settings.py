@@ -664,6 +664,10 @@ LOCKED: Final[Mapping[Placement, LockReason]] = MappingProxyType(
 
 _VERSION = "the version's own fields: the editor asks for them with every proposal"
 _COPY = "copy and templates: placed on steps in slice 2, edited on /sales/rules"
+_BRAVO_WRITES = (
+    "which Bravo writes DW1 performs: switched on per kind with its UAT proof on"
+    " /sales/rules, never from a step of the process (ticket 63)"
+)
 _LEARNED = (
     "each customer's own rules: learned from a worked example on the customer's row of"
     " the master data and approved there, never edited on a page (ticket 38)"
@@ -713,6 +717,11 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
             for path in ("schema_version", "policy_id", "policy_version", "mock", "description")
         },
         Placement(RuleKey.SALESORDER_RULES, "customers"): _LEARNED,
+        **{
+            Placement(RuleKey.BRAVO_WRITES, path): _VERSION
+            for path in ("schema_version", "policy_id", "policy_version")
+        },
+        Placement(RuleKey.BRAVO_WRITES, "kinds"): _BRAVO_WRITES,
     }
 )
 

@@ -68,6 +68,9 @@ IMPORT_TO_DIST = {
     "dw_purchasing": "dw-purchasing",
     "dw_reader": "dw-reader",
     "dw_sales": "dw-sales",
+    "dw_bravo_gateway": "dw-bravo-gateway",
+    # The Bravo gateway's driver, and nowhere else (ADR 0027).
+    "mssql_python": "mssql-python",
 }
 
 
@@ -237,6 +240,7 @@ def main() -> int:
         [
             *(REPO_ROOT / "packages" / "python").iterdir(),
             REPO_ROOT / "apps" / "api",
+            REPO_ROOT / "apps" / "bravo-gateway",
             REPO_ROOT / "apps" / "chat",
             REPO_ROOT / "apps" / "docgen",
             REPO_ROOT / "apps" / "reader",

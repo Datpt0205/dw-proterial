@@ -45,6 +45,15 @@ networks:
   # it is not on dw-internal. Internal: the signatures come with the image.
   dw-scan:
     internal: true
+  # The Bravo gateway's networks (ADR 0027, sales ticket 63). Callers reach
+  # it on dw-bravo, internal, with no port published: the worker and the API,
+  # and Postgres for its ledger. It reaches Bravo's SQL Server, on Proterial's
+  # LAN, through dw-bravo-egress, which it alone joins: a route off the
+  # machine, narrowed to Bravo's address and port by the host's firewall
+  # (DOCKER-USER), since compose cannot name a destination.
+  dw-bravo:
+    internal: true
+  dw-bravo-egress: {}
   dw-edge: {}
 
 volumes:
@@ -99,7 +108,7 @@ services:
       # Host port is overridable because a machine may already run its own
       # postgres on 5432 (the default keeps every other setup unchanged).
       - "127.0.0.1:${DW_POSTGRES_HOST_PORT:-5432}:5432"
-    networks: [dw-internal, dw-edge]
+    networks: [dw-internal, dw-edge, dw-bravo]
     healthcheck:
       test:
         [
@@ -390,7 +399,7 @@ services:
       DW_PURCHASING_MAILBOX: ${DW_PURCHASING_MAILBOX:-mock}
     ports:
       - "127.0.0.1:${DW_API_HOST_PORT:-8000}:8000"
-    networks: [dw-internal, dw-edge, dw-scan]
+    networks: [dw-internal, dw-edge, dw-scan, dw-bravo]
     # Read-only: connecting needs the socket, never a write to the volume.
     volumes:
       - reader-socket:/run/dw-reader:ro
@@ -411,6 +420,46 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
+    restart: unless-stopped
+
+  # ------------------------------------------------------ bravo gateway --
+  # The one process holding Bravo's logins and a SQL Server driver (ADR 0027,
+  # sales ticket 63). `bravo` only: it starts where IT has issued the two
+  # logins, and refuses to start without them, or, deployed, without the
+  # approval verifying key. No port: reached on dw-bravo by name.
+  bravo-gateway:
+    logging: *default-logging
+    build:
+      context: ../..
+      dockerfile: infra/docker/bravo-gateway.Dockerfile
+    image: dw-bravo-gateway:local
+    profiles: ["bravo"]
+    environment:
+      DW_BRAVO_GATEWAY_PROFILE: ${DW_API_PROFILE:-local}
+      DW_BRAVO_GATEWAY_TENANT_ID: ${DW_BRAVO_GATEWAY_TENANT_ID:-}
+      DW_BRAVO_GATEWAY_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
+      DW_BRAVO_GATEWAY_APPROVAL_PUBLIC_KEYS: ${DW_BRAVO_GATEWAY_APPROVAL_PUBLIC_KEYS:-{}}
+      DW_BRAVO_GATEWAY_BRAVO_HOST: ${DW_BRAVO_GATEWAY_BRAVO_HOST:-}
+      DW_BRAVO_GATEWAY_BRAVO_PORT: ${DW_BRAVO_GATEWAY_BRAVO_PORT:-1433}
+      DW_BRAVO_GATEWAY_BRAVO_DATABASE: ${DW_BRAVO_GATEWAY_BRAVO_DATABASE:-}
+      DW_BRAVO_GATEWAY_BRAVO_READ_USER: ${DW_BRAVO_GATEWAY_BRAVO_READ_USER:-}
+      DW_BRAVO_GATEWAY_BRAVO_READ_PASSWORD: ${DW_BRAVO_GATEWAY_BRAVO_READ_PASSWORD:-}
+      DW_BRAVO_GATEWAY_BRAVO_WRITE_USER: ${DW_BRAVO_GATEWAY_BRAVO_WRITE_USER:-}
+      DW_BRAVO_GATEWAY_BRAVO_WRITE_PASSWORD: ${DW_BRAVO_GATEWAY_BRAVO_WRITE_PASSWORD:-}
+    networks: [dw-bravo, dw-bravo-egress]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    tmpfs:
+      - /tmp:mode=1777,size=16m,nosuid,nodev,noexec
+    mem_limit: 512m
+    pids_limit: 128
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   # -------------------------------------------------------- malware scan --
@@ -706,7 +755,7 @@ services:
       # the on-premises overlay, where the plant's share is.
       DW_SALES_MAILBOX: ${DW_SALES_MAILBOX:-mock}
       DW_PURCHASING_MAILBOX: ${DW_PURCHASING_MAILBOX:-mock}
-    networks: [dw-internal, dw-edge, dw-scan]
+    networks: [dw-internal, dw-edge, dw-scan, dw-bravo]
     volumes:
       - reader-socket:/run/dw-reader:ro
     depends_on:
