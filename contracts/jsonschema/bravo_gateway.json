@@ -261,6 +261,79 @@
     ],
     "type": "object"
   },
+  "so.by_customer_po@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: Every SO line Bravo holds for a customer's PO (ticket 51's read-back):",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "Every SO line Bravo holds for a customer's PO (ticket 51's read-back):\nheaders by `CustomerCode` and `POCustomer` (template 72 writes the PO's\nnumber there), `DocCode = 'SO'`.",
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "po_no": {
+            "title": "Po No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code",
+          "po_no"
+        ],
+        "title": "CustomerPoQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.by_customer_po"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.by_number@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: An SO found by its number (`B30BizDoc.DocNo` where `DocCode = 'SO'`,",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "An SO found by its number (`B30BizDoc.DocNo` where `DocCode = 'SO'`,\nthe code the client's SO list filters on in the 11-20 trace), with each\nline's id, PO line and rowversion: what a proposed write names.",
+        "properties": {
+          "so_no": {
+            "title": "So No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "so_no"
+        ],
+        "title": "SalesOrderQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.by_number"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
   "so.create@1": {
     "$defs": {
       "SalesOrderLine": {
@@ -805,6 +878,40 @@
       },
       "kind": {
         "const": "so.line.split"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "user.by_employee_code@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: The Bravo users (`B00UserList`, groups excluded) carrying an employee",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "The Bravo users (`B00UserList`, groups excluded) carrying an employee\ncode (`Ma_CbNv`), and whether each is active.",
+        "properties": {
+          "employee_code": {
+            "title": "Employee Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "employee_code"
+        ],
+        "title": "BravoUserQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "user.by_employee_code"
       },
       "version": {
         "const": 1

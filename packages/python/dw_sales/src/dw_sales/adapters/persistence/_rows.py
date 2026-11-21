@@ -53,6 +53,11 @@ _RULES = {
         "change_request_open",
         "đơn này đang có một yêu cầu thay đổi mở",
     ),
+    # Ticket 53: one open Bravo write per line.
+    "uq_bravo_line_writes_one_open": (
+        "bravo_write_open",
+        "dòng này đang có một đề xuất ghi Bravo chờ duyệt",
+    ),
 }
 
 

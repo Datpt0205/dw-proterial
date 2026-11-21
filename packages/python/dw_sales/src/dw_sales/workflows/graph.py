@@ -36,11 +36,16 @@ import uuid
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
-from dw_agent_runtime.approval_flow import ApprovalDecisionGuard, ApproveAndResumeService
+from dw_agent_runtime.approval_flow import (
+    ApprovalDecisionGuard,
+    ApprovalDecisionStamp,
+    ApproveAndResumeService,
+)
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_agent_runtime.registry import ConfigError, GraphRegistry, WorkerRegistry
 from dw_platform.application.access_context import AccessContext
+from dw_sales.application.bravo_line_writes import BRAVO_WRITE_APPROVAL
 from dw_sales.application.catalog_imports import CATALOG_APPROVAL
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.layouts import LAYOUT_APPROVAL
@@ -185,6 +190,8 @@ def register(
     catalog: ApprovalDecisionGuard,
     skills: ApprovalDecisionGuard,
     prompts: ApprovalDecisionGuard,
+    bravo_writes: ApprovalDecisionGuard,
+    bravo_stamp: ApprovalDecisionStamp,
     worker_file: Path,
 ) -> WorkerDefinition:
     """DW1 on a runtime: its graph, its worker, and its approvals' rules.
@@ -205,7 +212,11 @@ def register(
       (`sales.skills`, no run, ticket 40) by ``skills``
       (`SkillDecisions.check`) and a prompt version's (`sales.prompts`, no
       run, proposed by the optimiser lane, ticket 43) by ``prompts``
-      (`PromptDecisions.check`), each the longer prefix.
+      (`PromptDecisions.check`), each the longer prefix;
+    - a Bravo write's (`bravo_write.sales_order`, no run, ticket 53) checked
+      by ``bravo_writes`` and signed by ``bravo_stamp`` in the decision's
+      transaction. Not under `sales.`: one person decides it, the one
+      whose Bravo user writes it (ADR 0027).
     """
     graphs.register(DW1_WORKER_ID, GRAPH_VERSION, lambda: build_graph(steps))
     loaded = workers.load_file(worker_file).definition
@@ -221,4 +232,6 @@ def register(
     approvals.decision_guards[CATALOG_APPROVAL] = catalog
     approvals.decision_guards[SKILLS_APPROVAL] = skills
     approvals.decision_guards[PROMPTS_APPROVAL] = prompts
+    approvals.decision_guards[BRAVO_WRITE_APPROVAL] = bravo_writes
+    approvals.decision_stamps[BRAVO_WRITE_APPROVAL] = bravo_stamp
     return loaded

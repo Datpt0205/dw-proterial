@@ -66,6 +66,7 @@ from dw_sales.application.assistant import (
     ConversationView,
 )
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
+from dw_sales.application.bravo_line_writes import BravoLineWriteView, LineChange
 from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.bravo_watch import BaselineAcceptedView, WatchStateView
 from dw_sales.application.catalog_imports import (
@@ -280,6 +281,25 @@ class RuleWordsBody(BaseModel):
 
     request: Annotated[str, Field(min_length=1, max_length=2000)]
     focus: Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.]*$", max_length=200)] | None = None
+
+
+class BravoWriteBody(BaseModel):
+    """A change of one SO line to write into Bravo (ticket 53): what changes
+    and to what. Which Bravo row, and its rowversion, are read by DW."""
+
+    model_config = _BODY
+
+    case_version: int = Field(ge=1)
+    change: LineChange
+
+
+class ReadBackBody(BaseModel):
+    """Read the case's SO back from Bravo (ticket 51), at the case version
+    the PIC is looking at."""
+
+    model_config = _BODY
+
+    case_version: int = Field(ge=1)
 
 
 class BaselineBody(BaseModel):
@@ -932,6 +952,36 @@ def build_router(
             deliveries=[(d.quantity, d.date) for d in body.deliveries],
         )
         return await idem.record(change)
+
+    # An SO line's change written into Bravo under the approver's own Bravo
+    # user (ticket 53): proposed here, decided on the platform's approval,
+    # carried out by the worker through the gateway.
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/bravo-writes",
+        response_model=BravoLineWriteView,
+        status_code=201,
+        dependencies=[scopes(SalesScopes.BRAVO_WRITE)],
+    )
+    async def propose_bravo_write(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=99_999)],
+        body: BravoWriteBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> BravoLineWriteView:
+        proposed = await svc.bravo_writes.propose(
+            context, case_id, line_no, body.change, case_version=body.case_version
+        )
+        return await idem.record(proposed)
+
+    @router.get(
+        "/orders/{case_id}/bravo-writes",
+        response_model=list[BravoLineWriteView],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def bravo_writes(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[BravoLineWriteView]:
+        return list(await svc.bravo_writes.of_case(context, case_id))
 
     # The request to Design for a new PRV code (ticket 06): drafted from a
     # line no item fits, with the item master's nearest codes, for a person
@@ -1920,6 +1970,20 @@ def build_router(
     )
     async def bravo_read_back(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ReadBackView:
         return await svc.read_backs.latest(context, case_id)
+
+    # The same, read from Bravo through the gateway on the PIC's ask (ticket
+    # 51), confirmed dates included; refused where no gateway is configured.
+    @router.post(
+        "/orders/{case_id}/bravo-read-back",
+        response_model=ReadBackView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def read_back_from_bravo(
+        case_id: uuid.UUID, body: ReadBackBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ReadBackView:
+        return await idem.record(
+            await svc.read_backs.read_from_bravo(context, case_id, case_version=body.case_version)
+        )
 
     @router.get("/quotes/{case_id}", response_model=QuoteCaseView)
     async def quote(

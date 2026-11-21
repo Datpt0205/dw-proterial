@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Literal, Protocol
 
 from dw_bravo.approval_token import ApprovalClaims
+from dw_bravo.contract import CustomerPoRows, SalesOrderState
 from dw_bravo.layout import Layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 
@@ -35,6 +36,10 @@ class DocumentNotFoundError(Exception):
     pass
 
 
+class AmbiguousDocumentError(Exception):
+    """More than one document answers to a number: none is chosen."""
+
+
 @dataclass(frozen=True)
 class BravoUser:
     """A `B00UserList` row that is a user (not a group)."""
@@ -49,6 +54,18 @@ class Directory(Protocol):
     """Who an employee code is in Bravo, read live at each write (ticket 64)."""
 
     async def users_by_employee_code(self, employee_code: str) -> Sequence[BravoUser]: ...
+
+
+class SalesOrders(Protocol):
+    """An SO as Bravo holds it now, found by its number (ticket 53): what a
+    proposed write names. Not found raises `DocumentNotFoundError`, several
+    `AmbiguousDocumentError`."""
+
+    async def sales_order(self, so_no: str) -> SalesOrderState: ...
+
+    async def customer_po(self, customer_code: str, po_no: str) -> CustomerPoRows:
+        """Every SO line of the PO; none is an empty answer, not an error."""
+        ...
 
 
 @dataclass(frozen=True)

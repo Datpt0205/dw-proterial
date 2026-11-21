@@ -31,18 +31,26 @@ import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Final, Literal, TypeVar
 
 import mssql_python
 
-from dw_bravo.contract import WRITE_KINDS
+from dw_bravo.contract import (
+    WRITE_KINDS,
+    CustomerPoRow,
+    CustomerPoRows,
+    SalesOrderState,
+    SoLineState,
+)
 from dw_bravo.expression import RuleRefusedError, UndecidableError
+from dw_bravo.import_template import read_import_template
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.watch import Component, Fingerprint
 from dw_bravo_gateway.ports import (
+    AmbiguousDocumentError,
     Batch,
     BravoUnavailableError,
     BravoUser,
@@ -155,6 +163,48 @@ class SqlServerBravo:
             for row in rows
         ]
 
+    # -------------------------------------------------------------- reads
+
+    async def sales_order(self, so_no: str) -> SalesOrderState:
+        """`DocCode = 'SO'` is the code the client's SO list filters on (the
+        11-20 trace). The lines join on the header's `BizDocId`, as `load`."""
+
+        def work() -> SalesOrderState:
+            headers = self._rows(
+                "SELECT Id, BizDocId, DocNo FROM dbo.B30BizDoc WHERE DocCode = 'SO' AND DocNo = ?",
+                (so_no,),
+            )
+            if not headers:
+                raise DocumentNotFoundError(so_no)
+            if len(headers) > 1:
+                raise AmbiguousDocumentError(so_no)
+            [header] = headers
+            rows = self._rows(
+                "SELECT Id, POLine, ItemCode, Quantity9, EstimatedTimeDelivery, timestamp"
+                " FROM dbo.B30BizDocDetailSO WHERE BizDocId = ? ORDER BY BuiltinOrder",
+                (header["BizDocId"],),
+            )
+            return SalesOrderState(
+                so_id=int(header["Id"]),  # type: ignore[call-overload]
+                so_no=str(header["DocNo"]),
+                lines=tuple(_line_state(row) for row in rows),
+            )
+
+        return await self._in_thread(work)
+
+    async def customer_po(self, customer_code: str, po_no: str) -> CustomerPoRows:
+        rows = await self._in_thread(
+            lambda: self._rows(
+                "SELECT h.DocNo, d.POLine, d.ItemCode, d.Quantity9, d.OriginalUnitCost,"
+                " d.PORequestDate, d.EstimatedTimeDelivery"
+                " FROM dbo.B30BizDoc h JOIN dbo.B30BizDocDetailSO d ON d.BizDocId = h.BizDocId"
+                " WHERE h.DocCode = 'SO' AND h.CustomerCode = ? AND h.POCustomer = ?"
+                " ORDER BY h.DocNo, d.BuiltinOrder",
+                (customer_code, po_no),
+            )
+        )
+        return CustomerPoRows(tuple(_po_row(row) for row in rows))
+
     # ------------------------------------------------------------- rights
 
     async def column_rights(self, user_id: int, command_key: str) -> Sequence[ColumnRight]:
@@ -255,8 +305,8 @@ class SqlServerBravo:
         """What DW's writes depend on, measured through the read login
         (ticket 65). A definition the login cannot read (no VIEW
         DEFINITION) is "could not check", never a constant that reads as
-        unchanged forever. The client version (needs VIEW SERVER STATE) and
-        the Import templates (ticket 51) are not measured yet."""
+        unchanged forever. The client version (needs VIEW SERVER STATE) is
+        not measured yet."""
         screens = sorted({k.screen for k in WRITE_KINDS.values()})
         tables = sorted({t for k in WRITE_KINDS.values() for t in k.tables})
 
@@ -264,6 +314,7 @@ class SqlServerBravo:
             components: list[Component] = []
             for screen in screens:
                 components.extend(self._layout_components(screen))
+                components.append(self._template_component(screen))
                 for row in self._rows(
                     "SELECT CommandKey, DLLName, ClassName, CtorArgs, MethodName, InvokeArgs"
                     " FROM dbo.B00Command WHERE CommandKey = ?",
@@ -301,6 +352,35 @@ class SqlServerBravo:
             return Fingerprint(environment, datetime.now(UTC), tuple(components))
 
         return await self._in_thread(work)
+
+    def _template_component(self, screen: str) -> Component:
+        """The screen's Import templates (`B00ImportSetting`, ticket 51), as
+        one component named for the screen: any of them changed, added,
+        switched on or off changes it. A template the reader cannot read is
+        named in `unknown`."""
+        rows = self._rows(
+            "SELECT Id, IsActive, LayoutData FROM dbo.B00ImportSetting"
+            " WHERE CommandKey = ? ORDER BY Id",
+            (screen,),
+        )
+        unknown: list[str] = []
+        for row in rows:
+            if not row["IsActive"]:
+                continue
+            try:
+                read_import_template(layout_xml(row["LayoutData"]))
+            except (UndecidableError, ValueError, zipfile.BadZipFile) as refused:
+                unknown.append(f"template {row['Id']}: {str(refused)[:160]}")
+        return Component(
+            "template",
+            screen,
+            _digest(
+                repr(
+                    [(row["Id"], bool(row["IsActive"]), _digest(row["LayoutData"])) for row in rows]
+                )
+            ),
+            unknown=tuple(unknown),
+        )
 
     def _layout_components(self, screen: str) -> list[Component]:
         rows = self._rows(
@@ -391,6 +471,36 @@ ROUTINES: Final[Mapping[str, Literal["routine", "context_parser"]]] = {
 def _digest(value: object) -> str:
     data = value if isinstance(value, bytes) else repr(value).encode("utf-8")
     return hashlib.sha256(data).hexdigest()
+
+
+def _line_state(row: Mapping[str, object]) -> SoLineState:
+    when = row["EstimatedTimeDelivery"]
+    return SoLineState(
+        line_id=int(row["Id"]),  # type: ignore[call-overload]
+        po_line=int(row["POLine"]),  # type: ignore[call-overload]
+        item_code=str(row["ItemCode"]),
+        quantity=Decimal(str(row["Quantity9"])),
+        confirmed_date=when.date() if isinstance(when, datetime) else None,
+        rowversion=str(rowversion(row["timestamp"])),
+    )
+
+
+def _day(value: object) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    return value if isinstance(value, date) else None
+
+
+def _po_row(row: Mapping[str, object]) -> CustomerPoRow:
+    return CustomerPoRow(
+        so_no=str(row["DocNo"]),
+        po_line=int(row["POLine"]),  # type: ignore[call-overload]
+        item_code=str(row["ItemCode"]),
+        quantity=Decimal(str(row["Quantity9"])),
+        unit_price=Decimal(str(row["OriginalUnitCost"])),
+        requested_date=_day(row["PORequestDate"]),
+        confirmed_date=_day(row["EstimatedTimeDelivery"]),
+    )
 
 
 def _stored(row: Mapping[str, object]) -> dict[str, object]:

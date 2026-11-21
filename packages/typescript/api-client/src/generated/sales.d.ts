@@ -972,6 +972,24 @@ export interface paths {
         /** Bravo Read Back */
         get: operations["bravo_read_back_api_v1_sales_orders__case_id__bravo_read_back_get"];
         put?: never;
+        /** Read Back From Bravo */
+        post: operations["read_back_from_bravo_api_v1_sales_orders__case_id__bravo_read_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/bravo-writes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Writes */
+        get: operations["bravo_writes_api_v1_sales_orders__case_id__bravo_writes_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1228,6 +1246,23 @@ export interface paths {
         put?: never;
         /** Read Internal Change */
         post: operations["read_internal_change_api_v1_sales_orders__case_id__internal_change_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Bravo Write */
+        post: operations["propose_bravo_write_api_v1_sales_orders__case_id__lines__line_no__bravo_writes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3001,6 +3036,41 @@ export interface components {
              */
             screen: "ycbg" | "sales_orders";
         };
+        /** BravoLineWriteView */
+        BravoLineWriteView: {
+            /** After */
+            after: string;
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /** Before */
+            before: string | null;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "confirmed_date" | "quantity";
+            /** Line No */
+            line_no: number;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /** Reason */
+            reason: string | null;
+            /** Settled At */
+            settled_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "rejected" | "written" | "written_with_differences" | "refused" | "in_doubt";
+            /** Warnings */
+            warnings: string[];
+        };
         /** BravoOrderLineView */
         BravoOrderLineView: {
             /**
@@ -3072,6 +3142,17 @@ export interface components {
             rows_read: number;
             /** So No */
             so_no: string;
+        };
+        /**
+         * BravoWriteBody
+         * @description A change of one SO line to write into Bravo (ticket 53): what changes
+         *     and to what. Which Bravo row, and its rowversion, are read by DW.
+         */
+        BravoWriteBody: {
+            /** Case Version */
+            case_version: number;
+            /** Change */
+            change: components["schemas"]["ConfirmedDateChange"] | components["schemas"]["QuantityChange"];
         };
         /** BriefView */
         BriefView: {
@@ -3706,6 +3787,22 @@ export interface components {
              */
             sent_at: string;
             term: components["schemas"]["ImpliedTermView"] | null;
+        };
+        /**
+         * ConfirmedDateChange
+         * @description "XN giao hàng": the line's confirmed delivery date.
+         */
+        ConfirmedDateChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            field: "confirmed_date";
+            /**
+             * Value
+             * Format: date
+             */
+            value: string;
         };
         /**
          * ConfirmedView
@@ -7055,6 +7152,19 @@ export interface components {
             reason: string | null;
         };
         /**
+         * QuantityChange
+         * @description The line's quantity, in the sales unit Bravo's `Quantity9` holds.
+         */
+        QuantityChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            field: "quantity";
+            /** Value */
+            value: number | string;
+        };
+        /**
          * QuestionKind
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
@@ -7429,6 +7539,15 @@ export interface components {
             status: string;
             /** Ycbg No */
             ycbg_no: string | null;
+        };
+        /**
+         * ReadBackBody
+         * @description Read the case's SO back from Bravo (ticket 51), at the case version
+         *     the PIC is looking at.
+         */
+        ReadBackBody: {
+            /** Case Version */
+            case_version: number;
         };
         /**
          * ReadBackView
@@ -8354,7 +8473,7 @@ export interface components {
              * Field
              * @enum {string}
              */
-            field: "missing_row" | "extra_row" | "item_code" | "quantity" | "unit_price" | "requested_date";
+            field: "missing_row" | "extra_row" | "item_code" | "quantity" | "unit_price" | "requested_date" | "confirmed_date";
             /** Line No */
             line_no: number;
             /** Po No */
@@ -11391,6 +11510,75 @@ export interface operations {
             };
         };
     };
+    read_back_from_bravo_api_v1_sales_orders__case_id__bravo_read_back_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadBackBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadBackView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bravo_writes_api_v1_sales_orders__case_id__bravo_writes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoLineWriteView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     open_change_request_api_v1_sales_orders__case_id__change_requests_post: {
         parameters: {
             query?: never;
@@ -11935,6 +12123,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InternalReadView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_bravo_write_api_v1_sales_orders__case_id__lines__line_no__bravo_writes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BravoWriteBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoLineWriteView"];
                 };
             };
             /** @description Validation Error */

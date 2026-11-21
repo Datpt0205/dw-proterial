@@ -27,7 +27,18 @@ from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
 from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.bravo_exports import BravoExportService, BravoExportUnitOfWorkFactory
-from dw_sales.application.bravo_sales_orders import ReadBackService, ReadBackUnitOfWorkFactory
+from dw_sales.application.bravo_line_writes import (
+    BravoCommandsPort,
+    BravoLineWrites,
+    BravoOrdersPort,
+    BravoWriteDecisions,
+    BravoWriteWorkFactory,
+)
+from dw_sales.application.bravo_sales_orders import (
+    BravoCustomerPoPort,
+    ReadBackService,
+    ReadBackUnitOfWorkFactory,
+)
 from dw_sales.application.bravo_watch import BravoWatchService, BravoWatchStorePort
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.catalog_imports import (
@@ -196,6 +207,8 @@ class SalesServices:
     order_quotes: OrderQuotes
     # The Bravo change watch: its state, and a baseline accepted (ticket 65).
     bravo_watch: BravoWatchService
+    # An SO line's change proposed for writing into Bravo (ticket 53).
+    bravo_writes: BravoLineWrites
     gate: Gate
 
 
@@ -211,6 +224,9 @@ class SalesAssembly:
     catalog_decisions: CatalogDecisions
     # The decision guard of a skill version's approval (`sales.skills`, ticket 40).
     skill_decisions: SkillDecisions
+    # The decision guard of a Bravo write's approval
+    # (`bravo_write.sales_order`, ticket 53).
+    bravo_write_decisions: BravoWriteDecisions
 
 
 def assemble(
@@ -227,6 +243,14 @@ def assemble(
     quotation: QuotationService,
     # The Bravo change watch's tables (ticket 65).
     bravo_watch_store: BravoWatchStorePort,
+    # An SO in Bravo, read through the gateway, and the unit of work that
+    # holds a proposed write with its approval (ticket 53).
+    bravo_orders: BravoOrdersPort,
+    bravo_commands: BravoCommandsPort,
+    bravo_writes_uow: BravoWriteWorkFactory,
+    # A customer's PO as Bravo holds it, for the read-back (ticket 51); None:
+    # only an uploaded export is read back.
+    bravo_po: BravoCustomerPoPort | None,
     files: SourceViewPort,
     source_cache: SourceCachePort,
     book: TenantRuleBook,
@@ -373,7 +397,7 @@ def assemble(
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         bravo_exports=BravoExportService(bravo_uow, uow, gate, clock, ids),
         convert_gaps=ConvertGapService(gaps, gate),
-        read_backs=ReadBackService(uow, read_back_uow, gate),
+        read_backs=ReadBackService(uow, read_back_uow, gate, bravo_po, clock, ids),
         salesorder_examples=SalesOrderExamples(example_uow, gate, clock, ids, catalog, book, rules),
         salesorder_pairs=WorkedPairs(example_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
@@ -480,6 +504,9 @@ def assemble(
         today=TodayService(gate, clock, notices, reminder_marks, book),
         order_quotes=order_quotes,
         bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
+        bravo_writes=BravoLineWrites(
+            bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids
+        ),
         gate=gate,
     )
     decisions = CaseDecisions(
@@ -492,4 +519,5 @@ def assemble(
         rule_decisions=RuleDecisions(uow, book, readiness),
         catalog_decisions=CatalogDecisions(catalog_uow),
         skill_decisions=SkillDecisions(uow, skills, skill_replays),
+        bravo_write_decisions=BravoWriteDecisions(bravo_writes_uow),
     )

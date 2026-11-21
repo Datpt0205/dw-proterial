@@ -133,4 +133,14 @@ def test_every_kind_is_keyed_by_its_name_and_version() -> None:
         "so.line.set_confirmed_date@1",
         "so.line.set_quantity@1",
     }
-    assert len(READ_KINDS) == 6
+    assert set(READ_KINDS) == {
+        "customer.get@1",
+        "item.get@1",
+        "item.convert@1",
+        "quotation.lookup@1",
+        "document.state@1",
+        "compliance.on_date@1",
+        # The two a proposed write needs (ticket 53), served by the gateway.
+        "so.by_number@1",
+        "user.by_employee_code@1",
+    }

@@ -64,6 +64,9 @@ class SalesScopes(StrEnum):
     # Linking a person to an employee code by hand, and the queue of what
     # DW would not link itself (ticket 64).
     IDENTITY_LINK = "sales.identity.link"
+    # Proposing a change of an SO line in Bravo, and approving one, which
+    # writes it under the approver's own Bravo user (ticket 53, ADR 0027).
+    BRAVO_WRITE = "sales.bravo.write"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR

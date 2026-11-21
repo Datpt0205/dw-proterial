@@ -30,6 +30,7 @@ import uuid
 from dataclasses import dataclass
 from typing import cast
 
+import httpx
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -539,6 +540,7 @@ def build_sales(
     )
     from dw_platform.application.malware import MalwareScanPort
     from dw_sales.adapters.assembly import build_dw1
+    from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
     from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
     from dw_sales.application.ports import SalesScope
     from dw_sales.presentation.routes import SalesMount
@@ -600,6 +602,19 @@ def build_sales(
         mailbox=settings.sales_mailbox,
         outbox_enabled=settings.sales_outbox_enabled,
         source_cache=source_cache,
+        # Bravo writes and reads (tickets 53, 51): the gateway, for the one
+        # tenant whose Bravo it reaches, and the key decisions sign its token
+        # with; any unset, Bravo is not connected.
+        bravo_gateway=(
+            BravoGatewayClient(
+                httpx.AsyncClient(),
+                settings.sales_bravo_gateway_url,
+                uuid.UUID(settings.sales_bravo_tenant_id),
+            )
+            if settings.sales_bravo_gateway_url and settings.sales_bravo_tenant_id
+            else None
+        ),
+        bravo_signer=settings.bravo_signer(),
     )
     return SalesMount(services=mount.services, activity=mount.activity)
 

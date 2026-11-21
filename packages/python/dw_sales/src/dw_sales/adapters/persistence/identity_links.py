@@ -40,6 +40,20 @@ class SqlIdentityLinks:
             ).all()
         return [Link(r.subject, r.employee_code, r.linked_how) for r in rows]
 
+    async def employee_code(self, tenant_id: uuid.UUID, subject: uuid.UUID) -> str | None:
+        """`EmployeeCodesPort` (ticket 53): the person's live link, or None."""
+        async with tenant_session(
+            self.session_factory, TenantScope(tenant_id=tenant_id)
+        ) as session:
+            code = await session.scalar(
+                sa.text(
+                    "SELECT employee_code FROM bravo.person_links"
+                    " WHERE subject = :s AND retired_at IS NULL"
+                ),
+                {"s": subject},
+            )
+        return None if code is None else str(code)
+
     async def save(
         self,
         tenant_id: uuid.UUID,

@@ -20,6 +20,7 @@ const FIELD: Record<Difference["field"], string> = {
   quantity: "Số lượng",
   unit_price: "Đơn giá",
   requested_date: "Ngày khách yêu cầu",
+  confirmed_date: "XN giao hàng (Bravo đã xoá hoặc khác)",
 };
 
 // Who sees a price difference's values: said once, beside the column.

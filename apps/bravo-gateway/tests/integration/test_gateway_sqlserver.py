@@ -38,7 +38,7 @@ from gateway_fakes import (
 from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
 from dw_bravo_gateway.adapters.sqlserver import Login, SqlServerBravo
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
-from dw_bravo_gateway.ports import CommandRight
+from dw_bravo_gateway.ports import AmbiguousDocumentError, CommandRight, DocumentNotFoundError
 
 SERVER = os.environ.get("DW_BRAVO_TEST_MSSQL")
 
@@ -65,6 +65,13 @@ def _run(database: str, *statements: str) -> None:
     for statement in statements:
         cursor.execute(statement)
     connection.close()  # type: ignore[attr-defined]
+
+
+TEMPLATE = (
+    "<root><Tables><BizDoc><Cols><DocDate>B</DocDate></Cols><txtRowRange>4</txtRowRange></BizDoc>"
+    "<Detail><txtForeignKey>A</txtForeignKey><Cols><POLine>S</POLine></Cols></Detail>"
+    "</Tables></root>"
+)
 
 
 def _zipped(text: str) -> bytes:
@@ -95,10 +102,13 @@ def logins() -> tuple[Login, Login]:
         "INSERT INTO dbo.B00UserList VALUES (2413, NULL, 0, 'pic', 'NV001', NULL, 1),"
         " (2414, NULL, 0, 'old', 'NV001', NULL, 0), (2415, NULL, 0, 'exp', 'NV002', 1, 1)",
         "CREATE TABLE dbo.B30BizDoc (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
+        " DocCode char(2) DEFAULT 'SO', DocNo nvarchar(32) DEFAULT '',"
+        " CustomerCode varchar(24) DEFAULT 'FG1', POCustomer nvarchar(192) DEFAULT 'PO-1',"
         " BranchCode varchar(3), DocDate datetime, TotalQuantity numeric(18,4), ModifiedBy int,"
         " ModifiedAt datetime DEFAULT GETDATE(), timestamp rowversion)",
         "CREATE TABLE dbo.B30BizDocDetailSO (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
-        " RowId varchar(16), BuiltinOrder smallint, Quantity9 numeric(18,4),"
+        " RowId varchar(16), BuiltinOrder smallint, POLine numeric(18,0) DEFAULT 0,"
+        " ItemCode varchar(24) DEFAULT '', PORequestDate date, Quantity9 numeric(18,4),"
         " OriginalUnitCost numeric(18,4), Amount9 numeric(18,4), Made numeric(18,4),"
         " EstimatedTimeDelivery datetime, ModifiedBy int, ModifiedAt datetime DEFAULT GETDATE(),"
         " timestamp rowversion)",
@@ -108,6 +118,8 @@ def logins() -> tuple[Login, Login]:
         "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64), ModifiedBy int DEFAULT 1, ModifiedAt smalldatetime DEFAULT GETDATE(),"
         " IsActive bit)",
         "CREATE TABLE dbo.B00LayoutData (Id int PRIMARY KEY, LayoutData varbinary(max))",
+        "CREATE TABLE dbo.B00ImportSetting (Id int PRIMARY KEY, CommandKey varchar(24),"
+        " IsActive bit, LayoutData varbinary(8000))",
         "CREATE FUNCTION dbo.ufn_sys_GetUserIdFromContext_Info (@_ci varbinary(512)) RETURNS int AS"
         " BEGIN DECLARE @c varchar(512) = CAST(@_ci AS varchar(512)); DECLARE @p int = CHARINDEX('@', @c);"
         " IF @p <= 0 RETURN -1; SET @c = STUFF(@c, 1, @p, ''); SET @p = CHARINDEX('@', @c);"
@@ -127,11 +139,21 @@ def logins() -> tuple[Login, Login]:
         "INSERT INTO dbo.B00Command VALUES (1, 'EDIT_BizDocSO', 'Bravo.dll', 'DataEditor', N'x', NULL, NULL)",
         "CREATE PROCEDURE dbo.usp_sys_GetControlPermission @_UserId int, @_CommandKey varchar(24) AS"
         " SELECT TableName, ColumnName, NoAddNew, NoEdit FROM dbo.Rights WHERE UserId = @_UserId",
-        "INSERT INTO dbo.B30BizDoc (BizDocId, BranchCode, DocDate, TotalQuantity, ModifiedBy)"
-        f" VALUES ('D1', 'A01', '{NOW.year}-11-20', 3, 1)",
-        "INSERT INTO dbo.B30BizDocDetailSO (BizDocId, RowId, BuiltinOrder, Quantity9,"
-        " OriginalUnitCost, Amount9, Made, ModifiedBy) VALUES ('D1', 'R1', 1, 3, 2, 6, 2, 1),"
-        " ('D1', 'LOCKED', 2, 1, 2, 2, 0, 1)",
+        "INSERT INTO dbo.B30BizDoc (BizDocId, DocNo, BranchCode, DocDate, TotalQuantity,"
+        f" ModifiedBy) VALUES ('D1', 'SO-1', 'A01', '{NOW.year}-11-20', 3, 1)",
+        "INSERT INTO dbo.B30BizDocDetailSO (BizDocId, RowId, BuiltinOrder, POLine, ItemCode,"
+        " Quantity9, OriginalUnitCost, Amount9, Made, ModifiedBy, EstimatedTimeDelivery) VALUES"
+        " ('D1', 'R1', 1, 1, 'PRV-1', 3, 2, 6, 2, 1, '2026-12-01'),"
+        " ('D1', 'LOCKED', 2, 2, 'PRV-2', 1, 2, 2, 0, 1, NULL)",
+        # Another document type under the same number, and one SO number twice.
+        "INSERT INTO dbo.B30BizDoc (BizDocId, DocCode, DocNo, BranchCode, DocDate, TotalQuantity,"
+        " ModifiedBy) VALUES ('P1', 'PO', 'SO-1', 'A01', '2026-11-20', 0, 1),"
+        " ('D2', 'SO', 'SO-DUP', 'A01', '2026-11-20', 0, 1),"
+        " ('D3', 'SO', 'SO-DUP', 'A02', '2026-11-20', 0, 1)",
+        # A line under the PO document, which is not an SO.
+        "INSERT INTO dbo.B30BizDocDetailSO (BizDocId, RowId, BuiltinOrder, POLine, ItemCode,"
+        " Quantity9, OriginalUnitCost, Amount9, Made, ModifiedBy) VALUES"
+        " ('P1', 'PR1', 1, 9, 'PO-ITEM', 1, 1, 1, 0, 1)",
         "CREATE USER dw_test_read FOR LOGIN dw_test_read",
         "CREATE USER dw_test_write FOR LOGIN dw_test_write",
         "GRANT SELECT ON dbo.B00UserList (Id, IsGroup, UserName, Ma_CbNv, Expire, IsActive) TO dw_test_read",
@@ -139,6 +161,7 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B30BizDocDetailSO TO dw_test_read",
         "GRANT SELECT ON dbo.B00Layout TO dw_test_read",
         "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
+        "GRANT SELECT ON dbo.B00ImportSetting (Id, CommandKey, IsActive, LayoutData) TO dw_test_read",
         "GRANT EXECUTE ON dbo.usp_sys_GetControlPermission TO dw_test_read",
         "GRANT EXECUTE ON dbo.ufn_Prevent_Edit TO dw_test_read",
         "GRANT SELECT ON dbo.B00Command TO dw_test_read",
@@ -167,6 +190,9 @@ def logins() -> tuple[Login, Login]:
         "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (1, 0, 'EDIT_BizDocSO', 1)"
     )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (1, ?)", (_zipped(LAYOUT),))
+    cursor.execute(
+        "INSERT INTO dbo.B00ImportSetting VALUES (7, 'EDIT_BizDocSO', 1, ?)", (_zipped(TEMPLATE),)
+    )
     connection.close()  # type: ignore[attr-defined]
     return (
         Login(host, int(port), DB, "dw_test_read", read_pw),
@@ -289,6 +315,43 @@ async def test_identity_reads_one_active_user_per_employee_code(
     assert [(u.id, u.active) for u in expired] == [(2415, False)]
 
 
+async def test_an_so_is_read_by_its_number_in_the_clients_line_order(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins)
+
+    so = await bravo.sales_order("SO-1")
+
+    assert so.so_no == "SO-1"
+    # Line 1's quantity is whatever an earlier test of this module wrote.
+    assert [(x.po_line, x.item_code, x.confirmed_date) for x in so.lines] == [
+        (1, "PRV-1", date(2026, 12, 1)),
+        (2, "PRV-2", None),
+    ]
+    assert so.lines[1].quantity == Decimal(1)
+    assert all(x.rowversion.startswith("0x") and len(x.rowversion) == 18 for x in so.lines)
+    with pytest.raises(DocumentNotFoundError):
+        await bravo.sales_order("SO-404")
+    with pytest.raises(AmbiguousDocumentError):
+        await bravo.sales_order("SO-DUP")
+
+
+async def test_a_customers_po_reads_every_so_line_with_its_price(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins)
+
+    found = await bravo.customer_po("FG1", "PO-1")
+
+    # SO-1's two lines; SO-DUP's headers carry no line; the PO document is not an SO.
+    assert [(r.so_no, r.po_line, r.item_code, r.unit_price) for r in found.rows] == [
+        ("SO-1", 1, "PRV-1", Decimal(2)),
+        ("SO-1", 2, "PRV-2", Decimal(2)),
+    ]
+    assert found.rows[0].confirmed_date == date(2026, 12, 1)
+    assert (await bravo.customer_po("FG2", "PO-1")).rows == ()
+
+
 async def test_the_write_login_cannot_touch_a_column_it_was_not_granted(
     logins: tuple[Login, Login],
 ) -> None:
@@ -401,6 +464,38 @@ async def test_the_fingerprint_sees_a_trigger_and_a_column_change(
         ("trigger", "DML_B30BizDocDetailSO_ChangeLog"),
     }
     assert react(diff(before, after), {}).paused  # the dependent kinds pause
+
+
+async def test_the_fingerprint_sees_an_import_template_change_and_names_one_it_cannot_read(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins)
+    before = await bravo.fingerprint("production")
+    [template] = [c for c in before.components if c.kind == "template"]
+    assert template.name == "EDIT_BizDocSO" and template.unknown == ()
+
+    moved = TEMPLATE.replace("<POLine>S</POLine>", "<POLine>T</POLine>")
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("UPDATE dbo.B00ImportSetting SET LayoutData = ? WHERE Id = 7", (_zipped(moved),))
+    cursor.execute(
+        "INSERT INTO dbo.B00ImportSetting VALUES (8, 'EDIT_BizDocSO', 1, ?)",
+        (_zipped("<root><Tables><Detail><Formula>x</Formula></Detail></Tables></root>"),),
+    )
+    try:
+        after = await bravo.fingerprint("production")
+    finally:
+        cursor.execute("DELETE FROM dbo.B00ImportSetting WHERE Id = 8")
+        cursor.execute(
+            "UPDATE dbo.B00ImportSetting SET LayoutData = ? WHERE Id = 7", (_zipped(TEMPLATE),)
+        )
+        connection.close()  # type: ignore[attr-defined]
+
+    from dw_bravo.watch import diff, react
+
+    [changed] = [c for c in diff(before, after) if c.kind == "template"]
+    assert changed.after is not None and changed.after.unknown[0].startswith("template 8")
+    assert "so.create@1" in react(diff(before, after), {}).paused
 
 
 async def test_a_definition_the_read_login_cannot_see_is_could_not_check(

@@ -801,3 +801,34 @@ assistant_turns = sa.Table(
     # `ProposedDecision` it records, only on a `decide_finding` turn.
     sa.Column("proposal", JSONB(none_as_null=True)),
 )
+
+# An SO line's change written into Bravo through the gateway (ticket 53,
+# migration af89f3f5d27d): the proposal, keyed by its approval, and what
+# the gateway answered once carried out.
+bravo_line_writes = sa.Table(
+    "bravo_line_writes",
+    metadata,
+    sa.Column("approval_id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("line_no", sa.Integer, nullable=False),
+    sa.Column("so_no", sa.Text, nullable=False),
+    sa.Column("item_code", sa.Text, nullable=False),
+    sa.Column("field", sa.Text, nullable=False),
+    sa.Column("before_value", sa.Text),
+    sa.Column("after_value", sa.Text, nullable=False),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("command", JSONB, nullable=False),
+    sa.Column("content_hash", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("check_name", sa.Text),
+    sa.Column("reason", sa.Text),
+    sa.Column("warnings", JSONB, nullable=False),
+    sa.Column("transport_failures", sa.Integer, nullable=False),
+    sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("proposed_at", _TS, nullable=False),
+    sa.Column("decided_by", UUID(as_uuid=True)),
+    sa.Column("settled_at", _TS),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)

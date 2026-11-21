@@ -319,6 +319,13 @@ services:
       DW_API_DEV_SECRET: ${DW_API_DEV_SECRET:-}
       DW_MODEL_PROVIDER: ${DW_MODEL_PROVIDER:-mock}
       DW_API_MODEL_PROFILE: ${DW_API_MODEL_PROFILE:-balanced}
+      # Bravo writes (sales ticket 53): the gateway on the `dw-bravo` network
+      # (profile `bravo`) and the Ed25519 key approvals sign its token with.
+      # Empty: Bravo is not connected and no write can be approved.
+      DW_SALES_BRAVO_GATEWAY_URL: ${DW_SALES_BRAVO_GATEWAY_URL:-}
+      DW_SALES_BRAVO_TENANT_ID: ${DW_BRAVO_GATEWAY_TENANT_ID:-}
+      DW_BRAVO_APPROVAL_SIGNING_KEY: ${DW_BRAVO_APPROVAL_SIGNING_KEY:-}
+      DW_BRAVO_APPROVAL_KEY_ID: ${DW_BRAVO_APPROVAL_KEY_ID:-k1}
       # The model server DW1 reads documents with (dw_sales ADR 0005, provider
       # `onprem`). Empty: no such server, and every model step goes to a
       # person. On a developer machine running Ollama:
@@ -699,7 +706,8 @@ services:
     environment:
       DW_API_PROFILE: ${DW_API_PROFILE:-local}
       DW_WORKER_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
-      # The Bravo change watch (sales ticket 65): set with the `bravo` profile.
+      # The Bravo change watch (sales ticket 65) and the decided writes (ticket
+      # 53): set with the `bravo` profile.
       DW_WORKER_BRAVO_GATEWAY_URL: ${DW_WORKER_BRAVO_GATEWAY_URL:-}
       DW_WORKER_BRAVO_TENANT_ID: ${DW_BRAVO_GATEWAY_TENANT_ID:-}
       DW_WORKER_BRAVO_WORKSPACE_ID: ${DW_WORKER_BRAVO_WORKSPACE_ID:-}

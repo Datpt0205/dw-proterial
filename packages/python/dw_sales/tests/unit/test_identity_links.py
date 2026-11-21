@@ -41,12 +41,12 @@ class Bravo:
     emails: dict[str, list[str]] = field(default_factory=dict)
     down: bool = False
 
-    async def codes_for_email(self, email: str) -> Sequence[str]:
+    async def codes_for_email(self, tenant_id: uuid.UUID, email: str) -> Sequence[str]:
         if self.down:
             raise BravoPeopleUnavailableError()
         return self.emails.get(email, [])
 
-    async def active_users(self, employee_code: str) -> int:
+    async def active_users(self, tenant_id: uuid.UUID, employee_code: str) -> int:
         if self.down:
             raise BravoPeopleUnavailableError()
         return self.users.get(employee_code, 0)
@@ -57,6 +57,7 @@ async def _decide(
 ) -> object:
     return await decide(
         person,
+        tenant_id=TENANT,
         link_of_subject={k.subject: k for k in links}.get,
         link_of_code={k.employee_code: k for k in links}.get,
         enabled=enabled.get,
