@@ -36,6 +36,7 @@ from typing import Any, ClassVar, Final, Literal
 # client holds: the row is as the PIC saw it, or nothing is written.
 _ROWVERSION: Final = re.compile(r"^0x[0-9A-F]{16}$")
 _CODE: Final = re.compile(r"^[^\x00-\x1f]{1,64}$")
+_CONTROL: Final = re.compile(r"[\x00-\x1f]")
 _TEXT_LIMIT: Final = 512
 
 # pydantic reads this on a stdlib dataclass: the gateway refuses a field the
@@ -377,6 +378,57 @@ class ComplianceQuery:
         _code("code", self.code)
 
 
+@dataclass(frozen=True)
+class SalesOrderQuery:
+    """An SO found by its number (`B30BizDoc.DocNo` where `DocCode = 'SO'`,
+    the code the client's SO list filters on in the 11-20 trace), with each
+    line's id, PO line and rowversion: what a proposed write names."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+    kind: ClassVar[str] = "so.by_number"
+    version: ClassVar[int] = 1
+
+    so_no: str
+
+    def __post_init__(self) -> None:
+        _code("so_no", self.so_no)
+
+
+@dataclass(frozen=True)
+class CustomerPoQuery:
+    """Every SO line Bravo holds for a customer's PO (ticket 51's read-back):
+    headers by `CustomerCode` and `POCustomer` (template 72 writes the PO's
+    number there), `DocCode = 'SO'`."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+    kind: ClassVar[str] = "so.by_customer_po"
+    version: ClassVar[int] = 1
+
+    customer_code: str
+    po_no: str
+
+    def __post_init__(self) -> None:
+        _code("customer_code", self.customer_code)
+        if not 1 <= len(self.po_no) <= 192 or _CONTROL.search(self.po_no):
+            raise ContractError("po_no must be 1-192 printable characters")
+
+
+@dataclass(frozen=True)
+class BravoUserQuery:
+    """The Bravo users (`B00UserList`, groups excluded) carrying an employee
+    code (`Ma_CbNv`), and whether each is active."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+    kind: ClassVar[str] = "user.by_employee_code"
+    version: ClassVar[int] = 1
+
+    employee_code: str
+
+    def __post_init__(self) -> None:
+        if not 1 <= len(self.employee_code) <= 24 or not _CODE.match(self.employee_code):
+            raise ContractError("employee_code must be 1-24 printable characters")
+
+
 ReadQuery = (
     CustomerQuery
     | ItemQuery
@@ -384,6 +436,9 @@ ReadQuery = (
     | QuotationQuery
     | DocumentStateQuery
     | ComplianceQuery
+    | SalesOrderQuery
+    | CustomerPoQuery
+    | BravoUserQuery
 )
 
 READ_KINDS: Final[dict[str, type[Any]]] = {
@@ -395,7 +450,87 @@ READ_KINDS: Final[dict[str, type[Any]]] = {
         QuotationQuery,
         DocumentStateQuery,
         ComplianceQuery,
+        SalesOrderQuery,
+        CustomerPoQuery,
+        BravoUserQuery,
     )
+}
+
+
+# ----------------------------------------------------------- read results
+
+
+@dataclass(frozen=True)
+class SoLineState:
+    """One `B30BizDocDetailSO` row as read: `Quantity9` is the column
+    `SetQuantity` writes, `EstimatedTimeDelivery` the one `SetConfirmedDate`
+    writes (its date, as the client wrote it)."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+
+    line_id: int  # Id
+    po_line: int  # POLine
+    item_code: str  # ItemCode
+    quantity: Decimal  # Quantity9
+    confirmed_date: date | None  # EstimatedTimeDelivery
+    rowversion: str  # timestamp
+
+    def __post_init__(self) -> None:
+        _rowversion("rowversion", self.rowversion)
+
+
+@dataclass(frozen=True)
+class SalesOrderState:
+    """An SO's header id and number, and its lines in the client's order
+    (`BuiltinOrder`)."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+
+    so_id: int  # B30BizDoc.Id
+    so_no: str  # DocNo
+    lines: tuple[SoLineState, ...]
+
+
+@dataclass(frozen=True)
+class BravoUsers:
+    """The ids of the active users carrying the code asked for; inactive
+    ones are not named."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+
+    active_user_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class CustomerPoRow:
+    """One SO line of a customer's PO as Bravo holds it: the SO's number
+    (`DocNo`), then `POLine`, `ItemCode`, `Quantity9`, `OriginalUnitCost`
+    (the PO's price, template 72), `PORequestDate`, `EstimatedTimeDelivery`."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+
+    so_no: str
+    po_line: int
+    item_code: str
+    quantity: Decimal
+    unit_price: Decimal
+    requested_date: date | None
+    confirmed_date: date | None
+
+
+@dataclass(frozen=True)
+class CustomerPoRows:
+    """In the SOs' number order, each SO's lines in the client's order."""
+
+    __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
+
+    rows: tuple[CustomerPoRow, ...]
+
+
+READ_RESULTS: Final[dict[str, type[Any]]] = {
+    f"{CustomerPoQuery.kind}@{CustomerPoQuery.version}": CustomerPoRows,
+    f"{SalesOrderQuery.kind}@{SalesOrderQuery.version}": SalesOrderState,
+    f"{BravoUserQuery.kind}@{BravoUserQuery.version}": BravoUsers,
 }
 
 

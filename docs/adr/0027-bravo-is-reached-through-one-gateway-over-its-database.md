@@ -99,6 +99,10 @@ What the 11-19/20 survey measured (details in `docs/proterial/`, outside git):
    - **Signed approval.** The PIC approves the exact content on the portal.
      The approval path signs a token carrying: the approval id, the content's
      hash, the resolved Bravo user, and an expiry.
+     The approval is decided by **one person**, the one whose Bravo user the
+     write goes under (`bravo_write.<document>`, not under a context's strict
+     maker-checker prefix; sales ticket 53, 2026-11-21): their own Bravo
+     rights, read at the write, decide what they may change.
    - **The gateway checks before it writes.** It verifies the token, then:
      - the Bravo user is still active and still that person's (identity 5);
      - the user's right on that screen, from Bravo's own permission rows and

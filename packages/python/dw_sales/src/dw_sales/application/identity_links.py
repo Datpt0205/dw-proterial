@@ -79,6 +79,7 @@ Outcome = Linked | Queued | Unchanged
 async def decide(
     person: Person,
     *,
+    tenant_id: uuid.UUID,
     link_of_subject: Callable[[uuid.UUID], Link | None],
     link_of_code: Callable[[str], Link | None],
     enabled: Callable[[uuid.UUID], bool | None],
@@ -93,7 +94,7 @@ async def decide(
     if person.employee_id and person.employee_id.strip():
         code, how = person.employee_id.strip(), "employee_id"
     elif person.email and person.email.strip():
-        codes = sorted(set(await bravo.codes_for_email(person.email.strip().lower())))
+        codes = sorted(set(await bravo.codes_for_email(tenant_id, person.email.strip().lower())))
         if not codes:
             return Queued("no_match")
         if len(codes) > 1:
@@ -101,7 +102,7 @@ async def decide(
         code, how = codes[0], "email"
     else:
         return Queued("no_match")
-    users = await bravo.active_users(code)
+    users = await bravo.active_users(tenant_id, code)
     if users == 0:
         return Queued("no_match", code)
     if users > 1:
@@ -156,9 +157,9 @@ class PeoplePort(Protocol):
 class BravoPeoplePort(Protocol):
     """Bravo's employee record and users, read through the gateway."""
 
-    async def codes_for_email(self, email: str) -> Sequence[str]: ...
+    async def codes_for_email(self, tenant_id: uuid.UUID, email: str) -> Sequence[str]: ...
 
-    async def active_users(self, employee_code: str) -> int: ...
+    async def active_users(self, tenant_id: uuid.UUID, employee_code: str) -> int: ...
 
 
 class AnnouncePort(Protocol):
@@ -188,6 +189,7 @@ class IdentityLinks:
             try:
                 outcome = await decide(
                     person,
+                    tenant_id=tenant_id,
                     link_of_subject=links.get,
                     link_of_code=by_code.get,
                     enabled=accounts.get,
@@ -227,7 +229,7 @@ class IdentityLinks:
         if not 1 <= len(code) <= 24:
             raise DomainError("mã nhân viên có 1-24 ký tự")
         try:
-            users = await self.bravo.active_users(code)
+            users = await self.bravo.active_users(context.tenant_id, code)
         except BravoPeopleUnavailableError:
             raise ConflictError("chưa hỏi được Bravo: thử lại sau") from None
         if users != 1:

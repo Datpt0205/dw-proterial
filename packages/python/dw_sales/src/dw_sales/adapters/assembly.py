@@ -49,6 +49,7 @@ from dw_agent_runtime.registry import (
     WorkerRegistry,
     parse_worker_file,
 )
+from dw_bravo.approval_token import ApprovalTokenSigner
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_platform.adapters.outbox_folder import FolderOutbox
@@ -57,6 +58,8 @@ from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlS
 from dw_platform.application.drop_folder import OwnedFolders
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
+from dw_sales.adapters.bravo_contract import BravoContract, ContractSigner
+from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.drafting_examples import (
     FixtureHandoffKindExamples,
@@ -75,6 +78,7 @@ from dw_sales.adapters.persistence.catalog import (
 )
 from dw_sales.adapters.persistence.customer_notations import SqlCustomerNotations
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
+from dw_sales.adapters.persistence.identity_links import SqlIdentityLinks
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseReader
 from dw_sales.adapters.persistence.labelled_examples import SqlDescriptionExamples
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
@@ -108,6 +112,11 @@ from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.autonomy import AutonomyGate, ThresholdLane
 from dw_sales.application.bravo_exports import BravoExportReading
+from dw_sales.application.bravo_line_writes import (
+    BravoNotConnected,
+    BravoWriteSettlement,
+    BravoWriteStamp,
+)
 from dw_sales.application.bravo_sales_orders import SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
@@ -322,6 +331,11 @@ def build_dw1(
     # The description step's security cases, which a proposed prompt version
     # must pass (ticket 43 part 3); none, and nothing is proposed.
     security: tuple[SecurityCase, ...] = (),
+    # The Bravo gateway (ticket 53) and the key approvals of its writes are
+    # signed with: none, and Bravo is not connected (a proposal and a
+    # decision are refused, never guessed).
+    bravo_gateway: BravoGatewayClient | None = None,
+    bravo_signer: ApprovalTokenSigner | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -552,6 +566,7 @@ def build_dw1(
         # The quote cases opened from an order (ticket 09).
         linked_quotes=SqlQuoteCaseLookup(session_factory),
     )
+    bravo: BravoGatewayClient | BravoNotConnected = bravo_gateway or BravoNotConnected()
     runs = RuntimeDw1Runs(
         runtime.runner,
         runtime.approval_flow,
@@ -571,6 +586,10 @@ def build_dw1(
         intake=intake,
         quotation=quotation,
         bravo_watch_store=SqlBravoWatch(session_factory, audit),
+        bravo_orders=bravo,
+        bravo_commands=BravoContract(),
+        bravo_po=bravo_gateway,
+        bravo_writes_uow=uow,
         files=readers.source,
         # The API's cache keeps an opened page or grid for a while; a process
         # serving no source view keeps nothing.
@@ -628,6 +647,14 @@ def build_dw1(
         catalog=assembly.catalog_decisions,
         skills=assembly.skill_decisions,
         prompts=PromptDecisions(uow, prompts),
+        bravo_writes=assembly.bravo_write_decisions,
+        bravo_stamp=BravoWriteStamp(
+            None if bravo_signer is None else ContractSigner(bravo_signer),
+            BravoContract(),
+            SqlIdentityLinks(session_factory, audit),
+            bravo,
+            clock,
+        ),
         worker_file=worker_file,
     )
     catalog_parsing = CatalogParsing(
@@ -883,6 +910,24 @@ def build_catalog_settlement(
         session_factory, audit=audit, approvals=approvals, outbox=outbox
     )
     return CatalogSettlement(uow, clock, ids)
+
+
+def build_bravo_write_settlement(
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    gateway: BravoGatewayClient | None,
+    notifications: NotificationSenderPort,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> BravoWriteSettlement:
+    """What carries out a decided Bravo write (`bravo_write.sales_order.decided`,
+    ticket 53), for the worker's outbox handler: the token the decision
+    signed, sent to the gateway with the stored command. With no gateway
+    configured, the write is refused with that reason, never left waiting."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    return BravoWriteSettlement(uow, gateway or BravoNotConnected(), notifications, clock, ids)
 
 
 def build_layout_settlement(

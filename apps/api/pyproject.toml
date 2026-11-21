@@ -11,6 +11,8 @@ dependencies = [
     "dw-memory",
     "dw-purchasing",
     "dw-sales",
+    # The approval token decisions sign for the Bravo gateway (ticket 53).
+    "dw-bravo",
     "dw-connectors",
     "dw-observability",
     # Object storage for knowledge documents and feedback attachments

@@ -1896,6 +1896,104 @@
         "title": "BravoExportBody",
         "type": "object"
       },
+      "BravoLineWriteView": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "title": "After",
+            "type": "string"
+          },
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "field": {
+            "enum": [
+              "confirmed_date",
+              "quantity"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "rejected",
+              "written",
+              "written_with_differences",
+              "refused",
+              "in_doubt"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "approval_id",
+          "line_no",
+          "field",
+          "before",
+          "after",
+          "status",
+          "reason",
+          "warnings",
+          "proposed_at",
+          "settled_at"
+        ],
+        "title": "BravoLineWriteView",
+        "type": "object"
+      },
       "BravoNoBody": {
         "additionalProperties": false,
         "properties": {
@@ -2110,6 +2208,41 @@
           "read_at"
         ],
         "title": "BravoReadBack",
+        "type": "object"
+      },
+      "BravoWriteBody": {
+        "additionalProperties": false,
+        "description": "A change of one SO line to write into Bravo (ticket 53): what changes\nand to what. Which Bravo row, and its rowversion, are read by DW.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "change": {
+            "discriminator": {
+              "mapping": {
+                "confirmed_date": "#/components/schemas/ConfirmedDateChange",
+                "quantity": "#/components/schemas/QuantityChange"
+              },
+              "propertyName": "field"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmedDateChange"
+              },
+              {
+                "$ref": "#/components/schemas/QuantityChange"
+              }
+            ],
+            "title": "Change"
+          }
+        },
+        "required": [
+          "case_version",
+          "change"
+        ],
+        "title": "BravoWriteBody",
         "type": "object"
       },
       "BriefView": {
@@ -4290,6 +4423,28 @@
           "implied_from"
         ],
         "title": "ConfirmationView",
+        "type": "object"
+      },
+      "ConfirmedDateChange": {
+        "additionalProperties": false,
+        "description": "\"XN giao hàng\": the line's confirmed delivery date.",
+        "properties": {
+          "field": {
+            "const": "confirmed_date",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "format": "date",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "ConfirmedDateChange",
         "type": "object"
       },
       "ConfirmedLine": {
@@ -17485,6 +17640,36 @@
         "title": "PushKeyView",
         "type": "object"
       },
+      "QuantityChange": {
+        "additionalProperties": false,
+        "description": "The line's quantity, in the sales unit Bravo's `Quantity9` holds.",
+        "properties": {
+          "field": {
+            "const": "quantity",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "QuantityChange",
+        "type": "object"
+      },
       "QuestionKind": {
         "description": "What DW1 answers (the agreed list), and everything else.",
         "enum": [
@@ -18671,6 +18856,22 @@
           "open_findings"
         ],
         "title": "QuoteSummaryView",
+        "type": "object"
+      },
+      "ReadBackBody": {
+        "additionalProperties": false,
+        "description": "Read the case's SO back from Bravo (ticket 51), at the case version\nthe PIC is looking at.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "ReadBackBody",
         "type": "object"
       },
       "ReadBackView": {
@@ -21911,7 +22112,8 @@
               "item_code",
               "quantity",
               "unit_price",
-              "requested_date"
+              "requested_date",
+              "confirmed_date"
             ],
             "title": "Field",
             "type": "string"
@@ -34840,6 +35042,122 @@
         "tags": [
           "sales"
         ]
+      },
+      "post": {
+        "operationId": "read_back_from_bravo_api_v1_sales_orders__case_id__bravo_read_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadBackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadBackView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Back From Bravo",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/bravo-writes": {
+      "get": {
+        "operationId": "bravo_writes_api_v1_sales_orders__case_id__bravo_writes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BravoLineWriteView"
+                  },
+                  "title": "Response Bravo Writes Api V1 Sales Orders  Case Id  Bravo Writes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bravo Writes",
+        "tags": [
+          "sales"
+        ]
       }
     },
     "/api/v1/sales/orders/{case_id}/change-requests": {
@@ -35905,6 +36223,88 @@
           }
         },
         "summary": "Read Internal Change",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes": {
+      "post": {
+        "operationId": "propose_bravo_write_api_v1_sales_orders__case_id__lines__line_no__bravo_writes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 99999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BravoWriteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BravoLineWriteView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Bravo Write",
         "tags": [
           "sales"
         ]

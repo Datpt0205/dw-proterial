@@ -36,7 +36,13 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 _PRINTED = r"^[!-~]{1,64}$"
 
 SoField = Literal[
-    "missing_row", "extra_row", "item_code", "quantity", "unit_price", "requested_date"
+    "missing_row",
+    "extra_row",
+    "item_code",
+    "quantity",
+    "unit_price",
+    "requested_date",
+    "confirmed_date",
 ]
 
 
@@ -56,6 +62,9 @@ class BravoSoRow(BaseModel):
     # As the PO prints it, in its currency ("Original Price").
     unit_price: Decimal | None = None
     requested_date: date | None = None
+    # "XN giao hàng" (`EstimatedTimeDelivery`): read through the gateway
+    # (ticket 51); the Form 1 export does not carry it.
+    confirmed_date: date | None = None
 
 
 class BravoSalesOrder(BaseModel):
@@ -89,6 +98,8 @@ class PreparedRow(BaseModel):
     quantity: Decimal
     unit_price: Decimal
     requested_date: date | None
+    # The confirmed date the row carries (PC's, ticket 07), if any.
+    confirmed_date: date | None = None
 
 
 class SoDifference(BaseModel):
@@ -121,7 +132,7 @@ def _text(value: object) -> str | None:
     return str(value)
 
 
-def _row(prepared: PreparedRow, bravo: BravoSoRow) -> list[SoDifference]:
+def _row(prepared: PreparedRow, bravo: BravoSoRow, *, confirmed_dates: bool) -> list[SoDifference]:
     found: list[SoDifference] = []
 
     def differs(field: SoField, expected: object, actual: object) -> None:
@@ -142,14 +153,22 @@ def _row(prepared: PreparedRow, bravo: BravoSoRow) -> list[SoDifference]:
     differs("unit_price", prepared.unit_price, bravo.unit_price)
     if prepared.requested_date is not None:
         differs("requested_date", prepared.requested_date, bravo.requested_date)
+    # Bravo clears "XN giao hàng" it finds earlier than the SO's DocDate
+    # (ticket 51): a confirmed date the row carried and Bravo does not hold.
+    if confirmed_dates and prepared.confirmed_date is not None:
+        differs("confirmed_date", prepared.confirmed_date, bravo.confirmed_date)
     return found
 
 
-def compare(prepared: Sequence[PreparedRow], order: BravoSalesOrder) -> tuple[SoDifference, ...]:
+def compare(
+    prepared: Sequence[PreparedRow], order: BravoSalesOrder, *, confirmed_dates: bool = False
+) -> tuple[SoDifference, ...]:
     """Every difference between the rows prepared for ``order``'s PO and the
     rows Bravo holds for it (module docstring), by PO line, in line order:
-    empty when Bravo holds exactly what was prepared. Raises ValueError for
-    an order under several sales orders: it is not compared."""
+    empty when Bravo holds exactly what was prepared. ``confirmed_dates``:
+    the source read Bravo's confirmed dates (the gateway), so a row's is
+    compared too. Raises ValueError for an order under several sales
+    orders: it is not compared."""
     if order.so_no is None:
         raise ValueError("a PO under several sales orders is not compared")
     found: list[SoDifference] = []
@@ -159,7 +178,7 @@ def compare(prepared: Sequence[PreparedRow], order: BravoSalesOrder) -> tuple[So
         mine = [row for row in wanted if row.line_no == line]
         held = [row for row in order.rows if row.po_line == line]
         for prepared_row, bravo_row in zip(mine, held, strict=False):
-            found.extend(_row(prepared_row, bravo_row))
+            found.extend(_row(prepared_row, bravo_row, confirmed_dates=confirmed_dates))
         found.extend(
             SoDifference(
                 po_no=order.po_no,

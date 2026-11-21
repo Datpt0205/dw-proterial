@@ -24,6 +24,7 @@ from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.activity import SqlStepActivityLog
+from dw_sales.adapters.persistence.bravo_line_writes import SqlBravoLineWrites
 from dw_sales.adapters.persistence.change_requests import SqlChangeRequests
 from dw_sales.adapters.persistence.followups import SqlFollowupStore
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseLog
@@ -70,6 +71,8 @@ class SqlSalesUnitOfWork:
     change_requests: SqlChangeRequests
     # What a person kept of a model's proposal (ticket 43): `LabelledCaseLogPort`.
     labelled_cases: SqlLabelledCaseLog
+    # An SO line's change written into Bravo (ticket 53): `BravoLineWriteStorePort`.
+    bravo_writes: SqlBravoLineWrites
     audit: AuditRepositoryPort
 
     def __init__(
@@ -118,6 +121,7 @@ class SqlSalesUnitOfWork:
         self.outbound = SqlOutboundMails(session, scope)
         self.change_requests = SqlChangeRequests(session, scope)
         self.labelled_cases = SqlLabelledCaseLog(session, scope)
+        self.bravo_writes = SqlBravoLineWrites(session, scope)
         self.audit = self._audit(session)
         return self
 

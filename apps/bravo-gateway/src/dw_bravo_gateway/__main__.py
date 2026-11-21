@@ -69,6 +69,8 @@ def main() -> int:
     app = create_app(
         pipeline,
         fingerprints=bravo,
+        orders=bravo,
+        directory=bravo,
         environment=settings.environment,
         max_request_bytes=settings.max_request_bytes,
         docs=not settings.is_deployed,

@@ -3,7 +3,14 @@
 Reached only on DW's internal network (compose publishes no port). A write
 is authorised by its approval token alone (`pipeline`); the request carries
 no tenant, user or role, and the route reads none. There is no free-form
-SQL and no route that runs one. Reads (ticket 50) are not served yet.
+SQL and no route that runs one.
+
+Reads take the same typed envelope with no token: a read changes nothing,
+and the read login holds SELECT on named columns only. Served so far: the
+two a proposed write needs (ticket 53), `so.by_number` and
+`user.by_employee_code`, and a PO's SO lines for the read-back
+(`so.by_customer_po`, ticket 51); every other read kind answers 501 until
+ticket 50.
 """
 
 from __future__ import annotations
@@ -15,10 +22,26 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from dw_bravo.contract import WRITE_KINDS, ContractError, WriteCommand
+from dw_bravo.contract import (
+    READ_KINDS,
+    READ_RESULTS,
+    WRITE_KINDS,
+    BravoUserQuery,
+    BravoUsers,
+    ContractError,
+    CustomerPoQuery,
+    SalesOrderQuery,
+    WriteCommand,
+)
 from dw_bravo.watch import Fingerprint
 from dw_bravo_gateway.pipeline import WritePipeline
-from dw_bravo_gateway.ports import BravoUnavailableError
+from dw_bravo_gateway.ports import (
+    AmbiguousDocumentError,
+    BravoUnavailableError,
+    Directory,
+    DocumentNotFoundError,
+    SalesOrders,
+)
 
 _TOKEN_LIMIT = 4096
 
@@ -49,6 +72,22 @@ def parse_command(envelope: _Envelope) -> WriteCommand:
     return command
 
 
+class ReadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: _Envelope
+
+
+def parse_query(envelope: _Envelope) -> object:
+    query_type = READ_KINDS.get(f"{envelope.kind}@{envelope.version}")
+    if query_type is None:
+        raise HTTPException(422, "not a read the gateway takes")
+    try:
+        return TypeAdapter(query_type).validate_python(envelope.content)
+    except (ValidationError, ContractError):
+        raise HTTPException(422, "the query does not satisfy its contract") from None
+
+
 class FingerprintSource(Protocol):
     async def fingerprint(self, environment: Literal["uat", "production"]) -> Fingerprint: ...
 
@@ -57,6 +96,8 @@ def create_app(
     pipeline: WritePipeline,
     *,
     fingerprints: FingerprintSource | None = None,
+    orders: SalesOrders | None = None,
+    directory: Directory | None = None,
     environment: Literal["uat", "production"] = "production",
     max_request_bytes: int = 64 * 1024,
     docs: bool = False,
@@ -99,6 +140,30 @@ def create_app(
                 for c in measured.components
             ],
         }
+
+    @app.post("/v1/reads")
+    async def read(body: ReadRequest) -> dict[str, object]:
+        query = parse_query(body.query)
+        result: object
+        try:
+            if isinstance(query, SalesOrderQuery) and orders is not None:
+                result = await orders.sales_order(query.so_no)
+            elif isinstance(query, CustomerPoQuery) and orders is not None:
+                result = await orders.customer_po(query.customer_code, query.po_no)
+            elif isinstance(query, BravoUserQuery) and directory is not None:
+                users = await directory.users_by_employee_code(query.employee_code)
+                result = BravoUsers(tuple(sorted(u.id for u in users if u.active)))
+            else:
+                raise HTTPException(501, "this read is not served yet (ticket 50)")
+        except DocumentNotFoundError:
+            raise HTTPException(404, "no such document") from None
+        except AmbiguousDocumentError:
+            raise HTTPException(409, "several documents carry that number") from None
+        except BravoUnavailableError:
+            raise HTTPException(503, "could not read Bravo") from None
+        shape = READ_RESULTS[f"{body.query.kind}@{body.query.version}"]
+        answer: dict[str, object] = TypeAdapter(shape).dump_python(result, mode="json")
+        return answer
 
     @app.post("/v1/writes")
     async def write(body: WriteRequest) -> dict[str, object]:

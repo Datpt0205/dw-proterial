@@ -79,6 +79,8 @@ _SALES_TABLES = (
     "sales.case_events",
     # Migration 63242ec52c4b (ticket 30): the PO layouts people map and decide.
     "sales.po_layouts",
+    # Migration af89f3f5d27d (ticket 53): SO line writes proposed for Bravo.
+    "sales.bravo_line_writes",
     # Migration 0a78ca5e96d3 (ticket 25): each message's processing job.
     "sales.processing_jobs",
     # Migration d2b1394c67b1 (ticket 42): what DW1's follow-ups delivered.
@@ -179,6 +181,8 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "bravo_exports",
         # A case's read-back is replaced by the next (7c6ad2350566).
         "order_bravo_read_backs",
+        # A Bravo write proposal is settled in place (af89f3f5d27d).
+        "bravo_line_writes",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
     # An import's file and its parsed records are never updated (ticket 41),

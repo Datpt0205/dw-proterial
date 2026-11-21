@@ -138,6 +138,7 @@ from dw_purchasing.application.rfq_mail import OUTBOUND_LANE as PURCHASING_OUTBO
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
+    build_bravo_write_settlement,
     build_catalog_settlement,
     build_dw1,
     build_followup_lane,
@@ -147,6 +148,7 @@ from dw_sales.adapters.assembly import (
     build_skill_settlement,
     build_threshold_lane,
 )
+from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
@@ -165,6 +167,7 @@ from dw_sales.adapters.reader_client import (
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.bravo_exports import BRAVO_EXPORT_UPLOADED, YCBG_EXPORT_UPLOADED_BEFORE
+from dw_sales.application.bravo_line_writes import BRAVO_WRITE_DECIDED
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
 from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
@@ -201,6 +204,7 @@ from dw_worker.consumers.bravo_watch import (
     BRAVO_WATCH_INTERVAL_SECONDS,
     build_bravo_watch_consumer,
 )
+from dw_worker.consumers.bravo_writes import build_bravo_write_handler
 from dw_worker.consumers.channel_delivery import build_channel_delivery_consumer
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import memory_handlers
@@ -956,6 +960,27 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # approval, carried out here once decided. Wired whether or not this
         # host reads a mailbox: the layout and the approval are rows of the
         # approval's own tenant, and an unhandled event would wait forever.
+        # A Bravo write's decision (Sales ticket 53): the token the decision
+        # signed, sent with the stored command to the gateway. Wired always:
+        # with no gateway configured the write is refused with that reason,
+        # never left waiting.
+        handlers[BRAVO_WRITE_DECIDED] = build_bravo_write_handler(
+            build_bravo_write_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                gateway=(
+                    BravoGatewayClient(
+                        httpx.AsyncClient(), settings.bravo_gateway_url, settings.bravo_tenant_id
+                    )
+                    if settings.bravo_gateway_url and settings.bravo_tenant_id is not None
+                    else None
+                ),
+                notifications=SqlNotificationRepository(sessions),
+                clock=clock,
+                ids=ids,
+            )
+        )
         handlers[LAYOUT_DECIDED] = build_decided_handler(
             build_layout_settlement(
                 session_factory=sessions,

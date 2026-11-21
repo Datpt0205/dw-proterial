@@ -9,6 +9,7 @@ from pydantic import AliasChoices, Field, SecretStr, ValidationInfo, field_valid
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dw_agent_runtime.model.profiles import DEFAULT_PROFILE_ID
+from dw_bravo.approval_token import ApprovalTokenSigner, load_private_key
 from dw_knowledge.contracts import DEFAULT_COLLECTION
 from dw_platform.adapters.web_push import PyWebPushSender, web_push_sender
 
@@ -190,6 +191,30 @@ class ApiSettings(BaseSettings):
     )
     sales_reader_url: str = Field(
         default="http://127.0.0.1:8120", validation_alias=AliasChoices("DW_SALES_READER_URL")
+    )
+
+    # --- Sales: Bravo writes through the gateway (ticket 53, ADR 0027) ---
+    # The gateway on DW's internal network; unset, Bravo is not connected and
+    # a proposal or a decision of a Bravo write is refused.
+    sales_bravo_gateway_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_BRAVO_GATEWAY_URL")
+    )
+    # The one tenant whose Bravo the gateway reaches: any other tenant's case
+    # is "not connected" and sends nothing (the gateway's own pin, mirrored).
+    sales_bravo_tenant_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_BRAVO_TENANT_ID")
+    )
+    # The Ed25519 private key (PEM) approval decisions sign the gateway's
+    # token with, and its id; the gateway holds only the public half. Unset,
+    # no Bravo write can be approved (the decision is refused, fail closed).
+    bravo_approval_signing_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DW_BRAVO_APPROVAL_SIGNING_KEY")
+    )
+    bravo_approval_key_id: str = Field(
+        default="k1",
+        min_length=1,
+        max_length=32,
+        validation_alias=AliasChoices("DW_BRAVO_APPROVAL_KEY_ID"),
     )
 
     # --- artifact storage (MinIO/S3) ---
@@ -455,6 +480,18 @@ class ApiSettings(BaseSettings):
             return None
         return uuid.UUID(self.default_tenant_id), uuid.UUID(self.default_workspace_id)
 
+    def bravo_signer(self) -> ApprovalTokenSigner | None:
+        """The approval token's signer, or None where no key is configured.
+        A key that is not an Ed25519 private key fails here, at startup."""
+        pem = self.bravo_approval_signing_key.get_secret_value().strip()
+        if not pem:
+            return None
+        try:
+            key = load_private_key(pem.replace("\\n", "\n"))
+        except ValueError as refused:
+            raise RuntimeError(f"DW_BRAVO_APPROVAL_SIGNING_KEY: {refused}") from None
+        return ApprovalTokenSigner(key, self.bravo_approval_key_id)
+
     def outbound_allow_private(self) -> bool:
         """Local/test may call localhost providers; a deployed profile never does."""
         return not self.is_deployed
@@ -560,6 +597,7 @@ class ApiSettings(BaseSettings):
                 )
         # Fails at startup, not on the first Sales request.
         self.sales_demo_scope()
+        self.bravo_signer()
         if self.auth_mode == "oidc" and not self.oidc_issuer_url:
             raise RuntimeError("auth_mode=oidc requires DW_API_OIDC_ISSUER_URL")
         if self.langfuse_enabled and not (

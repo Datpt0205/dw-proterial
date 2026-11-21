@@ -79,6 +79,12 @@ from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.autonomy import AutonomyGate, VersionKey
+from dw_sales.application.bravo_line_writes import (
+    BravoLineWrite,
+    BravoNotConnected,
+    BravoWriteStamp,
+    WriteStatus,
+)
 from dw_sales.application.bravo_watch import WatchState
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
@@ -93,7 +99,6 @@ from dw_sales.application.case_store import (
     OutboundMail,
     OutboundStatus,
     ProcessingJob,
-    SalesUnitOfWork,
     SentRead,
     ServedSource,
     Settlement,
@@ -197,6 +202,13 @@ class SampleSet:
             _path(repo_root, spec["data_dir"]),
             _path(repo_root, spec["attachments_dir"]),
         )
+
+
+class NoEmployeeCodes:
+    """No person is linked to an employee code in the evals."""
+
+    async def employee_code(self, tenant_id: uuid.UUID, subject: uuid.UUID) -> str | None:
+        return None
 
 
 class NoBravoMeasured:
@@ -323,6 +335,8 @@ class _ScopeState:
     worker: WorkerState = field(default_factory=lambda: WorkerState(paused=False))
     audit: list[AuditEvent] = field(default_factory=list)
     layouts: dict[uuid.UUID, PoLayout] = field(default_factory=dict)
+    # SO line writes proposed for Bravo (ticket 53).
+    bravo_writes: dict[uuid.UUID, BravoLineWrite] = field(default_factory=dict)
     jobs: dict[str, ProcessingJob] = field(default_factory=dict)
     followups: dict[FollowupKey, SentFollowup] = field(default_factory=dict)
     # What each model step did (slice 3), in the order written.
@@ -351,6 +365,7 @@ class _ScopeState:
             worker=self.worker,
             audit=list(self.audit),
             layouts=dict(self.layouts),
+            bravo_writes=dict(self.bravo_writes),
             jobs=dict(self.jobs),
             followups=dict(self.followups),
             step_outcomes=list(self.step_outcomes),
@@ -692,6 +707,35 @@ class _Layouts:
         self._held[layout.layout_id] = layout
 
 
+class _BravoWrites:
+    """`BravoLineWriteStorePort` over one transaction's state; refuses what
+    the SQL store refuses: a second open proposal for a line, and a save of
+    a proposal settled meanwhile."""
+
+    def __init__(self, held: dict[uuid.UUID, BravoLineWrite]) -> None:
+        self._held = held
+
+    async def get(self, approval_id: uuid.UUID) -> BravoLineWrite | None:
+        return self._held.get(approval_id)
+
+    async def add(self, write: BravoLineWrite) -> None:
+        if any(
+            w.status == "proposed" and (w.case_id, w.line_no) == (write.case_id, write.line_no)
+            for w in self._held.values()
+        ):
+            raise ConflictError("dòng này đang có một đề xuất ghi Bravo chờ duyệt")
+        self._held[write.approval_id] = write
+
+    async def save(self, write: BravoLineWrite, *, expected: WriteStatus) -> None:
+        stored = self._held.get(write.approval_id)
+        if stored is None or stored.status != expected:
+            raise ConflictError("the Bravo write was settled meanwhile")
+        self._held[write.approval_id] = write
+
+    async def of_case(self, case_id: uuid.UUID) -> Sequence[BravoLineWrite]:
+        return [w for w in self._held.values() if w.case_id == case_id]
+
+
 class _Audit:
     """The platform's audit port as a Sales transaction writes it."""
 
@@ -925,6 +969,7 @@ class _Work:
         self.worker = _Worker(state)
         self.audit = _Audit(state.audit)
         self.layouts = _Layouts(state.layouts)
+        self.bravo_writes = _BravoWrites(state.bravo_writes)
         self.jobs = _Jobs(state.jobs)
         self.sent = _Sent(state.sent)
         self.followups = _Followups(state)
@@ -987,7 +1032,7 @@ class MemoryStore:
     def state(self, scope: SalesScope) -> _ScopeState:
         return self.states.setdefault(scope, _ScopeState())
 
-    def __call__(self, scope: SalesScope) -> SalesUnitOfWork:
+    def __call__(self, scope: SalesScope) -> _Work:
         return _Work(self, scope)
 
     async def claim(self) -> ClaimedJob | None:
@@ -1839,6 +1884,10 @@ def open_world(
     assembly = assemble(
         uow=store,
         bravo_watch_store=NoBravoMeasured(),
+        bravo_orders=BravoNotConnected(),
+        bravo_commands=BravoNotConnected(),
+        bravo_po=None,
+        bravo_writes_uow=store,
         authorization=ScopeAuthorizationService(),
         clock=clock,
         ids=ids,
@@ -1901,6 +1950,11 @@ def open_world(
         catalog=assembly.catalog_decisions,
         skills=assembly.skill_decisions,
         prompts=PromptDecisions(store, prompt_book(store.rule_versions)),
+        bravo_writes=assembly.bravo_write_decisions,
+        # No signing key and no Bravo: a Bravo write is never approved here.
+        bravo_stamp=BravoWriteStamp(
+            None, BravoNotConnected(), NoEmployeeCodes(), BravoNotConnected(), clock
+        ),
         worker_file=worker_file,
     )
     return World(
