@@ -1024,6 +1024,20 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "words.case_word": { label: "Tên gọi hồ sơ trong câu" },
     "words.step_read": { label: "Dòng trạng thái khi đọc câu hỏi" },
     "words.step_look": { label: "Dòng trạng thái khi tra hồ sơ" },
+    "words.decide_confirm": {
+      label: "Nói lại quyết định về một cờ để PIC xác nhận",
+    },
+    "words.decide_accept_word": { label: "Từ cho quyết định chấp nhận" },
+    "words.decide_ask_word": { label: "Từ cho quyết định yêu cầu khách sửa" },
+    "words.decide_reason": { label: "Phần lý do trong câu nói lại" },
+    "words.decide_which_flag": { label: "Hỏi PIC muốn quyết định cờ nào" },
+    "words.decide_which_way": { label: "Hỏi chấp nhận hay yêu cầu khách sửa" },
+    "words.decide_need_reason": { label: "Xin lý do khi chấp nhận một cờ" },
+    "words.decide_no_flag": { label: "Hồ sơ không còn cờ mở" },
+    "words.decide_orders_only": {
+      label: "Cờ của yêu cầu báo giá chưa quyết định từ chat",
+    },
+    "words.decide_done": { label: "Báo đã ghi quyết định" },
   },
 };
 
