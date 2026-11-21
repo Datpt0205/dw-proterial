@@ -1,0 +1,840 @@
+{
+  "compliance.on_date@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: Black list (`B20BlackList`), LME (`B20LME`) and export control",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "Black list (`B20BlackList`), LME (`B20LME`) and export control\n(`B20ExportControlList`) as they stand on a date.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Code"
+          },
+          "list_name": {
+            "enum": [
+              "black_list",
+              "lme",
+              "export_control"
+            ],
+            "title": "List Name",
+            "type": "string"
+          },
+          "on_date": {
+            "format": "date",
+            "title": "On Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_name",
+          "on_date"
+        ],
+        "title": "ComplianceQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "compliance.on_date"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "customer.get@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: CustomerQuery(customer_code: 'str')",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code"
+        ],
+        "title": "CustomerQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "customer.get"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "document.state@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: An SO's or a YCBG's state: lines, statuses, rowversions.",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "An SO's or a YCBG's state: lines, statuses, rowversions.",
+        "properties": {
+          "doc_id": {
+            "title": "Doc Id",
+            "type": "integer"
+          },
+          "screen": {
+            "enum": [
+              "EDIT_BizDocSO",
+              "EDIT_BizDocRQ"
+            ],
+            "title": "Screen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen",
+          "doc_id"
+        ],
+        "title": "DocumentStateQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "document.state"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "item.convert@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: Bravo's own convert of a customer's description to an item code",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "Bravo's own convert of a customer's description to an item code\n(`usp_B20ItemCustomerDescription_Convert_ItemCode`).",
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "customer_description": {
+            "title": "Customer Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code",
+          "customer_description"
+        ],
+        "title": "ItemConvertQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "item.convert"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "item.get@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: ItemQuery(item_code: 'str')",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "properties": {
+          "item_code": {
+            "title": "Item Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_code"
+        ],
+        "title": "ItemQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "item.get"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "quotation.lookup@1": {
+    "$defs": {},
+    "additionalProperties": false,
+    "description": "A read: The quotation valid on a date, as `usp_B30BizDocDetailSO_GetSQData_HCV`",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "The quotation valid on a date, as `usp_B30BizDocDetailSO_GetSQData_HCV`\nfinds it: BP code, customer and indirect customer, on the SO's DocDate.",
+        "properties": {
+          "bp_code": {
+            "title": "Bp Code",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "indirect_customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indirect Customer Code"
+          },
+          "on_date": {
+            "format": "date",
+            "title": "On Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bp_code",
+          "customer_code",
+          "on_date"
+        ],
+        "title": "QuotationQuery",
+        "type": "object"
+      },
+      "kind": {
+        "const": "quotation.lookup"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.create@1": {
+    "$defs": {
+      "SalesOrderLine": {
+        "additionalProperties": false,
+        "description": "A line as Import template 72 carries it (columns S-AM).",
+        "properties": {
+          "confirmed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confirmed Date"
+          },
+          "customer_description": {
+            "title": "Customer Description",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Customer Item Code"
+          },
+          "customer_prs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Customer Prs"
+          },
+          "estimated_delivery": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Estimated Delivery"
+          },
+          "item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Item Code"
+          },
+          "po_line": {
+            "title": "Po Line",
+            "type": "string"
+          },
+          "po_request_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Po Request Date"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Unit Price"
+          }
+        },
+        "required": [
+          "po_line",
+          "customer_description",
+          "quantity",
+          "unit_price"
+        ],
+        "title": "SalesOrderLine",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "A write: A new SO carrying the PO's values (Đạt, 11-20), as template 72's header",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "A new SO carrying the PO's values (Đạt, 11-20), as template 72's header\n(columns B-R) and lines. `case_ref` names DW's case; it is not Bravo's.",
+        "properties": {
+          "case_ref": {
+            "title": "Case Ref",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "delivery_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Delivery Mode"
+          },
+          "delivery_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Delivery Place"
+          },
+          "delivery_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Delivery Term"
+          },
+          "doc_date": {
+            "format": "date",
+            "title": "Doc Date",
+            "type": "string"
+          },
+          "end_user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End User"
+          },
+          "indirect_customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indirect Customer Code"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/$defs/SalesOrderLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "po_customer": {
+            "title": "Po Customer",
+            "type": "string"
+          },
+          "receipt_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Receipt Date"
+          }
+        },
+        "required": [
+          "case_ref",
+          "doc_date",
+          "currency_code",
+          "customer_code",
+          "po_customer",
+          "lines"
+        ],
+        "title": "CreateSalesOrder",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.create"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.line.cancel@1": {
+    "$defs": {
+      "LineRef": {
+        "additionalProperties": false,
+        "description": "One SO line as DW read it: the document, the line, and both rowversions.",
+        "properties": {
+          "header_rowversion": {
+            "title": "Header Rowversion",
+            "type": "string"
+          },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
+          "line_rowversion": {
+            "title": "Line Rowversion",
+            "type": "string"
+          },
+          "so_id": {
+            "title": "So Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "so_id",
+          "line_id",
+          "header_rowversion",
+          "line_rowversion"
+        ],
+        "title": "LineRef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "A write: The whole line cancelled (`IsCancel`); a partial cancel is a split,",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "The whole line cancelled (`IsCancel`); a partial cancel is a split,\nthen this on the part that goes (ticket 53).",
+        "properties": {
+          "line": {
+            "$ref": "#/$defs/LineRef"
+          }
+        },
+        "required": [
+          "line"
+        ],
+        "title": "CancelLine",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.line.cancel"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.line.set_confirmed_date@1": {
+    "$defs": {
+      "LineRef": {
+        "additionalProperties": false,
+        "description": "One SO line as DW read it: the document, the line, and both rowversions.",
+        "properties": {
+          "header_rowversion": {
+            "title": "Header Rowversion",
+            "type": "string"
+          },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
+          "line_rowversion": {
+            "title": "Line Rowversion",
+            "type": "string"
+          },
+          "so_id": {
+            "title": "So Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "so_id",
+          "line_id",
+          "header_rowversion",
+          "line_rowversion"
+        ],
+        "title": "LineRef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "A write: \"XN giao hàng\": the line's `EstimatedTimeDelivery`; the first confirmed",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "\"XN giao hàng\": the line's `EstimatedTimeDelivery`; the first confirmed\ndate (`OriginalConfirmedDate`) is the layout's to keep, not the command's.",
+        "properties": {
+          "confirmed_date": {
+            "format": "date",
+            "title": "Confirmed Date",
+            "type": "string"
+          },
+          "line": {
+            "$ref": "#/$defs/LineRef"
+          }
+        },
+        "required": [
+          "line",
+          "confirmed_date"
+        ],
+        "title": "SetConfirmedDate",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.line.set_confirmed_date"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.line.set_quantity@1": {
+    "$defs": {
+      "LineRef": {
+        "additionalProperties": false,
+        "description": "One SO line as DW read it: the document, the line, and both rowversions.",
+        "properties": {
+          "header_rowversion": {
+            "title": "Header Rowversion",
+            "type": "string"
+          },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
+          "line_rowversion": {
+            "title": "Line Rowversion",
+            "type": "string"
+          },
+          "so_id": {
+            "title": "So Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "so_id",
+          "line_id",
+          "header_rowversion",
+          "line_rowversion"
+        ],
+        "title": "LineRef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "A write: The line's ordered quantity (`Quantity9`).",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "The line's ordered quantity (`Quantity9`).",
+        "properties": {
+          "line": {
+            "$ref": "#/$defs/LineRef"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "line",
+          "quantity"
+        ],
+        "title": "SetQuantity",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.line.set_quantity"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  },
+  "so.line.split@1": {
+    "$defs": {
+      "LineRef": {
+        "additionalProperties": false,
+        "description": "One SO line as DW read it: the document, the line, and both rowversions.",
+        "properties": {
+          "header_rowversion": {
+            "title": "Header Rowversion",
+            "type": "string"
+          },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
+          "line_rowversion": {
+            "title": "Line Rowversion",
+            "type": "string"
+          },
+          "so_id": {
+            "title": "So Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "so_id",
+          "line_id",
+          "header_rowversion",
+          "line_rowversion"
+        ],
+        "title": "LineRef",
+        "type": "object"
+      },
+      "SplitPart": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confirmed Date"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "quantity"
+        ],
+        "title": "SplitPart",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "A write: A line split into parts with Bravo's group fields (`QuantityGroup`,",
+    "properties": {
+      "content": {
+        "additionalProperties": false,
+        "description": "A line split into parts with Bravo's group fields (`QuantityGroup`,\n`GroupDivi`, `Divide`); the first part stays on the line, each further\npart is a new line. The parts' total is the layout's validator to check.",
+        "properties": {
+          "line": {
+            "$ref": "#/$defs/LineRef"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/$defs/SplitPart"
+            },
+            "title": "Parts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "line",
+          "parts"
+        ],
+        "title": "SplitLine",
+        "type": "object"
+      },
+      "kind": {
+        "const": "so.line.split"
+      },
+      "version": {
+        "const": 1
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "version"
+    ],
+    "type": "object"
+  }
+}

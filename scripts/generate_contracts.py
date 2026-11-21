@@ -31,9 +31,43 @@ def sales_rule_schemas() -> dict[str, object]:
     return {key.value: rule_schema(key) for key in OVERRIDABLE}
 
 
+def bravo_gateway_schemas() -> dict[str, object]:
+    """Each command the Bravo gateway takes, keyed `kind@version` (ADR 0027,
+    ticket 63): the envelope `{kind, version, content}` both sides hash, its
+    content generated from `dw_bravo.contract`, the contract's one owner."""
+    from pydantic import TypeAdapter
+
+    from dw_bravo.contract import READ_KINDS, WRITE_KINDS
+
+    commands = {key: (w.command, "write") for key, w in WRITE_KINDS.items()}
+    commands |= {key: (q, "read") for key, q in READ_KINDS.items()}
+    schemas: dict[str, object] = {}
+    for key, (command, role) in sorted(commands.items()):
+        content = TypeAdapter(command).json_schema(
+            ref_template="#/$defs/{model}", mode="validation"
+        )
+        defs = content.pop("$defs", {})
+        schemas[key] = {
+            "$defs": defs,
+            "additionalProperties": False,
+            "description": f"A {role}: {(command.__doc__ or '').strip().splitlines()[0]}",
+            "properties": {
+                "content": content,
+                "kind": {"const": command.kind},
+                "version": {"const": command.version},
+            },
+            "required": ["content", "kind", "version"],
+            "type": "object",
+        }
+    return schemas
+
+
 # PLUG-IN POINT: a JSON Schema a context serves as a value (not as a route's
 # type) and a test outside Python reads. One file per entry.
-JSON_SCHEMAS = {"sales_rules.json": sales_rule_schemas}
+JSON_SCHEMAS = {
+    "sales_rules.json": sales_rule_schemas,
+    "bravo_gateway.json": bravo_gateway_schemas,
+}
 
 
 def _render(value: object) -> str:
