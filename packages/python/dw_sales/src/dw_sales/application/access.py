@@ -57,6 +57,10 @@ class SalesScopes(StrEnum):
     # (ticket 41).
     MASTER_DATA_IMPORT = "sales.master_data.import"
     MASTER_DATA_APPROVE = "sales.master_data.approve"
+    # The Bravo change watch (ticket 65): told of a change and shown the
+    # watch's state; accepting a new baseline, which lifts its pauses.
+    BRAVO_WATCH_READ = "sales.bravo.watch.read"
+    BRAVO_WATCH_ACCEPT = "sales.bravo.watch.accept"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR

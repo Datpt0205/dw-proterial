@@ -13,7 +13,7 @@ import uuid
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEPLOYED_PROFILES: frozenset[str] = frozenset({"uat", "production"})
@@ -35,6 +35,13 @@ class GatewaySettings(BaseSettings):
     # The DW tenant whose Bravo this is (one gateway per Bravo): any other
     # tenant's approval is refused.
     tenant_id: uuid.UUID | None = None
+
+    @field_validator("tenant_id", mode="before")
+    @classmethod
+    def _unset_when_empty(cls, value: object) -> object:
+        # Compose passes an unset variable as "" (`${VAR:-}`): not configured.
+        return None if value == "" else value
+
     # {key id: Ed25519 public key PEM}, as JSON: the approval path's keys.
     approval_public_keys: SecretStr = SecretStr("{}")
     # DW's PostgreSQL as `dw_app` (RLS applies): the ledger and the switches.
@@ -49,6 +56,9 @@ class GatewaySettings(BaseSettings):
     # Bravo's server supports encryption and its clients do not ask for it
     # (11-20 survey); the gateway asks.
     bravo_encrypt: bool = True
+    # Which Bravo this gateway reads: its fingerprint is labelled with it,
+    # and the watch compares UAT with production (ticket 65).
+    environment: Literal["uat", "production"] = "production"
     port: int = 8080
     max_request_bytes: int = 64 * 1024
 

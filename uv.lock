@@ -1296,6 +1296,7 @@ version = "0.1.0"
 source = { editable = "packages/python/dw_sales" }
 dependencies = [
     { name = "dw-agent-runtime" },
+    { name = "dw-bravo" },
     { name = "dw-kernel" },
     { name = "dw-observability" },
     { name = "dw-platform" },
@@ -1321,6 +1322,7 @@ evals = [
 [package.metadata]
 requires-dist = [
     { name = "dw-agent-runtime", editable = "packages/python/dw_agent_runtime" },
+    { name = "dw-bravo", editable = "packages/python/dw_bravo" },
     { name = "dw-evals", marker = "extra == 'evals'", editable = "packages/python/dw_evals" },
     { name = "dw-kernel", editable = "packages/python/dw_kernel" },
     { name = "dw-observability", editable = "packages/python/dw_observability" },
@@ -1347,6 +1349,7 @@ source = { editable = "apps/worker" }
 dependencies = [
     { name = "asyncpg" },
     { name = "dw-agent-runtime" },
+    { name = "dw-bravo" },
     { name = "dw-connectors" },
     { name = "dw-kernel" },
     { name = "dw-knowledge" },
@@ -1355,6 +1358,7 @@ dependencies = [
     { name = "dw-platform" },
     { name = "dw-purchasing" },
     { name = "dw-sales" },
+    { name = "httpx" },
     { name = "minio" },
     { name = "prometheus-client" },
     { name = "pydantic" },
@@ -1367,6 +1371,7 @@ dependencies = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30,<1" },
     { name = "dw-agent-runtime", editable = "packages/python/dw_agent_runtime" },
+    { name = "dw-bravo", editable = "packages/python/dw_bravo" },
     { name = "dw-connectors", editable = "packages/python/dw_connectors" },
     { name = "dw-kernel", editable = "packages/python/dw_kernel" },
     { name = "dw-knowledge", editable = "packages/python/dw_knowledge" },
@@ -1375,6 +1380,7 @@ requires-dist = [
     { name = "dw-platform", editable = "packages/python/dw_platform" },
     { name = "dw-purchasing", editable = "packages/python/dw_purchasing" },
     { name = "dw-sales", editable = "packages/python/dw_sales" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "minio", specifier = ">=7.2,<8" },
     { name = "prometheus-client", specifier = ">=0.20,<1" },
     { name = "pydantic", specifier = ">=2.10,<3" },

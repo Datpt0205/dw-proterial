@@ -10,6 +10,9 @@ dependencies = [
     # The platform's telemetry port, which the eval world (`dw_sales.evals.world`)
     # hands to DW1's spans and to the runtime's alike (ticket 23).
     "dw-observability",
+    # Bravo shared with DW2, reached from this context's adapters only
+    # (import-linter): the change watch's store and the gateway's client.
+    "dw-bravo",
     # Pinned to match the packages that already own these: `apps/api` for
     # FastAPI and `dw_agent_runtime` for LangGraph. A context that picked its own
     # range would be a second opinion about one fact, and uv would refuse the

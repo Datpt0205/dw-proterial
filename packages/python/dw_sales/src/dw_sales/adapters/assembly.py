@@ -67,6 +67,7 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog, WithUploads
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.assistant import SqlAssistantStoreFactory
+from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.catalog import (
     OutboxFactory,
     SqlApprovedLists,
@@ -569,6 +570,7 @@ def build_dw1(
         threads=mail,
         intake=intake,
         quotation=quotation,
+        bravo_watch_store=SqlBravoWatch(session_factory, audit),
         files=readers.source,
         # The API's cache keeps an opened page or grid for a while; a process
         # serving no source view keeps nothing.

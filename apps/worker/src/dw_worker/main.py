@@ -28,6 +28,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from dw_agent_runtime.adapters.checkpoint_retention import SqlCheckpointRetention
@@ -39,6 +40,7 @@ from dw_agent_runtime.channel_decisions import (
     ChannelDecisionCommand,
 )
 from dw_agent_runtime.model.profiles import Provider
+from dw_bravo.watch_lane import BRAVO_WATCH_LANE, BravoWatch
 from dw_connectors.adapters.zalo_bot import ZaloBotClient
 from dw_connectors.adapters.zalo_inbound import ZaloInbound
 from dw_connectors.adapters.zalo_link import link_help
@@ -145,8 +147,10 @@ from dw_sales.adapters.assembly import (
     build_skill_settlement,
     build_threshold_lane,
 )
+from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.labelled_cases import RETENTION_KEY as LABELLED_CASES_KEY
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseRetention
 from dw_sales.adapters.policy_files import load_sales_policies
@@ -193,6 +197,10 @@ from dw_worker.composition import (
     release_manifest_ref,
 )
 from dw_worker.consumers import ConsumerRegistry
+from dw_worker.consumers.bravo_watch import (
+    BRAVO_WATCH_INTERVAL_SECONDS,
+    build_bravo_watch_consumer,
+)
 from dw_worker.consumers.channel_delivery import build_channel_delivery_consumer
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import memory_handlers
@@ -1285,6 +1293,33 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 clock=clock,
             ),
         )
+        # The Bravo change watch (sales ticket 65): only where the gateway
+        # and its tenant are configured; the gateway refuses every write
+        # until a baseline is accepted, so a lane not running fails closed.
+        if (
+            settings.bravo_gateway_url
+            and settings.bravo_tenant_id is not None
+            and settings.bravo_workspace_id is not None
+        ):
+            watch_store = SqlBravoWatch(sessions, SqlAuditRepository)
+            registry.register(
+                BRAVO_WATCH_LANE,
+                build_bravo_watch_consumer(
+                    BravoWatch(
+                        source=GatewayFingerprints(httpx.AsyncClient(), settings.bravo_gateway_url),
+                        store=watch_store.for_tenant(settings.bravo_tenant_id),
+                        announcer=WatchAnnouncer(
+                            tenant_id=settings.bravo_tenant_id,
+                            workspace_id=settings.bravo_workspace_id,
+                            holders=SqlScopeHolders(sessions),
+                            notices=SqlNotificationRepository(sessions),
+                            session_factory=sessions,
+                            audit=SqlAuditRepository,
+                        ),
+                    )
+                ),
+                interval_seconds=BRAVO_WATCH_INTERVAL_SECONDS,
+            )
         # What the dispatcher gave up on, told to the tenant's administrators
         # (2026-10-29): a stopped event is never only a log line.
         registry.register(

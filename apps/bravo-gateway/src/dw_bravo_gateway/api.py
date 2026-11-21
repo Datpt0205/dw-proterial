@@ -9,14 +9,16 @@ SQL and no route that runs one. Reads (ticket 50) are not served yet.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Literal, Protocol
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from dw_bravo.contract import WRITE_KINDS, ContractError, WriteCommand
+from dw_bravo.watch import Fingerprint
 from dw_bravo_gateway.pipeline import WritePipeline
+from dw_bravo_gateway.ports import BravoUnavailableError
 
 _TOKEN_LIMIT = 4096
 
@@ -47,8 +49,17 @@ def parse_command(envelope: _Envelope) -> WriteCommand:
     return command
 
 
+class FingerprintSource(Protocol):
+    async def fingerprint(self, environment: Literal["uat", "production"]) -> Fingerprint: ...
+
+
 def create_app(
-    pipeline: WritePipeline, *, max_request_bytes: int = 64 * 1024, docs: bool = False
+    pipeline: WritePipeline,
+    *,
+    fingerprints: FingerprintSource | None = None,
+    environment: Literal["uat", "production"] = "production",
+    max_request_bytes: int = 64 * 1024,
+    docs: bool = False,
 ) -> FastAPI:
     app = FastAPI(
         title="dw-bravo-gateway",
@@ -69,6 +80,25 @@ def create_app(
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/v1/fingerprint/{asked}")
+    async def fingerprint(asked: str) -> dict[str, object]:
+        """What DW's writes depend on, for the `bravo_watch` lane (ticket 65):
+        names and digests of Bravo's own definitions, no business row."""
+        if fingerprints is None or asked != environment:
+            raise HTTPException(404, "this gateway does not read that Bravo")
+        try:
+            measured = await fingerprints.fingerprint(environment)
+        except BravoUnavailableError:
+            raise HTTPException(503, "could not read Bravo") from None
+        return {
+            "environment": measured.environment,
+            "taken_at": measured.taken_at.isoformat(),
+            "components": [
+                {**asdict(c), "screens": sorted(c.screens), "unknown": list(c.unknown)}
+                for c in measured.components
+            ],
+        }
 
     @app.post("/v1/writes")
     async def write(body: WriteRequest) -> dict[str, object]:

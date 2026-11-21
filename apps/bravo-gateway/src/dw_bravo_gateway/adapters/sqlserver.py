@@ -24,21 +24,24 @@ not measured is refused, never guessed:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import re
 import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal, TypeVar
+from typing import Any, Final, Literal, TypeVar
 
 import mssql_python
 
-from dw_bravo.expression import UndecidableError
+from dw_bravo.contract import WRITE_KINDS
+from dw_bravo.expression import RuleRefusedError, UndecidableError
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
+from dw_bravo.watch import Component, Fingerprint
 from dw_bravo_gateway.ports import (
     Batch,
     BravoUnavailableError,
@@ -246,6 +249,86 @@ class SqlServerBravo:
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return Session(user={"Id": Decimal(user.id)}, branch=branch, now=now.replace(tzinfo=None))
 
+    # -------------------------------------------------------- fingerprint
+
+    async def fingerprint(self, environment: Literal["uat", "production"]) -> Fingerprint:
+        """What DW's writes depend on, measured through the read login
+        (ticket 65). A definition the login cannot read (no VIEW
+        DEFINITION) is "could not check", never a constant that reads as
+        unchanged forever. The client version (needs VIEW SERVER STATE) and
+        the Import templates (ticket 51) are not measured yet."""
+        screens = sorted({k.screen for k in WRITE_KINDS.values()})
+        tables = sorted({t for k in WRITE_KINDS.values() for t in k.tables})
+
+        def work() -> Fingerprint:
+            components: list[Component] = []
+            for screen in screens:
+                components.extend(self._layout_components(screen))
+                for row in self._rows(
+                    "SELECT CommandKey, DLLName, ClassName, CtorArgs, MethodName, InvokeArgs"
+                    " FROM dbo.B00Command WHERE CommandKey = ?",
+                    (screen,),
+                ):
+                    components.append(Component("command", screen, _digest(row)))
+            for table in tables:
+                columns = self._rows(
+                    "SELECT c.name, TYPE_NAME(c.user_type_id) AS type, c.max_length,"
+                    " c.precision, c.scale, c.is_nullable,"
+                    " OBJECT_DEFINITION(c.default_object_id) AS dflt"
+                    " FROM sys.columns c WHERE c.object_id = OBJECT_ID(?) ORDER BY c.column_id",
+                    (f"dbo.{table}",),
+                )
+                if not columns:
+                    raise BravoUnavailableError(f"cannot see the columns of {table}")
+                components.append(Component("columns", table, _digest(columns)))
+                for trigger in self._rows(
+                    "SELECT t.name, t.is_disabled, OBJECT_DEFINITION(t.object_id) AS body"
+                    " FROM sys.triggers t WHERE t.parent_id = OBJECT_ID(?)",
+                    (f"dbo.{table}",),
+                ):
+                    if trigger["body"] is None:
+                        raise BravoUnavailableError(f"cannot read trigger {trigger['name']}")
+                    components.append(
+                        Component("trigger", str(trigger["name"]), _digest(trigger), table=table)
+                    )
+            for name, kind in ROUTINES.items():
+                [row] = self._rows(
+                    "SELECT OBJECT_DEFINITION(OBJECT_ID(?)) AS body", (f"dbo.{name}",)
+                )
+                if row["body"] is None:
+                    raise BravoUnavailableError(f"cannot read routine {name}")
+                components.append(Component(kind, name, _digest(row["body"])))
+            return Fingerprint(environment, datetime.now(UTC), tuple(components))
+
+        return await self._in_thread(work)
+
+    def _layout_components(self, screen: str) -> list[Component]:
+        rows = self._rows(
+            "SELECT l.Id, l.ModifiedAt, l.ModifiedBy, d.LayoutData FROM dbo.B00Layout l"
+            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
+            " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) = 0",
+            (screen,),
+        )
+        found = []
+        for row in rows:
+            unknown: tuple[str, ...] = ()
+            try:
+                read_layout(layout_xml(row["LayoutData"]), screen, missing_template=None)
+            except (UndecidableError, RuleRefusedError, ValueError) as refused:
+                unknown = (str(refused)[:200],)
+            data = row["LayoutData"]
+            found.append(
+                Component(
+                    "layout",
+                    screen if len(rows) == 1 else f"{screen}#{row['Id']}",
+                    _digest(bytes(data) if isinstance(data, bytes | bytearray) else data),
+                    modified_at=str(row["ModifiedAt"]),
+                    modified_by=str(row["ModifiedBy"]),
+                    unknown=unknown,
+                )
+            )
+        return found
+
     # ------------------------------------------------------------- writer
 
     async def execute(self, batch: Batch) -> None:
@@ -291,6 +374,23 @@ def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
         value = statement.parameters[name]
         values.append(_binary(str(value)) if name == "_Original_timestamp" else value)
     return _NAMED.sub("?", update), tuple(values)
+
+
+# The routines every write depends on, by what they are to the watch: the
+# context parser Bravo's triggers read the PIC from, and the rights and lock
+# functions the gateway asks (ticket 65's list).
+ROUTINES: Final[Mapping[str, Literal["routine", "context_parser"]]] = {
+    "ufn_sys_GetUserIdFromContext_Info": "context_parser",
+    "usp_sys_GetControlPermission": "routine",
+    "ufn_B00Permission_Getdata": "routine",
+    "ufn_sys_GetPermissionUserListTable": "routine",
+    "ufn_Prevent_Edit": "routine",
+}
+
+
+def _digest(value: object) -> str:
+    data = value if isinstance(value, bytes) else repr(value).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
 
 
 def _stored(row: Mapping[str, object]) -> dict[str, object]:

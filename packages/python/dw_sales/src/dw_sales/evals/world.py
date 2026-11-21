@@ -79,6 +79,7 @@ from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.skill_files import load_dw1_skills, skills_book
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.autonomy import AutonomyGate, VersionKey
+from dw_sales.application.bravo_watch import WatchState
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
     ArtifactRecord,
@@ -196,6 +197,17 @@ class SampleSet:
             _path(repo_root, spec["data_dir"]),
             _path(repo_root, spec["attachments_dir"]),
         )
+
+
+class NoBravoMeasured:
+    """`BravoWatchStorePort` for a world with no Bravo: nothing measured,
+    nothing paused, and so no fingerprint a baseline could accept."""
+
+    async def state(self, tenant_id: uuid.UUID) -> WatchState:
+        return WatchState((), None, None, None, None, None)
+
+    async def accept(self, tenant_id: uuid.UUID, **_: object) -> None:
+        raise ConflictError("no Bravo fingerprint has been measured")
 
 
 def _path(repo_root: Path, value: str) -> Path:
@@ -1826,6 +1838,7 @@ def open_world(
     )
     assembly = assemble(
         uow=store,
+        bravo_watch_store=NoBravoMeasured(),
         authorization=ScopeAuthorizationService(),
         clock=clock,
         ids=ids,

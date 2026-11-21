@@ -699,6 +699,10 @@ services:
     environment:
       DW_API_PROFILE: ${DW_API_PROFILE:-local}
       DW_WORKER_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
+      # The Bravo change watch (sales ticket 65): set with the `bravo` profile.
+      DW_WORKER_BRAVO_GATEWAY_URL: ${DW_WORKER_BRAVO_GATEWAY_URL:-}
+      DW_WORKER_BRAVO_TENANT_ID: ${DW_BRAVO_GATEWAY_TENANT_ID:-}
+      DW_WORKER_BRAVO_WORKSPACE_ID: ${DW_WORKER_BRAVO_WORKSPACE_ID:-}
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
       REDIS_URL: redis://valkey:6379/0

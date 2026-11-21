@@ -50,6 +50,14 @@ def test_anything_the_schema_would_not_write_reads_as_off(switch: object) -> Non
 
 
 @dataclass
+class _Pauses:
+    kinds: frozenset[str] = frozenset()
+
+    async def paused(self, tenant_id: uuid.UUID, kind: str) -> bool:
+        return kind in self.kinds
+
+
+@dataclass
 class _Version:
     document: dict[str, Any]
 
@@ -66,7 +74,7 @@ class _Lookup:
 
 async def test_no_approved_version_is_the_platforms_file_every_kind_off() -> None:
     lookup = _Lookup(None, [])
-    switches = SqlSwitches(lookup)  # type: ignore[arg-type]
+    switches = SqlSwitches(lookup, _Pauses())  # type: ignore[arg-type]
 
     state = await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1")
 
@@ -76,7 +84,7 @@ async def test_no_approved_version_is_the_platforms_file_every_kind_off() -> Non
 async def test_a_kind_no_key_covers_is_off_without_asking() -> None:
     lookup = _Lookup(_Version({"kinds": {}}), [])
 
-    state = await SqlSwitches(lookup).state(uuid.uuid4(), uuid.uuid4(), "po.create@1")  # type: ignore[arg-type]
+    state = await SqlSwitches(lookup, _Pauses()).state(uuid.uuid4(), uuid.uuid4(), "po.create@1")  # type: ignore[arg-type]
 
     assert state == "off" and lookup.asked == []
 
@@ -85,7 +93,19 @@ async def test_an_approved_version_that_switches_the_kind_on_enables_it() -> Non
     document = _document(
         so__line__set_quantity_at_1=BravoWriteSwitch(enabled=True, uat_proof="UAT run 1")
     )
-    switches = SqlSwitches(_Lookup(_Version(document), []))  # type: ignore[arg-type]
+    switches = SqlSwitches(_Lookup(_Version(document), []), _Pauses())  # type: ignore[arg-type]
 
     assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1") == "enabled"
     assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.create@1") == "off"
+
+
+async def test_a_kind_the_watch_paused_reads_paused_even_when_switched_on() -> None:
+    document = _document(
+        so__line__set_quantity_at_1=BravoWriteSwitch(enabled=True, uat_proof="UAT run 1")
+    )
+    switches = SqlSwitches(
+        _Lookup(_Version(document), []),  # type: ignore[arg-type]
+        _Pauses(frozenset({"so.line.set_quantity@1"})),
+    )
+
+    assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1") == "paused"

@@ -105,7 +105,7 @@ def logins() -> tuple[Login, Login]:
         "CREATE TABLE dbo.ChangeLog (Id int IDENTITY PRIMARY KEY, RowId int, UserId int)",
         "CREATE TABLE dbo.Rights (UserId int, TableName varchar(48), ColumnName varchar(48),"
         " NoAddNew tinyint, NoEdit tinyint)",
-        "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64),"
+        "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64), ModifiedBy int DEFAULT 1, ModifiedAt smalldatetime DEFAULT GETDATE(),"
         " IsActive bit)",
         "CREATE TABLE dbo.B00LayoutData (Id int PRIMARY KEY, LayoutData varbinary(max))",
         "CREATE FUNCTION dbo.ufn_sys_GetUserIdFromContext_Info (@_ci varbinary(512)) RETURNS int AS"
@@ -118,6 +118,13 @@ def logins() -> tuple[Login, Login]:
         "CREATE FUNCTION dbo.ufn_Prevent_Edit (@_BizDocId varchar(16) = '', @_RowId varchar(16) = '',"
         " @_DocCode varchar(2) = 'SO') RETURNS int AS"
         " BEGIN RETURN CASE WHEN @_RowId = 'LOCKED' THEN 1 ELSE 0 END END",
+        "CREATE FUNCTION dbo.ufn_B00Permission_Getdata (@_UserId int, @_RoleId int,"
+        " @_PermissionType char(1)) RETURNS TABLE AS RETURN SELECT 1 AS NoEdit",
+        "CREATE FUNCTION dbo.ufn_sys_GetPermissionUserListTable (@_UserId int)"
+        " RETURNS TABLE AS RETURN SELECT @_UserId AS UserId",
+        "CREATE TABLE dbo.B00Command (Id int PRIMARY KEY, CommandKey varchar(24), DLLName varchar(64),"
+        " ClassName varchar(64), CtorArgs nvarchar(max), MethodName varchar(64), InvokeArgs nvarchar(max))",
+        "INSERT INTO dbo.B00Command VALUES (1, 'EDIT_BizDocSO', 'Bravo.dll', 'DataEditor', N'x', NULL, NULL)",
         "CREATE PROCEDURE dbo.usp_sys_GetControlPermission @_UserId int, @_CommandKey varchar(24) AS"
         " SELECT TableName, ColumnName, NoAddNew, NoEdit FROM dbo.Rights WHERE UserId = @_UserId",
         "INSERT INTO dbo.B30BizDoc (BizDocId, BranchCode, DocDate, TotalQuantity, ModifiedBy)"
@@ -134,6 +141,17 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
         "GRANT EXECUTE ON dbo.usp_sys_GetControlPermission TO dw_test_read",
         "GRANT EXECUTE ON dbo.ufn_Prevent_Edit TO dw_test_read",
+        "GRANT SELECT ON dbo.B00Command TO dw_test_read",
+        *(
+            f"GRANT VIEW DEFINITION ON dbo.{name} TO dw_test_read"
+            for name in (
+                "ufn_sys_GetUserIdFromContext_Info",
+                "usp_sys_GetControlPermission",
+                "ufn_B00Permission_Getdata",
+                "ufn_sys_GetPermissionUserListTable",
+                "ufn_Prevent_Edit",
+            )
+        ),
         "GRANT VIEW DEFINITION ON dbo.B30BizDoc TO dw_test_read",
         "GRANT VIEW DEFINITION ON dbo.B30BizDocDetailSO TO dw_test_read",
         # The write login: the columns the writes touch, and the WHERE's.
@@ -145,7 +163,9 @@ def logins() -> tuple[Login, Login]:
     )
     connection = _sa(DB)
     cursor = connection.cursor()  # type: ignore[attr-defined]
-    cursor.execute("INSERT INTO dbo.B00Layout VALUES (1, 0, 'EDIT_BizDocSO', 1)")
+    cursor.execute(
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (1, 0, 'EDIT_BizDocSO', 1)"
+    )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (1, ?)", (_zipped(LAYOUT),))
     connection.close()  # type: ignore[attr-defined]
     return (
@@ -336,7 +356,9 @@ async def test_two_active_layouts_for_the_screen_refuse_rather_than_pick_one(
 ) -> None:
     connection = _sa(DB)
     cursor = connection.cursor()  # type: ignore[attr-defined]
-    cursor.execute("INSERT INTO dbo.B00Layout VALUES (2, 0, 'EDIT_BizDocSO', 1)")
+    cursor.execute(
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (2, 0, 'EDIT_BizDocSO', 1)"
+    )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (2, ?)", (_zipped(LAYOUT),))
     connection.close()  # type: ignore[attr-defined]
     bravo = _Allowed(*logins, missing_templates={})
@@ -351,3 +373,44 @@ async def test_two_active_layouts_for_the_screen_refuse_rather_than_pick_one(
         )
 
     assert result.check == "rules" and (result.reason or "").startswith("layout_could_not_be_read")
+
+
+async def test_the_fingerprint_sees_a_trigger_and_a_column_change(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = SqlServerBravo(*logins)
+    before = await bravo.fingerprint("production")
+    kinds = {(c.kind, c.name) for c in before.components}
+    assert ("trigger", "DML_B30BizDocDetailSO_ChangeLog") in kinds
+    assert ("context_parser", "ufn_sys_GetUserIdFromContext_Info") in kinds
+    assert ("layout", "EDIT_BizDocSO") in kinds and ("command", "EDIT_BizDocSO") in kinds
+
+    _run(DB, "ALTER TABLE dbo.B30BizDocDetailSO ADD Measured int NULL")
+    _run(DB, "DISABLE TRIGGER dbo.DML_B30BizDocDetailSO_ChangeLog ON dbo.B30BizDocDetailSO")
+    try:
+        after = await bravo.fingerprint("production")
+    finally:
+        _run(DB, "ENABLE TRIGGER dbo.DML_B30BizDocDetailSO_ChangeLog ON dbo.B30BizDocDetailSO")
+        _run(DB, "ALTER TABLE dbo.B30BizDocDetailSO DROP COLUMN Measured")
+
+    from dw_bravo.watch import diff, react
+
+    changed = {(c.kind, c.name) for c in diff(before, after)}
+    assert changed == {
+        ("columns", "B30BizDocDetailSO"),
+        ("trigger", "DML_B30BizDocDetailSO_ChangeLog"),
+    }
+    assert react(diff(before, after), {}).paused  # the dependent kinds pause
+
+
+async def test_a_definition_the_read_login_cannot_see_is_could_not_check(
+    logins: tuple[Login, Login],
+) -> None:
+    from dw_bravo_gateway.ports import BravoUnavailableError
+
+    _run(DB, "REVOKE VIEW DEFINITION ON dbo.ufn_Prevent_Edit TO dw_test_read")
+    try:
+        with pytest.raises(BravoUnavailableError, match="ufn_Prevent_Edit"):
+            await SqlServerBravo(*logins).fingerprint("production")
+    finally:
+        _run(DB, "GRANT VIEW DEFINITION ON dbo.ufn_Prevent_Edit TO dw_test_read")

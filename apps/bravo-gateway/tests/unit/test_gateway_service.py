@@ -141,3 +141,48 @@ async def test_no_openapi_document_is_served_by_default() -> None:
     async with client:
         assert (await client.get("/openapi.json")).status_code == 404
         assert (await client.get("/healthz")).json() == {"status": "ok"}
+
+
+class _Fingerprints:
+    def __init__(self, down: bool = False) -> None:
+        self.down = down
+
+    async def fingerprint(self, environment: str) -> object:
+        from datetime import UTC, datetime
+
+        from dw_bravo.watch import Component, Fingerprint
+        from dw_bravo_gateway.ports import BravoUnavailableError
+
+        if self.down:
+            raise BravoUnavailableError("no answer")
+        return Fingerprint(
+            "production", datetime(2026, 11, 21, tzinfo=UTC), (Component("columns", "T", "d"),)
+        )
+
+
+@pytest.mark.parametrize(
+    ("source", "asked", "status"),
+    [
+        (_Fingerprints(), "production", 200),
+        (_Fingerprints(), "uat", 404),
+        (_Fingerprints(True), "production", 503),
+        (None, "production", 404),
+    ],
+    ids=["served", "another_bravo", "bravo_down", "not_wired"],
+)
+async def test_the_fingerprint_route(source: object, asked: str, status: int) -> None:
+    gw = gateway()
+    app = create_app(gw.pipeline, fingerprints=source)  # type: ignore[arg-type]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://gw") as c:
+        response = await c.get(f"/v1/fingerprint/{asked}")
+
+    assert response.status_code == status
+    if status == 200:
+        assert response.json()["components"][0]["kind"] == "columns"
+
+
+def test_an_empty_tenant_from_compose_reads_as_not_configured() -> None:
+    settings = GatewaySettings(profile="local", **{**_COMPLETE, "tenant_id": ""})
+
+    with pytest.raises(SettingsError, match="TENANT_ID"):
+        settings.check_startable()
