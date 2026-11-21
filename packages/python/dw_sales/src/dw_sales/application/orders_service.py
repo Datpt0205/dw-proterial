@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from dw_kernel.errors import DomainError
+from dw_kernel.errors import DomainError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
@@ -39,6 +39,7 @@ from dw_sales.application.autonomy import applied_by
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.confirmations import confirmation_copy
 from dw_sales.application.customer_notations import NotationLedgerPort, learn
+from dw_sales.application.line_trail import LineTrailView, line_trail
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
@@ -166,6 +167,25 @@ class OrderQueries:
             confirmation_copy=confirmation_copy(stored.case, thread.sent, artifacts),
             quote_links=quote_links,
         )
+
+    async def line_trail(
+        self, context: AccessContext, case_id: uuid.UUID, line_no: int
+    ) -> LineTrailView:
+        """Why line ``line_no`` went the way it did (ticket 62): read with the
+        case's own gate and record visibility, so a caller who may not read
+        the case finds no line either."""
+        await self.gate.require(
+            context, SalesScopes.CASE_READ, resource_type=_ORDER, resource_id=str(case_id)
+        )
+        scope = sales_scope(context)
+        async with self.uow(scope) as work:
+            stored = await stored_order(work, case_id, viewer=context)
+        if all(line.po_line.line_no != line_no for line in stored.case.lines):
+            raise NotFoundError(
+                "no such line", details={"case_id": str(case_id), "line_no": line_no}
+            )
+        outcomes = await self.activity.for_case(scope, CaseKind.ORDER, case_id)
+        return line_trail(stored.case, line_no, outcomes)
 
 
 @dataclass(frozen=True)

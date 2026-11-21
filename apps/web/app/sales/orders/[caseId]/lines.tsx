@@ -27,6 +27,7 @@ import { useAction } from "../../_lib/use-action";
 import { GuardedButton } from "../../_components/guarded-button";
 import { Money, Quantity } from "../../_components/money";
 import { MappingTag, ReadByTag, ValueStateTag } from "../../_components/tags";
+import { LineTrailButton } from "./line-trail";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = SalesSchemas["OrderLineView"];
@@ -478,6 +479,11 @@ function LineDetail({
   const fields = Object.entries(line.value_states);
   return (
     <div className="space-y-2">
+      <LineTrailButton
+        caseId={order.case_id}
+        lineNo={line.line_no}
+        version={order.case_version}
+      />
       <Typography.Paragraph className="!mb-0">
         <Typography.Text strong>Căn cứ: </Typography.Text>
         {basisStatement(line.basis, order.catalog_as_of)}.

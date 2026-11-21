@@ -153,6 +153,13 @@ export class SalesApi {
         );
   }
 
+  /** Why one line of an order went the way it did (ticket 62). */
+  lineTrail(caseId: string, lineNo: number) {
+    return this.get<"/api/v1/sales/orders/{case_id}/lines/{line_no}/trail">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/trail`,
+    );
+  }
+
   /** One case's events, oldest first. */
   history(kind: "order" | "quote", caseId: string) {
     return kind === "order"

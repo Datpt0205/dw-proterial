@@ -76,6 +76,7 @@ from dw_sales.application.design_text_reading import DesignTextReadingView, Mode
 from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.internal_changes import InternalLine, InternalReadView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
+from dw_sales.application.line_trail import LineTrailView
 from dw_sales.application.order_quotes import OrderQuoteView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
@@ -425,6 +426,7 @@ class AskBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: Annotated[str, Field(min_length=1, max_length=QUESTION_CHARS)]
+
 
 
 class SignedCopyBody(VersionBody):
@@ -1413,6 +1415,17 @@ def build_router(
     @router.get("/orders/{case_id}", response_model=OrderCaseView)
     async def order(case_id: uuid.UUID, context: ReadCtx, svc: ReadSvc) -> OrderCaseView:
         return await svc.orders.get(context, case_id)
+
+    # Why a line went the way it did (ticket 62): its steps, each with its
+    # rule's code and who decided, read on demand when the line is opened.
+    @router.get("/orders/{case_id}/lines/{line_no}/trail", response_model=LineTrailView)
+    async def order_line_trail(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=99_999)],
+        context: ReadCtx,
+        svc: ReadSvc,
+    ) -> LineTrailView:
+        return await svc.orders.line_trail(context, case_id, line_no)
 
     # A finding explained in words by the model, on request (AI item 12):
     # nothing is stored, and a price-bearing one only to a price reader.
