@@ -777,6 +777,23 @@ export class SalesApi {
         );
   }
 
+  /**
+   * The PIC confirms the flag decision turn ``seq`` stated (ticket 56): the
+   * server records the stored turn's decision when ``contentHash`` is its own.
+   */
+  assistantConfirm(
+    onCase: AssistantCase,
+    seq: number,
+    contentHash: string,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/assistant/cases/{kind}/{case_id}/turns/{seq}/confirm">(
+      `/api/v1/sales/assistant/cases/${onCase.kind}/${enc(onCase.caseId)}/turns/${seq}/confirm`,
+      { content_hash: contentHash },
+      key,
+    );
+  }
+
   /** The cases the caller talked about most recently (at most ten). */
   assistantCases() {
     return this.get<"/api/v1/sales/assistant/cases">(

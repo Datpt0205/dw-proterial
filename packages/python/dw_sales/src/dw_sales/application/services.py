@@ -309,6 +309,7 @@ def assemble(
     quotes = QuoteQueries(
         uow, gate, clock, quotation, pending, step_activity, book, threads, directory
     )
+    order_commands = OrderCommands(uow, gate, clock, ids, intake, pending, converts, notations)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
@@ -317,7 +318,7 @@ def assemble(
         uploads=PoUploads(uow, gate, clock, ids, catalog, intake.rules, directory, uploads, queue),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=orders,
-        order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts, notations),
+        order_commands=order_commands,
         quotes=quotes,
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending, notations),
         sources=sources,
@@ -462,6 +463,9 @@ def assemble(
             worker_id,
             worker_version,
             book,
+            # A flag's decision the PIC confirms in the case's conversation
+            # (ticket 56) is the same command the page's button sends.
+            decisions=order_commands,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled

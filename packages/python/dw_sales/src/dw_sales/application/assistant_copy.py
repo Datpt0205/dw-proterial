@@ -91,6 +91,20 @@ class AssistantWords(BaseModel):
     act_in_case: str = _words()
     # ``{what}`` in `not_found` for a step naming a number no case holds.
     case_word: str = _words(max_length=60)
+    # A decision on one of the case's open flags (ticket 56): said back word
+    # for word for the PIC to confirm, and what DW1 asks when it cannot yet.
+    # ``{flag}``: the flag's words and line; ``{decision}``: one of the two
+    # decision words; ``{reason}``: `decide_reason` filled, or empty.
+    decide_confirm: str = _words("flag", "decision", "reason")
+    decide_accept_word: str = _words(max_length=60)
+    decide_ask_word: str = _words(max_length=60)
+    decide_reason: str = _words("reason")
+    decide_which_flag: str = _words("flags")
+    decide_which_way: str = _words("flag")
+    decide_need_reason: str = _words("flag")
+    decide_no_flag: str = _words()
+    decide_orders_only: str = _words()
+    decide_done: str = _words("flag", "decision")
     # What the chat shows while a turn is worked on.
     step_read: str = _words(max_length=60)
     step_look: str = _words(max_length=60)

@@ -33,6 +33,9 @@ export type CaseOffers = Partial<Record<CaseOffer, ReactNode>>;
 const OffersContext = createContext<((offers: CaseOffers) => void) | null>(
   null,
 );
+const DecidedContext = createContext<((reload: () => void) => void) | null>(
+  null,
+);
 
 /**
  * Hands the case page's own controls to its conversation (ticket 46), so a
@@ -45,6 +48,17 @@ export function useCaseChatOffers(offers: CaseOffers) {
   useEffect(() => {
     set?.(offers);
   }, [set, offers]);
+}
+
+/**
+ * What the case page reloads once a flag decision is recorded from its
+ * conversation (ticket 56), so its findings show the decision at once.
+ */
+export function useCaseChatDecided(reload: () => void) {
+  const set = useContext(DecidedContext);
+  useEffect(() => {
+    set?.(() => reload);
+  }, [set, reload]);
 }
 
 /**
@@ -68,18 +82,22 @@ export function WithCaseChat({
   const lg = Grid.useBreakpoint().lg;
   const [open, setOpen] = useState(false);
   const [offers, setOffers] = useState<CaseOffers>({});
+  const [decided, setDecided] = useState<(() => void) | undefined>(undefined);
   const chat = (
     <AssistantConversation
       onCase={onCase}
       examples={EXAMPLES}
       catalog={CATALOG}
       offers={offers}
+      onDecided={decided}
     />
   );
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
       <OffersContext.Provider value={setOffers}>
-        <div className="min-w-0">{children}</div>
+        <DecidedContext.Provider value={setDecided}>
+          <div className="min-w-0">{children}</div>
+        </DecidedContext.Provider>
       </OffersContext.Provider>
       {lg === true ? (
         <aside aria-label={TITLE} className="self-start lg:sticky lg:top-4">

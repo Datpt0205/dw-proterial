@@ -33,6 +33,91 @@
             "type": "string",
             "x-placeholders": []
           },
+          "decide_accept_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Decide Accept Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "decide_ask_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Decide Ask Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "decide_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{decision}",
+              "{flag}",
+              "{reason}"
+            ]
+          },
+          "decide_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Done",
+            "type": "string",
+            "x-placeholders": [
+              "{decision}",
+              "{flag}"
+            ]
+          },
+          "decide_need_reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Need Reason",
+            "type": "string",
+            "x-placeholders": [
+              "{flag}"
+            ]
+          },
+          "decide_no_flag": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide No Flag",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "decide_orders_only": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Orders Only",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "decide_reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Reason",
+            "type": "string",
+            "x-placeholders": [
+              "{reason}"
+            ]
+          },
+          "decide_which_flag": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Which Flag",
+            "type": "string",
+            "x-placeholders": [
+              "{flags}"
+            ]
+          },
+          "decide_which_way": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Decide Which Way",
+            "type": "string",
+            "x-placeholders": [
+              "{flag}"
+            ]
+          },
           "elsewhere": {
             "maxLength": 300,
             "minLength": 1,
@@ -361,6 +446,16 @@
           "offer_thread",
           "act_in_case",
           "case_word",
+          "decide_confirm",
+          "decide_accept_word",
+          "decide_ask_word",
+          "decide_reason",
+          "decide_which_flag",
+          "decide_which_way",
+          "decide_need_reason",
+          "decide_no_flag",
+          "decide_orders_only",
+          "decide_done",
           "step_read",
           "step_look"
         ],

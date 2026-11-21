@@ -4305,6 +4305,25 @@
         "title": "ConfirmedLine",
         "type": "object"
       },
+      "ConfirmedView": {
+        "description": "A confirmed decision: DW1's sentence, and the case's new version.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "answer",
+          "case_version"
+        ],
+        "title": "ConfirmedView",
+        "type": "object"
+      },
       "Constant": {
         "additionalProperties": false,
         "description": "The value is this fixed text.",
@@ -5180,6 +5199,22 @@
           "decided_at"
         ],
         "title": "Decided",
+        "type": "object"
+      },
+      "DecisionConfirmBody": {
+        "additionalProperties": false,
+        "description": "The PIC confirms the decision a turn stated (ticket 56): its hash,\nwhich binds the confirmation to exactly the words said. What is decided\nis the stored turn's, never anything this body sends.",
+        "properties": {
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_hash"
+        ],
+        "title": "DecisionConfirmBody",
         "type": "object"
       },
       "DecisionRequest": {
@@ -16730,6 +16765,50 @@
         "title": "PromptsView",
         "type": "object"
       },
+      "ProposalView": {
+        "properties": {
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "accepted",
+              "ask_customer"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "finding_key": {
+            "title": "Finding Key",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "finding_key",
+          "decision",
+          "reason",
+          "case_version",
+          "content_hash"
+        ],
+        "title": "ProposalView",
+        "type": "object"
+      },
       "PurchaseCase": {
         "additionalProperties": false,
         "description": "One request, from the moment DW2 received it.\n\n``rules_ref`` is the tenant rules the case was received under\n(``purchasing_rules@<version>``), stamped once: a later reader takes the\nstamp, never whatever is in force today.",
@@ -17377,6 +17456,7 @@
           "draft_reply",
           "remind_customer",
           "explain_thread",
+          "decide_finding",
           "out_of_scope"
         ],
         "title": "QuestionKind",
@@ -24533,6 +24613,16 @@
               }
             ],
             "title": "Offer"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "question": {
             "title": "Question",
@@ -31777,6 +31867,96 @@
           }
         },
         "summary": "Assistant Case Stream",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/assistant/cases/{kind}/{case_id}/turns/{seq}/confirm": {
+      "post": {
+        "operationId": "assistant_confirm_api_v1_sales_assistant_cases__kind___case_id__turns__seq__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CaseKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmedView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Confirm",
         "tags": [
           "sales"
         ]

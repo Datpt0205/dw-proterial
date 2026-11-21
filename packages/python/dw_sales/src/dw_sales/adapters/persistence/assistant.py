@@ -27,7 +27,7 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.persistence import tables
 from dw_sales.application.assistant import AssistantStorePort
-from dw_sales.domain.assistant import CaseRef, QuestionKind, Session, Turn
+from dw_sales.domain.assistant import CaseRef, ProposedDecision, QuestionKind, Session, Turn
 from dw_sales.domain.dispositions import CaseKind
 
 _S = tables.assistant_sessions
@@ -68,6 +68,7 @@ def _turn(row: RowMapping) -> Turn:
         ),
         focus=_ref(row["focus_kind"], row["focus_case_id"], row["focus_label"]),
         answered_by=row["answered_by"],
+        proposal=ProposedDecision.from_stored(row["proposal"]) if row["proposal"] else None,
     )
 
 
@@ -161,6 +162,7 @@ class SqlAssistantStore:
                 focus_case_id=focus.case_id if focus else None,
                 focus_label=focus.label if focus else None,
                 answered_by=turn.answered_by,
+                proposal=turn.proposal.stored() if turn.proposal else None,
             )
         )
         await self.db.execute(
