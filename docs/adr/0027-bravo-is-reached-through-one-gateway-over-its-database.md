@@ -109,9 +109,19 @@ What the 11-19/20 survey measured (details in `docs/proterial/`, outside git):
      client's context format, holds the `timestamp` condition, uses the
      approval id as its idempotency key, and is read back and reconciled.
    - **Never.** The trigger-bypass context is never used.
-4. **Fail closed on change.** The gateway fingerprints the layouts, templates
-   and columns it depends on. A mismatch with the version proven on UAT stops
-   writes, never reads, and tells a person.
+4. **Watch for change; do not ask for a promise** (Đạt, 11-21; ticket 65).
+   - **What is watched.** On a schedule, DW fingerprints what its writes
+     depend on: layouts, templates, columns, triggers, the routines it calls,
+     and the client version. It notices a change and tells a person.
+   - **A change the runner follows goes on.** A layout whose rules all still
+     parse, and whose nightly replay agrees, keeps the writes running, with a
+     notice. This is why the rules are read, not copied.
+   - **A change it cannot follow pauses only the writes that depend on it.**
+     That covers an unknown rule, and a changed column, trigger, routine or
+     context format. Reads go on. The writes resume when a person accepts the
+     new baseline after the UAT replay. Nothing resumes by itself.
+   - **Early warning.** A difference between UAT and production is reported
+     as a warning ahead of the upgrade.
 5. **Identity is anchored on the employee code.**
    - **DW side.** Keycloak federated with the AD keys a person on the AD's
      immutable object id, so a renamed account stays the same person. DW
@@ -145,6 +155,7 @@ What the 11-19/20 survey measured (details in `docs/proterial/`, outside git):
   - 53: adjustments through the gateway, no staging table or job.
   - 63: the gateway.
   - 64: identity.
+  - 65: the change watch.
 - What this rests on that is not yet measured goes to ticket 52:
   - Bravo's triggers run under a login with column grants;
   - the driver in a Linux container;

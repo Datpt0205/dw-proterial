@@ -25,6 +25,11 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   - Tickets 63 (gateway) and 64 (identity) were added; 49 is done; 50, 51 and 53 are rewritten onto the gateway and are ready-for-agent; 52 gains scripts 06 (users and rights, counts only) and 07 (UAT: a column-granted login saving an SO line with Bravo's triggers, rolled back) and three questions for IT about the AD.
   - Unmeasured assumptions are listed in the ADR. Đạt decided to build on them; a failed one changes only the gateway's adapter or its grants.
   - The 11-20 design docx describes the old write path and needs a new version before IT and the vendor review it.
+  - **Change watch, ticket 65 (Đạt, same day: check and notify rather than ask the vendor to promise).** A `bravo_watch` lane fingerprints what writes depend on: layouts, templates, columns, triggers, the routines DW calls, and the client version.
+    - A layout change the runner can follow goes on, with a notice.
+    - A change it cannot follow pauses only the dependent write kinds, until a person accepts the new baseline after the UAT replay.
+    - A UAT-versus-production difference is an early warning.
+    - Script 06 §11 measures past change frequency.
 
 - 2026-11-21, **how every DW1/DW2 step is built (Đạt):** rules first, the model second, a person last.
   - **Rules** come from their owners: Bravo's own rules and procedures (ticket 59), tenant parameters, and the BA's BR-* codes. They are never if/else typed into code.
