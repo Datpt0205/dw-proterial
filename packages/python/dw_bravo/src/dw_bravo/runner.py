@@ -31,7 +31,9 @@ Measured against the 2026-11-20 UAT trace (the client's `sp_executesql` writes):
 an `UPDATE` carries only the columns whose value changed, plus `ModifiedBy`;
 the header is updated on every save; an `INSERT` lists only non-NULL columns
 plus `CreatedBy`. An assignment of the value a column already holds raises
-no event.
+no event. `ModifiedBy` and `CreatedBy` are written only where the row the
+client loaded holds them: the YCBG line's view (`vB30BizDocDetailRQ_Edit`)
+has neither, and the client passes both as parameters and sets neither.
 """
 
 from __future__ import annotations
@@ -614,7 +616,9 @@ class RuleRunner:
             kind = rule.class_name
             if kind is None:
                 return finding(
-                    "undecided", "its kind comes from the shared template, not in hand (script 03c)"
+                    "undecided",
+                    "no ClassName: its kind is not in the layout "
+                    "(the shared template may name it, script 03c)",
                 )
             if kind == "BravoValidator":
                 text = rule.setting("zValidateExpr")
@@ -671,11 +675,13 @@ class RuleRunner:
                 for c in sorted(row.stored)
                 if row.has(c) and row.get(c) is not None
             }
-            values["CreatedBy"] = user_id
+            if "createdby" in row.stored:
+                values["CreatedBy"] = user_id
             return WriteCommand(table, index, "insert", values)
         changed = row.changed()
         if not changed:
             return None
         values = {row.name(c): row.get(c) for c in changed}
-        values["ModifiedBy"] = user_id
+        if "modifiedby" in row.stored:
+            values[row.name("ModifiedBy")] = user_id
         return WriteCommand(table, index, "update", values)

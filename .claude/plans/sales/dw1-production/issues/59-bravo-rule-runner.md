@@ -1,6 +1,6 @@
 # 59 — A Bravo rule runner: execute the screen's own XML rules, not a copy of them
 
-Status: in-progress — the SO screen's slice is done (2026-11-21); YCBG, quotation, PR and PO next. pending: script 03c (the shared template `BizDocEditor`) for creating an SO and for a line split
+Status: in-progress — the SO screen's slice (2026-11-21) and the YCBG screen's (2026-11-22) are done offline. pending: script 03c (the shared template `BizDocEditor`) for creating an SO and for a line split, and for the kind of a validator with no `ClassName`; the save traces of the quotation, PR and PO screens (ticket 52) before their rules run; the YCBG's creation (an INSERT: the replay of a new document is not built)
 Blocked by: 49 before anything runs against Bravo; none for building it offline
 Category: enhancement
 
@@ -98,6 +98,48 @@ configuration as it changes.
   call, DOCTYPE, NULL condition, UNKNOWN-as-NULL, money NULL), each turned a
   test red. CI runs 33 tests on a layout written for them; 30 more run where
   the data is.
+
+## Done (2026-11-22, the YCBG screen, offline)
+
+- The screen `EDIT_BizDocRQ` (layout 11766, `<DataSource>`) is read with no
+  missing template: its `B00Command` row names none, and its layout uses no
+  rule it does not define. The SO, quotation, PR and PO screens name
+  `BizDocEditor`, and each uses 3 to 10 rules their layouts do not define.
+- Measured on the 11-20 trace, and now how the runner writes: the client
+  writes `ModifiedBy` and `CreatedBy` only where the row it loaded holds
+  them. The YCBG line's view (`vB30BizDocDetailRQ_Edit`) has neither, and no
+  `timestamp`, so the client passes both as parameters and sets neither, and
+  its UPDATE has no rowversion condition. The SO's views have all three. The
+  gateway loads the base table, so its SO writes are unchanged; a YCBG write
+  kind in the gateway would have to load what the view loads (not built).
+- Design's saved result reproduced column for column (`rq_screen_replay`):
+  17 columns typed, 4 computed by the layout (`DesignCheck` = QUOTE from the
+  BP code, `Status` = CLOSE, the designer, the completion date).
+- The replay now treats a written column that no rule can set as typed, and
+  searches only the columns a rule could also have set, so a save where a
+  person typed 17 columns is found (the SO's 6 saves still match).
+- Validators: 5 (4 block, 1 warning), each with a test: `CheckRowOnDetail`
+  and the `DocNo` warning fire; `CheckBizProcess` passes for the creator and
+  is undecided otherwise (CHARINDEX); `NotNull_DocNo` and the line's
+  `NotNull` have no `ClassName`, stay undecided and block.
+- An edited copy of the layout (QUOTE → NOINFO) changes what a typed BP code
+  sets, with no code change.
+- Inventory of the next screens (layouts 8375, 8162, 8196). The runner
+  refuses what it has no evidence for:
+  - the functions `DATEDIFF`, `ROUND`, `MIN`, `FISCALYEAR` and
+    `FORMATCURRENCY`;
+  - the rule kinds `BravoNullValidator`, `BravoFileReader` and
+    `BravoCommandKey`;
+  - one quotation expression with an extra `)`, which Bravo's client
+    evaluates and the parser refuses.
+
+  Their semantics wait on those screens' save traces (ticket 52).
+- Mutation check: 6 guards broken one at a time (the two audit columns, the
+  no-`ClassName` validator, the replay's typed columns, the line view
+  without audit, the settable columns), each turned a test red.
+- Security review: a library and its tests; no route, table, tenant or
+  container. The fail-closed rules are unchanged: an undecided blocking
+  validator still blocks, and the YCBG has no write kind.
 
 ## Comments
 
