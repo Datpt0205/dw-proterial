@@ -39,7 +39,7 @@ from dw_sales.application.autonomy import applied_by
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.confirmations import confirmation_copy
 from dw_sales.application.customer_notations import NotationLedgerPort, learn
-from dw_sales.application.line_trail import LineTrailView, line_trail
+from dw_sales.application.line_trail import CaseBravoWritesPort, LineTrailView, line_trail
 from dw_sales.application.local_time import LocalZonePort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
@@ -106,6 +106,8 @@ class OrderQueries:
     threads: ThreadMembersPort
     # Whose sign-in address a message Sales sent is from (ticket 25).
     directory: MemberDirectoryPort
+    # The Bravo writes proposed on a case's lines, for a line's trail (ticket 53).
+    bravo_writes: CaseBravoWritesPort
 
     async def summaries(
         self, context: AccessContext, activity: CaseListActivity | None = None
@@ -185,7 +187,8 @@ class OrderQueries:
                 "no such line", details={"case_id": str(case_id), "line_no": line_no}
             )
         outcomes = await self.activity.for_case(scope, CaseKind.ORDER, case_id)
-        return line_trail(stored.case, line_no, outcomes)
+        writes = await self.bravo_writes.of_case(scope, case_id)
+        return line_trail(stored.case, line_no, outcomes, writes)
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,7 @@ vi.mock("../../../../lib/session", () => ({
 const api = vi.hoisted(() => ({ lineTrail: vi.fn() }));
 vi.mock("../api", () => ({ salesApi: () => api }));
 
-import { LineTrail } from "../../orders/[caseId]/line-trail";
+import { LineTrail } from "../../_components/line-trail";
 
 const TRAIL = {
   case_id: "c-1",
@@ -70,7 +70,7 @@ describe("LineTrail", () => {
     api.lineTrail.mockResolvedValue(TRAIL);
     render(
       <UiProvider>
-        <LineTrail caseId="c-1" lineNo={3} version={4} />
+        <LineTrail kind="order" caseId="c-1" lineNo={3} version={4} />
       </UiProvider>,
     );
     expect(
@@ -78,7 +78,7 @@ describe("LineTrail", () => {
         /5 bước: 2 do luật, 1 do mô hình, 1 DW tự áp dụng, 1 do người/,
       ),
     ).toBeTruthy();
-    expect(api.lineTrail).toHaveBeenCalledWith("c-1", 3);
+    expect(api.lineTrail).toHaveBeenCalledWith("order", "c-1", 3);
     expect(screen.getAllByText("Luật")).toHaveLength(2);
     expect(screen.getByText("Mô hình")).toBeTruthy();
     expect(screen.getByText("DW tự áp dụng")).toBeTruthy();
@@ -93,11 +93,44 @@ describe("LineTrail", () => {
     ).toBeTruthy();
   });
 
+  it("reads a quotation's line from the quote's own trail, outcomes in words", async () => {
+    api.lineTrail.mockResolvedValue({
+      case_id: "q-1",
+      line_no: 1,
+      steps: [
+        {
+          kind: "design_check",
+          code: "design_check",
+          decided_by: "person",
+          value: "BP000001",
+          outcome: "quote",
+        },
+        {
+          kind: "declined",
+          code: "decline",
+          decided_by: "person",
+          actor_user_id: AN,
+          outcome: "commercial",
+        },
+      ],
+    });
+    render(
+      <UiProvider>
+        <LineTrail kind="quote" caseId="q-1" lineNo={1} version={2} />
+      </UiProvider>,
+    );
+    expect(await screen.findByText("Kết quả Design trên Bravo")).toBeTruthy();
+    expect(api.lineTrail).toHaveBeenCalledWith("quote", "q-1", 1);
+    expect(screen.getByText(/Báo giá được · BP000001/)).toBeTruthy();
+    expect(screen.getByText("Từ chối báo giá")).toBeTruthy();
+    expect(screen.queryByText(/commercial/)).toBeNull();
+  });
+
   it("shows the server's error, not an empty trail", async () => {
     api.lineTrail.mockRejectedValue(new Error("Máy chủ không trả lời"));
     render(
       <UiProvider>
-        <LineTrail caseId="c-1" lineNo={3} version={5} />
+        <LineTrail kind="order" caseId="c-1" lineNo={3} version={5} />
       </UiProvider>,
     );
     expect(await screen.findByRole("button", { name: /Thử lại/ })).toBeTruthy();

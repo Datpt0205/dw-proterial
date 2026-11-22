@@ -133,13 +133,20 @@ class Audit:
 @dataclass
 class Orders:
     so_no: str | None = SO.so_no
+    assigned_to: uuid.UUID = PIC
 
     async def get(self, case_id: uuid.UUID) -> object:
         if case_id != CASE:
             return None
         lines = tuple(SimpleNamespace(line_no=n) for n in (1, 2, 3))
         return SimpleNamespace(
-            case=SimpleNamespace(lines=lines, bravo_so_no=self.so_no, case_version=VERSION)
+            case=SimpleNamespace(
+                lines=lines,
+                bravo_so_no=self.so_no,
+                case_version=VERSION,
+                status=SimpleNamespace(value="checked"),
+            ),
+            origin=SimpleNamespace(assigned_to=self.assigned_to),
         )
 
 
@@ -362,6 +369,24 @@ async def test_a_line_or_case_not_in_the_workspace_is_not_found() -> None:
         await _service(world).propose(PIC_CONTEXT, uuid.uuid4(), 1, change, case_version=VERSION)
     with pytest.raises(NotFoundError):
         await _service(world).propose(PIC_CONTEXT, CASE, 9, change, case_version=VERSION)
+
+
+async def test_a_case_the_caller_may_not_see_is_not_found_to_propose_or_list() -> None:
+    # Record visibility: someone who sees only another person's cases finds
+    # neither the case to write against nor its proposals.
+    world = World()
+    await _proposed(world)
+    restricted = PIC_CONTEXT.model_copy(
+        update={"record_visibility": "restricted", "visible_owners": frozenset({uuid.uuid4()})}
+    )
+    change = ConfirmedDateChange(field="confirmed_date", value=date(2026, 12, 9))
+
+    with pytest.raises(NotFoundError):
+        await _service(world).propose(restricted, CASE, 2, change, case_version=VERSION)
+    with pytest.raises(NotFoundError):
+        await _service(world).of_case(restricted, CASE)
+    assert len(await _service(world).of_case(PIC_CONTEXT, CASE)) == 1
+    assert len(world.store.rows) == 1
 
 
 async def test_a_proposal_made_on_an_older_case_version_is_refused() -> None:
@@ -587,7 +612,7 @@ def test_dw1_registers_the_guard_and_the_stamp_and_signs_nothing_without_a_key()
 
 async def test_a_kind_the_gateway_does_not_run_yet_is_not_proposed() -> None:
     class _Pending(BravoContract):
-        def prepare(self, change: object, so: BravoSo, line: BravoSoLine) -> PreparedWrite:  # type: ignore[override]
+        def prepare(self, change: object, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
             return PreparedWrite("so.line.cancel@1", {}, "0" * 64, pending="not traced")
 
     world = World()

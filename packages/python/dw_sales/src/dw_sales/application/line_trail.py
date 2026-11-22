@@ -25,17 +25,19 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
 from dw_sales.application.autonomy import applied_by
+from dw_sales.application.bravo_line_writes import BravoLineWrite
+from dw_sales.application.ports import SalesScope
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import MappingStatus, Open, OrderCase, OrderLine
 
 TrailActor = Literal["rule", "model", "dw", "person"]
-TrailKind = Literal[
+OrderTrailKind = Literal[
     "read",
     "convert",
     "model_reading",
@@ -54,7 +56,35 @@ TrailKind = Literal[
     "bravo_recorded",
     "cross_checked",
     "confirmed",
+    # A date or quantity written into Bravo (ticket 53): proposed, then
+    # settled by the approver's write.
+    "bravo_write",
 ]
+# A requested line of a quotation (`quote_line_trail`).
+QuoteTrailKind = Literal[
+    "read",
+    "model_reading",
+    "candidates",
+    "unsettled",
+    "finding",
+    "finding_decided",
+    "value_confirmed",
+    "ycbg_recorded",
+    "production_type",
+    "design_reply",
+    "design_check",
+    "priced",
+    "pcs_priced",
+    "submitted",
+    "returned",
+    "approved",
+    "quote_sent",
+    "master_listed",
+    "signed_copy",
+    "declined",
+    "model_step",
+]
+TrailKind = Literal[OrderTrailKind, QuoteTrailKind]
 
 
 class TrailStepView(BaseModel):
@@ -99,7 +129,18 @@ _SHOWN_AS_THEIR_OWN_STEP = frozenset(
 )
 
 
-def line_trail(case: OrderCase, line_no: int, outcomes: Sequence[StepOutcome]) -> LineTrailView:
+class CaseBravoWritesPort(Protocol):
+    """The Bravo writes proposed on an order case's lines (ticket 53)."""
+
+    async def of_case(self, scope: SalesScope, case_id: uuid.UUID) -> Sequence[BravoLineWrite]: ...
+
+
+def line_trail(
+    case: OrderCase,
+    line_no: int,
+    outcomes: Sequence[StepOutcome],
+    writes: Sequence[BravoLineWrite] = (),
+) -> LineTrailView:
     """The steps of ``line_no`` on ``case``, in the order they happen."""
     line = case.line(line_no)
     mine = [o for o in outcomes if o.case_id == case.case_id and o.line_no == line_no]
@@ -121,7 +162,42 @@ def line_trail(case: OrderCase, line_no: int, outcomes: Sequence[StepOutcome]) -
         if o.step not in _SHOWN_AS_THEIR_OWN_STEP
     )
     steps.extend(_case_steps(case, line))
+    steps.extend(_bravo_writes(case, line_no, writes))
     return LineTrailView(case_id=case.case_id, line_no=line_no, steps=tuple(steps))
+
+
+def _bravo_writes(
+    case: OrderCase, line_no: int, writes: Sequence[BravoLineWrite]
+) -> list[TrailStepView]:
+    """Each Bravo write of the line: its proposal, and its settlement once
+    the approver decided (written, refused, in doubt, rejected)."""
+    steps: list[TrailStepView] = []
+    mine = [w for w in writes if w.case_id == case.case_id and w.line_no == line_no]
+    for write in sorted(mine, key=lambda w: w.proposed_at):
+        steps.append(
+            TrailStepView(
+                kind="bravo_write",
+                code=write.kind,
+                decided_by="person",
+                actor_user_id=write.proposed_by,
+                at=write.proposed_at,
+                value=write.field,
+                outcome="proposed",
+            )
+        )
+        if write.decided_by is not None:
+            steps.append(
+                TrailStepView(
+                    kind="bravo_write",
+                    code=write.kind,
+                    decided_by="person",
+                    actor_user_id=write.decided_by,
+                    at=write.settled_at,
+                    value=write.field,
+                    outcome=write.status,
+                )
+            )
+    return steps
 
 
 def _read(case: OrderCase, line: OrderLine, mine: Sequence[StepOutcome]) -> TrailStepView:

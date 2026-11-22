@@ -24573,7 +24573,24 @@
               "model_step",
               "bravo_recorded",
               "cross_checked",
-              "confirmed"
+              "confirmed",
+              "bravo_write",
+              "candidates",
+              "unsettled",
+              "value_confirmed",
+              "ycbg_recorded",
+              "production_type",
+              "design_reply",
+              "design_check",
+              "priced",
+              "pcs_priced",
+              "submitted",
+              "returned",
+              "approved",
+              "quote_sent",
+              "master_listed",
+              "signed_copy",
+              "declined"
             ],
             "title": "Kind",
             "type": "string"
@@ -39554,6 +39571,60 @@
           }
         },
         "summary": "Quote History",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/lines/{line_no}/trail": {
+      "get": {
+        "operationId": "quote_line_trail_api_v1_sales_quotes__case_id__lines__line_no__trail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 99999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineTrailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Line Trail",
         "tags": [
           "sales"
         ]

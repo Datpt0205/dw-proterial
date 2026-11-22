@@ -2066,6 +2066,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/lines/{line_no}/trail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Line Trail */
+        get: operations["quote_line_trail_api_v1_sales_quotes__case_id__lines__line_no__trail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/master-list": {
         parameters: {
             query?: never;
@@ -9072,7 +9089,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "read" | "convert" | "model_reading" | "mapping" | "quotation" | "checks" | "finding" | "finding_decided" | "correction" | "change" | "design_asked" | "pc_asked" | "pc_short_lead" | "pc_answer" | "model_step" | "bravo_recorded" | "cross_checked" | "confirmed";
+            kind: "read" | "convert" | "model_reading" | "mapping" | "quotation" | "checks" | "finding" | "finding_decided" | "correction" | "change" | "design_asked" | "pc_asked" | "pc_short_lead" | "pc_answer" | "model_step" | "bravo_recorded" | "cross_checked" | "confirmed" | "bravo_write" | "candidates" | "unsettled" | "value_confirmed" | "ycbg_recorded" | "production_type" | "design_reply" | "design_check" | "priced" | "pcs_priced" | "submitted" | "returned" | "approved" | "quote_sent" | "master_listed" | "signed_copy" | "declined";
             /** Outcome */
             outcome?: string | null;
             /** Page */
@@ -13912,6 +13929,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseHistoryEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_line_trail_api_v1_sales_quotes__case_id__lines__line_no__trail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineTrailView"];
                 };
             };
             /** @description Validation Error */
