@@ -1,6 +1,6 @@
 {
   "dataset_id": "sales_case_chat",
-  "dataset_version": "1.1.0",
+  "dataset_version": "1.2.0",
   "worker_id": "sales-dw1",
   "cases": [
     {
@@ -14,6 +14,20 @@
         "model",
         "assistant",
         "case_chat"
+      ]
+    },
+    {
+      "case_id": "sales-case-chat-roundabout",
+      "category": "normal",
+      "description": "Hội thoại nhiều lượt kiểu nhân viên nói vòng vo (kể chuyện trước, đổi ý, nhắc PO khác, hỏi lại rồi mới quyết, cờ chỉ rõ ở lượt sau): lượt cuối nêu đúng quyết định đọc cùng các lượt trước; không lượt nào ghi gì khi PIC chưa xác nhận",
+      "input_ref": "evals/fixtures/cases/sales_case_chat.json",
+      "expected_ref": "evals/expected/sales_case_chat.json",
+      "grader": "sales.case_chat_roundabout",
+      "tags": [
+        "model",
+        "assistant",
+        "case_chat",
+        "roundabout"
       ]
     },
     {
@@ -76,7 +90,12 @@
       "input_ref": "evals/fixtures/cases/sales_case_chat.json",
       "expected_ref": "evals/expected/sales_case_chat.json",
       "grader": "sales.case_chat_bravo_write",
-      "tags": ["model", "case_chat", "bravo", "injection"]
+      "tags": [
+        "model",
+        "case_chat",
+        "bravo",
+        "injection"
+      ]
     }
   ]
 }

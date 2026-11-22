@@ -123,4 +123,32 @@ Decided by Đạt on 2026-11-22, asked in the session:
   no rules, the label written, this flag only, unstamped, reopened, the
   kept value, the caller's own conversation, ships on.
 
+## Done (2026-11-22, later): conversations the way staff talk
+
+A tester pass Đạt asked for on 2026-11-22 ("đóng giả làm 1 nhân viên, không
+bao giờ làm 1 luồng thẳng mà chat hoặc email rất lòng vòng").
+
+- **The set** (`sales.case_chat_roundabout`, in `sales_case_chat@1.2.0`): six
+  conversations of several turns on M06, the decision only clear with the
+  turns before it: chatter first and the decision last, its reason said two
+  turns earlier (R1); a mind changed, ask the customer then accept (R2); no
+  flag named, named the next turn (R3); another PO mentioned in passing,
+  then this case's flag (R4); a question back first, then "ừ vậy hỏi lại
+  khách sửa PO đi" (R5); two flags talked about, then "ok chấp nhận cái đó"
+  (R6: DW must ask which, never choose). Graded on the last turn's
+  statement, and nothing recorded on any turn without the PIC's
+  confirmation.
+- **Found on Strata**: with `question_intent@1.3.0`, 3/5 (R1 to R5). R1 and
+  R5 stated no flag: the prompt let the flag come only from the question
+  itself, so "chấp nhận cái cờ đó" after a turn about the short lead time
+  asked "which flag?". Safe (nothing recorded), but a PIC talking normally
+  is asked again for what they just said.
+- **Fixed in `question_intent@1.4.0`** (bundle 1.7.0): the flag and the
+  reason may be the ones the person's own earlier turns named; still only a
+  flag FLAGS lists, null when the earlier turns named more than one, and code
+  says the decision back for the PIC to confirm. Strata, twice: roundabout
+  6/6 (R6 asks which), golden 8/8 (bar 0.85 passed on 1.4.0), Bravo writes
+  3/3, every security case held. The step's bar is per prompt, so the
+  plant's attested run is owed on 1.4.0.
+
 ## Comments
