@@ -81,8 +81,10 @@ from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.autonomy import AutonomyGate, VersionKey
 from dw_sales.application.bravo_facts import TableState
 from dw_sales.application.bravo_line_writes import (
+    BravoCommandsPort,
     BravoLineWrite,
     BravoNotConnected,
+    BravoOrdersPort,
     BravoWriteStamp,
     WriteStatus,
 )
@@ -1717,6 +1719,8 @@ def open_world(
     measured: bool = True,
     chat_model: BaseChatModel | None = None,
     skill_pick: PickModelPort | None = None,
+    bravo_orders: BravoOrdersPort | None = None,
+    bravo_commands: BravoCommandsPort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1893,8 +1897,10 @@ def open_world(
         uow=store,
         bravo_watch_store=NoBravoMeasured(),
         bravo_facts_store=NoBravoCopy(),
-        bravo_orders=BravoNotConnected(),
-        bravo_commands=BravoNotConnected(),
+        # Bravo read through the gateway (ticket 53): not connected unless a
+        # test hands its own SO and command builder.
+        bravo_orders=bravo_orders or BravoNotConnected(),
+        bravo_commands=bravo_commands or BravoNotConnected(),
         bravo_po=None,
         bravo_writes_uow=store,
         authorization=ScopeAuthorizationService(),

@@ -65,7 +65,7 @@ MODEL_STEPS = [
     "sales_handoff_kinds@1.0.0",
     "sales_reply_kinds@1.0.0",
     "sales_internal_change@1.0.0",
-    "sales_case_chat@1.0.0",
+    "sales_case_chat@1.1.0",
 ]
 REASON = "the live model gave no usable answer"
 

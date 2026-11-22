@@ -20,7 +20,14 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention, SqlAssistantStoreFactory
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.assistant import CaseRef, ProposedDecision, QuestionKind, Session, Turn
+from dw_sales.domain.assistant import (
+    CaseRef,
+    ProposedBravoWrite,
+    ProposedDecision,
+    QuestionKind,
+    Session,
+    Turn,
+)
 from dw_sales.domain.dispositions import CaseKind
 
 pytestmark = pytest.mark.integration
@@ -276,6 +283,39 @@ async def test_a_stated_decision_is_kept_with_its_turn_and_only_on_a_decision(
     )
     stated = replace(
         _turn(session), kind=QuestionKind.DECIDE_FINDING, reference=None, proposal=proposal
+    )
+    async with stores(_context(world.alpha, an)) as store:
+        await store.open(session)
+        await store.add(stated)
+    async with stores(_context(world.alpha, an)) as store:
+        (turn,) = await store.turns(session.session_id)
+    assert turn.proposal == proposal
+    assert turn.proposal.content_hash == proposal.content_hash
+    wrong = replace(_turn(session, seq=2), proposal=proposal)  # an order_status turn
+    with pytest.raises(DBAPIError, match="ck_assistant_turns_proposal"):
+        async with stores(_context(world.alpha, an)) as store:
+            await store.add(wrong)
+
+
+async def test_a_stated_bravo_write_is_kept_with_its_turn_and_reads_back_as_one(
+    world: World, migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """Ticket 56 over 53 (migration b5c316f405cd): a Bravo write a turn stated
+    reads back as a write, whole, so its hash is the one the PIC was shown;
+    on a turn of another kind the table refuses it."""
+    an = await _person(migrator)
+    stores = SqlAssistantStoreFactory(app_sessions)
+    session = _session(an)
+    proposal = ProposedBravoWrite(
+        case_kind=CaseKind.ORDER,
+        case_id=CASE,
+        case_version=3,
+        line_no=2,
+        field="confirmed_date",
+        value="2026-12-08",
+    )
+    stated = replace(
+        _turn(session), kind=QuestionKind.PROPOSE_BRAVO_WRITE, reference=None, proposal=proposal
     )
     async with stores(_context(world.alpha, an)) as store:
         await store.open(session)

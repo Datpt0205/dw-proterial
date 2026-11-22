@@ -354,6 +354,7 @@ def assemble(
         uow, gate, clock, quotation, pending, step_activity, book, threads, directory
     )
     order_commands = OrderCommands(uow, gate, clock, ids, intake, pending, converts, notations)
+    line_writes = BravoLineWrites(bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
@@ -510,6 +511,9 @@ def assemble(
             # A flag's decision the PIC confirms in the case's conversation
             # (ticket 56) is the same command the page's button sends.
             decisions=order_commands,
+            # And a Bravo write the PIC confirms there is ticket 53's own
+            # proposal, checked again in full.
+            bravo_writes=line_writes,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
@@ -520,9 +524,7 @@ def assemble(
         order_quotes=order_quotes,
         bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
         bravo_facts=BravoFactsService(bravo_facts_store, gate, clock),
-        bravo_writes=BravoLineWrites(
-            bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids
-        ),
+        bravo_writes=line_writes,
         gate=gate,
     )
     decisions = CaseDecisions(

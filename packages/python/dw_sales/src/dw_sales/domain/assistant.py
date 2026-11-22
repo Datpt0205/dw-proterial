@@ -56,6 +56,10 @@ class QuestionKind(StrEnum):
     # DW1 says back exactly what it would record, and records it only when
     # the PIC confirms that statement (`ProposedDecision.content_hash`).
     DECIDE_FINDING = "decide_finding"
+    # The PIC asks for an SO line's confirmed date or quantity to be written
+    # into Bravo (ticket 56 over ticket 53): DW1 says back exactly what it
+    # would propose, and proposes it for approval only when the PIC confirms.
+    PROPOSE_BRAVO_WRITE = "propose_bravo_write"
     OUT_OF_SCOPE = "out_of_scope"
 
 
@@ -63,6 +67,9 @@ class QuestionKind(StrEnum):
 # that need no typed value (`orders.DispositionKind`), in the API's words.
 ChatDecision = Literal["accepted", "ask_customer"]
 REASON_CHARS: Final = 200
+# What a PIC may ask the chat to write into Bravo: ticket 53's two runnable
+# kinds, in `bravo_line_writes.LineChange`'s words.
+WriteField = Literal["confirmed_date", "quantity"]
 
 
 class QuestionIntent(BaseModel):
@@ -82,6 +89,12 @@ class QuestionIntent(BaseModel):
     finding_code: str | None = Field(default=None, pattern=r"^[a-z_]{1,64}$")
     decision: ChatDecision | None = None
     reason: str | None = Field(default=None, min_length=1, max_length=REASON_CHARS)
+    # `propose_bravo_write` only: the PO line the person names, the field,
+    # and the new value as the model writes it (an ISO date or a plain
+    # number), which code parses strictly and says back before anything.
+    line_no: int | None = Field(default=None, ge=1, le=99_999)
+    field: WriteField | None = None
+    new_value: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +157,68 @@ class ProposedDecision:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ProposedBravoWrite:
+    """An SO line's value DW1 states it would propose writing into Bravo
+    (ticket 56 over ticket 53), bound like `ProposedDecision`: the PIC
+    confirms `content_hash`, and code opens the write's approval only for
+    content that still hashes to it on a case still at ``case_version``.
+    ``value`` is canonical: an ISO date, or a quantity with no exponent."""
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    case_version: int
+    line_no: int
+    field: WriteField
+    value: str
+
+    def stored(self) -> dict[str, object]:
+        return {
+            "action": "bravo_write",
+            "case_kind": self.case_kind.value,
+            "case_id": str(self.case_id),
+            "case_version": self.case_version,
+            "line_no": self.line_no,
+            "field": self.field,
+            "value": self.value,
+        }
+
+    @property
+    def content_hash(self) -> str:
+        canonical = json.dumps(
+            self.stored(), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def from_stored(cls, row: Mapping[str, object]) -> ProposedBravoWrite:
+        field_name = str(row["field"])
+        if field_name not in ("confirmed_date", "quantity"):
+            raise ValueError(f"unknown field {field_name!r}")
+        version, line_no = row["case_version"], row["line_no"]
+        if not isinstance(version, int) or not isinstance(line_no, int):
+            raise ValueError("case_version and line_no are integers")
+        return cls(
+            case_kind=CaseKind(str(row["case_kind"])),
+            case_id=uuid.UUID(str(row["case_id"])),
+            case_version=version,
+            line_no=line_no,
+            field=field_name,  # type: ignore[arg-type]
+            value=str(row["value"]),
+        )
+
+
+Proposal = ProposedDecision | ProposedBravoWrite
+
+
+def proposal_from_stored(row: Mapping[str, object]) -> Proposal:
+    """A turn's stored statement: a Bravo write names its action; a flag's
+    decision, stored before there was a second kind, names none."""
+    if row.get("action") == "bravo_write":
+        return ProposedBravoWrite.from_stored(row)
+    return ProposedDecision.from_stored(row)
+
+
 # The case page's own control a case conversation offers for a step asked
 # of it (ticket 46): the page draws it, with its own gate and API, where
 # it has one; the chat starts nothing.
@@ -190,8 +265,9 @@ class Turn:
     # The case the conversation is on after this turn, if any.
     focus: CaseRef | None
     answered_by: Literal["model", "code"]
-    # A decision stated for the PIC to confirm (ticket 56); None otherwise.
-    proposal: ProposedDecision | None = None
+    # A decision or a Bravo write stated for the PIC to confirm (ticket 56);
+    # None otherwise.
+    proposal: Proposal | None = None
 
 
 @dataclass(frozen=True, slots=True)

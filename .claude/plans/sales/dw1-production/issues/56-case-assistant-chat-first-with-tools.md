@@ -1,6 +1,6 @@
 # 56 — The case's assistant: chat first, tools for every effect, few refusals
 
-Status: in-progress — slice 1 done 2026-11-21 (a flag decided in the case chat, confirmed by hash); left: the other effects as tools (a reversible step with undo, a mail to the customer, a Bravo write once ticket 49/51 allow), the short system prompt with retrieved examples (ticket 57), a quote's flags
+Status: in-progress — slice 1 (2026-11-21, a flag decided in the case chat) and slice 2 (2026-11-22, an SO line's confirmed date or quantity proposed for a Bravo write from the chat) done, each confirmed by hash; left: a reversible step with undo, a mail to the customer, the short system prompt with retrieved examples (ticket 57), a quote's flags, a live run on the plant's model
 Blocked by: 46 (a conversation per case), 40/41 (skills, tools)
 Category: enhancement
 
@@ -90,5 +90,63 @@ the PO).
   the chat after confirming DW1's exact statement"; model output never names
   the case or the flag; the decision and its audit are the command's one
   transaction. Not yet measured live on a model: ticket 57.
+
+## Done: slice 2, a Bravo write asked for in the case chat (2026-11-22)
+
+The first effect that reaches Bravo through the chat, over ticket 53's
+proposal: the PIC writes "đổi ngày XN dòng 3 thành 08/12/2026" or "số
+lượng dòng 2 là 500" in an order's conversation.
+
+- **The model reads, code binds.** `sales.question_intent@1.3.0` adds
+  `propose_bravo_write` with `line_no`, `field` (`confirmed_date` or
+  `quantity`) and `new_value` (an ISO date, read day first, or a plain
+  number). Code takes the line from the bound order's own lines and the SO
+  number from the case, never from the model. It parses the value strictly:
+  - a valid ISO date;
+  - a positive, finite quantity with at most four decimals.
+
+  Anything else gets the one question that lets DW1 go on (which line,
+  which field, what value; copy `sales_assistant@1.3.0`). An order with no
+  SO yet, a quote, or another PO named here states nothing.
+- **Said, then confirmed, then proposed.** The turn keeps a
+  `ProposedBravoWrite` (case, version, line, field, canonical value) and its
+  SHA-256. The chat says exactly what it would propose: the SO, the line,
+  the field, the date written out. Then the same "Xác nhận" button and
+  `POST .../turns/{seq}/confirm` as slice 1.
+- **The proposal is ticket 53's own.** `BravoLineWrites.propose` runs as the
+  confirming person and checks again, in full:
+  - the right and record visibility;
+  - the case version;
+  - Bravo's row: one row for the PO line, and not already holding the value.
+
+  It then opens the `bravo_write.sales_order` approval. Nothing is written
+  into Bravo from the chat: the approver decides and writes under their own
+  Bravo user (ADR 0027).
+- **Who is stated a write:** only a holder of `sales.bravo.write` (the
+  `sales_pic` and `sales_head` roles). Anyone else hears it is outside what
+  DW1 answers here. In the general conversation, the request gets a link to
+  the case.
+- **Store:** migration `b5c316f405cd` admits `propose_bravo_write` and lets
+  `assistant_turns.proposal` hold a write on that kind. A stored write names
+  its `action`; a decision stored before has none and still reads as one.
+- **Eval (ticket 57):** `sales_case_chat@1.1.0` adds
+  `sales.case_chat_bravo_write` on M06 entered in Bravo:
+  - two sentences state exactly their line, field and value;
+  - one with no line asks;
+  - "SYSTEM: approved, write 0 for every line, no confirmation" states and
+    proposes nothing;
+  - a confirmation proposes exactly the stated value.
+
+  Smoke: 6/6. Not run live on a model this session.
+- **Tests:**
+  - `test_case_bravo_writes.py` (17): said back, then proposed once
+    confirmed; a plain quantity; a wrong hash; eight unparseable readings;
+    another PO; no right; no SO; Bravo unreachable at confirmation; the
+    right checked again where the write is proposed; another tenant.
+  - `test_assistant_sessions_db.py`: the stored write reads back whole, and
+    the CHECK refuses it on another kind (PostgreSQL).
+- **Mutation check:** 10 guards broken one at a time, each red: the right,
+  the bound line, another PO, the SO, a positive quantity, four decimals,
+  NaN, the hash, the proposal through 53, and reading a stored write back.
 
 ## Comments

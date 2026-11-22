@@ -47,6 +47,7 @@ from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, aclosing
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, Final, Literal, Protocol
 from zoneinfo import ZoneInfo
 
@@ -74,6 +75,11 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.assistant_copy import AssistantCopyPort, AssistantWords
+from dw_sales.application.bravo_line_writes import (
+    BravoLineWriteView,
+    ConfirmedDateChange,
+    QuantityChange,
+)
 from dw_sales.application.local_time import local_day
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
@@ -89,6 +95,8 @@ from dw_sales.domain.assistant import (
     CaseOffer,
     CaseRef,
     ChatDecision,
+    Proposal,
+    ProposedBravoWrite,
     ProposedDecision,
     QuestionIntent,
     QuestionKind,
@@ -106,7 +114,7 @@ from dw_sales.domain.process import DW_NAMES
 # rendered size under `*_TOKENS`.
 # 1.1.0 (ticket 46): the three steps of a case a person may ask for.
 # 1.2.0 (ticket 56): a decision on one of the case's open flags (FLAGS).
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.2.0")
+QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.3.0")
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
 INTENT_TOKENS: Final = 1500
 ANSWER_TOKENS: Final = 900
@@ -204,11 +212,18 @@ class TurnView(BaseModel):
 
 
 class ProposalView(BaseModel):
+    """What a turn stated for the PIC to confirm: a flag's decision
+    (``action`` decide_finding) or a Bravo write (bravo_write)."""
+
     model_config = ConfigDict(frozen=True)
 
-    finding_key: str
-    decision: ChatDecision
-    reason: str | None
+    action: Literal["decide_finding", "bravo_write"] = "decide_finding"
+    finding_key: str | None = None
+    decision: ChatDecision | None = None
+    reason: str | None = None
+    line_no: int | None = None
+    field: Literal["confirmed_date", "quantity"] | None = None
+    value: str | None = None
     case_version: int
     content_hash: str
 
@@ -267,7 +282,16 @@ def _turn_view(turn: Turn, *, on_case: bool) -> TurnView:
     )
 
 
-def _proposal_view(proposal: ProposedDecision) -> ProposalView:
+def _proposal_view(proposal: Proposal) -> ProposalView:
+    if isinstance(proposal, ProposedBravoWrite):
+        return ProposalView(
+            action="bravo_write",
+            line_no=proposal.line_no,
+            field=proposal.field,
+            value=proposal.value,
+            case_version=proposal.case_version,
+            content_hash=proposal.content_hash,
+        )
     return ProposalView(
         finding_key=proposal.finding_key,
         decision=proposal.decision,
@@ -304,7 +328,7 @@ class _Found:
     facts: dict[str, Any] | None = None
     cites: tuple[CaseRef, ...] = ()
     focus: CaseRef | None = None
-    proposal: ProposedDecision | None = None
+    proposal: Proposal | None = None
 
 
 def _order_ref(order: OrderSummaryView) -> CaseRef:
@@ -428,6 +452,22 @@ class FindingDecisionPort(Protocol):
     ) -> CaseChangeView: ...
 
 
+class BravoWriteProposalPort(Protocol):
+    """Proposes an SO line's write into Bravo as ticket 53's own service
+    does: it checks the caller's right and record visibility, the case's
+    version, and the row Bravo holds, and opens the write's approval."""
+
+    async def propose(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        line_no: int,
+        change: ConfirmedDateChange | QuantityChange,
+        *,
+        case_version: int,
+    ) -> BravoLineWriteView: ...
+
+
 @dataclass(frozen=True, slots=True)
 class _Flag:
     """An open flag of the bound case, as the model is shown it."""
@@ -457,6 +497,9 @@ class AssistantService:
     # Where a confirmed flag decision is recorded (ticket 56); None: the
     # chat states no decision.
     decisions: FindingDecisionPort | None = None
+    # Where a confirmed Bravo write is proposed (ticket 56 over 53); None:
+    # the chat states no write.
+    bravo_writes: BravoWriteProposalPort | None = None
 
     async def conversation(
         self, context: AccessContext, case: CaseKey | None = None
@@ -528,8 +571,6 @@ class AssistantService:
         that moved since, is a conflict. The command itself checks the
         caller's scope and the case's version, as the page's button does."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_RESOURCE)
-        if self.decisions is None:
-            raise NotFoundError("no such decision")
         words = (await self.copy.assistant_copy(sales_scope(context))).words
         bound = await self._bound(context, case)
         async with self.store(context) as store:
@@ -547,6 +588,10 @@ class AssistantService:
             raise ConflictError("the decision confirmed is not the one stated")
         if proposal.case_version != bound.version:
             raise ConflictError("the case changed since the decision was stated")
+        if isinstance(proposal, ProposedBravoWrite):
+            return await self._propose_write(context, proposal, words)
+        if self.decisions is None:
+            raise NotFoundError("no such decision", details={"seq": seq})
         flag = next((f for f in bound.flags if f.key == proposal.finding_key), None)
         if flag is None:
             raise ConflictError("the flag is no longer open")
@@ -564,6 +609,32 @@ class AssistantService:
             decision=_decision_word(proposal.decision, words),
         )
         return ConfirmedView(answer=answer, case_version=change.case_version)
+
+    async def _propose_write(
+        self, context: AccessContext, proposal: ProposedBravoWrite, words: AssistantWords
+    ) -> ConfirmedView:
+        """A confirmed write, proposed through ticket 53's own service as the
+        confirming person: it checks their right, the case and Bravo's row
+        again, and opens the approval; nothing is written into Bravo here."""
+        if self.bravo_writes is None:
+            raise NotFoundError("no such decision")
+        change: ConfirmedDateChange | QuantityChange = (
+            ConfirmedDateChange(field="confirmed_date", value=date.fromisoformat(proposal.value))
+            if proposal.field == "confirmed_date"
+            else QuantityChange(field="quantity", value=Decimal(proposal.value))
+        )
+        await self.bravo_writes.propose(
+            context,
+            proposal.case_id,
+            proposal.line_no,
+            change,
+            case_version=proposal.case_version,
+        )
+        answer = words.say(
+            "write_done", field=_field_word(proposal.field, words), line=str(proposal.line_no)
+        )
+        # A proposal moves Bravo's write, not the case: its version stands.
+        return ConfirmedView(answer=answer, case_version=proposal.case_version)
 
     async def stream(
         self, context: AccessContext, question: str, case: CaseKey | None = None
@@ -602,7 +673,11 @@ class AssistantService:
             deciding = self.decisions is not None and self.gate.allows(
                 context, SalesScopes.ORDER_PREPARE
             )
-            found = _in_case(intent, bound, words, deciding=deciding)
+            # A write is stated only to someone its service would let propose it.
+            writing = self.bravo_writes is not None and self.gate.allows(
+                context, SalesScopes.BRAVO_WRITE
+            )
+            found = _in_case(intent, bound, words, deciding=deciding, writing=writing)
         else:
             found = await self._find(context, intent, focus, words)
         answer: str = found.sentence
@@ -658,6 +733,8 @@ class AssistantService:
                         order_facts(order, zone),
                         version=whole.case_version,
                         flags=flags,
+                        lines=tuple(line.line_no for line in whole.lines),
+                        so_no=whole.bravo_so_no,
                     )
         else:
             for quote in await self.quotes.summaries(context):
@@ -747,9 +824,11 @@ class AssistantService:
                 | QuestionKind.REMIND_CUSTOMER
                 | QuestionKind.EXPLAIN_THREAD
                 | QuestionKind.DECIDE_FINDING
+                | QuestionKind.PROPOSE_BRAVO_WRITE
             ):
-                # A flag is decided in its case's own conversation (ticket
-                # 56): here, the link to it, nothing recorded.
+                # A flag is decided, and a Bravo write proposed, in its case's
+                # own conversation (ticket 56): here, the link to it, nothing
+                # recorded.
                 return await self._step(context, intent, focus, words)
 
     async def _order(
@@ -922,6 +1001,9 @@ class _Bound:
     # An order's version and open flags (ticket 56); a quote's are not read.
     version: int = 0
     flags: tuple[_Flag, ...] = ()
+    # An order's PO line numbers and its SO number in Bravo (ticket 56 over 53).
+    lines: tuple[int, ...] = ()
+    so_no: str | None = None
 
     def sentence(self, words: AssistantWords) -> str:
         said = order_sentence if self.ref.kind is CaseKind.ORDER else quote_sentence
@@ -929,7 +1011,12 @@ class _Bound:
 
 
 def _in_case(
-    intent: QuestionIntent | None, bound: _Bound, words: AssistantWords, *, deciding: bool = False
+    intent: QuestionIntent | None,
+    bound: _Bound,
+    words: AssistantWords,
+    *,
+    deciding: bool = False,
+    writing: bool = False,
 ) -> _Found:
     """A case conversation's answer: the bound case's facts, or a pointer
     elsewhere. Nothing here looks another case up, whatever the question
@@ -950,6 +1037,10 @@ def _in_case(
             if not deciding:
                 return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
             return _decision(intent, bound, words)
+        case QuestionKind.PROPOSE_BRAVO_WRITE:
+            if not writing:
+                return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
+            return _bravo_write(intent, bound, words)
         case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
             if intent.reference is not None and not same_reference(intent.reference, bound.number):
                 only = words.say("only_this_case", case=bound.ref.label)
@@ -999,6 +1090,65 @@ def _decision(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -> _
     return _Found(
         _proposal_sentence(proposal, flag, words), None, (bound.ref,), bound.ref, proposal
     )
+
+
+def _field_word(field: str, words: AssistantWords) -> str:
+    return words.write_date_word if field == "confirmed_date" else words.write_quantity_word
+
+
+def _canonical(field: str, written: str | None) -> str | None:
+    """The value as code holds it, or None when it is not exactly one: an
+    ISO date, or a positive quantity of at most four decimals, plain."""
+    if written is None:
+        return None
+    text = written.strip()
+    if field == "confirmed_date":
+        try:
+            return date.fromisoformat(text).isoformat() if len(text) == 10 else None
+        except ValueError:
+            return None
+    try:
+        number = Decimal(text)
+    except InvalidOperation:
+        return None
+    if not number.is_finite() or number <= 0 or number != number.quantize(Decimal("0.0001")):
+        return None
+    return format(number.normalize(), "f")
+
+
+def _bravo_write(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -> _Found:
+    """An SO line's value the PIC asked to write into Bravo, said back for
+    them to confirm; or the one question that lets DW1 say it. The line is
+    one of the bound order's own, the value parsed by code: nothing the
+    model wrote names the case, the SO or the row."""
+    if bound.ref.kind is not CaseKind.ORDER:
+        return _Found(words.write_orders_only)
+    if intent.reference is not None and not same_reference(intent.reference, bound.number):
+        only = words.say("only_this_case", case=bound.ref.label)
+        return _Found(f"{only} {words.elsewhere}")
+    if bound.so_no is None:
+        return _Found(words.write_no_so)
+    if intent.line_no is None or intent.line_no not in bound.lines:
+        listed = ", ".join(str(n) for n in bound.lines)
+        return _Found(words.say("write_which_line", lines=listed))
+    line = str(intent.line_no)
+    if intent.field is None:
+        return _Found(words.say("write_which_field", line=line))
+    field = _field_word(intent.field, words)
+    value = _canonical(intent.field, intent.new_value)
+    if value is None:
+        return _Found(words.say("write_which_value", field=field, line=line))
+    proposal = ProposedBravoWrite(
+        case_kind=bound.ref.kind,
+        case_id=bound.ref.case_id,
+        case_version=bound.version,
+        line_no=intent.line_no,
+        field=intent.field,
+        value=value,
+    )
+    shown = day(date.fromisoformat(value)) if intent.field == "confirmed_date" else value
+    sentence = words.say("write_confirm", so=bound.so_no, line=line, field=field, value=shown)
+    return _Found(sentence, None, (bound.ref,), bound.ref, proposal)
 
 
 def _decision_word(decision: ChatDecision, words: AssistantWords) -> str:
