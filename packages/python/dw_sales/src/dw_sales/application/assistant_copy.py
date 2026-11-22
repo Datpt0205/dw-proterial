@@ -105,6 +105,18 @@ class AssistantWords(BaseModel):
     decide_no_flag: str = _words()
     decide_orders_only: str = _words()
     decide_done: str = _words("flag", "decision")
+    # An SO line's value asked to be written into Bravo (ticket 56 over 53):
+    # said back for the PIC to confirm, then proposed for approval.
+    # ``{field}``: `write_date_word` or `write_quantity_word`.
+    write_confirm: str = _words("so", "line", "field", "value")
+    write_date_word: str = _words(max_length=60)
+    write_quantity_word: str = _words(max_length=60)
+    write_which_line: str = _words("lines")
+    write_which_field: str = _words("line")
+    write_which_value: str = _words("field", "line")
+    write_no_so: str = _words()
+    write_orders_only: str = _words()
+    write_done: str = _words("field", "line")
     # What the chat shows while a turn is worked on.
     step_read: str = _words(max_length=60)
     step_look: str = _words(max_length=60)

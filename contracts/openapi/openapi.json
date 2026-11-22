@@ -16960,7 +16960,17 @@
         "type": "object"
       },
       "ProposalView": {
+        "description": "What a turn stated for the PIC to confirm: a flag's decision\n(``action`` decide_finding) or a Bravo write (bravo_write).",
         "properties": {
+          "action": {
+            "default": "decide_finding",
+            "enum": [
+              "decide_finding",
+              "bravo_write"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
           "case_version": {
             "title": "Case Version",
             "type": "integer"
@@ -16970,16 +16980,56 @@
             "type": "string"
           },
           "decision": {
-            "enum": [
-              "accepted",
-              "ask_customer"
+            "anyOf": [
+              {
+                "enum": [
+                  "accepted",
+                  "ask_customer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Decision",
-            "type": "string"
+            "title": "Decision"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed_date",
+                  "quantity"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
           },
           "finding_key": {
-            "title": "Finding Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Key"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
           },
           "reason": {
             "anyOf": [
@@ -16991,12 +17041,20 @@
               }
             ],
             "title": "Reason"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
         "required": [
-          "finding_key",
-          "decision",
-          "reason",
           "case_version",
           "content_hash"
         ],
@@ -17681,6 +17739,7 @@
           "remind_customer",
           "explain_thread",
           "decide_finding",
+          "propose_bravo_write",
           "out_of_scope"
         ],
         "title": "QuestionKind",

@@ -7169,21 +7169,34 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["PromptVersionView"][];
         };
-        /** ProposalView */
+        /**
+         * ProposalView
+         * @description What a turn stated for the PIC to confirm: a flag's decision
+         *     (``action`` decide_finding) or a Bravo write (bravo_write).
+         */
         ProposalView: {
+            /**
+             * Action
+             * @default decide_finding
+             * @enum {string}
+             */
+            action: "decide_finding" | "bravo_write";
             /** Case Version */
             case_version: number;
             /** Content Hash */
             content_hash: string;
-            /**
-             * Decision
-             * @enum {string}
-             */
-            decision: "accepted" | "ask_customer";
+            /** Decision */
+            decision?: ("accepted" | "ask_customer") | null;
+            /** Field */
+            field?: ("confirmed_date" | "quantity") | null;
             /** Finding Key */
-            finding_key: string;
+            finding_key?: string | null;
+            /** Line No */
+            line_no?: number | null;
             /** Reason */
-            reason: string | null;
+            reason?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /**
          * QuantityChange
@@ -7203,7 +7216,7 @@ export interface components {
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
          */
-        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "out_of_scope";
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "propose_bravo_write" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];

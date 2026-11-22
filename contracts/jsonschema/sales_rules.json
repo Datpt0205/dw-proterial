@@ -406,6 +406,84 @@
             "x-placeholders": [
               "{more}"
             ]
+          },
+          "write_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{field}",
+              "{line}",
+              "{so}",
+              "{value}"
+            ]
+          },
+          "write_date_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Write Date Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "write_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Done",
+            "type": "string",
+            "x-placeholders": [
+              "{field}",
+              "{line}"
+            ]
+          },
+          "write_no_so": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write No So",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "write_orders_only": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Orders Only",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "write_quantity_word": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Write Quantity Word",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "write_which_field": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Which Field",
+            "type": "string",
+            "x-placeholders": [
+              "{line}"
+            ]
+          },
+          "write_which_line": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Which Line",
+            "type": "string",
+            "x-placeholders": [
+              "{lines}"
+            ]
+          },
+          "write_which_value": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Which Value",
+            "type": "string",
+            "x-placeholders": [
+              "{field}",
+              "{line}"
+            ]
           }
         },
         "required": [
@@ -456,6 +534,15 @@
           "decide_no_flag",
           "decide_orders_only",
           "decide_done",
+          "write_confirm",
+          "write_date_word",
+          "write_quantity_word",
+          "write_which_line",
+          "write_which_field",
+          "write_which_value",
+          "write_no_so",
+          "write_orders_only",
+          "write_done",
           "step_read",
           "step_look"
         ],

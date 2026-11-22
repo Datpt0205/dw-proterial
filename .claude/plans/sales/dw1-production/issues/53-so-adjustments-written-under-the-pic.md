@@ -1,6 +1,6 @@
 # 53 — SO adjustments written into Bravo under the PIC's user (phase 2)
 
-Status: in-progress — the date and the quantity built end to end offline (2026-11-21): proposed against Bravo's row, approved by the one person whose Bravo user writes it, signed in the decision, sent by the worker through the gateway. pending: split and creation (script 03c), cancel (a real cancel's trace, ticket 52 item 2), the existing SO's save context word and the command right (ticket 52), the case page's button, and every UAT acceptance item
+Status: in-progress — the date and the quantity built end to end offline (2026-11-21): proposed against Bravo's row, approved by the one person whose Bravo user writes it, signed in the decision, sent by the worker through the gateway. pending: split and creation (script 03c), cancel (a real cancel's trace, ticket 52 item 2), the existing SO's save context word and the command right (ticket 52), the case page's button (the case chat proposes a date or quantity since 2026-11-22, ticket 56 slice 2), and every UAT acceptance item
 Blocked by: 63 (the gateway), 64 (identity; replaces the hand-made PIC ↔ Bravo user list)
 Category: enhancement
 

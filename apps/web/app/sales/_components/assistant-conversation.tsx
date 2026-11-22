@@ -43,6 +43,8 @@ const READ_AS: Record<Turn["kind"], string> = {
   remind_customer: "Hiểu là nhờ nhắc khách",
   explain_thread: "Hiểu là nhờ tóm tắt chuỗi thư",
   decide_finding: "Hiểu là bạn quyết định một cờ của hồ sơ",
+  propose_bravo_write:
+    "Hiểu là nhờ ghi ngày XN hoặc số lượng một dòng vào Bravo",
   out_of_scope: "Câu này ngoài những gì DW1 trả lời",
 };
 
