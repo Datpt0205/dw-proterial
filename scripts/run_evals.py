@@ -18,7 +18,7 @@ Usage:
     # a step on, and DW1 uses it, only once its latest such measurement passed.
     uv run python scripts/run_evals.py --live onprem --attest
         --tenant <uuid> --workspace <uuid>
-        --dataset evals/datasets/sales_intent@1.0.0.json
+        --dataset evals/datasets/sales_intent@1.1.0.json
 
 Exit code is non-zero when any case fails or a dataset lacks full security
 coverage (prompt injection, cross-tenant attack, missing evidence). A live

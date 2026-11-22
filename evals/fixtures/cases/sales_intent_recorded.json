@@ -1,6 +1,11 @@
 {
   "_comment": "The local model's answers (onprem profile) to sales.message_intent, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
   "answers": {
+    "033f0358b3c14b00a963cd3e": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
     "03f6d13df092a2a9c8e332fb": {
       "language": "vi",
       "referenced_number_spans": [],
@@ -152,6 +157,13 @@
       "referenced_number_spans": [],
       "kind": "other"
     },
+    "462f703bb4da06d50df4295b": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0222"
+      ],
+      "kind": "complaint"
+    },
     "46cde1a74eae5780956acf36": {
       "language": "en",
       "referenced_number_spans": [],
@@ -161,6 +173,13 @@
       "language": "en",
       "referenced_number_spans": [],
       "kind": "complaint"
+    },
+    "4b77b926e9da0a8e8ec9df52": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2611-0305"
+      ],
+      "kind": "delivery_change"
     },
     "4d87b096c7332092fa88910e": {
       "language": "en",
@@ -188,6 +207,13 @@
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "quote_request"
+    },
+    "561c03f4c441a4d869bb545d": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0201"
+      ],
+      "kind": "reply_to_case"
     },
     "570350b0063a8b0aac9702c6": {
       "language": "ja",
@@ -264,6 +290,11 @@
       ],
       "kind": "design_reply"
     },
+    "7f7142acc09147b6ad5cbbc0": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
     "830fc286fb6178ecbfc8e861": {
       "language": "vi",
       "referenced_number_spans": [
@@ -299,6 +330,11 @@
       "language": "en",
       "referenced_number_spans": [],
       "kind": "po"
+    },
+    "9ec2c992c5512db12134e26f": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "reply_to_case"
     },
     "a156651caad19222728dbcea": {
       "language": "vi",
@@ -489,6 +525,11 @@
       ],
       "kind": "design_reply"
     },
+    "d8cc3667b4d9aceded9c2c0c": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
     "db213f5356caf47d8dd5eede": {
       "language": "en",
       "referenced_number_spans": [
@@ -516,6 +557,13 @@
         "YCBG-2610-004"
       ],
       "kind": "design_reply"
+    },
+    "e26205e24e851dbd68cd84a1": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-1010-A"
+      ],
+      "kind": "delivery_change"
     },
     "e2a68a14c1e19d1a1cc93f55": {
       "language": "vi",

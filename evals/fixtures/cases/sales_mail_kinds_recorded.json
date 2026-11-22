@@ -27,6 +27,11 @@
       ],
       "kind": "design_reply"
     },
+    "099eea947e80eb461c111647": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
     "0c529bc58e003e9e59deca95": {
       "language": "en",
       "referenced_number_spans": [
@@ -60,6 +65,13 @@
       "language": "vi",
       "referenced_number_spans": [
         "VLX-PO-2610-0004"
+      ],
+      "kind": "delivery_change"
+    },
+    "10439a1195211c78c68f8cc8": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2611-0305"
       ],
       "kind": "delivery_change"
     },
@@ -134,6 +146,11 @@
       "referenced_number_spans": [],
       "kind": "other"
     },
+    "321a94ecf7e2bd001143b427": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
     "32ab658082830bf8d7ace387": {
       "language": "vi",
       "referenced_number_spans": [
@@ -201,6 +218,18 @@
       "language": "ja",
       "referenced_number_spans": [],
       "kind": "sample_request"
+    },
+    "558c21cef4a35bc5e89861b1": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
+    "55a6a4de67affb1db6ccf8b1": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0222"
+      ],
+      "kind": "complaint"
     },
     "576d8387c79395c26a48d68a": {
       "language": "en",
@@ -343,6 +372,13 @@
       "referenced_number_spans": [],
       "kind": "reply_to_case"
     },
+    "a15060f1e1bab71a4f4688d2": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-1010-A"
+      ],
+      "kind": "delivery_change"
+    },
     "a3e651984f01a9d810dfc7ae": {
       "language": "en",
       "referenced_number_spans": [],
@@ -407,6 +443,13 @@
       ],
       "kind": "complaint"
     },
+    "bf502b920100c69cd2a2ba86": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0201"
+      ],
+      "kind": "reply_to_case"
+    },
     "c6f7cc21c068a0443233370e": {
       "language": "vi",
       "referenced_number_spans": [
@@ -420,6 +463,11 @@
         "YCBG-2610-011"
       ],
       "kind": "design_reply"
+    },
+    "cb52e00d00753881395b1f52": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
     },
     "cb6830fe01075715de086bd5": {
       "language": "ja",

@@ -27,6 +27,11 @@
       ],
       "kind": "complaint"
     },
+    "0f489c627eaf51a6e8f20d87": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
     "100c45f9505007b20184e44d": {
       "language": "vi",
       "referenced_number_spans": [
@@ -173,6 +178,11 @@
       "referenced_number_spans": [],
       "kind": "sample_request"
     },
+    "3c4078aaf5f2f2794961cb3c": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
+    },
     "3ebb88caf5328874a869c837": {
       "language": "ja",
       "referenced_number_spans": [
@@ -216,6 +226,13 @@
       "language": "en",
       "referenced_number_spans": [],
       "kind": "po"
+    },
+    "56a7f227641d39be40344bd6": {
+      "language": "ja",
+      "referenced_number_spans": [
+        "KMH-2026-1010-A"
+      ],
+      "kind": "delivery_change"
     },
     "5a3afa3e52f9c28350721b42": {
       "language": "en",
@@ -368,12 +385,24 @@
       "referenced_number_spans": [],
       "kind": "sample_request"
     },
+    "9f170ec518d9603da7ff048b": {
+      "language": "en",
+      "referenced_number_spans": [],
+      "kind": "quote_request"
+    },
     "a26915858508b81f1e9ba022": {
       "language": "vi",
       "referenced_number_spans": [
         "VLX-PO-2609-0131"
       ],
       "kind": "delivery_change"
+    },
+    "a76cf8054cc0136d401cbc41": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0222"
+      ],
+      "kind": "complaint"
     },
     "a9f9ed8b29c5f4db5e8f752e": {
       "language": "vi",
@@ -448,6 +477,13 @@
       "language": "ja",
       "referenced_number_spans": [],
       "kind": "quote_request"
+    },
+    "c09751ed72d8907c8f5ce004": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2611-0305"
+      ],
+      "kind": "delivery_change"
     },
     "c098eb6b674ac90ea3cb2450": {
       "language": "en",
@@ -598,6 +634,13 @@
       ],
       "kind": "delivery_change"
     },
+    "f72f98aa7cc8215c835f97e7": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2610-0201"
+      ],
+      "kind": "reply_to_case"
+    },
     "f83f6597eb8e7b9d4fa11a38": {
       "language": "vi",
       "referenced_number_spans": [],
@@ -607,6 +650,11 @@
       "language": "ja",
       "referenced_number_spans": [],
       "kind": "reply_to_case"
+    },
+    "fee0d81e0642b62920036527": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "po"
     }
   }
 }

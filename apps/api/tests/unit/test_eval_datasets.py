@@ -115,14 +115,14 @@ def test_the_live_lane_exits_non_zero_when_every_call_is_unavailable(
         return reports_dir / f"{report.dataset_id}@{report.dataset_version}.json"
 
     monkeypatch.setattr(runner, "write_report", write_report)
-    dataset = REPO_ROOT / "evals" / "datasets" / "sales_intent@1.0.0.json"
+    dataset = REPO_ROOT / "evals" / "datasets" / "sales_intent@1.1.0.json"
     monkeypatch.setattr(
         sys, "argv", ["run_evals.py", "--live", "onprem", "--dataset", str(dataset)]
     )
 
     assert script.main() == 1
     out = capsys.readouterr().out
-    assert out.startswith("[FAIL] sales_intent@1.0.0")
+    assert out.startswith("[FAIL] sales_intent@1.1.0")
     assert "the live model gave no usable answer" in out
     assert "✗ live: nothing was read" in out
     (report,) = written
