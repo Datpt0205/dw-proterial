@@ -96,8 +96,9 @@ def document() -> Document:
             "Places": Decimal(0),
             "Total": Decimal(40),
             "PO": "PO-1",
+            "ModifiedBy": Decimal(3),
         },
-        stored=["Id", "Customer", "DocDate", "Kind", "Total", "PO"],
+        stored=["Id", "Customer", "DocDate", "Kind", "Total", "PO", "ModifiedBy"],
     )
     line = {
         "Id": 11,
@@ -114,6 +115,7 @@ def document() -> Document:
         "Group": "",
         "Marked": None,
         "Ord": Decimal(1),
+        "ModifiedBy": Decimal(3),
     }
     second = {**line, "Id": 12, "Ord": Decimal(2), "Qty": Decimal(1), "Amount": Decimal(20)}
     second["Usd"] = Decimal(5)
@@ -168,6 +170,31 @@ def test_the_header_is_saved_whenever_a_line_is() -> None:
     run.edit(doc, "Detail", 0, "Eta", datetime(2026, 2, 2))
     header = next(c for c in run.save(doc).commands if c.table == "Parent")
     assert dict(header.columns) == {"ModifiedBy": Decimal(7)}
+
+
+def test_a_row_whose_view_holds_no_modified_by_is_written_without_it() -> None:
+    # The YCBG line's view has no ModifiedBy: the client passes the parameter
+    # and sets no such column (11-20 trace); the header's view has it.
+    doc, run = document(), runner()
+    first = doc.children["Detail"][0]
+    doc.children["Detail"][0] = Row(
+        first.values(), stored=[c for c in first.stored if c != "modifiedby"]
+    )
+    run.load(doc)
+    run.edit(doc, "Detail", 0, "Qty", Decimal(5))
+    by_table = {(c.table, c.row): dict(c.columns) for c in run.save(doc).commands}
+    assert "ModifiedBy" not in by_table[("Detail", 0)]
+    assert by_table[("Parent", 0)]["ModifiedBy"] == Decimal(7)
+
+
+def test_a_new_row_is_inserted_with_created_by_only_where_its_view_holds_it() -> None:
+    doc, run = document(), runner()
+    run.load(doc)
+    values = {"Id": 13, "Item": "I2", "Qty": Decimal(1), "Ord": Decimal(3)}
+    doc.children["Detail"].append(Row(values, new=True))
+    doc.children["Detail"].append(Row(values, stored=[*values, "CreatedBy"], new=True))
+    inserts = [c for c in run.save(doc).commands if c.kind == "insert"]
+    assert ["CreatedBy" in c.columns for c in inserts] == [False, True]
 
 
 def _cd_recorded() -> RecordedProcedures:

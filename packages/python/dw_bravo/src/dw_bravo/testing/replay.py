@@ -171,6 +171,10 @@ class ScreenReplay:
     derive_header: Callable[[dict[str, object]], dict[str, object]]
     derive_line: Callable[[dict[str, object]], dict[str, object]]
     max_roots: int = 3
+    # Columns the client passes as parameters with a line but its view does
+    # not load, so the line it holds has none of them (the YCBG line's view
+    # has no CreatedBy, ModifiedBy or timestamp).
+    line_unloaded: frozenset[str] = frozenset()
 
     def replay(
         self, saves: Sequence[SaveGroup], calls: Sequence[ProcedureCall]
@@ -289,7 +293,14 @@ class ScreenReplay:
 
     def _document(self, header: dict[str, object], lines: list[dict[str, object]]) -> Document:
         parent = Row({**header, **self.derive_header(header)}, stored=header.keys())
-        rows = [Row({**line, **self.derive_line(line)}, stored=line.keys()) for line in lines]
+        unloaded = {c.lower() for c in self.line_unloaded}
+        rows = [
+            Row(
+                {**line, **self.derive_line(line)},
+                stored=[c for c in line if c.lower() not in unloaded],
+            )
+            for line in lines
+        ]
         return Document(parent, {self.detail_key: rows})
 
     def _replay_update(
@@ -315,9 +326,15 @@ class ScreenReplay:
                 if column.lower() not in _AUDIT:
                     candidates.append((table, index, column))
         after_rows = {PARENT: [after_h], self.detail_key: after_l}
+        # A written column no rule of the layout can set was typed (or picked
+        # in a lookup, the same thing to the rules): it is a root for certain,
+        # and only the columns a rule could also have set are searched.
+        certain = [c for c in candidates if c[2].lower() not in self._settable(c[0])]
+        searched = [c for c in candidates if c not in certain]
         last_error = "no edit set reproduces the save"
-        for size in range(1, min(self.max_roots, len(candidates)) + 1):
-            for roots in combinations(candidates, size):
+        for size in range(0 if certain else 1, min(self.max_roots, len(searched)) + 1):
+            for extra in combinations(searched, size):
+                roots = (*certain, *extra)
                 doc = self._document(before_h, before_l)
                 procedures = _ReplayProcedures(self.layout, window, after_rows)
                 runner = RuleRunner(
@@ -350,6 +367,17 @@ class ScreenReplay:
         result.mismatch = last_error
         return result
 
+    def _settable(self, table: str) -> frozenset[str]:
+        """The columns some rule of the layout, homed on `table`, can set."""
+        columns: set[str] = set()
+        for rule in self.layout.rules.values():
+            if rule.home != table:
+                continue
+            columns.update(c.lower() for c in rule.data_members())
+            for key in ("bindingMembers", "CopyValues"):
+                columns.update(c.lower() for c in rule.maps.get(key, {}))
+        return frozenset(columns)
+
     def _compare(
         self,
         commands: Sequence[WriteCommand],
@@ -377,6 +405,37 @@ class ScreenReplay:
                     mine_v, theirs_v = lowered[column.lower()], write.values.get(column)
                     return f"{label}.{column}: ours {mine_v!r} vs client {theirs_v!r}"
         return None
+
+
+def rq_screen_replay(layout: Layout, user_id: int, branch: str) -> ScreenReplay:
+    """The YCBG screen's replay (`EDIT_BizDocRQ`, layout 11766).
+
+    Its header loads through the SO's view, `vB30BizDoc_Edit`
+    (`ModifiedBy AS UserId`); its line's view, `vB30BizDocDetailRQ_Edit`,
+    loads no audit column. What its view joins in (`Name_Item`, `ItemName`)
+    is not derived: no rule the trace's saves run reads it.
+    """
+
+    def derive_header(row: dict[str, object]) -> dict[str, object]:
+        out = unknown_columns(["MoneyDiffValue", "AutoNumbering"])
+        out["UserId"] = row.get("ModifiedBy")
+        return out
+
+    def derive_line(row: dict[str, object]) -> dict[str, object]:
+        return unknown_columns(["Name_Item", "ItemName"])
+
+    return ScreenReplay(
+        layout,
+        "B30BizDoc",
+        "B30BizDocDetailRQ",
+        "Detail",
+        session_for=lambda save: session_from(save, user_id, branch, {}),
+        derive_header=derive_header,
+        derive_line=derive_line,
+        line_unloaded=frozenset(
+            {"CreatedBy", "CreatedAt", "ModifiedBy", "ModifiedAt", "timestamp"}
+        ),
+    )
 
 
 class _NoReferences:
