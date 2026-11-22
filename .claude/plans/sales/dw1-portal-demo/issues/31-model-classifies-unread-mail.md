@@ -207,3 +207,28 @@ them are this ticket's.
   part (`mail_parts.newest_part`, history cut by structure) and is cut to the
   route's declared room (`max_input_tokens` 6,000 on `onprem`, less the
   prompt): the kind of a message is in its first lines.
+
+## 2026-11-22, tester pass: mail that never comes straight to the point
+
+Đạt asked for tests written the way staff and customers really write. Eight
+roundabout mails joined the golden set (`rb-*`, `sales_intent@1.1.0`, 100
+mails): an order slipped in after an apology for a missed call; an invoice
+question about an earlier PO; thanks for the last delivery, then "lùi giao
+dòng 1 sang 05/12"; a quote asked for in a reply about a year-end party; a
+complaint said very politely; a Japanese postponement asked very indirectly;
+"đặt như đơn tháng trước nhé, số lượng y chang"; a sample asked for in the
+middle of a project story. The report scores them apart (`roundabout`).
+
+- **Strata live** (Giang's home lab, not attested): 0.97 of the 100, bar
+  0.90 passed; 7 of the 8 `rb-*`.
+- **The one missed**: "đặt như đơn tháng trước nhé" (an order with no
+  quantity, no item, pointing at last month's) read `reply_to_case`. It names
+  no number, so no case is joined: a person reads it, as for any message
+  routed to Sales. Left as a model miss, not patched in the prompt for one
+  sentence.
+- **A label of mine corrected by the prompt's own definition**: an invoice
+  question about an earlier PO is `reply_to_case` ("a question about an
+  order already in progress"), not `other`; the model was right.
+- **Recordings**: the 92 keep their 9B answers, the eight `rb-*` are Strata's
+  (re-recording the whole set from Strata is Đạt's call, `PLAN.md`); the
+  replay reads 0.90, the floor stays 0.90.

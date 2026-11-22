@@ -269,12 +269,16 @@ def grade_golden(
     reads = _run(read_messages(model, golden))
     by_lang = {lang: scores([r for r in reads if r.lang == lang]) for lang in ("vi", "en", "ja")}
     regex_misses = {str(m["id"]) for m in golden if m.get("regex_miss")}
+    # Mails that reach the point only after an apology, thanks or a story
+    # (tester pass, 2026-11-22): scored apart, as part of the whole.
+    roundabout = {str(m["id"]) for m in golden if m.get("roundabout")}
     details: dict[str, Any] = {
         "live": ctx.live_model is not None,
         "all": scores(reads),
         "vi_en": scores([r for r in reads if r.lang in ("vi", "en")]),
         "by_language": by_lang,
         "regex_misses": scores([r for r in reads if r.message_id in regex_misses]),
+        "roundabout": scores([r for r in reads if r.message_id in roundabout]),
         "latency": latency(model, MESSAGE_INTENT.prompt_id),
         "missed": sorted(f"{r.message_id}:{r.gold}->{r.kind}" for r in reads if not r.right),
     }

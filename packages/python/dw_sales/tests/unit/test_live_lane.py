@@ -35,7 +35,7 @@ DATASETS = REPO / "evals" / "datasets"
 MODEL_STEPS = [
     "sales_descriptions@1.0.0",
     "sales_rfq@1.0.0",
-    "sales_intent@1.0.0",
+    "sales_intent@1.1.0",
     "sales_reply@2.0.0",
     "sales_handoff@1.0.0",
     "sales_layout@1.0.0",
@@ -120,7 +120,7 @@ def test_a_live_model_that_answers_is_graded_by_the_graders_own_verdict() -> Non
     ctx.live_model = model
     (golden,) = (
         case
-        for case in load_dataset(DATASETS / "sales_intent@1.0.0.json").cases
+        for case in load_dataset(DATASETS / "sales_intent@1.1.0.json").cases
         if case.grader == "sales.intent_golden"
     )
 
@@ -135,7 +135,7 @@ def test_a_live_model_that_does_not_count_its_answers_fails_closed() -> None:
     ctx = GraderContext(repo_root=REPO, live_model=Recorded(failure=ModelUnavailableError("x")))
     (golden,) = (
         case
-        for case in load_dataset(DATASETS / "sales_intent@1.0.0.json").cases
+        for case in load_dataset(DATASETS / "sales_intent@1.1.0.json").cases
         if case.grader == "sales.intent_golden"
     )
 
@@ -148,6 +148,6 @@ def test_a_live_model_that_does_not_count_its_answers_fails_closed() -> None:
 def test_the_smoke_is_graded_as_before() -> None:
     """No live model: the wrap hands the case straight to its grader."""
     ctx = GraderContext(repo_root=REPO)
-    for case in load_dataset(DATASETS / "sales_intent@1.0.0.json").cases:
+    for case in load_dataset(DATASETS / "sales_intent@1.1.0.json").cases:
         result = GRADERS[case.grader](ctx, _ref(case.input_ref), _ref(case.expected_ref))
         assert result.passed, (case.case_id, result.details)
