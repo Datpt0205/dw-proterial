@@ -86,6 +86,7 @@ from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.outbound import SqlOutboundScopes
+from dw_sales.adapters.persistence.po_body_examples import SqlPoBodyExamples
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
@@ -559,7 +560,15 @@ def build_dw1(
         layout_prefiller=(
             None if interpretation is None else LayoutPrefiller(interpretation, layout_checks)
         ),
-        body_pos=None if interpretation is None else PoBodyReader(interpretation, notations),
+        # Shown the customer's decided values (ticket 43), read from
+        # PostgreSQL under the run's scope: no index to fill.
+        body_pos=(
+            None
+            if interpretation is None
+            else PoBodyReader(
+                interpretation, notations, examples=SqlPoBodyExamples(session_factory)
+            )
+        ),
         model_steps=readiness,
         autonomy=AutonomyGate(thresholds),
         uploads=stored,

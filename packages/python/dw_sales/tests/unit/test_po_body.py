@@ -404,7 +404,7 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     rendered = prompts.render(
         PO_BODY_EXTRACTION.prompt_id,
         PO_BODY_EXTRACTION.version,
-        {"mail": ""},
+        {"mail": "", "examples": "[]"},
         tenant_id=None,
     )
     assert estimated_tokens(rendered.system + rendered.user) < PROMPT_TOKENS

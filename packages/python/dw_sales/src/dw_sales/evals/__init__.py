@@ -32,6 +32,7 @@ from dw_sales.evals.mail_kinds import GRADERS as MAIL_KIND_GRADERS
 from dw_sales.evals.morning_brief import GRADERS as BRIEF_GRADERS
 from dw_sales.evals.pc_dates import GRADERS as PC_DATE_GRADERS
 from dw_sales.evals.po_body import GRADERS as PO_BODY_GRADERS
+from dw_sales.evals.po_body_examples import GRADERS as PO_BODY_EXAMPLE_GRADERS
 from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.reply_drafts import GRADERS as REPLY_DRAFT_GRADERS
@@ -76,6 +77,7 @@ GRADERS = {
         **BRIEF_GRADERS,
         **THREAD_GRADERS,
         **PO_BODY_GRADERS,
+        **PO_BODY_EXAMPLE_GRADERS,
         **CHANGE_REQUEST_GRADERS,
         **REMINDER_GRADERS,
         **ASSISTANT_GRADERS,
