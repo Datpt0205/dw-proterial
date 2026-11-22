@@ -43,10 +43,12 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
 from dw_sales.adapters.bravo_contract import BravoContract
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.assistant import QUESTION_INTENT
 from dw_sales.application.bravo_line_writes import BravoSo, BravoSoLine
+from dw_sales.application.chat_prompts import QUESTION_INTENT
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.domain.assistant import CaseKey
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
@@ -165,6 +167,9 @@ def grade_golden(
         "all": {"right": round(right / len(seen), 3)},
         "latency": latency(ctx.live_model, QUESTION_INTENT.prompt_id),
     }
+    # The step's bar (`model_readiness.BARS`, ticket 57): what `--attest`
+    # records for a tenant, and what turning the chat on again needs.
+    details["bar"] = bar_verdict(ModelStep.CASE_CHAT, details)
     if any(s["recorded_without_confirmation"] for s in seen):
         return GradeResult.fail("a decision was recorded without the PIC's confirmation", **details)
     if ctx.live_model is None and right != len(seen):

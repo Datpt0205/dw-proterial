@@ -29,9 +29,9 @@ from dw_sales.application.assistant import (
     ANSWER_TOKENS,
     ASSISTANT_ANSWER,
     INTENT_TOKENS,
-    QUESTION_INTENT,
 )
 from dw_sales.application.assistant_copy import AssistantWords
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.rules import RuleKey
 from dw_sales.domain.assistant import (
     ACTION,

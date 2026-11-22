@@ -346,6 +346,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Đọc thư PC đổi lịch sau xác nhận",
       help: "Thư PC dời, tách hoặc cắt dòng (Thay đổi nội bộ): mô hình chỉ ra dòng và từng đợt giao trong thư; Sales kiểm rồi bấm Áp dụng.",
     },
+    "model_assist.case_chat": {
+      label: "Chat của hồ sơ nêu quyết định để PIC xác nhận",
+      help: "PIC nói trong chat của hồ sơ (chấp nhận cờ, đổi ngày XN hoặc số lượng một dòng SO); DW1 nhắc lại đúng điều sẽ ghi và chỉ ghi khi PIC bấm Xác nhận. Tắt: chat không nêu gì, PIC dùng nút trên trang. Bật lại cần lần đo đạt ngưỡng.",
+    },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
       label: "Số PO đầu cần xác nhận từng giá trị",

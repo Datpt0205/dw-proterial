@@ -21,10 +21,10 @@ in a request names either.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Protocol
 
 from dw_kernel.errors import DomainError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -71,10 +71,17 @@ from dw_sales.application.views import (
     order_change,
     order_summary,
 )
+from dw_sales.domain.assistant import Proposal
 from dw_sales.domain.catalog import ConvertEntry
 from dw_sales.domain.customer_notation import order_lesson
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.labelled_cases import mapping_label, po_value_label, undo_label
+from dw_sales.domain.labelled_cases import (
+    LabelledCase,
+    chat_decision_label,
+    mapping_label,
+    po_value_label,
+    undo_label,
+)
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -191,6 +198,14 @@ class OrderQueries:
         return line_trail(stored.case, line_no, outcomes, writes)
 
 
+class ChatStatementsPort(Protocol):
+    """What the case chat stated to the caller in their own conversation on
+    a case, oldest first (ticket 57): read before a flag's decision, so its
+    labelled case compares the decision with the statement."""
+
+    async def stated(self, context: AccessContext, case_id: uuid.UUID) -> Sequence[Proposal]: ...
+
+
 @dataclass(frozen=True)
 class OrderCommands:
     uow: SalesUnitOfWorkFactory
@@ -204,6 +219,10 @@ class OrderCommands:
     # Where what a typed value teaches of the customer's notation is kept
     # (ticket 37).
     notations: NotationLedgerPort
+    # What the case chat stated to the caller on a case (ticket 57), so a
+    # flag's decision labels the statement it agrees or disagrees with;
+    # None: nothing is labelled.
+    chat: ChatStatementsPort | None = None
 
     async def dispose(
         self,
@@ -225,6 +244,22 @@ class OrderCommands:
                 finding_key, _disposition(disposition, actor, at, reason, value, source), actor
             )
 
+        stated = await self.chat.stated(context, case_id) if self.chat is not None else ()
+
+        def labels(before: OrderCase, after: OrderCase, at: datetime) -> list[LabelledCase]:
+            # The chat's statement on this flag, beside what was recorded
+            # (ticket 57): one writer, whichever button recorded it.
+            label = chat_decision_label(
+                before,
+                after,
+                finding_key,
+                stated,
+                new_id=self.ids.new_uuid,
+                at=at,
+                by=context.principal_id,
+            )
+            return [] if label is None else [label]
+
         return await self._decide(
             context,
             case_id,
@@ -233,6 +268,7 @@ class OrderCommands:
             step,
             finding_key=finding_key,
             reason_code=disposition,
+            labels=labels,
         )
 
     async def confirm_mapping(
@@ -477,6 +513,7 @@ class OrderCommands:
         finding_key: str | None = None,
         field: str | None = None,
         reason_code: str | None = None,
+        labels: Callable[[OrderCase, OrderCase, datetime], list[LabelledCase]] | None = None,
     ) -> CaseChangeView:
         await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
         actor, now = order_actor(context, self.gate), self.clock.now()
@@ -493,6 +530,8 @@ class OrderCommands:
                 reason_code=reason_code,
             )
             await save_order(work, context, self.ids, case, after, event)
+            if labels is not None and (cases := labels(case, after, now)):
+                await work.labelled_cases.append(cases)
             await work.commit()
         await withdraw_if_left(self.decisions, context, case, after)
         return order_change(after)

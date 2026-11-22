@@ -12303,7 +12303,8 @@
           "skill_handoffs",
           "skill_reply_drafts",
           "triage_card",
-          "internal_change"
+          "internal_change",
+          "case_chat"
         ],
         "title": "ModelStep",
         "type": "string"

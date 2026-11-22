@@ -38,7 +38,8 @@ from dw_agent_runtime.model.figure_check import names_amount
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
-from dw_sales.application.assistant import QUESTION_INTENT, AnswerView
+from dw_sales.application.assistant import AnswerView
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.domain.assistant import CaseKey
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.evals.recorded import Recorded, latency

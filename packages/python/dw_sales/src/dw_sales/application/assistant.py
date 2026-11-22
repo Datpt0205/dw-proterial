@@ -80,7 +80,9 @@ from dw_sales.application.bravo_line_writes import (
     ConfirmedDateChange,
     QuantityChange,
 )
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.local_time import local_day
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
 from dw_sales.application.quotes_service import QuoteQueries
@@ -107,14 +109,12 @@ from dw_sales.domain.assistant import (
     same_reference,
 )
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.process import DW_NAMES
 
-# The prompts. Their files are `configs/prompts/sales/question_intent@1.1.0.yaml`
+# The prompts: `QUESTION_INTENT` (`chat_prompts`, the case chat's model step)
 # and `assistant_answer@1.0.0.yaml`; a test holds each to its file and its
 # rendered size under `*_TOKENS`.
-# 1.1.0 (ticket 46): the three steps of a case a person may ask for.
-# 1.2.0 (ticket 56): a decision on one of the case's open flags (FLAGS).
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.3.0")
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
 INTENT_TOKENS: Final = 1500
 ANSWER_TOKENS: Final = 900
@@ -178,6 +178,24 @@ class AssistantStorePort(Protocol):
 
 
 AssistantStoreFactory = Callable[[AccessContext], AbstractAsyncContextManager[AssistantStorePort]]
+
+
+@dataclass(frozen=True)
+class CaseChatStatements:
+    """`orders_service.ChatStatementsPort`: what the case chat stated to the
+    caller in their own conversation on a case, oldest first (ticket 57).
+    The store's RLS keeps another person's conversation out, and `_held`
+    says so again."""
+
+    store: AssistantStoreFactory
+
+    async def stated(self, context: AccessContext, case_id: uuid.UUID) -> Sequence[Proposal]:
+        async with self.store(context) as store:
+            session = await store.conversation(case_id)
+            if session is None or session.user_id != context.principal_id:
+                return ()
+            turns = await store.turns(session.session_id)
+        return [t.proposal for t in turns if t.proposal is not None]
 
 
 # --------------------------------------------------------------- views --
@@ -500,6 +518,10 @@ class AssistantService:
     # Where a confirmed Bravo write is proposed (ticket 56 over 53); None:
     # the chat states no write.
     bravo_writes: BravoWriteProposalPort | None = None
+    # The tenant's order rules, whose `model_assist.case_chat` says whether
+    # the chat states anything for the PIC to confirm (ticket 57); None:
+    # the rules are not read and the chat states nothing.
+    rules: OrderRulesPort | None = None
 
     async def conversation(
         self, context: AccessContext, case: CaseKey | None = None
@@ -610,6 +632,14 @@ class AssistantService:
         )
         return ConfirmedView(answer=answer, case_version=change.case_version)
 
+    async def _stating(self, context: AccessContext) -> bool:
+        """Whether the tenant's rules let the chat state a decision or a
+        write for the PIC to confirm (`model_assist.case_chat`)."""
+        if self.rules is None:
+            return False
+        rules = await self.rules.rules(sales_scope(context))
+        return rules.model_assist.on(ModelStep.CASE_CHAT)
+
     async def _propose_write(
         self, context: AccessContext, proposal: ProposedBravoWrite, words: AssistantWords
     ) -> ConfirmedView:
@@ -668,14 +698,20 @@ class AssistantService:
         )
         yield ChatStep(key="look", title=words.step_look)
         if bound is not None:
+            # Nothing is stated where the tenant turned the step off (ticket 57).
+            stating = await self._stating(context)
             # A decision is stated only to someone the command would let
             # record it; anyone else hears it is not theirs to decide here.
-            deciding = self.decisions is not None and self.gate.allows(
-                context, SalesScopes.ORDER_PREPARE
+            deciding = (
+                stating
+                and self.decisions is not None
+                and self.gate.allows(context, SalesScopes.ORDER_PREPARE)
             )
             # A write is stated only to someone its service would let propose it.
-            writing = self.bravo_writes is not None and self.gate.allows(
-                context, SalesScopes.BRAVO_WRITE
+            writing = (
+                stating
+                and self.bravo_writes is not None
+                and self.gate.allows(context, SalesScopes.BRAVO_WRITE)
             )
             found = _in_case(intent, bound, words, deciding=deciding, writing=writing)
         else:
@@ -1086,10 +1122,15 @@ def _decision(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -> _
         finding_key=flag.key,
         decision=decision,
         reason=reason,
+        prompt=_READ_BY,
     )
     return _Found(
         _proposal_sentence(proposal, flag, words), None, (bound.ref,), bound.ref, proposal
     )
+
+
+# The prompt a statement was read with, as its labelled case names it.
+_READ_BY: Final = f"{QUESTION_INTENT.prompt_id}@{QUESTION_INTENT.version}"
 
 
 def _field_word(field: str, words: AssistantWords) -> str:
@@ -1145,6 +1186,7 @@ def _bravo_write(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -
         line_no=intent.line_no,
         field=intent.field,
         value=value,
+        prompt=_READ_BY,
     )
     shown = day(date.fromisoformat(value)) if intent.field == "confirmed_date" else value
     sentence = words.say("write_confirm", so=bound.so_no, line=line, field=field, value=shown)
