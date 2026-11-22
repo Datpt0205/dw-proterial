@@ -26,7 +26,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Protocol
 
-from dw_kernel.errors import ConflictError, DomainError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
@@ -37,6 +37,7 @@ from dw_sales.application.activity_ports import (
 )
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.customer_notations import NotationLedgerPort, learn
+from dw_sales.application.line_trail import LineTrailView
 from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.overview_ports import FollowupPolicyPort
 from dw_sales.application.ports import (
@@ -46,6 +47,7 @@ from dw_sales.application.ports import (
     SalesScope,
 )
 from dw_sales.application.quotation import QuotationService, ScreeningRow
+from dw_sales.application.quote_line_trail import quote_line_trail
 from dw_sales.application.runs import (
     PendingDecisionsPort,
     awaiting,
@@ -187,6 +189,25 @@ class QuoteQueries:
             for s in stored
             if (kept is None or s.case.case_id in kept) and seen_by(context, CaseKind.QUOTE, s)
         ]
+
+    async def line_trail(
+        self, context: AccessContext, case_id: uuid.UUID, line_no: int
+    ) -> LineTrailView:
+        """Why requested line ``line_no`` went the way it did (ticket 62),
+        read with the case's own gate and record visibility: a caller who may
+        not read the case finds no line either."""
+        await self.gate.require(
+            context, SalesScopes.CASE_READ, resource_type=_QUOTE, resource_id=str(case_id)
+        )
+        scope = sales_scope(context)
+        async with self.uow(scope) as work:
+            stored = await stored_quote(work, case_id, viewer=context)
+        if line_no not in stored.case.request.document.line_numbers():
+            raise NotFoundError(
+                "no such line", details={"case_id": str(case_id), "line_no": line_no}
+            )
+        outcomes = await self.activity.for_case(scope, CaseKind.QUOTE, case_id)
+        return quote_line_trail(stored.case, line_no, outcomes)
 
     async def pcs_price_request(self, context: AccessContext, case_id: uuid.UUID) -> PcsCostSheet:
         """The cost sheet to ask GM/BC Manager for a pcs price (ticket 05):

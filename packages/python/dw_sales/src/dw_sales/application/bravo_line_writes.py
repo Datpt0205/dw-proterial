@@ -60,6 +60,8 @@ from dw_sales.application.case_store import (
     RunLessApprovalsPort,
 )
 from dw_sales.application.ports import NotificationSenderPort, SalesScope
+from dw_sales.application.support import seen_by
+from dw_sales.domain.dispositions import CaseKind
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -421,7 +423,9 @@ class BravoLineWrites:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             stored = await work.orders.get(case_id)
-        if stored is None:
+        # A case the caller may not see (record visibility) is not found, as
+        # every read of a case answers.
+        if stored is None or not seen_by(context, CaseKind.ORDER, stored):
             raise NotFoundError("no such order case", details={"case_id": str(case_id)})
         case = stored.case
         if case.case_version != case_version:
@@ -498,6 +502,9 @@ class BravoLineWrites:
             resource_id=str(case_id),
         )
         async with self.uow(sales_scope(context)) as work:
+            stored = await work.orders.get(case_id)
+            if stored is None or not seen_by(context, CaseKind.ORDER, stored):
+                raise NotFoundError("no such order case", details={"case_id": str(case_id)})
             return [BravoLineWriteView.of(w) for w in await work.bravo_writes.of_case(case_id)]
 
 
@@ -523,6 +530,18 @@ def asked_of(request: ApprovalRequest) -> BravoWriteAsked:
             details={"approval_type": request.approval_type},
         )
     return asked
+
+
+@dataclass(frozen=True)
+class CaseBravoWrites:
+    """`line_trail.CaseBravoWritesPort`: a case's writes, for its line trail,
+    read by a caller who already checked the case may be seen."""
+
+    uow: BravoWriteWorkFactory
+
+    async def of_case(self, scope: SalesScope, case_id: uuid.UUID) -> Sequence[BravoLineWrite]:
+        async with self.uow(scope) as work:
+            return await work.bravo_writes.of_case(case_id)
 
 
 @dataclass(frozen=True)

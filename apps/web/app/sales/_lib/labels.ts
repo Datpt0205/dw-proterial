@@ -207,7 +207,7 @@ export const FINDING_CODE = {
   above_target_price: "Cao hơn giá khách mong muốn",
 } as const;
 
-/** "Line trail steps": why a PO line went the way it did (ticket 62). */
+/** "Line trail steps": why an order's or a quotation's line went the way it did (ticket 62). */
 export const TRAIL_KIND = {
   read: "Đọc dòng từ PO",
   convert: "Đổi mã theo convert list",
@@ -227,6 +227,39 @@ export const TRAIL_KIND = {
   bravo_recorded: "Nhập vào Bravo",
   cross_checked: "Kiểm tra chéo",
   confirmed: "Xác nhận với khách",
+  candidates: "Mã có thể khớp (gợi ý)",
+  unsettled: "Cách ghi chưa rõ, để Sales điền",
+  value_confirmed: "Sales xác nhận giá trị máy đọc",
+  ycbg_recorded: "Ghi số YCBG",
+  production_type: "Chọn mass hay pcs",
+  design_reply: "Design trả lời",
+  design_check: "Kết quả Design trên Bravo",
+  priced: "Quyết định giá",
+  pcs_priced: "Giá pcs của GM/BC Manager",
+  submitted: "Gửi duyệt",
+  returned: "Trả lại để sửa",
+  approved: "Duyệt báo giá",
+  quote_sent: "Gửi báo giá cho khách",
+  master_listed: "Đưa vào master list",
+  signed_copy: "Tải bản có chữ ký",
+  declined: "Từ chối báo giá",
+  bravo_write: "Ghi vào Bravo",
+} as const;
+
+/** A Bravo write's state on a line's trail (ticket 53). */
+export const BRAVO_WRITE_STATUS = {
+  proposed: "Đề xuất, chờ duyệt",
+  rejected: "Không duyệt",
+  written: "Đã ghi vào Bravo",
+  written_with_differences: "Đã ghi, Bravo lưu khác",
+  refused: "Bravo từ chối",
+  in_doubt: "Chưa rõ đã ghi chưa",
+} as const;
+
+/** Design's result for a line in Bravo (`DesignCheck`). */
+export const DESIGN_VERDICT = {
+  quote: "Báo giá được",
+  decline: "Không báo giá",
 } as const;
 
 /** "Who decided a step". */

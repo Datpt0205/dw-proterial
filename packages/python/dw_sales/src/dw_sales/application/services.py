@@ -34,6 +34,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoOrdersPort,
     BravoWriteDecisions,
     BravoWriteWorkFactory,
+    CaseBravoWrites,
 )
 from dw_sales.application.bravo_sales_orders import (
     BravoCustomerPoPort,
@@ -338,7 +339,16 @@ def assemble(
         auto_apply=AutoApply(intake, clock, ids),
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending, book)
-    orders = OrderQueries(uow, gate, pending, step_activity, book, threads, directory)
+    orders = OrderQueries(
+        uow,
+        gate,
+        pending,
+        step_activity,
+        book,
+        threads,
+        directory,
+        CaseBravoWrites(bravo_writes_uow),
+    )
     order_quotes = OrderQuotes(uow, gate, clock, ids, inbox, intake, book, release_manifest_ref)
     quotes = QuoteQueries(
         uow, gate, clock, quotation, pending, step_activity, book, threads, directory

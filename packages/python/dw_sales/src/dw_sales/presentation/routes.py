@@ -1525,6 +1525,17 @@ def build_router(
     ) -> LineTrailView:
         return await svc.orders.line_trail(context, case_id, line_no)
 
+    # The quote page's counterpart (ticket 62): a requested line's steps.
+    @router.get("/quotes/{case_id}/lines/{line_no}/trail", response_model=LineTrailView)
+    async def quote_line_trail(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=99_999)],
+        # Members only, as the order line's trail.
+        context: Ctx,
+        svc: Svc,
+    ) -> LineTrailView:
+        return await svc.quotes.line_trail(context, case_id, line_no)
+
     # A finding explained in words by the model, on request (AI item 12):
     # nothing is stored, and a price-bearing one only to a price reader.
     @router.get(

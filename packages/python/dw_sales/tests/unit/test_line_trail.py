@@ -14,7 +14,8 @@ import pytest
 
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.autonomy import applied_by
-from dw_sales.application.line_trail import TrailKind, line_trail
+from dw_sales.application.bravo_line_writes import BravoLineWrite
+from dw_sales.application.line_trail import OrderTrailKind, line_trail
 from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.dispositions import CaseKind
@@ -34,7 +35,7 @@ from dw_sales.domain.orders import (
     ValueCorrection,
 )
 from dw_sales.evals.graders import AN, CALLERS, GIANG, OUTSIDER
-from dw_sales.evals.world import BETA, SampleSet, World, open_world
+from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -147,13 +148,40 @@ def _everything_on(case: OrderCase, no: int) -> tuple[OrderCase, list[StepOutcom
     return updated, [outcome]
 
 
+def _written(case: OrderCase, no: int) -> BravoLineWrite:
+    """A confirmed date written into Bravo for line ``no`` (ticket 53)."""
+    return BravoLineWrite(
+        approval_id=uuid.uuid4(),
+        case_id=case.case_id,
+        line_no=no,
+        so_no="SO2611-000001",
+        item_code="PRV-1",
+        field="confirmed_date",
+        before=None,
+        after="2026-12-01",
+        kind="so.line.set_confirmed_date@1",
+        command={},
+        content_hash="0" * 64,
+        status="written",
+        proposed_by=PERSON,
+        proposed_at=AT,
+        decided_by=GIANG.user_id,
+        settled_at=AT,
+    )
+
+
 async def test_a_line_with_every_decision_has_a_step_for_each() -> None:
     world = _world()
     case = await _m06(world)
     updated, outcomes = _everything_on(case, 3)
-    trail = line_trail(updated, 3, outcomes)
+    trail = line_trail(updated, 3, outcomes, [_written(case, 3), _written(case, 1)])
     kinds = {s.kind for s in trail.steps}
-    assert kinds == set(get_args(TrailKind))
+    assert kinds == set(get_args(OrderTrailKind))
+    writes = [s for s in trail.steps if s.kind == "bravo_write"]
+    assert [(s.outcome, s.actor_user_id) for s in writes] == [
+        ("proposed", PERSON),
+        ("written", GIANG.user_id),
+    ]
     by_kind = {s.kind: s for s in trail.steps}
     assert by_kind["read"].decided_by == "rule"
     assert by_kind["convert"].decided_by == "rule"
@@ -162,6 +190,17 @@ async def test_a_line_with_every_decision_has_a_step_for_each() -> None:
     assert by_kind["finding_decided"].actor_user_id == PERSON
     assert by_kind["cross_checked"].actor_user_id == GIANG.user_id
     assert all(s.actor_user_id is not None for s in trail.steps if s.decided_by == "person")
+
+
+async def test_the_order_page_reads_a_lines_bravo_writes_from_where_they_are_kept() -> None:
+    world = _world()
+    case = await _m06(world)
+    write = _written(case, 3)
+    world.store.state(ALPHA).bravo_writes[write.approval_id] = write
+    trail = await world.services.orders.line_trail(AN.context(), case.case_id, 3)
+    assert [s.outcome for s in trail.steps if s.kind == "bravo_write"] == ["proposed", "written"]
+    other = await world.services.orders.line_trail(AN.context(), case.case_id, 1)
+    assert "bravo_write" not in {s.kind for s in other.steps}
 
 
 async def test_a_plain_line_says_rule_read_and_checked_it_and_nobody_decided_yet() -> None:

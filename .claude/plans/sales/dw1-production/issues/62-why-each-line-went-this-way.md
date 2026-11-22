@@ -1,6 +1,6 @@
 # 62 — "Why this line went this way": a per-line decision trail with rule codes
 
-Status: in-progress — the order page is done (2026-11-21); left: the quote page, BR-* codes (pending: the BA's BR-* list mapped to DW1's check and finding codes), Bravo validator steps (pending: ticket 49, the runner reading live Bravo)
+Status: in-progress — the order page (2026-11-21) and the quote page (2026-11-22) are done. pending: BR-* codes (the BA's BR-* list mapped to DW1's check and finding codes); Bravo validator steps (the runner reading live Bravo through the gateway: IT's read login, ticket 63); the quote page at 320 px in a browser (not run this session)
 Blocked by: none (rule codes come from the BA's spec, BR-*; Bravo's validators by name)
 Category: enhancement
 
@@ -65,5 +65,50 @@ as a line's path.
   each turned a test red.
 - **Fixed on the way:** the `reader` image no longer built since its
   compile step met `olefile2.py` (Python 2, never imported); it is excluded.
+
+## Done (2026-11-22, the quote page, and Bravo writes on the order page)
+
+- **Quote line trail:** `dw_sales.application.quote_line_trail` reads a
+  requested line's steps from what the quote case holds:
+  - the request's reading and the fields a model read on the line;
+  - the description reading, the candidate codes, and what the customer's
+    notation left unsettled;
+  - each finding on the line, the values Sales confirmed and its decision;
+  - the YCBG, mass or pcs, each Design reply and Design's result in Bravo;
+  - every price decision (earlier ones too) and the pcs price;
+  - the submission, each return, the approval, sending, the master list,
+    the signed copy and the decline;
+  - the model steps the activity rows name for the line.
+
+  Design is outside DW, so its steps name no DW user. No amount is on a
+  step: a price, a target price and a finding's compared values stay on
+  the case page.
+- **Same view, two kinds:** `TrailKind` is `OrderTrailKind` and
+  `QuoteTrailKind`. Each kind's test holds that a line with every decision
+  has every kind of step, and lists every field of `QuoteCase` and
+  `RequestedItem` against its step, or says why it has none (an identity,
+  a stamp, an amount). A field added without a step turns the test red.
+- **API:** `GET /api/v1/sales/quotes/{case_id}/lines/{line_no}/trail` goes
+  through the case's gate and record visibility. Another tenant, a person
+  who may not see the case, and a line the request lacks all get not found.
+- **Web:** the drawer moved to `app/sales/_components/line-trail.tsx` and
+  takes the case kind. The quote page's request table has a "Các bước"
+  column. Labels are in the glossary (`CONTEXT.md` "Line trail steps"),
+  plus Bravo write states and Design's verdict in words.
+- **The order page's trail now has the line's Bravo writes** (ticket 53):
+  the proposal and its settlement, each with who decided. This was missing
+  since 53 shipped, so the trail was incomplete.
+- **Found on the way and fixed (ticket 53):** proposing a Bravo write and
+  listing a case's writes checked the right but not record visibility. In a
+  restricted tenant, a person could act on a case they cannot see. Both
+  now answer not found, with a negative test.
+- **Tests:**
+  - `test_quote_line_trail.py` (6): every kind, another line's steps, a
+    fresh request, field coverage, no amount, the gate;
+  - `test_line_trail.py`: Bravo writes, also read through the service;
+  - `test_bravo_line_writes.py`: visibility;
+  - vitest: the quote kind's call and outcomes in words. The web sales
+    suite is green (88 files, 453 tests).
+- **Mutation check:** 11 guards broken one at a time (the quote trail's visibility, missing line, no amount, this line's findings, the pcs and confirmed-value steps; the order page reading writes, this line's writes, the settled step; the two visibility checks of 53), each turned a test red.
 
 ## Comments

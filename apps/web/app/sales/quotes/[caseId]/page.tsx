@@ -62,6 +62,7 @@ import { DesignCheckPanel, DesignFromBravo } from "./design-check";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
+import { LineTrailButton } from "../../_components/line-trail";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
@@ -606,6 +607,19 @@ function QuoteDetail() {
                 >
                   Xem
                 </Button>
+              ),
+            },
+            {
+              // Why the line went this way (ticket 62): opened on demand.
+              title: "Các bước",
+              key: "trail",
+              render: (_, l) => (
+                <LineTrailButton
+                  kind="quote"
+                  caseId={data.case_id}
+                  lineNo={l.line_no}
+                  version={data.case_version}
+                />
               ),
             },
           ]}

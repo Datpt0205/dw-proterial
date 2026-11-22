@@ -733,29 +733,49 @@ sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử
 
 ## Line trail steps
 
-Why a PO line went the way it did (ticket 62): each step a line took, read
-from what the case stamps on the line, never kept a second time.
+Why a PO line or a quotation's requested line went the way it did (ticket
+62): each step a line took, read from what the case stamps on the line,
+never kept a second time. A Bravo write (ticket 53) is a step of an order
+line; the steps from `candidates` on, but for `bravo_write`, are a
+quotation's.
 
-| Step              | Label                          |
-| ----------------- | ------------------------------ |
-| `read`            | Đọc dòng từ PO                 |
-| `convert`         | Đổi mã theo convert list       |
-| `model_reading`   | Mô hình đọc mô tả              |
-| `mapping`         | Mã PRV của dòng                |
-| `quotation`       | Đối chiếu báo giá              |
-| `checks`          | Các bước kiểm                  |
-| `finding`         | Phát hiện                      |
-| `finding_decided` | Quyết định về phát hiện        |
-| `correction`      | Sales sửa giá trị              |
-| `change`          | Khách yêu cầu thay đổi         |
-| `design_asked`    | Hỏi Design tạo mã              |
-| `pc_asked`        | Hỏi PC ngày giao               |
-| `pc_short_lead`   | PC đồng ý lead time ngắn       |
-| `pc_answer`       | PC trả lời ngày giao           |
-| `model_step`      | Bước mô hình                   |
-| `bravo_recorded`  | Nhập vào Bravo                 |
-| `cross_checked`   | Kiểm tra chéo                  |
-| `confirmed`       | Xác nhận với khách             |
+| Step              | Label                           |
+| ----------------- | ------------------------------- |
+| `read`            | Đọc dòng từ PO                  |
+| `convert`         | Đổi mã theo convert list        |
+| `model_reading`   | Mô hình đọc mô tả               |
+| `mapping`         | Mã PRV của dòng                 |
+| `quotation`       | Đối chiếu báo giá               |
+| `checks`          | Các bước kiểm                   |
+| `finding`         | Phát hiện                       |
+| `finding_decided` | Quyết định về phát hiện         |
+| `correction`      | Sales sửa giá trị               |
+| `change`          | Khách yêu cầu thay đổi          |
+| `design_asked`    | Hỏi Design tạo mã               |
+| `pc_asked`        | Hỏi PC ngày giao                |
+| `pc_short_lead`   | PC đồng ý lead time ngắn        |
+| `pc_answer`       | PC trả lời ngày giao            |
+| `model_step`      | Bước mô hình                    |
+| `bravo_recorded`  | Nhập vào Bravo                  |
+| `cross_checked`   | Kiểm tra chéo                   |
+| `confirmed`       | Xác nhận với khách              |
+| `candidates`      | Mã có thể khớp (gợi ý)          |
+| `unsettled`       | Cách ghi chưa rõ, để Sales điền |
+| `value_confirmed` | Sales xác nhận giá trị máy đọc  |
+| `ycbg_recorded`   | Ghi số YCBG                     |
+| `production_type` | Chọn mass hay pcs               |
+| `design_reply`    | Design trả lời                  |
+| `design_check`    | Kết quả Design trên Bravo       |
+| `priced`          | Quyết định giá                  |
+| `pcs_priced`      | Giá pcs của GM/BC Manager       |
+| `submitted`       | Gửi duyệt                       |
+| `returned`        | Trả lại để sửa                  |
+| `approved`        | Duyệt báo giá                   |
+| `quote_sent`      | Gửi báo giá cho khách           |
+| `master_listed`   | Đưa vào master list             |
+| `signed_copy`     | Tải bản có chữ ký               |
+| `declined`        | Từ chối báo giá                 |
+| `bravo_write`     | Ghi vào Bravo                   |
 
 ## Who decided a step
 

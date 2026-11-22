@@ -19,26 +19,31 @@ import {
 } from "@ant-design/icons";
 import { StatusTag, type StatusTone } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
-import { LoadError } from "../../../../components/load-error";
+import { LoadError } from "../../../components/load-error";
 import {
   formatDate,
   formatDateTime,
   TIME_ZONE_LABEL,
-} from "../../../../lib/dates";
-import { salesApi } from "../../_lib/api";
+} from "../../../lib/dates";
+import { salesApi } from "../_lib/api";
 import {
+  BRAVO_WRITE_STATUS,
+  DECLINE_REASON,
+  DESIGN_VERDICT,
   FINDING_CODE,
   FINDING_DISPOSITION,
   label,
   MAPPING_STATUS,
   TRAIL_ACTOR,
   TRAIL_KIND,
-} from "../../_lib/labels";
-import { usePeople } from "../../_lib/people";
-import { useResource } from "../../_lib/use-resource";
+} from "../_lib/labels";
+import { usePeople } from "../_lib/people";
+import { useResource } from "../_lib/use-resource";
 
 type Trail = SalesSchemas["LineTrailView"];
 type Step = SalesSchemas["TrailStepView"];
+/** Which case's line: an order's PO line or a quotation's requested line. */
+type CaseKind = "order" | "quote";
 
 /** Who decided, in words and an icon, never colour alone (ui-quality §7). */
 const ACTOR_LOOK: Record<Step["decided_by"], [StatusTone, ReactNode]> = {
@@ -51,13 +56,16 @@ const ACTOR_LOOK: Record<Step["decided_by"], [StatusTone, ReactNode]> = {
 /**
  * "Vì sao dòng này đi như vậy" (ticket 62): a button on the line's detail
  * that opens the steps the line took, read only when opened. Short by
- * default (Đạt's rule): the drawer is the detail.
+ * default (Đạt's rule): the drawer is the detail. The order and quote pages
+ * both use it.
  */
 export function LineTrailButton({
+  kind,
   caseId,
   lineNo,
   version,
 }: {
+  kind: CaseKind;
   caseId: string;
   lineNo: number;
   /** Read again when the case moves: the page passes its version. */
@@ -81,7 +89,12 @@ export function LineTrailButton({
         destroyOnHidden
       >
         {open ? (
-          <LineTrail caseId={caseId} lineNo={lineNo} version={version} />
+          <LineTrail
+            kind={kind}
+            caseId={caseId}
+            lineNo={lineNo}
+            version={version}
+          />
         ) : null}
       </Drawer>
     </>
@@ -89,18 +102,23 @@ export function LineTrailButton({
 }
 
 export function LineTrail({
+  kind,
   caseId,
   lineNo,
   version,
 }: {
+  kind: CaseKind;
   caseId: string;
   lineNo: number;
   version: number;
 }) {
   const name = usePeople();
   const trail = useResource<Trail>(
-    `sales/order/${caseId}/line/${lineNo}/trail@${version}`,
-    useCallback(() => salesApi().lineTrail(caseId, lineNo), [caseId, lineNo]),
+    `sales/${kind}/${caseId}/line/${lineNo}/trail@${version}`,
+    useCallback(
+      () => salesApi().lineTrail(kind, caseId, lineNo),
+      [kind, caseId, lineNo],
+    ),
   );
   if (trail.loading && !trail.data)
     return <Skeleton active paragraph={{ rows: 4 }} />;
@@ -134,6 +152,15 @@ function title(step: Step): string {
   return label(TRAIL_KIND, step.kind);
 }
 
+/** Steps whose outcome is shown through its own label table above. */
+const LABELLED_OUTCOME = new Set<Step["kind"]>([
+  "mapping",
+  "finding_decided",
+  "bravo_write",
+  "design_check",
+  "declined",
+]);
+
 function facts(step: Step): string[] {
   const out: string[] = [];
   if (step.cell) out.push(`Ô ${step.cell}`);
@@ -142,18 +169,19 @@ function facts(step: Step): string[] {
     out.push(label(MAPPING_STATUS, step.outcome));
   if (step.kind === "finding_decided" && step.outcome)
     out.push(label(FINDING_DISPOSITION, step.outcome));
+  if (step.kind === "bravo_write" && step.outcome)
+    out.push(label(BRAVO_WRITE_STATUS, step.outcome));
+  if (step.kind === "design_check" && step.outcome)
+    out.push(label(DESIGN_VERDICT, step.outcome));
+  if (step.kind === "declined" && step.outcome)
+    out.push(label(DECLINE_REASON, step.outcome));
   if (step.value) out.push(step.value);
   if (step.valid_from || step.valid_to)
     out.push(
       `hiệu lực ${formatDate(step.valid_from)} – ${step.valid_to ? formatDate(step.valid_to) : "không hết hạn"}`,
     );
   if (step.rule_version) out.push(`quy tắc ${step.rule_version}`);
-  if (
-    step.kind !== "mapping" &&
-    step.kind !== "finding_decided" &&
-    step.outcome
-  )
-    out.push(step.outcome);
+  if (!LABELLED_OUTCOME.has(step.kind) && step.outcome) out.push(step.outcome);
   if (step.confidence != null)
     out.push(`độ chắc ${Math.round(step.confidence * 100)}%`);
   return out;
