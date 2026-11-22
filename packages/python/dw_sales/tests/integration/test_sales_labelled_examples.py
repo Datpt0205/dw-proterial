@@ -8,13 +8,16 @@ because the read runs under the caller's RLS.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+import sqlalchemy as sa
 from sales_harness import OrderRun, World
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_sales.adapters.persistence.labelled_examples import SqlDescriptionExamples
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope
@@ -112,3 +115,80 @@ async def test_only_the_newest_kept_decision_on_a_line_is_an_example(
     await _write(uow, world.alpha, corrected)
     found = await examples.by_ids(world.alpha, [confirmed.label_id, corrected.label_id])
     assert [(e.label_id, e.prv_code) for e in found] == [(corrected.label_id, "HW-1009")]
+
+
+async def _store_reading(
+    sessions: async_sessionmaker[AsyncSession],
+    scope: SalesScope,
+    case: OrderCase,
+    line_no: int,
+    reading: dict[str, object],
+) -> None:
+    """Stamp a model's reading on the stored line, as the intake does."""
+    statement = sa.text(
+        "UPDATE sales.order_lines AS l"
+        " SET check_basis = jsonb_set(l.check_basis, '{description_reading}', CAST(:r AS jsonb))"
+        " FROM sales.order_revisions AS r"
+        " WHERE r.id = l.revision_id AND r.case_id = :case AND r.message_id = :message"
+        " AND l.line_no = :line"
+    )
+    async with tenant_session(
+        sessions, TenantScope(scope.tenant_id.value, scope.workspace_id.value)
+    ) as session:
+        await session.execute(
+            statement,
+            {
+                "r": json.dumps(reading),
+                "case": case.case_id,
+                "message": case.message_id,
+                "line": line_no,
+            },
+        )
+        await session.commit()
+
+
+def _reading(description: str, outcome: str = "read") -> dict[str, object]:
+    word = description.split()[0]
+    start = description.index(word)
+    spans = [
+        {
+            "attribute": "colour",
+            "span": word,
+            "start": start,
+            "end": start + len(word),
+            "value": "black",
+            "read_by": "model",
+        }
+    ]
+    return {
+        "prompt": "sales.description_attributes@1.2.0",
+        "model_profile": "onprem",
+        "route": "structured_extraction",
+        "outcome": outcome,
+        "reason": None if outcome == "read" else "text_uncovered",
+        "spans": spans if outcome == "read" else [],
+    }
+
+
+async def test_a_lines_accepted_reading_comes_with_its_example_and_no_other_does(
+    uow: SqlSalesUnitOfWorkFactory,
+    app_sessions: async_sessionmaker[AsyncSession],
+    world: World,
+    order_run: OrderRun,
+) -> None:
+    """Ticket 43, 2026-11-22: the spans go with the example for
+    `shown_lines` to show as the answer they were; a reading code refused,
+    or none, gives none."""
+    case, line_no, description = _described(order_run)
+    label = _label(case, line_no, ["HW-1001"])
+    await _write(uow, world.alpha, label)
+    examples = SqlDescriptionExamples(app_sessions)
+
+    await _store_reading(app_sessions, world.alpha, case, line_no, _reading(description))
+    (example,) = await examples.by_ids(world.alpha, [label.label_id])
+    assert [(s.attribute, s.span) for s in example.spans] == [("colour", description.split()[0])]
+
+    refused = _reading(description, "not_understood")
+    await _store_reading(app_sessions, world.alpha, case, line_no, refused)
+    (example,) = await examples.by_ids(world.alpha, [label.label_id])
+    assert example.spans == ()

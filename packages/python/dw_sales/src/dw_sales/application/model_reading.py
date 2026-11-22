@@ -37,17 +37,22 @@ from dw_sales.domain.description_reading import (
     DescriptionReading,
     ModelDescriptionLine,
     ModelDescriptionReading,
+    SpanRead,
     Verified,
+    answer_of,
+    stated_of,
     verify_reading,
     vocabulary,
 )
+from dw_sales.domain.descriptions import candidates
 from dw_sales.domain.order_checks import MappedLine, map_read_line
 
 # The prompt DW1 reads descriptions with. Its file is
-# `configs/prompts/sales/description_attributes@1.1.0.yaml`; a test holds the
+# `configs/prompts/sales/description_attributes@1.2.0.yaml`; a test holds the
 # two together, and a new wording is a new version here and a new file there.
-# 1.1.0 (ticket 43) adds `examples`: decided lines shown beside the lines read.
-DESCRIPTION_ATTRIBUTES: Final = PromptRef("sales.description_attributes", "1.1.0")
+# 1.1.0 (ticket 43) adds `examples`: decided lines shown beside the lines read;
+# 1.2.0 shows a decided line's confirmed reading as the answer it was.
+DESCRIPTION_ATTRIBUTES: Final = PromptRef("sales.description_attributes", "1.2.0")
 # Generous for one line's reading (about 120 tokens measured), and a cap on
 # what a confused model can spend.
 _OUTPUT_TOKENS_PER_LINE: Final = 300
@@ -74,6 +79,9 @@ class Shown(Protocol):
 
     @property
     def prv_code(self) -> str: ...
+
+    @property
+    def spans(self) -> Sequence[SpanRead]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,11 +113,16 @@ def prompt_stamp(version: str | None) -> str:
 
 
 def shown_lines(shown: Sequence[Shown], items: Sequence[Item]) -> list[dict[str, Any]]:
-    """The examples as the prompt shows them: each description with the
-    attributes of the item a person kept, from the item master, so the model
-    sees what the customer's words meant and never a product code. A line
-    whose item is not in the list any more is left out (its answer no longer
-    passes code's own check), and so is a description shown already."""
+    """The examples as the prompt shows them, never with a product code.
+
+    - ``read``: the line's own reading, in the answer's shape
+      (`answer_of`), where code accepted one and the item a person kept fits
+      what it states: a right answer word by word (ticket 43, 2026-11-22).
+    - ``item``: otherwise, the attributes of the item a person kept, from the
+      item master, most of which the description never says.
+
+    A line whose item is not in the list any more is left out (its answer no
+    longer passes code's own check), and so is a description shown already."""
     by_code = {item.prv_code: item for item in items}
     seen: set[str] = set()
     found: list[dict[str, Any]] = []
@@ -119,13 +132,25 @@ def shown_lines(shown: Sequence[Shown], items: Sequence[Item]) -> list[dict[str,
         if item is None or key in seen:
             continue
         seen.add(key)
-        stated = item.attributes.model_dump(mode="json", exclude={"standard"}, exclude_none=True)
-        if item.family is not None:
-            stated = {"family": item.family, **stated}
-        found.append({"description": line.description, "item": stated})
+        if _fits(line.spans, item):
+            found.append({"description": line.description, "read": answer_of(line.spans)})
+        else:
+            found.append({"description": line.description, "item": _attributes(item)})
         if len(found) == MAX_SHOWN:
             break
     return found
+
+
+def _fits(spans: Sequence[SpanRead], item: Item) -> bool:
+    stated = stated_of(spans) if spans else None
+    return stated is not None and bool(candidates(stated, [item]))
+
+
+def _attributes(item: Item) -> dict[str, Any]:
+    stated = item.attributes.model_dump(mode="json", exclude={"standard"}, exclude_none=True)
+    if item.family is not None:
+        stated = {"family": item.family, **stated}
+    return stated
 
 
 @dataclass(frozen=True, slots=True)

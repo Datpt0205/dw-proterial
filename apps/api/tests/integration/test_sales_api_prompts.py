@@ -155,14 +155,14 @@ async def test_the_head_reads_a_proposal_and_it_is_served_only_once_approved(
     api = prompts_api
     giang = api.as_(GIANG)
     book = prompt_book(SqlRuleVersionLookup(api.sessions))
-    alpha_approval = await _propose(api, ALPHA_SCOPE, "1.2.0")
-    await _propose(api, BETA_SCOPE, "1.2.0")
+    alpha_approval = await _propose(api, ALPHA_SCOPE, "1.3.0")
+    await _propose(api, BETA_SCOPE, "1.3.0")
 
     listed = await giang.get("/prompts")
     assert listed.status_code == 200, listed.text
     body = listed.json()
     assert (body["in_force"], body["layer"], body["demonstrations"]) == (
-        "sales_prompt_description_attributes@1.1.0",
+        "sales_prompt_description_attributes@1.2.0",
         "platform",
         [],
     )
@@ -190,24 +190,24 @@ async def test_the_head_reads_a_proposal_and_it_is_served_only_once_approved(
     assert await _carry_out(api, migrator, alpha_approval) == "approved"  # redelivered
 
     served = await book.demonstrations(ALPHA_SCOPE)
-    assert served.version == "1.2.0"
+    assert served.version == "1.3.0"
     assert [(d.description, d.prv_code) for d in served.shown] == [
         (GREEN["description"], GREEN["prv_code"])
     ]
     assert await book.demonstrations(BETA_SCOPE) == Demonstrations(None)
     body = (await giang.get("/prompts")).json()
     assert (body["in_force"], body["layer"]) == (
-        "sales_prompt_description_attributes@1.2.0",
+        "sales_prompt_description_attributes@1.3.0",
         "tenant",
     )
     assert body["versions"][0]["decided_by"] is not None
 
     # A rejected one changes nothing served.
-    second = await _propose(api, ALPHA_SCOPE, "1.3.0")
+    second = await _propose(api, ALPHA_SCOPE, "1.4.0")
     rejected = await giang.decide(second, {"approve": False, "comment": "Chưa đủ"})
     assert rejected.status_code == 200, rejected.text
     assert await _carry_out(api, migrator, second) == "rejected"
-    assert (await book.demonstrations(ALPHA_SCOPE)).version == "1.2.0"
+    assert (await book.demonstrations(ALPHA_SCOPE)).version == "1.3.0"
 
     async with migrator.connect() as conn:
         actions = set(
@@ -227,7 +227,7 @@ async def test_the_head_reads_a_proposal_and_it_is_served_only_once_approved(
 async def test_a_caller_without_the_heads_scope_reads_no_version(prompts_api: Api) -> None:
     """A PIC, and tenant IT who proposes rules, are refused: the lines carry
     customers' words, and deciding them is the head's."""
-    await _propose(prompts_api, ALPHA_SCOPE, "1.2.0")
+    await _propose(prompts_api, ALPHA_SCOPE, "1.3.0")
 
     for subject in (AN, TAM):
         refused = await prompts_api.as_(subject).get("/prompts")

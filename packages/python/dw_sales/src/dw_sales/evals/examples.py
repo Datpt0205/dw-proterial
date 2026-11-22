@@ -24,6 +24,12 @@ shown some): `evals/fixtures/cases/sales_desc_examples_recorded.json`.
   index nor by the reading (whose read is the run's tenant's own), and every
   call is made as the run's tenant.
 
+A decided line's ``read`` in the fixture is the reading a person confirmed
+(1.1.0, 2026-11-22): code verifies it when the fixture loads, as the intake
+did, and the reading is shown it as the answer it was
+(`model_reading.shown_lines`); a decided line without one is shown as its
+item.
+
 Reports name ids, codes and counts; a description is fictional fixture text.
 """
 
@@ -57,7 +63,7 @@ from dw_sales.application.model_reading import (
     Showing,
 )
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.description_reading import ModelDescriptionLine
+from dw_sales.domain.description_reading import ModelDescriptionLine, Verified, verify_reading
 from dw_sales.domain.orders import MappingStatus
 from dw_sales.evals.descriptions import Read, _items, _po_line, invariant_breaks, scores
 from dw_sales.evals.recorded import failing_without_live_answers
@@ -95,7 +101,21 @@ def _arun[T](coroutine: Coroutine[Any, Any, T]) -> T:
     return asyncio.run(coroutine)
 
 
+def _confirmed(entry: Mapping[str, Any]) -> Verified | None:
+    """The fixture's confirmed reading of a decided line, as code accepts
+    it; a reading code refuses is a fixture error, not a line to skip."""
+    if "read" not in entry:
+        return None
+    nulls = {k: None for k in ModelDescriptionLine.model_fields if k != "line_no"}
+    line = ModelDescriptionLine.model_validate({"line_no": 1, **nulls, **entry["read"]})
+    verified = verify_reading(str(entry["description"]), line)
+    if not isinstance(verified, Verified):
+        raise ValueError(f"{entry['id']}: its confirmed reading is refused ({verified})")
+    return verified
+
+
 def _decided(entry: Mapping[str, Any], n: int) -> DescriptionExample:
+    confirmed = _confirmed(entry)
     return DescriptionExample(
         label_id=uuid.uuid5(uuid.NAMESPACE_URL, f"ticket-43/{entry['id']}"),
         case_id=uuid.UUID(int=0x4300_0000 + int(entry["case"])),
@@ -103,6 +123,7 @@ def _decided(entry: Mapping[str, Any], n: int) -> DescriptionExample:
         decided_at=_DAY + timedelta(hours=n),
         description=str(entry["description"]),
         prv_code=str(entry["kept"]),
+        spans=() if confirmed is None else confirmed.spans,
     )
 
 
@@ -278,7 +299,9 @@ def grade_golden(
     reader = DescriptionReader(model, examples=finder)
     held_out = fixture["held_out"]
     without = _arun(_read(reader, held_out, k=0))
+    first = len(model.calls)
     shown = _arun(_read(reader, held_out, k=_K))
+    examples = [e for _, inputs in model.calls[first:] for e in json.loads(inputs["examples"])]
     own: dict[str, set[str]] = {str(e["customer"]): set() for e in held_out}
     for entry in fixture["decided"]:
         own.setdefault(str(entry["customer"]), set()).add(str(entry["description"]))
@@ -303,6 +326,8 @@ def grade_golden(
             ),
         },
         "shown_own_customer": round(hits / len(held_out), 3),
+        # Of the examples shown, the share shown as a confirmed reading.
+        "shown_as_read": _share(["read" in e for e in examples]),
         "retrieval_p95_ms": None if timing is None else round(timing * 1000, 2),
     }
     if isinstance(model, Capturing):
@@ -318,6 +343,10 @@ def grade_golden(
         # retrieval or the verification changed, not the model.
         return GradeResult.fail("the recorded readings gain less than recorded", **details)
     return GradeResult.ok(**details)
+
+
+def _share(flags: Sequence[bool]) -> float | None:
+    return round(sum(flags) / len(flags), 3) if flags else None
 
 
 def grade_injection(

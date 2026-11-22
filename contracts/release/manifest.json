@@ -525,19 +525,19 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "85342eb9bfa7753f2de384619510972bc97d65fbd88c9420fe811e4a9dbf7d26",
+      "checksum": "1e1cdf2540826c7ecda1d66bccf91dba5323fe5f1ab98f16f71af7519a37b116",
       "dataset_id": "sales_description_examples",
       "files": [
         {
-          "checksum": "18584d5d10a8b6442b2a51506ce64eb87d35f1d5e69b9417facc24b6b01fb6e2",
+          "checksum": "192fd1c8a886c687f5314d01857b82f7bb926d9b296b522a4aa3c41f0d7ed066",
           "path": "evals/expected/sales_desc_examples.json"
         },
         {
-          "checksum": "40da87097e837c6bed4d5942d0e605e94a1bcd8d1003145df55842322d7e46b0",
+          "checksum": "e8f022dc6b4236d3103d50c77e37fd5cd8529eebb33004f6f58a6cc501eaa69d",
           "path": "evals/fixtures/cases/sales_desc_examples.json"
         }
       ],
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
@@ -1164,7 +1164,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "f4d9080d8c427e86598b5e6df20ed0186ecb97ef",
+  "git_sha": "29473d79d211e5fe4581b5f448f73e7d67aa2ad6",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1579,6 +1579,11 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "83d546318ca30f7850566bc9355bdc07dd651fa0d5c4a9d8e440b9af446a1766",
+      "prompt_id": "sales.description_attributes",
+      "version": "1.2.0"
+    },
+    {
       "checksum": "a9abcc70c6ea7804773f809b707fcae9dc1be3e4eddaaf473bf4c3c99b863331",
       "prompt_id": "sales.design_text_reply",
       "version": "1.0.0"
@@ -1900,7 +1905,7 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.4.0",
+      "prompt_bundle_version": "1.5.0",
       "toolset_version": "1.1.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"

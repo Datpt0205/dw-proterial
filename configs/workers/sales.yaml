@@ -14,8 +14,9 @@ graph_version: "1.0.0"
 # the thread agent's, sales.thread_agent@1.0.0 (tickets 30 and 31); 1.3.0
 # DW1's agent with skills, sales.dw1_agent@1.0.0 (dw_sales ADR 0014, ticket 40);
 # 1.4.0 sales.description_attributes@1.1.0, which shows a reading the
-# tenant's decided lines most like it (ticket 43).
-prompt_bundle_version: "1.4.0"
+# tenant's decided lines most like it (ticket 43); 1.5.0 its 1.2.0, which
+# shows a decided line's confirmed reading as the answer it was.
+prompt_bundle_version: "1.5.0"
 # Read-only tools for the thread agent's turn only (dw_sales ADR 0012, the
 # amendment of ADR 0005 decision 5): every tool `none`, bound by code to the
 # thread's customer, and no tool that writes, sends or approves, which is how

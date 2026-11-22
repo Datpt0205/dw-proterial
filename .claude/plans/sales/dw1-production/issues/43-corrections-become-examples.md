@@ -1,6 +1,6 @@
 # 43 — Every correction becomes an example; prompts and skills re-optimised on them
 
-Status: in progress (2026-11-16): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version) and the head's page for a proposed prompt version built; left: a second step, a measured gain (none reliable on the dev model), re-attesting the step on prompt 1.1.0 on the plant
+Status: in progress (2026-11-22): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version), the head's page, and a measured gain on Strata (examples as confirmed readings, prompt 1.2.0: 3/8 → 8/8 held-out lines) built; left: a second step (`po_body_extraction`), stamping which examples a reading saw. pending: re-attesting the step on prompt 1.2.0 on the plant (`--attest`, on the plant's Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -214,14 +214,56 @@ retrieval waits on the Qdrant review, and the optimiser after it.
   golden set maps against a synthetic item master, where a tenant's
   demonstrations name codes that do not exist.
 
+### A measured gain: examples as confirmed readings (2026-11-22)
+
+- **The form**: a decided line whose reading code accepted, and whose kept
+  item fits what that reading states, is shown as the reading itself, in
+  the answer's own shape (`"read"`: each label with its span, each number
+  as its span only; `description_reading.answer_of`). Every other decided
+  line is shown as before, the kept item's attributes (`"item"`). Never a
+  code. `model_reading.shown_lines` decides which, with `candidates`, the
+  same function the reading's own candidates come from.
+- **Where the reading comes from**: the order line's check basis
+  (`description_reading`, stamped at intake), read with the labelled case
+  under the same RLS (`SqlDescriptionExamples`); a reading code refused,
+  or none, gives none. A tenant prompt version's demonstrations keep the
+  reading too (`StoredDemonstration.spans`); the head's page lists them as
+  before (`Demonstration`, without spans: the API contract is unchanged).
+- **Prompt** `sales.description_attributes@1.2.0` (bundle 1.5.0): an example
+  with `read` is the right answer for its words; one with `item` only says
+  what the person chose. Its readings are stamped 1.2.0, so no threshold
+  set on 1.1.0 gates them (ADR 0015).
+- **Found by measuring, fixed**: a one-letter label inside a longer word
+  ("R" beside "RL") was refused as `span_repeated`. A label's span found
+  more than once now counts where exactly one place is a whole word; a
+  number's never does (`verify_reading`).
+- **Eval** `sales_description_examples@1.1.0`: decided lines carry the
+  reading a person confirmed (verified by code when the fixture loads; d04
+  stays item-only), plus two customers whose words no list holds (C005
+  "TV ... MD TT CR", C006 "CNL ... LUOI DEN CR"); 8 held-out lines.
+- **Measured on Strata** (Giang's home lab, `qwen3.8-flash-next-q2_0`, not
+  attested), gold code among the candidates, no wrong single code anywhere:
+
+  | Shown                         | Held-out lines right |
+  | ----------------------------- | -------------------- |
+  | no example                    | 3/8 (0.375)          |
+  | examples as items (1.1.0 form)| 5/8 (0.625)          |
+  | examples as readings (1.2.0)  | 8/8 (1.0), twice     |
+
+  The item-only row is the same run with the `read` form switched off in
+  code. Security cases held in every run (injection, missing evidence,
+  cross tenant). Retrieval p95 under 1 ms (memory index). The recorded
+  answers (`sales_desc_examples_recorded.json`) are the 1.2.0 run; the
+  smoke's floor is the recorded gain, 0.625.
+- **Mutation check**: 8 guards broken one at a time, each red: the whole-word
+  rule (labels only; whole words only), the `read` form, its fit to the
+  kept item, a number's field, a label's value, the adapter's reading (on
+  PostgreSQL), the optimiser's spans.
+
 ### Left
 
-- A measured gain: the example form (description + the kept item's
-  attributes) taught the dev model little; showing the confirmed reading's
-  own spans as the example (a confirmed line's reading is a right answer
-  word by word) is the next thing to try, then measure on Strata.
 - **After deploy**: the step's bar is per prompt version, so
-  `description_attributes` is not ready on 1.1.0 until the live lane is
+  `description_attributes` is not ready on 1.2.0 until the live lane is
   attested again on the plant model (`run_evals.py --dataset
   evals/datasets/sales_descriptions@1.0.0.json --live onprem --attest`).
 - A second step (`po_body_extraction`), and stamping which examples a

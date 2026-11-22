@@ -21,6 +21,7 @@ from dw_sales.domain.description_reading import (
     DescriptionReading,
     ModelDescriptionLine,
     Verified,
+    answer_of,
     parse_cores,
     parse_gauge,
     parse_pack_length,
@@ -95,6 +96,14 @@ def test_a_reading_that_holds_states_what_code_parsed_and_flags_the_labels() -> 
         assert JA[span.start : span.end] == span.span
 
 
+def test_an_accepted_reading_rebuilt_as_an_answer_is_accepted_the_same() -> None:
+    """`answer_of` (ticket 43's examples): every attribute back under the
+    field the model answers in, the pack length's included."""
+    verified = _verified(JA, _ja())
+    again = _verified(JA, _line(**answer_of(verified.spans)))
+    assert again.spans == verified.spans
+
+
 # ------------------------------------------------- 1. located exactly once --
 
 
@@ -107,6 +116,37 @@ def test_a_span_found_twice_proves_nothing_and_is_refused() -> None:
     # "2" is in "2芯" and in "AWG24": a short token is no evidence.
     line = _ja().model_copy(update={"cores_span": "2"})
     assert verify_reading(JA, line) == "span_repeated"
+
+
+def test_a_label_found_once_as_a_whole_word_holds_though_another_word_contains_it() -> None:
+    # "R" is red and also the start of "RL" (reel): measured on Strata,
+    # 2026-11-22, a customer's one-letter colour refused as repeated.
+    description = "LW AWG18 R TC RL"
+    line = _line(
+        family="hook_up_wire",
+        family_span="LW",
+        gauge_span="AWG18",
+        colour="red",
+        colour_span="R",
+        conductor="tinned_copper",
+        conductor_span="TC",
+        packaging="reel",
+        packaging_span="RL",
+    )
+    verified = _verified(description, line)
+    colour = next(s for s in verified.spans if s.attribute == "colour")
+    assert (colour.start, colour.end) == (9, 10)
+
+
+def test_a_label_found_twice_as_a_whole_word_is_still_refused() -> None:
+    line = _line(gauge_span="AWG18", colour="red", colour_span="R")
+    assert verify_reading("AWG18 R R", line) == "span_repeated"
+
+
+def test_a_label_inside_words_only_is_still_refused_as_repeated() -> None:
+    # No whole-word "R": which of the two the model meant is not known.
+    line = _line(colour="red", colour_span="R", packaging="reel", packaging_span="RL")
+    assert verify_reading("RL RX", line) == "span_repeated"
 
 
 def test_two_attributes_read_from_overlapping_text_are_refused() -> None:
