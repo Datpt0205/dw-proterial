@@ -465,7 +465,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "02c9a6839dfeed5ab96c69289a4606aa0058bfc256497a09be9f2a018388ad60",
+      "checksum": "15892ebb2fd07b3d5aa1ccd58a3c9765c476439c4f22d371685144cda75d0085",
       "dataset_id": "sales_case_chat",
       "files": [
         {
@@ -473,11 +473,11 @@
           "path": "evals/expected/sales_case_chat.json"
         },
         {
-          "checksum": "30b8061a4adf4502840e722fc6cd9811e66c579c02d53ca72409b5a520bcd818",
+          "checksum": "0d079f73cb09e4ddfce88dcc9c075807def5db4181582240a8953110ab1c63b1",
           "path": "evals/fixtures/cases/sales_case_chat.json"
         }
       ],
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "checksum": "113f26c797000704a86b6e34a88a9d784c6881281b11ab00b6fb8d3ac07b4963",
@@ -1179,7 +1179,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "c33c90e595ccd0044059a1424c74ffea9d99ad8e",
+  "git_sha": "6671017f9e2ba33649a7a998d9f0d112f767a353",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1704,6 +1704,11 @@
       "version": "1.3.0"
     },
     {
+      "checksum": "0ea9390b22d8392ccb270c1169b7c99c31ff3dfb5d75d514c5e53ea35ff7fd15",
+      "prompt_id": "sales.question_intent",
+      "version": "1.4.0"
+    },
+    {
       "checksum": "5c0bd624d3852ac7bd851c684de12b1d2b6376612aff93ca0359f59fb4203481",
       "prompt_id": "sales.reply_draft",
       "version": "1.0.0"
@@ -1925,7 +1930,7 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.6.0",
+      "prompt_bundle_version": "1.7.0",
       "toolset_version": "1.1.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"
