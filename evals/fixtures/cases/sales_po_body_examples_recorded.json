@@ -1,0 +1,220 @@
+{
+  "_comment": "The model's answers to sales.po_body_extraction@1.2.0 for ticket 43's second-step graders, per condition (shown no example, or shown the customer's decided values) and the mail's subject line, recorded 2026-11-22 on Strata on Giang's home lab (qwen3.8-flash-next-q2_0, the onprem profile; not the plant, not attested); the smoke replays them. null: no usable answer. Fictional text.",
+  "answers": {
+    "without": {
+      "Fw: đặt tiếp + giao thiếu": {
+        "po_no_span": "VLX-PO-2611-0320",
+        "po_date_span": "10/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-W24-BK dây AWG24 đen: 2.440 m, đơn giá 0,0420, giao 15/12/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "2.440 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "15/12/2026"
+          }
+        ]
+      },
+      "PO 2611-0342": {
+        "po_no_span": "VLX-PO-2611-0342",
+        "po_date_span": "14/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "VX-W24-BK / 20 R / 6.100 m / 0,0420 / 28/11/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": null,
+            "quantity_span": "6.100 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "28/11/2026"
+          },
+          {
+            "line_span": "VX-C2F05 / 6 R / 3.000 m / 0,4850 / 30/11/2026",
+            "customer_item_code_span": "VX-C2F05",
+            "description_span": null,
+            "quantity_span": "3.000 m",
+            "uom_span": "m",
+            "unit_price_span": "0,4850",
+            "amount_span": null,
+            "requested_date_span": "30/11/2026"
+          }
+        ]
+      },
+      "PO muộn, xin lỗi chị": {
+        "po_no_span": "VLX-PO-2611-0311",
+        "po_date_span": "05/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-C2F05 cáp 2 lõi: 3.000 m, đơn giá 0,4850 (đặt 05/11, cần hàng 25/11/2026)",
+            "customer_item_code_span": "VX-C2F05",
+            "description_span": "cáp 2 lõi",
+            "quantity_span": "3.000 m",
+            "uom_span": "m",
+            "unit_price_span": "0,4850",
+            "amount_span": null,
+            "requested_date_span": "25/11/2026"
+          },
+          {
+            "line_span": "2. VX-W24-BK dây AWG24 đen: 1.220 m, đơn giá 0,0420 (đặt 05/11, cần hàng 28/11/2026)",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "1.220 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "28/11/2026"
+          }
+        ]
+      },
+      "Re: đơn tháng 11": {
+        "po_no_span": "VLX-PO-2611-0305",
+        "po_date_span": "03/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-W24-BK dây AWG24 đen cuộn 305m x 20 cuộn = 6.100 m, đơn giá 0,0420, giao 20/11/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "6.100 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "20/11/2026"
+          }
+        ]
+      }
+    },
+    "with": {
+      "Fw: đặt tiếp + giao thiếu": {
+        "po_no_span": "VLX-PO-2611-0320",
+        "po_date_span": "10/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-W24-BK dây AWG24 đen: 2.440 m, đơn giá 0,0420, giao 15/12/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "2.440 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "15/12/2026"
+          }
+        ]
+      },
+      "PO 2611-0342": {
+        "po_no_span": "VLX-PO-2611-0342",
+        "po_date_span": "14/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "VX-W24-BK / 20 R / 6.100 m / 0,0420 / 28/11/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": null,
+            "quantity_span": "6.100 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "28/11/2026"
+          },
+          {
+            "line_span": "VX-C2F05 / 6 R / 3.000 m / 0,4850 / 30/11/2026",
+            "customer_item_code_span": "VX-C2F05",
+            "description_span": null,
+            "quantity_span": "3.000 m",
+            "uom_span": "m",
+            "unit_price_span": "0,4850",
+            "amount_span": null,
+            "requested_date_span": "30/11/2026"
+          }
+        ]
+      },
+      "PO muộn, xin lỗi chị": {
+        "po_no_span": "VLX-PO-2611-0311",
+        "po_date_span": "05/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-C2F05 cáp 2 lõi: 3.000 m, đơn giá 0,4850 (đặt 05/11, cần hàng 25/11/2026)",
+            "customer_item_code_span": "VX-C2F05",
+            "description_span": "cáp 2 lõi",
+            "quantity_span": "3.000 m",
+            "uom_span": "m",
+            "unit_price_span": "0,4850",
+            "amount_span": null,
+            "requested_date_span": "25/11/2026"
+          },
+          {
+            "line_span": "2. VX-W24-BK dây AWG24 đen: 1.220 m, đơn giá 0,0420 (đặt 05/11, cần hàng 28/11/2026)",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "1.220 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "28/11/2026"
+          }
+        ]
+      },
+      "Re: đơn tháng 11": {
+        "po_no_span": "VLX-PO-2611-0305",
+        "po_date_span": "03/11/2026",
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "1. VX-W24-BK dây AWG24 đen cuộn 305m x 20 cuộn = 6.100 m, đơn giá 0,0420, giao 20/11/2026",
+            "customer_item_code_span": "VX-W24-BK",
+            "description_span": "dây AWG24 đen",
+            "quantity_span": "6.100 m",
+            "uom_span": "m",
+            "unit_price_span": "0,0420",
+            "amount_span": null,
+            "requested_date_span": "20/11/2026"
+          }
+        ]
+      },
+      "đặt thêm": {
+        "po_no_span": "VLX-PO-2611-0330",
+        "po_date_span": null,
+        "currency_span": "USD",
+        "total_span": null,
+        "delivery_term_span": null,
+        "lines": [
+          {
+            "line_span": "Chị ơi PO VLX-PO-2611-0330 nhé, USD, 3.000 m VX-C2F05 như cũ, giá chị lấy theo báo giá giúp em, giao trước 30/11/2026 ạ.",
+            "customer_item_code_span": "VX-C2F05",
+            "description_span": "VX-C2F05 như cũ",
+            "quantity_span": "3.000 m",
+            "uom_span": "m",
+            "unit_price_span": null,
+            "amount_span": null,
+            "requested_date_span": "30/11/2026"
+          }
+        ]
+      }
+    }
+  }
+}

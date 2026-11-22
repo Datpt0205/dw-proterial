@@ -446,3 +446,54 @@ def _line(
             requested_date=requested.anchor if requested else line_anchor,
         ),
     )
+
+
+# ------------------------------------------------------ where it is written --
+
+# Rule 4's implied values: each field, and the field whose anchor it takes
+# when the mail does not write it (a unit read from "6.100 m" takes the
+# quantity's). A value anchored where its source is was never written.
+IMPLIED_AT: Final = {
+    "revision": "po_no",
+    "po_date": "po_no",
+    "amount": "unit_price",
+    "description": "customer_item_code",
+    "uom": "quantity",
+    "requested_date": "line_no",
+}
+# The most of a text line an example shows around the words it is about.
+_CONTEXT: Final = 300
+
+
+def written(document: PoDocument, line_no: int | None, field: str) -> tuple[str, str] | None:
+    """Where the mail writes ``field`` of ``document`` (``line_no`` None: the
+    PO as a whole): the text line the words are on, and the words. None where
+    the PO was not read from a mail, the field has no anchor in it, or the
+    mail does not write it (rule 4 implied it). What ticket 43's examples of
+    this step are cut from: the stored mail, never a person's typing."""
+    body = document.body
+    if body is None:
+        return None
+    if line_no is None:
+        anchors: Mapping[str, SourceAnchor | None] = dict(document.header.anchors)
+        if document.total is not None:
+            anchors = {**anchors, "total": document.total.anchor}
+    else:
+        line = next((li for li in document.lines if li.line_no == line_no), None)
+        if line is None:
+            return None
+        anchors = dict(line.anchors)
+    anchor = anchors.get(field)
+    if anchor is None or anchor.chars is None:
+        return None
+    source = anchors.get(IMPLIED_AT.get(field, ""))
+    if source is not None and source.chars == anchor.chars:
+        return None
+    text, chars = body.text, anchor.chars
+    start = text.rfind("\n", 0, chars.start) + 1
+    end = text.find("\n", chars.end)
+    end = len(text) if end < 0 else end
+    if end - start > _CONTEXT:
+        start = max(start, chars.start - _CONTEXT // 2)
+        end = min(end, max(chars.end, start + _CONTEXT))
+    return text[start:end].strip(), text[chars.start : chars.end]

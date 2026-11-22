@@ -1,6 +1,6 @@
 # 43 — Every correction becomes an example; prompts and skills re-optimised on them
 
-Status: in progress (2026-11-22): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version), the head's page, and a measured gain on Strata (examples as confirmed readings, prompt 1.2.0: 3/8 → 8/8 held-out lines) built; left: a second step (`po_body_extraction`), stamping which examples a reading saw. pending: re-attesting the step on prompt 1.2.0 on the plant (`--attest`, on the plant's Strata)
+Status: in progress (2026-11-22): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version), the head's page, and a measured gain on Strata (examples as confirmed readings, prompt 1.2.0: 3/8 → 8/8 held-out lines) built; the second step (`po_body_extraction`) shown the customer's decided values (2026-11-22; no gain measurable on Strata, which reads every trap without them); left: stamping which examples a reading saw. pending: re-attesting both steps on their new prompts on the plant (`--attest`, on the plant's Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -260,12 +260,59 @@ retrieval waits on the Qdrant review, and the optimiser after it.
   kept item, a number's field, a label's value, the adapter's reading (on
   PostgreSQL), the optimiser's spans.
 
+### The second step: a PO in a mail (2026-11-22)
+
+- **What an example is** (`application.po_body_examples`): one value Sales
+  checked in the same customer's earlier mail PO, cut by code from that
+  stored mail by its anchors (`domain.po_body_reading.written`), never from
+  what the person typed: the text line, the field, and the words, `right`
+  where the person kept the value as read, `wrong` where they corrected it
+  (where the right words are, the person did not say, and DW does not
+  guess). A value the mail never wrote (rule 4: the amount at the price, the
+  date at the PO number, the unit at the quantity) is no example.
+- **Which**: the sender's customer's newest decided values, at most six,
+  newest decision per value only (`SqlPoBodyExamples`, PostgreSQL under the
+  scope's RLS, the revision's mail with that one line from `order_lines`).
+  No index: a customer's mails share how they are written, not what they
+  are about.
+- **The reading** (`PoBodyReader`, prompt `po_body_extraction@1.2.0`, bundle
+  1.6.0): shown as untrusted `examples` beside the mail. Any failure reads
+  without them; a mail that fits its room only without them is read without
+  them, never refused for them.
+- **Found and fixed (a defect of AI item 4, not of this ticket)**: a PO read
+  from a mail body could never be stored on PostgreSQL. The baseline's
+  `ck_order_revisions_attachment_id` required an attachment id, and a body
+  PO has none, so intake's transaction was refused and the mail never became
+  a case. Every earlier test ran on the memory store. Migration
+  `4b3f44f30356` admits no id exactly when the document carries the mail it
+  was read from; an integration test stores one and reads it back.
+- **Eval** `sales_po_body_examples@1.0.0`: four mails of one customer written
+  around the point (an apology, an earlier order's shortfall, a stock-take,
+  an invoice question), with the traps the customer's own decided values
+  settle: a reel length beside the quantity, the order day beside the day
+  wanted in one line, an earlier PO's number first, rows in the customer's
+  own unlabelled order (code / reels / metres / price / date). Plus an
+  injection in an example's words, a mail with no price beside examples with
+  prices, another tenant's values that teach the traps backwards.
+- **Measured on Strata** (not attested): every value in the right field,
+  without examples 1.0 and with them 1.0: **no gain, no loss**. Strata reads
+  every trap here unaided; the mechanism ships for the cases production
+  labels will show, and the eval's floor stays 0. Security cases held.
+- **Seen in the run**: a mail whose two dates are both ≤ 12 ("10/11/2026",
+  "01/12/2026") reads neither: the mail does not settle the order, and with
+  no notation record for the customer the requested date goes to a person,
+  as decided in the 11-13 audit. The fixture was changed to test its own
+  trap instead.
+- **Mutation check**: 9 guards broken one at a time, each red (an implied
+  value, a failure, the room, one per line and field, at most six, a
+  correction shown wrong, the newest decision, kept vs corrected, one
+  customer's only).
+
 ### Left
 
-- **After deploy**: the step's bar is per prompt version, so
-  `description_attributes` is not ready on 1.2.0 until the live lane is
-  attested again on the plant model (`run_evals.py --dataset
-  evals/datasets/sales_descriptions@1.0.0.json --live onprem --attest`).
-- A second step (`po_body_extraction`), and stamping which examples a
-  reading was shown (`examples_as_of`).
+- **After deploy**: a step's bar is per prompt version, so
+  `description_attributes` (1.2.0) and `po_body_extraction` (1.2.0) are not
+  ready until the live lane is attested again on the plant model
+  (`run_evals.py --dataset <the step's set> --live onprem --attest`).
+- Stamping which examples a reading was shown (`examples_as_of`).
 
