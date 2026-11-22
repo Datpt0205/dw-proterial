@@ -11,6 +11,10 @@ as nothing (acceptance 1 at the reading).
 Only the newest label of a line counts: a code confirmed and later undone, or
 corrected again, is the later decision's. Only a kept value is an example: a
 rejection keeps nothing.
+
+The line's reading, where the model read it and code accepted the reading, is
+read from the same line's check basis: its spans go with the example, and
+`model_reading.shown_lines` decides whether they fit the kept item.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence.labelled_cases import labelled_cases
 from dw_sales.application.examples import STEP, DescriptionExample
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.description_reading import DescriptionReading, SpanRead
 
 _L = labelled_cases
 _N = labelled_cases.alias("later")
@@ -66,6 +71,7 @@ def _examples() -> sa.Select[tuple[object, ...]]:
             _L.c.decided_at,
             _L.c.kept,
             _DESCRIPTION.label("description"),
+            _OL.c.check_basis["description_reading"].label("reading"),
         )
         .join(_R, sa.and_(_R.c.case_id == _L.c.case_id, _R.c.message_id == _L.c.message_id))
         .join(_OL, sa.and_(_OL.c.revision_id == _R.c.id, _OL.c.line_no == _L.c.line_no))
@@ -92,9 +98,23 @@ def _example(row: RowMapping) -> DescriptionExample | None:
             decided_at=row["decided_at"],
             description=row["description"],
             prv_code=kept[0],
+            spans=_spans(row["reading"]),
         )
     except ValidationError:
         return None
+
+
+def _spans(stored: object) -> tuple[SpanRead, ...]:
+    """The spans of the line's reading, where one was taken; none where
+    there is none or it no longer reads (an example without them is shown as
+    its item)."""
+    if not isinstance(stored, dict):
+        return ()
+    try:
+        reading = DescriptionReading.model_validate(stored)
+    except ValidationError:
+        return ()
+    return reading.spans if reading.outcome == "read" else ()
 
 
 def _all(rows: Sequence[RowMapping]) -> list[DescriptionExample]:

@@ -58,7 +58,7 @@ MODEL_STEPS = [
     "sales_thread_agent@1.0.0",
     "sales_skill_intents@1.0.0",
     "sales_reply_draft@1.0.0",
-    "sales_description_examples@1.0.0",
+    "sales_description_examples@1.1.0",
     "sales_mail_kinds@1.0.0",
     "sales_triage_card@1.0.0",
     "sales_document_forms@1.0.0",

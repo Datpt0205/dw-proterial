@@ -40,6 +40,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import CustomerCode, PrvCode
+from dw_sales.domain.description_reading import SpanRead
 from dw_sales.domain.order_checks import ModelStep
 
 _LOG = logging.getLogger("dw_sales.examples")
@@ -75,6 +76,10 @@ class DescriptionExample(BaseModel):
     decided_at: AwareDatetime
     description: str = Field(min_length=1, max_length=500)
     prv_code: PrvCode
+    # The model's reading of the line that code accepted, where one was
+    # stored; shown as the answer it was only where it fits the kept item
+    # (`model_reading.shown_lines`). Never embedded.
+    spans: tuple[SpanRead, ...] = ()
 
     @property
     def example_id(self) -> uuid.UUID:

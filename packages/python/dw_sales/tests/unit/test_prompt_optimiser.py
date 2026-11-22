@@ -51,7 +51,17 @@ from dw_sales.domain.order_checks import ModelStep, OrderRules
 from dw_sales.evals.world import ALPHA, BETA, MemoryStore
 from dw_sales.testing.labelled_examples import MemoryDescriptionExamples
 
-from .test_examples import BLACK22, GREEN, ITEMS, MISSING, READS, REPO, Scripted, decided
+from .test_examples import (
+    BLACK22,
+    GREEN,
+    ITEMS,
+    MISSING,
+    READS,
+    REPO,
+    Scripted,
+    decided,
+    spans_of,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -224,6 +234,25 @@ async def test_a_better_version_is_proposed_to_the_head_and_never_applied() -> N
         )
     # One proposal at a time: the next tick waits for the head.
     assert (await bench.optimiser().tick(ALPHA)).reason == "proposal_waiting"
+
+
+async def test_a_demonstration_keeps_the_reading_its_line_was_confirmed_with() -> None:
+    """Ticket 43, 2026-11-22: a decided line's reading goes into the version
+    with it, so the reading under that version is shown the answer it was."""
+    bench = Bench()
+    spans = spans_of(GREEN)
+    bench.lines.add(
+        ALPHA,
+        *(decided(n, GREEN, "HW-1011").model_copy(update={"spans": spans}) for n in range(1, 21)),
+    )
+    outcome = await bench.optimiser().tick(ALPHA)
+
+    assert outcome.reason == "proposed"
+    (version,) = await bench.proposals(ALPHA)
+    (shown,) = version.document["demonstrations"]
+    assert [(s["attribute"], s["span"]) for s in shown["spans"]] == [
+        (s.attribute, s.span) for s in spans
+    ]
 
 
 async def test_a_version_worse_on_any_decided_line_is_never_proposed() -> None:

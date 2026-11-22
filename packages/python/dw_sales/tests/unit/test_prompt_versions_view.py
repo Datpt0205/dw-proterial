@@ -59,7 +59,7 @@ async def test_the_head_sees_the_proposal_beside_the_version_in_force() -> None:
     # In force: the platform's prompt, which shows no decided line.
     assert (view.in_force, view.layer, view.demonstrations) == (PLATFORM_PROMPT.ref, "platform", [])
     assert view.step == "description_attributes"
-    assert view.prompt == "sales.description_attributes@1.1.0"
+    assert view.prompt == "sales.description_attributes@1.2.0"
     (version,) = view.versions
     assert version.status == "proposed" and version.approval_id is not None
     assert version.replay is not None

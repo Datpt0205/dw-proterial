@@ -64,10 +64,10 @@ from dw_sales.application.prompt_versions import (
     MAX_DEMONSTRATIONS,
     PROMPT_KEY,
     REGISTRY,
-    Demonstration,
     PromptBook,
     PromptDemonstrations,
     PromptReplay,
+    StoredDemonstration,
 )
 from dw_sales.application.rules import ProposerNames, rule_work
 from dw_sales.domain.catalog import Item
@@ -246,12 +246,13 @@ class PromptOptimiser:
         document = PromptDemonstrations(
             policy_version=_next_version(current, [v.version for v in versions]),
             demonstrations=tuple(
-                Demonstration(
+                StoredDemonstration(
                     description=c.description,
                     prv_code=c.prv_code,
                     label_id=c.label_id,
                     case_id=c.case_id,
                     customer_code=c.customer_code,
+                    spans=c.spans,
                 )
                 for c in chosen
             ),

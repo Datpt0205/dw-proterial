@@ -43,7 +43,13 @@ from dw_sales.application.model_reading import (
 )
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import Item
-from dw_sales.domain.description_reading import ModelDescriptionLine
+from dw_sales.domain.description_reading import (
+    ModelDescriptionLine,
+    SpanRead,
+    Verified,
+    answer_of,
+    verify_reading,
+)
 from dw_sales.domain.orders import MappingStatus
 from dw_sales.evals.thread_agent import run_for
 from dw_sales.evals.world import ALPHA, BETA
@@ -241,6 +247,41 @@ def test_an_example_is_shown_as_the_kept_items_attributes_never_its_code() -> No
     assert "HW-1011" not in json.dumps(shown)
 
 
+def spans_of(description: str) -> tuple[SpanRead, ...]:
+    """The spans of a reading code accepted of ``description`` (READS)."""
+    nulls = {k: None for k in ModelDescriptionLine.model_fields if k != "line_no"}
+    line = ModelDescriptionLine.model_validate({"line_no": 1, **nulls, **READS[description]})
+    verified = verify_reading(description, line)
+    assert isinstance(verified, Verified), verified
+    return verified.spans
+
+
+def test_a_confirmed_reading_is_shown_as_the_answer_it_was_word_by_word() -> None:
+    """Ticket 43's next form: where the person kept one of the reading's own
+    candidates, its spans are a right answer, shown in the answer's shape,
+    and the item's attributes (most of them unstated) are not shown."""
+    example = decided(1, GREEN, "HW-1011").model_copy(update={"spans": spans_of(GREEN)})
+
+    assert shown_lines([example], ITEMS) == [{"description": GREEN, "read": READS[GREEN]}]
+
+
+def test_an_answer_rebuilt_from_its_spans_reads_back_to_the_same_spans() -> None:
+    spans = spans_of(GREEN)
+    nulls = {k: None for k in ModelDescriptionLine.model_fields if k != "line_no"}
+    line = ModelDescriptionLine.model_validate({"line_no": 1, **nulls, **answer_of(spans)})
+    again = verify_reading(GREEN, line)
+    assert isinstance(again, Verified) and again.spans == spans
+
+
+def test_a_reading_whose_spans_no_longer_fit_the_kept_item_is_shown_as_the_item() -> None:
+    """A person typed another code over the reading: its words were not the
+    item's, so the reading is no example of how to read them."""
+    example = decided(1, GREEN, "HW-1006").model_copy(update={"spans": spans_of(GREEN)})
+
+    (shown,) = shown_lines([example], ITEMS)
+    assert "read" not in shown and shown["item"]["colour"] == "black"
+
+
 def test_a_line_whose_item_left_the_list_is_not_shown() -> None:
     """Its answer no longer passes code's own check: the code is no item."""
     assert shown_lines([decided(1, GREEN, "HW-9999")], ITEMS) == []
@@ -249,7 +290,7 @@ def test_a_line_whose_item_left_the_list_is_not_shown() -> None:
 def test_the_stamp_names_the_tenants_prompt_version_so_a_threshold_never_carries_over() -> None:
     assert prompt_stamp(None) == str(DESCRIPTION_ATTRIBUTES)
     own = prompt_stamp("1.2.0")
-    assert own == "sales.description_attributes.tenant_1_2_0@1.1.0"
+    assert own == "sales.description_attributes.tenant_1_2_0@1.2.0"
     assert own != prompt_stamp("1.3.0") != str(DESCRIPTION_ATTRIBUTES)
 
 

@@ -20,6 +20,8 @@ then decides whether every word was still accounted for.
 1. Every span is found in the NFKC-normalised description (case folded), and
    exactly once. Not found, found twice, or overlapping another span: not
    understood. A substring test alone proves nothing for a token like ``2``.
+   A label's span found more than once counts where exactly one of the
+   places is a whole word (``R`` beside ``RL``); a number's never does.
 2. Cores, gauge, pack length and spec number are parsed from their span by the
    parsers below, full-width digits included (NFKC). A span that does not
    parse is not understood. The model has no value to disagree with.
@@ -40,6 +42,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import pairwise
@@ -264,6 +267,12 @@ def verify_reading(description: str, line: ModelDescriptionLine | None) -> Verif
     for name, raw_span, label in claims:
         span = unicodedata.normalize("NFKC", raw_span)
         located = text.locate(span)
+        if located == "span_repeated" and label is not None:
+            # A label's span inside a longer word as well ("R" in "RL") is
+            # still evidence when it is a whole word exactly once: the
+            # words it covers are known. A number's span stays refused.
+            whole = text.locate(span, bounded=True)
+            located = "span_repeated" if isinstance(whole, str) else whole
         if isinstance(located, str):
             return located
         start, end = located
@@ -289,11 +298,33 @@ def verify_reading(description: str, line: ModelDescriptionLine | None) -> Verif
         return "spans_overlap"
     if not _covered(text.original, ordered):
         return "text_uncovered"
-    try:
-        stated = StatedAttributes.model_validate({s.attribute: _typed(s) for s in ordered})
-    except ValidationError:
+    stated = stated_of(ordered)
+    if stated is None:
         return "value_refused"
     return Verified(stated=stated, spans=tuple(ordered))
+
+
+def stated_of(spans: Sequence[SpanRead]) -> StatedAttributes | None:
+    """What ``spans`` state, or None where the catalogue refuses a value."""
+    try:
+        return StatedAttributes.model_validate({s.attribute: _typed(s) for s in spans})
+    except ValidationError:
+        return None
+
+
+def answer_of(spans: Sequence[SpanRead]) -> dict[str, str]:
+    """A reading code accepted, in the shape the model answers in
+    (`ModelDescriptionLine` without its line number): each label with its
+    span, each parsed attribute as its span only. What ticket 43 shows a
+    reading as an example of reading words right."""
+    answer: dict[str, str] = {}
+    for span in spans:
+        if span.attribute in PARSED:
+            answer[PARSED[span.attribute]] = span.span
+        else:
+            answer[f"{span.attribute}_span"] = span.span
+            answer[span.attribute] = span.value
+    return answer
 
 
 def _covered(text: str, spans: list[SpanRead]) -> bool:

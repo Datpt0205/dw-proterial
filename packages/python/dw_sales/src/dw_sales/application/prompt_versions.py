@@ -3,7 +3,7 @@ every reading, proposed by the worker from decided cases, approved by the head
 (ticket 43 part 3, dw_sales ADR 0015 decisions 5 and 6).
 
 - **What a version is**: words a model reads, never power. The platform's
-  prompt (`configs/prompts/sales/description_attributes@1.1.0.yaml`) stays the
+  prompt (`configs/prompts/sales/description_attributes@1.2.0.yaml`) stays the
   instructions; a tenant's version adds up to `MAX_DEMONSTRATIONS` decided
   lines (a description and the PRV code a person kept), shown to every
   reading as untrusted input beside the nearest examples
@@ -54,6 +54,7 @@ from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, Demonstra
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import rule_work
 from dw_sales.domain.catalog import CustomerCode, PrvCode
+from dw_sales.domain.description_reading import SpanRead
 from dw_sales.domain.order_checks import ModelStep
 
 __all__ = [
@@ -72,6 +73,7 @@ __all__ = [
     "PromptVersionView",
     "PromptVersionsService",
     "PromptsView",
+    "StoredDemonstration",
     "prompt_book",
 ]
 
@@ -98,10 +100,11 @@ REGISTRY: Final = RuleRegistry(
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 
-class Demonstration(BaseModel):
-    """One decided line a version shows: the customer's description and the
-    PRV code a person kept. The reading shows the code's attributes from the
-    item master, never the code (`model_reading.shown_lines`)."""
+class StoredDemonstration(BaseModel):
+    """One decided line a version shows, as its document keeps it: the
+    customer's description, the PRV code a person kept and, where code
+    accepted one, the line's reading. The head's page lists it as a
+    `Demonstration`, without the spans."""
 
     model_config = _FROZEN
 
@@ -114,6 +117,27 @@ class Demonstration(BaseModel):
     label_id: UUID | None = None
     case_id: UUID | None = None
     customer_code: CustomerCode | None = None
+    # The line's reading code accepted, shown as the answer it was where it
+    # fits the kept item (ticket 43, 2026-11-22); empty on an older version.
+    spans: tuple[SpanRead, ...] = ()
+
+
+class Demonstration(BaseModel):
+    """One decided line a version shows: the customer's description and the
+    PRV code a person kept. The reading shows the code's attributes from the
+    item master, never the code (`model_reading.shown_lines`)."""
+
+    model_config = _FROZEN
+
+    description: str = Field(min_length=1, max_length=500)
+    prv_code: PrvCode
+    label_id: UUID | None = None
+    case_id: UUID | None = None
+    customer_code: CustomerCode | None = None
+
+    @classmethod
+    def of(cls, demonstration: StoredDemonstration) -> Demonstration:
+        return cls.model_validate(demonstration.model_dump(exclude={"spans"}))
 
 
 class PromptReplay(BaseModel):
@@ -138,7 +162,9 @@ class PromptDemonstrations(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     policy_id: Literal["sales_prompt_description_attributes"] = PROMPT_KEY
     policy_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
-    demonstrations: tuple[Demonstration, ...] = Field(default=(), max_length=MAX_DEMONSTRATIONS)
+    demonstrations: tuple[StoredDemonstration, ...] = Field(
+        default=(), max_length=MAX_DEMONSTRATIONS
+    )
     replay: PromptReplay | None = None
 
     @property
@@ -218,7 +244,7 @@ def _version_view(version: RuleVersion) -> PromptVersionView:
         decided_at=version.decided_at,
         comment=version.comment,
         approval_id=version.approval_id,
-        demonstrations=list(document.demonstrations),
+        demonstrations=[Demonstration.of(d) for d in document.demonstrations],
         replay=document.replay,
     )
 
@@ -249,7 +275,7 @@ class PromptVersionsService:
             prompt=str(DESCRIPTION_ATTRIBUTES),
             in_force=document.ref,
             layer="tenant" if own else "platform",
-            demonstrations=list(document.demonstrations),
+            demonstrations=[Demonstration.of(d) for d in document.demonstrations],
             versions=[_version_view(v) for v in versions],
         )
 
