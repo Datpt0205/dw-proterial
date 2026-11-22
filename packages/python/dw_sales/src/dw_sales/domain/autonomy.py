@@ -119,6 +119,9 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # PC's own change to a confirmed order changes nothing until a
         # person applies it (ticket 10).
         ModelStep.INTERNAL_CHANGE: Tier.PERSON_APPROVES,
+        # A flag's decision or a Bravo write stated in the case chat is
+        # recorded only once the PIC confirms that statement (ticket 56).
+        ModelStep.CASE_CHAT: Tier.PERSON_APPROVES,
     }
 )
 

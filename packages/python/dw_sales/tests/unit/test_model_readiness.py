@@ -232,9 +232,12 @@ def _world() -> World:
 
 
 def _document(world: World, version: str, **switches: bool) -> dict[str, Any]:
+    """The world's rules at ``version`` with ``switches`` set. The case chat,
+    which ships on (ticket 57), is off unless named: these tests turn one
+    step at a time on from every step off (`_all_off`)."""
     document = world.policies.order_rules.model_dump(mode="json", by_alias=True)
     document["policy_version"] = version
-    document["model_assist"] = {**document["model_assist"], **switches}
+    document["model_assist"] = {**document["model_assist"], "case_chat": False, **switches}
     return document
 
 
@@ -393,3 +396,19 @@ def platform_rules() -> OrderRules:
 @pytest.fixture
 async def demo_rules() -> OrderRules:
     return await _world().services.rules.book.order_rules(ALPHA)
+
+
+async def test_the_case_chat_ships_on_and_turning_it_on_again_needs_its_pass() -> None:
+    """Ticket 57 (Đạt, 2026-11-22): the chat's statements are on where a
+    version does not say; once a tenant turns them off, turning them on
+    again is refused until the chat's live eval passed, as any step's."""
+    world = _world()
+    assert (await world.services.rules.book.order_rules(ALPHA)).model_assist.case_chat
+    await _all_off(world)
+    with pytest.raises(ConflictError) as refused:
+        await world.services.rules.propose(
+            AN.context(), RuleKey.ORDER_RULES, _document(world, "9.1.1", case_chat=True)
+        )
+    assert refused.value.details["rule"] == MODEL_BAR_UNMET
+    (step,) = cast(list[dict[str, object]], refused.value.details["steps"])
+    assert step["step"] == "case_chat"

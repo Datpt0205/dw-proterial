@@ -114,6 +114,11 @@ class ProposedDecision:
     finding_key: str
     decision: ChatDecision
     reason: str | None
+    # The prompt that read the PIC's sentence (`name@version`), stamped when
+    # the statement is made, for its labelled case (ticket 57). Not part of
+    # what the PIC confirms: the hash binds what they were shown. None on a
+    # statement stored before the stamp.
+    prompt: str | None = None
 
     @property
     def content_hash(self) -> str:
@@ -136,6 +141,7 @@ class ProposedDecision:
             "finding_key": self.finding_key,
             "decision": self.decision,
             "reason": self.reason,
+            **({} if self.prompt is None else {"prompt": self.prompt}),
         }
 
     @classmethod
@@ -146,7 +152,7 @@ class ProposedDecision:
         version = row["case_version"]
         if not isinstance(version, int):
             raise ValueError("case_version is not an integer")
-        reason = row.get("reason")
+        reason, prompt = row.get("reason"), row.get("prompt")
         return cls(
             case_kind=CaseKind(str(row["case_kind"])),
             case_id=uuid.UUID(str(row["case_id"])),
@@ -154,6 +160,7 @@ class ProposedDecision:
             finding_key=str(row["finding_key"]),
             decision=decision,  # type: ignore[arg-type]
             reason=None if reason is None else str(reason),
+            prompt=None if prompt is None else str(prompt),
         )
 
 
@@ -171,8 +178,10 @@ class ProposedBravoWrite:
     line_no: int
     field: WriteField
     value: str
+    # As `ProposedDecision.prompt`: stamped, stored, outside the hash.
+    prompt: str | None = None
 
-    def stored(self) -> dict[str, object]:
+    def _content(self) -> dict[str, object]:
         return {
             "action": "bravo_write",
             "case_kind": self.case_kind.value,
@@ -183,10 +192,16 @@ class ProposedBravoWrite:
             "value": self.value,
         }
 
+    def stored(self) -> dict[str, object]:
+        return {
+            **self._content(),
+            **({} if self.prompt is None else {"prompt": self.prompt}),
+        }
+
     @property
     def content_hash(self) -> str:
         canonical = json.dumps(
-            self.stored(), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+            self._content(), sort_keys=True, ensure_ascii=False, separators=(",", ":")
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -205,6 +220,7 @@ class ProposedBravoWrite:
             line_no=line_no,
             field=field_name,  # type: ignore[arg-type]
             value=str(row["value"]),
+            prompt=None if row.get("prompt") is None else str(row["prompt"]),
         )
 
 

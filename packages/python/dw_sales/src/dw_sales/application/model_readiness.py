@@ -50,6 +50,7 @@ from dw_agent_runtime.model.readiness import (
 )
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.change_reading import CHANGE_REQUEST
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.document_forms import DOCUMENT_FORMS_PROMPT
 from dw_sales.application.handoffs import HANDOFF_KINDS_PROMPT, REQUEST_HANDOFF
 from dw_sales.application.internal_changes import INTERNAL_CHANGE
@@ -261,6 +262,19 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
             INTERNAL_CHANGE,
             "sales_internal_change",
             "sales.internal_change_golden",
+        ),
+        # Tickets 56 and 57: the PICs' sentences in a case's chat read as
+        # exactly the flag and decision they state. Set at the reading steps'
+        # 0.85 from the first live run (2026-11-22, Strata's
+        # qwen3.8-flash-next-q2_0 on Giang's home lab, not the plant: 8 of 8
+        # sentences, the Bravo writes 3 of 3). Every statement still waits on
+        # the PIC's confirmation.
+        ModelStep.CASE_CHAT: StepBar(
+            0.85,
+            "all.right",
+            QUESTION_INTENT,
+            "sales_case_chat",
+            "sales.case_chat_golden",
         ),
     }
 )

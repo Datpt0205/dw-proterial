@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -39,6 +39,7 @@ from typing import Final, Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from dw_sales.domain.activity import request_step
+from dw_sales.domain.assistant import Proposal, ProposedDecision
 from dw_sales.domain.catalog import CustomerCode
 from dw_sales.domain.change_requests import ChangeLine, ChangeRequest
 from dw_sales.domain.description_reading import GateRoute
@@ -388,6 +389,59 @@ def layout_label(
         model_profile=prefill.model_profile,
         rules=prefill.rules,
         decided_by=layout.proposed_by,
+    )
+
+
+def chat_decision_label(
+    before: OrderCase,
+    after: OrderCase,
+    finding_key: str,
+    stated: Sequence[Proposal],
+    *,
+    new_id: NewId,
+    at: AwareDatetime,
+    by: uuid.UUID,
+) -> LabelledCase | None:
+    """A flag's decision recorded by the person to whom the case chat had
+    stated one for it (`case_chat`, tickets 56 and 57): the chat's latest
+    statement on that flag in their own case conversation, beside what they
+    recorded, by the chat's button or the page's. The same decision is a
+    confirmation; another one (asking the customer where the chat said
+    accept, a value typed) a correction. The reason is the person's own
+    words, so it is not compared. None where the chat stated nothing on the
+    flag, the statement was read by no stamped prompt, or the flag is
+    reopened rather than decided."""
+    statement = next(
+        (
+            s
+            for s in reversed(stated)
+            if isinstance(s, ProposedDecision)
+            and s.case_id == before.case_id
+            and s.finding_key == finding_key
+        ),
+        None,
+    )
+    decided = after.finding(finding_key).disposition
+    if statement is None or statement.prompt is None or decided.kind.value == "open":
+        return None
+    finding = before.finding(finding_key)
+    return LabelledCase(
+        label_id=new_id(),
+        decided_at=at,
+        step=ModelStep.CASE_CHAT,
+        lane=CaseKind.ORDER,
+        case_id=before.case_id,
+        customer_code=before.customer_code,
+        message_id=before.message_id,
+        attachment_id=None,
+        line_no=finding.line_no,
+        field="flag_decision",
+        proposed={"finding_key": finding_key, "decision": statement.decision},
+        kept={"finding_key": finding_key, "decision": decided.kind.value},
+        prompt=statement.prompt,
+        model_profile=None,
+        rules=before.rules_version,
+        decided_by=by,
     )
 
 

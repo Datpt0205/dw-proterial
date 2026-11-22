@@ -105,7 +105,13 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
         "sales_order_rules@1.5.4",
         "sales_order_rules@1.5.2",
     )
-    assert not any(demo.model_assist.on(step) for step in ModelStep)
+    # Every step but the case chat's, which ships on where a version does not
+    # say (ticket 57, Đạt 2026-11-22): its statements wait on the PIC's
+    # confirmation, and with no model server it reads nothing anyway.
+    assert demo.model_assist.case_chat
+    assert not any(
+        demo.model_assist.on(step) for step in ModelStep if step is not ModelStep.CASE_CHAT
+    )
     # The mail kinds and the triage card stay off in 1.5.2 (tickets 42 and
     # 33): the API's integration suite reads residue mail through the one
     # call's recordings.

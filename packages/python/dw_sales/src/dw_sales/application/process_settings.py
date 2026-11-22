@@ -245,7 +245,13 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             # otherwise (ticket 41).
             _step(StepId.O7, _in(_ORDER, "model_assist.salesorder_skill")),
             # Asking the customer to correct, and how long DW1 waits on them.
-            _step(StepId.O8, _in(_FOLLOWUPS, "waiting_customer")),
+            # The case chat stating a flag's decision for the PIC to
+            # confirm (tickets 56 and 57).
+            _step(
+                StepId.O8,
+                _in(_ORDER, "model_assist.case_chat"),
+                _in(_FOLLOWUPS, "waiting_customer"),
+            ),
             # Whether a second person cross-checks the Bravo entry.
             _step(StepId.O9, _in(_ORDER, "cross_check_required")),
             # Confirmation and the export-control hold; then each customer's

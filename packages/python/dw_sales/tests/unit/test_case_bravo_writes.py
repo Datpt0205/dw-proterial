@@ -18,8 +18,8 @@ from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.bravo_contract import BravoContract
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.assistant import QUESTION_INTENT
 from dw_sales.application.bravo_line_writes import BravoSo, BravoSoLine
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.domain.assistant import CaseKey, QuestionKind
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase

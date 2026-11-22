@@ -1,6 +1,6 @@
 # 57 — A chat eval from the PICs' real replies, run in shadow from day one
 
-Status: in-progress — the eval for ticket 56 slice 1 is in the smoke (2026-11-21); left: a live run on the on-premises model (not run this session), the PICs' real replies once go-live gives them, examples retrieved per message, the production shadow comparison as labelled cases
+Status: in-progress — the case chat is a model step with its bar, measured live on Strata (PASS) and labelled in production (2026-11-22). pending: the PICs' real replies (go-live); an attested measurement on the plant's Strata for the tenant (`--attest`, on the plant); examples retrieved per message; labels for Bravo writes (one path only, so far always confirmed)
 Blocked by: 56
 Category: evaluation
 
@@ -64,5 +64,63 @@ is switched off. Two things follow:
   the flag taken without matching the model's code 3/5.
 - **Switching on (acceptance 2) is not done:** no tier is switched on yet, so
   there is no run to cite; the first live run sets the bar.
+
+## Done (2026-11-22): a model step, measured, and labelled in production
+
+Decided by Đạt on 2026-11-22, asked in the session:
+- The case chat becomes a model step: `ModelStep.CASE_CHAT`, with its
+  switch, bar and labelled cases.
+- Its switch `model_assist.case_chat` ships ON (unlike every other step).
+  The head turns it off with a rule version.
+- Turning it on again is refused until its live eval passed
+  (`ModelReadiness.unready`, as for any step).
+- Its effects are T2 (`STEP_TIERS`): every statement still waits on the
+  PIC's confirmation, so the switch says whether the chat states anything
+  at all. Off: nothing is stated, and the PIC uses the page.
+
+- **The live run** (acceptance 2's citation), Strata on Giang's home lab
+  (`qwen3.8-flash-next-q2_0`, the `onprem` profile's model; not the plant's
+  GPU, so not attested). Đạt asked for it on 2026-11-22 instead of the
+  local 9B. A 9B run had already been made before that; it is discarded.
+  `sales_case_chat@1.1.0` PASS 6/6, security coverage ok:
+  - golden 8/8 (`all.right` 1.0, bar 0.85 passed);
+  - Bravo writes 3/3;
+  - injection, wrong case, missing evidence and cross tenant all hold;
+  - p50 1.8 s, p95 30 s: the model was cold ("unloaded") at the first call.
+- **The bar:** `BARS[CASE_CHAT]` = 0.85 on `all.right` of
+  `sales.case_chat_golden` over `question_intent@1.3.0`, the reading steps'
+  bar. The golden grader reports `bar` like every step's. Đạt should
+  confirm it.
+- **Seen in the run:** "chap nhan co ngay giao" (no diacritics) was read
+  `out_of_scope`. The fixture counts it right, since no statement is the
+  outcome, but the PIC gets "outside what DW1 answers" instead of a
+  question. A candidate for the first real labelled example.
+- **Labelled in production (shadow):**
+  - Each statement now carries the prompt that read it (`prompt`, stamped,
+    stored, outside the hash the PIC confirms).
+  - When the person records a flag's decision, by the chat's Xác nhận or
+    the page's own button, `OrderCommands.dispose` reads what the chat
+    stated to them on that case (`ChatStatementsPort`, their own
+    conversation only). It then writes a labelled case
+    (`chat_decision_label`) in the decision's own transaction: the
+    statement's decision beside the recorded one, confirmed or corrected.
+  - The reason is the person's words and is not compared.
+  - Nothing is labelled for an unstamped statement, a reopened flag,
+    another flag, or another person's statement.
+  - These are ADR 0015's cases: the thresholds, the audits and ticket 43's
+    examples read them like every step's.
+- **Store:** migration `d759676dee5e` admits `case_chat` in the four step
+  CHECKs (measurements, step outcomes, labelled cases, thresholds). The web
+  lists the step and labels its switch.
+- **Tests:**
+  - `test_case_chat_shadow.py` (9): a confirmed case read by its prompt; a
+    corrected case from the page; no statement, another flag, another
+    person, unstamped, reopened; the switch off; no rules.
+  - `test_model_readiness.py`: ships on; turning it on again needs its
+    pass.
+  - The schema, labelled-case and RLS integration tests on PostgreSQL.
+- **Mutation check:** 9 guards broken one at a time, each red: the switch,
+  no rules, the label written, this flag only, unstamped, reopened, the
+  kept value, the caller's own conversation, ships on.
 
 ## Comments

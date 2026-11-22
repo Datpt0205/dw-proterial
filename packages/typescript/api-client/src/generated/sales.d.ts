@@ -5932,7 +5932,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card" | "internal_change";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card" | "internal_change" | "case_chat";
         /**
          * Multiply
          * @description Multiplies the value by another field's.

@@ -24,7 +24,11 @@ from dw_sales.application.activity_ports import StepActivityReadPort
 from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
-from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
+from dw_sales.application.assistant import (
+    AssistantService,
+    AssistantStoreFactory,
+    CaseChatStatements,
+)
 from dw_sales.application.auto_apply import AutoApply
 from dw_sales.application.bravo_exports import BravoExportService, BravoExportUnitOfWorkFactory
 from dw_sales.application.bravo_facts import BravoFactsService, BravoFactsStorePort
@@ -353,7 +357,18 @@ def assemble(
     quotes = QuoteQueries(
         uow, gate, clock, quotation, pending, step_activity, book, threads, directory
     )
-    order_commands = OrderCommands(uow, gate, clock, ids, intake, pending, converts, notations)
+    order_commands = OrderCommands(
+        uow,
+        gate,
+        clock,
+        ids,
+        intake,
+        pending,
+        converts,
+        notations,
+        # What the chat stated on a flag, labelled with its decision (ticket 57).
+        chat=CaseChatStatements(assistant),
+    )
     line_writes = BravoLineWrites(bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids)
     services = SalesServices(
         overview=overview,
@@ -514,6 +529,8 @@ def assemble(
             # And a Bravo write the PIC confirms there is ticket 53's own
             # proposal, checked again in full.
             bravo_writes=line_writes,
+            # Whether the chat states either: `model_assist.case_chat` (ticket 57).
+            rules=intake.rules,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled

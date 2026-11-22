@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from dw_kernel.errors import ConflictError, NotFoundError
-from dw_sales.application.assistant import QUESTION_INTENT
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.domain.assistant import CaseKey, QuestionKind
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import DispositionKind, FindingCode, OrderCase

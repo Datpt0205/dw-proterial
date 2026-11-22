@@ -144,6 +144,8 @@ class ModelStep(StrEnum):
     SKILL_REPLY_DRAFTS = "skill_reply_drafts"
     TRIAGE_CARD = "triage_card"
     INTERNAL_CHANGE = "internal_change"
+    # The case chat's reading of what the PIC states there (ticket 56/57).
+    CASE_CHAT = "case_chat"
 
 
 class ModelAssist(BaseModel):
@@ -257,6 +259,15 @@ class ModelAssist(BaseModel):
     # quantity and date, which code finds, resolves and parses; Sales applies
     # the lines. Off: Sales types them. Off where a version does not say.
     internal_change: bool = False
+    # The case chat states, for the PIC to confirm, a flag's decision or an
+    # SO line's write the PIC asked for in the case's conversation (tickets
+    # 56 and 57). ON where a version does not say, unlike every other step:
+    # it is what the chat has done since it shipped, every statement waits
+    # on the PIC's confirmation (its effects are T2, `STEP_TIERS`), and the
+    # head turns it off with a version (Đạt, 2026-11-22). Turning it on again
+    # is refused until its live eval passed (`ModelReadiness.unready`). Off:
+    # the chat states nothing and points to the case page's controls.
+    case_chat: bool = True
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

@@ -1,6 +1,6 @@
 # 56 — The case's assistant: chat first, tools for every effect, few refusals
 
-Status: in-progress — slice 1 (2026-11-21, a flag decided in the case chat) and slice 2 (2026-11-22, an SO line's confirmed date or quantity proposed for a Bravo write from the chat) done, each confirmed by hash; left: a reversible step with undo, a mail to the customer, the short system prompt with retrieved examples (ticket 57), a quote's flags, a live run on the plant's model
+Status: in-progress — a model step since 2026-11-22 (`case_chat`, ships on, the head may turn it off; ticket 57); slice 1 (2026-11-21, a flag decided in the case chat) and slice 2 (2026-11-22, an SO line's confirmed date or quantity proposed for a Bravo write from the chat) done, each confirmed by hash; left: a reversible step with undo, a mail to the customer, the short system prompt with retrieved examples (ticket 57), a quote's flags, a live run on the plant's model
 Blocked by: 46 (a conversation per case), 40/41 (skills, tools)
 Category: enhancement
 
