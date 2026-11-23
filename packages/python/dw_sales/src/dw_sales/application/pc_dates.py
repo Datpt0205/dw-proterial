@@ -24,7 +24,8 @@ PC gives, copied as the mail writes it.
   Bravo sales order, other than the customer's own and the case's revisions;
   `read_mail` reads one of those as if it were pasted. Which mail is PC's
   answer is code's list and Sales' choice, never the model's; who sent it
-  is shown, since no setting yet names PC's mailboxes.
+  is shown. Once the order rules name PC's mailboxes
+  (`pc_mailboxes`, 1.16.0), only theirs is listed.
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ from dw_platform.domain.messages import InboundMessage
 from dw_platform.domain.notation import DateOrder, Notation, notation_of
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import InboxPort, SalesCatalogPort
 from dw_sales.application.support import same_version, stored_order
 from dw_sales.domain.orders import OrderCase
@@ -247,6 +249,9 @@ class PcDateReplies:
     # no mailbox is wired: nothing is listed, and a paste still reads.
     inbox: InboxPort | None = None
     catalog: SalesCatalogPort | None = None
+    # The tenant's order rules, whose `pc_mailboxes` narrow what is listed;
+    # None lists as an empty setting does.
+    rules: OrderRulesPort | None = None
 
     async def mails(self, context: AccessContext, case_id: uuid.UUID) -> list[PcMailView]:
         """The verified mails naming the order (module docstring), newest first."""
@@ -286,9 +291,16 @@ class PcDateReplies:
         scope = sales_scope(context)
         names = [case.document.header.po_no, *([case.bravo_so_no] if case.bravo_so_no else [])]
         own = {case.message_id, *(r.message_id for r in case.superseded)}
+        pc = (
+            {a.lower() for a in (await self.rules.rules(scope)).pc_mailboxes}
+            if self.rules is not None
+            else set()
+        )
         found: list[InboundMessage] = []
         for message in await self.inbox.list_messages(scope):
             if message.message_id in own or not message.authentication.verified:
+                continue
+            if pc and message.sender.address.lower() not in pc:
                 continue
             text = f"{message.subject}\n{newest_part(message).text}"
             if not any(written_in(name, text) for name in names):
