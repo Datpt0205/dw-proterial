@@ -403,6 +403,6 @@ def test_the_replay_examples_are_the_message_intents() -> None:
     examples = FixtureMailKindExamples.load(REPO).examples()
     golden = [e for e in examples if e.gold is not None]
     security = [e for e in examples if e.gold is None]
-    assert len(golden) == 92 and len(security) == 5
+    assert len(golden) == 100 and len(security) == 5
     assert all(e.never == {"po", "quote_request", "design_reply"} for e in security)
     assert {e.gold for e in golden} <= set[IntentKind](ROUTES)  # type: ignore[arg-type]
