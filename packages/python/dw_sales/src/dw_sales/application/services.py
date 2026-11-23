@@ -452,7 +452,16 @@ def assemble(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
         ),
         pc_dates=PcDateReplies(
-            uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
+            uow,
+            gate,
+            one_call,
+            clock,
+            ids,
+            worker_id,
+            worker_version,
+            inbox,
+            catalog,
+            rules=intake.rules,
         ),
         pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
         design_requests=DesignRequests(uow, gate, clock, ids, catalog, book, book, inbox),

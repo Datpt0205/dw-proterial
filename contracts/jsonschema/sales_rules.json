@@ -2411,6 +2411,15 @@
       "model_assist": {
         "$ref": "#/$defs/ModelAssist"
       },
+      "pc_mailboxes": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "title": "Pc Mailboxes",
+        "type": "array"
+      },
       "policy_id": {
         "const": "sales_order_rules",
         "title": "Policy Id",

@@ -213,6 +213,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Chữ khách viết sau số PO trong tên file để báo bản sửa, như R trong PO123-R1.xlsx. Chỉ là gợi ý hiện cạnh PO; bản sửa vẫn do số revision in trên PO và các dòng quyết định. Mỗi chữ 1–5 chữ cái in hoa.",
       item: "Chữ đánh dấu",
     },
+    pc_mailboxes: {
+      label: "Hộp thư của PC",
+      help: "Địa chỉ PC dùng để trả lời ngày giao. Khi có danh sách, DW1 chỉ đưa thư từ các địa chỉ này ra để đọc ngày PC trả lời; để trống thì đưa mọi thư đã xác thực có nêu số PO, kèm người gửi. Bạn vẫn xác nhận từng dòng.",
+      item: "Địa chỉ",
+    },
     implied_acceptance: {
       label: "Khách im lặng được coi là đồng ý",
       help: "Theo từng khách: sau số ngày này mà khách không trả lời xác nhận đơn, DW1 báo Sales phụ trách để ghi khách đồng ý ngầm. Khách không có trong danh sách thì không bao giờ đồng ý ngầm.",

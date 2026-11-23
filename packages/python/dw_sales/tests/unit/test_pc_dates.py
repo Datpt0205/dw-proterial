@@ -4,6 +4,7 @@ list, item 7): what the model is told, what code keeps, and who may ask."""
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -289,10 +290,12 @@ OTHERS = [
 ]
 
 
-async def _order_with(model: Any) -> tuple[World, OrderCase, Any]:
+async def _order_with(
+    model: Any, more: Sequence[dict[str, Any]] = ()
+) -> tuple[World, OrderCase, Any]:
     from dw_sales.evals.world import SampleWith
 
-    sample = SampleWith(OTHERS)
+    sample = SampleWith([*OTHERS, *more])
     data = sample.__enter__()
     world = open_world(REPO, data, CALLERS, model=model, measured=False)
     _, case = (await world.process_each(AN, ["M01"]))["M01"]
@@ -327,6 +330,60 @@ async def test_dates_are_read_from_a_listed_mail_as_from_a_pasted_one() -> None:
         assert inputs["mail"].endswith(MAIL) and "VLX-PO-2609-0118" in inputs["mail"]
     finally:
         sample.__exit__(None, None, None)
+
+
+async def _naming_pc(world: World, *mailboxes: str) -> None:
+    """The sample tenant's own order rules, naming PC's mailboxes."""
+    from dw_sales.adapters.mock.fixtures import DATA_DIR
+    from dw_sales.adapters.order_rules import load_tenant_order_rules
+
+    own = load_tenant_order_rules(DATA_DIR / "policies")
+    assert own is not None
+    world.store.rule_versions.seed_approved(
+        ALPHA.tenant_id.value,
+        own.model_copy(update={"policy_version": "1.5.9", "pc_mailboxes": mailboxes}),
+    )
+
+
+# Another colleague's verified mail naming the same PO: listed while no
+# setting names PC's mailboxes, never once one does.
+COLLEAGUE = {**PC_MAIL, "message_id": "PC05", "sender": "kho@proterial.example"}
+
+
+async def test_once_pc_s_mailboxes_are_named_only_their_mail_is_listed_and_read() -> None:
+    from dw_kernel.errors import NotFoundError
+
+    model = Answering(RIGHT)
+    world, case, sample = await _order_with(model, [COLLEAGUE])
+    try:
+        before = await world.services.pc_dates.mails(AN.context(), case.case_id)
+        assert [m.message_id for m in before] == ["PC01", "PC05"]
+
+        await _naming_pc(world, "PC@Proterial.example")
+        listed = await world.services.pc_dates.mails(AN.context(), case.case_id)
+        assert [m.message_id for m in listed] == ["PC01"]
+        calls = len(model.calls)
+        with pytest.raises(NotFoundError):
+            await world.services.pc_dates.read_mail(
+                AN.context(), case.case_id, "PC05", case_version=case.case_version
+            )
+        assert len(model.calls) == calls
+    finally:
+        sample.__exit__(None, None, None)
+
+
+def test_pc_s_mailboxes_are_addresses_each_once_and_none_by_default() -> None:
+    from pydantic import ValidationError
+
+    from dw_sales.adapters.order_rules import load_order_rules
+    from dw_sales.domain.order_checks import OrderRules
+
+    old = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.15.0.yaml")
+    assert old.pc_mailboxes == ()
+    document = old.model_dump(mode="json")
+    for wrong in (["not an address"], ["pc@proterial.example", "PC@proterial.example"]):
+        with pytest.raises(ValidationError, match="pc_mailboxes"):
+            OrderRules.model_validate({**document, "pc_mailboxes": wrong})
 
 
 @pytest.mark.parametrize("message_id", ["PC02", "PC03", "PC04", "M01", "nope"])
