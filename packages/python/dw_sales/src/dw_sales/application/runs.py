@@ -85,7 +85,9 @@ _REASONS: Final[Mapping[DecisionType, str]] = MappingProxyType(
     {
         DecisionType.QUOTE_APPROVAL: "Báo giá chờ duyệt (WIV-03-023 bước 9)",
         DecisionType.ORDER_CROSS_CHECK: "Đơn đã nhập Bravo chờ kiểm chéo (WIV-03-012 bước 9)",
-        DecisionType.QUOTE_MANAGER: "Báo giá kèm đơn đã kiểm, chờ Manager duyệt (WIV-03-023 section 4)",
+        DecisionType.QUOTE_MANAGER: (
+            "Báo giá kèm đơn đã kiểm, chờ Manager duyệt (WIV-03-023 mục 4)"
+        ),
     }
 )
 
