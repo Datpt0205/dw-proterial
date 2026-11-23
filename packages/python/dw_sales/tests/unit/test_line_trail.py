@@ -102,6 +102,7 @@ def _everything_on(case: OrderCase, no: int) -> tuple[OrderCase, list[StepOutcom
         model_profile="default",
         route="local",
         outcome="unavailable",
+        examples=(uuid.UUID(int=0x4301), uuid.UUID(int=0x4302)),
     )
     decided = decided.model_copy(
         update={"basis": decided.basis.model_copy(update={"description_reading": reading})}
@@ -186,6 +187,8 @@ async def test_a_line_with_every_decision_has_a_step_for_each() -> None:
     assert by_kind["read"].decided_by == "rule"
     assert by_kind["convert"].decided_by == "rule"
     assert by_kind["model_reading"].decided_by == "model"
+    # How many decided lines the model was shown, never their words here.
+    assert by_kind["model_reading"].examples == 2
     assert by_kind["finding"].code == FindingCode.REQUESTED_DATE_SHORT_LT.value
     assert by_kind["finding_decided"].actor_user_id == PERSON
     assert by_kind["cross_checked"].actor_user_id == GIANG.user_id

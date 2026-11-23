@@ -311,6 +311,10 @@ async def test_a_reading_is_shown_its_customers_decided_line_and_reads_it() -> N
 
     assert read.mapping.candidates == ("HW-1011",)
     assert without.mapping.status is MappingStatus.UNMAPPED
+    # Which decided lines it was shown is stamped on the reading (the
+    # replay and the trail read it); a reading shown none names none.
+    assert read.reading.examples == (uuid.UUID(int=0x4301),)
+    assert without.reading.examples == ()
     # Asked in the run's scope, for the case's customer, at the tenant's k.
     (asked,) = index.asked
     assert (asked["tenant"], asked["workspace"]) == (
@@ -331,6 +335,7 @@ async def test_another_tenants_decided_line_is_never_shown_even_when_the_index_n
     ((_, inputs),) = model.calls
     assert inputs["examples"] == "[]"
     assert read.mapping.status is MappingStatus.UNMAPPED
+    assert read.reading.examples == ()
 
 
 async def test_an_example_is_contained_like_the_lines_and_cannot_close_its_block() -> None:
@@ -372,6 +377,36 @@ async def test_an_index_that_fails_costs_the_reading_its_examples_only(
     assert read.mapping.candidates == ("HW-1004",)
 
 
+async def test_only_the_decided_lines_the_model_saw_are_stamped() -> None:
+    """Found is not shown: a line whose item left the list, or whose words
+    were shown already, never reached the prompt, and the stamp says what
+    the model saw, in the order it saw it."""
+    store = MemoryDescriptionExamples()
+    gone, first, again = (
+        decided(1, BLACK22, "HW-9999"),
+        decided(2, GREEN, "HW-1011"),
+        decided(3, GREEN, "HW-1011"),
+    )
+    store.add(ALPHA, gone, first, again)
+    index = FakeIndex(ids=[gone.label_id, first.label_id, again.label_id])
+    model = Scripted(taught)
+    read = await _read(_reader(index, store, model), GREEN, Lookup("C001", 3))
+    ((_, inputs),) = model.calls
+    assert shown_in(inputs) == [GREEN]
+    assert read.reading.examples == (first.label_id,)
+
+
+async def test_a_reading_with_no_answer_still_names_what_it_was_shown() -> None:
+    """The call carried the examples whatever came back: an unavailable
+    or refused reading is stamped with them too."""
+    store = MemoryDescriptionExamples()
+    store.add(ALPHA, decided(1, GREEN, "HW-1011"))
+    index = FakeIndex(ids=[uuid.UUID(int=0x4301)])
+    read = await _read(_reader(index, store, Scripted(lambda d, s: None)), GREEN, Lookup("C001", 3))
+    assert read.reading.outcome == "not_understood"
+    assert read.reading.examples == (uuid.UUID(int=0x4301),)
+
+
 async def test_none_asked_for_none_shown() -> None:
     index = FakeIndex(ids=[uuid.UUID(int=0x4301)])
     model = Scripted(taught)
@@ -410,6 +445,9 @@ async def test_the_tenants_demonstrations_are_shown_before_the_nearest() -> None
     assert shown_in(inputs) == [GREEN, BLACK22]
     reading = mapped[1].reading
     assert reading is not None and reading.prompt == prompt_stamp("1.2.0")
+    # The version names its demonstrations; the stamp names what the search
+    # found, which nothing else records.
+    assert reading.examples == (uuid.UUID(int=0x4301),)
 
 
 # --------------------------------------------------------- the lane --

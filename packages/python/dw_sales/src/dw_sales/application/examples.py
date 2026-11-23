@@ -40,7 +40,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import CustomerCode, PrvCode
-from dw_sales.domain.description_reading import SpanRead
+from dw_sales.domain.description_reading import MAX_EXAMPLES_SHOWN, SpanRead
 from dw_sales.domain.order_checks import ModelStep
 
 _LOG = logging.getLogger("dw_sales.examples")
@@ -50,8 +50,8 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 # The step whose decided cases are examples (module docstring).
 STEP: Final = ModelStep.DESCRIPTION_ATTRIBUTES
 # The most examples one reading is shown, whatever k and the lines: each is a
-# line of a prompt every line of the call carries.
-MAX_SHOWN: Final = 12
+# line of a prompt every line of the call carries. The reading's stamp owns it.
+MAX_SHOWN: Final = MAX_EXAMPLES_SHOWN
 # What the lane indexes per read.
 INDEX_PAGE: Final = 200
 # The lane that fills the index (`apps/worker`).

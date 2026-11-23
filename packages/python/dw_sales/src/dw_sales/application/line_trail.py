@@ -113,6 +113,9 @@ class TrailStepView(BaseModel):
     rule_version: str | None = None
     confidence: float | None = None
     gate: str | None = None
+    # A model reading: how many decided lines it was shown (ticket 43); the
+    # reading's stamp keeps which.
+    examples: int | None = None
 
 
 class LineTrailView(BaseModel):
@@ -232,6 +235,7 @@ def _mapping(line: OrderLine) -> list[TrailStepView]:
                 outcome=reading.outcome,
                 confidence=reading.confidence,
                 gate=reading.gate,
+                examples=len(reading.examples),
             )
         )
     if mapping.status is MappingStatus.CANDIDATE_CONFIRMED:

@@ -1,6 +1,6 @@
 # 43 — Every correction becomes an example; prompts and skills re-optimised on them
 
-Status: in progress (2026-11-22): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version), the head's page, and a measured gain on Strata (examples as confirmed readings, prompt 1.2.0: 3/8 → 8/8 held-out lines) built; the second step (`po_body_extraction`) shown the customer's decided values (2026-11-22; no gain measurable on Strata, which reads every trap without them); left: stamping which examples a reading saw. pending: re-attesting both steps on their new prompts on the plant (`--attest`, on the plant's Strata)
+Status: in progress (2026-11-22): parts 1, 2 (dynamic few-shot, `description_attributes`), 3 (the optimiser, smallest version), the head's page, and a measured gain on Strata (examples as confirmed readings, prompt 1.2.0: 3/8 → 8/8 held-out lines) built; the second step (`po_body_extraction`) shown the customer's decided values (2026-11-22; no gain measurable on Strata, which reads every trap without them); which decided lines a reading saw stamped on it (2026-11-23). pending: re-attesting both steps on their new prompts on the plant (`--attest`, on the plant's Strata)
 Blocked by: 40
 Category: enhancement
 
@@ -308,11 +308,44 @@ retrieval waits on the Qdrant review, and the optimiser after it.
   correction shown wrong, the newest decision, kept vs corrected, one
   customer's only).
 
+### Which decided lines a reading saw (2026-11-23)
+
+- **The stamp**: `DescriptionReading.examples`, the labelled case ids of
+  the decided lines the call showed beside the line, in the order shown, at
+  most `MAX_EXAMPLES_SHOWN` (12, owned by the domain; `examples.MAX_SHOWN`
+  reads it) and each once. Only what the search found **and** the prompt
+  showed: a line whose item left the list, or whose words were shown
+  already, never reached the model and is not named; the tenant's prompt
+  version's demonstrations are named by `prompt` already and are not
+  repeated. An unavailable or refused reading is stamped too: the call
+  carried them whatever came back. A quote's items are read by the same
+  reader and stamped the same way.
+- **Ids, not `examples_as_of`** (the research note's word): the search is
+  by similarity, so a time alone does not say which lines came back, while
+  the ids do, and stay true when the index or the embedder changes. The
+  PO-in-mail step needs no stamp of its own: it is shown the customer's
+  newest decided values, which the time of the reading already determines.
+- **Who reads it**: the line's trail (ticket 62) says "đã xem N dòng đã
+  quyết" on the model-reading step; the ids stay on the line's check basis
+  for whoever asks why a line read as it did. The labelled case reaches
+  them by its case and line, not by a copy.
+- **Old cases**: a basis stored before the stamp has no key and reads as
+  shown none (tested), though readings from 11-16 on did see examples.
+- **API**: `TrailStepView.examples` (a count) and the quote item's
+  `description_reading.examples` (ids: opaque, and nothing outside the
+  head's page resolves a labelled case) are added; snapshot and TS types
+  regenerated.
+- **Deploy note**: `DescriptionReading` forbids unknown keys, so code from
+  before this change cannot read a line stamped by it: rolling back past it
+  needs the key stripped, as for `confidence` and `gate` before it.
+- **Mutation check**: 8 guards broken one at a time, each red (no stamp,
+  found but not shown, demonstrations named, a duplicate, no bound, no
+  default for old rows, the trail's count, the page's words).
+
 ### Left
 
 - **After deploy**: a step's bar is per prompt version, so
   `description_attributes` (1.2.0) and `po_body_extraction` (1.2.0) are not
   ready until the live lane is attested again on the plant model
   (`run_evals.py --dataset <the step's set> --live onprem --attest`).
-- Stamping which examples a reading was shown (`examples_as_of`).
 

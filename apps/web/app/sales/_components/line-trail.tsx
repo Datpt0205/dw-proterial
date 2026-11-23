@@ -184,6 +184,7 @@ function facts(step: Step): string[] {
   if (!LABELLED_OUTCOME.has(step.kind) && step.outcome) out.push(step.outcome);
   if (step.confidence != null)
     out.push(`độ chắc ${Math.round(step.confidence * 100)}%`);
+  if (step.examples) out.push(`đã xem ${step.examples} dòng đã quyết`);
   return out;
 }
 

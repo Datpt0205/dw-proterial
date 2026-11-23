@@ -36,6 +36,7 @@ const TRAIL = {
       decided_by: "model",
       outcome: "read",
       confidence: 0.91,
+      examples: 3,
     },
     {
       kind: "mapping",
@@ -87,6 +88,8 @@ describe("LineTrail", () => {
       screen.getByText("Phát hiện: Ngày yêu cầu ngắn hơn lead time"),
     ).toBeTruthy();
     expect(screen.getByText("Ô PO!B12")).toBeTruthy();
+    // How many decided lines the model was shown beside the line (ticket 43).
+    expect(screen.getByText(/đã xem 3 dòng đã quyết/)).toBeTruthy();
     expect(screen.getByText(/Chấp nhận \(có lý do\)/)).toBeTruthy();
     expect(
       screen.getByText("sales.order_rules@1.2.0", { exact: false }),

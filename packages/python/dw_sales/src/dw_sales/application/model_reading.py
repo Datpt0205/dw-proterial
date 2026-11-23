@@ -17,6 +17,7 @@ DW1's here is:
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
@@ -29,7 +30,7 @@ from dw_agent_runtime.model.interpretation import (
     ScoredInterpretationPort,
 )
 from dw_kernel.ids import TenantId, WorkspaceId
-from dw_sales.application.examples import MAX_SHOWN, ExampleFinder, Lookup
+from dw_sales.application.examples import MAX_SHOWN, DescriptionExample, ExampleFinder, Lookup
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import Item
 from dw_sales.domain.description_reading import (
@@ -112,6 +113,15 @@ def prompt_stamp(version: str | None) -> str:
     return f"{DESCRIPTION_ATTRIBUTES.prompt_id}.tenant_{tenant}@{DESCRIPTION_ATTRIBUTES.version}"
 
 
+@dataclass(frozen=True, slots=True)
+class Stamp:
+    """What every reading of one call is stamped with: the prompt (and the
+    tenant's version) and the decided lines the call showed."""
+
+    prompt: str
+    examples: tuple[uuid.UUID, ...]
+
+
 def shown_lines(shown: Sequence[Shown], items: Sequence[Item]) -> list[dict[str, Any]]:
     """The examples as the prompt shows them, never with a product code.
 
@@ -121,24 +131,33 @@ def shown_lines(shown: Sequence[Shown], items: Sequence[Item]) -> list[dict[str,
     - ``item``: otherwise, the attributes of the item a person kept, from the
       item master, most of which the description never says.
 
-    A line whose item is not in the list any more is left out (its answer no
+    Only the lines `kept_lines` keeps."""
+    return [_shown(line, items) for line in kept_lines(shown, items)]
+
+
+def kept_lines[S: Shown](shown: Sequence[S], items: Sequence[Item]) -> list[S]:
+    """The decided lines a prompt shows, in order, at most `MAX_SHOWN`: a
+    line whose item is not in the list any more is left out (its answer no
     longer passes code's own check), and so is a description shown already."""
-    by_code = {item.prv_code: item for item in items}
+    codes = {item.prv_code for item in items}
     seen: set[str] = set()
-    found: list[dict[str, Any]] = []
+    kept: list[S] = []
     for line in shown:
-        item = by_code.get(line.prv_code)
         key = line.description.strip().casefold()
-        if item is None or key in seen:
+        if line.prv_code not in codes or key in seen:
             continue
         seen.add(key)
-        if _fits(line.spans, item):
-            found.append({"description": line.description, "read": answer_of(line.spans)})
-        else:
-            found.append({"description": line.description, "item": _attributes(item)})
-        if len(found) == MAX_SHOWN:
+        kept.append(line)
+        if len(kept) == MAX_SHOWN:
             break
-    return found
+    return kept
+
+
+def _shown(line: Shown, items: Sequence[Item]) -> dict[str, Any]:
+    item = next(item for item in items if item.prv_code == line.prv_code)
+    if _fits(line.spans, item):
+        return {"description": line.description, "read": answer_of(line.spans)}
+    return {"description": line.description, "item": _attributes(item)}
 
 
 def _fits(spans: Sequence[SpanRead], item: Item) -> bool:
@@ -194,13 +213,21 @@ class DescriptionReader:
         mapped: dict[int, MappedLine] = {}
         for start in range(0, len(lines), MAX_LINES_PER_READING):
             batch = lines[start : start + MAX_LINES_PER_READING]
-            shown: list[Shown] = list(demonstrations.shown)
+            found: list[DescriptionExample] = []
             if self.examples is not None and showing is not None:
-                shown += await self.examples.find(
+                found = await self.examples.find(
                     scope, [line.description for line in batch], showing.lookup
                 )
+            kept = kept_lines([*demonstrations.shown, *found], items)
+            # The stamp names what the search found and the prompt showed;
+            # the demonstrations are the version's, named by `prompt`.
+            seen = tuple(e.label_id for e in found if any(e is line for line in kept))
             mapped |= await self._batch(
-                batch, items, run, shown_lines(shown, items), demonstrations.version
+                batch,
+                items,
+                run,
+                [_shown(line, items) for line in kept],
+                Stamp(prompt_stamp(demonstrations.version), seen),
             )
         return mapped
 
@@ -217,7 +244,7 @@ class DescriptionReader:
         items: Sequence[Item],
         run: RunContext,
         examples: list[dict[str, Any]],
-        version: str | None,
+        stamp: Stamp,
     ) -> dict[int, MappedLine]:
         inputs = {
             # Code-built JSON inside the untrusted block: a description cannot
@@ -257,7 +284,6 @@ class DescriptionReader:
         except ModelUnavailableError:
             answer = None
         readings = _by_line(answer, {line.line_no for line in batch})
-        stamp = prompt_stamp(version)
         if readings is None:
             unavailable = self._stamp(stamp, "unavailable")
             return {line.line_no: map_read_line(None, unavailable, items) for line in batch}
@@ -276,7 +302,7 @@ class DescriptionReader:
 
     def _stamp(
         self,
-        prompt: str,
+        stamp: Stamp,
         outcome: str,
         *,
         spans: Verified | None = None,
@@ -285,7 +311,8 @@ class DescriptionReader:
     ) -> DescriptionReading:
         return DescriptionReading.model_validate(
             {
-                "prompt": prompt,
+                "prompt": stamp.prompt,
+                "examples": stamp.examples,
                 "model_profile": self.model.model_profile,
                 "route": self.model.route,
                 "outcome": outcome,
