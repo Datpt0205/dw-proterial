@@ -19,11 +19,8 @@
       "kind": "complaint"
     },
     "0a6a0b670646c558d9d4332b": {
-      "language": "en",
-      "referenced_number_spans": [
-        "SO26-0408",
-        "VLX-PO-2609-0118"
-      ],
+      "language": "other",
+      "referenced_number_spans": [],
       "kind": "other"
     },
     "0f2ed71ed213374f507c0448": {
@@ -188,10 +185,8 @@
     },
     "4dc9061fae0e10fcbde84cf9": {
       "language": "ja",
-      "referenced_number_spans": [
-        "KMH-21-0045"
-      ],
-      "kind": "other"
+      "referenced_number_spans": [],
+      "kind": "reply_to_case"
     },
     "4e537ce1ce3385f78c1a91cb": {
       "language": "ja",
@@ -271,7 +266,7 @@
     "7c7506e22c168cd2a2fe1cf1": {
       "language": "vi",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "sample_request"
     },
     "7caa201270e72f93ace6a033": {
       "language": "ja",
@@ -281,7 +276,7 @@
     "7cd7a3c9068d8d14c2cfa00d": {
       "language": "ja",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "reply_to_case"
     },
     "7cdd74802a4ec0c570e58c66": {
       "language": "vi",
@@ -305,7 +300,7 @@
     "8a19cbf0b41d50bc36fdfc3f": {
       "language": "vi",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "reply_to_case"
     },
     "8bcc3e07f767431e02cc1162": {
       "language": "en",
@@ -351,7 +346,7 @@
     "a1b441cfe5d3d3cf3d32e4e3": {
       "language": "en",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "reply_to_case"
     },
     "a407b0a7439fc8aee6d7865b": {
       "language": "en",
@@ -549,7 +544,7 @@
       "referenced_number_spans": [
         "QRL-PO-0930-15"
       ],
-      "kind": "design_reply"
+      "kind": "reply_to_case"
     },
     "e1a4ba0313a4517ba13d2e03": {
       "language": "en",
@@ -602,7 +597,7 @@
       "referenced_number_spans": [
         "BRN-PO-2609-052"
       ],
-      "kind": "delivery_change"
+      "kind": "reply_to_case"
     },
     "ef33e6bfaa0b794da71750c0": {
       "language": "ja",
@@ -617,7 +612,7 @@
     "f3300829ad7e9b1b92b063c8": {
       "language": "en",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "reply_to_case"
     },
     "f40be20e06ba652afb8ad630": {
       "language": "ja",
