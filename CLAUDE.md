@@ -339,6 +339,22 @@ eval smoke. CI runs config/contract validation, Python lint/typecheck, frontend
 lint/typecheck/build, unit tests, architecture tests, integration tests,
 security/dependency scan, eval smoke, container build and a compose smoke test.
 
+## Branches
+
+Work goes branch → `dev` → `main` (Đạt, 2026-11-23):
+
+1. Each piece of work is its own branch off `dev`, merged into `dev` by a
+   pull request. A merge into `dev` deploys the dev environment
+   (`.github/workflows/deploy.yml`; until a runner exists the run only
+   queues).
+2. `main` takes a pull request from `dev` only, opened when `dev` is stable:
+   that is a release.
+3. Never a direct push or a force-push to either. The "main and dev" ruleset
+   says the same but is not enforced while the repository is private on
+   GitHub Free, so this list is the rule.
+
+A local checkout sits on `dev` or a work branch, never on `main`.
+
 ## Work style
 
 1. Inspect before changing.
