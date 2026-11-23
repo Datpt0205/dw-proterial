@@ -251,7 +251,9 @@ class World:
                     approval_type=approval_type,
                     requested_by=requested_by or uuid.uuid4(),
                     reason="Duyệt thử",
-                    payload={},
+                    # The requester alone made it; a request without the key
+                    # is decided by nobody (fail closed, 2026-11-13).
+                    payload={"makers": []},
                     required_scope=required_scope,
                 )
             )

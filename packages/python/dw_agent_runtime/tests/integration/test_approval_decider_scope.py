@@ -67,7 +67,12 @@ def build_stamping_graph(required_scope: object) -> Callable[[], StateGraph]:  #
 
     def factory() -> StateGraph:  # type: ignore[type-arg]
         def _review(state: DemoState) -> DemoState:
-            body: dict[str, Any] = {"approval_type": "demo.dispatch", "reason": "cần duyệt"}
+            # `makers` as every raiser names them: the requester alone.
+            body: dict[str, Any] = {
+                "approval_type": "demo.dispatch",
+                "reason": "cần duyệt",
+                "makers": [],
+            }
             if required_scope is not _ABSENT:
                 body["required_scope"] = required_scope
             decision: dict[str, Any] = interrupt(body)

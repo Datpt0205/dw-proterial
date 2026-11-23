@@ -373,7 +373,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
         for row in load_workbook(io.BytesIO(served[XLSX].content)).worksheets[0].iter_rows()
         for c in row
     )
-    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.3.0"
+    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.6.0"
     # A preview is for the pricer and approvers, and only while it waits.
     stale = await giang.get(f"/quotes/{final['case_id']}/artifacts/{previews[0]['artifact_id']}")
     assert stale.status_code == 409

@@ -48,6 +48,9 @@ PIC = frozenset(
         "sales.worker.pause",
         # Imports a master-data list (511ef1b71dee, ticket 41).
         "sales.master_data.import",
+        # Proposes an SO line's change in Bravo, and approves one, which
+        # writes it under their own Bravo user (af89f3f5d27d, ticket 53).
+        "sales.bravo.write",
     }
 )
 HEAD = PIC | {
@@ -64,6 +67,10 @@ HEAD = PIC | {
     "sales.rules.approve",
     # Approves a master-data import (511ef1b71dee, ticket 41).
     "sales.master_data.approve",
+    # Told of a change in Bravo, and accepts its new baseline (6b0f375184fb,
+    # ticket 65).
+    "sales.bravo.watch.read",
+    "sales.bravo.watch.accept",
 }
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {
