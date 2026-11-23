@@ -73,6 +73,15 @@ context. All five are done and on `main`. The full narrative is at
   collaborator gets write. **Incident:** a `git reset --hard` of mine wiped
   the two uncommitted files; the e2e spec was rebuilt from the session's
   edits, the rollout `.xlsx` only as the 11-10 Teams copy (Đạt to check).
+  **Later the same day:** the repo went private (Đạt), so on GitHub Free the
+  ruleset is kept but NOT enforced (the API answers 403 "Upgrade to GitHub
+  Pro"); history rewritten at Đạt's ask so Contributors shows only him (66
+  Claude co-author trailers dropped, 5 commits by another address
+  re-authored; trees identical, 812 commits, force-pushed to main and dev).
+  Every commit id before 2026-11-23 in these plans is the old one: the old
+  history is in the local branch `backup/pre-rewrite-2026-11-23` and a
+  bundle beside the checkout. Claude Code's `attribution` is empty in the
+  user settings, so no new trailer.
 
 - **The plant's hosts (Đạt, 2026-11-09, corrected the same day).** DW runs
   on its own Ubuntu Server, as designed. Bravo runs on-prem on a separate
