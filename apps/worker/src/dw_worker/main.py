@@ -148,6 +148,7 @@ from dw_sales.adapters.assembly import (
     build_rule_settlement,
     build_skill_settlement,
     build_threshold_lane,
+    refuse_orphaned_stage_pins,
 )
 from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
@@ -970,6 +971,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # signed, sent with the stored command to the gateway. Wired always:
         # with no gateway configured the write is refused with that reason,
         # never left waiting.
+        # No lane runs while an open case is pinned to a stage version this
+        # deployment does not serve (Sales ticket 61).
+        registry.check_at_start(lambda: refuse_orphaned_stage_pins(sessions))
         handlers[BRAVO_WRITE_DECIDED] = build_bravo_write_handler(
             build_bravo_write_settlement(
                 session_factory=sessions,
@@ -1695,6 +1699,7 @@ async def run_worker(
     shutdown_event: asyncio.Event,
 ) -> None:
     logger.info("worker starting, consumers=%s", sorted(registry.all()))
+    await registry.run_start_checks()
 
     async def heartbeat_loop() -> None:
         while not shutdown_event.is_set():

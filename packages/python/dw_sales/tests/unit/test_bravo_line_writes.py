@@ -29,6 +29,7 @@ from dw_sales.adapters.bravo_contract import BravoContract, ContractSigner
 from dw_sales.application.access import Gate
 from dw_sales.application.bravo_line_writes import (
     BRAVO_WRITE_APPROVAL,
+    BravoCommandsPort,
     BravoLineWrite,
     BravoLineWrites,
     BravoSo,
@@ -41,8 +42,10 @@ from dw_sales.application.bravo_line_writes import (
     GatewayAnswer,
     PreparedWrite,
     QuantityChange,
+    write_bravo_versions,
 )
 from dw_sales.application.runs import APPROVAL_PREFIX
+from dw_sales.application.stages import Stage, StageHandlers
 
 pytestmark = pytest.mark.unit
 
@@ -134,6 +137,8 @@ class Audit:
 class Orders:
     so_no: str | None = SO.so_no
     assigned_to: uuid.UUID = PIC
+    # What the case was stamped with when it opened (ticket 61).
+    stage_versions: dict[str, str] = field(default_factory=lambda: {"write_bravo": "1.0.0"})
 
     async def get(self, case_id: uuid.UUID) -> object:
         if case_id != CASE:
@@ -146,7 +151,9 @@ class Orders:
                 case_version=VERSION,
                 status=SimpleNamespace(value="checked"),
             ),
-            origin=SimpleNamespace(assigned_to=self.assigned_to),
+            origin=SimpleNamespace(
+                assigned_to=self.assigned_to, stage_versions=self.stage_versions
+            ),
         )
 
 
@@ -263,14 +270,20 @@ def _service(world: World, bravo: Bravo | None = None) -> BravoLineWrites:
         world,  # type: ignore[arg-type]
         Gate(ScopeAuthorizationService()),
         bravo or Bravo(),
-        BravoContract(),
+        write_bravo_versions(BravoContract()),
         _Clock(),
         _Ids(),
     )
 
 
-async def _proposed(world: World, change: object | None = None, line: int = 1) -> ApprovalRequest:
-    view = await _service(world).propose(
+async def _proposed(
+    world: World,
+    change: object | None = None,
+    line: int = 1,
+    *,
+    service: BravoLineWrites | None = None,
+) -> ApprovalRequest:
+    view = await (service or _service(world)).propose(
         PIC_CONTEXT,
         CASE,
         line,
@@ -448,7 +461,7 @@ def _stamp(
 ) -> BravoWriteStamp:
     return BravoWriteStamp(
         ContractSigner(ApprovalTokenSigner(KEY, "k1")) if key else None,
-        BravoContract(),
+        write_bravo_versions(BravoContract()),
         codes or Codes(),
         bravo or Bravo(),
         _Clock(),
@@ -620,7 +633,7 @@ async def test_a_kind_the_gateway_does_not_run_yet_is_not_proposed() -> None:
         world,  # type: ignore[arg-type]
         Gate(ScopeAuthorizationService()),
         Bravo(),
-        _Pending(),
+        write_bravo_versions(_Pending()),
         _Clock(),
         _Ids(),
     )
@@ -634,3 +647,66 @@ async def test_a_kind_the_gateway_does_not_run_yet_is_not_proposed() -> None:
             case_version=VERSION,
         )
     assert world.approvals.requests == {}
+
+
+# -------------------------------------- the stage version a case runs on (61) --
+
+
+class _Other(BravoContract):
+    """A second command set, as a new write-Bravo version would bring."""
+
+    def prepare(self, change: object, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
+        raise AssertionError("a case pinned to 1.0.0 is prepared by 1.0.0")
+
+
+def _served(**versions: BravoCommandsPort) -> StageHandlers[BravoCommandsPort]:
+    return StageHandlers(
+        Stage.WRITE_BRAVO, {k.removeprefix("v").replace("_", "."): v for k, v in versions.items()}
+    )
+
+
+async def test_the_proposal_names_the_stage_version_the_case_runs_on() -> None:
+    request = await _proposed(World())
+    assert request.payload["stage_version"] == "1.0.0"
+
+
+async def test_a_case_keeps_its_versions_command_set_when_a_newer_one_is_served() -> None:
+    """Acceptance 1: a case opened on 1.0.0 finishes on it after 1.1.0 ships."""
+    world = World()
+    service = _service(world)
+    service = BravoLineWrites(
+        service.uow,
+        service.gate,
+        service.orders,
+        _served(v1_0_0=BravoContract(), v1_1_0=_Other()),
+        service.clock,
+        service.ids,
+    )
+    request = await _proposed(world, service=service)
+    assert request.payload["kind"] == "so.line.set_confirmed_date@1"
+
+
+async def test_a_case_pinned_to_a_version_no_longer_served_is_refused_and_opens_nothing() -> None:
+    world = World(orders_=Orders(stage_versions={"write_bravo": "0.9.0"}))
+    with pytest.raises(ConflictError) as refused:
+        await _proposed(world)
+    assert refused.value.details["rule"] == "stage_version_unavailable"
+    assert world.approvals.requests == {} and world.store.rows == {}
+
+
+async def test_a_case_with_no_write_bravo_stamp_is_refused() -> None:
+    world = World(orders_=Orders(stage_versions={}))
+    with pytest.raises(ConflictError) as refused:
+        await _proposed(world)
+    assert refused.value.details["rule"] == "stage_not_pinned"
+
+
+async def test_a_decision_on_a_stage_version_no_longer_served_is_not_signed() -> None:
+    """The hash is checked by the command set of the version the proposal
+    names; one this deployment does not serve signs nothing."""
+    request = await _proposed(World())
+    request.payload["stage_version"] = "0.9.0"
+    with pytest.raises(ConflictError) as refused:
+        await _stamp().stamp(request, object(), PIC_CONTEXT)
+    assert refused.value.details["rule"] == "stage_version_unavailable"
+

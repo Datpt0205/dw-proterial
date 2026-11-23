@@ -87,6 +87,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoOrdersPort,
     BravoWriteStamp,
     WriteStatus,
+    write_bravo_versions,
 )
 from dw_sales.application.bravo_watch import WatchState
 from dw_sales.application.case_store import (
@@ -1968,7 +1969,11 @@ def open_world(
         bravo_writes=assembly.bravo_write_decisions,
         # No signing key and no Bravo: a Bravo write is never approved here.
         bravo_stamp=BravoWriteStamp(
-            None, BravoNotConnected(), NoEmployeeCodes(), BravoNotConnected(), clock
+            None,
+            write_bravo_versions(BravoNotConnected()),
+            NoEmployeeCodes(),
+            BravoNotConnected(),
+            clock,
         ),
         worker_file=worker_file,
     )

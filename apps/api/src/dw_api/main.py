@@ -97,6 +97,8 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         # One LISTEN connection for this process, feeding every open stream.
         # Started here because it owns a connection for the app's lifetime, and
         # a composition root that is synchronous cannot open one.
+        for check in container.start_checks:
+            await check()
         if container.run_events is not None:
             await container.run_events.start()
         try:

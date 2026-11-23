@@ -52,7 +52,8 @@ def _case(row: RowMapping) -> QuoteCase:
 
 def stored_quote(row: RowMapping) -> Stored[QuoteCase]:
     origin = CaseOrigin(
-        assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"]
+        assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"],
+        stage_versions=dict(row["stage_versions"]),
     )
     return Stored(_case(row), origin)
 
@@ -97,6 +98,7 @@ class SqlQuoteCaseRepository:
                     received_at=case.request.received_at,
                     assigned_to=origin.assigned_to,
                     release_manifest_ref=origin.release_manifest_ref,
+                    stage_versions=dict(origin.stage_versions),
                 )
             )
             await self._event(case, None, event)

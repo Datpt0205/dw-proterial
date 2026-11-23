@@ -60,6 +60,7 @@ from dw_sales.application.case_store import (
     RunLessApprovalsPort,
 )
 from dw_sales.application.ports import NotificationSenderPort, SalesScope
+from dw_sales.application.stages import Stage, StageHandlers
 from dw_sales.application.support import seen_by
 from dw_sales.domain.dispositions import CaseKind
 
@@ -145,6 +146,13 @@ class PreparedWrite:
     pending: str | None = None
 
 
+def write_bravo_versions(v1_0_0: BravoCommandsPort) -> StageHandlers[BravoCommandsPort]:
+    """The write-Bravo stage's versions this deployment serves (ticket 61):
+    1.0.0, the gateway's contract as `dw_bravo.contract` holds it today. A new
+    command set is a second entry here, never an edit of the first."""
+    return StageHandlers(Stage.WRITE_BRAVO, {"1.0.0": v1_0_0})
+
+
 class BravoCommandsPort(Protocol):
     """The gateway's contract, owned by `dw_bravo.contract` and reached
     through an adapter (import-linter: a context's application never imports
@@ -212,6 +220,9 @@ class BravoWriteAsked(BaseModel):
     command: dict[str, Any]
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     required_scope: Literal["sales.bravo.write"]
+    # The write-Bravo stage version the case runs on (ticket 61): the command
+    # set that prepared ``command`` is the one that checks its hash.
+    stage_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
 
 
 class BravoLineWrite(BaseModel):
@@ -240,8 +251,9 @@ class BravoLineWrite(BaseModel):
     decided_by: uuid.UUID | None = None
     settled_at: AwareDatetime | None = None
 
-    def asked(self) -> BravoWriteAsked:
+    def asked(self, stage_version: str) -> BravoWriteAsked:
         return BravoWriteAsked(
+            stage_version=stage_version,
             approval_type=BRAVO_WRITE_APPROVAL,
             case_id=self.case_id,
             line_no=self.line_no,
@@ -400,7 +412,8 @@ class BravoLineWrites:
     uow: BravoWriteWorkFactory
     gate: Gate
     orders: BravoOrdersPort
-    commands: BravoCommandsPort
+    # By the version each case was stamped with (`write_bravo_versions`).
+    commands: StageHandlers[BravoCommandsPort]
     clock: UtcClock
     ids: IdGenerator
 
@@ -450,7 +463,8 @@ class BravoLineWrites:
                 details={"bravo_rows": len(rows), "rule": "one_bravo_row"},
             )
         before = before_value(change, rows[0])
-        prepared = self.commands.prepare(change, so, rows[0])
+        stage_version, commands = self.commands.for_case(stored.origin.stage_versions)
+        prepared = commands.prepare(change, so, rows[0])
         if prepared.pending is not None:
             raise ConflictError(
                 "loại ghi này chưa chạy được",
@@ -481,7 +495,7 @@ class BravoLineWrites:
                     approval_type=BRAVO_WRITE_APPROVAL,
                     requested_by=UserId(context.principal_id),
                     reason=_REASON,
-                    payload=write.asked().model_dump(mode="json"),
+                    payload=write.asked(stage_version).model_dump(mode="json"),
                     required_scope=SalesScopes.BRAVO_WRITE.value,
                 )
             )
@@ -574,7 +588,7 @@ class BravoWriteStamp:
     decision is refused (fail closed)."""
 
     signer: ApprovalSignerPort | None
-    commands: BravoCommandsPort
+    commands: StageHandlers[BravoCommandsPort]
     codes: EmployeeCodesPort
     users: BravoUsersPort
     clock: UtcClock
@@ -588,7 +602,8 @@ class BravoWriteStamp:
                 "DW chưa có khoá ký phê duyệt ghi Bravo: chưa duyệt được",
                 details={"rule": "no_signing_key"},
             )
-        if self.commands.hash_of(asked.kind, asked.command) != asked.content_hash:
+        commands = self.commands.at(asked.stage_version)
+        if commands.hash_of(asked.kind, asked.command) != asked.content_hash:
             raise ConflictError("lệnh ghi Bravo không khớp với nội dung đã đề xuất")
         code = await self.codes.employee_code(context.tenant_id, context.principal_id)
         if code is None:

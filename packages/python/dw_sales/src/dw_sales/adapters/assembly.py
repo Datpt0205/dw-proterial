@@ -95,6 +95,7 @@ from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.adapters.persistence.reminder_marks import SqlReminderMarkStoreFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.skill_replays import SqlSkillReplays
+from dw_sales.adapters.persistence.stage_pins import open_cases_by_stage
 from dw_sales.adapters.persistence.step_thresholds import SqlStepThresholds
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
@@ -118,6 +119,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoNotConnected,
     BravoWriteSettlement,
     BravoWriteStamp,
+    write_bravo_versions,
 )
 from dw_sales.application.bravo_sales_orders import SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
@@ -661,7 +663,7 @@ def build_dw1(
         bravo_writes=assembly.bravo_write_decisions,
         bravo_stamp=BravoWriteStamp(
             None if bravo_signer is None else ContractSigner(bravo_signer),
-            BravoContract(),
+            write_bravo_versions(BravoContract()),
             SqlIdentityLinks(session_factory, audit),
             bravo,
             clock,
@@ -939,6 +941,13 @@ def build_bravo_write_settlement(
     configured, the write is refused with that reason, never left waiting."""
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     return BravoWriteSettlement(uow, gateway or BravoNotConnected(), notifications, clock, ids)
+
+
+async def refuse_orphaned_stage_pins(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Refuse to start while an open case is pinned to a stage version this
+    deployment no longer serves (ticket 61): the versions served are the ones
+    `write_bravo_versions` lists, the counts the database's own."""
+    write_bravo_versions(BravoContract()).refuse_orphans(await open_cases_by_stage(session_factory))
 
 
 def build_layout_settlement(

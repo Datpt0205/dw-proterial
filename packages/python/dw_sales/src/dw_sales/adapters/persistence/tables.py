@@ -67,6 +67,8 @@ order_cases = sa.Table(
     sa.Column("superseded_by_case", UUID(as_uuid=True)),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
+    # The stage versions the case runs on to its end (ticket 61), never moved.
+    sa.Column("stage_versions", JSONB, nullable=False),
     # A cross-check decision recorded and not applied (ticket 14), while the
     # order awaits its cross-check: ids, an outcome and a reason code.
     sa.Column("unapplied_decision", JSONB(none_as_null=True)),
@@ -183,6 +185,8 @@ quote_cases = sa.Table(
     ),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
+    # The stage versions the case runs on to its end (ticket 61), never moved.
+    sa.Column("stage_versions", JSONB, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

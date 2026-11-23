@@ -22,8 +22,8 @@ Three rules shape these ports:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from types import TracebackType
 from typing import TYPE_CHECKING, Final, Literal, Protocol, Self
@@ -34,6 +34,7 @@ from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.stages import current_stages
 from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
@@ -129,11 +130,14 @@ class CaseOrigin:
 
     ``assigned_to`` is the user the customer's Sales PIC resolved to then, or
     None when no user matched, until the head reassigns the case (ticket 17,
-    `assign`); ``release_manifest_ref`` the release the case was opened under.
+    `assign`); ``release_manifest_ref`` the release the case was opened under;
+    ``stage_versions`` the version of each stage it runs on to its end
+    (`stages`, ticket 61), the defaults of the day it opened.
     """
 
     assigned_to: uuid.UUID | None
     release_manifest_ref: str | None
+    stage_versions: Mapping[str, str] = field(default_factory=current_stages)
 
 
 @dataclass(frozen=True, slots=True)

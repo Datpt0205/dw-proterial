@@ -39,6 +39,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoWriteDecisions,
     BravoWriteWorkFactory,
     CaseBravoWrites,
+    write_bravo_versions,
 )
 from dw_sales.application.bravo_sales_orders import (
     BravoCustomerPoPort,
@@ -369,7 +370,9 @@ def assemble(
         # What the chat stated on a flag, labelled with its decision (ticket 57).
         chat=CaseChatStatements(assistant),
     )
-    line_writes = BravoLineWrites(bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids)
+    line_writes = BravoLineWrites(
+        bravo_writes_uow, gate, bravo_orders, write_bravo_versions(bravo_commands), clock, ids
+    )
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),

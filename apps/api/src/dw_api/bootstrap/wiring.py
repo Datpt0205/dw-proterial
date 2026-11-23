@@ -400,6 +400,10 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     # carries the session factory, clock, ids, registries and gateways; anything
     # this context needs beyond them is its own adapter (`build_sales` below).
     assert container.workspace_directory is not None  # wired with the database
+    # Sales' cases finish on the stage versions they opened with (ticket 61).
+    from dw_sales.adapters.assembly import refuse_orphaned_stage_pins
+
+    container.start_checks.append(lambda: refuse_orphaned_stage_pins(session_factory))
     container.sales = build_sales(
         settings,
         session_factory=wiring.seam.session_factory,
