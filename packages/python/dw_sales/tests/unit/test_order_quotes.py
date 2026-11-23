@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.domain.messages import Attachment
+from dw_sales.application.decisions import QuoteManagerSettlement
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.domain.anchors import SourceAnchor
@@ -48,7 +49,7 @@ from dw_sales.domain.quotes import (
     RequestReading,
     Sourced,
 )
-from dw_sales.evals.graders import AN, CALLERS, KHOA, OUTSIDER, READER
+from dw_sales.evals.graders import AN, CALLERS, GIANG, KHOA, OUTSIDER, READER
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, SampleWith, World, open_world
 
@@ -149,10 +150,24 @@ def _design_replied(quote: QuoteCase, prv_code: str) -> QuoteCase:
 
 
 async def _approved(
-    world: World, quote_id: uuid.UUID, *, prv_code: str = "CB-2003", price: Decimal = PO_PRICE
+    world: World,
+    quote_id: uuid.UUID,
+    *,
+    prv_code: str = "CB-2003",
+    price: Decimal = PO_PRICE,
+    recheck: bool = True,
 ) -> None:
     """The quote opened from the order, through YCBG, Design, price and
-    submission, approved by the head on the platform's approval."""
+    submission, checked by Khoa and approved by the head as its Manager."""
+    reasons = await _submitted(world, quote_id, prv_code=prv_code, price=price)
+    await _decided(world, quote_id, reasons, recheck)
+
+
+async def _submitted(
+    world: World, quote_id: uuid.UUID, *, prv_code: str = "CB-2003", price: Decimal = PO_PRICE
+) -> dict[str, str]:
+    """The quote opened from the order, priced and submitted; the reasons
+    its open price findings are accepted with."""
     commands = world.services.quote_commands
 
     def version() -> int:
@@ -181,15 +196,34 @@ async def _approved(
     await world.services.dw1.submit_quote(
         AN.context(), quote_id, case_version=version(), quote_no="Q26-0901"
     )
-    reasons = {
+    return {
         f"{f.code.value}:{f.line_no or '-'}": "Giá theo PO của khách"
         for f in world.quote(quote_id).findings
         if f.is_open
     }
+
+
+async def _decided(
+    world: World, quote_id: uuid.UUID, reasons: dict[str, str], recheck: bool
+) -> None:
     await world.decide(
         KHOA, CaseKind.QUOTE, quote_id, approve=True, comment="Đã xem", reasons=reasons or None
     )
+    # WIV-03-023 §4 (ticket 39): opened from an order, it is checked at the
+    # first level and approved by a Manager, then the order is checked again
+    # ("Kiểm tra lại": the worker carrying out the Manager's decision holds
+    # no order intake).
+    checked = world.quote(quote_id)
+    assert checked.status is QuoteStatus.PENDING_APPROVAL
+    assert checked.submission is not None and checked.submission.check is not None
+    await world.decide_manager(GIANG, quote_id, approve=True, comment="Manager duyệt")
     assert world.quote(quote_id).status is QuoteStatus.APPROVED
+    if recheck:
+        case_id = world.quote(quote_id).from_order
+        assert case_id is not None
+        await world.services.order_quotes.recheck(
+            AN.context(), case_id.case_id, case_version=world.order(case_id.case_id).case_version
+        )
 
 
 # ------------------------------------------------------------- "Mở báo giá" --
@@ -624,3 +658,78 @@ async def test_both_case_views_name_the_link() -> None:
     await _approved(world, quote_id)
     (link,) = (await world.services.orders.get(AN.context(), case_id)).quote_links
     assert (link.status, link.waiting) == ("approved", False)
+
+
+# --------------------------- two levels for a quotation with an order (39) --
+
+
+async def _checked(world: World, checker: Caller = KHOA) -> uuid.UUID:
+    """M03's quote, priced, submitted and checked at the first level."""
+    case_id = await _m03(world)
+    quote_id = await _open(world, case_id)
+    reasons = await _submitted(world, quote_id)
+    await world.decide(
+        checker, CaseKind.QUOTE, quote_id, approve=True, comment="Đã kiểm", reasons=reasons or None
+    )
+    return quote_id
+
+
+async def test_the_check_keeps_it_waiting_on_a_manager_naming_three_makers() -> None:
+    """WIV-03-023 §4: the first level keeps the quotation waiting and opens
+    a Manager's approval whose makers are the pricer, the submitter and the
+    checker, so the strict check refuses each of them."""
+    world = _world()
+    quote_id = await _checked(world)
+    checked = world.quote(quote_id)
+    assert checked.status is QuoteStatus.PENDING_APPROVAL
+    assert checked.submission is not None and checked.submission.check is not None
+    (request,) = [
+        r for r in world.runtime.approvals.rows.values() if r.approval_type == "sales.quote.manager"
+    ]
+    assert request.required_scope == "sales.quote.manager_approve"
+    assert set(request.payload["makers"]) == {str(AN.user_id), str(KHOA.user_id)}
+    assert request.payload["case_id"] == str(quote_id)
+    assert "sales.quote.checked" in {e.action for e in world.audit()}
+
+
+async def test_the_checker_never_decides_the_managers_approval() -> None:
+    """Giang checks it and holds the Manager's scope too: refused."""
+    world = _world()
+    quote_id = await _checked(world, checker=GIANG)
+    with pytest.raises(ConflictError):
+        await world.decide_manager(GIANG, quote_id, approve=True, comment="Tự duyệt")
+    assert world.quote(quote_id).status is QuoteStatus.PENDING_APPROVAL
+
+
+async def test_a_manager_without_the_scope_is_refused() -> None:
+    """The platform shows a Manager's approval only to a holder of its
+    scope: anyone else finds no such request, and nothing is decided."""
+    world = _world()
+    quote_id = await _checked(world, checker=GIANG)
+    with pytest.raises(NotFoundError):
+        await world.decide_manager(KHOA, quote_id, approve=True, comment="Không có quyền")
+    assert world.quote(quote_id).status is QuoteStatus.PENDING_APPROVAL
+
+
+async def test_the_manager_returns_it_to_the_pricer_and_the_check_goes() -> None:
+    world = _world()
+    quote_id = await _checked(world)
+    await world.decide_manager(GIANG, quote_id, approve=False, comment="Giá chưa hợp lý")
+    returned = world.quote(quote_id)
+    assert returned.status is QuoteStatus.RETURNED and returned.submission is None
+    assert returned.returns[-1].returned_by == GIANG.user_id
+
+
+async def test_a_manager_decision_delivered_twice_is_carried_out_once() -> None:
+    world = _world()
+    quote_id = await _checked(world)
+    await world.decide_manager(GIANG, quote_id, approve=True, comment="Duyệt")
+    version = world.quote(quote_id).case_version
+    (request,) = [
+        r for r in world.runtime.approvals.rows.values() if r.approval_type == "sales.quote.manager"
+    ]
+    settlement = QuoteManagerSettlement(
+        world.store, world.layout_settlement.clock, world.layout_settlement.ids, world.notifications
+    )
+    again = await settlement.settle(request.id, GIANG.context())
+    assert again == "quote.approved" and world.quote(quote_id).case_version == version

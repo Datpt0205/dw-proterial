@@ -1677,6 +1677,9 @@ class QuoteCapability(StrEnum):
     # The scope ``sales.quote.approve``: the head of Sales, or a deputy
     # holding the approver permission set.
     APPROVE = "approve"
+    # The scope ``sales.quote.manager_approve``: WIV-03-023 §4's second level,
+    # a Manager approving a quotation that comes with an order (ticket 39).
+    MANAGER_APPROVE = "manager_approve"
 
 
 class QuoteActor(BaseModel):
@@ -1698,6 +1701,18 @@ class YcbgRecord(BaseModel):
     recorded_at: AwareDatetime
 
 
+class QuoteCheck(BaseModel):
+    """WIV-03-023 §4's first level on a quotation that comes with an order:
+    an ASV-level approver checked this document (ticket 39). It lives on the
+    submission, so a return or a new price takes it away with the document."""
+
+    model_config = _FROZEN
+
+    checked_by: uuid.UUID
+    checked_at: AwareDatetime
+    document_sha256: Sha256Hex
+
+
 class Submission(BaseModel):
     """The document the approver is shown, its hash, and who priced it."""
 
@@ -1709,6 +1724,10 @@ class Submission(BaseModel):
     priced_by: uuid.UUID
     submitted_by: uuid.UUID
     submitted_at: AwareDatetime
+    # Set by the first level when the quotation comes with an order; the
+    # Manager's approval then needs it (ticket 39). None before, and always
+    # on a quotation without an order.
+    check: QuoteCheck | None = None
 
     @model_validator(mode="after")
     def _hash_is_the_documents(self) -> Self:
@@ -2139,19 +2158,29 @@ class QuoteCase(BaseModel):
                 or document.lines != self.document_lines()
             ):
                 raise ValueError("the document states the request and the decided terms")
+        check = submission.check if submission is not None else None
+        if check is not None:
+            # The first level of a quotation with an order (ticket 39).
+            if check.document_sha256 != submission.document_sha256:  # type: ignore[union-attr]
+                raise ValueError("the check is of the submitted document")
+            if check.checked_by == submission.priced_by:  # type: ignore[union-attr]
+                raise ValueError("checked_by is not priced_by")
         if approval is not None:
             assert submission is not None  # _NEEDS: an approval comes with its submission
             if approval.approved_by == submission.priced_by:
                 raise ValueError("approved_by is not priced_by")
             if approval.document_sha256 != submission.document_sha256:
                 raise ValueError("the approval is of the submitted document")
+            if check is not None and approval.approved_by == check.checked_by:
+                raise ValueError("the Manager is not who checked it")
+            # Price findings are accepted by whoever accepted the document
+            # first: the checker where there is one, else the approver.
+            acceptor = check.checked_by if check is not None else approval.approved_by
             for finding in self.findings:
                 if finding.code not in PRICE_FINDINGS:
                     continue
                 disposition = finding.disposition
-                if not isinstance(disposition, FindingAccepted) or (
-                    disposition.by != approval.approved_by
-                ):
+                if not isinstance(disposition, FindingAccepted) or disposition.by != acceptor:
                     raise ValueError(f"{finding.code} is decided by the approver")
 
     # --------------------------------------------------- reading the case --
@@ -2634,11 +2663,54 @@ class QuoteCase(BaseModel):
     def return_to_pricer(self, actor: QuoteActor, *, at: AwareDatetime, reason: str) -> QuoteCase:
         """The approver sends the price back; the returned decision stays on record."""
         transition(self.status, QuoteStatus.RETURNED)
-        by = self._approver(actor)
+        submission = self.submission
+        checked = submission is not None and submission.check is not None
+        # Waiting on a Manager, it is the Manager who may send it back.
+        by = self._manager(actor, submission) if checked else self._approver(actor)  # type: ignore[arg-type]
         returned = Return(
             returned_by=by, returned_at=at, reason=reason, case_version=self.case_version
         )
         return self._moved(QuoteStatus.RETURNED, returns=(*self.returns, returned), submission=None)
+
+    @property
+    def needs_manager(self) -> bool:
+        """WIV-03-023 §4: a quotation that comes with an order is approved by
+        a Manager as well, after an ASV-level check (ticket 39). "With an
+        order" is the case's own link, stamped when it opened (`from_order`)."""
+        return self.from_order is not None
+
+    def check_for_manager(
+        self,
+        actor: QuoteActor,
+        *,
+        at: AwareDatetime,
+        document_sha256: str,
+        reasons: Mapping[tuple[QuoteFindingCode, int | None], str] | None = None,
+    ) -> QuoteCase:
+        """The first level on a quotation with an order: what `approve` checks
+        of the approver, the document and the price findings, recorded as a
+        check; the case keeps waiting, now on a Manager (ticket 39)."""
+        if not self.needs_manager:
+            raise ConflictError(
+                "a quotation without an order is approved at one level",
+                details={"case_id": str(self.case_id)},
+            )
+        if self.status is not QuoteStatus.PENDING_APPROVAL:
+            transition(self.status, QuoteStatus.APPROVED)  # raises: not waiting
+        submission = self.submission
+        assert submission is not None  # _NEEDS: pending approval holds its submission
+        if submission.check is not None:
+            raise ConflictError(
+                "the quotation was checked already and waits on a Manager",
+                details={"case_id": str(self.case_id)},
+            )
+        by = self._approver(actor)
+        findings = self._accepted(by, at, document_sha256, reasons)
+        check = QuoteCheck(checked_by=by, checked_at=at, document_sha256=document_sha256)
+        # Still waiting, now on a Manager: no move, a new version.
+        return self._changed(
+            findings=findings, submission=submission.model_copy(update={"check": check})
+        )
 
     def approve(
         self,
@@ -2658,9 +2730,43 @@ class QuoteCase(BaseModel):
         and `above_target_price` is acknowledged by the approval itself.
         """
         transition(self.status, QuoteStatus.APPROVED)
-        by = self._approver(actor)
         submission = self.submission
         assert submission is not None  # _NEEDS: pending approval holds its submission
+        if self.needs_manager:
+            by = self._manager(actor, submission)
+            # The first level accepted the price findings; the Manager approves
+            # the document it checked, and adds none.
+            findings = self.findings
+            if document_sha256 != submission.document_sha256:
+                raise ConflictError(
+                    "the document changed after it was shown: approve the current one",
+                    details={"case_id": str(self.case_id), "case_version": self.case_version},
+                )
+        else:
+            by = self._approver(actor)
+            findings = self._accepted(by, at, document_sha256, reasons)
+        return self._moved(
+            QuoteStatus.APPROVED,
+            findings=findings,
+            approval=Approval(
+                approved_by=by,
+                approved_at=at,
+                case_version=self.case_version,
+                document_sha256=submission.document_sha256,
+            ),
+        )
+
+    def _accepted(
+        self,
+        by: uuid.UUID,
+        at: AwareDatetime,
+        document_sha256: str,
+        reasons: Mapping[tuple[QuoteFindingCode, int | None], str] | None,
+    ) -> tuple[QuoteFinding, ...]:
+        """The findings once the document shown is the one submitted and each
+        blocking price finding has its reason: accepted by ``by``."""
+        submission = self.submission
+        assert submission is not None
         if document_sha256 != submission.document_sha256:
             raise ConflictError(
                 "the document changed after it was shown: approve the current one",
@@ -2679,7 +2785,7 @@ class QuoteCase(BaseModel):
                 "each blocking price finding is accepted with a reason, and only those raised",
                 details={"case_id": str(self.case_id), "unknown": unknown, "missing": unreasoned},
             )
-        findings = tuple(
+        return tuple(
             f.model_copy(
                 update={"disposition": FindingAccepted(by=by, at=at, reason=given.get(f.key))}
             )
@@ -2687,16 +2793,32 @@ class QuoteCase(BaseModel):
             else f
             for f in self.findings
         )
-        return self._moved(
-            QuoteStatus.APPROVED,
-            findings=findings,
-            approval=Approval(
-                approved_by=by,
-                approved_at=at,
-                case_version=self.case_version,
-                document_sha256=submission.document_sha256,
-            ),
-        )
+
+    def _manager(self, actor: QuoteActor, submission: Submission) -> uuid.UUID:
+        """The Manager's id on a quotation with an order: it was checked first,
+        they hold the Manager capability (else 403), and they are neither who
+        priced it nor who checked it (else 409): three people (ticket 39)."""
+        check = submission.check
+        if check is None:
+            raise ConflictError(
+                "a quotation with an order is checked before a Manager approves it",
+                details={"case_id": str(self.case_id)},
+            )
+        if QuoteCapability.MANAGER_APPROVE not in actor.capabilities:
+            raise PermissionDeniedError(
+                "approving a quotation with an order needs sales.quote.manager_approve",
+                details={"case_id": str(self.case_id)},
+            )
+        by = actor.user_id
+        if by in {check.checked_by, submission.priced_by} or (
+            self.pricing is not None and self.pricing.decided_by == by
+        ):
+            raise ConflictError(
+                "separation of duties: the Manager is neither who priced the quotation"
+                " nor who checked it (WIV-03-023 §4)",
+                details={"case_id": str(self.case_id)},
+            )
+        return by
 
     def _approver(self, actor: QuoteActor) -> uuid.UUID:
         """The approver's id, once they may approve this quote: they hold the

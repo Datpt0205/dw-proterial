@@ -842,3 +842,77 @@ def test_the_decline_reasons_are_the_ones_the_glossary_labels() -> None:
 
 def test_every_quote_finding_code_is_labelled_in_the_glossary() -> None:
     assert {c.value for c in QuoteFindingCode} <= _first_column("Finding codes")
+
+
+# ------------------------- a quotation with an order: two levels (ticket 39) --
+
+MANAGER = QuoteActor(
+    user_id=uuid.UUID(int=103), capabilities=frozenset({QuoteCapability.MANAGER_APPROVE})
+)
+
+
+def _with_order() -> QuoteCase:
+    from dw_sales.domain.quotes import FromOrder
+
+    pending = _case(QuoteStatus.PENDING_APPROVAL)
+    linked = pending.model_copy(
+        update={"from_order": FromOrder(case_id=uuid.UUID(int=9), po_no="KMH-PO-1")}
+    )
+    assert linked.needs_manager and not pending.needs_manager
+    return linked
+
+
+def _checked(case: QuoteCase, actor: QuoteActor = HEAD) -> QuoteCase:
+    assert case.submission is not None
+    return case.check_for_manager(actor, at=AT, document_sha256=case.submission.document_sha256)
+
+
+def test_a_quotation_with_an_order_is_checked_then_approved_by_a_manager() -> None:
+    """WIV-03-023 §4: the ASV-level check keeps it waiting, the Manager approves."""
+    checked = _checked(_with_order())
+    assert checked.status is QuoteStatus.PENDING_APPROVAL
+    assert checked.submission is not None and checked.submission.check is not None
+    assert checked.submission.check.checked_by == APPROVER
+    approved = _approve(checked, MANAGER)
+    assert approved.status is QuoteStatus.APPROVED
+    assert approved.approval is not None and approved.approval.approved_by == MANAGER.user_id
+
+
+def test_the_first_level_alone_never_approves_a_quotation_with_an_order() -> None:
+    with pytest.raises(ConflictError, match="checked before a Manager"):
+        _approve(_with_order(), MANAGER)
+    # Nor does the ASV level approve it outright: it holds no Manager capability.
+    with pytest.raises(PermissionDeniedError, match="manager_approve"):
+        _approve(_checked(_with_order()), HEAD)
+
+
+def test_the_checker_and_the_pricer_are_never_the_manager() -> None:
+    both = frozenset({QuoteCapability.APPROVE, QuoteCapability.MANAGER_APPROVE})
+    checker = QuoteActor(user_id=APPROVER, capabilities=both)
+    pricer = QuoteActor(user_id=PRICER, capabilities=both)
+    checked = _checked(_with_order(), checker)
+    for who in (checker, pricer):
+        with pytest.raises(ConflictError, match="separation of duties"):
+            _approve(checked, who)
+
+
+def test_a_return_takes_the_check_away_with_the_document() -> None:
+    """Waiting on a Manager, the Manager sends it back; the checker cannot."""
+    checked = _checked(_with_order())
+    with pytest.raises(PermissionDeniedError, match="manager_approve"):
+        checked.return_to_pricer(HEAD, at=AT, reason="Giá thấp")
+    returned = checked.return_to_pricer(MANAGER, at=AT, reason="Giá thấp")
+    assert returned.submission is None
+    again = _submitted(_priced(returned))
+    assert again.submission is not None and again.submission.check is None
+
+
+def test_a_quotation_without_an_order_has_one_level_and_no_check() -> None:
+    with pytest.raises(ConflictError, match="one level"):
+        _checked(_case(QuoteStatus.PENDING_APPROVAL))
+    assert _approve(_case(QuoteStatus.PENDING_APPROVAL)).status is QuoteStatus.APPROVED
+
+
+def test_a_quotation_is_checked_once() -> None:
+    with pytest.raises(ConflictError, match="checked already"):
+        _checked(_checked(_with_order()))

@@ -44,6 +44,7 @@ const SCOPE_LABELS: Record<string, string> = {
   "sales.order.resend_cross_check": "Gửi kiểm chéo lại",
   "sales.quote.prepare": "Làm báo giá",
   "sales.quote.approve": "Duyệt báo giá",
+  "sales.quote.manager_approve": "Manager duyệt báo giá kèm đơn",
   "sales.compliance.ack": "Xác nhận kiểm soát xuất khẩu",
   "sales.worker.pause": "Tạm dừng DW1",
   "sales.worker.resume": "Chạy lại DW1",
