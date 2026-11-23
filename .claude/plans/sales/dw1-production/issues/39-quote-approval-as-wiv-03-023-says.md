@@ -1,6 +1,6 @@
 # 39 — Quote approval as WIV-03-023 §4 says: ASV checks every quote, a Manager approves one with an order
 
-Status: ready-for-agent (2026-11-23: Đạt follows the procedure's two levels)
+Status: in-progress — two levels built (2026-11-23): a quotation with an order is checked, then approved by a Manager. Left: Bravo's third outcome "Không duyệt"; the order resuming by itself on the Manager's approval (today a person's "Kiểm tra lại"); the quote page saying "đã kiểm, chờ Manager" beside the approval panel; pending: Sales' answer on a quote opened by hand while its PO exists
 Blocked by: none
 Category: enhancement
 
@@ -75,3 +75,32 @@ Manager level a permission set, no new role; Bravo's three outcomes.
 - **Open (ask Sales with the plant list)**: a quote opened by hand while the
   PO already exists counts as "with an order"? Default: no (level 1 only),
   the PIC may open it from the PO case instead.
+
+## Done (2026-11-23): two levels
+
+- **Built as planned above, with one change**: no new state. The check
+  lives on the submission (`QuoteCheck`), so the case stays
+  `pending_approval` and a return or a new price takes the check away with
+  the document; no CHECK constraint, process map or status label changed.
+- **First level** (`sales.quote`, the run's pause): on a quotation opened
+  from an order (`from_order`) the approval is a check
+  (`QuoteCase.check_for_manager`, event `quote.checked`), and the same
+  transaction opens the run-less `sales.quote.manager` approval
+  (`decisions.manager_request`): `sales.quote.manager_approve`, makers the
+  pricer, the submitter and the checker. `awaiting()` then names it.
+- **Second level**: decided on the approvals page; the guard is
+  `CaseDecisions.check` (the `sales.` prefix), the worker's handler of
+  `sales.quote.manager.decided` is `QuoteManagerSettlement`: approve
+  (`approved`, the pricer told), or return to the pricer. A redelivery
+  writes nothing.
+- **Who**: migration `3748b069dd99` adds the scope to `sales_head` and a
+  permission set `sales_quote_manager`; a holder without the scope does
+  not see the request (404).
+- **Tests**: domain (check, Manager, three people, a return, one level
+  without an order, checked once), flow through the world (makers, the
+  checker refused, no scope, the Manager's return, delivered twice).
+  8 mutations red.
+- **Changed behaviour**: the order a quote was opened from used to resume
+  on the approval; with two levels the approval lands in the worker, which
+  holds no order intake, so the order waits for "Kiểm tra lại" (left).
+
