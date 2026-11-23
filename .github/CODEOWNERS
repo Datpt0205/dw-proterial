@@ -30,3 +30,8 @@
 /infra/               @Datpt0205
 /.github/             @Datpt0205
 /Makefile             @Datpt0205
+
+# --- Schema, deploy và chốt chặn repo public (Đạt, 2026-11-23) ---
+/db/migrations/                 @Datpt0205
+/scripts/deploy.sh              @Datpt0205
+/scripts/check_public_repo.py   @Datpt0205
