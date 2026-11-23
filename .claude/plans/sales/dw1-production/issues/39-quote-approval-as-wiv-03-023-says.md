@@ -41,3 +41,37 @@ separate step before sending.
 DW1's quote approval follows WIV-03-023 §4, as the shape above says: ASV
 level is the existing quote approver (the head or `sales_quote_approver`),
 Manager level a permission set, no new role; Bravo's three outcomes.
+
+## How it is built (planned 2026-11-23, before code)
+
+- **"With an order"** is the quote's own link, `QuoteCase.from_order` (a quote
+  opened from a PO case), stamped when the case opens; nothing a person types
+  and no second field that could disagree with it. A quote Sales opens by
+  hand for a customer who already sent the PO is the open question below.
+- **Level 1 stays the run's pause** (`sales.quote`, `sales.quote.approve`,
+  the graph unchanged, no new `GRAPH_VERSION`). Approved without an order:
+  `approved`, as today. Approved with one: a new state `checked`, and a
+  run-less approval `sales.quote.manager` opened in the same transaction
+  (`ApproveAndResumeService`'s `.decided` outbox path, as `bravo_write.*`
+  uses), required scope `sales.quote.manager_approve`, makers the pricer,
+  the submitter **and the level-1 checker**, so three different people.
+- **Level 2** (`sales.quote.manager.decided` handler in dw_sales): approve
+  moves `checked` to `approved` on the same document hash, then the
+  existing "đã duyệt" notice and the order's resume; return goes back to the
+  pricer; refuse declines.
+- **Bravo's third outcome, "Không duyệt"**: at either level, a decision whose
+  comment starts the reason code `refuse:` declines the quote
+  (`declined_reason="refused"` plus the words), not returns it. Needs the
+  approvals page to offer it as a third button for `sales.quote*` only;
+  the platform's decision stays approve/reject.
+- **Scope and set**: `sales.quote.manager_approve` declared in
+  `SalesScopes`, seeded in a permission set `sales_quote_manager` by
+  migration (grants and the roles test), held by the head by default; no
+  new role (Đạt, 10-27).
+- **Tests first**: two decisions by two different people neither the
+  pricer; the checker refused as manager; a manager decision on a quote
+  without an order refused; "Không duyệt" declines at both levels; the send
+  refused while `checked` (where the send happens, not the button).
+- **Open (ask Sales with the plant list)**: a quote opened by hand while the
+  PO already exists counts as "with an order"? Default: no (level 1 only),
+  the PIC may open it from the PO case instead.
