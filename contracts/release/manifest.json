@@ -648,11 +648,11 @@
           "path": "evals/expected/sales_handoff.json"
         },
         {
-          "checksum": "477bcb68937491b37912a17830b5fc52410df2ad32333ef81d0de0ae52dea12f",
+          "checksum": "b430fb190b2bf236339d46e97ab236822e21925b0749337f3a87ca256310083f",
           "path": "evals/expected/sales_handoff_flow.json"
         },
         {
-          "checksum": "9e59565ece9314dd0b6d7d6f3e10a0202f2bc7ef63c9c13fe36be193fd359448",
+          "checksum": "d8fd4c00f1b86be71cae148ea1dc33ca26d9ee8b199458b352c4ed2a36bcde0c",
           "path": "evals/expected/sales_handoff_golden.json"
         },
         {
@@ -710,7 +710,7 @@
           "path": "evals/expected/sales_intent.json"
         },
         {
-          "checksum": "4c7c7912cd2b76885c4f4b830d64909455bdf40c9439bb70e13a776e9e0e3897",
+          "checksum": "c5529e4a13eb10533236f19416971fb2719177247bd05602901a611aadbe5927",
           "path": "evals/expected/sales_intent_golden.json"
         },
         {
@@ -752,7 +752,7 @@
           "path": "evals/expected/sales_layout.json"
         },
         {
-          "checksum": "32f4255105eebf5fabe17b9b87b37e393547e434127d2f0067708ed50957b1e0",
+          "checksum": "d182d525b9da889f3b8e52e4d3dfb89765bb33b9672ae010b0422be3c11f9fcb",
           "path": "evals/expected/sales_layout_golden.json"
         },
         {
@@ -881,7 +881,7 @@
           "path": "evals/expected/sales_reply.json"
         },
         {
-          "checksum": "2b10ed7293e489f8e4d8e9c7e9ec42e04843467a92d293c819cb3a6cc12f6d0b",
+          "checksum": "22b80395ee778804e254ac76a91cf1d4394564feab52dd414d7f06723f5a7662",
           "path": "evals/expected/sales_reply_golden.json"
         },
         {
@@ -908,7 +908,7 @@
           "path": "evals/expected/sales_reply_draft.json"
         },
         {
-          "checksum": "79c7d08a4809f59766fea2589a581b0349e64d66a83163afaa528b9ac777912f",
+          "checksum": "8abac3b913b28697d464129e24ed9c12027c41f22d3a1c55479505c0360e5d55",
           "path": "evals/expected/sales_reply_draft_golden.json"
         },
         {
@@ -950,7 +950,7 @@
           "path": "evals/expected/sales_rfq_flow.json"
         },
         {
-          "checksum": "b2b6794eabffd29e2da7a1e67d8e3f3a42e9195644c4a61a78b5bda40007f320",
+          "checksum": "885a7f963ce7e4766bcc8a56287f3a273c8b7ed25bd05b98583997315656def6",
           "path": "evals/expected/sales_rfq_golden.json"
         },
         {
@@ -1114,7 +1114,7 @@
           "path": "evals/expected/sales_thread_agent.json"
         },
         {
-          "checksum": "9b678f2c56751174b32a80993b0f945e4a221cc874e5c077579b3d4cbcc0c418",
+          "checksum": "7f4d1a9a7ae221545595eb228fed1dfb669a7d56b0f9197faef5ca778c139423",
           "path": "evals/expected/sales_thread_agent_golden.json"
         },
         {
@@ -1179,7 +1179,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "4a4305a49cd7b0f074b3a29c08fb5135c5abd768",
+  "git_sha": "9db93c9fb7e4e46141b9fd81ec251e367fcf9522",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [

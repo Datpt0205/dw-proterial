@@ -422,7 +422,7 @@
     "adee7cf776ac792ed971dca7": {
       "language": "en",
       "referenced_number_spans": [],
-      "kind": "other"
+      "kind": "reply_to_case"
     },
     "af77cc0f4423b84fa33c5135": {
       "language": "vi",
@@ -644,7 +644,7 @@
     "f83f6597eb8e7b9d4fa11a38": {
       "language": "vi",
       "referenced_number_spans": [],
-      "kind": "none"
+      "kind": "other"
     },
     "f87a7942cfc92d0affcf7d72": {
       "language": "ja",
