@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -62,6 +63,9 @@ _SPAN = Field(min_length=1, max_length=200)
 # Most lines one call reads: the prompt and the answer stay well inside the
 # local model's context window (8,192 tokens) whatever the PO holds.
 MAX_LINES_PER_READING: Final = 10
+# The most decided lines one reading is shown (`application.examples`), and
+# so the most its stamp names.
+MAX_EXAMPLES_SHOWN: Final = 12
 
 
 class ModelDescriptionLine(BaseModel):
@@ -207,6 +211,13 @@ class DescriptionReading(BaseModel):
     # where the line was not eligible (not read, or not exactly one item
     # fits) or was read before ticket 44.
     gate: GateRoute | None = None
+    # The decided lines the call showed beside the line (ticket 43), by
+    # labelled case id, in the order shown: the nearest found, never the
+    # tenant's prompt version's demonstrations, which `prompt` names already.
+    # The line's trail counts them; a person asking why a line read as it
+    # did looks each one up by its id. Empty on a reading shown none, or
+    # stored before the stamp (2026-11-23).
+    examples: tuple[uuid.UUID, ...] = Field(default=(), max_length=MAX_EXAMPLES_SHOWN)
 
     @model_validator(mode="after")
     def _outcome_says_what_is_there(self) -> Self:
@@ -219,6 +230,8 @@ class DescriptionReading(BaseModel):
             raise ValueError("only a reading code took has a confidence or a gate")
         if self.gate not in (None, "person") and self.confidence is None:
             raise ValueError("a reading cleared the gate on a confidence")
+        if len(set(self.examples)) != len(self.examples):
+            raise ValueError("a reading names each example it was shown once")
         return self
 
     @property

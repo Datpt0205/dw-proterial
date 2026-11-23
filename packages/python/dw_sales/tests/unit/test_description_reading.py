@@ -8,16 +8,19 @@ mutation (remove it, watch a test here go red) is recorded in ticket 28.
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Item
 from dw_sales.domain.description_reading import (
+    MAX_EXAMPLES_SHOWN,
     DescriptionReading,
     ModelDescriptionLine,
     Verified,
@@ -346,3 +349,33 @@ def _po_line() -> PoLine:
         requested_date=date(2026, 12, 4),
         anchors=PoLineAnchors(**dict.fromkeys(PoLineAnchors.model_fields, anchor)),
     )
+
+
+# ------------------------------------------- the examples it was shown --
+
+
+def _stamp(**extra: Any) -> DescriptionReading:
+    return DescriptionReading.model_validate(
+        {
+            "prompt": "sales.description_attributes@1.2.0",
+            "model_profile": "onprem",
+            "route": "structured_extraction",
+            "outcome": "unavailable",
+            **extra,
+        }
+    )
+
+
+def test_a_reading_stored_before_examples_were_stamped_reads_as_shown_none() -> None:
+    """A check basis written before ticket 43's stamp has no key: it reads,
+    as none, rather than failing every case stored before it."""
+    assert _stamp().examples == ()
+
+
+def test_a_reading_names_at_most_the_examples_a_prompt_shows_and_each_once() -> None:
+    ids = [uuid.UUID(int=n) for n in range(MAX_EXAMPLES_SHOWN + 1)]
+    assert len(_stamp(examples=ids[:MAX_EXAMPLES_SHOWN]).examples) == MAX_EXAMPLES_SHOWN
+    with pytest.raises(ValidationError):
+        _stamp(examples=ids)
+    with pytest.raises(ValidationError):
+        _stamp(examples=[ids[0], ids[0]])

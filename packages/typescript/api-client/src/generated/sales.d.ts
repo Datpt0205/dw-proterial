@@ -4221,6 +4221,11 @@ export interface components {
         DescriptionReading: {
             /** Confidence */
             confidence?: number | null;
+            /**
+             * Examples
+             * @default []
+             */
+            examples: string[];
             /** Gate */
             gate?: ("person" | "shadow" | "audit" | "applied") | null;
             /** Model Profile */
@@ -9096,6 +9101,8 @@ export interface components {
              * @enum {string}
              */
             decided_by: "rule" | "model" | "dw" | "person";
+            /** Examples */
+            examples?: number | null;
             /** Gate */
             gate?: string | null;
             /**

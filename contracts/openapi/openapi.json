@@ -5767,6 +5767,16 @@
             ],
             "title": "Confidence"
           },
+          "examples": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Examples",
+            "type": "array"
+          },
           "gate": {
             "anyOf": [
               {
@@ -24602,6 +24612,17 @@
             ],
             "title": "Decided By",
             "type": "string"
+          },
+          "examples": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Examples"
           },
           "gate": {
             "anyOf": [
