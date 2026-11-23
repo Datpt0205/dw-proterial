@@ -38,6 +38,9 @@ def _human_review(state: DemoState) -> DemoState:
             "approval_type": "demo.dispatch",
             "reason": "demo graph requires human approval before dispatch",
             "prepared_message": state.get("prepared_message", ""),
+            # The requester alone made it (the platform adds them): the key
+            # is required, a request without it is decided by nobody.
+            "makers": [],
         }
     )
     return {
