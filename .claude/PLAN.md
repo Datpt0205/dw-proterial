@@ -47,7 +47,7 @@ own file and a row here.
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
   repo never had; renumbering duplicate ADRs.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** push only when Đạt asks; main/dev PR-only since 11-23 (ruleset; going private on Free drops it: Pro or Team?), 5 CI jobs red; the rollout `.xlsx` restored from the 11-10 Teams copy (check); ClamAV bump off (ticket 25).
+- **Ops:** push only when Đạt asks; repo private since 11-23, so the main/dev ruleset is not enforced until GitHub Pro; history rewritten 11-23 (commit ids in plans are pre-rewrite; backup branch + bundle), 5 CI jobs red; the rollout `.xlsx` restored from the 11-10 Teams copy (check); ClamAV bump off (ticket 25).
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; Bravo is on its
   own Windows Server, DW on Ubuntu; support without VPN (11-09,
