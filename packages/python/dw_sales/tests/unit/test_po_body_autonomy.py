@@ -150,6 +150,7 @@ async def test_a_value_that_clears_the_threshold_is_logged_as_shadow_and_never_a
         )
         await world.store.save(ALPHA, [threshold], [])
         ((_, case),) = (await world.process_each(AN, [spec["message_id"]])).values()
+        assert case is not None
         served = await world.services.orders.get(AN.context(), case.case_id)
     assert isinstance(case, OrderCase)
     gates = {f: _gate(case, None, f) for f in ("po_no", "po_date", "currency")}

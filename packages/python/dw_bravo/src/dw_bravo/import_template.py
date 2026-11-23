@@ -72,8 +72,15 @@ def _column(text: str | None, where: str) -> str:
 
 
 def read_import_template(xml: str) -> ImportTemplate:
+    # As `layout.read_layout`: no template of Bravo's declares a DOCTYPE, and
+    # one that does is refused before the parser could expand an entity.
+    if "<!DOCTYPE" in xml[:4096].upper():
+        raise UndecidableError("a template with a DOCTYPE is refused (entities are not read)")
     try:
-        root = ET.fromstring(xml)
+        # DOCTYPE refused above; expat also refuses entity amplification
+        # (measured 2.7.4, 2026-11-23) and ElementTree never fetches an
+        # external entity, so defusedxml would add nothing here.
+        root = ET.fromstring(xml)  # nosec B314
     except ET.ParseError as broken:
         raise UndecidableError(f"the template is not XML: {broken}") from None
     tables = root.find("Tables") if root.tag == "root" else None

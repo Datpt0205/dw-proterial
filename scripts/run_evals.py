@@ -2,7 +2,7 @@
 
 Usage:
     uv run python scripts/run_evals.py --smoke              # all datasets
-    uv run python scripts/run_evals.py --dataset evals/datasets/platform@1.2.0.json
+    uv run python scripts/run_evals.py --dataset evals/datasets/platform@1.3.0.json
 
     # The live lane, outside CI: a dataset's model steps against a real model
     # (the `onprem` profile: DW_ONPREM_MODEL_BASE_URL, e.g. a local Ollama),

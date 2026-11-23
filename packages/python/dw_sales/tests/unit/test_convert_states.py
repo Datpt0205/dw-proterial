@@ -34,7 +34,7 @@ HEADERS = [
 
 
 def _row(code: str, words: str, prv: str = "HW-1001") -> list[object]:
-    return ["2026-11-09", prv, "Fictional", None, code, "Fictional Co", words] + [None] * 5
+    return ["2026-11-09", prv, "Fictional", None, code, "Fictional Co", words, *[None] * 5]
 
 
 def _b04(groups: Sequence[tuple[str, Sequence[list[object]]]]) -> bytes:
@@ -113,7 +113,7 @@ class _ReaderBeforeGroups:
 
 async def test_a_reader_that_sends_no_groups_is_refused_never_read_as_approved() -> None:
     world = _world()
-    reader = ClientTableReader(_ReaderBeforeGroups(), world.policies.order_rules.intake)  # type: ignore[arg-type]
+    reader = ClientTableReader(_ReaderBeforeGroups(), world.policies.order_rules.intake)
 
     with pytest.raises(ReaderMismatchError):
         await reader.read(EXPORT, "b04.xlsx")

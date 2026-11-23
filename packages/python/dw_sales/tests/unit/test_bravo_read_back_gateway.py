@@ -95,8 +95,8 @@ def test_a_confirmed_date_bravo_cleared_is_a_difference_only_where_it_was_read()
         po_no="PO-1",
         line_no=1,
         prv_code="A",
-        quantity=1,  # type: ignore[arg-type]
-        unit_price=2,  # type: ignore[arg-type]
+        quantity=1,
+        unit_price=2,
         requested_date=None,
         confirmed_date=date(2026, 12, 1),
     )
@@ -112,7 +112,7 @@ def test_a_confirmed_date_bravo_cleared_is_a_difference_only_where_it_was_read()
                 po_line=1,
                 item_code="A",
                 quantity=1,
-                unit_price=2,  # type: ignore[arg-type]
+                unit_price=2,
             ),
         ),
     )

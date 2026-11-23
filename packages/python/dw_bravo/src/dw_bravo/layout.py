@@ -270,7 +270,9 @@ def read_layout(xml_text: str, form: str, *, missing_template: str | None = None
     """
     if "<!DOCTYPE" in xml_text[:4096].upper():
         raise UnsupportedSyntaxError("a layout with a DOCTYPE is refused (entities are not read)")
-    root = ET.fromstring(xml_text)
+    # DOCTYPE refused above; expat also refuses entity amplification
+    # (measured 2.7.4, 2026-11-23); ElementTree fetches no external entity.
+    root = ET.fromstring(xml_text)  # nosec B314
     tables_el = root.find("Tables")
     if tables_el is None:
         raise UnsupportedSyntaxError(f"{form}: no <Tables> in the layout")
