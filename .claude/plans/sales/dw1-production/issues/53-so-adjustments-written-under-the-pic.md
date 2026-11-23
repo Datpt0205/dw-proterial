@@ -65,7 +65,7 @@ For each operation, on UAT:
   Bravo not answering, a second open proposal for the line.
 - **Decided by one person** (approval type `bravo_write.sales_order`,
   required scope `sales.bravo.write`, `makers` empty). **Decision taken here,
-  for Đạt to review:** the type is not under `sales.`, whose approvals want a
+  confirmed by Đạt 2026-11-23:** the type is not under `sales.`, whose approvals want a
   second person who made none of the case; ADR 0027 has "the PIC approves the
   exact content", and the write is the approver's own, under their own Bravo
   user, as when they type it into Bravo today. What stops a wrong write is

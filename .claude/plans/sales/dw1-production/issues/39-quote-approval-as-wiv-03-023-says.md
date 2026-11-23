@@ -1,7 +1,7 @@
 # 39 — Quote approval as WIV-03-023 §4 says: ASV checks every quote, a Manager approves one with an order
 
-Status: needs-triage
-Blocked by: Đạt's call (whether DW1's quote approval follows the procedure's two levels)
+Status: ready-for-agent (2026-11-23: Đạt follows the procedure's two levels)
+Blocked by: none
 Category: enhancement
 
 ## Why
@@ -35,3 +35,9 @@ separate step before sending.
 1. A quote with an order needs both decisions, by two different people,
    neither the pricer.
 2. "Không duyệt" ends the quote as declined with its reason.
+
+## Decided (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+DW1's quote approval follows WIV-03-023 §4, as the shape above says: ASV
+level is the existing quote approver (the head or `sales_quote_approver`),
+Manager level a permission set, no new role; Bravo's three outcomes.

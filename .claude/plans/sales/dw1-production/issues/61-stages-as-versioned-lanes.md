@@ -1,6 +1,6 @@
 # 61 — DW1's stages as versioned lanes: pinned per case, rolled out per PIC
 
-Status: ready-for-human (step 1 done 2026-11-21: the map and the pinning design below; Đạt confirms the design before step 2 changes code)
+Status: ready-for-agent (step 1 done 2026-11-21; 2026-11-23 Đạt confirmed the design, step 2 for the "write Bravo" stage first, the other stages after UAT)
 Blocked by: none
 Category: architecture (inside the modular monolith; no new services)
 
@@ -104,3 +104,10 @@ and everyone else's on N (acceptance 2); a pinned version with no handler is
 refused; removing a handler with open cases pinned refuses to start.
 
 ## Comments
+
+## Decided (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+The pinning design is confirmed. Step 2 moves one stage first, **write
+Bravo** (3 modules, the stage with the hardest consequences and the fewest
+files), so the pin, the stamp and the dispatch are proven on it before the
+other 105 modules move; those wait until UAT has run on the current code.
