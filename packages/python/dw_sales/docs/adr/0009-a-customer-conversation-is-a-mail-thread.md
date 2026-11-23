@@ -46,27 +46,28 @@ thread" was proposed.
    (read by a model, resolved by code against the sender's customer); naming
    none, Sales picks the case. Nothing is guessed.
 
-   *Built 2026-11-14 (ticket 24), by the agent; what the ticket left open:*
-   the key (`threads.thread_key`) is the earliest stored named message's,
-   computed within the workspace only; the customer is applied where a
-   thread is read (`ThreadLinks.cases`, the case's talk before it), since
-   the store cannot know who a sender is and Bravo's contacts or the ledger
-   may change that later. A message stored before what it answers keeps its
-   own key, and a thread is read as the union of its own key and those of
-   the stored messages its headers name; two replies sharing only an
-   ancestor stored after both stay apart. The talk before a case shows only
-   mails DW1 processed as that case's customer's. Several cases and the
-   model off or unanswering (after the intent step's retry window): routed
-   `reply_to_case` with the cases offered; Sales picks with
-   `sales.inbox.process`, as "DW xử lý" asks, and only an offered case.
+    _Built 2026-11-14 (ticket 24), by the agent; what the ticket left open:_
+    the key (`threads.thread_key`) is the earliest stored named message's,
+    computed within the workspace only; the customer is applied where a
+    thread is read (`ThreadLinks.cases`, the case's talk before it), since
+    the store cannot know who a sender is and Bravo's contacts or the ledger
+    may change that later. A message stored before what it answers keeps its
+    own key, and a thread is read as the union of its own key and those of
+    the stored messages its headers name; two replies sharing only an
+    ancestor stored after both stay apart. The talk before a case shows only
+    mails DW1 processed as that case's customer's. Several cases and the
+    model off or unanswering (after the intent step's retry window): routed
+    `reply_to_case` with the cases offered; Sales picks with
+    `sales.inbox.process`, as "DW xử lý" asks, and only an offered case.
 
-   *Built 2026-11-14 (ticket 19), by the agent:* one stored message may be
-   on several order cases, one per PO number it carries; its disposition
-   names the first and lists the rest (`sales.message_cases`), and the log's
-   `cases_of` returns every one of them, so a reply in the thread of a
-   three-PO mail is attached to the PO it names or offered the three. A
-   mail's cases are written in the transaction that records it: processed
-   again, it is refused whole.
+    _Built 2026-11-14 (ticket 19), by the agent:_ one stored message may be
+    on several order cases, one per PO number it carries; its disposition
+    names the first and lists the rest (`sales.message_cases`), and the log's
+    `cases_of` returns every one of them, so a reply in the thread of a
+    three-PO mail is attached to the PO it names or offered the three. A
+    mail's cases are written in the transaction that records it: processed
+    again, it is refused whole.
+
 3. **Sales' sent mail joins the thread.** Each person's flow also exports
    Sent Items to the same folder. A message is outgoing when its sender is
    the member's own address, resolved by the server, never by the folder the
@@ -75,32 +76,33 @@ thread" was proposed.
    building it, measure whether the export of a sent item keeps its thread
    headers (ticket 23). The "Gửi cho khách" button stays.
 
-   *Built 2026-11-14 (ticket 25), by the agent, before ticket 23's
-   measurement (a fake flow: the mock mailbox and the drop lane, which
-   stored every file already):* `outgoing.is_outgoing` reads the sender
-   against the workspace's people's sign-in addresses
-   (`sales_addresses`, the platform's user record, service accounts left
-   out). Two exceptions the ADR did not name: an upload ("Tải PO lên"
-   stores the uploader as its sender) is never outgoing, and a member's
-   address with an SPF, DKIM or DMARC `fail` (or SPF `softfail`) is
-   processed as incoming, so a forged one reaches a person instead of
-   being hidden as context; a copy saved from Sent Items carries no such
-   result. A message is on a case when it is on the case's thread and
-   addressed (To/Cc) to someone who wrote one of that customer's mails
-   there (`threads.addressed_to`): Sales' headers say which thread, its
-   recipients say which customer, so a chain another customer forged into
-   the thread never puts Sales' mail on their case. It has no
-   disposition; the mailbox lane takes it up only while the tenant reads
-   thread intents (ADR 0010), once, as a DW1 run, and keeps what it read in
-   `sales.sent_messages` (`SentRead`, migration `7f3def432f82`), which is
-   also what tells the lane it is done. With the step off it costs no run.
-   A message processed before this rule keeps the disposition it had. The
-   inbox marks it "Sales gửi" with nothing to press; the case shows it in
-   its thread card. Consequence to watch: a PIC forwarding a customer's PO
-   to a colleague is now Sales' mail and opens nothing; the customer's own
-   mail opens the case. Owed: ticket 23 (whether the export keeps
-   `In-Reply-To`; without it a sent copy has its own thread key and reaches
-   a case only through the customer's next reply naming it).
+    _Built 2026-11-14 (ticket 25), by the agent, before ticket 23's
+    measurement (a fake flow: the mock mailbox and the drop lane, which
+    stored every file already):_ `outgoing.is_outgoing` reads the sender
+    against the workspace's people's sign-in addresses
+    (`sales_addresses`, the platform's user record, service accounts left
+    out). Two exceptions the ADR did not name: an upload ("Tải PO lên"
+    stores the uploader as its sender) is never outgoing, and a member's
+    address with an SPF, DKIM or DMARC `fail` (or SPF `softfail`) is
+    processed as incoming, so a forged one reaches a person instead of
+    being hidden as context; a copy saved from Sent Items carries no such
+    result. A message is on a case when it is on the case's thread and
+    addressed (To/Cc) to someone who wrote one of that customer's mails
+    there (`threads.addressed_to`): Sales' headers say which thread, its
+    recipients say which customer, so a chain another customer forged into
+    the thread never puts Sales' mail on their case. It has no
+    disposition; the mailbox lane takes it up only while the tenant reads
+    thread intents (ADR 0010), once, as a DW1 run, and keeps what it read in
+    `sales.sent_messages` (`SentRead`, migration `7f3def432f82`), which is
+    also what tells the lane it is done. With the step off it costs no run.
+    A message processed before this rule keeps the disposition it had. The
+    inbox marks it "Sales gửi" with nothing to press; the case shows it in
+    its thread card. Consequence to watch: a PIC forwarding a customer's PO
+    to a colleague is now Sales' mail and opens nothing; the customer's own
+    mail opens the case. Owed: ticket 23 (whether the export keeps
+    `In-Reply-To`; without it a sent copy has its own thread key and reaches
+    a case only through the customer's next reply naming it).
+
 4. **Power Automate transports and decides nothing.** No flow tags a mail as
    an existing or new thread: that would be a second decider beside the
    thread key, written as subject keywords, blind to DW's cases (the host
@@ -118,25 +120,25 @@ thread" was proposed.
    its case then. A customer Bravo does not have yet is ticket 15's (DW
    drafts the request for a code; a person creates it).
 
-   *Amended 2026-11-13, by the agent while Đạt was away:* the grilling's
-   Q4/Q8 proposed a provisional case and a choice held per thread, and "no
-   contact table of DW's own". The sender ledger already existed and does
-   the same with less: a confirmed address, never a domain, audited, the
-   mail re-processed. So it stays, below Bravo, and no provisional case or
-   per-thread choice is built. Owed: Đạt's confirmation (`.claude/PLAN.md`).
+    _Amended 2026-11-13, by the agent while Đạt was away:_ the grilling's
+    Q4/Q8 proposed a provisional case and a choice held per thread, and "no
+    contact table of DW's own". The sender ledger already existed and does
+    the same with less: a confirmed address, never a domain, audited, the
+    mail re-processed. So it stays, below Bravo, and no provisional case or
+    per-thread choice is built. Owed: Đạt's confirmation (`.claude/PLAN.md`).
 
-   *Built 2026-11-14 (ticket 20), by the agent:* `customer_by_sender` reads
-   in this order: the one customer whose contacts in the master data list
-   the address; else the sender ledger, never against those contacts (an
-   address several customers list is chosen by the ledger among them only);
-   else the customer whose own domain it is, unless the tenant lists the
-   domain in its order rules' `shared_mail_domains` (1.13.0, empty on the
-   platform; Proterial's group list, Box B37, is theirs to enter). A shared
-   domain with no matching address is routed `customer_unknown` as before;
-   Sales' confirmation keeps that address, and the next mail from it is that
-   customer's. The ledger refuses an address one customer's contacts list,
-   or one whose unshared domain already answers. A ledger entry naming a
-   customer no longer in the list decides nothing: the mail goes to a person.
+    _Built 2026-11-14 (ticket 20), by the agent:_ `customer_by_sender` reads
+    in this order: the one customer whose contacts in the master data list
+    the address; else the sender ledger, never against those contacts (an
+    address several customers list is chosen by the ledger among them only);
+    else the customer whose own domain it is, unless the tenant lists the
+    domain in its order rules' `shared_mail_domains` (1.13.0, empty on the
+    platform; Proterial's group list, Box B37, is theirs to enter). A shared
+    domain with no matching address is routed `customer_unknown` as before;
+    Sales' confirmation keeps that address, and the next mail from it is that
+    customer's. The ledger refuses an address one customer's contacts list,
+    or one whose unshared domain already answers. A ledger entry naming a
+    customer no longer in the list decides nothing: the mail goes to a person.
 
 ## Considered options
 

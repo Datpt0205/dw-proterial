@@ -22,13 +22,13 @@ case only: nothing learns from it.
 ## Decision
 
 1. **Two tiers, by whether the effect can be undone.**
-   - **Applies itself** (reversible, inside DW): reading and classifying a
-     mail, linking it to a case, reading a PO or a reply, drafting, reminders,
-     moving a case along a move the state machine allows. Each such
-     application is recorded, shown, and undoable by a person.
-   - **A person approves** (irreversible or outside DW): a Bravo write (ADR
-     0026), anything sent outside (DW still never sends mail), money and price
-     decisions, approvals.
+    - **Applies itself** (reversible, inside DW): reading and classifying a
+      mail, linking it to a case, reading a PO or a reply, drafting, reminders,
+      moving a case along a move the state machine allows. Each such
+      application is recorded, shown, and undoable by a person.
+    - **A person approves** (irreversible or outside DW): a Bravo write (ADR
+      0026), anything sent outside (DW still never sends mail), money and price
+      decisions, approvals.
 2. **A result applies itself only when** every code check passes **and** its
    confidence clears the step's threshold, and the threshold is set from
    labelled cases so that the step's error rate on what it applies stays at or

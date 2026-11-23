@@ -11,28 +11,44 @@
 # read the cache name followed by the object-store phrase as a key and value.
 # Reworded in the next commit so it cannot recur; this fingerprint covers the
 # one commit that already carries it.
-68b26af76ea4f46d6b981049c5b099269226181e:CLAUDE.md:generic-api-key:111
+2b7f450da7644587c209f27ce6d8f54158a1ff74:CLAUDE.md:generic-api-key:111
 
 # This file's own comment, as committed in 8c46c65, quoted the same phrase and
 # tripped the same rule. The comment above no longer quotes it.
-8c46c65566ee25b330580a9f1b0476b7e7e4cbee:.gitleaksignore:generic-api-key:11
+68c11d7dce9ee2749a2293f7455980700e71a7a2:.gitleaksignore:generic-api-key:11
 
 # Zalo poll consumer test: fake token and secret ("tok-…", "sec-…") passed to
 # the settings so the test can assert repr() never prints them. Not a
 # credential. The line now carries `# gitleaks:allow`; this covers the commit
 # that introduced it.
-dfa0f399fa358671928216004984c62b9e1c187b:apps/worker/tests/unit/test_zalo_poll_consumer.py:generic-api-key:58
+fe5a408fabe4cc936c2ed3ec9c625c85aba759be:apps/worker/tests/unit/test_zalo_poll_consumer.py:generic-api-key:58
 
 # Checked by hand 2026-11-12, after the first CI run of the Oct–Nov work:
 # the migration's downgrade deletes a role row by its key (`key = 'purchasing_dw2'`),
 # SQL, not a credential.
-530aba4c4a76b822e5fcec41bfd01dd842734cd7:db/migrations/versions/6971b41fcdf6_purchasing_automation_lane_and_its_.py:generic-api-key:75
+9ab21a001af2c6804b0fd5dad3b5c69bb427ab5b:db/migrations/versions/6971b41fcdf6_purchasing_automation_lane_and_its_.py:generic-api-key:75
 # Keycloak account tests: made-up temporary passwords ("Abcd-Efgh-Jkm2" and
 # siblings) handed to a fake or a throwaway test realm, never a real account's.
-cf6811ec94d79ab5df165a6d05728f713b55a21c:apps/web/components/__tests__/sign-in-accounts.test.tsx:generic-api-key:163
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:139
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:160
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:201
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:217
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:220
-cf6811ec94d79ab5df165a6d05728f713b55a21c:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:235
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:apps/web/components/__tests__/sign-in-accounts.test.tsx:generic-api-key:163
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:139
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:160
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:201
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:217
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:220
+d5fac5e53fad80e29a1cde3b5e2a2f917e67a3a1:packages/python/dw_platform/tests/integration/test_keycloak_accounts.py:generic-api-key:235
+
+# Checked by hand 2026-11-23, after the history rewrite re-keyed every
+# commit (fingerprints carry the commit, so the lines above were re-keyed
+# from a fresh report on the same files and lines):
+# packages/python/dw_bravo/src/dw_bravo/approval_token.py: a type annotation naming the private-key class, no key material.
+5f8d7b37c7d654e5b5d6694d59a8a62ec8d517ce:packages/python/dw_bravo/src/dw_bravo/approval_token.py:generic-api-key:108
+# packages/python/dw_bravo/tests/unit/test_bravo_approval_token.py: a test helper's signature naming the key type; the test key is generated at run time.
+5f8d7b37c7d654e5b5d6694d59a8a62ec8d517ce:packages/python/dw_bravo/tests/unit/test_bravo_approval_token.py:generic-api-key:41
+# evals/fixtures/cases/pf_retrieval.json: an eval fixture's document keys (`stock-hmb45x2` and siblings), item names, not credentials.
+9565e4d5c204d47110d407e1119c75737f89e32d:evals/fixtures/cases/pf_retrieval.json:generic-api-key:200
+9565e4d5c204d47110d407e1119c75737f89e32d:evals/fixtures/cases/pf_retrieval.json:generic-api-key:65
+9565e4d5c204d47110d407e1119c75737f89e32d:evals/fixtures/cases/pf_retrieval.json:generic-api-key:72
+9565e4d5c204d47110d407e1119c75737f89e32d:evals/fixtures/cases/pf_retrieval.json:generic-api-key:79
+9565e4d5c204d47110d407e1119c75737f89e32d:evals/fixtures/cases/pf_retrieval.json:generic-api-key:86
+# .gitleaksignore: its own comment quoting the migration's role-row SQL (line 27 as committed), not a credential.
+b3591f2acf109f9827ec74aa18d85e5a2257e010:.gitleaksignore:generic-api-key:27

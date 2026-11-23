@@ -122,8 +122,8 @@ its bar on Strata.
 The amendment above, built; what it did not settle was settled so, and is
 recorded here because no rule above moved.
 
-- **The skill**: one per customer, ``salesorder-<customer code>``, a tenant
-  rule version under ``sales_skill_salesorder_<code>`` in the skills' own
+- **The skill**: one per customer, `salesorder-<customer code>`, a tenant
+  rule version under `sales_skill_salesorder_<code>` in the skills' own
   store and flow (ADR 0014, ticket 40: proposed by whoever proposes rules,
   decided by the head on a `sales.skills` approval, never the proposer). The
   platform ships one generic skill (`configs/skills/dw1-salesorder`, fictional
@@ -132,7 +132,7 @@ recorded here because no rule above moved.
   turn's skill pick is offered DW1's skills alone. Migration `711e8b760139`
   admits the key family by pattern in `ck_rule_versions_key`.
 - **A constant the skill names** is a text between backticks in its
-  ``## Constants`` section, or the fixed text the layout holds in that
+  `## Constants` section, or the fixed text the layout holds in that
   column; nothing elsewhere in the skill counts, so a worked pair's values or
   a field's name never pass as one.
 - **The tools are called by code, before the one turn**: the customer's
@@ -142,14 +142,14 @@ recorded here because no rule above moved.
   withheld, and a turn that chose its own calls looped on Strata (ticket 40,
   0.183). The calendar and the unit factors are ADR 0013's closed set, which
   code redoes; the PO as read is the rows with an anchor per value,
-  ``R<row>.<field>``. A tool is bound to one customer when it is built
+  `R<row>.<field>`. A tool is bound to one customer when it is built
   (`SalesOrderTools.bound`): another customer's convert rows, and items only
   another customer's list reaches, are not in it.
 - **The trace** (`salesorder_fill.trace`) writes code's value, never the
   model's text: the anchor must be the row's own, a call one made for the
   row's item and give the value again, a computation give it again, a
-  constant be the skill's. A price column (the layout's ``unit_price`` or
-  ``amount``) takes only a source that reads the PO's price (ADR 0008). A
+  constant be the skill's. A price column (the layout's `unit_price` or
+  `amount`) takes only a source that reads the PO's price (ADR 0008). A
   column the layout fills that the answer leaves empty is flagged too
   (`not_filled`); PC's dates are left for the person as in every file.
 - **Worked pairs** are ticket 38's examples: every uploaded pair whose PO the
@@ -161,7 +161,7 @@ recorded here because no rule above moved.
 - **A skill change** is replayed by the worker's lane
   `sales_salesorder_skill_replay` on the customer's newest 20 pairs, with it
   and with the skill in force, stored beside the version (`sales.skill_replays`,
-  source ``customer_pairs``). The head's approval is refused unless every
+  source `customer_pairs`). The head's approval is refused unless every
   pair came out as the PIC's file, every fill answered, and at least one pair
   proved it (`skills.PAIRS_BROKEN`); rejecting stays open. "Cannot be sent
   for approval" is built as "cannot be approved": proposing opens the
@@ -171,7 +171,7 @@ recorded here because no rule above moved.
   `model_assist.salesorder_skill` (off in every platform version), tier T2
   (the file is still approved by a person, ADR 0026), bar 0.95 on the golden
   pairs' cell accuracy, held with no injected or other customer's value ever
-  written. Asked when a case's ``bravo_upload`` file is drawn
+  written. Asked when a case's `bravo_upload` file is drawn
   (`salesorder_case_fill.CaseSalesOrderFill`, through the one-call door, the
   caller's plan checked, before the draw's transaction): off, below the bar,
   no usable answer or the plan's day spent, the rules above fill it. A cell
@@ -190,8 +190,7 @@ recorded here because no rule above moved.
   and proposes one through the same door. A wrong pair is withdrawn by a
   person who proposes rules and reads prices (a DELETE, audited in their
   name with ids and counts, migration `985e4fa0cd4f`); pairs older than the
-  tenant's `learning.salesorder_pairs_kept_days` (365 by default, 30 to
-  1095) are dropped hourly by the `sales_salesorder_pairs_retention` lane in
+  tenant's `learning.salesorder_pairs_kept_days` (365 by default, 30 to 1095) are dropped hourly by the `sales_salesorder_pairs_retention` lane in
   each workspace's scope. A replay stored before a pair left keeps the
   counts it was stored with.
 - **Not built yet**: a PO column the reading does not keep is still no

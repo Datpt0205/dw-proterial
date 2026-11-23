@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import { DIEU, pendingQuote } from "./fixtures";
@@ -16,7 +22,8 @@ vi.mock("../../../../lib/auth/auth-context", () => ({
     principalId: DIEU,
     displayName: "Diệu",
     active: { workspaceId: "w-1" },
-    hasScope: (scope: string) => scope !== "sales.quote.prepare" || scopes.prepare,
+    hasScope: (scope: string) =>
+      scope !== "sales.quote.prepare" || scopes.prepare,
   }),
 }));
 vi.mock("../../../../lib/session", () => ({
@@ -80,7 +87,9 @@ describe("ticket 05: a pcs case waits for the GM's price", () => {
     draw(waiting());
     expect(screen.queryByRole("button", { name: "Ghi giá GM" })).toBeNull();
     expect(
-      screen.getByRole("radio", { name: "Mass", hidden: true }).hasAttribute("disabled"),
+      screen
+        .getByRole("radio", { name: "Mass", hidden: true })
+        .hasAttribute("disabled"),
     ).toBe(true);
   });
 

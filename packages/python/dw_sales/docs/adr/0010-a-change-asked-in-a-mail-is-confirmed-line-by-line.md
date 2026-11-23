@@ -27,25 +27,26 @@ a value", and a reply's reading (ticket 32) had kinds fixed to two waits.
    which case and which step are code's, from the case's kind and status (a
    table, as `REPLY_STEPS`). It replaces ticket 32's `ReplyKind`.
 
-   *Built 2026-11-14 (ticket 26), by the agent:* `domain/reply_intent.py`
-   holds `ThreadIntent`, the model's answer (`ModelThreadIntents`: up to
-   four intents, each with up to three quotes) and `verified_intents`: an
-   intent with no quote located once in the newest part is `unclear`, an
-   intent given twice is kept once. The table (`INTENT_STEPS`) is keyed by
-   who wrote the message too, since the same words from Sales and from the
-   customer lead to different steps: a customer's `accepts`/`rejects` on a
-   spec discussion settle or decline it, `rejects` (keep the PO) or
-   `accepts` on a correction request resume the review, `sends_po` awaits
-   the revised PO; Sales' `asks` on an order in review proposes
-   `request_correction`, on a quote with Design's reply `discuss_spec`:
-   the two statuses `waiting_customer` watches. Intents pointing at two
-   different steps propose nothing. Only the newest message of the case's
-   thread, a reply or Sales' own, proposes; a person takes the step
-   (HITL, Đạt 11-04). Prompt `sales.reply_intent@2.0.0` (context, subject,
-   body; the context is code's sentence: who wrote it and what Sales last
-   asked); the switch stays `model_assist.reply_intent`. Stored readings of
-   1.0.0 were rewritten by migration `7f3def432f82` (kind to intent).
-   Measured: see `.claude/plans/sales/dw1-production/issues/26-thread-intents.md`.
+    _Built 2026-11-14 (ticket 26), by the agent:_ `domain/reply_intent.py`
+    holds `ThreadIntent`, the model's answer (`ModelThreadIntents`: up to
+    four intents, each with up to three quotes) and `verified_intents`: an
+    intent with no quote located once in the newest part is `unclear`, an
+    intent given twice is kept once. The table (`INTENT_STEPS`) is keyed by
+    who wrote the message too, since the same words from Sales and from the
+    customer lead to different steps: a customer's `accepts`/`rejects` on a
+    spec discussion settle or decline it, `rejects` (keep the PO) or
+    `accepts` on a correction request resume the review, `sends_po` awaits
+    the revised PO; Sales' `asks` on an order in review proposes
+    `request_correction`, on a quote with Design's reply `discuss_spec`:
+    the two statuses `waiting_customer` watches. Intents pointing at two
+    different steps propose nothing. Only the newest message of the case's
+    thread, a reply or Sales' own, proposes; a person takes the step
+    (HITL, Đạt 11-04). Prompt `sales.reply_intent@2.0.0` (context, subject,
+    body; the context is code's sentence: who wrote it and what Sales last
+    asked); the switch stays `model_assist.reply_intent`. Stored readings of
+    1.0.0 were rewritten by migration `7f3def432f82` (kind to intent).
+    Measured: see `.claude/plans/sales/dw1-production/issues/26-thread-intents.md`.
+
 2. **A change request** (Yêu cầu điều chỉnh) is a record on the case: per
    line, the field, the value the case holds, the value asked, and a source
    anchor into the mail's characters. A model copies the asked value's text;

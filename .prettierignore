@@ -17,3 +17,10 @@ my_reference_docs/
 evals/datasets/
 evals/expected/
 evals/fixtures/
+
+# Working notes that every session edits by script (the plan, its tickets,
+# hooks' rules): their layout is not reviewed, their words are (2026-11-23).
+.claude/
+# Words a model loads, versioned and pinned per tenant: a reflow is a new
+# version of what the model reads, so a skill changes only on purpose.
+configs/skills/
