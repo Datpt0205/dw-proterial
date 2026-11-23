@@ -383,8 +383,9 @@ def _rebuild(
     return Stored(
         case=case,
         origin=CaseOrigin(
-            assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"],
-        stage_versions=dict(row["stage_versions"]),
+            assigned_to=row["assigned_to"],
+            release_manifest_ref=row["release_manifest_ref"],
+            stage_versions=dict(row["stage_versions"]),
         ),
     )
 

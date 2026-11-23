@@ -709,4 +709,3 @@ async def test_a_decision_on_a_stage_version_no_longer_served_is_not_signed() ->
     with pytest.raises(ConflictError) as refused:
         await _stamp().stamp(request, object(), PIC_CONTEXT)
     assert refused.value.details["rule"] == "stage_version_unavailable"
-

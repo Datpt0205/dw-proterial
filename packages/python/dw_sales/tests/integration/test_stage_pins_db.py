@@ -53,7 +53,7 @@ async def test_no_role_moves_a_cases_stamp(
             )
             await conn.execute(
                 sa.text(
-                    "UPDATE sales.order_cases SET stage_versions = '{\"write_bravo\": \"9.9.9\"}'"
+                    'UPDATE sales.order_cases SET stage_versions = \'{"write_bravo": "9.9.9"}\''
                     " WHERE id = :id"
                 ),
                 {"id": case_id},
@@ -84,7 +84,7 @@ async def test_start_up_is_refused_while_an_open_case_runs_on_a_dropped_version(
         await conn.execute(sa.text(_TRIGGER_OFF))
         await conn.execute(
             sa.text(
-                "UPDATE sales.order_cases SET stage_versions = '{\"write_bravo\": \"0.9.0\"}'"
+                'UPDATE sales.order_cases SET stage_versions = \'{"write_bravo": "0.9.0"}\''
                 " WHERE id = :id"
             ),
             {"id": case_id},
@@ -102,7 +102,7 @@ async def test_start_up_is_refused_while_an_open_case_runs_on_a_dropped_version(
             await conn.execute(sa.text(_TRIGGER_OFF))
             await conn.execute(
                 sa.text(
-                    "UPDATE sales.order_cases SET stage_versions = '{\"write_bravo\": \"1.0.0\"}'"
+                    'UPDATE sales.order_cases SET stage_versions = \'{"write_bravo": "1.0.0"}\''
                     " WHERE id = :id"
                 ),
                 {"id": case_id},
