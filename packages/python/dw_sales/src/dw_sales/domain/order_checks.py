@@ -384,7 +384,7 @@ class OrderRules(BaseModel):
     # Today's four where a version does not say, as none of the platform's
     # versions does (ticket 42 family 6).
     revision_marks: tuple[str, ...] = Field(default=REVISION_MARKS, max_length=20)
-    # The addresses production control (PC) answers from (Đạt, 2026-11-23):
+    # The addresses production control (PC) answers from (decided 2026-11-23):
     # once named, only a verified mail from one of them is offered as PC's
     # answer on an order's dates (`pc_dates.PcDateReplies.mails`). Empty, as
     # a version before 1.16.0 reads, offers any verified mail naming the order
