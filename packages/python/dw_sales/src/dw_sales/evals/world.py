@@ -61,6 +61,7 @@ from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.notifications import SourcedNotification
+from dw_platform.domain.approval import ApprovalStatus
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
@@ -117,6 +118,7 @@ from dw_sales.application.catalog_imports import (
     CatalogSettlement,
 )
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED, QuoteManagerSettlement
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoff_kinds import HandoffKindReader
 from dw_sales.application.handoffs import HandoffReader
@@ -140,7 +142,7 @@ from dw_sales.application.prompt_versions import PromptDecisions, prompt_book
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
-from dw_sales.application.runs import subject_of
+from dw_sales.application.runs import DecisionType, subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.skill_pick import PickModelPort
@@ -1444,6 +1446,42 @@ class World:
         """Each `sales.layout.decided` the decisions announced, carried out."""
         await self._settle(LAYOUT_DECIDED, self.layout_settlement)
 
+    async def decide_manager(
+        self,
+        caller: Caller,
+        quote_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A Manager's decision on a checked quotation with an order (ticket
+        39), as the API's `POST /approvals/{id}/decisions` makes it, on the
+        version shown; then carried out as the worker carries it out."""
+        waiting = [
+            request
+            for request in self.runtime.approvals.rows.values()
+            if request.approval_type == DecisionType.QUOTE_MANAGER.value
+            and request.status is ApprovalStatus.PENDING
+            and request.payload.get("case_id") == str(quote_id)
+        ]
+        if not waiting:
+            raise ConflictError(
+                "the quotation waits on no Manager", details={"rule": "no_decision"}
+            )
+        await self.runtime.approval_flow.decide(
+            approval_id=waiting[0].id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+            subject_version=self.quote(quote_id).case_version,
+        )
+        settlement = QuoteManagerSettlement(
+            self.store, self.layout_settlement.clock, self.layout_settlement.ids, self.notifications
+        )
+        await self._settle(QUOTE_MANAGER_DECIDED, settlement)
+
     async def decide_rules(
         self,
         caller: Caller,
@@ -1543,7 +1581,11 @@ class World:
     async def _settle(
         self,
         event_type: str,
-        settlement: LayoutSettlement | RuleSettlement | CatalogSettlement | SkillSettlement,
+        settlement: LayoutSettlement
+        | RuleSettlement
+        | CatalogSettlement
+        | SkillSettlement
+        | QuoteManagerSettlement,
     ) -> None:
         """Each event of ``event_type`` handed to its settlement with the
         envelope's tenancy and the decider, as the worker's handler hands it

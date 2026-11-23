@@ -1,7 +1,7 @@
 """sales case stage versions
 
 Revision ID: 7add0d23936a
-Revises: 4b3f44f30356
+Revises: 3748b069dd99
 Create Date: 2026-11-23
 
 Sales ticket 61, step 2 (Đạt, 2026-11-23): a case finishes on the stage
@@ -31,7 +31,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "7add0d23936a"
-down_revision = "4b3f44f30356"
+down_revision = "3748b069dd99"
 branch_labels = None
 depends_on = None
 

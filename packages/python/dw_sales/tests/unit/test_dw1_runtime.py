@@ -121,6 +121,8 @@ def test_each_approval_type_declares_its_decide_scope() -> None:
     assert dict(DECIDE_SCOPES) == {
         DecisionType.QUOTE_APPROVAL: "sales.quote.approve",
         DecisionType.ORDER_CROSS_CHECK: "sales.order.cross_check",
+        # A checked quotation with an order, run-less (ticket 39).
+        DecisionType.QUOTE_MANAGER: "sales.quote.manager_approve",
     }
 
 

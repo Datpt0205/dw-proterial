@@ -1,4 +1,4 @@
 {
-  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) map 0.982 of the 171 fields of the 12 golden forms to the right label, and code accepts 11 of the 12 pre-fills with no wrong label among them. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) map 0.982 of the 171 fields of the 12 golden forms to the right label, and code accepts 11 of the 12 pre-fills with no wrong label among them. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes. 2026-11-23 (Đạt: CI's recordings re-recorded from Strata now, the plant's attested run later): every answer this set replays was re-recorded on Strata on Giang's home lab (qwen3.8-flash-next-q2_0, not attested); the floor above still holds on them.",
   "min_right": 0.98
 }

@@ -57,6 +57,10 @@ class DecisionType(StrEnum):
 
     QUOTE_APPROVAL = "sales.quote"
     ORDER_CROSS_CHECK = "sales.order.cross_check"
+    # A quotation with an order, checked at the first level, waits on a
+    # Manager (WIV-03-023 section 4, ticket 39). No run: opened in the check's own
+    # transaction and carried out from its decided event.
+    QUOTE_MANAGER = "sales.quote.manager"
 
 
 # Who decides each one: the one place this is said. The interrupt stamps it on
@@ -67,6 +71,7 @@ DECIDE_SCOPES: Final[Mapping[DecisionType, SalesScopes]] = MappingProxyType(
     {
         DecisionType.QUOTE_APPROVAL: SalesScopes.QUOTE_APPROVE,
         DecisionType.ORDER_CROSS_CHECK: SalesScopes.ORDER_CROSS_CHECK,
+        DecisionType.QUOTE_MANAGER: SalesScopes.QUOTE_MANAGER_APPROVE,
     }
 )
 
@@ -80,6 +85,9 @@ _REASONS: Final[Mapping[DecisionType, str]] = MappingProxyType(
     {
         DecisionType.QUOTE_APPROVAL: "Báo giá chờ duyệt (WIV-03-023 bước 9)",
         DecisionType.ORDER_CROSS_CHECK: "Đơn đã nhập Bravo chờ kiểm chéo (WIV-03-012 bước 9)",
+        DecisionType.QUOTE_MANAGER: (
+            "Báo giá kèm đơn đã kiểm, chờ Manager duyệt (WIV-03-023 mục 4)"
+        ),
     }
 )
 
@@ -92,7 +100,10 @@ def subject_of(kind: CaseKind, case_id: uuid.UUID) -> str:
 def awaiting(case: OrderCase | QuoteCase) -> DecisionType | None:
     """The decision this case waits on in its state, if any."""
     if isinstance(case, QuoteCase):
-        return DecisionType.QUOTE_APPROVAL if case.status is QuoteStatus.PENDING_APPROVAL else None
+        if case.status is not QuoteStatus.PENDING_APPROVAL:
+            return None
+        checked = case.submission is not None and case.submission.check is not None
+        return DecisionType.QUOTE_MANAGER if checked else DecisionType.QUOTE_APPROVAL
     if case.awaits_cross_check:
         return DecisionType.ORDER_CROSS_CHECK
     return None
@@ -133,6 +144,24 @@ class DecisionAsked(BaseModel):
             case.case_version,
             # The pricer, and whoever submitted: the requester is excluded too.
             makers=frozenset({submission.priced_by, submission.submitted_by}),
+            document_sha256=submission.document_sha256,
+        )
+
+    @classmethod
+    def of_manager(cls, case: QuoteCase) -> DecisionAsked:
+        """The Manager's approval of a checked quotation with an order: the
+        pricer, the submitter and the checker are its makers, so the strict
+        check refuses each of them (three people, ticket 39)."""
+        submission = case.submission
+        assert submission is not None and submission.check is not None
+        return cls._of(
+            DecisionType.QUOTE_MANAGER,
+            CaseKind.QUOTE,
+            case.case_id,
+            case.case_version,
+            makers=frozenset(
+                {submission.priced_by, submission.submitted_by, submission.check.checked_by}
+            ),
             document_sha256=submission.document_sha256,
         )
 

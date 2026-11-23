@@ -126,6 +126,7 @@ from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.customer_notations import NotationRecordPort
+from dw_sales.application.decisions import QuoteManagerSettlement
 from dw_sales.application.document_forms import DocumentFormReader, DocumentFormReplay
 from dw_sales.application.examples import ExampleFinder, ExampleIndexLane, ExampleIndexPort
 from dw_sales.application.followups import BriefWriterPort, FollowupLane, PushNoticePort
@@ -948,6 +949,24 @@ async def refuse_orphaned_stage_pins(session_factory: async_sessionmaker[AsyncSe
     deployment no longer serves (ticket 61): the versions served are the ones
     `write_bravo_versions` lists, the counts the database's own."""
     write_bravo_versions(BravoContract()).refuse_orphans(await open_cases_by_stage(session_factory))
+
+
+def build_quote_manager_settlement(
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    notifications: NotificationSenderPort,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> QuoteManagerSettlement:
+    """What carries out a decided Manager's approval of a quotation with an
+    order (`sales.quote.manager.decided`, ticket 39), for the worker's outbox
+    handler: the quotation and the approval are rows of the decided
+    approval's own tenant and workspace. The order it came from waits for a
+    person's "Kiểm tra lại" here, as without `order_quotes` anywhere."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    return QuoteManagerSettlement(uow, clock, ids, notifications)
 
 
 def build_layout_settlement(

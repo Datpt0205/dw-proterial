@@ -72,7 +72,8 @@
       "po_no_span": "BRN-PO-2601-004",
       "lot_no_span": "LOT-2602-233",
       "problem_quote_spans": [
-        "cuộn số 3 trong lô LOT-2602-233 bị thiếu 150 m so với chiều dài ghi trên nhãn. Bên em đã đo lại hai lần."
+        "Riêng đơn BRN-PO-2601-004, bên em mới mở cuộn dự trữ thì thấy cuộn số 3 trong lô LOT-2602-233 bị thiếu 150 m so với chiều dài ghi trên nhãn.",
+        "Bên em đã đo lại hai lần."
       ]
     },
     "2618105cefdbf89af5e62dae": {
@@ -101,16 +102,15 @@
       "po_no_span": "VLX-PO-2602-0077",
       "lot_no_span": "LOT 2603-041",
       "problem_quote_spans": [
-        "Lô cáp giao theo đơn trên (số lô LOT 2603-041 trên nhãn cuộn), khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong.",
-        "Bên em đã tạm ngưng sử dụng lô này."
+        "khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong"
       ]
     },
     "3f0fbb5725a6969c1d72ee36": {
       "po_no_span": "NRV-PO-26-0388",
       "lines": [
         {
-          "line_or_item_span": "1",
-          "new_quantity_span": null,
+          "line_or_item_span": "line 1",
+          "new_quantity_span": "0",
           "new_date_span": "20/11/2026"
         }
       ]
@@ -164,7 +164,7 @@
       ]
     },
     "78c59cbadfa874b2859ed22c": {
-      "po_no_span": "BRN-PO-2608-022",
+      "po_no_span": null,
       "lot_no_span": null,
       "problem_quote_spans": [
         "納品された電線の被覆に傷がありました。"
@@ -234,7 +234,7 @@
       "quantity_span": "10m"
     },
     "cb1bf4e51d4461f06f2475d0": {
-      "po_no_span": "PO BRN-PO-2608-022",
+      "po_no_span": "BRN-PO-2608-022",
       "lot_no_span": null,
       "problem_quote_spans": [
         "Lô hàng bên em nhận ngày 08/10 có 2 thùng dán nhãn PO BRN-PO-2608-022, không phải đơn của Velatrix, và số lượng trong thùng không khớp phiếu giao hàng."
@@ -275,7 +275,7 @@
       "po_no_span": "KMH-2025-1118-B",
       "lines": [
         {
-          "line_or_item_span": "CB-2007",
+          "line_or_item_span": "1行目（CB-2007）",
           "new_quantity_span": "2,500m",
           "new_date_span": null
         }
@@ -285,18 +285,12 @@
       "po_no_span": "CVG-260415-03",
       "lot_no_span": "CV-2605-2201",
       "problem_quote_spans": [
-        "ロットCV-2605-2201の1本が、実測で表示より約150m短くなっておりました。"
+        "注文番号CVG-260415-03で納品いただいたドラムのうち、ロットCV-2605-2201の1本が、実測で表示より約150m短くなっておりました。"
       ]
     },
     "eb5dbdf5495ac587a316e82f": {
       "po_no_span": "BRN-PO-2609-052",
-      "lines": [
-        {
-          "line_or_item_span": "null",
-          "new_quantity_span": null,
-          "new_date_span": null
-        }
-      ]
+      "lines": []
     },
     "eb96db1c94be91b9ada4f7db": {
       "item_spans": [
@@ -306,7 +300,7 @@
       "quantity_span": "200 m of each"
     },
     "ecca49cb20af315c4a453fed": {
-      "po_no_span": "KMH-21-0077",
+      "po_no_span": "KMH-2026-0728-A",
       "lines": [
         {
           "line_or_item_span": "2行目（KMH-21-0077）",
@@ -319,6 +313,7 @@
       "po_no_span": "NRV-PO-26-0190",
       "lot_no_span": "LOT 2605-077",
       "problem_quote_spans": [
+        "On PO NRV-PO-26-0190 we re-measured the reels before kitting.",
         "Reel 4 came out short by 200 m against the label, and reel 6 looks short as well."
       ]
     },
@@ -326,7 +321,7 @@
       "po_no_span": "KMH-2026-0728-A",
       "lot_no_span": "LOT 2608-152",
       "problem_quote_spans": [
-        "受入検査におきまして、被覆に傷が多数見つかりました。"
+        "注文書KMH-2026-0728-Aにて納品いただいた電線（ロット番号：LOT 2608-152）の受入検査におきまして、被覆に傷が多数見つかりました。"
       ]
     },
     "f4b2196a3671454da425e039": {

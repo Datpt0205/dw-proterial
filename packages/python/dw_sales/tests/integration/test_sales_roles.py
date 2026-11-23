@@ -71,8 +71,14 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         # (6b0f375184fb, ticket 65).
         "sales.bravo.watch.read",
         "sales.bravo.watch.accept",
+        # A quotation with an order, checked, waits on a Manager (3748b069dd99).
+        "sales.quote.manager_approve",
     }
     assert pic <= head
+    assert permission_sets["sales_quote_manager"] == {
+        "sales.quote.manager_approve",
+        "approvals.decide",
+    }
     # Both propose and approve an SO line's change in Bravo (af89f3f5d27d).
     assert "sales.bravo.write" in pic
     # Both decide a Sales request (cross-check, quote approval), so both carry

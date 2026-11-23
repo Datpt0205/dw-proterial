@@ -516,6 +516,7 @@ export const CASE_EVENT = {
   "quote.production_type_set": "Chọn mass hay pcs",
   "quote.pcs_price_recorded": "Ghi giá GM cho hàng pcs",
   "quote.submitted": "Trình duyệt",
+  "quote.checked": "Kiểm báo giá kèm đơn (chờ Manager duyệt)",
   "quote.approved": "Duyệt báo giá",
   "quote.returned": "Trả lại định giá",
   "quote.signed_copy_attached": "Tải lên bản báo giá đã ký",
