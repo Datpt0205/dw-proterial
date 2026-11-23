@@ -210,6 +210,31 @@ async def test_a_tool_needing_approval_pauses_before_running() -> None:
     assert store.records == [], "nothing may run before a human decides"
 
 
+async def test_a_tool_s_pause_names_its_makers_so_someone_can_decide_it() -> None:
+    """The platform refuses a request whose makers it cannot read (fail closed,
+    2026-11-13): a pause without the key could be decided by nobody. The agent
+    acted for the requester alone, so the list is empty and the requester is
+    the one maker a strict type then refuses."""
+    from dw_kernel.ids import TenantId, UserId, WorkspaceId
+    from dw_platform.domain.approval import ApprovalRequest
+
+    registry, executor, _ = make_stack(make_definition(**CRITICAL))
+    state = await call_tool(build_tools(registry, executor)[0])
+    payload = state["__interrupt__"][0].value
+    assert payload["makers"] == []
+    requester = uuid.uuid4()
+    request = ApprovalRequest(
+        id=uuid.uuid4(),
+        tenant_id=TenantId(uuid.uuid4()),
+        workspace_id=WorkspaceId(uuid.uuid4()),
+        approval_type=payload["approval_type"],
+        requested_by=UserId(requester),
+        reason=payload["reason"],
+        payload=payload,
+    )
+    assert request.makers == {requester}
+
+
 class TaskInput(BaseModel):
     """Field types the stdlib JSON encoder has no answer for on its own."""
 

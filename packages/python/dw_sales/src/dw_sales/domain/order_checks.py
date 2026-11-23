@@ -24,7 +24,7 @@ from typing import Final, Literal, NamedTuple, Self, assert_never
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dw_platform.domain.messages import MailAuthentication, is_domain
+from dw_platform.domain.messages import MailAuthentication, is_domain, is_email_address
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -384,6 +384,13 @@ class OrderRules(BaseModel):
     # Today's four where a version does not say, as none of the platform's
     # versions does (ticket 42 family 6).
     revision_marks: tuple[str, ...] = Field(default=REVISION_MARKS, max_length=20)
+    # The addresses production control (PC) answers from (decided 2026-11-23):
+    # once named, only a verified mail from one of them is offered as PC's
+    # answer on an order's dates (`pc_dates.PcDateReplies.mails`). Empty, as
+    # a version before 1.16.0 reads, offers any verified mail naming the order
+    # that is not the customer's, with its sender shown: a person still picks
+    # it, and nothing is recorded until they confirm each line.
+    pc_mailboxes: tuple[str, ...] = Field(default=(), max_length=20)
 
     @model_validator(mode="before")
     @classmethod
@@ -403,6 +410,16 @@ class OrderRules(BaseModel):
                 raise ValueError(f"shared_mail_domains[{index}] is not a lowercase domain")
         if len(set(value)) != len(value):
             raise ValueError("shared_mail_domains repeat")
+        return value
+
+    @field_validator("pc_mailboxes")
+    @classmethod
+    def _pc_mailboxes_are_addresses(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for index, address in enumerate(value):
+            if not is_email_address(address):
+                raise ValueError(f"pc_mailboxes[{index}] is not an email address")
+        if len({address.lower() for address in value}) != len(value):
+            raise ValueError("pc_mailboxes repeat")
         return value
 
     @field_validator("revision_marks")

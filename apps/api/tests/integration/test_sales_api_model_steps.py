@@ -27,6 +27,7 @@ from dw_agent_runtime.model.interpretation import PromptRef
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.ports import ModelRequest
 from dw_platform.testing.seed_env import sid
+from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.evals.recorded import answer_key, load_answers
 
 pytestmark = pytest.mark.integration
@@ -115,7 +116,7 @@ async def test_a_postponement_no_keyword_lists_is_read_and_names_m35s_order(
     assert (reading["kind"], reading["outcome"], reading["prompt"]) == (
         "delivery_change",
         "read",
-        "sales.message_intent@1.0.0",
+        str(MESSAGE_INTENT),
     )
     assert reading["rules"] == "sales_order_rules@1.5.2"
     ((reference),) = reading["references"]
@@ -160,7 +161,7 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
     # The text is served on its own route, never inside the case (ticket 29).
     assert "message_text" not in case
     path = f"/quotes/{case['case_id']}/findings/value_uncertain:1/answer"
-    body = {"case_version": case["case_version"], "field": "quantity", "value": "1250"}
+    body = {"case_version": case["case_version"], "field": "needed_by", "value": "2026-11-20"}
     unopened = await dieu.post(path, body)
     assert unopened.status_code == 409, unopened.text
     assert "chưa mở nguồn" in unopened.text
@@ -170,9 +171,15 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
     assert "1.200 m" in text
     assert "5.000" not in text  # the quoted older offer was cut
     first = case["lines"][0]
-    assert sorted(first["model_read"]) == ["description", "needed_by", "quantity", "uom"]
-    chars = first["anchors"]["quantity"]["chars"]
-    assert text[chars["start"] : chars["end"]] == first["anchors"]["quantity"]["quote"]
+    # "1.200 m" is 1.2 or 1200 by the writer's notation, which this mail
+    # does not settle: no quantity is taken, the line asks for it (the
+    # 2026-11-13 audit: an unsettled number goes to a person).
+    assert first["quantity"] is None
+    incomplete = [f for f in case["findings"] if f["key"] == "rfq_incomplete:1"]
+    assert [f["missing"] for f in incomplete] == [["quantity"]]
+    assert sorted(first["model_read"]) == ["description", "needed_by", "uom"]
+    chars = first["anchors"]["needed_by"]["chars"]
+    assert text[chars["start"] : chars["end"]] == first["anchors"]["needed_by"]["quote"]
     async with migrator.connect() as conn:
         recorded = await conn.scalar(
             sa.text(
@@ -194,10 +201,10 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
     answered = await dieu.post(path, body)
     assert answered.status_code == 200, answered.text
     after = await quote(dieu, case["case_id"])
-    assert after["lines"][0]["quantity"] == "1250"
+    assert after["lines"][0]["needed_by"] == "2026-11-20"
     (line_one,) = [f for f in after["findings"] if f["key"] == "value_uncertain:1"]
     assert [(c["field"], c["read"], c["value"]) for c in line_one["confirmed"]] == [
-        ("quantity", "1200", "1250")
+        ("needed_by", "2026-11-15", "2026-11-20")
     ]
     async with migrator.connect() as conn:
         event = await conn.scalar(
@@ -207,7 +214,7 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
             ),
             {"id": case["case_id"]},
         )
-    assert event == "quantity"
+    assert event == "needed_by"
 
 
 async def test_a_stated_target_price_is_shown_as_the_customers_words_only(
@@ -237,12 +244,16 @@ async def test_a_request_in_the_customers_own_sheet_asks_for_its_blank_quantity(
 
 async def test_without_a_model_server_the_requests_are_routed_as_before(api: Api) -> None:
     an = api.as_(AN)
-    for message_id in ("M37", "M38", "M39"):
+    # Without a model nothing decides what a mail is from its words
+    # (2ec3f8eb): M37 has no file, so it is "other"; M38 and M39 carry a
+    # file no fixed-label reader reads (the mock scenarios' table).
+    for message_id, reason in (
+        ("M37", "other"),
+        ("M38", "attachment_unreadable"),
+        ("M39", "attachment_unreadable"),
+    ):
         disposition = await process(an, message_id)
-        assert (disposition["kind"], disposition["reason"]) == (
-            "routed_to_sales",
-            "attachment_unreadable",
-        )
+        assert (disposition["kind"], disposition["reason"]) == ("routed_to_sales", reason)
         assert disposition["reading"] is None
     m40 = await process(an, "M40")
     assert (m40["reason"], m40["reading"]) == ("other", None)
@@ -253,7 +264,7 @@ async def test_a_value_is_confirmed_only_by_a_preparer_of_the_tenant(model_api: 
     and another tenant's preparer finds no such case."""
     disposition = await process(model_api.as_(AN), "M37")
     case = await quote(model_api.as_(DIEU), disposition["case_id"])
-    body = {"case_version": case["case_version"], "field": "quantity", "value": "1"}
+    body = {"case_version": case["case_version"], "field": "needed_by", "value": "2026-12-31"}
     path = f"/quotes/{case['case_id']}/findings/value_uncertain:1/answer"
 
     viewer = await model_api.as_(HA).post(path, body)
@@ -270,4 +281,4 @@ async def test_a_value_is_confirmed_only_by_a_preparer_of_the_tenant(model_api: 
     assert other_text.status_code == 404, other_text.text
     after = await quote(model_api.as_(DIEU), case["case_id"])
     assert after["case_version"] == case["case_version"]
-    assert after["lines"][0]["quantity"] == "1200"
+    assert after["lines"][0]["needed_by"] == "2026-11-15"

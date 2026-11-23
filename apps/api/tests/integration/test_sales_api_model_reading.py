@@ -26,6 +26,7 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.ports import ModelRequest
 from dw_platform.testing.seed_env import sid
+from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 
 pytestmark = pytest.mark.integration
 
@@ -118,7 +119,7 @@ async def test_m36_lines_the_model_read_are_candidates_sales_confirms(
     reading = third["basis"]["description_reading"]
     assert (reading["outcome"], reading["prompt"], reading["model_profile"]) == (
         "read",
-        "sales.description_attributes@1.0.0",
+        str(DESCRIPTION_ATTRIBUTES),
         "onprem",
     )
     by = {span["attribute"]: span["read_by"] for span in reading["spans"]}

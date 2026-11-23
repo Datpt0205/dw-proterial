@@ -67,8 +67,14 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.rules.propose",
         # Approves or rejects a master-data import (511ef1b71dee, ticket 41).
         "sales.master_data.approve",
+        # Told of a change in Bravo and accepts its new baseline
+        # (6b0f375184fb, ticket 65).
+        "sales.bravo.watch.read",
+        "sales.bravo.watch.accept",
     }
     assert pic <= head
+    # Both propose and approve an SO line's change in Bravo (af89f3f5d27d).
+    assert "sales.bravo.write" in pic
     # Both decide a Sales request (cross-check, quote approval), so both carry
     # the platform's decide right (ac31ff0f2087).
     assert "approvals.decide" in pic and "approvals.decide" in head

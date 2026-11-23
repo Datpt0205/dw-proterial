@@ -679,17 +679,29 @@ async def test_a_tenant_with_no_measurement_cannot_turn_a_model_step_on(rules_ap
 async def test_the_process_page_serves_each_steps_model_uses_actors_and_edge_actions(
     rules_api: Api,
 ) -> None:
-    """The demo tenant's version turns every model step on, and the suite
-    recorded a measurement at its bar for each: each is served in effect.
-    The actors are the database's own roles and permission sets."""
+    """Each model step is served as the demo tenant's version sets it: one it
+    turns on is in effect, on the measurement the suite recorded at its bar;
+    one it turns off on purpose (ticket 42's families, the triage card: no
+    recordings for this suite's mails, each its own comment in the file) is
+    served off. The actors are the database's own roles and permission sets."""
+    from dw_sales.adapters.order_rules import load_tenant_order_rules
+
+    demo = load_tenant_order_rules(DATA_DIR / "policies")
+    assert demo is not None
     body = (await rules_api.as_(AN).get("/rules/process")).json()
     steps = {step["step_id"]: step for step in body["steps"]}
     models = [model for step in body["steps"] for model in step["models"]]
     # One per model step: counted from the enum, so a new step is counted.
     assert len(models) == len(ModelStep)
+    switches = demo.model_assist.model_dump()
+    on = {model["step"] for model in models if switches[model["step"]]}
+    assert {"message_intent", "description_attributes", "rfq_extraction"} <= on
     for model in models:
-        assert model["enabled"] and model["effective"], model
-        assert model["latest"]["passed"] and model["latest"]["model"] == model["model"]
+        if model["step"] in on:
+            assert model["enabled"] and model["effective"], model
+            assert model["latest"]["passed"] and model["latest"]["model"] == model["model"]
+        else:
+            assert not model["enabled"] and not model["effective"], model
     assert steps["O1"]["uses"] == {"lists": ["customers"], "layouts": True}
     cross = {actor["key"] for actor in steps["O9"]["actors"]}
     assert cross and all(

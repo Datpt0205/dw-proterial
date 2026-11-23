@@ -533,6 +533,11 @@ async def _ask_human(
         "tool": definition.name,
         "tool_version": definition.version,
         "payload": redact_mapping(payload.model_dump(mode="json")),
+        # Who made what is decided: the agent acted for the run's requester
+        # alone, whom the platform adds itself. The key is required: since
+        # 2026-11-13 a request without it is decided by nobody (fail closed),
+        # and every tool approval had become undecidable.
+        "makers": [],
     }
     if registered.approval_preview is not None:
         body["preview"] = redact_mapping(await _preview(registered, payload, run_context))
