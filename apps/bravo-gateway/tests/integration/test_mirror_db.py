@@ -1,4 +1,3 @@
-
 """DW's copy of Bravo's read tables on a migrated PostgreSQL (ticket 50,
 ffd0c95da906): rows kept and replaced by Bravo's Id, a full pass marking
 what it did not see as gone (and a row that comes back unmarked), errors

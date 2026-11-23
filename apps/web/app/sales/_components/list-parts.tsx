@@ -36,7 +36,6 @@ import { describeActivity } from "../_lib/activity";
  * the four lists read alike (ui-quality §1).
  */
 
-
 // ------------------------------------------------------------ Cần xử lý --
 
 export interface PriorityItem {
