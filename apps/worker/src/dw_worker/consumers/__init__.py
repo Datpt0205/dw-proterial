@@ -22,6 +22,16 @@ ConsumerFn = Callable[[], Awaitable[None]]
 class ConsumerRegistry:
     _consumers: dict[str, ConsumerFn] = field(default_factory=dict)
     _intervals: dict[str, float] = field(default_factory=dict)
+    # Run once before any lane: one that raises stops the worker starting
+    # (a stage version an open case is pinned to with no handler, ticket 61).
+    _start_checks: list[ConsumerFn] = field(default_factory=list)
+
+    def check_at_start(self, check: ConsumerFn) -> None:
+        self._start_checks.append(check)
+
+    async def run_start_checks(self) -> None:
+        for check in self._start_checks:
+            await check()
 
     def register(
         self, name: str, consumer: ConsumerFn, *, interval_seconds: float | None = None

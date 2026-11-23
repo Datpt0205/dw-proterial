@@ -360,7 +360,7 @@ async def history(api: Api, migrator: AsyncEngine) -> Api:
                 "INSERT INTO sales.order_cases (id, tenant_id, workspace_id, customer_code,"
                 " po_no, case_version, status, received_at, rules_version, catalog_as_of,"
                 " cross_check_required, export_control_mode, changes, bravo_entry_compared,"
-                " close_reason, closed_by, closed_at, release_manifest_ref, due)"
+                " close_reason, closed_by, closed_at, release_manifest_ref, due, stage_versions)"
                 " SELECT gen_random_uuid(), :t, :w, 'VLX', 'PO-H' || n, 2,"
                 " CASE WHEN n <= 3000 THEN 'closed' ELSE 'in_review' END,"
                 " CAST(:at AS timestamptz) - make_interval(mins => n),"
@@ -368,7 +368,8 @@ async def history(api: Api, migrator: AsyncEngine) -> Api:
                 " CASE WHEN n <= 3000 THEN 'not_an_order' END,"
                 " CASE WHEN n <= 3000 THEN CAST(:me AS uuid) END,"
                 " CASE WHEN n <= 3000 THEN CAST(:at AS timestamptz) END, 'sha256:history',"
-                " CASE WHEN n % 3 = 0 THEN to_char(DATE '2026-10-01' + n % 40, 'YYYY-MM-DD') END"
+                " CASE WHEN n % 3 = 0 THEN to_char(DATE '2026-10-01' + n % 40, 'YYYY-MM-DD') END,"
+                ' \'{"write_bravo": "1.0.0"}\'::jsonb'
                 " FROM generate_series(1, 3100) AS n"
             ),
             {

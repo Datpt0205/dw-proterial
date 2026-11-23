@@ -17,6 +17,7 @@ published object rather than an edit in the middle of this file.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from qdrant_client import AsyncQdrantClient
@@ -148,6 +149,9 @@ class ApiContainer:
     # Holds one LISTEN connection for the process; started and stopped by the
     # app's lifespan, never by a request.
     run_events: RunStateListener | None = None
+    # Awaited once before the app serves: one that raises stops it starting
+    # (a stage version an open case is pinned to with no handler, ticket 61).
+    start_checks: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
     runner: LangGraphWorkflowRunner | None = None
     approval_flow: ApproveAndResumeService | None = None
     # Opening an approval: the view receipt and, when asked, the code a
