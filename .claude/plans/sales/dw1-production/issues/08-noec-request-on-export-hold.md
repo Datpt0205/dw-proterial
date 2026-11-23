@@ -1,7 +1,7 @@
 # 08 — On an export hold, the NOEC request drafted
 
-Status: needs-triage
-Blocked by: Đạt's call. Export control was withdrawn on 10-29 (ticket 45), yet the BA's drawio has NOEC/ESF holding a PO
+Status: wontfix for the NOEC draft (2026-11-23); the hold's reading from Bravo moves to ticket 50's pending checks
+Blocked by: none (decided)
 Category: enhancement
 
 ## Why
@@ -24,3 +24,14 @@ it. The drawio adds a NOEC request drafted when a PO is held.
   PO date, or a black-list keyword match, holds the order. That needs no
   new page and stays inside the 10-29 decision. The NOEC draft is still
   Đạt's call.
+
+## Decided (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+- **No NOEC draft.** Export control left DW1's scope on 10-29 (ticket 45);
+  drafting its request would bring it back.
+- **The hold stays and reads Bravo**: no ECP covering the PO date, or a
+  black-list match, holds the order, read from ticket 50's copy of Bravo's
+  `Export control program` and `Black list` instead of master-data dates.
+  That is ticket 50's pending "checks that use the copy"; pending: what
+  counts as a black-list match is Bravo's own routine, read on Proterial's
+  host before code decides it (ticket 52).
