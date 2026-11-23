@@ -36,15 +36,24 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 
 from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_agent_runtime.contracts import RunContext
-from dw_kernel.errors import ConflictError, DomainError, DWError, PermissionDeniedError
+from dw_kernel.errors import (
+    ConflictError,
+    DomainError,
+    DWError,
+    NotFoundError,
+    PermissionDeniedError,
+)
+from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_platform.domain.approval import ApprovalRequest
+from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.bravo_sales_orders import (
     BravoReadBack,
@@ -78,7 +87,7 @@ from dw_sales.application.support import (
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import Actor, OrderCase, OrderStatus, UnappliedDecision
-from dw_sales.domain.quotes import QuoteActor, QuoteCapability, QuoteCase
+from dw_sales.domain.quotes import QuoteActor, QuoteCapability, QuoteCase, QuoteStatus
 
 _QUOTE = "sales_quote_case"
 _ORDER = "sales_order_case"
@@ -97,6 +106,9 @@ class _Decision:
     subject_version: int | None
     # Whether the decider may approve a quotation (`sales.quote.approve`).
     approves_quotes: bool
+    # Whether the decider may approve one with an order as its Manager
+    # (`sales.quote.manager_approve`, ticket 39).
+    manages_quotes: bool = False
 
 
 @dataclass(frozen=True)
@@ -239,6 +251,7 @@ class CaseDecisions:
                 reasons=decision.reasons,
                 subject_version=decision.subject_version,
                 approves_quotes=self.gate.allows(context, SalesScopes.QUOTE_APPROVE),
+                manages_quotes=self.gate.allows(context, SalesScopes.QUOTE_MANAGER_APPROVE),
             ),
             write=False,
         )
@@ -375,6 +388,8 @@ class CaseDecisions:
                 if write:
                     event = person_event(action, decider, now)
                     await save_quote(work, decider, self.ids, quote, quoted, event, run_id=run_id)
+                    if action == "quote.checked":
+                        await work.approvals.add(manager_request(self.ids, decider, quoted))
             else:
                 order = (await stored_order(work, asked.case_id, viewer=seer)).case
                 _still_waiting(order, asked, decision.subject_version)
@@ -390,43 +405,22 @@ class CaseDecisions:
             if write:
                 await work.commit()
         if write and quoted is not None and action == "quote.approved":
-            await self._approved(decider, quoted)
+            await tell_approved(self.notifications, decider, quoted)
             if self.order_quotes is not None:
                 await self.order_quotes.resume(decider, quoted)
         return action
-
-    async def _approved(self, decider: AccessContext, quote: QuoteCase) -> None:
-        """Tell who priced and submitted it: print it to sign, or send it. No
-        electronic signature: the signed copy comes back as an upload."""
-        submission = quote.submission
-        if submission is None:
-            return
-        recipients = sorted(
-            {submission.priced_by, submission.submitted_by} - {decider.principal_id}, key=str
-        )
-        if not recipients:
-            return
-        await self.notifications.deliver(
-            decider,
-            recipients=recipients,
-            source_key=f"sales.quote.approved:{quote.case_id}:{quote.case_version}",
-            title=f"Báo giá {quote.request.reference} đã được duyệt",
-            body=(
-                "Tải tài liệu báo giá để in trình ký hoặc gửi khách. "
-                "Bản đã ký có thể tải lên lại hồ sơ để gửi kèm."
-            ),
-            link=f"/sales/quotes/{quote.case_id}",
-        )
 
     @staticmethod
     def _on_quote(
         case: QuoteCase, asked: DecisionAsked, decision: _Decision, at: datetime
     ) -> tuple[QuoteCase, str]:
+        held = {
+            QuoteCapability.APPROVE: decision.approves_quotes,
+            QuoteCapability.MANAGER_APPROVE: decision.manages_quotes,
+        }
         actor = QuoteActor(
             user_id=decision.decider.principal_id,
-            capabilities=(
-                frozenset({QuoteCapability.APPROVE}) if decision.approves_quotes else frozenset()
-            ),
+            capabilities=frozenset(capability for capability, has in held.items() if has),
         )
         if not decision.approve:
             comment = decision.comment
@@ -435,6 +429,13 @@ class CaseDecisions:
         # A quote approval names its document: the hash the approver approves.
         sha = asked.document_sha256 or ""
         given = {parse_finding_key(key): reason for key, reason in decision.reasons.items()}
+        if asked.approval_type is DecisionType.QUOTE_APPROVAL and case.needs_manager:
+            # WIV-03-023 section 4: with an order, the first level checks it and a
+            # Manager approves it (ticket 39).
+            checked = decided(
+                lambda: case.check_for_manager(actor, at=at, document_sha256=sha, reasons=given)
+            )
+            return checked, "quote.checked"
         approved = decided(lambda: case.approve(actor, at=at, document_sha256=sha, reasons=given))
         return approved, "quote.approved"
 
@@ -501,3 +502,149 @@ def _still_waiting(case: OrderCase | QuoteCase, asked: DecisionAsked, decided_on
             },
         )
     same_version(case.case_id, case.case_version, decided_on)
+
+
+# ----------------------------------------- the Manager's level (ticket 39) --
+
+# The event a decided Manager's approval writes; the worker carries it out.
+QUOTE_MANAGER_DECIDED: Final = decided_event_type(DecisionType.QUOTE_MANAGER.value)
+
+
+def manager_request(ids: IdGenerator, checker: AccessContext, quote: QuoteCase) -> ApprovalRequest:
+    """The Manager's run-less approval of a quotation the first level checked:
+    raised by the checker in the check's own transaction, decided with
+    `sales.quote.manager_approve`, its makers the pricer, the submitter and
+    the checker (strict: none of them decides it)."""
+    asked = DecisionAsked.of_manager(quote)
+    return ApprovalRequest(
+        id=ids.new_uuid(),
+        tenant_id=TenantId(checker.tenant_id),
+        workspace_id=WorkspaceId(checker.workspace_id),
+        approval_type=asked.approval_type.value,
+        requested_by=UserId(checker.principal_id),
+        reason=asked.reason,
+        payload=asked.payload(),
+        required_scope=asked.required_scope,
+    )
+
+
+async def tell_approved(
+    notifications: NotificationSenderPort, decider: AccessContext, quote: QuoteCase
+) -> None:
+    """Tell who priced and submitted it: print it to sign, or send it. No
+    electronic signature: the signed copy comes back as an upload."""
+    submission = quote.submission
+    if submission is None:
+        return
+    recipients = sorted(
+        {submission.priced_by, submission.submitted_by} - {decider.principal_id}, key=str
+    )
+    if not recipients:
+        return
+    await notifications.deliver(
+        decider,
+        recipients=recipients,
+        source_key=f"sales.quote.approved:{quote.case_id}:{quote.case_version}",
+        title=f"Báo giá {quote.request.reference} đã được duyệt",
+        body=(
+            "Tải tài liệu báo giá để in trình ký hoặc gửi khách. "
+            "Bản đã ký có thể tải lên lại hồ sơ để gửi kèm."
+        ),
+        link=f"/sales/quotes/{quote.case_id}",
+    )
+
+
+# Words for a Manager's return when the decision's own comment is not on the
+# event (the outbox carries ids only); the comment stays on the platform's
+# decision record, which the approvals page shows.
+_MANAGER_RETURNED = "Manager trả lại báo giá: xem ý kiến trên yêu cầu duyệt"
+
+
+@dataclass(frozen=True)
+class QuoteManagerSettlement:
+    """Carries out a decided `sales.quote.manager` approval, for the worker's
+    handler of its decided event, with the decider's tenancy and identity
+    from the event's envelope. What was decided is read from the approval
+    row, as every run-less Sales approval is."""
+
+    uow: SalesUnitOfWorkFactory
+    clock: UtcClock
+    ids: IdGenerator
+    notifications: NotificationSenderPort
+
+    async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> str:
+        """The Manager's decision on the quotation. Idempotent: a redelivery
+        finds it decided by this person on this document and writes nothing.
+        Raises the refusals the quotation makes (409, 404)."""
+        audience = ApprovalAudience(
+            context=decider.model_copy(
+                update={"scopes": frozenset({SalesScopes.QUOTE_MANAGER_APPROVE.value})}
+            ),
+            holds_decide=True,
+        )
+        now = self.clock.now()
+        async with self.uow(sales_scope(decider)) as work:
+            request = await work.approvals.get(
+                approval_id, workspace_id=decider.workspace_id, audience=audience
+            )
+            if request is None:
+                raise NotFoundError(
+                    "quote approval not found", details={"approval_id": str(approval_id)}
+                )
+            asked = _asked(request)
+            if asked.approval_type is not DecisionType.QUOTE_MANAGER:
+                raise ConflictError(
+                    "the approval is not a Manager's", details={"approval_id": str(approval_id)}
+                )
+            if request.status is ApprovalStatus.PENDING:
+                raise ConflictError(
+                    "the Manager's approval is not decided yet",
+                    details={"approval_id": str(approval_id)},
+                )
+            quote = (await stored_quote(work, asked.case_id, viewer=None)).case
+            done = _manager_applied(quote, asked, decider.principal_id)
+            if done is not None:
+                return done
+            _still_waiting(quote, asked, asked.case_version)
+            approve = request.status is ApprovalStatus.APPROVED
+            quoted, action = CaseDecisions._on_quote(
+                quote,
+                asked,
+                _Decision(
+                    decider=decider,
+                    approve=approve,
+                    comment="" if approve else _MANAGER_RETURNED,
+                    reasons={},
+                    subject_version=asked.case_version,
+                    approves_quotes=False,
+                    manages_quotes=True,
+                ),
+                now,
+            )
+            event = person_event(action, decider, now)
+            await save_quote(work, decider, self.ids, quote, quoted, event)
+            await work.commit()
+        if action == "quote.approved":
+            await tell_approved(self.notifications, decider, quoted)
+        return action
+
+
+def _manager_applied(quote: QuoteCase, asked: DecisionAsked, by: uuid.UUID) -> str | None:
+    """The action an earlier delivery of the same decision already took."""
+    approval = quote.approval
+    if (
+        quote.status is not QuoteStatus.PENDING_APPROVAL
+        and approval is not None
+        and approval.approved_by == by
+        and approval.document_sha256 == asked.document_sha256
+    ):
+        return "quote.approved"
+    returned = quote.returns[-1] if quote.returns else None
+    if (
+        quote.status is QuoteStatus.RETURNED
+        and returned is not None
+        and returned.returned_by == by
+        and returned.case_version >= asked.case_version
+    ):
+        return "quote.returned"
+    return None

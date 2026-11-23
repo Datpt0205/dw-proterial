@@ -132,6 +132,10 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
   },
   "sales.quote.priced": { label: "Định giá", color: "processing" },
   "sales.quote.submitted": { label: "Gửi duyệt báo giá", color: "processing" },
+  "sales.quote.checked": {
+    label: "Kiểm báo giá kèm đơn",
+    color: "processing",
+  },
   "sales.quote.approved": { label: "Duyệt báo giá", color: "success" },
   "sales.quote.returned": { label: "Trả lại định giá", color: "warning" },
   "sales.quote.signed_copy_attached": {

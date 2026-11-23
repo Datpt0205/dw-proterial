@@ -95,6 +95,8 @@ GIANG = Caller(
     | {
         _S.PRICE_OTHER_CUSTOMERS_READ,
         _S.QUOTE_APPROVE,
+        # The head approves a checked quotation with an order (ticket 39).
+        _S.QUOTE_MANAGER_APPROVE,
         _S.WORKER_RESUME,
         _S.ORDER_RESEND_CROSS_CHECK,
         _S.CASE_ASSIGN,

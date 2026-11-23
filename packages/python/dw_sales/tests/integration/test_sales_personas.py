@@ -71,6 +71,9 @@ HEAD = PIC | {
     # ticket 65).
     "sales.bravo.watch.read",
     "sales.bravo.watch.accept",
+    # Approves a checked quotation with an order as its Manager (3748b069dd99,
+    # ticket 39).
+    "sales.quote.manager_approve",
 }
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {

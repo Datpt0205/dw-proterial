@@ -145,6 +145,7 @@ from dw_sales.adapters.assembly import (
     build_followup_lane,
     build_layout_settlement,
     build_prompt_settlement,
+    build_quote_manager_settlement,
     build_rule_settlement,
     build_skill_settlement,
     build_threshold_lane,
@@ -171,6 +172,7 @@ from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.bravo_exports import BRAVO_EXPORT_UPLOADED, YCBG_EXPORT_UPLOADED_BEFORE
 from dw_sales.application.bravo_line_writes import BRAVO_WRITE_DECIDED
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
+from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED
 from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
@@ -986,6 +988,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 clock=clock,
                 ids=ids,
             )
+        )
+        # A Manager's approval of a quotation with an order (Sales ticket 39,
+        # WIV-03-023 section 4): run-less, opened by the first level's check.
+        handlers[QUOTE_MANAGER_DECIDED] = build_decided_handler(
+            build_quote_manager_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                notifications=SqlNotificationRepository(sessions),
+                clock=clock,
+                ids=ids,
+            ),
+            applied="quote manager decision applied",
         )
         handlers[LAYOUT_DECIDED] = build_decided_handler(
             build_layout_settlement(
