@@ -430,7 +430,7 @@ class CaseDecisions:
         sha = asked.document_sha256 or ""
         given = {parse_finding_key(key): reason for key, reason in decision.reasons.items()}
         if asked.approval_type is DecisionType.QUOTE_APPROVAL and case.needs_manager:
-            # WIV-03-023 §4: with an order, the first level checks it and a
+            # WIV-03-023 section 4: with an order, the first level checks it and a
             # Manager approves it (ticket 39).
             checked = decided(
                 lambda: case.check_for_manager(actor, at=at, document_sha256=sha, reasons=given)

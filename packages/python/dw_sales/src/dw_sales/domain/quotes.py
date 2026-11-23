@@ -1677,7 +1677,7 @@ class QuoteCapability(StrEnum):
     # The scope ``sales.quote.approve``: the head of Sales, or a deputy
     # holding the approver permission set.
     APPROVE = "approve"
-    # The scope ``sales.quote.manager_approve``: WIV-03-023 §4's second level,
+    # The scope ``sales.quote.manager_approve``: WIV-03-023 section 4's second level,
     # a Manager approving a quotation that comes with an order (ticket 39).
     MANAGER_APPROVE = "manager_approve"
 
@@ -1702,7 +1702,7 @@ class YcbgRecord(BaseModel):
 
 
 class QuoteCheck(BaseModel):
-    """WIV-03-023 §4's first level on a quotation that comes with an order:
+    """WIV-03-023 section 4's first level on a quotation that comes with an order:
     an ASV-level approver checked this document (ticket 39). It lives on the
     submission, so a return or a new price takes it away with the document."""
 
@@ -2674,7 +2674,7 @@ class QuoteCase(BaseModel):
 
     @property
     def needs_manager(self) -> bool:
-        """WIV-03-023 §4: a quotation that comes with an order is approved by
+        """WIV-03-023 section 4: a quotation that comes with an order is approved by
         a Manager as well, after an ASV-level check (ticket 39). "With an
         order" is the case's own link, stamped when it opened (`from_order`)."""
         return self.from_order is not None
@@ -2815,7 +2815,7 @@ class QuoteCase(BaseModel):
         ):
             raise ConflictError(
                 "separation of duties: the Manager is neither who priced the quotation"
-                " nor who checked it (WIV-03-023 §4)",
+                " nor who checked it (WIV-03-023 section 4)",
                 details={"case_id": str(self.case_id)},
             )
         return by

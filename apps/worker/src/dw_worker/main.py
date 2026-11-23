@@ -990,7 +990,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             )
         )
         # A Manager's approval of a quotation with an order (Sales ticket 39,
-        # WIV-03-023 §4): run-less, opened by the first level's check.
+        # WIV-03-023 section 4): run-less, opened by the first level's check.
         handlers[QUOTE_MANAGER_DECIDED] = build_decided_handler(
             build_quote_manager_settlement(
                 session_factory=sessions,

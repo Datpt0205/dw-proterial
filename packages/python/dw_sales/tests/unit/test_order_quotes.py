@@ -209,7 +209,7 @@ async def _decided(
     await world.decide(
         KHOA, CaseKind.QUOTE, quote_id, approve=True, comment="Đã xem", reasons=reasons or None
     )
-    # WIV-03-023 §4 (ticket 39): opened from an order, it is checked at the
+    # WIV-03-023 section 4 (ticket 39): opened from an order, it is checked at the
     # first level and approved by a Manager, then the order is checked again
     # ("Kiểm tra lại": the worker carrying out the Manager's decision holds
     # no order intake).
@@ -675,7 +675,7 @@ async def _checked(world: World, checker: Caller = KHOA) -> uuid.UUID:
 
 
 async def test_the_check_keeps_it_waiting_on_a_manager_naming_three_makers() -> None:
-    """WIV-03-023 §4: the first level keeps the quotation waiting and opens
+    """WIV-03-023 section 4: the first level keeps the quotation waiting and opens
     a Manager's approval whose makers are the pricer, the submitter and the
     checker, so the strict check refuses each of them."""
     world = _world()

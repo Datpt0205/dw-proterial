@@ -4,7 +4,7 @@ Revision ID: 3748b069dd99
 Revises: 4b3f44f30356
 Create Date: 2026-11-23
 
-Sales ticket 39 (Đạt, 2026-11-23: follow WIV-03-023 §4): a quotation that
+Sales ticket 39 (Đạt, 2026-11-23: follow WIV-03-023 section 4): a quotation that
 comes with an order is checked at ASV level and then approved by a Manager,
 three different people.
 

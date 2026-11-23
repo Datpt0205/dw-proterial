@@ -868,7 +868,7 @@ def _checked(case: QuoteCase, actor: QuoteActor = HEAD) -> QuoteCase:
 
 
 def test_a_quotation_with_an_order_is_checked_then_approved_by_a_manager() -> None:
-    """WIV-03-023 §4: the ASV-level check keeps it waiting, the Manager approves."""
+    """WIV-03-023 section 4: the ASV-level check keeps it waiting, the Manager approves."""
     checked = _checked(_with_order())
     assert checked.status is QuoteStatus.PENDING_APPROVAL
     assert checked.submission is not None and checked.submission.check is not None

@@ -58,7 +58,7 @@ class DecisionType(StrEnum):
     QUOTE_APPROVAL = "sales.quote"
     ORDER_CROSS_CHECK = "sales.order.cross_check"
     # A quotation with an order, checked at the first level, waits on a
-    # Manager (WIV-03-023 §4, ticket 39). No run: opened in the check's own
+    # Manager (WIV-03-023 section 4, ticket 39). No run: opened in the check's own
     # transaction and carried out from its decided event.
     QUOTE_MANAGER = "sales.quote.manager"
 
@@ -85,7 +85,7 @@ _REASONS: Final[Mapping[DecisionType, str]] = MappingProxyType(
     {
         DecisionType.QUOTE_APPROVAL: "Báo giá chờ duyệt (WIV-03-023 bước 9)",
         DecisionType.ORDER_CROSS_CHECK: "Đơn đã nhập Bravo chờ kiểm chéo (WIV-03-012 bước 9)",
-        DecisionType.QUOTE_MANAGER: "Báo giá kèm đơn đã kiểm, chờ Manager duyệt (WIV-03-023 §4)",
+        DecisionType.QUOTE_MANAGER: "Báo giá kèm đơn đã kiểm, chờ Manager duyệt (WIV-03-023 section 4)",
     }
 )
 

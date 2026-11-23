@@ -40,7 +40,7 @@ class SalesScopes(StrEnum):
     ORDER_RESEND_CROSS_CHECK = "sales.order.resend_cross_check"
     QUOTE_PREPARE = "sales.quote.prepare"
     QUOTE_APPROVE = "sales.quote.approve"
-    # WIV-03-023 §4's second level: a Manager approves a quotation that
+    # WIV-03-023 section 4's second level: a Manager approves a quotation that
     # comes with an order, after the check above (ticket 39).
     QUOTE_MANAGER_APPROVE = "sales.quote.manager_approve"
     COMPLIANCE_ACK = "sales.compliance.ack"
