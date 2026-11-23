@@ -687,7 +687,9 @@ async def test_the_check_keeps_it_waiting_on_a_manager_naming_three_makers() -> 
         r for r in world.runtime.approvals.rows.values() if r.approval_type == "sales.quote.manager"
     ]
     assert request.required_scope == "sales.quote.manager_approve"
-    assert set(request.payload["makers"]) == {str(AN.user_id), str(KHOA.user_id)}
+    makers = request.payload["makers"]
+    assert isinstance(makers, list)
+    assert set(makers) == {str(AN.user_id), str(KHOA.user_id)}
     assert request.payload["case_id"] == str(quote_id)
     assert "sales.quote.checked" in {e.action for e in world.audit()}
 
