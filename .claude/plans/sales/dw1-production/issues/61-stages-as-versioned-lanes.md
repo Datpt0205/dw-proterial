@@ -1,6 +1,6 @@
 # 61 — DW1's stages as versioned lanes: pinned per case, rolled out per PIC
 
-Status: ready-for-agent (step 1 done 2026-11-21; 2026-11-23 Đạt confirmed the design, step 2 for the "write Bravo" stage first, the other stages after UAT)
+Status: in-progress — step 2's first slice built (2026-11-23): the write-Bravo stage pinned per case (stamp, dispatch, start-up refusal). Left: per-PIC rollouts and shadow (`sales.stage_rollouts`), the manifest's `stages/<stage>@<semver>`, the other four stages after UAT
 Blocked by: none
 Category: architecture (inside the modular monolith; no new services)
 
@@ -111,3 +111,31 @@ The pinning design is confirmed. Step 2 moves one stage first, **write
 Bravo** (3 modules, the stage with the hardest consequences and the fewest
 files), so the pin, the stamp and the dispatch are proven on it before the
 other 105 modules move; those wait until UAT has run on the current code.
+
+## Step 2, first slice (2026-11-23): write Bravo pinned per case
+
+- **The stamp**: `CaseOrigin.stage_versions` (`dw_sales.application.stages`),
+  written when a case opens from `STAGE_DEFAULTS` (`write_bravo` 1.0.0) and
+  read back with the case; migration `7add0d23936a` adds
+  `stage_versions jsonb NOT NULL` to `sales.order_cases` and
+  `sales.quote_cases` (open cases backfilled 1.0.0, no column default: one
+  owner) and a trigger that refuses any UPDATE changing it, from any role.
+- **The dispatch**: `StageHandlers` per stage. For write Bravo a version is
+  the gateway's command set (`BravoCommandsPort`, `write_bravo_versions`,
+  1.0.0 = `dw_bravo.contract` today): a line write is prepared by the set of
+  the case's version, the approval names `stage_version`, and the decision's
+  stamp checks the hash with that same set. Not served, or not stamped:
+  refused, nothing opened.
+- **Removing a version**: the API (lifespan) and the worker refuse to start
+  while `sales.open_cases_by_stage()` (SECURITY DEFINER, counts only) shows
+  an open case on a version with no handler.
+- **Tests**: unit (the stamp, a case keeping 1.0.0 while 1.1.0 is served,
+  refusals, start-up) and PostgreSQL (read back as stored, no role moves the
+  stamp, counts as `dw_app`, start-up refused). Mutations red: the dispatch,
+  the stamp, the start-up refusal, the read-back, the trigger (dropped from
+  the migration).
+- **Left**: `sales.stage_rollouts` (a version active for listed PICs, shadow
+  runs compared before promotion, `sales.rollout.manage`), which acceptance
+  2 needs; `stages/<stage>@<semver>` in the release manifest; the other
+  four stages once UAT has run on the current code.
+
