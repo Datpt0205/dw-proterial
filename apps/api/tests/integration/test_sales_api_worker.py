@@ -36,7 +36,8 @@ async def test_an_pauses_dw1_and_only_the_holders_of_resume_are_told(
     assert await _recipients(migrator) == {user_id(GIANG)}
     inbox = await api.as_(GIANG).platform("/notifications")
     (note,) = [n for n in inbox.json()["items"] if n["title"] == "DW1 đã tạm dừng"]
-    assert "Nguyễn Văn An" in note["body"] and "giờ Việt Nam" in note["body"]
+    # The tenant's own zone with its offset (audit item 14, a407ae07).
+    assert "Nguyễn Văn An" in note["body"] and "(UTC+7)" in note["body"]
 
 
 async def test_processing_is_refused_while_paused_naming_who_and_when(api: Api) -> None:
