@@ -428,7 +428,7 @@ class _LaneRowRefused:
             ) -> list[AuditEvent]:
                 return await held.list_for_run(run_id, workspace_id=workspace_id, limit=limit)
 
-        work.audit = Refusing()  # type: ignore[misc]
+        work.audit = Refusing()  # type: ignore[assignment]
         return work
 
 

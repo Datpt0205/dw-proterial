@@ -998,6 +998,30 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     "words.no_work": { label: "Không có việc đang chờ" },
     "words.no_overdue": { label: "Không có việc quá hạn" },
+    "words.write_confirm": {
+      label: "Nói lại đề xuất ghi Bravo trước khi xác nhận",
+      help: ASSISTANT_HELP,
+    },
+    "words.write_date_word": { label: "Tên gọi ngày XN giao hàng trong câu" },
+    "words.write_quantity_word": { label: "Tên gọi số lượng trong câu" },
+    "words.write_which_line": {
+      label: "Hỏi lại dòng cần ghi Bravo",
+      help: ASSISTANT_HELP,
+    },
+    "words.write_which_field": {
+      label: "Hỏi lại ghi ngày hay số lượng",
+      help: ASSISTANT_HELP,
+    },
+    "words.write_which_value": {
+      label: "Hỏi lại giá trị mới cần ghi",
+      help: ASSISTANT_HELP,
+    },
+    "words.write_no_so": { label: "Đơn chưa có số SO trên Bravo" },
+    "words.write_orders_only": { label: "Chỉ ghi Bravo từ đơn hàng có SO" },
+    "words.write_done": {
+      label: "Đã gửi đề xuất ghi Bravo",
+      help: ASSISTANT_HELP,
+    },
     "words.work_head": {
       label: "Mở đầu danh sách việc đang chờ",
       help: ASSISTANT_HELP,

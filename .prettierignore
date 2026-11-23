@@ -24,3 +24,6 @@ evals/fixtures/
 # Words a model loads, versioned and pinned per tenant: a reflow is a new
 # version of what the model reads, so a skill changes only on purpose.
 configs/skills/
+# Held untouched with uncommitted work in it (Đạt, 2026-11-22); CI checks the
+# committed copy. Drop this line when the file is next committed on purpose.
+apps/web/e2e/sales-demo.spec.ts
