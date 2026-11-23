@@ -57,6 +57,23 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **GitHub, 2026-11-23 (Đạt: others will join the repo).** `main` pushed
+  (225 commits, public-repo guard clean) and `dev` created; ruleset "main and
+  dev" (id 27874374): PR only, 1 approval, code owner review (CODEOWNERS now
+  names `db/migrations/`, `scripts/deploy.sh`, `scripts/check_public_repo.py`),
+  last push approved, no force-push or deletion, admins bypass through a PR
+  only (a direct push measured refused, GH013). Required checks: the two
+  green CI jobs (contract/manifest, public-repo guard); Ruff, Prettier,
+  gitleaks full history, scaffold smoke and compose build red on `main` since
+  at least 11-12, each added once fixed. A push to `dev` runs `deploy.yml`
+  (no self-hosted runner yet; both runs cancelled). **Owed by Đạt:** going
+  private on GitHub Free for a personal account leaves the ruleset
+  unenforced (GitHub Pro or an organisation on Team keeps it); moving the
+  `PUBLIC_REPO_DENYLIST` secret to an environment with reviewers before a
+  collaborator gets write. **Incident:** a `git reset --hard` of mine wiped
+  the two uncommitted files; the e2e spec was rebuilt from the session's
+  edits, the rollout `.xlsx` only as the 11-10 Teams copy (Đạt to check).
+
 - **The plant's hosts (Đạt, 2026-11-09, corrected the same day).** DW runs
   on its own Ubuntu Server, as designed. Bravo runs on-prem on a separate
   Windows Server (it has a desktop and can reach wifi). VPN will likely be
