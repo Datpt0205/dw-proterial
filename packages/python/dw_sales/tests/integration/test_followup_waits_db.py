@@ -131,9 +131,9 @@ async def test_a_link_to_another_tenants_quote_reads_nothing_of_it(
     await _set(
         migrator,
         "INSERT INTO sales.quote_cases"
-        " (id, tenant_id, workspace_id, case_version, status, body, received_at)"
+        " (id, tenant_id, workspace_id, case_version, status, body, received_at, stage_versions)"
         " SELECT CAST(:theirs AS uuid), CAST(:tenant AS uuid), CAST(:workspace AS uuid),"
-        " case_version, 'priced', body, received_at"
+        " case_version, 'priced', body, received_at, stage_versions"
         " FROM sales.quote_cases WHERE id = :id",
         theirs=str(theirs),
         tenant=str(world.beta.tenant_id.value),
