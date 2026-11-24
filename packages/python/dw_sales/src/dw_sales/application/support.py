@@ -38,6 +38,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     Stored,
 )
+from dw_sales.application.shadow import label_reply_move
 from dw_sales.application.visibility import sees_case
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
@@ -199,8 +200,21 @@ async def save_order(
     approval_id: uuid.UUID | None = None,
 ) -> None:
     """The order's next state, its event and its audit row, in the open
-    transaction; the caller commits."""
+    transaction; the caller commits. A person's move labels what the reply
+    readers read in shadow (ticket 67), in the same transaction."""
     await work.orders.save(after, expected_version=before.case_version, event=event)
+    if run_id is None and before.status is not after.status:
+        await label_reply_move(
+            work,
+            context,
+            ids,
+            case_kind=CaseKind.ORDER,
+            case_id=after.case_id,
+            customer_code=after.customer_code,
+            from_status=before.status.value,
+            to_status=after.status.value,
+            at=event.occurred_at,
+        )
     await work.audit.append(
         audit_row(
             context,
@@ -228,6 +242,18 @@ async def save_quote(
     run_id: uuid.UUID | None = None,
 ) -> None:
     await work.quotes.save(after, expected_version=before.case_version, event=event)
+    if run_id is None and before.status is not after.status:
+        await label_reply_move(
+            work,
+            context,
+            ids,
+            case_kind=CaseKind.QUOTE,
+            case_id=after.case_id,
+            customer_code=after.customer_code,
+            from_status=before.status.value,
+            to_status=after.status.value,
+            at=event.occurred_at,
+        )
     await work.audit.append(
         audit_row(
             context,

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, Flex, Input, Typography } from "antd";
+import { Alert, Flex, Input, Select, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { errorMessage } from "../../../lib/error-message";
+import { INTENT_KIND } from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
@@ -14,6 +15,12 @@ import { GuardedButton } from "../_components/guarded-button";
 import { SCOPE } from "../_components/sales-frame";
 
 type Message = SalesSchemas["InboxMessageView"];
+type Kind = NonNullable<SalesSchemas["HandledRequest"]["kind"]>;
+
+const KINDS = Object.entries(INTENT_KIND).map(([value, label]) => ({
+  value: value as Kind,
+  label,
+}));
 
 /** The PICs' pool, as a routed message names it (`SALES_PIC_POOL`). */
 const POOL = "role:sales_pic";
@@ -38,6 +45,9 @@ export function HandledPanel({
   const name = usePeople();
   const { run, pending } = useAction();
   const [note, setNote] = useState("");
+  // What the mail was, one optional click (ticket 67): it teaches DW1, it
+  // routes nothing.
+  const [kind, setKind] = useState<Kind | null>(null);
   const [error, setError] = useState<unknown>(null);
   const d = message.disposition;
   const owner = (d.owner ?? "").toLowerCase();
@@ -55,6 +65,7 @@ export function HandledPanel({
     if (result.ok) {
       setError(null);
       setNote("");
+      setKind(null);
       onChanged();
     } else setError(result.error);
   };
@@ -109,6 +120,21 @@ export function HandledPanel({
         disabled={reason !== null}
         onChange={(e) => setNote(e.target.value)}
       />
+      <Flex vertical gap={2}>
+        <Typography.Text id={`kind-${message.message_id}`}>
+          Thư này là (không bắt buộc, giúp DW1 học phân loại thư)
+        </Typography.Text>
+        <Select<Kind>
+          aria-labelledby={`kind-${message.message_id}`}
+          allowClear
+          placeholder="Chọn loại thư"
+          options={KINDS}
+          value={kind ?? undefined}
+          disabled={reason !== null}
+          onChange={(value) => setKind(value ?? null)}
+          className="max-w-xs"
+        />
+      </Flex>
       {error ? (
         <Alert type="error" showIcon title={errorMessage(error)} />
       ) : null}
@@ -122,12 +148,13 @@ export function HandledPanel({
             after(
               await run(
                 id,
-                { note },
+                { note, kind },
                 (key) =>
                   salesApi().markHandled(
                     message.message_id,
                     note.trim() || null,
                     key,
+                    kind,
                   ),
                 `Đã đánh dấu thư ${ref} đã xử lý`,
               ),

@@ -1414,7 +1414,7 @@ def build_router(
     async def handled(
         message_id: _MessageId, body: HandledRequest, context: Ctx, svc: Svc, idem: Idem
     ) -> HandledView:
-        view = await svc.routed_mail.handle(context, message_id, body.note)
+        view = await svc.routed_mail.handle(context, message_id, body.note, body.kind)
         return await idem.record(view)
 
     # Whose mail an unknown sender's is (AI item 5): the model suggests from

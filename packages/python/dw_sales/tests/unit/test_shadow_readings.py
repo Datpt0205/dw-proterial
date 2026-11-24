@@ -14,12 +14,13 @@ import dataclasses
 import itertools
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from pydantic import ValidationError
 
 from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import system_actor
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import PlatformOrderRules
@@ -28,19 +29,34 @@ from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, DescriptionReader
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.routed_mail import HandledRequest
 from dw_sales.application.shadow import (
     SHADOW_KEPT_FOR,
     SHADOW_RETENTION_LANE,
     ShadowBudget,
     ShadowReadings,
     ShadowRetention,
+    label_reply_move,
 )
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
 from dw_sales.domain.orders import MappingStatus, OrderCase
-from dw_sales.domain.shadow import ShadowReading, item_key
+from dw_sales.domain.reply_intent import ProposedStep
+from dw_sales.domain.shadow import NO_STEP, REPLY_MOVES, ShadowReading, item_key
 from dw_sales.evals.descriptions import Replayed
-from dw_sales.evals.graders import AN, CALLERS
-from dw_sales.evals.world import ALPHA, BETA, NOW, MemoryStore, SampleSet, measured_gate, open_world
+from dw_sales.evals.graders import AN, CALLERS, GIANG
+from dw_sales.evals.recorded import Recorded
+from dw_sales.evals.replies import correction_case
+from dw_sales.evals.world import (
+    ALPHA,
+    BETA,
+    NOW,
+    MemoryStore,
+    SampleSet,
+    World,
+    measured_gate,
+    open_world,
+)
 from dw_sales.testing.followups import platform_zone
 
 from .test_model_reading import ANSWERS, CATALOG, INBOX, PLATFORM, REPO, RUN, SCOPE, _NoCases
@@ -176,8 +192,8 @@ async def test_shadow_is_on_by_default_and_only_for_a_step_with_a_consumer() -> 
     )
     gate, _ = measured_gate(REPO, SCOPE)
     readings = ShadowReadings(gate=gate, uow=MemoryStore(), clock=FixedClock(AT))
-    assert ModelStep.REPLY_INTENT not in SHADOW_STEPS
-    assert not await readings.shadows(SCOPE, PLATFORM, ModelStep.REPLY_INTENT)
+    assert ModelStep.REQUEST_HANDOFF not in SHADOW_STEPS
+    assert not await readings.shadows(SCOPE, PLATFORM, ModelStep.REQUEST_HANDOFF)
     assert await readings.shadows(SCOPE, PLATFORM, STEP)
 
 
@@ -215,8 +231,8 @@ def test_a_reading_names_its_own_item() -> None:
         ShadowReading.model_validate(
             {
                 **values,
-                "step": ModelStep.REPLY_INTENT,
-                "item_key": item_key("M36", "M36-A1", 1, ModelStep.REPLY_INTENT),
+                "step": ModelStep.REQUEST_HANDOFF,
+                "item_key": item_key("M36", "M36-A1", 1, ModelStep.REQUEST_HANDOFF),
             }
         )
 
@@ -345,3 +361,182 @@ async def test_readings_past_the_term_are_dropped_in_their_own_scope_and_audited
         "actor": f"system:{SHADOW_RETENTION_LANE}",
     }
     assert event.actor_id == system_actor(SHADOW_RETENTION_LANE)
+
+
+# ------------------------------------------- a reply, labelled by the move --
+
+
+def test_every_move_a_reply_proposes_is_one_case_move() -> None:
+    """`REPLY_MOVES` holds each `ProposedStep` that moves a case once;
+    `await_revised_po` moves nothing and labels nothing."""
+    moves = list(REPLY_MOVES.values())
+    assert len(moves) == len(set(moves))
+    assert set(moves) == set(get_args(ProposedStep)) - {"await_revised_po"}
+
+
+async def _replied(intent: str, *, reply_on: bool = False) -> tuple[World, uuid.UUID]:
+    """M04 sent back to the customer, then M42 (the customer's reply) read
+    by the one call answering ``intent``, the reply readers off and shadow
+    on (or the one call on, with ``reply_on``)."""
+    keeps = Recorded(
+        raw={"intents": [{"quote_spans": ["Please keep the PO as it is."], "intent": intent}]}
+    )
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=keeps, shadow=True)
+    current = world.policies.order_rules
+    rules = current.model_copy(
+        update={
+            "policy_version": "1.92.0",
+            "model_assist": current.model_assist.model_copy(
+                update={
+                    "skill_intents": False,
+                    "thread_agent": False,
+                    "reply_intent": reply_on,
+                    "shadow": True,
+                }
+            ),
+        }
+    )
+    world.store.rule_versions.seed_approved(ALPHA.tenant_id.value, rules)
+    case_id = await correction_case(world)
+    await world.process_each(AN, ["M42"])
+    return world, case_id
+
+
+def _reply_labels(world: World) -> list[Any]:
+    return [c for c in world.store.state(ALPHA).labelled_cases if c.field == "next_step"]
+
+
+@pytest.mark.parametrize(
+    ("intent", "proposed", "verdict"),
+    [("rejects", "resume_review", "confirmed"), ("asks", NO_STEP, "corrected")],
+)
+async def test_the_pics_move_after_a_reply_labels_what_the_reader_read_in_shadow(
+    intent: str, proposed: str, verdict: str
+) -> None:
+    world, case_id = await _replied(intent)
+    # Nothing of it shows on the case: the reply carries no reading.
+    (reply,) = (await world.services.orders.get(AN.context(), case_id)).replies
+    assert (reply.outcome, reply.proposal) == (None, None)
+    (held,) = world.store.state(ALPHA).shadow_readings.values()
+    assert (held.step, held.case_id, held.proposed) == (ModelStep.REPLY_INTENT, case_id, proposed)
+
+    await world.services.order_commands.resume_review(
+        AN.context(), case_id, case_version=world.order(case_id).case_version
+    )
+
+    (label,) = _reply_labels(world)
+    assert (label.step, label.verdict, label.proposed, label.kept, label.gate) == (
+        ModelStep.REPLY_INTENT,
+        verdict,
+        proposed,
+        "resume_review",
+        "shadow",
+    )
+    assert (label.case_id, label.message_id, label.decided_by) == (case_id, "M42", AN.user_id)
+    assert world.store.state(ALPHA).shadow_readings == {}
+
+
+async def test_a_reader_on_and_passing_reads_as_itself_and_keeps_nothing_in_shadow() -> None:
+    world, case_id = await _replied("rejects", reply_on=True)
+    (reply,) = (await world.services.orders.get(AN.context(), case_id)).replies
+    assert reply.outcome == "read"
+    assert world.store.state(ALPHA).shadow_readings == {}
+
+
+async def test_a_lanes_move_or_a_move_no_reply_proposes_labels_nothing() -> None:
+    world, case_id = await _replied("rejects")
+    lane = AccessContext(
+        tenant_id=ALPHA.tenant_id.value,
+        workspace_id=ALPHA.workspace_id.value,
+        principal_id=uuid.uuid4(),
+        roles=frozenset(),
+        scopes=frozenset(),
+        plan_id="background",
+    )
+    async with world.store(ALPHA) as work:
+        for context, before, after in (
+            (lane, "correction_requested", "in_review"),
+            (AN.context(), "in_review", "prepared"),
+        ):
+            await label_reply_move(
+                work,
+                context,
+                Uuid4Generator(),
+                case_kind=CaseKind.ORDER,
+                case_id=case_id,
+                customer_code="KMH",
+                from_status=before,
+                to_status=after,
+                at=AT,
+            )
+        await work.commit()
+    assert _reply_labels(world) == []
+    assert len(world.store.state(ALPHA).shadow_readings) == 1
+
+
+# ---------------------------------------- a mail's kind, labelled on handled --
+
+
+async def _unread_mail(kind: str, *, shadow: bool = True) -> World:
+    """M11 (a customer asking to move a delivery) with every mail-reading
+    step off and shadow on: it goes to a person, read in shadow as ``kind``."""
+    scripted = Recorded(raw={"language": "en", "referenced_number_spans": [], "kind": kind})
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=scripted, shadow=True)
+    current = world.policies.order_rules
+    off = {"message_intent": False, "skill_mail_kinds": False, "triage_card": False}
+    rules = current.model_copy(
+        update={
+            "policy_version": "1.93.0",
+            "model_assist": current.model_assist.model_copy(update={**off, "shadow": shadow}),
+        }
+    )
+    world.store.rule_versions.seed_approved(ALPHA.tenant_id.value, rules)
+    seen = await world.process_each(AN, ["M11"])
+    disposition, _ = seen["M11"]
+    assert (disposition.kind, disposition.reason) == ("routed_to_sales", "other")
+    return world
+
+
+def _kind_labels(world: World) -> list[Any]:
+    return [c for c in world.store.state(ALPHA).labelled_cases if c.field == "kind"]
+
+
+@pytest.mark.parametrize(
+    ("picked", "verdict"), [("delivery_change", "confirmed"), ("complaint", "corrected")]
+)
+async def test_the_kind_picked_as_a_mail_is_marked_handled_labels_its_shadow_reading(
+    picked: str, verdict: str
+) -> None:
+    world = await _unread_mail("delivery_change")
+    (held,) = world.store.state(ALPHA).shadow_readings.values()
+    assert (held.step, held.proposed) == (ModelStep.MESSAGE_INTENT, "delivery_change")
+
+    await world.services.routed_mail.handle(GIANG.context(), "M11", None, picked)
+
+    (label,) = _kind_labels(world)
+    assert (label.step, label.verdict, label.proposed, label.kept, label.gate) == (
+        ModelStep.MESSAGE_INTENT,
+        verdict,
+        "delivery_change",
+        picked,
+        "shadow",
+    )
+    assert world.store.state(ALPHA).shadow_readings == {}
+
+
+async def test_marked_handled_with_no_kind_labels_nothing_and_keeps_the_reading() -> None:
+    world = await _unread_mail("delivery_change")
+    await world.services.routed_mail.handle(GIANG.context(), "M11", None)
+    assert _kind_labels(world) == []
+    assert len(world.store.state(ALPHA).shadow_readings) == 1
+
+
+def test_a_kind_outside_the_platforms_is_refused_at_the_door() -> None:
+    assert HandledRequest.model_validate({"kind": "complaint"}).kind == "complaint"
+    with pytest.raises(ValidationError):
+        HandledRequest.model_validate({"kind": "anything"})
+
+
+async def test_with_shadow_off_a_mail_to_a_person_is_not_read() -> None:
+    world = await _unread_mail("delivery_change", shadow=False)
+    assert world.store.state(ALPHA).shadow_readings == {}

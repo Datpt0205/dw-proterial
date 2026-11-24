@@ -1,6 +1,6 @@
 # 67 — Shadow mode shared by every model step
 
-Status: in-progress (2026-11-24): slice 1 done (the engine and `description_attributes`), one switch on by default with an hourly cap; next, reply reading
+Status: in-progress (2026-11-24): slices 1-2 done (engine, `description_attributes`, both reply readers, `message_intent`), one switch on by default with an hourly cap; left `po_body_extraction` and the steps a person asks for
 
 ## Why
 
@@ -96,5 +96,27 @@ hand-off: a cold start); intake-time steps only (drafts, SalesOrder, chat,
 internal change are asked by a person). The reply agent's chat turns are
 not counted by the run's wrapper.
 
-Left: reply reading, `message_intent`, `po_body_extraction` as shadow
-consumers; a line on the process page showing each step's shadow labels.
+Slice 2, same day (Đạt: "đồng ý, làm 1 rồi 2"):
+
+- **Reply reading**: a customer's reply attached to a case is read in
+  shadow by each reply reader not on and passing (`reply_intent` and
+  `skill_intents` side by side, `REPLY_SHADOW_STEPS`), keeping the move it
+  proposes for the case's status (`proposed_step`, or `none`) with the case
+  (migration `af64f9143d66`: `case_id` and its index). A person's move on
+  the case (`save_order`/`save_quote`, every order and quote change passes
+  there) labels the newest reading per reader through `REPLY_MOVES` (the
+  case move each `ProposedStep` is, held to `ProposedStep` by a test); a
+  lane's move (no scope) and a move no reply proposes label nothing. Known
+  bias: a reading whose case never takes a reply move is dropped unlabelled.
+- **Mail kind**: a mail going to a person is read in shadow by
+  `message_intent`; marking it handled takes an optional kind
+  (`HandledRequest.kind`, the platform's `IntentKind`, one click on the
+  inbox panel "Thư này là", routing nothing) which labels the reading.
+- Errors of a shadow reading (model down, ceiling, budget, quota) never
+  fail the mail.
+- Tests: unit 22 (+ web 1), integration 8; mutation 8/8 red (one test added
+  after a green mutation: shadow off reads no mail kind).
+
+Left: `po_body_extraction` (off, a PO in the mail is no case: no decision
+to label yet); the steps a person asks for (drafts, SalesOrder, chat); a
+line on the process page showing each step's shadow labels.

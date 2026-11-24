@@ -31,11 +31,13 @@ from datetime import datetime, timedelta
 from typing import Final, Protocol
 
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import lane_audit_event
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
-from dw_sales.domain.shadow import ShadowReading
+from dw_sales.domain.shadow import REPLY_MOVES, REPLY_SHADOW_STEPS, ShadowReading, shadow_label
 
 __all__ = [
     "SHADOW_KEPT_FOR",
@@ -45,6 +47,7 @@ __all__ = [
     "ShadowReadingRepositoryPort",
     "ShadowReadings",
     "ShadowRetention",
+    "label_reply_move",
 ]
 
 _LOG = logging.getLogger("dw_sales.shadow")
@@ -66,6 +69,13 @@ class ShadowReadingRepositoryPort(Protocol):
 
     async def take(self, step: ModelStep, item_key: str) -> ShadowReading | None:
         """``step``'s reading of the item, deleted as it is returned."""
+        ...
+
+    async def take_for_case(
+        self, steps: Sequence[ModelStep], case_id: uuid.UUID
+    ) -> Sequence[ShadowReading]:
+        """``steps``' readings of the case's items, deleted as they are
+        returned: a move on the case labels the newest and ends the rest."""
         ...
 
     async def prune(self, before: datetime) -> int:
@@ -173,3 +183,49 @@ class ShadowRetention:
                 )
             await work.commit()
         return dropped
+
+
+async def label_reply_move(
+    work: SalesUnitOfWork,
+    context: AccessContext,
+    ids: IdGenerator,
+    *,
+    case_kind: CaseKind,
+    case_id: uuid.UUID,
+    customer_code: str,
+    from_status: str,
+    to_status: str,
+    at: datetime,
+) -> None:
+    """A person's move on a case, labelling what each reply reader read in
+    shadow (ticket 67): the move a reading proposed beside the move taken,
+    the newest reading per reader. A move no reply proposes (`REPLY_MOVES`)
+    labels nothing and leaves the readings; a lane's move (no scope: the
+    silence that implies an agreement) labels nothing either: only a person
+    decides what a reply meant."""
+    if not context.scopes:
+        return
+    move = REPLY_MOVES.get((case_kind, from_status, to_status))
+    if move is None:
+        return
+    taken = await work.shadow_readings.take_for_case(REPLY_SHADOW_STEPS, case_id)
+    newest: dict[ModelStep, ShadowReading] = {}
+    for reading in taken:
+        held = newest.get(reading.step)
+        if held is None or reading.read_at > held.read_at:
+            newest[reading.step] = reading
+    labels = [
+        shadow_label(
+            reading,
+            move,
+            lane=case_kind,
+            case_id=case_id,
+            customer_code=customer_code,
+            at=at,
+            by=context.principal_id,
+            new_id=ids.new_uuid,
+        )
+        for _, reading in sorted(newest.items())
+    ]
+    if labels:
+        await work.labelled_cases.append(labels)

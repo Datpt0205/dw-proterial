@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Final, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -26,9 +27,21 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, mod
 from dw_sales.domain.catalog import CustomerCode
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.labelled_cases import LabelledCase, NewId
+from dw_sales.domain.message_intent import IntentKind, IntentReading
 from dw_sales.domain.order_checks import SHADOW_STEPS, MappedLine, ModelStep
+from dw_sales.domain.reply_intent import ProposedStep, ReplyReading, proposed_step
 
-__all__ = ["ShadowReading", "description_shadows", "item_key", "shadow_label"]
+__all__ = [
+    "NO_STEP",
+    "REPLY_MOVES",
+    "REPLY_SHADOW_STEPS",
+    "ShadowReading",
+    "description_shadows",
+    "item_key",
+    "kind_shadow",
+    "reply_shadow",
+    "shadow_label",
+]
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 _VERSION = r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$"
@@ -63,6 +76,9 @@ class ShadowReading(BaseModel):
     rules: str | None = Field(pattern=_VERSION)
     confidence: float | None = Field(ge=0.0, le=1.0)
     read_at: AwareDatetime
+    # The case the item belongs to, where the decision that labels it is
+    # taken on the case and not on the item (a reply's next move).
+    case_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _a_shadow_step(self) -> Self:
@@ -146,3 +162,93 @@ def description_shadows(
             )
         )
     return readings
+
+
+# ------------------------------------------------------------ a reply's move --
+
+# The readers of a customer's reply that read it in shadow side by side.
+REPLY_SHADOW_STEPS: Final = (ModelStep.REPLY_INTENT, ModelStep.SKILL_INTENTS)
+# A reading that proposes no move: the PIC taking one is a correction of it.
+NO_STEP: Final = "none"
+# The move a PIC takes on a case, by the case's kind and its status before
+# and after, as each `ProposedStep` is that move (`reply_intent.ProposedStep`
+# says which method; a test holds the two together). `await_revised_po`
+# moves nothing, so nothing here labels it.
+REPLY_MOVES: Final[Mapping[tuple[CaseKind, str, str], ProposedStep]] = MappingProxyType(
+    {
+        (CaseKind.ORDER, "correction_requested", "in_review"): "resume_review",
+        (CaseKind.ORDER, "in_review", "correction_requested"): "request_correction",
+        (CaseKind.ORDER, "confirmation_sent", "confirmed"): "record_accepted",
+        (CaseKind.ORDER, "confirmation_sent", "change_review"): "record_declined",
+        (CaseKind.QUOTE, "spec_discussion", "design_replied"): "settle_spec",
+        (CaseKind.QUOTE, "design_replied", "spec_discussion"): "discuss_spec",
+        (CaseKind.QUOTE, "spec_discussion", "declined"): "decline_customer_rejected_spec",
+    }
+)
+
+
+def reply_shadow(
+    step: ModelStep,
+    reading: ReplyReading,
+    *,
+    message_id: str,
+    case_kind: CaseKind,
+    case_id: uuid.UUID,
+    status: str,
+    at: AwareDatetime,
+    new_id: NewId,
+) -> ShadowReading | None:
+    """A customer's reply read in shadow by ``step``: the move its reading
+    proposes for the case in ``status`` (`proposed_step`), or `NO_STEP`.
+    None for a reading that read nothing."""
+    if reading.outcome != "read":
+        return None
+    proposed = proposed_step("customer", case_kind.value, status, reading)
+    return ShadowReading(
+        reading_id=new_id(),
+        step=step,
+        item_key=item_key(message_id, None, None, step),
+        message_id=message_id,
+        attachment_id=None,
+        line_no=None,
+        field="next_step",
+        proposed=proposed or NO_STEP,
+        prompt=reading.prompt,
+        model_profile=reading.model_profile,
+        rules=reading.rules,
+        confidence=None,
+        read_at=at,
+        case_id=case_id,
+    )
+
+
+# ----------------------------------------------------------- a mail's kind --
+
+
+def kind_shadow(
+    kind: IntentKind,
+    reading: IntentReading,
+    *,
+    message_id: str,
+    at: AwareDatetime,
+    new_id: NewId,
+) -> ShadowReading:
+    """A mail no reader understood, read in shadow by `message_intent`: the
+    kind it read (the platform's, the route it takes), for the kind the
+    person picks as they mark the mail handled."""
+    step = ModelStep.MESSAGE_INTENT
+    return ShadowReading(
+        reading_id=new_id(),
+        step=step,
+        item_key=item_key(message_id, None, None, step),
+        message_id=message_id,
+        attachment_id=None,
+        line_no=None,
+        field="kind",
+        proposed=kind,
+        prompt=reading.prompt,
+        model_profile=reading.model_profile,
+        rules=reading.rules,
+        confidence=None,
+        read_at=at,
+    )

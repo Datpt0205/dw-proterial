@@ -151,3 +151,40 @@ async def test_the_term_drops_old_readings_of_the_scope_only(
     assert await _take(uow, world.alpha, old.item_key) is None
     assert await _take(uow, world.alpha, young.item_key) == young
     assert await _take(uow, world.beta, old.item_key) is not None
+
+
+async def test_a_case_s_reply_readings_are_taken_together_by_its_scope_only(
+    uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    case_id = uuid.uuid4()
+    readings = [
+        ShadowReading(
+            reading_id=uuid.uuid4(),
+            step=step,
+            item_key=item_key("R42", None, None, step),
+            message_id="R42",
+            attachment_id=None,
+            line_no=None,
+            field="next_step",
+            proposed="resume_review",
+            prompt="sales.reply_intent@2.0.0",
+            model_profile="onprem",
+            rules="sales_order_rules@1.16.0",
+            confidence=None,
+            read_at=_AT,
+            case_id=case_id,
+        )
+        for step in (ModelStep.REPLY_INTENT, ModelStep.SKILL_INTENTS)
+    ]
+    await _keep(uow, world.alpha, *readings)
+    async with uow(world.beta) as work:
+        assert await work.shadow_readings.take_for_case(list(ModelStep), case_id) == []
+        await work.commit()
+    async with uow(world.alpha) as work:
+        taken = await work.shadow_readings.take_for_case(
+            [ModelStep.REPLY_INTENT, ModelStep.SKILL_INTENTS], case_id
+        )
+        await work.commit()
+    assert sorted(taken, key=lambda r: r.step.value) == sorted(readings, key=lambda r: r.step.value)
+    async with uow(world.alpha) as work:
+        assert await work.shadow_readings.take_for_case(list(ModelStep), case_id) == []

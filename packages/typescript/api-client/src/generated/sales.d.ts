@@ -4840,6 +4840,8 @@ export interface components {
          * @description The note a person may leave when they mark a message handled.
          */
         HandledRequest: {
+            /** Kind */
+            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | null;
             /** Note */
             note?: string | null;
         };

@@ -151,7 +151,19 @@ class ModelStep(StrEnum):
 # The steps whose reading can run in shadow (ticket 67): each has the two
 # places a shadow needs, where it reads and where a person decides. A step
 # joins here with them, never before (failure-modes #1).
-SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset({ModelStep.DESCRIPTION_ATTRIBUTES})
+SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset(
+    {
+        ModelStep.DESCRIPTION_ATTRIBUTES,
+        # A customer's reply on a case, by both readers side by side: the one
+        # call and DW1's agent with skills, labelled by the move the PIC
+        # takes next on the case.
+        ModelStep.REPLY_INTENT,
+        ModelStep.SKILL_INTENTS,
+        # A mail no reader understood, labelled by the kind the person picks
+        # as they mark it handled.
+        ModelStep.MESSAGE_INTENT,
+    }
+)
 
 
 class ModelAssist(BaseModel):

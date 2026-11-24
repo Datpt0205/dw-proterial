@@ -145,6 +145,7 @@ from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSe
 from dw_sales.application.runs import DecisionType, subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.shadow import ShadowReadings
 from dw_sales.application.skill_pick import PickModelPort
 from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -944,6 +945,15 @@ class _ShadowReadings:
 
     async def take(self, step: ModelStep, item_key: str) -> ShadowReading | None:
         return self._held.pop((step.value, item_key), None)
+
+    async def take_for_case(
+        self, steps: Sequence[ModelStep], case_id: uuid.UUID
+    ) -> Sequence[ShadowReading]:
+        wanted = {s.value for s in steps}
+        found = [
+            k for k, r in self._held.items() if r.case_id == case_id and r.step.value in wanted
+        ]
+        return [self._held.pop(k) for k in found]
 
     async def prune(self, before: datetime) -> int:
         old = [k for k, r in self._held.items() if r.read_at < before]
@@ -1797,6 +1807,7 @@ def open_world(
     skill_pick: PickModelPort | None = None,
     bravo_orders: BravoOrdersPort | None = None,
     bravo_commands: BravoCommandsPort | None = None,
+    shadow: bool = False,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1957,6 +1968,9 @@ def open_world(
         design_senders=quotation,
         # The quote cases opened from an order (ticket 09).
         linked_quotes=store,
+        # Shadow readings (ticket 67) where a test asks for them: a smoke's
+        # scripted model answers the calls its case expects, no others.
+        shadow=ShadowReadings(gate=readiness, uow=store, clock=clock) if shadow else None,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications(clock=clock)

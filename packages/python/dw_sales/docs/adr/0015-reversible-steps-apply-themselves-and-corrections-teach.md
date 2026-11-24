@@ -151,6 +151,8 @@ Decided:
 4. **Bounded**: a reading no one decides is dropped after `SHADOW_KEPT_FOR`
    (60 days) by the `sales_shadow_retention` lane.
 
-First step: `description_attributes`. Next: reply reading (two readers on
-the same message, labelled by the step Sales takes), `message_intent`,
-`po_body_extraction`.
+First step: `description_attributes`. Then (same day) both reply readers,
+labelled by the move the PIC takes on the case, and `message_intent`,
+labelled by the kind the person picks, optionally, as they mark the mail
+handled (a choice that routes nothing). `po_body_extraction` waits: with it
+off, a PO in the mail becomes no case, so no decision labels it.

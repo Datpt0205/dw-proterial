@@ -282,11 +282,18 @@ export class SalesApi {
   }
 
   /** A routed message marked handled, with an optional note: it leaves
-   * Việc cần làm and stays in the inbox (2026-10-27). */
-  markHandled(messageId: string, note: string | null, key: string) {
+   * Việc cần làm and stays in the inbox (2026-10-27). The optional kind is
+   * what the person says the mail was (ticket 67): it labels the model's
+   * shadow reading of it and routes nothing. */
+  markHandled(
+    messageId: string,
+    note: string | null,
+    key: string,
+    kind: SalesSchemas["HandledRequest"]["kind"] = null,
+  ) {
     return this.post<"/api/v1/sales/inbox/{message_id}/handled">(
       `/api/v1/sales/inbox/${enc(messageId)}/handled`,
-      { note },
+      { note, kind },
       key,
     );
   }
