@@ -196,7 +196,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             # Design's new code before reminding the PIC (ticket 06).
             _step(
                 StepId.O2,
-                _in(_ORDER, "model_assist.description_attributes"),
+                _in(_ORDER, "model_assist.description_attributes", "model_assist.shadow"),
                 _severities("code_unmapped", "code_ambiguous"),
                 _in(_FOLLOWUPS, "waiting_design_code"),
             ),

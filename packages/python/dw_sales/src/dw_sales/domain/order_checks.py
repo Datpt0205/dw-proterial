@@ -20,9 +20,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Final, Literal, NamedTuple, Self, assert_never
+from typing import Annotated, Final, Literal, NamedTuple, Self, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator, model_validator
 
 from dw_platform.domain.messages import MailAuthentication, is_domain, is_email_address
 from dw_sales.domain.anchors import SourceAnchor
@@ -148,6 +148,18 @@ class ModelStep(StrEnum):
     CASE_CHAT = "case_chat"
 
 
+# The steps whose reading can run in shadow (ticket 67): each has the two
+# places a shadow needs, where it reads and where a person decides. A step
+# joins here with them, never before (failure-modes #1).
+SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset({ModelStep.DESCRIPTION_ATTRIBUTES})
+# A step as `ModelAssist.shadow` lists it: its schema offers only the steps
+# above, so the rules editor never offers one the validator refuses.
+ShadowStep = Annotated[
+    ModelStep,
+    WithJsonSchema({"type": "string", "enum": sorted(s.value for s in SHADOW_STEPS)}),
+]
+
+
 class ModelAssist(BaseModel):
     """Which DW1 steps a model takes part in for the tenant (dw_sales ADR 0005).
 
@@ -268,6 +280,22 @@ class ModelAssist(BaseModel):
     # is refused until its live eval passed (`ModelReadiness.unready`). Off:
     # the chat states nothing and points to the case page's controls.
     case_chat: bool = True
+    # The steps that read in shadow while they are not on and passing (ticket
+    # 67, dw_sales ADR 0015 decision 4): the model reads where one is
+    # configured, its result is stored and applied nowhere, and the decision
+    # a person then takes labels it. Only steps with a shadow consumer
+    # (`SHADOW_STEPS`); none where a version does not say.
+    shadow: tuple[ShadowStep, ...] = Field(default=(), max_length=len(SHADOW_STEPS))
+
+    @field_validator("shadow")
+    @classmethod
+    def _shadow_steps(cls, steps: tuple[ModelStep, ...]) -> tuple[ModelStep, ...]:
+        if len(set(steps)) != len(steps):
+            raise ValueError("each step is listed in shadow once")
+        unknown = sorted(s.value for s in steps if s not in SHADOW_STEPS)
+        if unknown:
+            raise ValueError(f"no shadow reading is built for {', '.join(unknown)}")
+        return steps
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

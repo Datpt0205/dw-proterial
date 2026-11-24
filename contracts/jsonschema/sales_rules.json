@@ -2221,6 +2221,18 @@
             "title": "Salesorder Skill",
             "type": "boolean"
           },
+          "shadow": {
+            "default": [],
+            "items": {
+              "enum": [
+                "description_attributes"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1,
+            "title": "Shadow",
+            "type": "array"
+          },
           "skill_document_forms": {
             "default": false,
             "title": "Skill Document Forms",

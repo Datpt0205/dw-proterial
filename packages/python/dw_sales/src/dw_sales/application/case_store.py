@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from dw_sales.application.labelled_cases import LabelledCaseLogPort
     from dw_sales.application.overview_ports import OverviewReadPort
     from dw_sales.application.rules import RuleVersionStorePort
+    from dw_sales.application.shadow import ShadowReadingRepositoryPort
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -718,6 +719,11 @@ class SalesUnitOfWork(Protocol):
     # decision it records.
     @property
     def labelled_cases(self) -> LabelledCaseLogPort: ...
+
+    # What a step read in shadow (ticket 67), taken with the decision that
+    # labels it.
+    @property
+    def shadow_readings(self) -> ShadowReadingRepositoryPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

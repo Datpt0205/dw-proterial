@@ -279,6 +279,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "model_assist.description_attributes": {
       label: "Đọc mô tả hàng chưa có trong convert list",
     },
+    "model_assist.shadow": {
+      label: "Bước chạy thử ngầm (shadow)",
+      help: "Bước đang tắt hoặc chưa đạt đánh giá vẫn đọc như thật, nhưng không áp dụng và không hiện gì. Khi Sales tự quyết, DW1 so với kết quả đọc ngầm để đo độ đúng trên việc thật trước khi bật bước. Tốn lượt gọi mô hình.",
+      item: "Bước",
+    },
     "model_assist.message_intent": {
       label: "Phân loại thư không có tài liệu đọc được",
     },
@@ -1119,6 +1124,8 @@ export function lockReason(reason: LockReason): string {
  * mean the same wherever they appear.
  */
 const VALUES: Record<string, string> = {
+  // A model step named in `model_assist.shadow` (ticket 67).
+  description_attributes: "Đọc mô tả hàng chưa có trong convert list",
   // The Bravo write kinds (`sales_bravo_writes`, ticket 63).
   "so.line.set_confirmed_date@1": "Đổi ngày XN giao hàng của một dòng SO",
   "so.line.set_quantity@1": "Đổi số lượng của một dòng SO",

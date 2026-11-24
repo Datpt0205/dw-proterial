@@ -179,6 +179,7 @@ from dw_sales.application.salesorder_pairs import (
 from dw_sales.application.salesorder_skill_drafts import SalesOrderSkillDrafter
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.shadow import ShadowReadings, ShadowRetention
 from dw_sales.application.skill_pick import PickModelPort, SkillPicker
 from dw_sales.application.skill_replay import SkillReplayer
 from dw_sales.application.skills import (
@@ -287,6 +288,9 @@ class Dw1Mount:
     # What drops a customer's worked pairs past the tenant's term (ticket
     # 41): built wherever DW1 is, since pairs are kept with or without a model.
     salesorder_pairs_retention: WorkedPairRetention | None = None
+    # What drops readings made in shadow no person decided past their term
+    # (ticket 67): built wherever DW1 is.
+    shadow_retention: ShadowRetention | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -578,6 +582,9 @@ def build_dw1(
         ),
         model_steps=readiness,
         autonomy=AutonomyGate(thresholds),
+        # Steps the tenant lists in shadow read and keep for a person's
+        # decision to label (ticket 67).
+        shadow=ShadowReadings(gate=readiness, uow=uow, clock=clock),
         uploads=stored,
         design_senders=quotation,
         # The quote cases opened from an order (ticket 09).
@@ -881,6 +888,7 @@ def build_dw1(
         salesorder_pairs_retention=WorkedPairRetention(
             pairs=catalog_uow, rules=book, clock=clock, ids=ids
         ),
+        shadow_retention=ShadowRetention(uow=uow, clock=clock, ids=ids),
         prompt_optimiser=(
             None
             if interpretation is None or finder is None or not security
