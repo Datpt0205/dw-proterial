@@ -1037,6 +1037,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "dbf855e45710e0e92e3bd2db46bd48ecda18eb9c9d0282625ed979f4eebed794",
+      "dataset_id": "sales_salesorder_skill_draft",
+      "files": [
+        {
+          "checksum": "99c81af4a09343b3277789a67ea522bb68d45cf9657f8a7a523bc15771f6878d",
+          "path": "evals/expected/sales_salesorder_skill_draft.json"
+        },
+        {
+          "checksum": "e44670ea6cd1e91c5aa68cc3c28466e76798c4c78f5b7f8c39520aeae0730965",
+          "path": "evals/fixtures/cases/sales_salesorder_skill_draft.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "37bb8ede7c1ef26fca66d4aa147357d76f7de2fd9916942302018cb57a04b7a2",
       "dataset_id": "sales_screening_followups",
       "files": [
@@ -1179,7 +1194,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "9db93c9fb7e4e46141b9fd81ec251e367fcf9522",
+  "git_sha": "07dc5d053b1ab0773cdbe4e6875d63b0049f3c80",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1756,6 +1771,11 @@
     {
       "checksum": "dc472ac8e7e5004816e07462dbb749724b4f4b8b62adefeb48d03ca0841fbdae",
       "prompt_id": "sales.salesorder_rules_proposal",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "ef32ec0595a464654e12cdc6f4b83f7aa0c0c70ca3df1cf1d5342cbfc6138d46",
+      "prompt_id": "sales.salesorder_skill_draft",
       "version": "1.0.0"
     },
     {
