@@ -36,7 +36,7 @@ from dw_sales.application.activity_ports import (
     activity_cases,
 )
 from dw_sales.application.autonomy import applied_by
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.confirmations import confirmation_copy
 from dw_sales.application.customer_notations import NotationLedgerPort, learn
 from dw_sales.application.line_trail import CaseBravoWritesPort, LineTrailView, line_trail
@@ -82,6 +82,7 @@ from dw_sales.domain.labelled_cases import (
     po_value_label,
     undo_label,
 )
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -93,6 +94,7 @@ from dw_sales.domain.orders import (
     Open,
     OrderCase,
 )
+from dw_sales.domain.shadow import item_key, shadow_label
 
 DispositionChoice = Literal["open", "accepted", "corrected_by_sales", "ask_customer"]
 
@@ -271,6 +273,34 @@ class OrderCommands:
             labels=labels,
         )
 
+    async def _shadow_label(
+        self,
+        work: SalesUnitOfWork,
+        case: OrderCase,
+        line_no: int,
+        prv_code: str,
+        at: datetime,
+        by: uuid.UUID,
+    ) -> LabelledCase | None:
+        """What Sales confirmed of a line a description reading read in
+        shadow (ticket 67): the reading taken, labelled with the code kept.
+        None where nothing read the line in shadow."""
+        step = ModelStep.DESCRIPTION_ATTRIBUTES
+        key = item_key(case.message_id, case.document.attachment_id, line_no, step)
+        reading = await work.shadow_readings.take(step, key)
+        if reading is None:
+            return None
+        return shadow_label(
+            reading,
+            [prv_code],
+            lane=CaseKind.ORDER,
+            case_id=case.case_id,
+            customer_code=case.customer_code,
+            at=at,
+            by=by,
+            new_id=self.ids.new_uuid,
+        )
+
     async def confirm_mapping(
         self,
         context: AccessContext,
@@ -296,7 +326,7 @@ class OrderCommands:
             # candidates (ticket 43), with the decision.
             label = mapping_label(
                 case, line_no, prv_code, new_id=self.ids.new_uuid, at=now, by=actor.user_id
-            )
+            ) or await self._shadow_label(work, case, line_no, prv_code, now, actor.user_id)
             if label is not None:
                 await work.labelled_cases.append([label])
             await work.commit()

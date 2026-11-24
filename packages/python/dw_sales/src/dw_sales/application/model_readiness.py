@@ -304,6 +304,12 @@ class ModelReadiness:
     async def check(self, scope: SalesScope, step: ModelStep) -> StepReadiness:
         return await runtime.ReadinessCheck(BARS, self.measurements, self.models).check(scope, step)
 
+    async def configured(self, scope: SalesScope, step: ModelStep) -> bool:
+        """Whether a model is configured for ``step`` for the tenant now,
+        measured or not: what a step reading in shadow needs (ticket 67).
+        Unreadable is not configured: fail closed."""
+        return (await self.check(scope, step)).model is not None
+
     async def allows(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
         if not rules.model_assist.on(step):
             return False

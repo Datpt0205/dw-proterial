@@ -121,3 +121,33 @@ from real runs where it can; keep latency.
 
 - Decided above. Left: the latency budget per step (proposed: p95 at most
   twice its measured one-call p95 on Strata).
+
+## Addendum 2026-11-24: shadow for a step that is off (ticket 67)
+
+Đạt, 2026-11-24: "làm theo đề xuất, bắt đầu cơ chế shadow dùng chung đi".
+Decision 4's shadow mode existed only inside a step that was on (a result
+cleared its threshold while the step was stopped). A step that is off, or on
+and not yet attested, never ran, so no person's decision ever labelled it,
+and the plant's real mail measured nothing. 18 of 19 steps sat there.
+
+Decided:
+
+1. **A third state per step**: `model_assist.shadow` lists the steps that
+   read while they are not on and passing, wherever a model is configured
+   for them. A reading in shadow is kept (`sales.shadow_readings`) and
+   applied nowhere, shown nowhere. The tenant chooses: it costs model calls.
+2. **The person's decision labels it**: where the person makes the decision
+   the step would have proposed, the step's own service takes the reading
+   (deleted as it is labelled) and writes a labelled case gated ``shadow``
+   in the decision's transaction. Those labels count toward the step's
+   threshold and the head's view like any gated result's, so a step can
+   earn its threshold on real work before it is ever turned on.
+3. **One engine, two lines per step**: where it reads, and where the person
+   decides. A step is listed as shadow-capable (`SHADOW_STEPS`) only with
+   both; the rules refuse any other.
+4. **Bounded**: a reading no one decides is dropped after `SHADOW_KEPT_FOR`
+   (60 days) by the `sales_shadow_retention` lane.
+
+First step: `description_attributes`. Next: reply reading (two readers on
+the same message, labelled by the step Sales takes), `message_intent`,
+`po_body_extraction`.

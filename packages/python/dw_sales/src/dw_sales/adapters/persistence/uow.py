@@ -41,6 +41,7 @@ from dw_sales.adapters.persistence.records import (
     SqlSourceServed,
     SqlWorkerSwitch,
 )
+from dw_sales.adapters.persistence.shadow_readings import SqlShadowReadings
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.ports import SalesScope
 
@@ -71,6 +72,7 @@ class SqlSalesUnitOfWork:
     change_requests: SqlChangeRequests
     # What a person kept of a model's proposal (ticket 43): `LabelledCaseLogPort`.
     labelled_cases: SqlLabelledCaseLog
+    shadow_readings: SqlShadowReadings
     # An SO line's change written into Bravo (ticket 53): `BravoLineWriteStorePort`.
     bravo_writes: SqlBravoLineWrites
     audit: AuditRepositoryPort
@@ -121,6 +123,7 @@ class SqlSalesUnitOfWork:
         self.outbound = SqlOutboundMails(session, scope)
         self.change_requests = SqlChangeRequests(session, scope)
         self.labelled_cases = SqlLabelledCaseLog(session, scope)
+        self.shadow_readings = SqlShadowReadings(session, scope)
         self.bravo_writes = SqlBravoLineWrites(session, scope)
         self.audit = self._audit(session)
         return self

@@ -126,6 +126,8 @@ _SALES_TABLES = (
     "sales.step_thresholds",
     # Migration e1b1e0cadb66 (ticket 40): a proposed skill version's replay.
     "sales.skill_replays",
+    # Migration a201f3d7ad6f (ticket 67): what a step read in shadow.
+    "sales.shadow_readings",
     # Migration 711e8b760139 (ticket 41): a customer's worked pairs.
     "sales.salesorder_pairs",
     # Migration 99ae8f7eb765 (ticket 37): each customer's notation record.
@@ -252,6 +254,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     # A proposed skill version's replay (ticket 40): a fact about one version.
     assert {verb for tbl, verb in held if tbl == "skill_replays"} == {"SELECT", "INSERT"}
+    # A shadow reading is taken (deleted) when labelled, never rewritten.
+    assert {verb for tbl, verb in held if tbl == "shadow_readings"} == {
+        "SELECT",
+        "INSERT",
+        "DELETE",
+    }
     # A customer's worked pair (ticket 41): a PO and the file the PIC made,
     # never changed; withdrawn by a person or dropped past the tenant's term
     # (migration 985e4fa0cd4f).

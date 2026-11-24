@@ -163,6 +163,7 @@ from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.order_quotes import SETTLED
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.shadow import ShadowReading
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.evals.recorded import ScriptedPick
@@ -362,6 +363,9 @@ class _ScopeState:
     change_requests: dict[uuid.UUID, ChangeRequest] = field(default_factory=dict)
     # What a person kept of a model's proposal (ticket 43), in the order written.
     labelled_cases: list[LabelledCase] = field(default_factory=list)
+    # What a step read in shadow (ticket 67), by step and item, until a
+    # decision takes it.
+    shadow_readings: dict[tuple[str, str], ShadowReading] = field(default_factory=dict)
     # Each step's threshold per prompt and model profile (ticket 44): what
     # the lane last stored, committed at once as the lane's own transaction.
     thresholds: dict[VersionKey, StepThreshold] = field(default_factory=dict)
@@ -386,6 +390,7 @@ class _ScopeState:
             sent=dict(self.sent),
             change_requests=dict(self.change_requests),
             labelled_cases=list(self.labelled_cases),
+            shadow_readings=dict(self.shadow_readings),
             thresholds=dict(self.thresholds),
         )
 
@@ -920,6 +925,33 @@ class _LabelledCases:
         self._held.extend(cases)
 
 
+class _ShadowReadings:
+    """`ShadowReadingRepositoryPort` over one transaction's state: one
+    reading per step and item, the first kept, as `uq_shadow_readings_item`
+    holds it; taken readings deleted as they are returned."""
+
+    def __init__(self, held: dict[tuple[str, str], ShadowReading]) -> None:
+        self._held = held
+
+    async def keep(self, readings: Sequence[ShadowReading]) -> int:
+        kept = 0
+        for reading in readings:
+            key = (reading.step.value, reading.item_key)
+            if key not in self._held:
+                self._held[key] = reading
+                kept += 1
+        return kept
+
+    async def take(self, step: ModelStep, item_key: str) -> ShadowReading | None:
+        return self._held.pop((step.value, item_key), None)
+
+    async def prune(self, before: datetime) -> int:
+        old = [k for k, r in self._held.items() if r.read_at < before]
+        for key in old:
+            del self._held[key]
+        return len(old)
+
+
 class _Outbound:
     """`OutboundMailStorePort` over one transaction's state: one active mail
     per artifact, as `uq_outbound_mails_active_artifact` holds it."""
@@ -990,6 +1022,7 @@ class _Work:
         self.outbound = _Outbound(state.outbound)
         self.change_requests = _ChangeRequests(state.change_requests)
         self.labelled_cases = _LabelledCases(state.labelled_cases)
+        self.shadow_readings = _ShadowReadings(state.shadow_readings)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)

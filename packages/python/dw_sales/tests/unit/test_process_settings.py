@@ -396,6 +396,7 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.skill_handoffs"): model,
         (RuleKey.ORDER_RULES, "model_assist.change_request"): model,
         (RuleKey.ORDER_RULES, "model_assist.description_attributes"): model,
+        (RuleKey.ORDER_RULES, "model_assist.shadow"): model,
         (RuleKey.ORDER_RULES, "model_assist.layout_proposal"): model,
         (RuleKey.ORDER_RULES, "model_assist.salesorder_skill"): model,
         (RuleKey.ORDER_RULES, "model_assist.rfq_extraction"): model,
