@@ -278,7 +278,7 @@ class ModelAssist(BaseModel):
     # while it is not on and passing (ticket 67, dw_sales ADR 0015 decision
     # 4): the model reads where one is configured, its result is stored and
     # applied nowhere, and the decision a person then takes labels it. On
-    # where a version does not say (Đạt, 2026-11-24: one switch, not a list).
+    # where a version does not say (decided 2026-11-24: one switch, not a list).
     shadow: bool = True
     # The most model calls shadow readings may make in an hour, for the whole
     # tenant: they never take the model from work that is on. Past it, a step
