@@ -2,10 +2,12 @@
 decision 4; the reading is `domain.shadow.ShadowReading`).
 
 - **When a step reads in shadow** (`ShadowReadings.shadows`): the tenant's
-  rules list it in `model_assist.shadow`, it is not on and passing (the
-  caller asks its gate first: on and passing, the step runs as itself), and
-  a model is configured for it (`ShadowGatePort`). The tenant decides what
-  is spent: a step in shadow costs its model calls and applies nothing.
+  `model_assist.shadow` is on (it is unless a version turns it off), the
+  step has a shadow consumer (`SHADOW_STEPS`), it is not on and passing (the
+  caller asks its gate first: on and passing, the step runs as itself), a
+  model is configured for it (`ShadowGatePort`), and the tenant's hour still
+  has calls left (`ShadowBudget`, `model_assist.shadow_calls_per_hour`): a
+  reading in shadow never takes the model from work that is on.
 - **Kept** (`ShadowReadings.keep`) in a transaction of its own while the
   step's caller still holds the mail: a reading of a mail no case comes of
   is dropped with the term, never shown.
@@ -22,8 +24,9 @@ The log carries ids and counts, never a value.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Final, Protocol
 
@@ -31,12 +34,13 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.domain.audit import lane_audit_event
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.order_checks import ModelStep, OrderRules
+from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
 from dw_sales.domain.shadow import ShadowReading
 
 __all__ = [
     "SHADOW_KEPT_FOR",
     "SHADOW_RETENTION_LANE",
+    "ShadowBudget",
     "ShadowGatePort",
     "ShadowReadingRepositoryPort",
     "ShadowReadings",
@@ -75,6 +79,26 @@ class ShadowGatePort(Protocol):
     async def configured(self, scope: SalesScope, step: ModelStep) -> bool: ...
 
 
+@dataclass
+class ShadowBudget:
+    """The calls shadow readings made per tenant in the current hour, in this
+    process (the worker reads mail in one). One entry per tenant, replaced
+    when its hour turns: bounded by the tenants the process serves."""
+
+    used: dict[uuid.UUID, tuple[datetime, int]] = field(default_factory=dict)
+
+    def take(self, tenant_id: uuid.UUID, limit: int, now: datetime) -> bool:
+        """One call taken from the tenant's hour, or False with none left."""
+        hour = now.replace(minute=0, second=0, microsecond=0)
+        start, count = self.used.get(tenant_id, (hour, 0))
+        if start != hour:
+            count = 0
+        if count >= limit:
+            return False
+        self.used[tenant_id] = (hour, count + 1)
+        return True
+
+
 @dataclass(frozen=True)
 class ShadowReadings:
     """A step's side: whether it reads in shadow now, and where it keeps
@@ -82,15 +106,28 @@ class ShadowReadings:
 
     gate: ShadowGatePort
     uow: SalesUnitOfWorkFactory
-    # When a reading is read: what its term is counted from.
+    # When a reading is read: what its term and the hour's budget count from.
     clock: UtcClock
+    budget: ShadowBudget = field(default_factory=ShadowBudget)
 
     async def shadows(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
-        """Whether ``step`` reads in shadow for the tenant now; asked only
-        where the step is not on and passing (module docstring)."""
-        if step not in rules.model_assist.shadow:
+        """Whether ``step`` reads in shadow for the tenant now, a call taken
+        from its hour when it does; asked only where the step is not on and
+        passing (module docstring)."""
+        assist = rules.model_assist
+        if not assist.shadow or step not in SHADOW_STEPS:
             return False
-        return await self.gate.configured(scope, step)
+        if not await self.gate.configured(scope, step):
+            return False
+        if self.budget.take(scope.tenant_id.value, assist.shadow_calls_per_hour, self.clock.now()):
+            return True
+        _LOG.info(
+            "shadow reading of %s skipped for tenant %s: %s calls this hour",
+            step.value,
+            scope.tenant_id.value,
+            assist.shadow_calls_per_hour,
+        )
+        return False
 
     async def keep(self, scope: SalesScope, readings: Sequence[ShadowReading]) -> None:
         if not readings:

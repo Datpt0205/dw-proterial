@@ -1,6 +1,6 @@
 # 67 — Shadow mode shared by every model step
 
-Status: in-progress (2026-11-24): slice 1 done (the engine and `description_attributes`); next, reply reading
+Status: in-progress (2026-11-24): slice 1 done (the engine and `description_attributes`), one switch on by default with an hourly cap; next, reply reading
 
 ## Why
 
@@ -83,6 +83,18 @@ Slice 1, 2026-11-24 (dw_sales ADR 0015 addendum 2026-11-24):
   on); audit (labels in the decision's transaction; retention audited as
   the lane); lifecycle (deleted on label, dropped after 60 days, fail closed
   with no model). Deployment: no route, no compose change.
+
+Same day, Đạt: "bật full 1 lần": the list became one switch,
+`model_assist.shadow` (on unless a version turns it off), with
+`model_assist.shadow_calls_per_hour` (120 per tenant, `ShadowBudget`, per
+process): past it a step reads as off until the hour turns. Mutation 3/3.
+
+Measured before choosing the cap (all 45 sample mails, every step ON, live
+on Giang's Strata, not attested): 0 errors, 23 calls all usable, 0.5 calls
+per mail (max 3, 32 mails none), calls 1-3 s (one 31.7 s, the first
+hand-off: a cold start); intake-time steps only (drafts, SalesOrder, chat,
+internal change are asked by a person). The reply agent's chat turns are
+not counted by the run's wrapper.
 
 Left: reply reading, `message_intent`, `po_body_extraction` as shadow
 consumers; a line on the process page showing each step's shadow labels.
