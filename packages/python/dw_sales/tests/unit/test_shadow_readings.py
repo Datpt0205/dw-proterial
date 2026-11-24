@@ -31,10 +31,11 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.application.shadow import (
     SHADOW_KEPT_FOR,
     SHADOW_RETENTION_LANE,
+    ShadowBudget,
     ShadowReadings,
     ShadowRetention,
 )
-from dw_sales.domain.order_checks import SHADOW_STEPS, ModelAssist, ModelStep, OrderRules
+from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
 from dw_sales.domain.orders import MappingStatus, OrderCase
 from dw_sales.domain.shadow import ShadowReading, item_key
 from dw_sales.evals.descriptions import Replayed
@@ -50,9 +51,13 @@ STEP = ModelStep.DESCRIPTION_ATTRIBUTES
 AT = datetime(2026, 11, 24, 9, 0, tzinfo=UTC)
 
 
-def _shadowed(rules: OrderRules, *steps: ModelStep) -> OrderRules:
+def _shadowed(rules: OrderRules, on: bool = True, per_hour: int = 120) -> OrderRules:
     return rules.model_copy(
-        update={"model_assist": rules.model_assist.model_copy(update={"shadow": steps})}
+        update={
+            "model_assist": rules.model_assist.model_copy(
+                update={"shadow": on, "shadow_calls_per_hour": per_hour}
+            )
+        }
     )
 
 
@@ -92,7 +97,7 @@ def _held(store: MemoryStore, scope: SalesScope = SCOPE) -> dict[tuple[str, str]
 async def test_a_step_off_and_listed_in_shadow_reads_keeps_and_changes_nothing() -> None:
     """Acceptance 1: the case is exactly the case with the step off."""
     store, model = MemoryStore(), Replayed(answers=ANSWERS)
-    shadowed = await _case(_intake(model, _shadowed(PLATFORM, STEP), store))
+    shadowed = await _case(_intake(model, _shadowed(PLATFORM), store))
     off = await _case(_intake(Replayed(answers=ANSWERS), PLATFORM, MemoryStore()))
 
     assert len(model.calls) == 1
@@ -114,9 +119,17 @@ async def test_a_step_off_and_listed_in_shadow_reads_keeps_and_changes_nothing()
     )
 
 
-async def test_a_step_not_listed_reads_nothing() -> None:
+async def test_a_tenant_that_turns_shadow_off_reads_nothing() -> None:
     store, model = MemoryStore(), Replayed(answers=ANSWERS)
-    await _case(_intake(model, PLATFORM, store))
+    await _case(_intake(model, _shadowed(PLATFORM, on=False), store))
+    assert model.calls == []
+    assert _held(store) == {}
+
+
+async def test_past_the_hours_calls_a_step_reads_as_when_it_is_off() -> None:
+    """The cap: shadow never takes the model from work that is on."""
+    store, model = MemoryStore(), Replayed(answers=ANSWERS)
+    await _case(_intake(model, _shadowed(PLATFORM, per_hour=0), store))
     assert model.calls == []
     assert _held(store) == {}
 
@@ -130,7 +143,7 @@ async def test_no_model_configured_reads_nothing_in_shadow() -> None:
     """Fail closed: a step in shadow with no model configured for it reads
     nothing, as off."""
     store, model = MemoryStore(), Replayed(answers=ANSWERS)
-    intake = _intake(model, _shadowed(PLATFORM, STEP), store)
+    intake = _intake(model, _shadowed(PLATFORM), store)
     intake = dataclasses.replace(
         intake, shadow=ShadowReadings(gate=_NoModel(), uow=store, clock=FixedClock(AT))
     )
@@ -146,7 +159,7 @@ async def test_a_step_on_and_passing_runs_as_itself_and_keeps_nothing_in_shadow(
     demo = load_tenant_order_rules(DATA_DIR / "policies")
     assert demo is not None and demo.model_assist.description_attributes
     store = MemoryStore()
-    case = await _case(_intake(Replayed(answers=ANSWERS), _shadowed(demo, STEP), store))
+    case = await _case(_intake(Replayed(answers=ANSWERS), _shadowed(demo), store))
     assert case.line(1).mapping.status is MappingStatus.CANDIDATE
     assert _held(store) == {}
 
@@ -154,18 +167,29 @@ async def test_a_step_on_and_passing_runs_as_itself_and_keeps_nothing_in_shadow(
 # --------------------------------------------------------- the tenant list --
 
 
-def test_only_a_step_with_a_shadow_consumer_may_be_listed_and_once() -> None:
-    """Acceptance 4."""
-    assist = PLATFORM.model_assist
-    assert ModelAssist.model_validate({**assist.model_dump(), "shadow": ["description_attributes"]})
+async def test_shadow_is_on_by_default_and_only_for_a_step_with_a_consumer() -> None:
+    """Acceptance 4 as decided 2026-11-24: one switch, on unless a version
+    turns it off, capped per hour; a step with no consumer never shadows."""
+    assert (PLATFORM.model_assist.shadow, PLATFORM.model_assist.shadow_calls_per_hour) == (
+        True,
+        120,
+    )
+    gate, _ = measured_gate(REPO, SCOPE)
+    readings = ShadowReadings(gate=gate, uow=MemoryStore(), clock=FixedClock(AT))
     assert ModelStep.REPLY_INTENT not in SHADOW_STEPS
-    with pytest.raises(ValidationError, match="no shadow reading is built for reply_intent"):
-        ModelAssist.model_validate({**assist.model_dump(), "shadow": ["reply_intent"]})
-    with pytest.raises(ValidationError, match=r"once|at most"):
-        ModelAssist.model_validate(
-            {**assist.model_dump(), "shadow": ["description_attributes"] * 2}
-        )
-    assert PLATFORM.model_assist.shadow == ()
+    assert not await readings.shadows(SCOPE, PLATFORM, ModelStep.REPLY_INTENT)
+    assert await readings.shadows(SCOPE, PLATFORM, STEP)
+
+
+def test_the_hour_is_counted_per_tenant_and_starts_again() -> None:
+    budget = ShadowBudget()
+    one, two = uuid.UUID(int=1), uuid.UUID(int=2)
+    assert budget.take(one, 2, AT) and budget.take(one, 2, AT + timedelta(minutes=59))
+    assert not budget.take(one, 2, AT + timedelta(minutes=59))
+    # Another tenant has its own hour; the next hour starts again.
+    assert budget.take(two, 2, AT)
+    assert budget.take(one, 2, AT + timedelta(hours=1))
+    assert not budget.take(one, 0, AT + timedelta(hours=2))
 
 
 def test_a_reading_names_its_own_item() -> None:

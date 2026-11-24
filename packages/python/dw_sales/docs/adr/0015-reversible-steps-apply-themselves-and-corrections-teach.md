@@ -132,10 +132,13 @@ and the plant's real mail measured nothing. 18 of 19 steps sat there.
 
 Decided:
 
-1. **A third state per step**: `model_assist.shadow` lists the steps that
-   read while they are not on and passing, wherever a model is configured
-   for them. A reading in shadow is kept (`sales.shadow_readings`) and
-   applied nowhere, shown nowhere. The tenant chooses: it costs model calls.
+1. **A third state per step**: every step with a shadow consumer reads
+   while it is not on and passing, wherever a model is configured for it.
+   A reading in shadow is kept (`sales.shadow_readings`) and applied
+   nowhere, shown nowhere. One switch, `model_assist.shadow`, on unless a
+   version turns it off (Đạt, same day: "bật full 1 lần"), capped by
+   `model_assist.shadow_calls_per_hour` (120) per tenant so it never takes
+   the model from work that is on.
 2. **The person's decision labels it**: where the person makes the decision
    the step would have proposed, the step's own service takes the reading
    (deleted as it is labelled) and writes a labelled case gated ``shadow``
@@ -143,8 +146,8 @@ Decided:
    threshold and the head's view like any gated result's, so a step can
    earn its threshold on real work before it is ever turned on.
 3. **One engine, two lines per step**: where it reads, and where the person
-   decides. A step is listed as shadow-capable (`SHADOW_STEPS`) only with
-   both; the rules refuse any other.
+   decides. A step joins `SHADOW_STEPS` only with both; the switch reads
+   in shadow only the steps listed there.
 4. **Bounded**: a reading no one decides is dropped after `SHADOW_KEPT_FOR`
    (60 days) by the `sales_shadow_retention` lane.
 

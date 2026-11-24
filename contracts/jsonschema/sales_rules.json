@@ -2222,16 +2222,16 @@
             "type": "boolean"
           },
           "shadow": {
-            "default": [],
-            "items": {
-              "enum": [
-                "description_attributes"
-              ],
-              "type": "string"
-            },
-            "maxItems": 1,
+            "default": true,
             "title": "Shadow",
-            "type": "array"
+            "type": "boolean"
+          },
+          "shadow_calls_per_hour": {
+            "default": 120,
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Shadow Calls Per Hour",
+            "type": "integer"
           },
           "skill_document_forms": {
             "default": false,

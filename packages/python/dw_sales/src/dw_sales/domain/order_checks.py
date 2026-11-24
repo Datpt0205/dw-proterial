@@ -20,9 +20,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Final, Literal, NamedTuple, Self, assert_never
+from typing import Final, Literal, NamedTuple, Self, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_platform.domain.messages import MailAuthentication, is_domain, is_email_address
 from dw_sales.domain.anchors import SourceAnchor
@@ -152,12 +152,6 @@ class ModelStep(StrEnum):
 # places a shadow needs, where it reads and where a person decides. A step
 # joins here with them, never before (failure-modes #1).
 SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset({ModelStep.DESCRIPTION_ATTRIBUTES})
-# A step as `ModelAssist.shadow` lists it: its schema offers only the steps
-# above, so the rules editor never offers one the validator refuses.
-ShadowStep = Annotated[
-    ModelStep,
-    WithJsonSchema({"type": "string", "enum": sorted(s.value for s in SHADOW_STEPS)}),
-]
 
 
 class ModelAssist(BaseModel):
@@ -280,22 +274,16 @@ class ModelAssist(BaseModel):
     # is refused until its live eval passed (`ModelReadiness.unready`). Off:
     # the chat states nothing and points to the case page's controls.
     case_chat: bool = True
-    # The steps that read in shadow while they are not on and passing (ticket
-    # 67, dw_sales ADR 0015 decision 4): the model reads where one is
-    # configured, its result is stored and applied nowhere, and the decision
-    # a person then takes labels it. Only steps with a shadow consumer
-    # (`SHADOW_STEPS`); none where a version does not say.
-    shadow: tuple[ShadowStep, ...] = Field(default=(), max_length=len(SHADOW_STEPS))
-
-    @field_validator("shadow")
-    @classmethod
-    def _shadow_steps(cls, steps: tuple[ModelStep, ...]) -> tuple[ModelStep, ...]:
-        if len(set(steps)) != len(steps):
-            raise ValueError("each step is listed in shadow once")
-        unknown = sorted(s.value for s in steps if s not in SHADOW_STEPS)
-        if unknown:
-            raise ValueError(f"no shadow reading is built for {', '.join(unknown)}")
-        return steps
+    # Every step with a shadow consumer (`SHADOW_STEPS`) reads in shadow
+    # while it is not on and passing (ticket 67, dw_sales ADR 0015 decision
+    # 4): the model reads where one is configured, its result is stored and
+    # applied nowhere, and the decision a person then takes labels it. On
+    # where a version does not say (decided 2026-11-24: one switch, not a list).
+    shadow: bool = True
+    # The most model calls shadow readings may make in an hour, for the whole
+    # tenant: they never take the model from work that is on. Past it, a step
+    # reads as when it is off until the hour turns. 0: none.
+    shadow_calls_per_hour: int = Field(default=120, ge=0, le=100_000)
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use
