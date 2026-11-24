@@ -101,6 +101,8 @@ __all__ = [
     "WorkedPairRetention",
     "WorkedPairView",
     "WorkedPairs",
+    "fill_pair",
+    "lane_run",
 ]
 
 _LOG = logging.getLogger("dw_sales.salesorder_pairs")
@@ -108,6 +110,8 @@ _LOG = logging.getLogger("dw_sales.salesorder_pairs")
 SALESORDER_SKILL_REPLAY_LANE: Final = "sales_salesorder_skill_replay"
 # The customer's newest pairs a version is replayed on: each costs two fills.
 PAIRS_REPLAYED: Final = 20
+# How often a pair's fill is asked before it counts as unanswered.
+FILL_ATTEMPTS: Final = 2
 # The versions a replay is for: those waiting on the head.
 _WAITING: Final[tuple[RuleStatus, ...]] = ("proposed",)
 SALESORDER_PAIRS_RETENTION_LANE: Final = "sales_salesorder_pairs_retention"
@@ -200,8 +204,12 @@ class SalesOrderSkillReplayer:
                 (await self.catalog.items(scope)).data,
             )
             for pair in pairs:
-                with_it = await self._fill(scope, layout, tools, pair, _skill(proposed))
-                without = await self._fill(scope, layout, tools, pair, _skill(in_force))
+                with_it = await fill_pair(
+                    self.filler, layout, tools, pair, _skill(proposed), self._run(scope)
+                )
+                without = await fill_pair(
+                    self.filler, layout, tools, pair, _skill(in_force), self._run(scope)
+                )
                 unanswered += (with_it is None) + (without is None)
                 right_with += _reproduced(layout, with_it, pair)
                 right_without += _reproduced(layout, without, pair)
@@ -215,28 +223,6 @@ class SalesOrderSkillReplayer:
             right_without=right_without,
             unanswered=unanswered,
         )
-
-    async def _fill(
-        self,
-        scope: SalesScope,
-        layout: BravoUploadLayout,
-        tools: SalesOrderTools,
-        pair: WorkedPair,
-        skill: FillSkill,
-    ) -> TracedFill | None:
-        """The pair's PO filled with ``skill``; None for no usable answer, the
-        plan's day spent included: an incomplete replay the head cannot
-        approve on."""
-        try:
-            return await self.filler.fill(
-                layout=layout,
-                rows=po_rows(pair.document, tools, pair.received_on),
-                tools=tools,
-                skill=skill,
-                run=self._run(scope),
-            )
-        except (ModelUnavailableError, QuotaExceededError):
-            return None
 
     def _audit(self, scope: SalesScope, replay: SkillReplay) -> AuditEvent:
         """The lane's own audit row for a stored replay: ids and counts."""
@@ -259,23 +245,64 @@ class SalesOrderSkillReplayer:
         )
 
     def _run(self, scope: SalesScope) -> RunContext:
-        """A fill's own run, as the lane, holding no scope."""
-        run_id = self.ids.new_uuid()
-        return RunContext(
-            run_id=run_id,
-            tenant_id=scope.tenant_id.value,
-            workspace_id=scope.workspace_id.value,
-            actor_id=system_actor(SALESORDER_SKILL_REPLAY_LANE).value,
-            worker_id=self.worker_id,
-            worker_version=self.worker_version,
-            channel=SALESORDER_SKILL_REPLAY_LANE,
-            plan_id="background",
-            roles=frozenset(),
-            scopes=frozenset(),
-            trace_id=f"{SALESORDER_SKILL_REPLAY_LANE}-{run_id.hex[:12]}",
-            autonomy_level="A1",
-            approval_policy_version="1.0.0",
+        return lane_run(
+            SALESORDER_SKILL_REPLAY_LANE,
+            scope,
+            self.ids.new_uuid(),
+            self.worker_id,
+            self.worker_version,
         )
+
+
+def lane_run(
+    lane: str, scope: SalesScope, run_id: UUID, worker_id: str, worker_version: str
+) -> RunContext:
+    """A model call's own run, as ``lane``, holding no scope: a fill's tools
+    are code's, called before the turn, and need none."""
+    return RunContext(
+        run_id=run_id,
+        tenant_id=scope.tenant_id.value,
+        workspace_id=scope.workspace_id.value,
+        actor_id=system_actor(lane).value,
+        worker_id=worker_id,
+        worker_version=worker_version,
+        channel=lane,
+        plan_id="background",
+        roles=frozenset(),
+        scopes=frozenset(),
+        trace_id=f"{lane}-{run_id.hex[:12]}",
+        autonomy_level="A1",
+        approval_policy_version="1.0.0",
+    )
+
+
+async def fill_pair(
+    filler: SalesOrderFiller,
+    layout: BravoUploadLayout,
+    tools: SalesOrderTools,
+    pair: WorkedPair,
+    skill: FillSkill,
+    run: RunContext,
+) -> TracedFill | None:
+    """The pair's PO filled with ``skill``; None for no usable answer, the
+    plan's day spent included: a comparison with a gap proves nothing. A
+    fill with no usable answer is asked once more (`FILL_ATTEMPTS`): in the
+    first live run on Strata a fill came back malformed (ticket 66), and a
+    replay waits on no one."""
+    for _ in range(FILL_ATTEMPTS):
+        try:
+            return await filler.fill(
+                layout=layout,
+                rows=po_rows(pair.document, tools, pair.received_on),
+                tools=tools,
+                skill=skill,
+                run=run,
+            )
+        except QuotaExceededError:
+            return None
+        except ModelUnavailableError:
+            continue
+    return None
 
 
 def _skill(document: SkillDocument) -> FillSkill:

@@ -195,3 +195,42 @@ recorded here because no rule above moved.
   counts it was stored with.
 - **Not built yet**: a PO column the reading does not keep is still no
   source.
+
+## Addendum 2026-11-24: the model drafts a customer's skill (ticket 66)
+
+Đạt, 2026-11-24: "làm phần model soạn skill riêng đi". A customer's own
+SalesOrder skill had to be written by a person, and Sales staff will not
+write skills; most customers need none (their differences are data the fill
+is handed), the few with exceptions did not get one.
+
+Decided:
+
+1. **When a worked pair is kept** (`PAIR_ADDED`, written in the learning's
+   transaction), the worker's `sales_salesorder_skill_draft` lane fills the
+   customer's newest pairs with the skill in force. Every pair reproduced:
+   nothing is drafted.
+2. **The model writes the customer's whole skill** from the cells that came
+   out differently (what the PIC wrote, what DW wrote and why, in the form
+   the comparison reads), the PIC's whole rows and the rows' look-ups, for
+   up to three rounds, each shown the previous draft's own differences.
+3. **This is the one place a model writes words a later model call obeys.**
+   The prompt optimiser (ADR 0015) refused to for that reason. It is allowed
+   here because what a skill's words can put into a SalesOrder unchecked is
+   already only a constant: the trace redoes every other cell from the PO,
+   a look-up or a closed computation. So code refuses a draft adding a
+   constant that no PIC's file holds or that is a value of a PO (a PO's text
+   is untrusted), replays it on every pair, and proposes it only where it
+   reproduces more pairs and loses none.
+4. **The lane proposes, never decides.** The replay lane replays the version
+   again on its own; the head approves only where every pair is reproduced
+   (decision 3 above, as amended), never the lane (`RuleDecisionGuard`).
+   A version already waiting stops a draft.
+
+Measured on Giang's home-lab Strata (flash next Q2, not attested), ticket 38's
+three synthetic pairs from the generic skill, five runs: KHA and KHC
+reproduced by the generic skill itself (the model found their fixed codes'
+sources); KHB (dates moved ten days, km and price per km) drafted and
+proposed in one round every run once the prompt showed dates as compared and
+spelled out `unit_factor` (before that: a time-of-day rule, then a price's
+unit factor written backwards, which the trace flagged). An instruction
+planted in KHB's PO was read by the model and never proposed.

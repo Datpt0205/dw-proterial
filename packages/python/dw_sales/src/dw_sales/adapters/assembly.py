@@ -176,6 +176,7 @@ from dw_sales.application.salesorder_pairs import (
     SalesOrderSkillReplayer,
     WorkedPairRetention,
 )
+from dw_sales.application.salesorder_skill_drafts import SalesOrderSkillDrafter
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.skill_pick import PickModelPort, SkillPicker
@@ -280,6 +281,9 @@ class Dw1Mount:
     # customer's worked pairs, for the head to see (ticket 41): built where
     # the one-call door is.
     salesorder_skill_replay: SalesOrderSkillReplayer | None = None
+    # What drafts a customer's SalesOrder skill from its worked pairs when a
+    # pair is kept (ticket 66): built where the one-call door is.
+    salesorder_skill_draft: SalesOrderSkillDrafter | None = None
     # What drops a customer's worked pairs past the tenant's term (ticket
     # 41): built wherever DW1 is, since pairs are kept with or without a model.
     salesorder_pairs_retention: WorkedPairRetention | None = None
@@ -851,6 +855,23 @@ def build_dw1(
                 filler=SalesOrderFiller(
                     interpretation_for(one_call_model, configs, worker.default_model_profile)
                 ),
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+            )
+        ),
+        salesorder_skill_draft=(
+            None
+            if one_call_model is None
+            else SalesOrderSkillDrafter(
+                uow=uow,
+                pairs=catalog_uow,
+                book=skills,
+                rules=book,
+                catalog=catalog,
+                model=interpretation_for(one_call_model, configs, worker.default_model_profile),
+                directory=directory,
                 clock=clock,
                 ids=ids,
                 worker_id=worker.worker_id,

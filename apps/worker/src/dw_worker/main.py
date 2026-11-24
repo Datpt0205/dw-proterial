@@ -186,7 +186,7 @@ from dw_sales.application.prompt_optimiser import OPTIMISER_LANE, SecurityCase, 
 from dw_sales.application.prompt_versions import PROMPTS_DECIDED
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
-from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
+from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED, PAIR_ADDED
 from dw_sales.application.salesorder_pairs import (
     SALESORDER_PAIRS_RETENTION_LANE,
     SALESORDER_SKILL_REPLAY_LANE,
@@ -280,6 +280,7 @@ from dw_worker.consumers.sales_rule_drafts import (
     build_rule_draft_sweep_consumer,
 )
 from dw_worker.consumers.sales_salesorder_examples import build_example_handler
+from dw_worker.consumers.sales_salesorder_skill_drafts import build_pair_added_handler
 from dw_worker.consumers.sales_skill_replay import (
     INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
 )
@@ -1320,6 +1321,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # the same condition.
                 if mount.salesorder_learning is not None:
                     handlers[EXAMPLE_REQUESTED] = build_example_handler(mount.salesorder_learning)
+                # A kept pair asks for the customer's skill to be drafted
+                # (ticket 66), where the one-call door is.
+                if mount.salesorder_skill_draft is not None:
+                    handlers[PAIR_ADDED] = build_pair_added_handler(mount.salesorder_skill_draft)
                 # A Bravo export (a YCBG for Design's results, ticket 16; a
                 # sales order read back, ticket 03), on the same condition.
                 # Ticket 16's own event type, which an upload made before the
