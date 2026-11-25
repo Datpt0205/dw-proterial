@@ -49,3 +49,18 @@ on the SO just created, in the window still open (context `EDIT_BizDocSO|New`).
 3. IT runs 07 and 08 on UAT; the acceptance per kind.
 4. Asked of the vendor: how a new SO line's `QuantityBox` is set (two traced
    lines both 1, the column's default 0, ticket 59).
+
+**2026-11-25, the one UAT session handed to Đạt (02a/02b, about 25 minutes,
+with a Sales person; times and document numbers noted):** A. a YCBG made by
+New (not a copy), then one of its lines edited before Design answers; B. a
+quotation made the way Sales makes one from Design's QUOTE (pulled from the
+YCBG if that is how), then one non-price cell edited; C. an SO made the way
+Sales usually makes one (pulled from the quotation if that is how); D. an
+existing SO opened from the list (window closed first), a line's date
+changed and saved, then a quantity changed and saved; E. a line split on a
+bobbin or drum item; F. a line cancelled by its tick, and one through
+"Cancelled order information". What each answers: the INSERT/UPDATE column
+sets and the procedures each save calls in order (A, B, C), the event word
+and the permission calls of an existing document's open and save (D),
+`QuantityBox` (E), what a cancel writes (F). IT, apart: scripts 07 and 08.
+
