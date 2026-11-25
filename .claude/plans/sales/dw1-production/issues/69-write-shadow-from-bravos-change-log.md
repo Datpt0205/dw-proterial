@@ -52,3 +52,15 @@ holds every save Sales made, back as far as it is kept.
    its definition first, and a read-only one is called through the read
    login with an EXECUTE grant (script 08 widened).
 3. The read login granted SELECT on the log tables (script 08).
+
+**2026-11-25, the 40 procedures and functions the SO, YCBG and quotation
+screens call, classified from their definitions** (production schema): 33
+read only (every `ufn_*`; most `usp_*`; the `Convert...` procedures only
+parse XML with `sp_xml_preparedocument`); 4 write and run in the write's
+transaction: `usp_B30BizDocProcess_CreateProcess` (INSERT
+`B30BizDocProcess`, UPDATE `B30BizDoc`, `B30BizDocSP`),
+`usp_B30BizDocDetailSQ_ExpiryDate_Update`, `usp_B30BizDocSQ_ExpiryDate_Update`,
+`usp_Vcd_KTPTemp_HCV` (calls `usp_B30CdNtxt_TonDauList`). The quotation
+screen calls `ufn_B30BizDoc_Default_QuantityBox`: how a new line's
+`QuantityBox` is set there (ticket 59's open question for the SO).
+
