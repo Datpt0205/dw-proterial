@@ -72,3 +72,17 @@ takes the newest 3,000 saves of the three screens whatever their age, the
 line tables found by name (SO, RQ, SQ, or the shared `B30BizDocDetail$0`),
 and each table's first and last date. Waiting on Đạt's run.
 
+**2026-11-25, script 09 version 2 read** (`Downloads/DB-Bravo-3.rar`, local;
+CSVs without headers: names from the triggers and the schema). UAT's log
+runs 2019-09 to 2026-09-18: 72,299 SO edits, 26,113 SO creates, 6,405 YCBG
+edits. In the newest 3,000 header saves, 2,608 SO saves (session x
+document) read from the line log: create typed 756, **create by Import
+305**, by copy 29; lines added or split 378 (and 277 regroupings,
+`Divide`/`QuantityGroup`); date only 316; quantity 31; **unit price and
+amounts about 120** (Sales bringing a line to the PO's price, ADR 0008: a
+write kind none defines yet); PRS, PO request date, remark a few dozen; 5
+line deletes; no cancel in the window (the cancel's table unknown; the UAT
+session's step F). Quotation lines logged too (`B30BizDocDetailSQ$0`, 123
+rows). Shadow candidates per write kind: create, date, quantity, split now;
+price once a kind exists.
+

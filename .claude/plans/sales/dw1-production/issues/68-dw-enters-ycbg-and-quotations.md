@@ -63,4 +63,8 @@ bobbin or drum item; F. a line cancelled by its tick, and one through
 sets and the procedures each save calls in order (A, B, C), the event word
 and the permission calls of an existing document's open and save (D),
 `QuantityBox` (E), what a cancel writes (F). IT, apart: scripts 07 and 08.
+Added the same day from the change log (ticket 69): C2. an SO made by
+Import with the template Sales uses (305 of 2,608 recent SO saves); G. a
+line's unit price changed to the PO's (about 120 recent saves; a new write
+kind, `so.line.set_price`, the price only ever the PO's, ADR 0008).
 
