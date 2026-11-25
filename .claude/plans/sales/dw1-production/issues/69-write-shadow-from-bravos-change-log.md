@@ -64,3 +64,11 @@ transaction: `usp_B30BizDocProcess_CreateProcess` (INSERT
 screen calls `ufn_B30BizDoc_Default_QuantityBox`: how a new line's
 `QuantityBox` is set there (ticket 59's open question for the SO).
 
+**2026-11-25, script 09 version 1 run on UAT:** the change log is large
+(`B30BizDoc$0` about 3.57 million rows, `B30BizDocDetail$0` 2.78 million,
+`B30BizDocDetailPO$0` 253 thousand) but holds no save in the last 30 days:
+UAT is barely used, its log likely restored with the database. Version 2
+takes the newest 3,000 saves of the three screens whatever their age, the
+line tables found by name (SO, RQ, SQ, or the shared `B30BizDocDetail$0`),
+and each table's first and last date. Waiting on Đạt's run.
+
