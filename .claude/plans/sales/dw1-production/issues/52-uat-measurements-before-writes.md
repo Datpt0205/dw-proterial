@@ -42,6 +42,17 @@ With `docs/proterial/sql/02a`/`02b` recording, on Bravo UAT:
    - Can DW have a read-only AD account?
    - Is the AD's `employeeID` filled?
 
+**Added 2026-11-25 (runbook handed to Đạt for his remote session).**
+
+9. Script 03b again on the production database: the Import templates
+   (`B00ImportSetting`) were read on UAT only (11-20).
+10. A person's fact, not a script: which Import template Sales picks in
+    Bravo's Import dialog for an SO (template 72 by the 11-20 survey).
+11. Then: DW on the AI server's Ubuntu VM with its database, and the live
+    evals run with `--attest` there (ticket 01; nothing is attested yet).
+    Owed by Đạt: whether the VM has Docker and the repository, and the
+    address it reaches Strata at.
+
 ## Acceptance
 
 - The trace CSV and the document numbers are in `Downloads/DB-Bravo`.
