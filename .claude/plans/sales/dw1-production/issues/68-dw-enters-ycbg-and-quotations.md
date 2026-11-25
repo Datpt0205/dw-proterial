@@ -1,6 +1,6 @@
 # 68 — DW enters the YCBG and the quotation into Bravo, not only the SO
 
-Status: needs-info (2026-11-25): waiting on one UAT trace of every entry (ticket 52's session, widened), then script 08 widened and run by IT
+Status: needs-info (2026-11-25): waiting on a 10-minute UAT trace of what the 11-20 trace lacks (quotation, an existing SO's save, a cancel, a split on another packing), then script 08 widened and run by IT
 
 ## Why
 
@@ -19,7 +19,22 @@ runner, column grants, audit), each off until measured:
   59), never written by DW.
 - The SO's 5 (tickets 51, 53).
 
+## Already traced (11-20, `02-trace-uat-bo-sung.csv`, local only)
+
+Read again 2026-11-25 (Bravo writes `UPDATE TOP (1)`): an SO created by
+typing (header + 2 lines), a line's quantity, a line's dates (CDDate,
+EstimatedTimeDelivery, SalesAccountingDate), a split (a line INSERTed,
+Divide/GroupDivi/QuantityGroup set), the header's POCustomer, a YCBG created
+by NewAsCopy, Design's result on a YCBG line (20 columns). Every SO edit was
+on the SO just created, in the window still open (context `EDIT_BizDocSO|New`).
+
 ## Needs, in order
+
+0. **Missing from the 11-20 trace, one 10-minute session**: a quotation
+   created and edited (none traced); an existing SO opened from the list and
+   saved (its context word); a real cancel, both ways; a split on a bobbin or
+   drum item (`QuantityBox`). Import is not needed: DW creates an SO as the
+   typed create does.
 
 1. One UAT session traced by 02a/02b (Đạt, with a Sales person): each entry
    once, times and document numbers noted.
