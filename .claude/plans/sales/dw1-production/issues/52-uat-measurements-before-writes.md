@@ -53,6 +53,14 @@ With `docs/proterial/sql/02a`/`02b` recording, on Bravo UAT:
     Owed by Đạt: whether the VM has Docker and the repository, and the
     address it reaches Strata at.
 
+**2026-11-25, Đạt:** the full UAT trace (items 1-5) is declined as too
+costly. Writes it would prove stay refused by the gateway (an existing SO's
+save, a cancel, the command right, Import's price). Offered instead: one
+5-minute trace of an existing SO's date change (unlocks ticket 53's date and
+quantity). The 11-25 production runs of 05, 03c, 06 and 03b came back as
+empty files (0 bytes in `Downloads/DB-Bravo`): to be saved again from the
+remote machine.
+
 ## Acceptance
 
 - The trace CSV and the document numbers are in `Downloads/DB-Bravo`.
