@@ -86,3 +86,15 @@ session's step F). Quotation lines logged too (`B30BizDocDetailSQ$0`, 123
 rows). Shadow candidates per write kind: create, date, quantity, split now;
 price once a kind exists.
 
+**2026-11-25, slice 1 built: the change log read as saves**
+(`dw_bravo.change_log`): `parse_value` reads a row's `new`/`old` elements
+and refuses anything else; `group_saves` makes one save per session and
+document, classed as create, date, quantity, price, split, cancel, delete,
+touch or other (audit columns never class a save). On the 22,176 real SO
+line rows of script 09: every row parses; 2,608 saves (create 1,090, split
+378, date 316, price 119, quantity 31, other 637). Unit 14; mutation 3/3
+red (a redundant DOCTYPE check removed: wrapped, a DOCTYPE cannot parse).
+Next: rebuild each date and quantity save's document before the save
+(today's rows with the old values put back) and replay it through the
+runner; then the gateway's read of the log and the table of results.
+
