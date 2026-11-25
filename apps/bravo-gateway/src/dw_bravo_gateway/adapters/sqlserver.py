@@ -44,9 +44,9 @@ from dw_bravo.contract import (
     SalesOrderState,
     SoLineState,
 )
-from dw_bravo.expression import RuleRefusedError, UndecidableError
+from dw_bravo.expression import RuleRefusedError, UndecidableError, UnsupportedSyntaxError
 from dw_bravo.import_template import read_import_template
-from dw_bravo.layout import Layout, read_layout
+from dw_bravo.layout import Layout, read_layout, read_template, with_template
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.sync import SYNC_TABLES, SyncPage, SyncQuery, SyncRow, as_text
 from dw_bravo.watch import Component, Fingerprint
@@ -109,11 +109,11 @@ class SqlServerBravo:
     # inside one the driver already opened (measured): reads connect in
     # autocommit, the write does not.
     connect: Callable[[str, bool], Any] = lambda cs, auto: mssql_python.connect(cs, autocommit=auto)
-    # The shared template each screen's layout leans on and DW does not hold
-    # yet (script 03c): a plan made without it is provisional and never writes.
-    missing_templates: Mapping[str, str] = field(
-        default_factory=lambda: {"EDIT_BizDocSO": "BizDocEditor"}
-    )
+    # The shared template each screen loads beside its own layout
+    # (`B00Command`'s TemplateName; script 03c, 2026-11-25): read from
+    # `B00Layout` with the layout, its guards applied at every save. Not
+    # found, or not readable, the plan stays provisional and never writes.
+    templates: Mapping[str, str] = field(default_factory=lambda: {"EDIT_BizDocSO": "BizDocEditor"})
 
     # ----------------------------------------------------------- plumbing
 
@@ -309,10 +309,25 @@ class SqlServerBravo:
         if len(rows) != 1:
             # Which of several the client opens is not measured.
             raise UndecidableError(f"{len(rows)} active layouts for {screen}")
-        return read_layout(
-            layout_xml(rows[0]["LayoutData"]),
-            screen,
-            missing_template=self.missing_templates.get(screen),
+        name = self.templates.get(screen)
+        layout = read_layout(layout_xml(rows[0]["LayoutData"]), screen, missing_template=name)
+        if name is None:
+            return layout
+        template = await self._in_thread(lambda: self._template_rows(name))
+        if len(template) != 1:
+            # Absent or ambiguous: the plan stays provisional, never a write.
+            return layout
+        try:
+            return with_template(layout, read_template(layout_xml(template[0]["LayoutData"]), name))
+        except (UnsupportedSyntaxError, ValueError):
+            return layout
+
+    def _template_rows(self, name: str) -> list[dict[str, object]]:
+        return self._rows(
+            "SELECT l.Id, d.LayoutData FROM dbo.B00Layout l"
+            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
+            " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) > 0",
+            (name,),
         )
 
     def procedures(self) -> ProcedurePort:
@@ -322,7 +337,29 @@ class SqlServerBravo:
         return _NotYetCalled()
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
-        return Session(user={"Id": Decimal(user.id)}, branch=branch, now=now.replace(tzinfo=None))
+        """The session a plan runs in; the branch's own attributes from
+        `B00Branch` (what `BRANCH('IsGroup')` reads). A branch not found, or
+        not readable, has none: a guard that reads one is undecided and
+        blocks."""
+
+        def branch_info() -> dict[str, object]:
+            try:
+                rows = self._rows(
+                    "SELECT IsGroup FROM dbo.B00Branch WHERE BranchCode = ? AND IsActive = 1",
+                    (branch,),
+                )
+            except Exception:  # the driver's own errors: no answer, so none
+                return {}
+            if len(rows) != 1 or rows[0]["IsGroup"] is None:
+                return {}
+            return {"IsGroup": Decimal(int(bool(rows[0]["IsGroup"])))}
+
+        return Session(
+            user={"Id": Decimal(user.id)},
+            branch=branch,
+            now=now.replace(tzinfo=None),
+            branch_info=await self._in_thread(branch_info),
+        )
 
     # -------------------------------------------------------- fingerprint
 
@@ -340,12 +377,16 @@ class SqlServerBravo:
             for screen in screens:
                 components.extend(self._layout_components(screen))
                 components.append(self._template_component(screen))
+                # The shared template rides on the screen's command: either
+                # changing pauses the screen's writes.
+                name = self.templates.get(screen)
+                shared = [] if name is None else self._template_rows(name)
                 for row in self._rows(
                     "SELECT CommandKey, DLLName, ClassName, CtorArgs, MethodName, InvokeArgs"
                     " FROM dbo.B00Command WHERE CommandKey = ?",
                     (screen,),
                 ):
-                    components.append(Component("command", screen, _digest(row)))
+                    components.append(Component("command", screen, _digest([row, shared])))
             for table in tables:
                 columns = self._rows(
                     "SELECT c.name, TYPE_NAME(c.user_type_id) AS type, c.max_length,"

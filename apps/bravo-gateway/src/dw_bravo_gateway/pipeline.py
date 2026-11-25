@@ -332,7 +332,9 @@ class WritePipeline:
             for edit in typed_edits(command):
                 index = _line_index(stored, command.line.line_id) if edit.table != "Parent" else 0  # type: ignore[union-attr]
                 runner.edit(doc, edit.table, index, edit.column, edit.value)
-            plan = runner.save(doc)
+            # A stored document, opened and saved: the template's guards on
+            # those two commands (ticket 59).
+            plan = runner.save(doc, commands=("Edit", "Save"))
         except (RuleRefusedError, UndecidableError) as refused:
             raise _RefusedError("rules", f"rules_could_not_decide: {refused}") from None
         # A warning that fired, or one that could not be decided, goes back to

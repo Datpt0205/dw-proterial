@@ -48,6 +48,7 @@ from dw_bravo.expression import (
     RuleRefusedError,
     Scope,
     UndecidableError,
+    UnsupportedSyntaxError,
     condition,
     evaluate,
     is_empty,
@@ -55,7 +56,7 @@ from dw_bravo.expression import (
     substitute,
     truth,
 )
-from dw_bravo.layout import PARENT, Invocation, Layout, Rule, Table
+from dw_bravo.layout import PARENT, CommandGuard, Invocation, Layout, Rule, Table
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 
 USER = "<user>"
@@ -197,6 +198,11 @@ class SavePlan:
         return self.check.may_save and not self.provisional
 
 
+def _guard_finding(guard: CommandGuard, status: Status, reason: str | None = None) -> Finding:
+    """A template guard's finding: on the parent, always blocking."""
+    return Finding(guard.name, PARENT, 0, "block", status, guard.message or guard.name, (), reason)
+
+
 def _same(a: object, b: object) -> bool:
     if a is UNKNOWN or b is UNKNOWN:
         return a is b
@@ -238,7 +244,9 @@ class _RowScope:
         if function == "GETDATE":
             return session.now
         if function == "BRANCH":
-            return session.branch
+            if argument is None:
+                return session.branch
+            return session.branch_info.get(str(argument), UNKNOWN)
         if function == "LANGID":
             return session.lang_id
         source = {"USER": session.user, "CURRENCY": session.currency, "CONFIG": session.config}.get(
@@ -305,16 +313,44 @@ class RuleRunner:
                     findings.append(self._validate(doc, table, index, row, rule))
         return Check(tuple(findings))
 
-    def save(self, doc: Document) -> SavePlan:
+    def save(self, doc: Document, *, commands: Sequence[str] = ("Save",)) -> SavePlan:
+        """The save the client would make, checked by the layout's validators
+        and by each guard of the shared template on ``commands`` (the window's
+        own: ``("Edit", "Save")`` for a stored document, ``("New", "Save")``
+        for a new one). A guard that is not true, or cannot be decided,
+        blocks: Bravo refuses the command."""
         self._event(doc, PARENT, doc.parent, "ServerUpdating")
         for table in self.layout.children():
             for row in doc.children.get(table.key, []):
                 self._event(doc, table.key, row, "ServerUpdating")
         check = self.check(doc)
+        guarded = Check(check.findings + tuple(self._guards(doc, commands)))
         provisional: tuple[str, ...] = ()
         if self.layout.missing_template:
             provisional = (f"template {self.layout.missing_template} is not in hand (script 03c)",)
-        return SavePlan(tuple(self._commands(doc)), check, provisional)
+        return SavePlan(tuple(self._commands(doc)), guarded, provisional)
+
+    def _guards(self, doc: Document, commands: Sequence[str]) -> list[Finding]:
+        template = self.layout.template
+        if template is None:
+            return []
+        asked = {c.lower() for c in commands}
+        found: list[Finding] = []
+        for guard in template.guards:
+            if not guard.commands & asked:
+                continue
+            scope = _RowScope(self, doc, PARENT, doc.parent, None)
+            try:
+                allowed = condition(guard.expr, scope)
+            except (UndecidableError, RuleRefusedError, UnsupportedSyntaxError) as exc:
+                found.append(_guard_finding(guard, "undecided", str(exc)[:200]))
+                continue
+            found.append(
+                _guard_finding(guard, "passed")
+                if allowed
+                else _guard_finding(guard, "fired", guard.expr)
+            )
+        return found
 
     # ------------------------------------------------------------- events
 

@@ -171,3 +171,29 @@ vendor says how `QuantityBox` is set, or a traced split shows it on another
 item. The same trace holds one YCBG (`B30BizDocDetailRQ`) INSERT: a YCBG
 creation could be a write kind (none is defined; DW1's writes are the SO's).
 
+## Done (2026-11-25, the shared template applied)
+
+- `read_template` reads a shared template's `CommandValidators` as guards
+  (commands, condition, message) and refuses a template that sets or checks
+  anything else (an event, a rule, a child table), whole; `with_template`
+  completes a layout only with the template it names.
+- `RuleRunner.save(doc, commands=...)` checks each guard on the window's
+  commands (`("Edit", "Save")` for a stored document, `("New", "Save")` for
+  a new one): not true blocks, undecided blocks. `BRANCH('<column>')` reads
+  the session's `branch_info`.
+- The gateway reads the template from `B00Layout` (`IsTemplate > 0`) with the
+  screen's layout and the branch from `B00Branch`; a template absent or
+  unreadable leaves the plan provisional (never a write); the template rides
+  on the screen's `command` component, so a change to it pauses the writes
+  (ticket 65). The pipeline saves a stored document with `("Edit", "Save")`.
+- Script 08 (local) grants the read login `B00Branch (BranchCode, IsGroup,
+  IsActive)`.
+- Tests: unit 12 (template) + every dw_bravo test with the real layouts and
+  the 11-20 trace (Proterial's `BizDocEditor` reads as its three guards and
+  completes the SO screen); gateway SQL Server integration 19, two new (the
+  guards hold at a write and a group branch is refused; a template not
+  found stays provisional). Mutation 6/6 red.
+
+Left: the 6 validators with no `ClassName` and a new line's `QuantityBox`
+(the client program's, ticket 68's UAT session).
+

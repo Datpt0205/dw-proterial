@@ -647,6 +647,8 @@ class Evaluator:
             return when + timedelta(days=int(days))
         if name in ("USER", "CURRENCY", "CONFIG") and len(args) == 1:
             return _check(scope.session(name, self.eval(args[0], scope)), f"{name}()")
+        if name == "BRANCH" and len(args) == 1:
+            return _check(scope.session(name, self.eval(args[0], scope)), f"{name}()")
         if name in ("GETDATE", "BRANCH", "LANGID") and not args:
             return _check(scope.session(name, None), f"{name}()")
         if name == "UPDATEDCOLUMN" and not args:

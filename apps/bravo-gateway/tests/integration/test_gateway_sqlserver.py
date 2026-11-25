@@ -67,6 +67,14 @@ def _run(database: str, *statements: str) -> None:
     connection.close()  # type: ignore[attr-defined]
 
 
+SHARED = (
+    "<root><DataSource><Tables><ParentTable><CommandValidators>"
+    "<ModifyInactiveData><CommandName>Edit</CommandName><Expr>ISNULL(IsActive,1)=1</Expr></ModifyInactiveData>"
+    "<CreateData><CommandName>New,NewAsCopy,Edit</CommandName><Expr>BRANCH('IsGroup')=0</Expr></CreateData>"
+    "<ModifyCurrentData><CommandName>Edit,Save</CommandName><Expr>BranchCode=BRANCH()</Expr></ModifyCurrentData>"
+    "</CommandValidators></ParentTable></Tables></DataSource></root>"
+)
+
 TEMPLATE = (
     "<root><Tables><BizDoc><Cols><DocDate>B</DocDate></Cols><txtRowRange>4</txtRowRange></BizDoc>"
     "<Detail><txtForeignKey>A</txtForeignKey><Cols><POLine>S</POLine></Cols></Detail>"
@@ -105,7 +113,12 @@ def logins() -> tuple[Login, Login]:
         " DocCode char(2) DEFAULT 'SO', DocNo nvarchar(32) DEFAULT '',"
         " CustomerCode varchar(24) DEFAULT 'FG1', POCustomer nvarchar(192) DEFAULT 'PO-1',"
         " BranchCode varchar(3), DocDate datetime, TotalQuantity numeric(18,4), ModifiedBy int,"
-        " ModifiedAt datetime DEFAULT GETDATE(), timestamp rowversion)",
+        " ModifiedAt datetime DEFAULT GETDATE(), IsActive bit NOT NULL DEFAULT 1,"
+        " timestamp rowversion)",
+        # The branches, as `B00Branch` holds them: what `BRANCH('IsGroup')` reads.
+        "CREATE TABLE dbo.B00Branch (Id int IDENTITY PRIMARY KEY, BranchCode varchar(3),"
+        " IsGroup bit NOT NULL, IsActive bit NOT NULL)",
+        "INSERT INTO dbo.B00Branch (BranchCode, IsGroup, IsActive) VALUES ('A01', 0, 1), ('A00', 1, 1)",
         "CREATE TABLE dbo.B30BizDocDetailSO (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
         " RowId varchar(16), BuiltinOrder smallint, POLine numeric(18,0) DEFAULT 0,"
         " ItemCode varchar(24) DEFAULT '', PORequestDate date, Quantity9 numeric(18,4),"
@@ -168,6 +181,7 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B30BizDoc TO dw_test_read",
         "GRANT SELECT ON dbo.B30BizDocDetailSO TO dw_test_read",
         "GRANT SELECT ON dbo.B00Layout TO dw_test_read",
+        "GRANT SELECT ON dbo.B00Branch (BranchCode, IsGroup, IsActive) TO dw_test_read",
         "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
         "GRANT SELECT ON dbo.B20LME (Id, timestamp, IsGroup, BranchCode, Code, Name, DocDate,"
         " LMEActual, LMECenter, IsActive) TO dw_test_read",
@@ -203,6 +217,11 @@ def logins() -> tuple[Login, Login]:
     cursor.execute(
         "INSERT INTO dbo.B00ImportSetting VALUES (7, 'EDIT_BizDocSO', 1, ?)", (_zipped(TEMPLATE),)
     )
+    # The shared template the SO screen loads (script 03c's shape).
+    cursor.execute(
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (9, 1, 'BizDocEditor', 1)"
+    )
+    cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (9, ?)", (_zipped(SHARED),))
     connection.close()  # type: ignore[attr-defined]
     return (
         Login(host, int(port), DB, "dw_test_read", read_pw),
@@ -255,7 +274,7 @@ def _logged_users() -> list[int]:
 async def test_the_pics_write_under_column_grants_reaches_bravos_trigger(
     logins: tuple[Login, Login],
 ) -> None:
-    bravo = _Allowed(*logins, missing_templates={})
+    bravo = _Allowed(*logins, templates={})
     command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(5))
 
     result = await _pipeline(bravo).execute(command, token(command))
@@ -269,7 +288,7 @@ async def test_the_pics_write_under_column_grants_reaches_bravos_trigger(
 
 
 async def test_a_stale_line_is_refused_by_the_rowversion(logins: tuple[Login, Login]) -> None:
-    bravo = _Allowed(*logins, missing_templates={})
+    bravo = _Allowed(*logins, templates={})
     approved = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
     _run(DB, "UPDATE dbo.B30BizDocDetailSO SET Made = Made WHERE RowId = 'R1'")  # a colleague saved
 
@@ -279,7 +298,7 @@ async def test_a_stale_line_is_refused_by_the_rowversion(logins: tuple[Login, Lo
 
 
 async def test_a_line_on_a_cdo_is_locked_by_bravos_function(logins: tuple[Login, Login]) -> None:
-    bravo = _Allowed(*logins, missing_templates={})
+    bravo = _Allowed(*logins, templates={})
     command = SetConfirmedDate(line=await _line(bravo, "LOCKED"), confirmed_date=date(2026, 12, 1))
 
     result = await _pipeline(bravo).execute(command, token(command))
@@ -292,7 +311,7 @@ async def test_a_column_bravo_bars_the_user_from_is_refused(logins: tuple[Login,
         DB,
         "INSERT INTO dbo.Rights VALUES (2413, 'B30BizDocDetailSO', 'EstimatedTimeDelivery', 0, 1)",
     )
-    bravo = _Allowed(*logins, missing_templates={})
+    bravo = _Allowed(*logins, templates={})
     command = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
     try:
         result = await _pipeline(bravo).execute(command, token(command))
@@ -305,7 +324,7 @@ async def test_a_column_bravo_bars_the_user_from_is_refused(logins: tuple[Login,
 async def test_the_live_command_right_is_unmeasured_and_refuses(
     logins: tuple[Login, Login],
 ) -> None:
-    bravo = SqlServerBravo(*logins, missing_templates={})
+    bravo = SqlServerBravo(*logins, templates={})
     command = SetConfirmedDate(line=await _line(bravo, "R1"), confirmed_date=date(2026, 12, 1))
 
     result = await _pipeline(bravo).execute(command, token(command))
@@ -386,15 +405,17 @@ async def test_a_wrong_password_is_bravo_not_answering(logins: tuple[Login, Logi
     assert (result.outcome, result.reason) == ("refused", "bravo_unreachable_could_not_check")
 
 
-async def test_the_shipped_adapter_holds_the_so_screen_provisional(
+async def test_the_shipped_adapter_reads_bizdoceditor_and_writes_under_its_guards(
     logins: tuple[Login, Login],
 ) -> None:
-    bravo = _Allowed(*logins)  # the shipped default: BizDocEditor not in hand
+    """The shipped default names the SO screen's template; with it in Bravo
+    (script 03c), the plan is complete and the write passes its guards."""
+    bravo = _Allowed(*logins)
     command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
 
     result = await _pipeline(bravo).execute(command, token(command))
 
-    assert result.check == "rules" and (result.reason or "").startswith("provisional:")
+    assert result.outcome == "written", result
 
 
 async def test_a_row_saved_between_the_read_and_the_write_writes_nothing(
@@ -403,7 +424,7 @@ async def test_a_row_saved_between_the_read_and_the_write_writes_nothing(
     from dw_bravo_gateway.ports import Batch, StaleRowError
     from dw_bravo_gateway.statements import context_line, render_update
 
-    bravo = SqlServerBravo(*logins, missing_templates={})
+    bravo = SqlServerBravo(*logins, templates={})
     document = await bravo.load("EDIT_BizDocSO", 1)
     line = next(x for x in document.lines if x["RowId"] == "R1")
     _run(DB, "UPDATE dbo.B30BizDocDetailSO SET Made = Made WHERE RowId = 'R1'")  # the race
@@ -434,7 +455,7 @@ async def test_two_active_layouts_for_the_screen_refuse_rather_than_pick_one(
     )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (2, ?)", (_zipped(LAYOUT),))
     connection.close()  # type: ignore[attr-defined]
-    bravo = _Allowed(*logins, missing_templates={})
+    bravo = _Allowed(*logins, templates={})
     command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
     try:
         result = await _pipeline(bravo).execute(command, token(command))
@@ -540,3 +561,35 @@ async def test_a_definition_the_read_login_cannot_see_is_could_not_check(
             await SqlServerBravo(*logins).fingerprint("production")
     finally:
         _run(DB, "GRANT VIEW DEFINITION ON dbo.ufn_Prevent_Edit TO dw_test_read")
+
+
+async def test_the_shared_templates_guards_hold_on_a_write(logins: tuple[Login, Login]) -> None:
+    """Ticket 59 with script 03c: the SO screen's template is read from
+    `B00Layout` and its guards hold at the write; the branch is read from
+    `B00Branch`. A document of a branch that is a group is refused."""
+    bravo = _Allowed(*logins, templates={"EDIT_BizDocSO": "BizDocEditor"})
+    layout = await bravo.layout("EDIT_BizDocSO")
+    assert layout.missing_template is None and layout.template is not None
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+    assert result.outcome == "written", result
+
+    _run(DB, "UPDATE dbo.B00Branch SET IsGroup = 1 WHERE BranchCode = 'A01'")
+    try:
+        command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(5))
+        result = await _pipeline(bravo).execute(command, token(command))
+    finally:
+        _run(DB, "UPDATE dbo.B00Branch SET IsGroup = 0 WHERE BranchCode = 'A01'")
+    assert (result.check, result.reason) == ("rules", "blocked: CreateData")
+
+
+async def test_a_template_not_found_leaves_the_plan_provisional(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = _Allowed(*logins, templates={"EDIT_BizDocSO": "NoSuchTemplate"})
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(4))
+
+    result = await _pipeline(bravo).execute(command, token(command))
+
+    assert result.check == "rules" and (result.reason or "").startswith("provisional")

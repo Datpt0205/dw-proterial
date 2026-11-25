@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
 from dw_bravo.expression import UnsupportedSyntaxError
@@ -121,6 +121,27 @@ class Table:
 
 
 @dataclass(frozen=True)
+class CommandGuard:
+    """One of a template's `CommandValidators`: the commands it guards
+    (lower case), the condition each needs to be true, and its message."""
+
+    name: str
+    commands: frozenset[str]
+    expr: str
+    message: str | None
+
+
+@dataclass(frozen=True)
+class Template:
+    """A shared template a screen loads beside its own layout, as far as it
+    sets or checks anything: its command guards. Everything else in it is the
+    window's menus and toolbars."""
+
+    name: str
+    guards: tuple[CommandGuard, ...]
+
+
+@dataclass(frozen=True)
 class Layout:
     form: str
     tables: Mapping[str, Table]
@@ -130,6 +151,8 @@ class Layout:
     # `BizDocEditor` for the SO screen) when it is not in hand: its events and
     # rules are invisible here, so nothing the runner returns is complete.
     missing_template: str | None = None
+    # The template, read, once it is in hand (`with_template`).
+    template: Template | None = None
 
     @property
     def parent(self) -> Table:
@@ -268,11 +291,7 @@ def read_layout(xml_text: str, form: str, *, missing_template: str | None = None
     own layout when that template is not in hand (script 03c brings
     `BizDocEditor`); how the two merge is not measured yet.
     """
-    if "<!DOCTYPE" in xml_text[:4096].upper():
-        raise UnsupportedSyntaxError("a layout with a DOCTYPE is refused (entities are not read)")
-    # DOCTYPE refused above; expat also refuses entity amplification
-    # (measured 2.7.4, 2026-11-23); ElementTree fetches no external entity.
-    root = ET.fromstring(xml_text)  # nosec B314
+    root = _parse(xml_text, "a layout")
     tables_el = root.find("Tables")
     if tables_el is None:
         raise UnsupportedSyntaxError(f"{form}: no <Tables> in the layout")
@@ -295,3 +314,69 @@ def read_layout(xml_text: str, form: str, *, missing_template: str | None = None
         ambiguous=frozenset(reader.ambiguous),
         missing_template=missing_template,
     )
+
+
+# The parts of a template's parent table that set or check nothing: the
+# columns the window fetches. Any other part refuses the template whole.
+_TEMPLATE_INERT = frozenset({"FetchingColumnList"})
+
+
+def _parse(xml_text: str, what: str) -> ET.Element:
+    if "<!DOCTYPE" in xml_text[:4096].upper():
+        raise UnsupportedSyntaxError(f"{what} with a DOCTYPE is refused (entities are not read)")
+    # DOCTYPE refused above; expat also refuses entity amplification
+    # (measured 2.7.4, 2026-11-23); ElementTree fetches no external entity.
+    return ET.fromstring(xml_text)  # nosec B314
+
+
+def read_template(xml_text: str, name: str) -> Template:
+    """Read a shared template (`B00Layout.IsTemplate`): its parent table's
+    `CommandValidators`, each a guard on the commands it names. A template
+    that sets or checks anything else (an event, a rule, a validator, a
+    child table) is refused whole: what it would do is not read, so a plan
+    made with it would not be complete (ticket 59, script 03c)."""
+    root = _parse(xml_text, f"template {name}")
+    source = root.find("DataSource")
+    if source is None:
+        return Template(name, ())
+    tables = source.find("Tables")
+    parts = _elements(source)
+    if any(p.tag != "Tables" for p in parts):
+        raise UnsupportedSyntaxError(f"template {name}: {[p.tag for p in parts]} is not read")
+    guards: list[CommandGuard] = []
+    for table in [] if tables is None else _elements(tables):
+        if table.tag != "ParentTable":
+            raise UnsupportedSyntaxError(f"template {name}: {table.tag} is not read")
+        for part in _elements(table):
+            if part.tag in _TEMPLATE_INERT:
+                continue
+            if part.tag != "CommandValidators":
+                raise UnsupportedSyntaxError(f"template {name}: {part.tag} is not read")
+            for guard in _elements(part):
+                commands = _text(guard.find("CommandName")) or ""
+                expr = _text(guard.find("Expr"))
+                if not commands or expr is None:
+                    raise UnsupportedSyntaxError(
+                        f"template {name}: guard {guard.tag} names no command or condition"
+                    )
+                guards.append(
+                    CommandGuard(
+                        name=guard.tag,
+                        commands=frozenset(
+                            c.strip().lower() for c in commands.split(",") if c.strip()
+                        ),
+                        expr=expr,
+                        message=_message(guard.find("Text")),
+                    )
+                )
+    return Template(name, tuple(guards))
+
+
+def with_template(layout: Layout, template: Template) -> Layout:
+    """``layout`` with the shared template it names in hand: a plan made with
+    it is no longer provisional for want of it."""
+    if layout.missing_template != template.name:
+        raise ValueError(
+            f"{layout.form} loads {layout.missing_template!r}, not template {template.name!r}"
+        )
+    return replace(layout, missing_template=None, template=template)
