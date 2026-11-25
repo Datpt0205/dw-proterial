@@ -161,3 +161,13 @@ plan is no longer provisional for want of the template), with `BRANCH()`
 read from the session; the 6 validators stay undecided until a UAT save
 shows their kind.
 
+**2026-11-25, the 11-20 trace's two SO line INSERTs read for the new-line
+columns** (local only): `ConvertRate9` 1.0 on both (the column's default, so
+settled), `QuantityBox` 1 on both, where the column's default is 0: the
+client sets it by a rule no layout holds (perhaps
+`ufn_B30BizDoc_Default_QuantityBox` by base price and packing). Two samples
+do not make a rule: a split or a create stays refused until Proterial or the
+vendor says how `QuantityBox` is set, or a traced split shows it on another
+item. The same trace holds one YCBG (`B30BizDocDetailRQ`) INSERT: a YCBG
+creation could be a write kind (none is defined; DW1's writes are the SO's).
+
