@@ -108,3 +108,11 @@ Read from the layouts and today's rows instead of a trace:
   procedures as server constraints (`usp_B30BizDocDetailSQ_ExpiryDate_Update`,
   `usp_B30BizDocSQ_ExpiryDate_Update`), which the runner must never call
   while it plans. The YCBG screen (11766) has nothing it refuses.
+
+**2026-11-25, later:** none of the three trace files (11-20 and 11-25) holds
+a save touching a cancel or a unit price; the only split is the 11-20 one on
+an item of `QuantityBox` 1. The UAT machine has no network and takes no
+file, so C2 (Import) is dropped: DW does not need it. A cancel's price going
+to 0 is the screen's own rule (`Eval_Ct0_OriginalUnitCost_ResetWhenQuantityZero`
+on `Quantity9`). Handed to Đạt: one session, E/F/G on UAT's SO2609-000335
+(lines of `QuantityBox` 5 and 3, 610 m), each saved apart.
