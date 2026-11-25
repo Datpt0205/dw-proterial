@@ -169,3 +169,29 @@ What the 11-19/20 survey measured (details in `docs/proterial/`, outside git):
 
     Đạt decided to build on the assumption that they hold. A failed
     measurement changes only the gateway's adapter or grants, never a context.
+
+## Addendum 2026-11-25: DW enters everything Sales entered (Đạt)
+
+Đạt, 2026-11-25: "giờ scope không còn là sale tự nhập nữa mà là DW nhập cho
+họ, chỉ duyệt trước khi nhập thôi". DW1 performs every Bravo entry Sales
+made by hand, each after the PIC approves it on the portal, under the PIC's
+Bravo user, through the gateway as decided above. The paste sheet and the
+YCBG draft stay only as the fallback while a write kind is off.
+
+The write kinds, per screen Sales entered (`docs/proterial/bravo`):
+
+- **YCBG** (`EDIT_BizDocRQ`, `B30BizDoc` + `B30BizDocDetailRQ`): create, and
+  edit a line before Design answers.
+- **Quotation** (`EDIT_BizDocSQ`, `B30BizDocDetailSQ`): create after Design's
+  QUOTE, and edit; the price stays Bravo's, computed by the screen's own
+  rules the runner executes (ticket 59, dw_sales ADR 0008), never DW's.
+- **SO** (`EDIT_BizDocSO`, `B30BizDocDetailSO`): create (typed or by Import),
+  a line's confirmed date and quantity, a split, a cancel (the 5 kinds
+  already defined).
+
+Each kind stays off until a UAT save of it was traced (the columns it
+writes, the context's event word, the rights it checks, what the client
+sets that no layout holds), the gateway's write login is granted exactly
+those columns (`docs/proterial/sql/08`), and its UAT acceptance passed
+(decision 7). No approval workflow exists in Bravo for SO or quotations
+(script 05, 2026-11-25): the approval is DW's, before the entry.
