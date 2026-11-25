@@ -30,11 +30,17 @@ on the SO just created, in the window still open (context `EDIT_BizDocSO|New`).
 
 ## Needs, in order
 
-0. **Missing from the 11-20 trace, one 10-minute session**: a quotation
-   created and edited (none traced); an existing SO opened from the list and
-   saved (its context word); a real cancel, both ways; a split on a bobbin or
-   drum item (`QuantityBox`). Import is not needed: DW creates an SO as the
-   typed create does.
+0. **Settled from the schema, 2026-11-25:** the context's event word (`New`
+   for the traced edits) is only copied by `DML_*_ChangeLog` into Bravo's
+   change log (`__$CommandKey0`); the user id is read apart
+   (`ufn_sys_GetUserIdFromContext_Info`). So an existing SO's save carries
+   `Edit` (the screen's permission command of that name), checked once at
+   the UAT acceptance against Bravo's log row; no trace needed. The user's
+   Edit/Save right is read by a read-only script (to write), not traced.
+   **Still needs a Sales person, about 5 minutes**: a quotation created and
+   edited (none traced); a real cancel, both ways; and a split on a bobbin
+   or drum item, unless the vendor says how `QuantityBox` is set. Import is
+   not needed: DW creates an SO as the typed create does.
 
 1. One UAT session traced by 02a/02b (Đạt, with a Sales person): each entry
    once, times and document numbers noted.
