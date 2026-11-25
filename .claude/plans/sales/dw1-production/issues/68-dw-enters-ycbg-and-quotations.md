@@ -68,3 +68,43 @@ Import with the template Sales uses (305 of 2,608 recent SO saves); G. a
 line's unit price changed to the PO's (about 120 recent saves; a new write
 kind, `so.line.set_price`, the price only ever the PO's, ADR 0008).
 
+
+**2026-11-25, what the UAT session traced (`02-trace-2.csv`, 13:28–14:00,
+local only):** A done (a YCBG by New, one line; then Edit: 4 line columns),
+B done (a quotation by New with its line pulled from that YCBG line,
+`RowId_RQ`; the prices `PriceLME1..15`, `OriginalPriceLME*`, `MaterialCost`
+from Bravo's own `usp_B30BizDocDetailSQ_Check_B20BasePrice` and `_LME`; then
+Edit: header delivery mode/term, the line's item and price columns), D done
+(an existing SO opened from the list: context `EDIT_BizDocSO|Edit`, the word
+settled in Needs 0 now seen; a date save of 3 columns; a quantity save on a
+split pair: Quantity, Quantity9, amounts, Length, QuantityGroup, Divide, and
+the header's totals). Not traced: C (an SO pulled from a quotation), C2
+(the Import dialog opened, `B00ImportSetting` read, nothing imported), E, F,
+G. Every save ends in `usp_B30BizDocProcess_CreateProcess` and touches the
+header (`ModifiedBy`).
+
+Read from the layouts and today's rows instead of a trace:
+- **Cancel (F)** is not a tick and not the "Cancelled order information"
+  screen (`MasrerList_Cancel` is a list whose row opens the SO): on the SO
+  line, column "Order status" (`IsCancel`, a lookup of `B20Class`
+  `SOCancel`, value `Cancel`) sets Cancelled date (today), Cancelled
+  quantity (`Quantity_Edit`), Cancel price (`UnitCost`), amount, and
+  `CancelPRS` (`ufn_B30BizdocRelationSO_PRS`); the person types the reason.
+  114 lines carry `Cancel` today; their logged saves set quantity, price,
+  amounts and `BoxQuantity` to 0. Whether the 0s are typed or computed is
+  the one thing a 2-minute trace of F settles.
+- **What may be edited** is in the grid layout (8213), not the data layout
+  the runner reads: 35 `Editor/Expr` conditions. A line on a completed or
+  pending delivery (`CheckEdit` = `ufn_Prevent_Edit`) takes no edit; a saved
+  line's quantity changes only through a split or a cancel; the unit price
+  only while `RowId_Price` is empty; `UnitCost` never. The runner does not
+  read these yet: a write kind must, or DW writes what the screen forbids.
+- **Import (C2)** is 305 of 1,090 SO creates in the log, one person, each a
+  one-line SO, and it skips screen rules the typed create runs
+  (`BasePriceCode` on 6% of imported lines, 74% of typed). DW creates as the
+  typed create does; the paste sheet (ADR 0026) stays the way back.
+- **The quotation screen** (8375) holds 2 rule kinds the runner refuses
+  (`BravoNullValidator` ×2, `BravoCommandKey` ×3) and calls two writing
+  procedures as server constraints (`usp_B30BizDocDetailSQ_ExpiryDate_Update`,
+  `usp_B30BizDocSQ_ExpiryDate_Update`), which the runner must never call
+  while it plans. The YCBG screen (11766) has nothing it refuses.

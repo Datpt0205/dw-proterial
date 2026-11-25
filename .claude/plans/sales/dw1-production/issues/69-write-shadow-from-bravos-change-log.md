@@ -98,3 +98,13 @@ Next: rebuild each date and quantity save's document before the save
 (today's rows with the old values put back) and replay it through the
 runner; then the gateway's read of the log and the table of results.
 
+
+**2026-11-25, what the log cannot see:** Bravo's `DML_B30BizDocDetailSO_ChangeLog`
+was generated before the line's later columns existed: of 125 it records 100,
+and none of `IsCancel`, `CancelDate`, `CancelQuantity`, `CancelPrice`,
+`CancelRemark`, `CancelPRS`, `CancelAmount`, `PORequestDate1`, `CDDate`. So a
+cancel reaches the log only as its quantity and price set to 0, and slice 1
+classed 55 of the 119 "price" saves wrongly (64 lines carry `Cancel` today;
+12 more were set to 0 with no status). Fix owed in `_kind`: a line whose
+quantity goes to 0 is a cancel. A shadow comparing a date save leaves
+`CDDate` out, and the cancel shadow compares what the log holds only.
