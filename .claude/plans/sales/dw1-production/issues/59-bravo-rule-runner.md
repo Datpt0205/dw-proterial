@@ -145,3 +145,19 @@ configuration as it changes.
 
 Measured facts and file locations: `docs/proterial/bravo/BRAVO-NOI-BO.md`
 (gitignored).
+
+**2026-11-25, script 03c read (production).** The shared templates are in
+hand (decoded beside the layouts, local only). `BizDocEditor` holds menus
+and three command guards only: Edit needs `ISNULL(IsActive,1)=1`; New,
+NewAsCopy and Edit need `BRANCH('IsGroup')=0`; Edit and the saves need
+`BranchCode=BRANCH()`. `BizDocVoucher` adds Delete, Recall and Import guards
+on the branch and `Lock`. Neither defines the 6 validators with no
+`ClassName` nor a rule for a new line's `ConvertRate9` or `QuantityBox`:
+those are the client program's. The schema gives the columns' defaults
+(`DF_B30BizDocDetail_ConvertRate9` 1, `DF_B30BizDocDetail_QuantityBox` 0) and
+a `ufn_B30BizDoc_Default_QuantityBox(BasePriceCode, PackingType)` no object
+in the schema calls. Next: the runner applies the template's guards (so a
+plan is no longer provisional for want of the template), with `BRANCH()`
+read from the session; the 6 validators stay undecided until a UAT save
+shows their kind.
+

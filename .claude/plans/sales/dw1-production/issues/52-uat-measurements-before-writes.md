@@ -61,6 +61,27 @@ quantity). The 11-25 production runs of 05, 03c, 06 and 03b came back as
 empty files (0 bytes in `Downloads/DB-Bravo`): to be saved again from the
 remote machine.
 
+**2026-11-25, the production runs read** (`Downloads/DB-Bravo-2.rar`, local
+only): 05, 06, 03b and 03c all complete.
+- 05: Bravo has **no approval workflow for SO or quotations** (only PR's
+  statuses are configured), so "Duyệt an SO" (item 3) is moot. Quotation
+  kinds QN 62, QM 9, QS 2, none 29; 1,099 POs sit under 2 SOs, a few under
+  up to 93 (2.3% of POs: the read-back's "PO under several SOs" refusal
+  matters).
+- 06: 197 active users, 173 with an employee code (24 without), 6 codes
+  shared by up to 3 active users, valid e-mail on 18 only, Windows mapping
+  last touched 2019 and pointing at one active user: the employee code is
+  the only workable anchor (ADR 0027 holds); IT to fill 24 codes. SO
+  permission rows exist for Edit, New, NewAsCopy, Save. Section 6 failed on
+  a bug in the script (an aggregate of an aggregate), not needed now.
+- 03b on production: the 5 active SO Import templates (3, 16, 17, 18, 72)
+  and every SO/YCBG layout are identical to the 11-20 run; one layout
+  changed (the item catalogue's).
+- Still unmeasured, so the gateway keeps refusing writes: the event word of
+  an existing SO's save, which permission rows a save applies, whether the
+  change-log triggers write to `<db>_Log` (script 07, IT), and the kind of
+  the 6 validators with no `ClassName` (ticket 59).
+
 ## Acceptance
 
 - The trace CSV and the document numbers are in `Downloads/DB-Bravo`.
