@@ -154,5 +154,8 @@ Decided:
 First step: `description_attributes`. Then (same day) both reply readers,
 labelled by the move the PIC takes on the case, and `message_intent`,
 labelled by the kind the person picks, optionally, as they mark the mail
-handled (a choice that routes nothing). `po_body_extraction` waits: with it
-off, a PO in the mail becomes no case, so no decision labels it.
+handled (a choice that routes nothing). Then (2026-11-25, Đạt's choice)
+`po_body_extraction`: with it off a PO in the mail becomes no case, so its
+reading is kept under its customer and PO number and labelled value by value
+when an order case of the same PO is prepared by a person, from the file
+that arrives later.

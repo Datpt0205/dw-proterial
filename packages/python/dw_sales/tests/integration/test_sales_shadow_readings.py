@@ -188,3 +188,35 @@ async def test_a_case_s_reply_readings_are_taken_together_by_its_scope_only(
     assert sorted(taken, key=lambda r: r.step.value) == sorted(readings, key=lambda r: r.step.value)
     async with uow(world.alpha) as work:
         assert await work.shadow_readings.take_for_case(list(ModelStep), case_id) == []
+
+
+async def test_a_po_read_in_shadow_is_taken_by_its_match_key_in_its_scope_only(
+    uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    step = ModelStep.PO_BODY_EXTRACTION
+    reading = ShadowReading(
+        reading_id=uuid.uuid4(),
+        step=step,
+        item_key=item_key("MB1", None, None, step),
+        message_id="MB1",
+        attachment_id=None,
+        line_no=None,
+        field="po",
+        proposed={"header": {"po_date": "2026-11-20"}, "lines": {"1": {"quantity": "100"}}},
+        prompt="sales.po_body_extraction@1.2.0",
+        model_profile="onprem",
+        rules=None,
+        confidence=None,
+        read_at=_AT,
+        match_key="KMH:po-77",
+    )
+    await _keep(uow, world.alpha, reading)
+    async with uow(world.beta) as work:
+        assert await work.shadow_readings.take_matching(step, "KMH:po-77") == []
+        await work.commit()
+    async with uow(world.alpha) as work:
+        assert await work.shadow_readings.take_matching(step, "KMH:po-78") == []
+        assert await work.shadow_readings.take_matching(step, "KMH:po-77") == [reading]
+        await work.commit()
+    async with uow(world.alpha) as work:
+        assert await work.shadow_readings.take_matching(step, "KMH:po-77") == []

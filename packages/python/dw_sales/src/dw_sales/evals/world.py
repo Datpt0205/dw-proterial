@@ -955,6 +955,10 @@ class _ShadowReadings:
         ]
         return [self._held.pop(k) for k in found]
 
+    async def take_matching(self, step: ModelStep, match_key: str) -> Sequence[ShadowReading]:
+        found = [k for k, r in self._held.items() if r.step is step and r.match_key == match_key]
+        return [self._held.pop(k) for k in found]
+
     async def prune(self, before: datetime) -> int:
         old = [k for k, r in self._held.items() if r.read_at < before]
         for key in old:

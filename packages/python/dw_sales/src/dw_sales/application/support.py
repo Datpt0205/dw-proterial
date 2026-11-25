@@ -38,7 +38,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     Stored,
 )
-from dw_sales.application.shadow import label_reply_move
+from dw_sales.application.shadow import label_po_settled, label_reply_move
 from dw_sales.application.visibility import sees_case
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
@@ -215,6 +215,7 @@ async def save_order(
             to_status=after.status.value,
             at=event.occurred_at,
         )
+        await label_po_settled(work, context, ids, before=before, after=after, at=event.occurred_at)
     await work.audit.append(
         audit_row(
             context,

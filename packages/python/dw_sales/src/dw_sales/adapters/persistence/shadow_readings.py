@@ -47,6 +47,7 @@ shadow_readings = sa.Table(
     sa.Column("confidence", sa.Float),
     sa.Column("read_at", _TS, nullable=False),
     sa.Column("case_id", UUID(as_uuid=True)),
+    sa.Column("match_key", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 _S = shadow_readings
@@ -69,6 +70,7 @@ def _values(scope: SalesScope, reading: ShadowReading) -> dict[str, object]:
         "confidence": reading.confidence,
         "read_at": reading.read_at,
         "case_id": reading.case_id,
+        "match_key": reading.match_key,
     }
 
 
@@ -88,6 +90,7 @@ def _reading(row: RowMapping) -> ShadowReading:
         confidence=row["confidence"],
         read_at=row["read_at"],
         case_id=row["case_id"],
+        match_key=row["match_key"],
     )
 
 
@@ -127,6 +130,14 @@ class SqlShadowReadings:
         statement = (
             sa.delete(_S)
             .where(_S.c.case_id == case_id, _S.c.step.in_([s.value for s in steps]))
+            .returning(*_S.c)
+        )
+        return [_reading(row) for row in (await self._session.execute(statement)).mappings()]
+
+    async def take_matching(self, step: ModelStep, match_key: str) -> Sequence[ShadowReading]:
+        statement = (
+            sa.delete(_S)
+            .where(_S.c.step == step.value, _S.c.match_key == match_key)
             .returning(*_S.c)
         )
         return [_reading(row) for row in (await self._session.execute(statement)).mappings()]

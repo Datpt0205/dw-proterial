@@ -162,6 +162,9 @@ SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset(
         # A mail no reader understood, labelled by the kind the person picks
         # as they mark it handled.
         ModelStep.MESSAGE_INTENT,
+        # A PO written in a mail going to a person, labelled value by value
+        # when an order case of the same customer and PO number is prepared.
+        ModelStep.PO_BODY_EXTRACTION,
     }
 )
 

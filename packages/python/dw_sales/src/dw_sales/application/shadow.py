@@ -37,7 +37,16 @@ from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFact
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
-from dw_sales.domain.shadow import REPLY_MOVES, REPLY_SHADOW_STEPS, ShadowReading, shadow_label
+from dw_sales.domain.orders import OrderCase
+from dw_sales.domain.shadow import (
+    PO_SETTLED_MOVE,
+    REPLY_MOVES,
+    REPLY_SHADOW_STEPS,
+    ShadowReading,
+    po_body_labels,
+    po_match_key,
+    shadow_label,
+)
 
 __all__ = [
     "SHADOW_KEPT_FOR",
@@ -47,6 +56,7 @@ __all__ = [
     "ShadowReadingRepositoryPort",
     "ShadowReadings",
     "ShadowRetention",
+    "label_po_settled",
     "label_reply_move",
 ]
 
@@ -76,6 +86,11 @@ class ShadowReadingRepositoryPort(Protocol):
     ) -> Sequence[ShadowReading]:
         """``steps``' readings of the case's items, deleted as they are
         returned: a move on the case labels the newest and ends the rest."""
+        ...
+
+    async def take_matching(self, step: ModelStep, match_key: str) -> Sequence[ShadowReading]:
+        """``step``'s readings found by ``match_key``, deleted as they are
+        returned: the record they match labels them once."""
         ...
 
     async def prune(self, before: datetime) -> int:
@@ -226,6 +241,34 @@ async def label_reply_move(
             new_id=ids.new_uuid,
         )
         for _, reading in sorted(newest.items())
+    ]
+    if labels:
+        await work.labelled_cases.append(labels)
+
+
+async def label_po_settled(
+    work: SalesUnitOfWork,
+    context: AccessContext,
+    ids: IdGenerator,
+    *,
+    before: OrderCase,
+    after: OrderCase,
+    at: datetime,
+) -> None:
+    """A person preparing an order labels what `po_body_extraction` read in
+    shadow of a mail with the same customer and PO number (ticket 67), value
+    by value, against the values the case is entered with. A lane's move
+    labels nothing."""
+    if not context.scopes or (before.status.value, after.status.value) != PO_SETTLED_MOVE:
+        return
+    key = po_match_key(after.customer_code, after.effective_header.po_no)
+    taken = await work.shadow_readings.take_matching(ModelStep.PO_BODY_EXTRACTION, key)
+    labels = [
+        label
+        for reading in taken
+        for label in po_body_labels(
+            reading, after, at=at, by=context.principal_id, new_id=ids.new_uuid
+        )
     ]
     if labels:
         await work.labelled_cases.append(labels)

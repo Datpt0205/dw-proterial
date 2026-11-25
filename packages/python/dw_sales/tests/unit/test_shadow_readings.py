@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, get_args
@@ -28,6 +29,7 @@ from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, DescriptionReader
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.routed_mail import HandledRequest
 from dw_sales.application.shadow import (
@@ -36,16 +38,24 @@ from dw_sales.application.shadow import (
     ShadowBudget,
     ShadowReadings,
     ShadowRetention,
+    label_po_settled,
     label_reply_move,
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
-from dw_sales.domain.orders import MappingStatus, OrderCase
+from dw_sales.domain.orders import MappingStatus, OrderCase, OrderStatus
 from dw_sales.domain.reply_intent import ProposedStep
-from dw_sales.domain.shadow import NO_STEP, REPLY_MOVES, ShadowReading, item_key
+from dw_sales.domain.shadow import (
+    NO_STEP,
+    REPLY_MOVES,
+    ShadowReading,
+    item_key,
+    po_body_shadow,
+    po_match_key,
+)
 from dw_sales.evals.descriptions import Replayed
 from dw_sales.evals.graders import AN, CALLERS, GIANG
-from dw_sales.evals.recorded import Recorded
+from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.replies import correction_case
 from dw_sales.evals.world import (
     ALPHA,
@@ -53,6 +63,7 @@ from dw_sales.evals.world import (
     NOW,
     MemoryStore,
     SampleSet,
+    SampleWith,
     World,
     measured_gate,
     open_world,
@@ -64,6 +75,9 @@ from .test_model_reading import ANSWERS, CATALOG, INBOX, PLATFORM, REPO, RUN, SC
 pytestmark = pytest.mark.unit
 
 STEP = ModelStep.DESCRIPTION_ATTRIBUTES
+BODY = json.loads(
+    (REPO / "evals" / "fixtures" / "cases" / "sales_po_body.json").read_text(encoding="utf-8")
+)["golden"][0]
 AT = datetime(2026, 11, 24, 9, 0, tzinfo=UTC)
 
 
@@ -540,3 +554,127 @@ def test_a_kind_outside_the_platforms_is_refused_at_the_door() -> None:
 async def test_with_shadow_off_a_mail_to_a_person_is_not_read() -> None:
     world = await _unread_mail("delivery_change", shadow=False)
     assert world.store.state(ALPHA).shadow_readings == {}
+
+
+# -------------------------------- a PO in the mail, labelled when prepared --
+
+
+def test_a_po_is_found_again_by_its_customer_and_number_as_retyped() -> None:
+    assert po_match_key("KMH", " PO 123 ") == po_match_key("KMH", "po 123")
+    assert po_match_key("KMH", "PO123") != po_match_key("KHB", "PO123")
+
+
+async def _m01_with_a_body_reading(change: dict[str, str] | None = None) -> tuple[World, Any]:
+    """M01's order case, and a reading in shadow of a PO in another mail
+    (``MX-BODY``) holding the same values (M01's own document), or those with
+    ``change`` on line 1."""
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, shadow=True)
+    _, case = (await world.process_each(AN, ["M01"]))["M01"]
+    assert isinstance(case, OrderCase)
+    reading = po_body_shadow(
+        case.document,
+        message_id="MX-BODY",
+        customer_code=case.customer_code,
+        at=AT,
+        new_id=uuid.uuid4,
+    )
+    if change:
+        proposed = json.loads(json.dumps(reading.proposed))
+        proposed["lines"]["1"].update(change)
+        reading = reading.model_copy(update={"proposed": proposed})
+    async with world.store(ALPHA) as work:
+        await work.shadow_readings.keep([reading])
+        await work.commit()
+    return world, case
+
+
+def _body_labels(world: World) -> list[Any]:
+    return [
+        c for c in world.store.state(ALPHA).labelled_cases if c.step is ModelStep.PO_BODY_EXTRACTION
+    ]
+
+
+async def test_preparing_an_order_labels_a_po_read_in_shadow_value_by_value() -> None:
+    world, case = await _m01_with_a_body_reading()
+    await world.open_sources(AN, case.case_id)
+    await world.services.order_commands.prepare(
+        AN.context(), case.case_id, case_version=world.order(case.case_id).case_version
+    )
+    labels = _body_labels(world)
+    assert labels and {c.verdict for c in labels} == {"confirmed"}
+    assert {(c.message_id, c.case_id, c.gate) for c in labels} == {
+        ("MX-BODY", case.case_id, "shadow")
+    }
+    fields = {(c.line_no, c.field) for c in labels}
+    assert (None, "po_date") in fields and (1, "quantity") in fields
+    assert world.store.state(ALPHA).shadow_readings == {}
+
+
+async def test_a_value_read_otherwise_is_a_correction_and_the_rest_confirmed() -> None:
+    world, case = await _m01_with_a_body_reading({"quantity": "999"})
+    await world.open_sources(AN, case.case_id)
+    await world.services.order_commands.prepare(
+        AN.context(), case.case_id, case_version=world.order(case.case_id).case_version
+    )
+    (wrong,) = [c for c in _body_labels(world) if c.verdict != "confirmed"]
+    assert (wrong.line_no, wrong.field, wrong.proposed, wrong.verdict) == (
+        1,
+        "quantity",
+        "999",
+        "corrected",
+    )
+
+
+async def test_a_lane_or_another_move_labels_no_po() -> None:
+    world, case = await _m01_with_a_body_reading()
+    lane = AccessContext(
+        tenant_id=ALPHA.tenant_id.value,
+        workspace_id=ALPHA.workspace_id.value,
+        principal_id=uuid.uuid4(),
+        roles=frozenset(),
+        scopes=frozenset(),
+        plan_id="background",
+    )
+    prepared = case.model_copy(update={"status": OrderStatus.PREPARED})
+    checked = case.model_copy(update={"status": OrderStatus.CHECKED})
+    async with world.store(ALPHA) as work:
+        await label_po_settled(work, lane, Uuid4Generator(), before=case, after=prepared, at=AT)
+        await label_po_settled(
+            work, AN.context(), Uuid4Generator(), before=case, after=checked, at=AT
+        )
+        await work.commit()
+    assert _body_labels(world) == []
+    assert len(world.store.state(ALPHA).shadow_readings) == 1
+
+
+async def test_a_po_written_in_a_mail_to_a_person_is_read_in_shadow() -> None:
+    """VI (a PO in the mail) with the step off goes to a person, read in
+    shadow and kept by its customer and PO number."""
+    spec = BODY["message"]
+    kind = Recorded(raw={"language": "vi", "referenced_number_spans": [], "kind": "po"})
+    model = ByPrompt(
+        {"sales.message_intent": kind, PO_BODY_EXTRACTION.prompt_id: Recorded(raw=BODY["answer"])}
+    )
+    with SampleWith([spec]) as sample:
+        world = open_world(REPO, sample, CALLERS, model=model, shadow=True)
+        current = world.policies.order_rules
+        off = {
+            "po_body_extraction": False,
+            "message_intent": False,
+            "skill_mail_kinds": False,
+            "triage_card": False,
+        }
+        rules = current.model_copy(
+            update={
+                "policy_version": "1.94.0",
+                "model_assist": current.model_assist.model_copy(update={**off, "shadow": True}),
+            }
+        )
+        world.store.rule_versions.seed_approved(ALPHA.tenant_id.value, rules)
+        disposition, case = (await world.process_each(AN, [spec["message_id"]]))[spec["message_id"]]
+    assert case is None and disposition.kind == "routed_to_sales"
+    held = {r.step: r for r in world.store.state(ALPHA).shadow_readings.values()}
+    assert set(held) == {ModelStep.PO_BODY_EXTRACTION, ModelStep.MESSAGE_INTENT}
+    po = held[ModelStep.PO_BODY_EXTRACTION]
+    assert po.match_key is not None
+    assert po.match_key.startswith(f"{disposition.customer_code}:")

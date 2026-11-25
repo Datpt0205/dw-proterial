@@ -1,6 +1,6 @@
 # 67 — Shadow mode shared by every model step
 
-Status: in-progress (2026-11-24): slices 1-2 done (engine, `description_attributes`, both reply readers, `message_intent`), one switch on by default with an hourly cap; left `po_body_extraction` and the steps a person asks for
+Status: in-progress (2026-11-25): slices 1-3 done (engine, `description_attributes`, both reply readers, `message_intent`, `po_body_extraction`), one switch on by default with an hourly cap; left the steps a person asks for
 
 ## Why
 
@@ -117,6 +117,20 @@ Slice 2, same day (Đạt: "đồng ý, làm 1 rồi 2"):
 - Tests: unit 22 (+ web 1), integration 8; mutation 8/8 red (one test added
   after a green mutation: shadow off reads no mail kind).
 
-Left: `po_body_extraction` (off, a PO in the mail is no case: no decision
-to label yet); the steps a person asks for (drafts, SalesOrder, chat); a
-line on the process page showing each step's shadow labels.
+Slice 3, 2026-11-25 (Đạt chose "ghép khi PO đó vào DW sau"):
+
+- **A PO in the mail**: a mail with no document going to a person, from a
+  known customer, is read in shadow by `po_body_extraction`; the reading
+  keeps every value it read (the PO's date and currency, each line's code,
+  quantity, unit, price, asked date) and a match key
+  `<customer>:<PO number, trimmed, case-folded>` (migration `fe1e1ddf1ea6`).
+- **Labelled when the same PO is prepared**: a person's move
+  in_review → prepared on an order case of that customer and PO number (the
+  PO arriving later as a file, or uploaded) takes the readings and labels
+  each value against the case's entered values, Sales' corrections
+  included; a line the case does not hold kept nothing. Only POs that later
+  reach DW as a case are measured.
+- Tests: unit 27, mutation 4/4 red; integration test of the match key.
+
+Left: the steps a person asks for (drafts, SalesOrder, chat); a line on the
+process page showing each step's shadow labels.

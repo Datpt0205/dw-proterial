@@ -214,6 +214,7 @@ from dw_sales.domain.shadow import (
     REPLY_SHADOW_STEPS,
     description_shadows,
     kind_shadow,
+    po_body_shadow,
     reply_shadow,
 )
 
@@ -672,8 +673,60 @@ class OrderIntake:
         ):
             return Classification(MessageKind.DESIGN_REPLY)
         await self._shadow_kind(scope, message, sender, rules, run)
+        if not self._carries_document(attached):
+            await self._shadow_body(scope, message, sender, rules, run)
         return _for_a_person(
             message, carries_document=self._carries_document(attached), sender=sender
+        )
+
+    async def _shadow_body(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> None:
+        """A PO written in a mail going to a person, read in shadow by
+        `po_body_extraction` where the sender is a customer (ticket 67): kept
+        for the order case of the same customer and PO number to label when
+        a person prepares it. A mail with no PO in it keeps nothing; a shadow
+        reading never fails the mail."""
+        step = ModelStep.PO_BODY_EXTRACTION
+        if self.body_pos is None or self.shadow is None or run is None or sender is None:
+            return
+        if not await self.shadow.shadows(scope, rules, step):
+            return
+        try:
+            read = await self.body_pos.read(
+                message,
+                scope=scope,
+                customer_code=sender.code,
+                received_on=await self._received_on(scope, message.received_at),
+                run=run,
+            )
+        except (ModelUnavailableError, BudgetExceededError, QuotaExceededError) as exc:
+            _LOG.info(
+                "shadow reading of %s gave nothing for %s in tenant %s: %s",
+                step.value,
+                message.message_id,
+                scope.tenant_id.value,
+                type(exc).__name__,
+            )
+            return
+        if isinstance(read, str):
+            return
+        await self.shadow.keep(
+            scope,
+            [
+                po_body_shadow(
+                    read,
+                    message_id=message.message_id,
+                    customer_code=sender.code,
+                    at=self.shadow.clock.now(),
+                    new_id=uuid.uuid4,
+                )
+            ],
         )
 
     async def _shadow_kind(
