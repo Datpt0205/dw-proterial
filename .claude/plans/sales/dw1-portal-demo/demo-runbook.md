@@ -118,56 +118,19 @@ qua `/dev-login`).
 Mỗi dòng: **[cửa sổ] người — vào đâu → bấm gì → thấy gì.** "Bị từ chối" là phần
 phải cho khán giả thấy, **không phải lỗi**.
 
-### 3.1 Một đơn hàng: đọc PO → kiểm tra → yêu cầu khách sửa
+> **Đi đúng vòng đời thật — KHÔNG demo ngược.** Khách **hỏi giá → DW báo giá**
+> (3.1) → khách **gửi PO (file SO)** → **DW nhập & kiểm đơn** (3.2, 3.3).
+> - DW **nhập SO từ file SO khách gửi, không "sinh" SO từ báo giá** (Đạt 25/11):
+>   về kỹ thuật không bấm "kéo dữ liệu từ báo giá". Nhưng về **nghiệp vụ, báo giá
+>   vẫn có trước**.
+> - Quan hệ "phải có báo giá trước" **nhìn thấy được**: khi kiểm đơn, DW **đối
+>   chiếu PO với báo giá còn hiệu lực** (bước O6) — không có thì ra cờ **"Không có
+>   báo giá còn hiệu lực"** (3.3). Nhớ chỉ cái cờ này cho khán giả để nối mạch.
+> - (Lưu ý nội bộ, chưa vào code) Bravo còn cần YCBG/báo giá/master-data tồn tại
+>   trước mới tạo được SO — là **giả định cần kiểm bằng trace/layout** cho gateway
+>   (ticket 68), không bịa vào demo.
 
-**[Cửa sổ 1 — An]**
-1. Vào **`/sales/inbox`** (menu *Sales → Hộp thư*). Tìm dòng **M04**, bấm
-   **"DW xử lý thư M04"**. Thư chuyển "Đang chờ DW1" → vài giây sau "Đã tạo hồ sơ".
-   > Giải thích: bấm là **xếp việc cho worker**; worker đọc file đính kèm trong
-   > sandbox cách ly, rồi mở hồ sơ. (Vì vậy worker phải đang chạy — mục 1.)
-2. Bấm **"Mở đơn hàng"** để vào hồ sơ. Thấy **2 cờ**: "Đơn giá lệch báo giá, dòng
-   2" và "Mã chưa có trong convert list, dòng 3".
-3. Bấm **"Mở bản gốc"** → trang PDF hiện ra với **khung bao quanh từng giá trị
-   DW đọc được**. Đóng lại.
-4. Với **từng cờ**: chọn **"Yêu cầu khách sửa"** → **"Ghi quyết định"** (lưu ý:
-   không có nút "chấp nhận tất cả" — cố ý, duyệt từng cái).
-5. Bấm **"Gửi yêu cầu khách sửa"** → trong hộp thoại bấm **"Gửi yêu cầu sửa"**.
-   Hồ sơ sang **"Chờ khách sửa PO"**; có thư nháp liệt kê đúng 2 dòng để tải.
-
-### 3.2 Một đơn hàng khác: chuẩn bị → **kiểm chéo (ghế duyệt)** → xác nhận
-
-Đây là chỗ cho thấy **tách nhiệm**: người chuẩn bị ≠ người kiểm chéo.
-
-**[Cửa sổ 1 — An]**
-1. Ở Hộp thư, **"DW xử lý thư M03"** → **"Mở đơn hàng"**. (M03 là PO tiếng Việt,
-   khách BRN, có cờ **"Thiếu NOC/ESF"** đang **giữ đơn**.)
-2. Bấm **"Mở bản gốc"** xem trang PDF có khung đọc.
-3. Quyết định các cờ bằng **"Chấp nhận + lý do"** → **"Ghi quyết định"**:
-   - "Không có báo giá còn hiệu lực, dòng 2" — lý do ví dụ *"Khách xác nhận giá
-     theo thư 22/09"*.
-   - "Thiếu NOC/ESF" — lý do ví dụ *"Đã kiểm tra danh sách cấm, chờ ESF năm nay"*.
-     (An có quyền kiểm soát xuất khẩu nên xác nhận được cờ này.)
-4. Nút **"Chuẩn bị xong"** đang khóa với lý do *"Chưa mở nguồn…"*. Bấm **"Mở
-   nguồn"**, rồi bấm **"Chuẩn bị xong"**.
-5. Trong "Tệp và thư nháp DW1 soạn": bấm soạn và **"Tải"** *"Tệp nhập Bravo (mẫu
-   giả lập)"* (file .xlsx). → Đây là bản mô phỏng; **DW chưa ghi vào Bravo thật**.
-6. Bấm **"Đã nhập Bravo"** → gõ số đơn ví dụ `SO26-1001` → tích *"Tôi đã đối
-   chiếu…"* → **"Ghi số đơn Bravo"**.
-7. **Bị từ chối (phải khoe):** nút **"Kiểm chéo đạt"** của An **bị khóa**, lý do
-   bằng chữ: *"Bạn đã chuẩn bị đơn này nên không tự kiểm chéo được (tách nhiệm…)."*
-
-**[Cửa sổ 2 — Giang]** (ghế duyệt)
-8. Mở đúng hồ sơ M03 đó (vào `/sales/orders`, chọn PO đó — hoặc dán cùng URL
-   `/sales/orders/<id>` từ cửa sổ 1). Bấm **"Mở nguồn"**, rồi **"Kiểm chéo đạt"**,
-   ghi **"Ghi chú kiểm chéo"** (đã đối chiếu gì) → **"Ghi kiểm chéo đạt"**.
-   > Giang không phải người chuẩn bị nên được kiểm chéo. Lượt chạy DW tiếp tục.
-
-**[Cửa sổ 1 — An]**
-9. Quay lại hồ sơ, bấm **"Đã gửi xác nhận"** → nhập **ngày xác nhận cho từng
-   dòng** → **"Ghi đã gửi xác nhận"**. Thư nháp xác nhận nêu tên **cả người chuẩn
-   bị lẫn người kiểm chéo**.
-
-### 3.3 Một báo giá: YCBG → Design → định giá → **duyệt (ghế duyệt)**
+### 3.1 Báo giá: YCBG → Design → định giá → **duyệt (ghế duyệt)**
 
 **[Cửa sổ 1 — An]**
 1. Hộp thư → **"DW xử lý thư M10"** → mở hồ sơ báo giá (`/sales/quotes/<id>`).
@@ -190,6 +153,58 @@ phải cho khán giả thấy, **không phải lỗi**.
 
 > Muốn khoe thêm *An cũng có quyền duyệt*: ở một báo giá do **người khác** định
 > giá, An bấm "Duyệt báo giá" được — chỉ không duyệt được cái của **chính An**.
+
+### 3.2 Đơn hàng: đọc PO → kiểm tra → yêu cầu khách sửa
+
+Giờ mới tới PO (sau khi đã báo giá ở 3.1).
+
+**[Cửa sổ 1 — An]**
+1. Vào **`/sales/inbox`** (menu *Sales → Hộp thư*). Tìm dòng **M04**, bấm
+   **"DW xử lý thư M04"**. Thư chuyển "Đang chờ DW1" → vài giây sau "Đã tạo hồ sơ".
+   > Giải thích: bấm là **xếp việc cho worker**; worker đọc file đính kèm trong
+   > sandbox cách ly, rồi mở hồ sơ. (Vì vậy worker phải đang chạy — mục 1.)
+2. Bấm **"Mở đơn hàng"** để vào hồ sơ. Thấy **2 cờ**: "Đơn giá lệch báo giá, dòng
+   2" (DW **đối chiếu PO với báo giá** — chính là quan hệ "có báo giá trước") và
+   "Mã chưa có trong convert list, dòng 3".
+3. Bấm **"Mở bản gốc"** → trang PDF hiện ra với **khung bao quanh từng giá trị
+   DW đọc được**. Đóng lại.
+4. Với **từng cờ**: chọn **"Yêu cầu khách sửa"** → **"Ghi quyết định"** (lưu ý:
+   không có nút "chấp nhận tất cả" — cố ý, duyệt từng cái).
+5. Bấm **"Gửi yêu cầu khách sửa"** → trong hộp thoại bấm **"Gửi yêu cầu sửa"**.
+   Hồ sơ sang **"Chờ khách sửa PO"**; có thư nháp liệt kê đúng 2 dòng để tải.
+
+### 3.3 Đơn hàng khác: chuẩn bị → **kiểm chéo (ghế duyệt)** → xác nhận
+
+Đây là chỗ cho thấy **tách nhiệm**: người chuẩn bị ≠ người kiểm chéo.
+
+**[Cửa sổ 1 — An]**
+1. Ở Hộp thư, **"DW xử lý thư M03"** → **"Mở đơn hàng"**. (M03 là PO tiếng Việt,
+   khách BRN, có cờ **"Thiếu NOC/ESF"** đang **giữ đơn**.)
+2. Bấm **"Mở bản gốc"** xem trang PDF có khung đọc.
+3. Quyết định các cờ bằng **"Chấp nhận + lý do"** → **"Ghi quyết định"**:
+   - "Không có báo giá còn hiệu lực, dòng 2" — lý do ví dụ *"Khách xác nhận giá
+     theo thư 22/09"*. (Đây là cờ thể hiện "phải có báo giá trước".)
+   - "Thiếu NOC/ESF" — lý do ví dụ *"Đã kiểm tra danh sách cấm, chờ ESF năm nay"*.
+     (An có quyền kiểm soát xuất khẩu nên xác nhận được cờ này.)
+4. Nút **"Chuẩn bị xong"** đang khóa với lý do *"Chưa mở nguồn…"*. Bấm **"Mở
+   nguồn"**, rồi bấm **"Chuẩn bị xong"**.
+5. Trong "Tệp và thư nháp DW1 soạn": bấm soạn và **"Tải"** *"Tệp nhập Bravo (mẫu
+   giả lập)"* (file .xlsx). → Đây là bản mô phỏng; **DW chưa ghi vào Bravo thật**.
+6. Bấm **"Đã nhập Bravo"** → gõ số đơn ví dụ `SO26-1001` → tích *"Tôi đã đối
+   chiếu…"* → **"Ghi số đơn Bravo"**.
+7. **Bị từ chối (phải khoe):** nút **"Kiểm chéo đạt"** của An **bị khóa**, lý do
+   bằng chữ: *"Bạn đã chuẩn bị đơn này nên không tự kiểm chéo được (tách nhiệm…)."*
+
+**[Cửa sổ 2 — Giang]** (ghế duyệt)
+8. Mở đúng hồ sơ M03 đó (vào `/sales/orders`, chọn PO đó — hoặc dán cùng URL
+   `/sales/orders/<id>` từ cửa sổ 1). Bấm **"Mở nguồn"**, rồi **"Kiểm chéo đạt"**,
+   ghi **"Ghi chú kiểm chéo"** (đã đối chiếu gì) → **"Ghi kiểm chéo đạt"**.
+   > Giang không phải người chuẩn bị nên được kiểm chéo. Lượt chạy DW tiếp tục.
+
+**[Cửa sổ 1 — An]**
+9. Quay lại hồ sơ, bấm **"Đã gửi xác nhận"** → nhập **ngày xác nhận cho từng
+   dòng** → **"Ghi đã gửi xác nhận"**. Thư nháp xác nhận nêu tên **cả người chuẩn
+   bị lẫn người kiểm chéo**.
 
 ---
 
