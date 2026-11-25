@@ -116,3 +116,8 @@ file, so C2 (Import) is dropped: DW does not need it. A cancel's price going
 to 0 is the screen's own rule (`Eval_Ct0_OriginalUnitCost_ResetWhenQuantityZero`
 on `Quantity9`). Handed to Đạt: one session, E/F/G on UAT's SO2609-000335
 (lines of `QuantityBox` 5 and 3, 610 m), each saved apart.
+
+**2026-11-25, Đạt:** no SO is ever made from a quotation; Sales makes every
+SO from the SO file. C is dropped, and the SO screen's pull from a quotation
+(`RowId_SQ`, `usp_B30BizDocDetailSO_GetSQData_HCV`) is not a path DW writes
+by. The trace still owed is E, F, G only.
