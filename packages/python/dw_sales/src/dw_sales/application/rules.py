@@ -242,7 +242,7 @@ PRICE_BEARING: Final = frozenset(
     {RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, RuleKey.PRICING, RuleKey.SALESORDER_RULES}
 )
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
-_ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
+_ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD, RuleKey.HANDOFFS)
 
 
 def _sales_schemas() -> dict[Any, type[BaseModel]]:
@@ -319,7 +319,8 @@ class TenantRuleBook(RuleBook):
         name (the template refs of the files already drawn at the case's
         version, the first that names that copy), else the tenant's current
         one; Design's mailboxes from the tenant's current quote rules, which
-        the reply check reads too. A stamp this process no longer holds is
+        the reply check reads too, and PC's from its current order rules,
+        which the reading of PC's mail reads too. A stamp this process no longer holds is
         refused: a file drawn again must be the file drawn before."""
         found: dict[RuleKey, Policy] = {}
         named = [_copy_ref(stamp) for stamp in stamps]
@@ -335,15 +336,18 @@ class TenantRuleBook(RuleBook):
                     details={"copy": stamped, "reason": "template_version_gone"},
                 )
             found[key] = policy
-        emails, documents, upload = (found[key] for key in _ARTIFACT_COPY)
+        emails, documents, upload, handoffs = (found[key] for key in _ARTIFACT_COPY)
         assert isinstance(emails, SalesEmailCopy)
         assert isinstance(documents, SalesDocumentCopy)
         assert isinstance(upload, BravoUploadLayout)
+        assert isinstance(handoffs, HandoffCopy)
         return ArtifactCopy(
             emails=emails,
             documents=documents,
             upload=upload,
+            handoffs=handoffs,
             design_mailboxes=(await self.quote_rules(scope)).design_mailboxes,
+            pc_mailboxes=(await self.order_rules(scope)).pc_mailboxes,
             zone=await self.time_zone(scope),
             salesorder=await self.salesorder_rules(scope),
         )

@@ -919,6 +919,7 @@ def build_dw1(
                 artifact_bytes=artifact_bytes,
                 quotes=assembly.services.quote_commands,
                 answers=assembly.services.update_loops,
+                pc=assembly.services.pc_requests,
                 access=requester_access,
                 notifications=notifications,
                 clock=clock,

@@ -30,6 +30,7 @@ import {
 import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
+import { ARTIFACT_KIND, label } from "../../_lib/labels";
 import type { Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
@@ -57,8 +58,10 @@ function pcReason(order: Order, viewer: Viewer): string | null {
 
 /**
  * "Hỏi PC" (ticket 07): the request to PC DW1 drafts from the order, which
- * the person copies into Teams or a mail and sends from their own account
- * (DW1 sends nothing); "Ghi đã hỏi PC" starts the wait DW1 reminds on; and
+ * the person copies into Teams or a mail from their own account, or sends as
+ * the order's PC draft from the files panel (ticket 77: to the tenant's PC
+ * mailboxes only, recorded asked on its receipt); "Ghi đã hỏi PC" starts the
+ * wait DW1 reminds on; and
  * per line, PC's answer, a date or several dates splitting the line, each
  * with its first and current date.
  */
@@ -172,6 +175,12 @@ export function PcRequestPanel({
             Ghi đã hỏi PC
           </GuardedButton>
         </Space>
+        {reason === null ? (
+          <Typography.Text type="secondary">
+            Hoặc soạn và gửi “{label(ARTIFACT_KIND, "pc_request_draft")}” ở mục
+            tệp và thư nháp: thư đi rồi DW1 tự ghi đã hỏi PC.
+          </Typography.Text>
+        ) : null}
         <ActionError error={error} />
         <Table<Line>
           size="small"

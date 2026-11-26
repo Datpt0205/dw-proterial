@@ -548,7 +548,16 @@ def assemble(
             assignment=assignment,
         ),
         outbound=OutboundMailService(
-            uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled, design=book
+            uow,
+            gate,
+            catalog,
+            directory,
+            artifact_bytes,
+            clock,
+            ids,
+            outbox_enabled,
+            design=book,
+            pc=book,
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays, catalog),
         prompts=PromptVersionsService(uow, gate, prompts),

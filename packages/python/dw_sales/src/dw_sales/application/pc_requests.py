@@ -5,10 +5,14 @@ line (ticket 07; drawio 2a, WIV-03-012 step O4).
   order case (each line asked as it is entered: its number, PRV code, the
   customer's code, quantity and requested date) in the tenant's hand-off copy
   (`sales_handoffs`, `pc_request`). The person copies it into Teams or a mail
-  from their own account: DW1 sends nothing, and nothing is stored of it.
+  from their own account, or sends the same words as the order's
+  `pc_request_draft` from their mailbox through the outbox (ticket 77), to
+  the tenant's `pc_mailboxes` only.
 - **"Ghi đã hỏi PC"** (`ask`): the case waits on PC from now
   (`OrderCase.ask_pc`), and the `sales_followups` lane reminds the PIC once
-  the tenant's `waiting_pc` hours have passed with no answer.
+  the tenant's `waiting_pc` hours have passed with no answer. A mail sent
+  through the outbox records it on its receipt, as the person who pressed,
+  from when they pressed (`sales_outbound`).
 - **PC's answer** (`answer`), one line at a time: each delivery's quantity and
   PC's date, typed by the person (or filled from PC's mail by the reader of
   item 7, `pc_dates`, and checked by the person). A split whose quantities do
@@ -39,7 +43,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.handoffs import HandoffCopyPort, PcAskedLine, render_pc_request
+from dw_sales.application.handoffs import HandoffCopyPort, pc_asked_lines, render_pc_request
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.overview_ports import FollowupPolicyPort
 from dw_sales.application.support import (
@@ -92,23 +96,12 @@ class PcRequests:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             case = (await stored_order(work, case_id, viewer=context)).case
-        asked = set(case.pc_lines())
+        asked = pc_asked_lines(case)
         rendered = render_pc_request(
             await self.copy.handoff_copy(scope),
             customer_code=case.customer_code,
             po_no=case.effective_header.po_no,
-            lines=[
-                PcAskedLine(
-                    line_no=line.line_no,
-                    prv_code=line.mapping.prv_code,
-                    customer_item_code=line.effective.customer_item_code,
-                    quantity=line.effective.quantity,
-                    uom=line.effective.uom,
-                    requested_date=line.effective.requested_date,
-                )
-                for line in case.lines
-                if line.line_no in asked
-            ],
+            lines=asked,
         )
         request = case.pc_request
         reminder = None
@@ -116,7 +109,7 @@ class PcRequests:
             reminder = pc_reminder_at(await self.followups.followups(scope), request.at)
         return PcRequestView(
             case_version=case.case_version,
-            lines=sorted(asked),
+            lines=sorted(line.line_no for line in asked),
             subject=rendered.subject,
             body=rendered.body,
             template_ref=rendered.template_ref,
@@ -124,15 +117,24 @@ class PcRequests:
         )
 
     async def ask(
-        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        *,
+        case_version: int,
+        sent_at: datetime | None = None,
     ) -> CaseChangeView:
-        """ "Ghi đã hỏi PC": the case waits on PC from the server's now."""
+        """ "Ghi đã hỏi PC": the case waits on PC from the server's now, or,
+        recorded from an outbox receipt, from ``sent_at``, when the server
+        queued the mail at the person's press (never a value a request
+        carries: the route does not take it)."""
         await self._require(context, case_id)
         actor, now = order_actor(context, self.gate), self.clock.now()
+        asked_at = now if sent_at is None else sent_at
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
-            after = decided(lambda: case.ask_pc(actor, now))
+            after = decided(lambda: case.ask_pc(actor, asked_at))
             await save_order(
                 work, context, self.ids, case, after, person_event("order.pc_asked", context, now)
             )

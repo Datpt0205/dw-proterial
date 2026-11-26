@@ -79,6 +79,10 @@ describe("Hỏi PC (ticket 07)", () => {
     expect(await screen.findByText(/Ngày giao cho PO BRN-PO-1/)).toBeTruthy();
     expect(screen.getByText("Chờ PC trả ngày")).toBeTruthy();
     expect(screen.getByText(/DW1 nhắc lúc/)).toBeTruthy();
+    // Ticket 77: the same request goes from DW1 as a draft to PC's mailbox.
+    expect(
+      screen.getByText(/Thư hỏi PC ngày giao \(nháp\)”.*DW1 tự ghi đã hỏi PC/s),
+    ).toBeTruthy();
     fireEvent.click(button("Ghi đã hỏi PC"));
     await waitFor(() =>
       expect(api.recordPcAsked).toHaveBeenCalledWith(
@@ -113,6 +117,7 @@ describe("Hỏi PC (ticket 07)", () => {
       }),
     );
     expect(button("Ghi đã hỏi PC").disabled).toBe(true);
+    expect(screen.queryByText(/DW1 tự ghi đã hỏi PC/)).toBeNull();
     expect(
       screen.getByText(/Chỉ hỏi và ghi ngày PC khi đơn đang xem xét/),
     ).toBeTruthy();

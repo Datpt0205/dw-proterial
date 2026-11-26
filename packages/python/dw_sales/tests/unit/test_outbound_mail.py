@@ -87,6 +87,7 @@ async def _rig(tmp_path: Path) -> Rig:
         artifact_bytes=world.objects,
         quotes=world.services.quote_commands,
         answers=world.services.update_loops,
+        pc=world.services.pc_requests,
         access=Directory(CALLERS),
         notifications=told,
         clock=clock,
@@ -146,7 +147,7 @@ async def test_someone_with_no_outbox_folder_is_told_and_nothing_is_sent(tmp_pat
         await rig.world.services.outbound.mails(SENDER.context(), CaseKind.QUOTE, rig.case_id)
     ).mails
     assert (mail.status, mail.error) == ("failed", "not_connected")
-    assert rig.told.calls == [((SENDER.user_id,), "Chưa gửi được thư cho khách")]
+    assert rig.told.calls == [((SENDER.user_id,), "Chưa gửi được thư")]
     assert rig.world.quote(rig.case_id).status is QuoteStatus.APPROVED
 
 
@@ -262,6 +263,7 @@ async def test_a_changes_answer_sent_from_dw1_records_it_sent_on_the_receipt(
             artifact_bytes=world.objects,
             quotes=world.services.quote_commands,
             answers=world.services.update_loops,
+            pc=world.services.pc_requests,
             access=Directory(CALLERS),
             notifications=Told(),
             clock=FixedClock(world.store.clock.now()),
@@ -290,8 +292,8 @@ async def test_a_draft_to_design_is_never_a_customer_draft(tmp_path: Path) -> No
     from dw_sales.application.outbound_mail import INTERNAL_SENDABLE, SENDABLE
 
     for kind, kinds in SENDABLE.items():
-        assert not kinds & INTERNAL_SENDABLE[kind]
-        assert "ycbg_draft" not in kinds | INTERNAL_SENDABLE[kind]
+        assert not kinds & INTERNAL_SENDABLE[kind].keys()
+        assert "ycbg_draft" not in kinds | INTERNAL_SENDABLE[kind].keys()
 
 
 async def test_a_request_to_design_goes_to_designs_mailboxes_and_records_it_sent(
@@ -323,6 +325,7 @@ async def test_a_request_to_design_goes_to_designs_mailboxes_and_records_it_sent
         artifact_bytes=world.objects,
         quotes=world.services.quote_commands,
         answers=world.services.update_loops,
+        pc=world.services.pc_requests,
         access=Directory(CALLERS),
         notifications=Told(),
         clock=FixedClock(world.store.clock.now()),
@@ -373,3 +376,168 @@ async def test_a_request_to_design_is_refused_when_it_names_no_configured_design
         await outbound.send(
             DIEU.context(), CaseKind.QUOTE, case_id, draft.artifact_id, case_version=version()
         )
+
+
+# ------------------------------------------- ticket 77: the request to PC
+
+PC_BOX = "pc@proterial.example"
+
+
+def _lane(world: World, root: Path, told: Told | None = None) -> OutboundLane:
+    return OutboundLane(
+        uow=world.store,
+        scopes=Scopes([ALPHA]),
+        outbox=FolderOutbox(root),
+        artifact_bytes=world.objects,
+        quotes=world.services.quote_commands,
+        answers=world.services.update_loops,
+        pc=world.services.pc_requests,
+        access=Directory(CALLERS),
+        notifications=told or Told(),
+        clock=FixedClock(world.store.clock.now()),
+        ids=Uuid4Generator(),
+    )
+
+
+async def _pc_draft(world: World, case_id: uuid.UUID) -> Any:
+    (draft,) = await world.services.artifacts.render_order(
+        AN.context(),
+        case_id,
+        kind="pc_request_draft",
+        case_version=world.order(case_id).case_version,
+    )
+    return draft
+
+
+async def _send_order(world: World, case_id: uuid.UUID, draft: Any, outbound: Any = None) -> Any:
+    return await (outbound or world.services.outbound).send(
+        AN.context(),
+        CaseKind.ORDER,
+        case_id,
+        draft.artifact_id,
+        case_version=world.order(case_id).case_version,
+    )
+
+
+async def test_a_request_to_pc_goes_to_pcs_mailbox_and_records_it_asked_from_the_press(
+    tmp_path: Path,
+) -> None:
+    """The order's request to PC, in the words the page shows, goes to the
+    tenant's PC mailbox only, from the PIC's in one press; the receipt
+    records "Ghi đã hỏi PC" as the PIC, the wait starting when they pressed."""
+    from email import message_from_bytes
+    from email import policy as email_policy
+
+    from .test_pc_dates import _naming_pc
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+    await _naming_pc(world, PC_BOX)
+    draft = await _pc_draft(world, case_id)
+    data = (
+        await world.services.artifacts.order_artifact(AN.context(), case_id, draft.artifact_id)
+    ).data
+    message = message_from_bytes(data, policy=email_policy.default)
+    page = await world.services.pc_requests.draft(AN.context(), case_id)
+    assert [a.addr_spec for a in message["To"].addresses] == [PC_BOX]
+    assert message["Subject"] == page.subject
+    body = message.get_body(preferencelist=("plain",))
+    assert body is not None
+    text = body.get_content().replace("\r\n", "\n")
+    assert text.strip() == page.body.strip()  # the page's words, one owner
+
+    pressed = world.store.clock.now()
+    mail = await _send_order(world, case_id, draft)
+    lane = _lane(world, tmp_path)
+    (tmp_path / mail.mailbox / "outbox").mkdir(parents=True)
+    await lane.tick()
+    FakeFlow(tmp_path).run()
+    world.store.clock.advance_to(pressed + RECEIPT_WITHIN / 3)
+    await lane.tick()
+
+    request = world.order(case_id).pc_request
+    assert request is not None and request.by == AN.user_id and request.at == pressed
+    asked = [e for e in world.audit() if e.action == "sales.order.pc_asked"]
+    assert [e.actor_id.value for e in asked] == [AN.user_id]
+
+
+@dataclass
+class _Mailboxes:
+    """A team's mailboxes as configured after the draft named another."""
+
+    names: tuple[str, ...]
+
+    async def quote_rules(self, scope: SalesScope) -> Any:
+        return replace_rules(design_mailboxes=self.names)
+
+    async def order_rules(self, scope: SalesScope) -> Any:
+        return replace_rules(pc_mailboxes=self.names)
+
+
+def replace_rules(**kw: Any) -> Any:
+    @dataclass
+    class _Rules:
+        design_mailboxes: tuple[str, ...] = ()
+        pc_mailboxes: tuple[str, ...] = ()
+
+    return _Rules(**kw)
+
+
+async def test_a_request_to_pc_is_refused_unless_pcs_own_setting_names_every_recipient(
+    tmp_path: Path,
+) -> None:
+    """Checked against PC's setting as it stands at the press, never against
+    Design's: Design's mailboxes naming PC's address do not let it through."""
+    from .test_pc_dates import _naming_pc
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+    await _naming_pc(world, PC_BOX)
+    draft = await _pc_draft(world, case_id)
+    moved = replace(
+        world.services.outbound,
+        pc=_Mailboxes(("pc-moved@proterial.example",)),
+        design=_Mailboxes((PC_BOX,)),
+    )
+
+    with pytest.raises(ConflictError, match="hộp thư PC") as refused:
+        await _send_order(world, case_id, draft, moved)
+    assert refused.value.details["rule"] == "recipient_not_pc"
+    assert await _send_order(world, case_id, draft)  # as configured: queued
+
+
+async def test_a_request_to_pc_is_not_drawn_while_no_pc_mailbox_is_configured() -> None:
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+    with pytest.raises(ConflictError, match="hộp thư của PC") as refused:
+        await _pc_draft(world, case_id)
+    assert refused.value.details["reason"] == "pc_mailbox_unknown"
+
+
+@dataclass
+class _CaseMovedOn:
+    """`PcRequests.ask` on a case that left the step before the receipt."""
+
+    async def ask(self, context: AccessContext, case_id: uuid.UUID, **kw: Any) -> None:
+        raise ConflictError("PC is not asked from DW1 in uploaded_to_bravo")
+
+
+async def test_a_sent_request_to_pc_the_case_cannot_record_is_told_to_the_pic(
+    tmp_path: Path,
+) -> None:
+    from .test_pc_dates import _naming_pc
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+    await _naming_pc(world, PC_BOX)
+    mail = await _send_order(world, case_id, await _pc_draft(world, case_id))
+    told = Told()
+    lane = replace(_lane(world, tmp_path, told), pc=_CaseMovedOn())
+    (tmp_path / mail.mailbox / "outbox").mkdir(parents=True)
+    await lane.tick()
+    FakeFlow(tmp_path).run()
+    await lane.tick()
+
+    assert told.calls == [((AN.user_id,), "Thư hỏi PC đã gửi nhưng chưa ghi được")]
+    assert world.order(case_id).pc_request is None

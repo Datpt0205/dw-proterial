@@ -16,8 +16,9 @@ import { GuardedButton } from "./guarded-button";
 type Mail = SalesSchemas["OutboundMailView"];
 
 /** The drafts each case may send from the viewer's mailbox: every mail DW1
- * drafts to the customer (`SENDABLE`, ticket 76) and the requests to Design,
- * which go only to the tenant's Design mailboxes (`INTERNAL_SENDABLE`, 77). */
+ * drafts to the customer (`SENDABLE`, ticket 76) and the requests to Design
+ * and PC, which go only to that team's mailboxes in the tenant's rules
+ * (`INTERNAL_SENDABLE`, 77). */
 export const SENDABLE: Record<"order" | "quote", readonly string[]> = {
   order: [
     "confirmation_draft",
@@ -27,6 +28,7 @@ export const SENDABLE: Record<"order" | "quote", readonly string[]> = {
     "internal_change_notice",
     "cannot_supply_draft",
     "design_code_request",
+    "pc_request_draft",
   ],
   quote: [
     "send_draft",
@@ -81,7 +83,7 @@ export function OutboundSend({
 }: {
   kind: "order" | "quote";
   caseId: string;
-  /** Which customer draft this sends (one of `SENDABLE[kind]`). */
+  /** Which draft this sends (one of `SENDABLE[kind]`). */
   draftKind: string;
   /** That draft at the current version, downloadable; absent: not drafted yet. */
   draft: Artifact | undefined;
@@ -110,7 +112,7 @@ export function OutboundSend({
   const reason = !mails.data.enabled
     ? "DW1 chưa được nối để gửi thư: tải tệp .eml và gửi từ hộp thư của bạn."
     : !hasScope(PREPARE[kind])
-      ? "Chỉ người chuẩn bị hồ sơ mới gửi được thư cho khách."
+      ? "Chỉ người chuẩn bị hồ sơ mới gửi được thư này."
       : !draft
         ? `Soạn “${label(ARTIFACT_KIND, draftKind)}” ở trên trước.`
         : travelling || latest?.status === "sent"

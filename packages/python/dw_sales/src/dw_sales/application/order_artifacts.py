@@ -35,6 +35,7 @@ from dw_sales.application.artifact_content import (
     time_text,
 )
 from dw_sales.application.drafting import Drafting, Rendered, anchor_text, filled, line_template
+from dw_sales.application.handoffs import pc_asked_lines, render_pc_request
 from dw_sales.application.local_time import local_day
 from dw_sales.application.salesorder_rules import Lookups, StepRefusedError, filled_row
 from dw_sales.domain.anchors import SourceAnchor
@@ -1015,6 +1016,23 @@ def design_code_request(d: OrderDrafting) -> tuple[Rendered, ...]:
     ]
     values = {**_order_values(d, INTERNAL), "lines": "\n".join(lines)}
     return (d.eml(bound.ref, filled(bound, draft, values)),)
+
+
+def pc_request_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
+    """ "Hỏi PC" as a mail (ticket 77): the words the page shows
+    (`PcRequests.draft`, the hand-off copy's ``pc_request``) addressed to the
+    tenant's PC mailboxes only, for the PIC to send from their own."""
+    case, handoffs = d.case, d.copy.handoffs
+    rendered = render_pc_request(
+        handoffs,
+        customer_code=case.customer_code,
+        po_no=case.effective_header.po_no,
+        lines=pc_asked_lines(case),
+    )
+    draft = replace(d.pc_email(), subject=rendered.subject, body=rendered.body)
+    # Named as the copy it is drawn from (`rules._copy_ref`), so a draw
+    # again at this version is drawn with the same words.
+    return (d.eml(f"{handoffs.copy_id}.pc_request@{handoffs.version}", draft),)
 
 
 def cannot_supply_draft(d: OrderDrafting) -> tuple[Rendered, ...]:

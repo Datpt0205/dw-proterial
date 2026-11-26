@@ -89,6 +89,7 @@ from dw_sales.application.order_artifacts import (
     cross_check_sheet,
     design_code_request,
     internal_change_notice,
+    pc_request_draft,
     portal_checklist,
 )
 from dw_sales.application.ports import (
@@ -128,6 +129,7 @@ from dw_sales.domain.orders import (
     MappingStatus,
     OrderCase,
     OrderStatus,
+    changeable_statuses,
 )
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus, SignedCopy
 
@@ -269,6 +271,11 @@ ORDER_GATES: Final[Mapping[str, ArtifactGate[OrderCase]]] = {
         _order(convert_list_proposal),
     ),
     "design_code_request": ArtifactGate(False, _unmapped_without_code, _order(design_code_request)),
+    # The request to PC as a mail (ticket 77): where PC is asked from DW1
+    # (`OrderCase.ask_pc`), before the order is in Bravo.
+    "pc_request_draft": ArtifactGate(
+        False, lambda c, *_: c.status in changeable_statuses(), _order(pc_request_draft)
+    ),
     "cannot_supply_draft": ArtifactGate(
         False,
         lambda c, *_: c.close_reason is CloseReason.CANNOT_SUPPLY,

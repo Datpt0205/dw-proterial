@@ -833,6 +833,7 @@ export const ARTIFACT_KIND = {
   internal_change_notice: "Thư báo khách thay đổi nội bộ (nháp)",
   convert_list_proposal: "Đề xuất bổ sung bảng quy đổi mã",
   design_code_request: "Phiếu nhờ Design tạo mã",
+  pc_request_draft: "Thư hỏi PC ngày giao (nháp)",
   cannot_supply_draft: "Thư báo không cung cấp được (nháp)",
   ycbg_draft: "YCBG (nháp, mẫu giả lập)",
   design_request_draft: "Thư gửi Design (nháp)",

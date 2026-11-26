@@ -37,6 +37,7 @@ from dw_sales.application.artifact_content import (
     label,
     time_text,
 )
+from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.salesorder_rules import (
     CustomerSalesOrderRules,
@@ -61,15 +62,19 @@ MOCK_COPY: Final = (
 class ArtifactCopy:
     """The versioned sources an artifact is rendered with, pinned by the
     release manifest: the drafts' words, the sheets' words, the upload
-    layout, Design's mailboxes (`sales_quote_rules`, their owner), and the
-    time zone a document's times are printed in (`working_hours.time_zone`
-    of `sales_followups`, its owner), and the customers' own SalesOrder
-    rules the upload file applies (ticket 38)."""
+    layout, the hand-offs' words (the request to PC, ticket 77), Design's
+    mailboxes (`sales_quote_rules`, their owner) and PC's (`pc_mailboxes`
+    of `sales_order_rules`, theirs), and the time zone a document's times
+    are printed in (`working_hours.time_zone` of `sales_followups`, its
+    owner), and the customers' own SalesOrder rules the upload file applies
+    (ticket 38)."""
 
     emails: SalesEmailCopy
     documents: SalesDocumentCopy
     upload: BravoUploadLayout
+    handoffs: HandoffCopy
     design_mailboxes: tuple[str, ...]
+    pc_mailboxes: tuple[str, ...]
     zone: ZoneInfo
     salesorder: SalesOrderRules
 
@@ -210,6 +215,16 @@ class Drafting[CaseT]:
             )
         to = tuple(EmailAddress(address=a) for a in self.copy.design_mailboxes)
         return bound, self._draft(to)
+
+    def pc_email(self) -> EmailDraft:
+        """An empty draft to PC's mailboxes (ticket 77): only those the
+        tenant configured, refused while it names none."""
+        if not self.copy.pc_mailboxes:
+            raise ConflictError(
+                "chưa cấu hình hộp thư của PC",
+                details={"reason": "pc_mailbox_unknown"},
+            )
+        return self._draft(tuple(EmailAddress(address=a) for a in self.copy.pc_mailboxes))
 
     def _draft(self, to: tuple[EmailAddress, ...]) -> EmailDraft:
         sender = self.emails.sender
