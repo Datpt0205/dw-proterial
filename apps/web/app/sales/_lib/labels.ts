@@ -256,6 +256,13 @@ export const BRAVO_WRITE_STATUS = {
   in_doubt: "Chưa rõ đã ghi chưa",
 } as const;
 
+/** What a Bravo write changes on an SO line (tickets 53, 71). */
+export const BRAVO_WRITE_FIELD = {
+  confirmed_date: "Ngày XN giao hàng",
+  quantity: "Số lượng",
+  cancel: "Hủy dòng",
+} as const;
+
 /** Design's result for a line in Bravo (`DesignCheck`). */
 export const DESIGN_VERDICT = {
   quote: "Báo giá được",

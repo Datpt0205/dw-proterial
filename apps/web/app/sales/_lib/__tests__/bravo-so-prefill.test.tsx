@@ -62,6 +62,7 @@ let readBack: View = NOTHING_READ;
 const api = {
   pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => prepared),
+  bravoWrites: vi.fn(async () => []),
   bravoReadBack: vi.fn(async () => readBack),
   bravoEntry: vi.fn(async () => ({})),
   myWork: vi.fn(async () => []),

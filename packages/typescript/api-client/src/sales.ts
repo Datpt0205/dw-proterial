@@ -459,6 +459,27 @@ export class SalesApi {
     );
   }
 
+  /** The case's SO line changes proposed for Bravo, latest first (ticket 53). */
+  bravoWrites(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/bravo-writes">(
+      `/api/v1/sales/orders/${enc(caseId)}/bravo-writes`,
+    );
+  }
+
+  /** One SO line's date, quantity or cancel, proposed for Bravo (tickets 53, 71). */
+  proposeBravoWrite(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/bravo-writes`,
+      body,
+      key,
+    );
+  }
+
   /** The original as the reader saw it; the server records that it was served. */
   orderSource(caseId: string, attachmentId: string, region: SourceRegion) {
     return this.get<"/api/v1/sales/orders/{case_id}/source/{attachment_id}">(

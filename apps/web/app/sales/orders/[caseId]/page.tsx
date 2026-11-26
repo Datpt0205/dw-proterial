@@ -89,6 +89,7 @@ import { QuoteLinksPanel } from "./quote-link";
 import { InternalChangePanel } from "./internal-change";
 import { UpdateLoopPanel } from "./update-loop";
 import { BravoReadBackPanel } from "./bravo-read-back";
+import { BravoWritesPanel } from "./bravo-writes";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
@@ -521,6 +522,8 @@ function OrderDetail() {
       ) ? (
         <BravoReadBackPanel caseId={caseId} />
       ) : null}
+
+      <BravoWritesPanel order={data} viewer={viewer} onChanged={reload} />
 
       <UpdateLoopPanel
         order={data}
