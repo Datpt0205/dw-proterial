@@ -3085,7 +3085,7 @@ export interface components {
              * Field
              * @enum {string}
              */
-            field: "confirmed_date" | "quantity";
+            field: "confirmed_date" | "quantity" | "cancel";
             /** Line No */
             line_no: number;
             /**
@@ -3186,7 +3186,7 @@ export interface components {
             /** Case Version */
             case_version: number;
             /** Change */
-            change: components["schemas"]["ConfirmedDateChange"] | components["schemas"]["QuantityChange"];
+            change: components["schemas"]["ConfirmedDateChange"] | components["schemas"]["QuantityChange"] | components["schemas"]["CancelChange"];
         };
         /** BriefView */
         BriefView: {
@@ -3206,6 +3206,21 @@ export interface components {
             opening: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * CancelChange
+         * @description The whole line cancelled in Bravo, with the person's reason (ticket 71:
+         *     "Order status" Cancel, the quantity to 0, the reason; the layout computes
+         *     the rest).
+         */
+        CancelChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            field: "cancel";
+            /** Reason */
+            reason: string;
         };
         /**
          * CardDecisionRequest

@@ -1,6 +1,6 @@
 # 71 — Gateway: cancel an SO line (`so.line.cancel`)
 
-Status: in-progress — gateway done (2026-11-26); DW1's proposal (order page, chat) next
+Status: in-progress — gateway and DW1's proposal API done 2026-11-26; the order page's button and the chat's cancel left
 Blocked by: 70
 Category: enhancement (tickets 53, 63)
 
@@ -62,3 +62,14 @@ fail the same on the previous runner. Live, a quantity or cancel change
 also calls `usp_B20BizProcessGroup` with the new total, which stays
 undecided until procedures run against Bravo (ticket 50): the plan is
 held back until then, as the quantity's is today.
+
+**2026-11-26, DW1's proposal.** `CancelChange(reason ≤ 58)` joins
+`LineChange`; `POST /orders/{id}/lines/{n}/bravo-writes` proposes it like a
+date or a quantity: `BravoContract.prepare` builds `CancelLine(reason)`, the
+approval shows before = the quantity it ends, after = "Hủy: <reason>".
+Migration `a56aac13a035` admits `cancel` and `so.line.cancel@1` in the
+proposals' CHECKs. Tests: unit 58 (the command hashed as the gateway takes
+it; a cancel without its reason refused), Postgres 4, contracts and the TS
+client regenerated. Left: a button on the order page (no page proposes a
+Bravo write yet; ticket 53's date/quantity go through the chat) and the
+chat's own cancel kind.

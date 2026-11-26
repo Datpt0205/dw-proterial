@@ -83,6 +83,10 @@ class BravoUnreachableError(Exception):
 # ------------------------------------------------------------------ the change
 
 
+# A cancel's reason as the approval shows it after "Hủy: " (64 in all).
+CANCEL_REASON_CHARS: Final = 58
+
+
 class ConfirmedDateChange(BaseModel):
     """ "XN giao hàng": the line's confirmed delivery date."""
 
@@ -101,7 +105,21 @@ class QuantityChange(BaseModel):
     value: Decimal = Field(gt=0, max_digits=18, decimal_places=4)
 
 
-LineChange = Annotated[ConfirmedDateChange | QuantityChange, Field(discriminator="field")]
+class CancelChange(BaseModel):
+    """The whole line cancelled in Bravo, with the person's reason (ticket 71:
+    "Order status" Cancel, the quantity to 0, the reason; the layout computes
+    the rest)."""
+
+    model_config = _FROZEN
+
+    field: Literal["cancel"]
+    reason: str = Field(min_length=1, max_length=CANCEL_REASON_CHARS)
+
+
+LineChange = Annotated[
+    ConfirmedDateChange | QuantityChange | CancelChange, Field(discriminator="field")
+]
+AnyChange = ConfirmedDateChange | QuantityChange | CancelChange
 
 
 def _text(value: object) -> str | None:
@@ -158,9 +176,7 @@ class BravoCommandsPort(Protocol):
     through an adapter (import-linter: a context's application never imports
     it)."""
 
-    def prepare(
-        self, change: ConfirmedDateChange | QuantityChange, so: BravoSo, line: BravoSoLine
-    ) -> PreparedWrite: ...
+    def prepare(self, change: AnyChange, so: BravoSo, line: BravoSoLine) -> PreparedWrite: ...
 
     def hash_of(self, kind: str, content: dict[str, Any]) -> str:
         """The content's hash, once it reads back as a command of ``kind``;
@@ -185,9 +201,11 @@ class ApprovalSignerPort(Protocol):
     ) -> str: ...
 
 
-def before_value(change: ConfirmedDateChange | QuantityChange, line: BravoSoLine) -> str | None:
-    """Bravo's value the change replaces, as text. Refuses a change Bravo
-    already holds."""
+def before_value(change: AnyChange, line: BravoSoLine) -> str | None:
+    """Bravo's value the change replaces, as text: a cancel replaces the
+    line's quantity. Refuses a change Bravo already holds."""
+    if isinstance(change, CancelChange):
+        return _text(line.quantity)
     held: object = line.confirmed_date if change.field == "confirmed_date" else line.quantity
     if held == change.value:
         raise ConflictError(
@@ -213,7 +231,7 @@ class BravoWriteAsked(BaseModel):
     line_no: int = Field(ge=1, le=99_999)
     so_no: str = Field(min_length=1, max_length=64)
     item_code: str = Field(max_length=64)
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None = Field(default=None, max_length=64)
     after: str = Field(max_length=64)
     kind: str = Field(max_length=64)
@@ -235,7 +253,7 @@ class BravoLineWrite(BaseModel):
     line_no: int = Field(ge=1, le=99_999)
     so_no: str
     item_code: str
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None
     after: str
     kind: str
@@ -274,7 +292,7 @@ class BravoLineWriteView(BaseModel):
 
     approval_id: uuid.UUID
     line_no: int
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None
     after: str
     status: WriteStatus
@@ -395,9 +413,7 @@ class BravoNotConnected:
     async def write(self, kind: str, content: dict[str, Any], token: str) -> GatewayAnswer:
         return GatewayAnswer("refused", None, "no_bravo_gateway_configured")
 
-    def prepare(
-        self, change: ConfirmedDateChange | QuantityChange, so: BravoSo, line: BravoSoLine
-    ) -> PreparedWrite:
+    def prepare(self, change: AnyChange, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
         raise ConflictError("Bravo is not connected")
 
     def hash_of(self, kind: str, content: dict[str, Any]) -> str:
@@ -422,7 +438,7 @@ class BravoLineWrites:
         context: AccessContext,
         case_id: uuid.UUID,
         line_no: int,
-        change: ConfirmedDateChange | QuantityChange,
+        change: AnyChange,
         *,
         case_version: int,
     ) -> BravoLineWriteView:
@@ -479,7 +495,11 @@ class BravoLineWrites:
             item_code=rows[0].item_code,
             field=change.field,
             before=before,
-            after=str(_text(change.value)),
+            after=(
+                f"Hủy: {change.reason}"
+                if isinstance(change, CancelChange)
+                else str(_text(change.value))
+            ),
             kind=prepared.kind,
             command=prepared.content,
             content_hash=prepared.content_hash,

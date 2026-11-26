@@ -16,10 +16,11 @@ from typing import Any, Self
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ApproveAndResumeService, ProposedDecision
 from dw_bravo.approval_token import ApprovalTokenSigner, ApprovalTokenVerifier
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity, content_hash
+from dw_bravo.contract import CancelLine, LineRef, SetConfirmedDate, SetQuantity, content_hash
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
@@ -38,6 +39,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoWriteDecisions,
     BravoWriteSettlement,
     BravoWriteStamp,
+    CancelChange,
     ConfirmedDateChange,
     GatewayAnswer,
     PreparedWrite,
@@ -326,6 +328,26 @@ async def test_a_quantity_change_names_the_quantity_column_bravo_holds() -> None
     )
     assert request.payload["content_hash"] == content_hash(expected)
     assert (request.payload["before"], request.payload["after"]) == ("1200", "1100")
+
+
+async def test_a_cancel_is_proposed_with_its_reason_against_the_row_bravo_holds() -> None:
+    # Ticket 71: the gateway runs the cancel since the 11-25 UAT trace.
+    world = World()
+
+    request = await _proposed(world, CancelChange(field="cancel", reason="Khách hủy dòng"))
+
+    expected = CancelLine(
+        line=LineRef(so_id=10, line_id=20, line_rowversion=ROWVERSION), reason="Khách hủy dòng"
+    )
+    payload = request.payload
+    assert payload["kind"] == "so.line.cancel@1"
+    assert payload["content_hash"] == content_hash(expected)
+    assert (payload["before"], payload["after"]) == ("1200", "Hủy: Khách hủy dòng")
+
+
+def test_a_cancel_without_its_reason_is_not_a_change() -> None:
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason="")
 
 
 @pytest.mark.parametrize(

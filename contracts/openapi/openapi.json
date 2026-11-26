@@ -1922,7 +1922,8 @@
           "field": {
             "enum": [
               "confirmed_date",
-              "quantity"
+              "quantity",
+              "cancel"
             ],
             "title": "Field",
             "type": "string"
@@ -2222,6 +2223,7 @@
           "change": {
             "discriminator": {
               "mapping": {
+                "cancel": "#/components/schemas/CancelChange",
                 "confirmed_date": "#/components/schemas/ConfirmedDateChange",
                 "quantity": "#/components/schemas/QuantityChange"
               },
@@ -2233,6 +2235,9 @@
               },
               {
                 "$ref": "#/components/schemas/QuantityChange"
+              },
+              {
+                "$ref": "#/components/schemas/CancelChange"
               }
             ],
             "title": "Change"
@@ -2288,6 +2293,29 @@
           "at"
         ],
         "title": "BriefView",
+        "type": "object"
+      },
+      "CancelChange": {
+        "additionalProperties": false,
+        "description": "The whole line cancelled in Bravo, with the person's reason (ticket 71:\n\"Order status\" Cancel, the quantity to 0, the reason; the layout computes\nthe rest).",
+        "properties": {
+          "field": {
+            "const": "cancel",
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 58,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "CancelChange",
         "type": "object"
       },
       "CancelResult": {
