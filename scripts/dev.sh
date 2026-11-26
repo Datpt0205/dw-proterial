@@ -47,7 +47,9 @@ esac
 busy=""
 for spec in "${DW_API_PORT:-8000}:API" "$WEB_PORT:web"; do
   port="${spec%%:*}"
-  if ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN; then
+  # A connection that opens means something listens. `ss` is not in Git Bash,
+  # where this check silently passed; bash's /dev/tcp is in both.
+  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
     busy="$busy  port $port (${spec##*:}) is already in use"$'\n'
   fi
 done
