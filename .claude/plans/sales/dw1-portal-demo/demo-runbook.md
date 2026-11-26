@@ -72,15 +72,22 @@ DW_WORKER_SALES_INBOX_LANE=false make dev   # API :8300, web :3300, worker
 > dùng **Chrome Profiles** (biểu tượng avatar → "Add" tạo 3 profile: Lái/Duyệt/
 > Admin). Chắc chắn nhất.
 
-Ở **mỗi** cửa sổ, vào `http://localhost:3300/dev-login` — đây là trang đăng nhập
-nhanh (chỉ có ở bản chạy cục bộ), hiện một danh sách người với nút **"Đăng nhập"**
-cạnh mỗi người. Bấm đúng người cho cửa sổ đó:
+Ở **mỗi** cửa sổ, vào `http://localhost:3300` → app chuyển sang **trang đăng
+nhập Keycloak**. Đăng nhập **bằng EMAIL** (realm bật `loginWithEmailAllowed`),
+mật khẩu là `DW_DEV_USER_PASSWORD` trong `.env`:
 
-- Cửa sổ 1 → **Nguyễn Văn An**
-- Cửa sổ 2 → **Đỗ Trường Giang**
-- Cửa sổ 3 → **Lê Thị Chi**
+- Cửa sổ 1 (Lái) → `an.nguyen@alpha.local`
+- Cửa sổ 2 (Duyệt) → `giang.do@alpha.local`
+- Cửa sổ 3 (Admin) → `chi.le@alpha.local`
 
-Không cần mật khẩu. Sau khi bấm là vào thẳng Trang chủ.
+> **Dùng EMAIL, đừng dùng username.** Username Keycloak của `chi.le` là **`chi`**
+> (tài khoản có sẵn trong realm import; seed chỉ đặt lại mật khẩu, không đổi
+> username), nên gõ `chi.le` sẽ **không vào được** — gõ **email** là chắc cho cả
+> ba.
+>
+> (Bản cục bộ còn có trang một-chạm `/dev-login` liệt kê sẵn các persona: nếu nó
+> hiện thì bấm **"Đăng nhập"** cạnh người cần, không cần mật khẩu; nếu nó chuyển
+> thẳng sang Keycloak thì dùng email như trên.)
 
 ### 2b. Cấp quyền rộng cho account Lái (An) — làm 1 lần sau mỗi `demo-reset`
 
