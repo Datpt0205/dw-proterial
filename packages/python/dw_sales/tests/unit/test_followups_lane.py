@@ -383,3 +383,20 @@ async def test_the_pic_is_told_at_once_when_dw1_hands_the_case_over() -> None:
 async def test_a_tenant_may_switch_your_turn_off() -> None:
     rig = await _rig()
     assert await rig.tick(rig.received) == ()
+
+
+async def test_a_cross_check_tells_who_may_cross_check_and_never_the_preparer() -> None:
+    """Sales ticket 78: the order waits on a cross-check by someone who made
+    none of it. Every holder of the cross-check scope is told, beside the
+    head; the PIC who prepared it is not, since they may not check it."""
+    rig = await _rig(turn=True)
+    await rig.world.walk_to_uploaded(AN, rig.order_id)
+    case = rig.world.order(rig.order_id)
+    assert str(case.status) == "uploaded_to_bravo"
+
+    # The walk's events are stamped by the world's clock; the lane runs after.
+    await rig.tick(rig.world.store.clock.now() + 5 * MINUTE)
+
+    [turn] = [c for c in rig.sender.calls if c.title.endswith("chờ kiểm chéo")]
+    assert DIEU.user_id in turn.recipients and GIANG.user_id in turn.recipients
+    assert AN.user_id not in turn.recipients

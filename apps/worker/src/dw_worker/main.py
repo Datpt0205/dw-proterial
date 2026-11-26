@@ -216,6 +216,7 @@ from dw_worker.consumers.bravo_watch import (
 )
 from dw_worker.consumers.bravo_writes import build_bravo_write_handler
 from dw_worker.consumers.channel_delivery import build_channel_delivery_consumer
+from dw_worker.consumers.web_push_delivery import build_web_push_delivery_consumer
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
@@ -882,6 +883,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # (ADR 0006-provider-neutral-channel-delivery-outbox): a database and a bot token, polled or
     # webhooked alike.
     channel_delivery_consumer: Callable[[], Awaitable[None]] | None = None
+    web_push_delivery_consumer: Callable[[], Awaitable[None]] | None = None
     # Channel deliveries: 90 days, never a pending one, the database's constant.
     channel_deliveries_retention: RetentionPrunePort | None = None
     # Ops hardening Phase 4. Needs object storage too, not just a database -
@@ -1175,6 +1177,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             session_factory=sessions,
             pending_expiry=timedelta(days=retention_policy.channel_deliveries.pending_expiry_days),
         )
+        if (pusher := web_push(settings, sessions)) is not None:
+            web_push_delivery_consumer = build_web_push_delivery_consumer(
+                SqlChannelOutbox(sessions), pusher
+            )
         if settings.zalo_send_enabled:
             channel_delivery_consumer = build_channel_delivery_consumer(
                 SqlChannelOutbox(sessions),
@@ -1259,7 +1265,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                     ids=ids,
                     holders=SqlScopeHolders(sessions),
-                    notifications=SqlNotificationRepository(sessions),
+                    # The follow-ups push their reminders themselves, batched
+                    # per tick (ticket 48): the outbox queues no second push.
+                    notifications=SqlNotificationRepository(sessions, push=False),
                     writer=mount.brief_writer,
                     # Web push to the people told (ticket 48), where it is on.
                     push=web_push(settings, sessions),
@@ -1588,6 +1596,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             interval_seconds=ZALO_WEBHOOK_INTERVAL_SECONDS,
         )
         logger.info("zalo webhook drain registered")
+    # In-app notifications out to the devices people turned push on from
+    # (Sales ticket 78), where this deployment has a VAPID key. Claims as the
+    # chat lane does, so it needs no ReapTarget either.
+    if web_push_delivery_consumer is not None:
+        registry.register(
+            "web_push_delivery",
+            web_push_delivery_consumer,
+            interval_seconds=settings.channel_delivery_interval_seconds,
+        )
     # In-app notifications out through linked chats. Claims rows with
     # SKIP LOCKED and holds no lease, so it needs no ReapTarget: a row a dead
     # worker held is pending again the moment its transaction ends.

@@ -71,6 +71,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import lane_audit_event, system_actor
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.next_steps import checker_scope
 from dw_sales.application.overview_ports import BUCKETS, Bucket, FollowupPolicyPort
 from dw_sales.application.overview_service import STATUS_BUCKETS, WHOSE_TURN
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
@@ -88,7 +89,6 @@ from dw_sales.application.reminder_copy import (
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
-    Audience,
     BriefSlot,
     Due,
     Followup,
@@ -342,7 +342,7 @@ class FollowupLane:
         """The source key and whom it told, when this tick recorded it; None
         when not delivered, or recorded already by another worker (which
         pushes it, so a person's phone rings once)."""
-        recipients = await self._audience(scope, due.notify, due.case.assigned_to)
+        recipients = await self._audience(scope, due)
         if not recipients:
             return None
         key = key_of(due)
@@ -372,17 +372,28 @@ class FollowupLane:
         )
         return (source_key(key, scope), recipients) if recorded else None
 
-    async def _audience(
-        self, scope: SalesScope, notify: Sequence[Audience], assignee: uuid.UUID | None
-    ) -> list[uuid.UUID]:
+    async def _audience(self, scope: SalesScope, due: Due) -> list[uuid.UUID]:
+        """Whom ``due`` tells: the assignee for their own step; the heads,
+        and, where the case waits on a checker (a cross-check, a quotation's
+        approval: `checker_scope`), every holder of that checker's scope but
+        the assignee, who may not check their own case (Sales ticket 78:
+        a colleague who cross-checks was never told)."""
+        assignee = due.case.assigned_to
         told: list[uuid.UUID] = []
         heads: list[uuid.UUID] | None = None
-        for audience in notify:
+        for audience in due.notify:
             if audience == "pic" and assignee is not None:
                 found = [assignee]
             else:
                 heads = heads if heads is not None else await self._holding(scope, _HEADS)
-                found = heads
+                found = list(heads)
+                checker = checker_scope(due.case.kind, due.case.status)
+                if checker is not None:
+                    found += [
+                        person
+                        for person in await self._holding(scope, frozenset({checker.value}))
+                        if person != assignee
+                    ]
             told += [person for person in found if person not in told]
         return told
 
