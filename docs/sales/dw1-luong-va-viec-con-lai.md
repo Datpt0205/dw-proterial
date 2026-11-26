@@ -35,7 +35,8 @@ Hiện trạng đọc từ code ngày 2026-11-26; số ticket trỏ vào
 **Chat hay nút?** Ticket 48 ghi "chat chỉ để hỏi", còn ticket 56 (Đạt 11-20)
 ghi "chat của hồ sơ là kênh chính". Đề xuất: **cả hai trong một mục** của Việc
 của tôi; nút và câu trong chat gọi cùng một lệnh (phần chung đã có:
-`useCaseChatOffers`). Thiếu: mục trong Việc của tôi chưa mở được chat (ticket 79).
+`useCaseChatOffers`). Mục đơn hàng và báo giá trong Việc của tôi có nút "Hỏi DW1
+về hồ sơ này" mở chat của chính hồ sơ, với các nút của trang (ticket 79, 27/11).
 
 ---
 
@@ -76,14 +77,16 @@ của tôi; nút và câu trong chat gọi cùng một lệnh (phần chung đã
 **Đã có:** hỏi trạng thái, việc của tôi, việc quá hạn; quyết một cờ; đề xuất đổi
 ngày hoặc số lượng dòng SO để ghi Bravo; gợi ý soạn trả lời/nhắc khách (trỏ về
 nút của trang); quyết đơn và báo giá trong Việc của tôi; từ chối mã gợi ý;
-trưởng phòng giao lại hồ sơ (chỉ trên trang hồ sơ).
+trưởng phòng giao hồ sơ bằng một câu trong chat ("giao cho Diệu", 79); chat của
+hồ sơ mở ngay từ mục trong Việc của tôi; chọn mã PRV ngay trong mục đơn hàng,
+từng dòng một (79).
 
 **Còn thiếu**, xếp theo mức giảm việc cho người dùng (ticket 79 trừ khi ghi khác):
 
 1. Gửi thư cho khách, PC, Design từ việc hoặc từ chat, một bấm (76, 77).
 2. Duyệt / trả lại ngay trong chat: kiểm chéo, Manager, ghi Bravo, phiên bản quy tắc.
-3. **Giao người ngay trong chat** ("giao cho Khoa"): thẻ chọn người lấy đúng danh sách người có quyền, như nút "Giao lại" đang dùng.
-4. Chọn/xác nhận mã PRV ngay trong việc.
+3. ~~Giao người ngay trong chat~~ (xong 26/11).
+4. ~~Chọn/xác nhận mã PRV ngay trong việc~~ (xong 27/11: tối đa 5 dòng trong việc, còn lại mở hồ sơ).
 5. Chấp nhận ngày PC do DW đọc, một bấm (77).
 6. Ghi khách đồng ý, đóng hồ sơ có lý do, đề nghị khách sửa từ chat.
 7. Cờ của báo giá trong chat; bước tự chạy có nút hoàn tác trong chat.
