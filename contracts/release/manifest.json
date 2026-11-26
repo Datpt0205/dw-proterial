@@ -146,6 +146,16 @@
       "checksum": "1ddaf74ab06558a939272a1b1d05de2a696031d6552f66d17e898711cf9e6cbe",
       "copy_id": "sales_reminders",
       "version": "1.2.0"
+    },
+    {
+      "checksum": "7d4b8a6edceb278447b8009d25efd983ab7311b0002a3824a44078af8404e326",
+      "copy_id": "sales_reminders",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "4673d22fe0c6055656b2158e70ed8cd8adc94c8758d3ed3409c2a8b9ac682c91",
+      "copy_id": "sales_reminders",
+      "version": "1.4.0"
     }
   ],
   "eval_datasets": [
@@ -1214,7 +1224,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "214b86d6bf40903364a572b06f7b7c354269ad3c",
+  "git_sha": "4901f0b3ed023212ac795c581febe166be73f8f5",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1415,6 +1425,11 @@
       "checksum": "3734620c148728eca9c47b80e7991eb27c53b39a47b35627f172fe7aa9a28a43",
       "policy_id": "sales_followups",
       "version": "1.7.0"
+    },
+    {
+      "checksum": "52bca029ca5370e768686e7d250a38d39d1dcfdc0fbc313269a889ddc8ae3651",
+      "policy_id": "sales_followups",
+      "version": "1.8.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
