@@ -34,8 +34,6 @@ import {
 import { usePeople } from "../../_lib/people";
 import {
   anchorRegion,
-  mailRange,
-  markMailServed,
   unopenedSources,
   useServedRevision,
 } from "../../_lib/served";
@@ -60,6 +58,7 @@ import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
 import { AgentReply } from "./agent-reply";
 import { agentDraft, useOrderChatOffers, waitsOnCustomer } from "./chat-offers";
+import { useOrderSource } from "./order-source";
 import { AgreementPanel } from "./agreement";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -71,14 +70,6 @@ import {
   WithCaseChat,
   useCaseChatOffers,
 } from "../../_components/case-chat";
-import {
-  SourceDrawer,
-  type SourceTarget,
-} from "../../_components/source-drawer";
-import {
-  MailTextDrawer,
-  type MailTarget,
-} from "../../_components/mail-text-drawer";
 import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
 import { ChangeRequestsPanel } from "./change-requests";
@@ -95,7 +86,6 @@ import { PrintCopyNotice } from "./print-copy";
 import { UnopenedValues } from "./unopened-values";
 
 type Order = SalesSchemas["OrderCaseView"];
-type Anchor = SalesSchemas["SourceAnchor"];
 
 export default function OrderPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -107,35 +97,6 @@ export default function OrderPage() {
       </WithCaseChat>
     </ScopeGate>
   );
-}
-
-/** Where a value of the order was read: a header field, or a line's field. */
-function anchorOf(
-  order: Order,
-  field: string,
-  lineNo: number | null,
-): Anchor | null {
-  // `print:<n>`: where the PDF print shows a value differently (ticket 34).
-  const printed = /^print:(\d+)$/.exec(field);
-  if (printed)
-    return order.print_copy?.differences[Number(printed[1])]?.anchor ?? null;
-  if (lineNo === null)
-    return (
-      order.header_anchors[field] ??
-      (field === "total"
-        ? order.total_anchor
-        : field === "buyer"
-          ? order.buyer_anchor
-          : field === "legacy_text"
-            ? order.legacy_text_anchor
-            : null) ??
-      null
-    );
-  const line = order.lines.find((l) => l.line_no === lineNo);
-  // `schedule:<n>`: one delivery schedule of a split line (ticket 21).
-  const schedule = /^schedule:(\d+)$/.exec(field);
-  if (schedule) return line?.schedules[Number(schedule[1])]?.anchor ?? null;
-  return line?.anchors[field] ?? line?.anchors.description ?? null;
 }
 
 function OrderDetail() {
@@ -155,8 +116,6 @@ function OrderDetail() {
     "sales/master-data/customers",
     useCallback(() => salesApi().customers(), []),
   );
-  const [source, setSource] = useState<SourceTarget | null>(null);
-  const [mail, setMail] = useState<MailTarget | null>(null);
   const [picking, setPicking] = useState<number | null>(null);
 
   const data = order.data;
@@ -172,14 +131,7 @@ function OrderDetail() {
   }, [order, work]);
   // A flag decided in the case's conversation (ticket 56) shows at once.
   useCaseChatDecided(reload);
-  const loadMail = useCallback(
-    () => salesApi().orderMessageText(caseId),
-    [caseId],
-  );
-  const mailServed = useCallback(
-    (version: number) => markMailServed(caseId, version),
-    [caseId],
-  );
+  const source = useOrderSource(data ?? null);
   // The page's own controls for a step asked in its conversation (ticket
   // 46), under the same conditions the page draws them with below.
   const offers = useOrderChatOffers(
@@ -219,17 +171,7 @@ function OrderDetail() {
                 ? `Đến lượt ${name(data.assigned_to)}.`
                 : "Hồ sơ chưa giao cho ai.";
 
-  const openSource = (field: string, lineNo: number | null) => {
-    const anchor = anchorOf(data, field, lineNo);
-    if (fromMail) {
-      const range = mailRange(anchor) ?? mailRange(data.header_anchors.po_no);
-      if (range) setMail({ field, lineNo, ...range });
-      return;
-    }
-    const region =
-      anchorRegion(anchor) ?? anchorRegion(data.header_anchors.po_no);
-    if (region) setSource({ region, field, lineNo });
-  };
+  const openSource = source.open;
   const primary = anchorRegion(data.header_anchors.po_no);
   const customer = customers.data?.items.find(
     (c) => c.code === data.customer_code,
@@ -449,11 +391,7 @@ function OrderDetail() {
                 onClick={() =>
                   fromMail
                     ? openSource("po_no", null)
-                    : setSource({
-                        region: missingRegions[0]!,
-                        field: "po_no",
-                        lineNo: null,
-                      })
+                    : source.openRegion(missingRegions[0]!)
                 }
               >
                 Mở nguồn
@@ -738,25 +676,7 @@ function OrderDetail() {
         ]}
       />
 
-      {data.attachment_id !== null ? (
-        <SourceDrawer
-          kind="order"
-          caseId={data.case_id}
-          caseVersion={data.case_version}
-          attachmentId={data.attachment_id}
-          target={source}
-          onClose={() => setSource(null)}
-        />
-      ) : (
-        <MailTextDrawer
-          resourceKey={`sales/order/${data.case_id}/${data.case_version}/message-text`}
-          load={loadMail}
-          target={mail}
-          mayRead={viewer.hasScope("sales.price.read")}
-          onClose={() => setMail(null)}
-          onServed={mailServed}
-        />
-      )}
+      {source.drawers(viewer)}
       {picking !== null ? (
         <CandidatePicker
           order={data}

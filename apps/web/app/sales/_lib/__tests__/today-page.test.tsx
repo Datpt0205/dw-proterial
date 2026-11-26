@@ -14,6 +14,10 @@ import { bySla, slaOf } from "../sla";
 
 type WorkItem = SalesSchemas["WorkItem"];
 type Today = SalesSchemas["TodayView"];
+type Order = SalesSchemas["OrderCaseView"];
+type Line = Order["lines"][number];
+
+const MAIL_TEXT = "PO số VLX-PO-2610-0201\n1. VX-W24-BK: 6.100 m";
 
 /**
  * The one place for a person's work (tickets 47, 48): the brief on top, the
@@ -104,6 +108,8 @@ const day = (): Today => ({
 });
 
 let items: WorkItem[] = [];
+// The order the item reads; a test that needs another sets it.
+let shownOrder: Order = waiting;
 const api = {
   // No case holds an answer the person has not seen (ticket 46).
   assistantUnread: vi.fn(async (): Promise<string[]> => []),
@@ -119,7 +125,7 @@ const api = {
     reminders: [day().reminders[0]!],
     hidden: 1,
   })),
-  order: vi.fn(async () => waiting),
+  order: vi.fn(async (): Promise<Order> => shownOrder),
   resumeReview: vi.fn(async () => waiting),
   artifacts: vi.fn(async () => ({
     case_version: waiting.case_version,
@@ -135,6 +141,16 @@ const api = {
     answer: "Đã giao hồ sơ cho Hoàng Thị Diệu.",
     case_version: waiting.case_version + 1,
   })),
+  // The item's lines needing a PRV code (ticket 79).
+  items: vi.fn(async () => ({ items: [] })),
+  confirmMapping: vi.fn(async () => shownOrder),
+  orderMessageText: vi.fn(async () => ({
+    case_id: shownOrder.case_id,
+    case_version: shownOrder.case_version,
+    text: MAIL_TEXT,
+    sha256: "b".repeat(64),
+    served_at: "2026-10-05T02:00:00Z",
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
@@ -148,6 +164,7 @@ Element.prototype.scrollIntoView = vi.fn();
 afterEach(() => {
   cleanup();
   items = [];
+  shownOrder = waiting;
   search = new URLSearchParams();
   vi.clearAllMocks();
 });
@@ -442,6 +459,190 @@ describe("The item's case conversation (ticket 79)", () => {
       ).toBeTruthy();
       expect(screen.queryByText(TITLE)).toBeNull();
       expect(api.assistantConversation).not.toHaveBeenCalled();
+    },
+    SLOW,
+  );
+});
+
+/** A line of `base` numbered `no`, its code still to be picked from two. */
+function unpicked(base: Order, no: number, code: string): Line {
+  const line = base.lines[0]!;
+  return {
+    ...line,
+    line_no: no,
+    customer_item_code: code,
+    mapping: {
+      ...line.mapping,
+      status: "ambiguous",
+      prv_code: null,
+      candidates: ["CB-2005", "CB-2006"],
+    },
+  };
+}
+
+function editable(lines: (base: Order) => Line[], over: Partial<Order> = {}) {
+  const base = order({ status: "in_review", ...over });
+  return { ...base, lines: lines(base) };
+}
+
+/** The order's item, opened by a push's deep link. */
+function openItem(o: Order) {
+  shownOrder = o;
+  items = [item(o.case_id, "2026-10-04T05:00:00Z", "2026-10-05T01:00:00Z")];
+  search = new URLSearchParams({ item: `order:${o.case_id}` });
+  page();
+}
+
+const pickButtons = () =>
+  screen.queryAllByText("Chọn mã").map((t) => t.closest("button")!);
+
+describe("The item's lines needing a PRV code (ticket 79)", () => {
+  it(
+    "offers a code only on a line that needs one, picked in place, then moves to the next line",
+    async () => {
+      const first = editable((b) => [
+        b.lines[0]!,
+        unpicked(b, 2, "VX-2"),
+        unpicked(b, 3, "VX-3"),
+      ]);
+      openItem(first);
+      expect(
+        await screen.findByText("2 dòng chưa có mã PRV", undefined, {
+          timeout: 8000,
+        }),
+      ).toBeTruthy();
+      // Line 1 is exact: no "Chọn mã" on it.
+      expect(screen.queryByText(/^Dòng 1 · /)).toBeNull();
+      expect(screen.getByText("Dòng 2 · VX-2")).toBeTruthy();
+      expect(pickButtons()).toHaveLength(2);
+      fireEvent.click(pickButtons()[0]!);
+      fireEvent.click(
+        await screen.findByRole(
+          "radio",
+          { name: "CB-2006" },
+          { timeout: 8000 },
+        ),
+      );
+      // The server answers; the order is read again with line 2 settled.
+      const settled = unpicked(first, 2, "VX-2");
+      shownOrder = {
+        ...first,
+        case_version: first.case_version + 1,
+        lines: [
+          first.lines[0]!,
+          {
+            ...settled,
+            mapping: {
+              ...settled.mapping,
+              status: "candidate_confirmed",
+              prv_code: "CB-2006",
+            },
+          },
+          first.lines[2]!,
+        ],
+      };
+      fireEvent.click(
+        screen.getByText("Xác nhận mã CB-2006").closest("button")!,
+      );
+      await waitFor(() => expect(api.confirmMapping).toHaveBeenCalled());
+      expect(api.confirmMapping.mock.calls[0]!.slice(0, 3)).toEqual([
+        first.case_id,
+        2,
+        { case_version: first.case_version, prv_code: "CB-2006" },
+      ]);
+      // One line left, and focus is on its button (ui-quality §7).
+      expect(
+        await screen.findByText("1 dòng chưa có mã PRV", undefined, {
+          timeout: 8000,
+        }),
+      ).toBeTruthy();
+      await waitFor(() =>
+        expect(document.activeElement).toBe(pickButtons()[0]),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "lists the first five and sends the rest to the case",
+    async () => {
+      openItem(
+        editable((b) =>
+          [2, 3, 4, 5, 6, 7, 8].map((no) => unpicked(b, no, `VX-${no}`)),
+        ),
+      );
+      expect(
+        await screen.findByText("7 dòng chưa có mã PRV", undefined, {
+          timeout: 8000,
+        }),
+      ).toBeTruthy();
+      expect(pickButtons()).toHaveLength(5);
+      expect(
+        screen
+          .getByText("Còn 2 dòng chưa có mã · Mở hồ sơ")
+          .closest("a")!
+          .getAttribute("href"),
+      ).toBe(`/sales/orders/${waiting.case_id}`);
+    },
+    SLOW,
+  );
+
+  it(
+    "refuses a code on an order seen through its NOC/ESF hold",
+    async () => {
+      openItem(
+        editable((b) => [unpicked(b, 2, "VX-2")], { export_hold_only: true }),
+      );
+      await screen.findByText("1 dòng chưa có mã PRV", undefined, {
+        timeout: 8000,
+      });
+      expect(pickButtons()[0]!.disabled).toBe(true);
+    },
+    SLOW,
+  );
+
+  it(
+    "sees a source opened from the item's picker at once, in the buttons' source gate",
+    async () => {
+      // A PO written in the mail: its one source is the mail's text, not
+      // yet opened at this version.
+      const chars = { start: 7, end: 22 };
+      const inMail = {
+        attachment_id: null,
+        attachment_sha256: "b".repeat(64),
+        cell_ref: null,
+        page: null,
+        boxes: [],
+        quote: MAIL_TEXT.slice(chars.start, chars.end),
+        chars,
+      };
+      openItem(
+        editable((b) => [unpicked(b, 2, "VX-2")], {
+          case_version: 41,
+          attachment_id: null,
+          header_anchors: { po_no: inMail },
+        } as Partial<Order>),
+      );
+      expect(
+        await screen.findByText(
+          "Mở hồ sơ để xem nguồn (nội dung thư)",
+          undefined,
+          { timeout: 8000 },
+        ),
+      ).toBeTruthy();
+      fireEvent.click(pickButtons()[0]!);
+      fireEvent.click(
+        (
+          await screen.findByText("Xem nguồn", undefined, { timeout: 8000 })
+        ).closest("button")!,
+      );
+      await waitFor(() => expect(api.orderMessageText).toHaveBeenCalled());
+      // Without closing anything: the serve alone redraws the item.
+      await waitFor(() =>
+        expect(
+          screen.queryByText("Mở hồ sơ để xem nguồn (nội dung thư)"),
+        ).toBeNull(),
+      );
     },
     SLOW,
   );

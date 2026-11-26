@@ -102,6 +102,49 @@ function Schedules({ line }: { line: Line }) {
   );
 }
 
+/** A line whose PRV code is still to be confirmed while the order can be
+ * edited: where "Chọn mã" is drawn. */
+export function needsCode(order: Order, line: Line): boolean {
+  return (
+    !["exact", "candidate_confirmed"].includes(line.mapping.status) &&
+    EDITABLE.includes(order.status)
+  );
+}
+
+/**
+ * "Chọn mã" on a line that needs its PRV code (G13), refused in words to a
+ * viewer without `sales.order.prepare`: one control for the lines table and
+ * the item in "Việc của tôi" (ticket 79). The server checks the scope and the
+ * case's version again (`confirm_mapping`).
+ */
+export function PickCodeButton({
+  order,
+  line,
+  viewer,
+  onPick,
+}: {
+  order: Order;
+  line: Line;
+  viewer: Viewer;
+  onPick: (lineNo: number) => void;
+}) {
+  if (!needsCode(order, line)) return null;
+  return (
+    <GuardedButton
+      size="small"
+      inlineReason={false}
+      reason={
+        viewer.hasScope("sales.order.prepare")
+          ? null
+          : "Bạn không có quyền xác nhận mã PRV."
+      }
+      onClick={() => onPick(line.line_no)}
+    >
+      Chọn mã
+    </GuardedButton>
+  );
+}
+
 /** Past this many lines the table renders only the rows in view (G23). */
 const VIRTUAL_FROM = 200;
 
@@ -283,20 +326,12 @@ export function LinesTable({
                 ) ? (
                   <StatusTag tone="warn">Chờ Design</StatusTag>
                 ) : null}
-                {!["exact", "candidate_confirmed"].includes(
-                  line.mapping.status,
-                ) && editable ? (
-                  <GuardedButton
-                    size="small"
-                    inlineReason={false}
-                    reason={
-                      canPrepare ? null : "Bạn không có quyền xác nhận mã PRV."
-                    }
-                    onClick={() => onPickCode(line.line_no)}
-                  >
-                    Chọn mã
-                  </GuardedButton>
-                ) : null}
+                <PickCodeButton
+                  order={order}
+                  line={line}
+                  viewer={viewer}
+                  onPick={onPickCode}
+                />
               </Space>
             ),
           },
