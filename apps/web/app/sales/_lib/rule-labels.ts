@@ -689,9 +689,13 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "waiting_pcs_price.remind.notify": { label: "Nhắc ai" },
     implied_acceptance: {
       label: "Khách im lặng quá hạn xác nhận",
-      help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 báo một lần cho Sales phụ trách. DW1 không tự ghi đồng ý ngầm.",
+      help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 tự ghi đồng ý ngầm (nếu bật) và báo một lần cho Sales phụ trách; Sales hoàn tác được bằng một nút.",
     },
     "implied_acceptance.enabled": { label: "Bật báo khách im lặng quá hạn" },
+    "implied_acceptance.record": {
+      label: "DW1 tự ghi đồng ý ngầm",
+      help: "Tắt thì DW1 chỉ báo, Sales tự bấm ghi.",
+    },
     morning_brief: {
       label: "Bản tin buổi sáng",
       help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
@@ -849,6 +853,17 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: REMINDER_HELP,
     },
     "reminders.implied_acceptance.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.implied_recorded": {
+      label: "DW1 đã ghi khách đồng ý ngầm",
+    },
+    "reminders.implied_recorded.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.implied_recorded.body": {
       label: "Nội dung",
       help: REMINDER_HELP,
     },
@@ -1032,6 +1047,20 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     "words.write_no_so": { label: "Đơn chưa có số SO trên Bravo" },
     "words.write_orders_only": { label: "Chỉ ghi Bravo từ đơn hàng có SO" },
+    "words.assign_confirm": {
+      label: "Hỏi lại trước khi giao hồ sơ",
+      help: "{case}: hồ sơ, {person}: người nhận.",
+    },
+    "words.assign_which": {
+      label: "Hỏi giao cho ai",
+      help: "{people}: những người giao được.",
+    },
+    "words.assign_nobody": { label: "Không có ai nhận được hồ sơ" },
+    "words.assign_not_yours": { label: "Người hỏi không có quyền giao việc" },
+    "words.assign_done": {
+      label: "Đã giao hồ sơ",
+      help: "{case}: hồ sơ, {person}: người nhận.",
+    },
     "words.write_done": {
       label: "Đã gửi đề xuất ghi Bravo",
       help: ASSISTANT_HELP,

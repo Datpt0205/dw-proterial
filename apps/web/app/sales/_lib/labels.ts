@@ -496,6 +496,7 @@ export const CASE_EVENT = {
   "order.confirmed": "Gửi xác nhận cho khách",
   "order.confirmation_sent": "Ghi đã gửi xác nhận cho khách",
   "order.customer_agreed": "Ghi khách đã đồng ý xác nhận",
+  "order.implied_undone": "Hoàn tác đồng ý ngầm",
   "order.customer_declined": "Ghi khách từ chối xác nhận",
   "order.closed": "Đóng hồ sơ",
   "order.reassigned": "Giao cho người khác",
