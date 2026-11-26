@@ -500,6 +500,7 @@ export const CASE_EVENT = {
   "order.pc_asked": "Ghi đã hỏi PC ngày giao",
   "order.design_asked": "Ghi đã gửi Design đề nghị tạo mã",
   "order.pc_answer_recorded": "Ghi ngày PC trả lời",
+  "order.pc_reply_read": "DW1 đọc thư PC trả ngày giao",
   "order.quote_opened": "Mở báo giá cho dòng chưa có báo giá",
   "order.quote_rechecked": "Kiểm tra lại theo báo giá đã duyệt",
   "order.update_change_confirmed":

@@ -467,7 +467,7 @@ def assemble(
             catalog,
             rules=intake.rules,
         ),
-        pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
+        pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book, inbox),
         design_requests=DesignRequests(uow, gate, clock, ids, catalog, book, book, inbox),
         update_loops=UpdateLoops(uow, gate, clock, ids, intake, book, book),
         internal_changes=InternalChanges(

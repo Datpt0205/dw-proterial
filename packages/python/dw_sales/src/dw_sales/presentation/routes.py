@@ -89,7 +89,7 @@ from dw_sales.application.order_quotes import OrderQuoteView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pc_dates import MAX_TEXT, PcDatesView, PcMailsView
-from dw_sales.application.pc_requests import PcRequestView
+from dw_sales.application.pc_requests import PcReplyMailView, PcRequestView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
@@ -951,6 +951,41 @@ def build_router(
             line_no,
             case_version=body.case_version,
             deliveries=[(d.quantity, d.date) for d in body.deliveries],
+        )
+        return await idem.record(change)
+
+    # PC's mail DW1 read while the order waits on PC (ticket 77): the mail a
+    # proposal was read from, opened (and recorded served) by the PIC, and
+    # "Đúng" on one line, which records its dates as the PIC's answer.
+    @router.get(
+        "/orders/{case_id}/pc-reply/mail",
+        response_model=PcReplyMailView,
+        dependencies=prepare_scope,
+    )
+    async def pc_reply_mail(
+        case_id: uuid.UUID,
+        # A query value: a message id may hold "/", which a path cannot.
+        message_id: Annotated[str, Query(min_length=1, max_length=998)],
+        context: Ctx,
+        svc: Svc,
+    ) -> PcReplyMailView:
+        return await svc.pc_requests.reply_mail(context, case_id, message_id)
+
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/pc-reply/accept",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def pc_reply_accept(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.pc_requests.accept_reply(
+            context, case_id, line_no, case_version=body.case_version
         )
         return await idem.record(change)
 

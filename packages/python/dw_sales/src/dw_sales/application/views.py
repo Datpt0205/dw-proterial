@@ -619,6 +619,31 @@ class PcRequestStateView(BaseModel):
     at: datetime
 
 
+class PcReplyDateView(BaseModel):
+    """One date DW1 read from PC's mail for a delivery of a line (ticket 77),
+    the words it rests on and the mail it was read from: a proposal, never
+    a recorded value."""
+
+    model_config = _VIEW
+
+    line_no: int
+    delivery: int
+    date: date
+    quote: str
+    message_id: str
+    received_at: datetime
+
+
+class PcReplyView(BaseModel):
+    """PC's mail read by DW1 while the order waits on PC (ticket 77)."""
+
+    model_config = _VIEW
+
+    dates: list[PcReplyDateView]
+    read_at: datetime
+    prompt_ref: str
+
+
 class DesignRequestStateView(BaseModel):
     """Sales asked Design to create a PRV code for this line, and waits (ticket 06)."""
 
@@ -1253,6 +1278,8 @@ class OrderCaseView(BaseModel):
     change_requests: list[ChangeRequestView] = []
     # Sales asked PC for delivery dates and waits on the answer (ticket 07).
     pc_request: PcRequestStateView | None = None
+    # The dates DW1 read from PC's mail, proposed per line (ticket 77).
+    pc_reply: PcReplyView | None = None
     # Sales asked Design for a new PRV code and waits, per line (ticket 06).
     design_requests: list[DesignRequestStateView] = []
     # A customer's change on the order once it is in Bravo (ticket 29).
@@ -1691,6 +1718,15 @@ def order_case(
         pc_request=(
             PcRequestStateView.model_validate(case.pc_request.model_dump())
             if case.pc_request
+            else None
+        ),
+        pc_reply=(
+            PcReplyView(
+                dates=[PcReplyDateView.model_validate(d.model_dump()) for d in case.pc_reply.dates],
+                read_at=case.pc_reply.read_at,
+                prompt_ref=case.pc_reply.prompt_ref,
+            )
+            if case.pc_reply
             else None
         ),
         design_requests=[

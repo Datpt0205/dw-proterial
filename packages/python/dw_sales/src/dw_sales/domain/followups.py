@@ -553,6 +553,9 @@ class WaitingCase:
     # PC (`OrderCase.pc_request`, or its update loop's PC step, ticket 29);
     # None otherwise (ticket 07).
     pc_asked_at: datetime | None = None
+    # DW1 read dates from PC's mail for the wait (ticket 77,
+    # `OrderCase.pc_reply`): PC answered, and the PIC was told to confirm.
+    pc_proposed: bool = False
     # When Sales recorded the answer to a customer's change sent, while the
     # update loop waits on the customer (ticket 29); None otherwise.
     customer_asked_at: datetime | None = None
@@ -836,7 +839,9 @@ def owed(
                 now,
             )
         pc = policy.waiting_pc
-        if pc.enabled and order and case.pc_asked_at is not None:
+        # PC answered once DW1 read dates from its mail (ticket 77): the PIC
+        # was told then, and is not reminded that PC has not answered.
+        if pc.enabled and order and case.pc_asked_at is not None and not case.pc_proposed:
             found += _after(
                 case, Followup.WAITING_PC, ((Stage.REMIND, pc.remind),), case.pc_asked_at, now
             )

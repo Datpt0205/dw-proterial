@@ -909,6 +909,29 @@ export class SalesApi {
     );
   }
 
+  /** PC's mail a proposal on the order was read from (ticket 77): opening it
+   * records it served to the caller at the case's version, which "Đúng"
+   * asks for. */
+  pcReplyMail(caseId: string, messageId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/pc-reply/mail">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-reply/mail?message_id=${enc(messageId)}`,
+    );
+  }
+
+  /** "Đúng" on one line's dates DW1 read from PC's mail (ticket 77). */
+  acceptPcReply(
+    caseId: string,
+    lineNo: number,
+    caseVersion: number,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/pc-reply/accept`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   // ---- the update loop (ticket 29) -------------------------------------------
 
   /** 6-DW2: the request to PC with the values the customer asks, and when

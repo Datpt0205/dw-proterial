@@ -1,6 +1,6 @@
 # 77 — PC and Design by the outbox; DW reads PC's reply itself
 
-Status: in-progress — Design by the outbox done 2026-11-26; PC by the outbox done 2026-11-27; the PC-reply lane left
+Status: in-progress — Design and PC by the outbox, and DW1 reading PC's reply into a per-line proposal, done 2026-11-27 (the reading off until a tenant turns it on and it is measured live); the reminder to PC first waits on Đạt
 Blocked by: none for the code; ticket 23 for live sending
 Category: enhancement (UX, flow steps 3, 4, 11, Q3)
 
@@ -162,9 +162,73 @@ the full text read instead of the newest part, the lane not registered.
 Also: `dw_worker/main.py` had an unsorted import in HEAD (ruff I001), fixed
 by `ruff --fix` on the file.
 
-Left (next): the PIC's "Đúng" per line and its source gate (ui-quality §7),
-the labelled case on each "Đúng"/"Sửa", the PC panel showing the proposal,
-the `waiting_pc` reminder while a proposal waits, and whether accepting
-marks PC's routed mail handled. Owed by measurement, not code: whether
-Proterial's internal Exchange mail reads as verified (SPF/DKIM/DMARC pass);
-if not, the lane, like the person's list, sees none of PC's mail.
+Left after 3b: the PIC's press, its source gate, the labels, the panel and
+the reminder (slice 3c below).
+
+**2026-11-27, slice 3c: the PIC confirms or corrects each line.** On the
+order's "Hỏi PC ngày giao" panel, a line DW1 read dates for shows them
+tagged "Máy đọc, cần kiểm", each with the words of PC's mail it rests on,
+and three controls: "Xem thư" (`GET /orders/{id}/pc-reply/mail?message_id=`,
+`PcRequests.reply_mail`: only a mail the proposal was read from, only to
+`sales.order.prepare`; it serves the mail's newest part and records it
+served to that person at the case's version), "Đúng" (`POST
+/orders/{id}/lines/{n}/pc-reply/accept`, Idempotency-Key,
+`PcRequests.accept_reply`: one line per press, the proposal's dates with the
+line's own delivery quantities, recorded through the same path as the
+person's typed answer, as the person; refused with "chưa mở nguồn" until
+every mail behind the line was opened at this version, so after one press
+the next line's mail is opened again; refused "pc_reply_incomplete" when the
+mail does not date every delivery of the line), and "Sửa" (the answer form,
+filled with DW1's dates). The button stays disabled with the reason in
+words until the mail has loaded for this person (ui-quality §7).
+
+Decision (by recommendation, recorded here): PC's mail is served as a
+one-page source of its own in `sales.source_served` (`pcmail.<sha256 of the
+message id>`, page 1), the shape the table's CHECKs already admit, rather
+than a new column or table; a reviewer who wants a separate kind adds a
+migration then.
+
+Every answer to a line DW1 had proposed dates for writes a labelled case
+(`pc_reply_label`, step `pc_reply`, field `pc_dates`): "Đúng" confirmed,
+"Sửa" with other dates corrected, in the answer's transaction. The
+`waiting_pc` reminder is not sent while a proposal holds dates
+(`WaitingCase.pc_proposed`, SQL `jsonb_array_length(pc_reply->'dates') >
+0`): PC answered, and the PIC was told then. The case view carries
+`pc_reply`; the event `order.pc_reply_read` is labelled.
+
+Tests: `test_pc_replies.py` 27 (5 new: "Đúng" refused until opened, then
+recorded as An for line 1 only with the labelled case confirmed; opened
+again at the next version; "Sửa" labelled corrected; refused to a reader,
+at a stale version, for a line with no proposal, for a mail not behind the
+proposal, in another tenant; refused when the mail does not date every
+delivery), follow-ups 64 (a proposal stops the reminder), PC integration 7
+(the served region read back per person and version, the labelled case
+admitted, `pc_proposed` from SQL), API route units, web pc-request 6.
+Mutations, each red: the opened check removed; the deliveries check
+removed; the label not written; `accept_reply` without its scope check;
+the web "Đúng" not waiting for the mail.
+
+Left, and why:
+- "The reminder goes to PC first; the PIC is told only when overdue": an
+  automatic mail to PC with nobody pressing. ADR 0015 makes anything sent
+  T2 and `outbound_mail` sends nothing without a press. Owed: Đạt's word,
+  and an ADR 0015 amendment if yes.
+- "A new item code appearing in the Bravo copy (ticket 50) is offered for
+  the line that asked Design for it": not built in this ticket's slices;
+  it reads ticket 50's Bravo copy, which is ticket 50/06's seam.
+- The update loop's request to PC (step 11) through the outbox, and its
+  proposals: its `ask_pc` refuses while the change request is open, which
+  the artifact gate cannot see; left so a mail never goes that cannot be
+  recorded.
+- Accepting does not mark PC's routed mail handled in "Việc cần làm":
+  the inbox lane routes it as any internal mail; it may show twice.
+- Owed by measurement on the plant (tickets 52/83): whether Proterial's
+  internal Exchange mail reads as verified (SPF/DKIM/DMARC pass). If it does
+  not, the lane, like the person's own list, sees none of PC's mail;
+  `verified` is not loosened silently.
+- Owed from Proterial: `pc_mailboxes` (ships empty: the draft and the lane
+  refuse until named), ticket 23's flows for live sending, and a live run of
+  `sales_pc_dates` on the plant's model before the switch can turn on.
+- Not tested against real RLS for the lane end to end (the unit world plus
+  the SQL `waiting_on_pc` negative stand in); an integration run of the
+  lane over two tenants is owed.

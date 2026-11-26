@@ -457,3 +457,147 @@ def test_a_mail_naming_two_waiting_orders_answers_neither() -> None:
     pc = frozenset({PC_BOX})
     assert answered_by(message, [one], pc) is one  # type: ignore[list-item]
     assert answered_by(message, [one, two], pc) is None  # type: ignore[list-item]
+
+
+# ------------------------------ the PIC's press on a proposal (ticket 77) --
+
+
+async def _proposed() -> Rig:
+    rig = await _rig([_mail()])
+    await rig.lane.tick()
+    assert rig.world.order(rig.case_id).pc_reply is not None
+    return rig
+
+
+async def _accept(rig: Rig, line_no: int = 1, caller: Any = AN, **kw: Any) -> Any:
+    return await rig.world.services.pc_requests.accept_reply(
+        caller.context(kw.pop("scope", ALPHA)),
+        rig.case_id,
+        line_no,
+        case_version=kw.pop("case_version", rig.world.order(rig.case_id).case_version),
+    )
+
+
+async def _open(rig: Rig, message_id: str = "PC01", caller: Any = AN) -> Any:
+    return await rig.world.services.pc_requests.reply_mail(
+        caller.context(), rig.case_id, message_id
+    )
+
+
+def _labels(rig: Rig) -> list[Any]:
+    return [c for c in rig.world.store.state(ALPHA).labelled_cases if c.step.value == "pc_reply"]
+
+
+async def test_dung_records_pcs_dates_for_one_line_as_the_pic_once_the_mail_was_opened() -> None:
+    rig = await _proposed()
+    try:
+        with pytest.raises(ConflictError, match="chưa mở nguồn"):
+            await _accept(rig)
+        opened = await _open(rig)
+        assert opened.sender == PC_BOX and "30/10/2026" in opened.text
+
+        await _accept(rig)
+
+        case = rig.world.order(rig.case_id)
+        answer = case.line(1).pc_answer
+        assert answer is not None and answer.by == AN.user_id
+        assert [d.date for d in answer.deliveries] == [date(2026, 10, 30)]
+        assert answer.quantities == case.line(1).delivery_quantities
+        assert _lines(case) == {2: date(2026, 11, 5)}  # one line per press
+        assert case.line(2).pc_answer is None
+        (label,) = _labels(rig)
+        assert (label.verdict, label.line_no, label.decided_by) == ("confirmed", 1, AN.user_id)
+        assert label.proposed == ["2026-10-30"] and label.message_id == "PC01"
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
+async def test_dung_needs_the_mail_opened_again_at_the_cases_new_version() -> None:
+    rig = await _proposed()
+    try:
+        await _open(rig)
+        await _accept(rig, 1)
+        with pytest.raises(ConflictError, match="chưa mở nguồn"):
+            await _accept(rig, 2)
+        await _open(rig)
+        await _accept(rig, 2)
+        assert rig.world.order(rig.case_id).line(2).pc_answer is not None
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
+async def test_sua_records_another_date_and_labels_it_a_correction() -> None:
+    rig = await _proposed()
+    try:
+        line = rig.world.order(rig.case_id).line(1)
+        await rig.world.services.pc_requests.answer(
+            AN.context(),
+            rig.case_id,
+            1,
+            case_version=rig.world.order(rig.case_id).case_version,
+            deliveries=[(line.effective.quantity, date(2026, 11, 2))],
+        )
+        (label,) = _labels(rig)
+        assert label.verdict == "corrected" and label.kept == ["2026-11-02"]
+        assert 1 not in _lines(rig.world.order(rig.case_id))
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
+async def test_dung_is_refused_without_prepare_stale_with_none_proposed_or_elsewhere() -> None:
+    from dw_kernel.errors import NotFoundError, PermissionDeniedError
+    from dw_sales.evals.graders import OUTSIDER, READER
+    from dw_sales.evals.world import BETA
+
+    rig = await _proposed()
+    try:
+        await _open(rig)
+        version = rig.world.order(rig.case_id).case_version
+        with pytest.raises(PermissionDeniedError):
+            await _accept(rig, caller=READER)
+        with pytest.raises(PermissionDeniedError):
+            await _open(rig, caller=READER)
+        with pytest.raises(ConflictError):
+            await _accept(rig, case_version=version - 1)
+        with pytest.raises(NotFoundError):
+            await _accept(rig, 3)  # DW1 proposed nothing for line 3
+        with pytest.raises(NotFoundError):
+            await _open(rig, "PC99")  # a mail the proposal was not read from
+        with pytest.raises(NotFoundError):
+            await _accept(rig, caller=OUTSIDER, scope=BETA)
+        assert rig.world.order(rig.case_id).line(1).pc_answer is None and _labels(rig) == []
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
+async def test_dung_is_refused_where_the_mail_does_not_date_every_delivery_of_the_line() -> None:
+    rig = await _rig([_mail()], model=Answering({"dates": []}))
+    try:
+        await rig.lane.tick()
+        case = rig.world.order(rig.case_id)
+        # A date for a second delivery of a line delivered once: nothing for
+        # its first, so the line is the person's to answer.
+        assert case.pc_request is not None and case.pc_reply is not None
+        odd = case.read_pc_reply(
+            "PC02",
+            case.pc_request.at + MINUTE,
+            [(1, 2, date(2026, 10, 30), "30/10/2026")],
+            at=case.pc_request.at + MINUTE,
+            prompt_ref="sales.pc_dates@1.0.0",
+            model_profile="onprem",
+        )
+        async with rig.world.store(ALPHA) as work:
+            await work.orders.save(
+                odd,
+                expected_version=case.case_version,
+                event=CaseEvent(
+                    action="order.pc_reply_read",
+                    actor=EventActor.worker("dw1", "1.0.0", initiated_by=None),
+                    occurred_at=case.pc_request.at,
+                ),
+            )
+            await work.commit()
+        with pytest.raises(ConflictError, match="mọi đợt"):
+            await _accept(rig)
+    finally:
+        rig.sample.__exit__(None, None, None)

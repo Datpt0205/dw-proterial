@@ -13623,6 +13623,16 @@
             "title": "Parser Version",
             "type": "string"
           },
+          "pc_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PcReplyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pc_request": {
             "anyOf": [
               {
@@ -15124,6 +15134,110 @@
           "mails"
         ],
         "title": "PcMailsView",
+        "type": "object"
+      },
+      "PcReplyDateView": {
+        "description": "One date DW1 read from PC's mail for a delivery of a line (ticket 77),\nthe words it rests on and the mail it was read from: a proposal, never\na recorded value.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "delivery": {
+            "title": "Delivery",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "delivery",
+          "date",
+          "quote",
+          "message_id",
+          "received_at"
+        ],
+        "title": "PcReplyDateView",
+        "type": "object"
+      },
+      "PcReplyMailView": {
+        "description": "PC's mail a proposal was read from, as the PIC opens it: its newest\npart, the words DW1 read (ticket 77).",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "subject",
+          "received_at",
+          "text"
+        ],
+        "title": "PcReplyMailView",
+        "type": "object"
+      },
+      "PcReplyView": {
+        "description": "PC's mail read by DW1 while the order waits on PC (ticket 77).",
+        "properties": {
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/PcReplyDateView"
+            },
+            "title": "Dates",
+            "type": "array"
+          },
+          "prompt_ref": {
+            "title": "Prompt Ref",
+            "type": "string"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dates",
+          "read_at",
+          "prompt_ref"
+        ],
+        "title": "PcReplyView",
         "type": "object"
       },
       "PcRequestStateView": {
@@ -37198,6 +37312,88 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept": {
+      "post": {
+        "operationId": "pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Reply Accept",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
       "get": {
         "operationId": "order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get",
@@ -37528,6 +37724,60 @@
           }
         },
         "summary": "Pc Mails",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/pc-reply/mail": {
+      "get": {
+        "operationId": "pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "maxLength": 998,
+              "minLength": 1,
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PcReplyMailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Reply Mail",
         "tags": [
           "sales"
         ]

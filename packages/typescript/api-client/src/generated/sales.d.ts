@@ -1409,6 +1409,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pc Reply Accept */
+        post: operations["pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
         parameters: {
             query?: never;
@@ -1503,6 +1520,23 @@ export interface paths {
         };
         /** Pc Mails */
         get: operations["pc_mails_api_v1_sales_orders__case_id__pc_mails_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/pc-reply/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pc Reply Mail */
+        get: operations["pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6182,6 +6216,7 @@ export interface components {
             name_revision?: string | null;
             /** Parser Version */
             parser_version: string;
+            pc_reply?: components["schemas"]["PcReplyView"] | null;
             pc_request?: components["schemas"]["PcRequestStateView"] | null;
             /**
              * Po Date
@@ -6655,6 +6690,67 @@ export interface components {
              * @default 8000
              */
             text_max: number;
+        };
+        /**
+         * PcReplyDateView
+         * @description One date DW1 read from PC's mail for a delivery of a line (ticket 77),
+         *     the words it rests on and the mail it was read from: a proposal, never
+         *     a recorded value.
+         */
+        PcReplyDateView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Delivery */
+            delivery: number;
+            /** Line No */
+            line_no: number;
+            /** Message Id */
+            message_id: string;
+            /** Quote */
+            quote: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+        };
+        /**
+         * PcReplyMailView
+         * @description PC's mail a proposal was read from, as the PIC opens it: its newest
+         *     part, the words DW1 read (ticket 77).
+         */
+        PcReplyMailView: {
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * PcReplyView
+         * @description PC's mail read by DW1 while the order waits on PC (ticket 77).
+         */
+        PcReplyView: {
+            /** Dates */
+            dates: components["schemas"]["PcReplyDateView"][];
+            /** Prompt Ref */
+            prompt_ref: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
         };
         /**
          * PcRequestStateView
@@ -12613,6 +12709,45 @@ export interface operations {
             };
         };
     };
+    pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get: {
         parameters: {
             query?: never;
@@ -12802,6 +12937,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PcMailsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get: {
+        parameters: {
+            query: {
+                message_id: string;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcReplyMailView"];
                 };
             };
             /** @description Validation Error */
