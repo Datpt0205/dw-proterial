@@ -169,6 +169,13 @@ _CAPABILITIES: Final[Mapping[Capability, SalesScopes]] = MappingProxyType(
 )
 
 
+def capability_scope(capability: Capability) -> SalesScopes:
+    """The scope that verifies ``capability``: who may see and be told of
+    what it decides (the export-control hold, ticket 78) asks the same
+    table `order_actor` does, never a second copy of it."""
+    return _CAPABILITIES[capability]
+
+
 def order_actor(context: AccessContext, gate: Gate) -> Actor:
     """The caller as an order case knows them: their principal id, and each
     capability whose scope (`_CAPABILITIES`) their verified context holds."""

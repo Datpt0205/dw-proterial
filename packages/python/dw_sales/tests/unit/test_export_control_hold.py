@@ -29,6 +29,7 @@ from dw_sales.domain.orders import (
     DispositionKind,
     FindingCode,
     OrderCase,
+    OrderStatus,
     Severity,
 )
 from dw_sales.evals.graders import AN, CALLERS, DIEU, readme_claims
@@ -157,6 +158,8 @@ async def test_an_order_failing_export_control_is_held_until_the_export_control_
         True,
         True,
     )
+    # Ticket 78: the hold is the export-control PIC's turn while it is open.
+    assert crossed.awaits_export_control
 
     with pytest.raises(ConflictError, match="missing_noc_esf"):
         await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
@@ -171,6 +174,33 @@ async def test_an_order_failing_export_control_is_held_until_the_export_control_
         disposition="accepted",
         reason="Đã nhận NOC và ESF năm nay",
     )
-    assert (
-        await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
-    ).status.value == "confirmation_sent"
+    assert not world.order(crossed.case_id).awaits_export_control
+    confirmed = await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
+    assert confirmed.status.value == "confirmation_sent"
+    assert not world.order(crossed.case_id).awaits_export_control
+
+
+async def test_an_order_with_no_export_control_finding_awaits_nobody_for_it() -> None:
+    world = _world()
+    ((_, case),) = (await world.process_each(AN, ["M01"])).values()
+    assert isinstance(case, OrderCase)
+    assert not any(f.code is FindingCode.MISSING_NOC_ESF for f in case.findings)
+    assert not case.awaits_export_control
+
+
+async def test_an_open_hold_awaits_the_export_control_pic_only_where_they_may_decide_it() -> None:
+    """`dispose`'s statuses, no other: before review and once the case is
+    done, nobody is told or shown it for the hold."""
+    world = _world()
+    ((_, case),) = (await world.process_each(AN, [HELD[0]])).values()
+    assert isinstance(case, OrderCase) and case.finding(NOC).is_open
+    acknowledgeable = {
+        "in_review",
+        "prepared",
+        "uploaded_to_bravo",
+        "cross_checked",
+        "change_review",
+    }
+    for status in OrderStatus:
+        moved = case.model_copy(update={"status": status})
+        assert moved.awaits_export_control is (status.value in acknowledgeable), status

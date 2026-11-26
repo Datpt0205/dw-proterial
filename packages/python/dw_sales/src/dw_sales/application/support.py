@@ -82,8 +82,13 @@ async def stored_quote(
 def seen_by(
     viewer: AccessContext | None, kind: CaseKind, stored: Stored[OrderCase] | Stored[QuoteCase]
 ) -> bool:
+    case = stored.case
     return viewer is None or sees_case(
-        viewer, kind, stored.case.status.value, stored.origin.assigned_to
+        viewer,
+        kind,
+        case.status.value,
+        stored.origin.assigned_to,
+        export_held=isinstance(case, OrderCase) and case.awaits_export_control,
     )
 
 

@@ -2304,6 +2304,16 @@ class OrderCase(BaseModel):
         return self.status is _S.UPLOADED_TO_BRAVO and self.cross_check_required is not False
 
     @property
+    def awaits_export_control(self) -> bool:
+        """Held on an open `missing_noc_esf` where the export-control PIC may
+        acknowledge it (`dispose`'s statuses): their turn, though the status
+        is the PIC's (ticket 78). The follow-ups tell them and the case is
+        theirs to see while it holds (`visibility.sees_case`)."""
+        return self.status in _ACKNOWLEDGEABLE and any(
+            f.is_open and f.code is FindingCode.MISSING_NOC_ESF for f in self.findings
+        )
+
+    @property
     def awaits_confirmation(self) -> bool:
         """In Bravo, past its cross-check (or with none required), and its
         confirmation not sent yet: where `confirm` may move it."""

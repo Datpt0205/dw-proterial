@@ -22,8 +22,9 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
+from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
-from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG
+from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
@@ -112,6 +113,68 @@ async def test_another_pics_quote_is_not_found_on_any_read() -> None:
     head = _restricted(GIANG, AN, DIEU)
     assert quote.case_id in {s.case_id for s in await services.quotes.summaries(head)}
     assert "M10" in {m.message_id for m in await services.inbox.messages(head)}
+
+
+@pytest.mark.parametrize(
+    ("caller", "export_held", "seen"),
+    [
+        (AN, True, True),  # holds sales.compliance.ack: the hold is theirs to decide
+        (AN, False, False),  # acknowledged, or never held: the assignee's again
+        (KHOA, True, False),  # prepares orders, acknowledges nothing
+    ],
+)
+def test_the_export_control_pic_sees_an_order_only_while_it_holds_on_them(
+    caller: Caller, export_held: bool, seen: bool
+) -> None:
+    """Sales ticket 78: the export-control PIC is told of an NOC/ESF hold on
+    an order that is not theirs, so they may open it while it holds."""
+    assert (
+        sees_case(_restricted(caller), CaseKind.ORDER, "in_review", OTHER, export_held=export_held)
+        is seen
+    )
+
+
+async def _held_order_of_dieu(world: World) -> OrderCase:
+    """M03 (no NOC/ESF on file) processed, then given to Diệu by the head."""
+    ((_, case),) = (await world.process_each(AN, ["M03"])).values()
+    assert isinstance(case, OrderCase) and case.awaits_export_control, case
+    await world.services.assignment.reassign(
+        GIANG.context(),
+        CaseKind.ORDER,
+        case.case_id,
+        assignee=DIEU.user_id,
+        case_version=case.case_version,
+    )
+    return world.order(case.case_id)
+
+
+async def test_the_export_control_pic_opens_and_decides_a_hold_on_anothers_order() -> None:
+    """In a restricted tenant An (the export-control PIC) reads Diệu's held
+    order and acknowledges the hold; once acknowledged it reads as not found
+    to An again. Khoa, who prepares orders but acknowledges nothing, never
+    reads it."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    services = world.services
+    an, khoa = _restricted(AN), _restricted(KHOA)
+
+    with pytest.raises(NotFoundError):
+        await services.orders.get(khoa, held.case_id)
+    assert held.case_id not in {s.case_id for s in await services.orders.summaries(khoa)}
+
+    assert (await services.orders.get(an, held.case_id)).case_id == held.case_id
+    assert held.case_id in {s.case_id for s in await services.orders.summaries(an)}
+    await services.order_commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert not world.order(held.case_id).awaits_export_control
+    with pytest.raises(NotFoundError):
+        await services.orders.get(an, held.case_id)
 
 
 async def test_a_mail_routed_to_a_named_pic_is_theirs_and_their_heads_alone() -> None:
