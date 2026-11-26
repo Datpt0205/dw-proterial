@@ -111,6 +111,7 @@ class ReminderWords(BaseModel):
     quote_deadline_late: DueReminder
     waiting_pc: HoursReminder
     implied_acceptance: SinceReminder
+    implied_recorded: SinceReminder
     # The customer's answer to their change (ticket 29), a PO's correction,
     # a quote's spec.
     waiting_customer_change: HoursReminder

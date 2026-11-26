@@ -719,6 +719,16 @@ export class SalesApi {
     );
   }
 
+  /** An agreement by silence taken back, whoever recorded it: DW1 itself
+   * or a person (ticket 82). */
+  undoImpliedAgreement(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/agreement/undo">(
+      `/api/v1/sales/orders/${enc(caseId)}/agreement/undo`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   /** The customer did not agree to the confirmation (ticket 28). */
   recordDecline(caseId: string, caseVersion: number, key: string) {
     return this.post<"/api/v1/sales/orders/{case_id}/decline">(

@@ -264,6 +264,12 @@ class PushResult(Protocol):
     def removed(self) -> int: ...
 
 
+class ImpliedAgreementPort(Protocol):
+    """`Confirmations.record_implied`: the silence recorded as the lane."""
+
+    async def record_implied(self, context: AccessContext, case_id: uuid.UUID) -> bool: ...
+
+
 class PushNoticePort(Protocol):
     """A push to every device ``person`` turned notifications on from in the
     workspace (`dw_platform.application.web_push.WebPushService.push`). The
@@ -290,6 +296,9 @@ class FollowupLane:
     writer: BriefWriterPort | None = None
     # None where web push is off: the inbox alone tells people (ticket 48).
     push: PushNoticePort | None = None
+    # Where DW1 records a customer's silence as agreement (ticket 82); None:
+    # it only tells the PIC, as before.
+    agreements: ImpliedAgreementPort | None = None
 
     async def tick(self, scope: SalesScope) -> FollowupTick:
         policy = await self.policies.followups(scope)
@@ -315,7 +324,8 @@ class FollowupLane:
         # many (ticket 48: several within a tick's few minutes ring once).
         told: dict[uuid.UUID, list[Due]] = {}
         for due in pending:
-            delivered = await self._remind(scope, policy, copy, due, now)
+            recorded = await self._record_silence(scope, policy, due)
+            delivered = await self._remind(scope, policy, copy, due, now, recorded=recorded)
             if delivered is not None:
                 key, recipients = delivered
                 sent.append(key)
@@ -331,6 +341,22 @@ class FollowupLane:
 
     # ------------------------------------------------------------- stages --
 
+    async def _record_silence(self, scope: SalesScope, policy: SalesFollowups, due: Due) -> bool:
+        """The customer's silence recorded as agreement by DW1 itself, where
+        the tenant lets it (`implied_acceptance.record`, ticket 82): internal,
+        undone by one press. The domain's fences are the command's."""
+        if (
+            due.followup is not Followup.IMPLIED_ACCEPTANCE
+            or not policy.implied_acceptance.record
+            or self.agreements is None
+        ):
+            return False
+        try:
+            return await self.agreements.record_implied(lane_context(scope), due.case.case_id)
+        except Exception:
+            logger.exception("sales_followups: a silence was not recorded")
+            return False
+
     async def _remind(
         self,
         scope: SalesScope,
@@ -338,6 +364,8 @@ class FollowupLane:
         copy: ReminderCopy,
         due: Due,
         now: datetime,
+        *,
+        recorded: bool = False,
     ) -> tuple[str, list[uuid.UUID]] | None:
         """The source key and whom it told, when this tick recorded it; None
         when not delivered, or recorded already by another worker (which
@@ -346,7 +374,7 @@ class FollowupLane:
         if not recipients:
             return None
         key = key_of(due)
-        title, body = reminder_text(copy, policy, due, now)
+        title, body = reminder_text(copy, policy, due, now, recorded=recorded)
         try:
             await self.notifications.deliver(
                 lane_context(scope),
@@ -597,7 +625,7 @@ type Template = SinceReminder | HoursReminder | DueReminder | TurnReminder
 
 
 def reminder_text(
-    copy: ReminderCopy, policy: SalesFollowups, due: Due, now: datetime
+    copy: ReminderCopy, policy: SalesFollowups, due: Due, now: datetime, *, recorded: bool = False
 ) -> tuple[str, str]:
     """A reminder's title and body, in the tenant's words: the case's number
     and customer code, when the wait began and how long the threshold is.
@@ -605,6 +633,9 @@ def reminder_text(
     template names only its own (`reminder_copy`), so the rest go unused."""
     case = due.case
     template, hours = _template(copy.reminders, policy, due, now)
+    if recorded:
+        # The silence DW1 recorded as agreement itself (ticket 82).
+        template = copy.reminders.implied_recorded
     values: dict[str, object] = {
         "ref": _reference(case),
         "customer": case.customer_code,

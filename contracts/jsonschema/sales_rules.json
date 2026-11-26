@@ -1244,11 +1244,17 @@
       },
       "ImpliedAcceptanceRule": {
         "additionalProperties": false,
-        "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): tell the PIC once, who\nrecords the agreement. DW1 never records it.",
+        "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): DW1 records the agreement\nitself and tells the PIC once, who may undo it with one press (ticket 82,\ndw_sales ADR 0011 amendment); with ``record`` off, the PIC records it.",
         "properties": {
           "enabled": {
             "description": "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO).",
             "title": "Enabled",
+            "type": "boolean"
+          },
+          "record": {
+            "default": true,
+            "description": "DW1 tự ghi khách đồng ý ngầm khi quá số ngày im lặng, rồi báo Sales phụ trách; Sales hoàn tác được bằng một nút.",
+            "title": "Record",
             "type": "boolean"
           }
         },
@@ -3165,6 +3171,9 @@
           "implied_acceptance": {
             "$ref": "#/$defs/SinceReminder"
           },
+          "implied_recorded": {
+            "$ref": "#/$defs/SinceReminder"
+          },
           "order_unconfirmed_escalate": {
             "$ref": "#/$defs/HoursReminder"
           },
@@ -3226,6 +3235,7 @@
           "quote_deadline_late",
           "waiting_pc",
           "implied_acceptance",
+          "implied_recorded",
           "waiting_customer_change",
           "waiting_customer_correction",
           "waiting_customer_spec",

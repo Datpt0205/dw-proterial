@@ -294,8 +294,9 @@ class WaitingPcsPriceRule(BaseModel):
 
 class ImpliedAcceptanceRule(BaseModel):
     """A customer's days of silence after the confirmation have passed (the
-    days are the customer's, in the order rules): tell the PIC once, who
-    records the agreement. DW1 never records it."""
+    days are the customer's, in the order rules): DW1 records the agreement
+    itself and tells the PIC once, who may undo it with one press (ticket 82,
+    dw_sales ADR 0011 amendment); with ``record`` off, the PIC records it."""
 
     model_config = _FROZEN
 
@@ -304,6 +305,15 @@ class ImpliedAcceptanceRule(BaseModel):
             "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là "
             "đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO)."
         )
+    )
+    # True: DW1 records the silence as agreement (internal, undone by one
+    # press); a version written before ticket 82 reads as the platform's.
+    record: bool = Field(
+        default=True,
+        description=(
+            "DW1 tự ghi khách đồng ý ngầm khi quá số ngày im lặng, rồi báo Sales phụ trách; "
+            "Sales hoàn tác được bằng một nút."
+        ),
     )
 
 

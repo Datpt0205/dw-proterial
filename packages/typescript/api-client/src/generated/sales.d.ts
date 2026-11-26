@@ -876,6 +876,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/agreement/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Implied Agreement */
+        post: operations["undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/artifacts": {
         parameters: {
             query?: never;
@@ -4562,7 +4579,7 @@ export interface components {
          * @description What makes a case move: the domain method that moves it.
          * @enum {string}
          */
-        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
+        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "undo_implied" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
         /**
          * EdgeGuard
          * @description What the domain refuses a move without.
@@ -11321,6 +11338,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgreementBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
             };
         };
         responses: {

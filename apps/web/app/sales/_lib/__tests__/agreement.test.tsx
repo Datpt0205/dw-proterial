@@ -29,6 +29,7 @@ vi.mock("../../../../lib/session", () => ({
 const api = {
   recordAgreement: vi.fn(async () => ({ case_id: "c", case_version: 9 })),
   recordDecline: vi.fn(async () => ({ case_id: "c", case_version: 9 })),
+  undoImpliedAgreement: vi.fn(async () => ({ case_id: "c", case_version: 10 })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
@@ -215,5 +216,50 @@ describe("Khách xác nhận đơn (ticket 28)", () => {
     );
     expect(screen.getByText("Khách im lặng quá hạn: đồng ý ngầm")).toBeTruthy();
     expect(screen.queryByText("Khách từ chối")).toBeNull();
+  });
+
+  it("takes an agreement by silence back with one confirmed press (ticket 82)", async () => {
+    page(
+      order({
+        status: "confirmed",
+        confirmation: SENT,
+        agreement: {
+          how: "implied",
+          by: AN,
+          at: "2026-11-06T03:00:00Z",
+          message_id: null,
+          quotes: [],
+        },
+      }),
+    );
+    fireEvent.click(button("Hoàn tác"));
+    expect(api.undoImpliedAgreement).not.toHaveBeenCalled();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Hoàn tác đồng ý ngầm" }),
+    );
+    await waitFor(() =>
+      expect(api.undoImpliedAgreement).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Number),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("never offers to undo a customer's own words", () => {
+    page(
+      order({
+        status: "confirmed",
+        confirmation: SENT,
+        agreement: {
+          how: "accepted",
+          by: AN,
+          at: "2026-11-06T03:00:00Z",
+          message_id: null,
+          quotes: [],
+        },
+      }),
+    );
+    expect(screen.queryByText("Hoàn tác")).toBeNull();
   });
 });

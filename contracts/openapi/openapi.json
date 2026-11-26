@@ -7001,6 +7001,7 @@
           "confirm",
           "record_agreement",
           "record_decline",
+          "undo_implied",
           "apply_change",
           "draft_ycbg",
           "record_ycbg",
@@ -34820,6 +34821,77 @@
           }
         },
         "summary": "Record Agreement",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/agreement/undo": {
+      "post": {
+        "operationId": "undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Implied Agreement",
         "tags": [
           "sales"
         ]

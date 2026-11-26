@@ -125,6 +125,7 @@ from dw_sales.application.bravo_sales_orders import SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.confirmations import SilenceRecorder
 from dw_sales.application.customer_notations import NotationRecordPort
 from dw_sales.application.decisions import QuoteManagerSettlement
 from dw_sales.application.document_forms import DocumentFormReader, DocumentFormReplay
@@ -1100,7 +1101,18 @@ def build_followup_lane(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     policies = load_sales_policies(configs / "policies", configs / "copy")
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
-    lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer, push)
+    lane = FollowupLane(
+        uow,
+        book,
+        holders,
+        notifications,
+        clock,
+        ids,
+        writer,
+        push,
+        # DW1 records a customer's silence as agreement itself (ticket 82).
+        agreements=SilenceRecorder(uow, clock, ids),
+    )
     return lane, SqlFollowupScopes(session_factory)
 
 

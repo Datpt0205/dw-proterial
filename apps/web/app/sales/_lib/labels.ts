@@ -623,6 +623,7 @@ export const EDGE_ACTION: Record<SalesSchemas["EdgeAction"], string> = {
   confirm: "Gửi xác nhận cho khách",
   record_agreement: "Ghi khách đồng ý (bằng lời hoặc im lặng quá hạn)",
   record_decline: "Ghi khách từ chối xác nhận",
+  undo_implied: "Hoàn tác đồng ý ngầm",
   apply_change: "Áp dụng thay đổi PO",
   draft_ycbg: "Soạn YCBG",
   record_ycbg: "Ghi số YCBG trên Bravo",

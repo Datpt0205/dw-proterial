@@ -1893,6 +1893,20 @@ def build_router(
         )
         return await idem.record(change)
 
+    # An agreement by silence taken back, whoever recorded it (ticket 82).
+    @router.post(
+        "/orders/{case_id}/agreement/undo",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def undo_implied_agreement(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.confirmations.implied_undone(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
     @router.post(
         "/orders/{case_id}/decline", response_model=CaseChangeView, dependencies=prepare_scope
     )

@@ -1960,7 +1960,9 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
         # -> confirmed: the customer agreed (ADR 0011); -> change_review: they
         # declined it, or a revision or an accepted change arrived.
         _S.CONFIRMATION_SENT: frozenset({_S.CONFIRMED, _S.CHANGE_REVIEW}),
-        _S.CONFIRMED: frozenset({_S.CHANGE_REVIEW}),
+        # Back to waiting on the customer: an agreement by silence undone
+        # (ticket 82, dw_sales ADR 0011 amendment).
+        _S.CONFIRMED: frozenset({_S.CHANGE_REVIEW, _S.CONFIRMATION_SENT}),
         _S.CHANGE_REVIEW: frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO}),
         _S.CLOSED: frozenset(),
     }
@@ -3833,6 +3835,20 @@ class OrderCase(BaseModel):
             how=how, by=actor.user_id, at=at, message_id=message_id, quotes=tuple(quotes)
         )
         return self._next(status, agreement=agreement)
+
+    def implied_undone(self) -> OrderCase:
+        """confirmed -> confirmation_sent: an agreement by silence taken back,
+        by DW1's own recording or a person's (ticket 82): the order waits on
+        the customer again, its confirmation as it left. Only silence: a
+        customer's words are not undone here, they are a reply."""
+        agreement = self.agreement
+        if self.status is not _S.CONFIRMED or agreement is None or agreement.how != "implied":
+            raise ConflictError(
+                "chỉ hoàn tác được khi khách đang được ghi đồng ý ngầm",
+                details={"case_id": str(self.case_id), "rule": "not_implied"},
+            )
+        status = transition(self.status, _S.CONFIRMATION_SENT)
+        return self._next(status, agreement=None)
 
     def declined(self) -> OrderCase:
         """confirmation_sent -> change_review: the customer did not agree to

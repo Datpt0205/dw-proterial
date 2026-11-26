@@ -436,6 +436,8 @@ class EdgeAction(StrEnum):
     # words or by silence past their days, or that they declined it (ticket 28).
     RECORD_AGREEMENT = "record_agreement"
     RECORD_DECLINE = "record_decline"
+    # An agreement by silence taken back (ticket 82).
+    UNDO_IMPLIED = "undo_implied"
     APPLY_CHANGE = "apply_change"
     DRAFT_YCBG = "draft_ycbg"
     RECORD_YCBG = "record_ycbg"
@@ -537,6 +539,7 @@ _ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
     # move this status adds.
     (_O.CONFIRMATION_SENT, _O.CHANGE_REVIEW): _edge(_A.RECORD_DECLINE, "sales"),
     (_O.CONFIRMED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CONFIRMED, _O.CONFIRMATION_SENT): _edge(_A.UNDO_IMPLIED, "sales"),
     (_O.CHANGE_REVIEW, _O.UPLOADED_TO_BRAVO): _edge(
         _A.APPLY_CHANGE, "sales", _G.BLOCKING_FINDINGS, _G.ENTRY_COMPARED
     ),
