@@ -7,6 +7,7 @@ from the chat."""
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -18,9 +19,9 @@ from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.bravo_contract import BravoContract
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.bravo_line_writes import BravoSo, BravoSoLine
+from dw_sales.application.bravo_line_writes import CANCEL_REASON_CHARS, BravoSo, BravoSoLine
 from dw_sales.application.chat_prompts import QUESTION_INTENT
-from dw_sales.domain.assistant import CaseKey, QuestionKind
+from dw_sales.domain.assistant import CaseKey, ProposedBravoWrite, QuestionKind
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, OUTSIDER
@@ -31,6 +32,11 @@ pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 SO_NO = "SO26-1001"
+SO_UUID = uuid.UUID("00000000-0000-4000-8000-000000000071")
+
+
+def _fields(proposal: ProposedBravoWrite) -> dict[str, Any]:
+    return {f: getattr(proposal, f) for f in proposal.__slots__}
 
 
 class Reader(Recorded):
@@ -162,7 +168,7 @@ async def test_a_hash_not_the_statements_proposes_nothing() -> None:
     [
         (_write(line=99), "dòng nào"),
         ({**_write(), "line_no": None}, "dòng nào"),
-        ({**_write(), "field": None}, "hay số lượng"),
+        ({**_write(), "field": None}, "hay hủy dòng"),
         (_write(value="08/12/2026"), "chưa đọc được"),
         (_write(field="quantity", value="0"), "chưa đọc được"),
         (_write(field="quantity", value="1.23456"), "chưa đọc được"),
@@ -233,3 +239,80 @@ async def test_another_tenant_confirming_the_turn_finds_nothing() -> None:
             _writer(OUTSIDER.context(BETA)), key, turn.seq, turn.proposal.content_hash
         )
     assert _writes(world) == []
+
+
+# ------------------------------------------------------- a cancel (ticket 71)
+
+
+def _cancel(line: int = 2, reason: str | None = "khách bỏ dòng") -> Any:
+    return {"kind": "propose_bravo_write", "line_no": line, "field": "cancel", "reason": reason}
+
+
+async def test_a_cancel_is_said_back_with_its_reason_and_proposed_only_once_confirmed() -> None:
+    world, bravo, case, key = await _uploaded(_cancel(reason="  khách   bỏ dòng "))
+    turn = await _ask(world, key, "hủy dòng 2 vì khách bỏ dòng")
+    proposal = turn.proposal
+    assert proposal is not None and proposal.action == "bravo_write"
+    # Collapsed as the page's body is (`cancel_reason`): one rule, one owner.
+    assert (proposal.line_no, proposal.field, proposal.value) == (2, "cancel", "khách bỏ dòng")
+    assert SO_NO in turn.answer and "khách bỏ dòng" in turn.answer
+    assert _writes(world) == [] and bravo.read == 0
+    done = await world.services.assistant.confirm(
+        _writer(AN.context()), key, turn.seq, proposal.content_hash
+    )
+    (write,) = _writes(world)
+    assert (write.line_no, write.field, write.after) == (2, "cancel", "Hủy: khách bỏ dòng")
+    assert write.kind == "so.line.cancel@1" and write.status == "proposed"
+    assert "hủy dòng 2" in done.answer and done.case_version == case.case_version
+
+
+@pytest.mark.parametrize(
+    ("reason", "asks"),
+    [
+        (None, "cần một lý do"),
+        ("   ", "cần một lý do"),
+        ("x" * (CANCEL_REASON_CHARS + 1), f"tối đa {CANCEL_REASON_CHARS} ký tự"),
+    ],
+    ids=["no_reason", "blank_reason", "too_long"],
+)
+async def test_a_cancel_code_cannot_take_asks_for_its_reason_and_states_nothing(
+    reason: str | None, asks: str
+) -> None:
+    world, _, _, key = await _uploaded(_cancel(reason=reason))
+    turn = await _ask(world, key, "hủy dòng 2")
+    assert turn.proposal is None and asks in turn.answer
+    assert _writes(world) == []
+
+
+async def test_a_cancel_reason_is_measured_once_its_spaces_are_collapsed() -> None:
+    padded = "  " + "x" * CANCEL_REASON_CHARS + "  "
+    world, _, _, key = await _uploaded(_cancel(reason=padded))
+    turn = await _ask(world, key, "hủy dòng 2")
+    assert turn.proposal is not None and turn.proposal.value == "x" * CANCEL_REASON_CHARS
+
+
+async def test_the_right_is_checked_again_where_a_cancel_is_proposed() -> None:
+    world, _, _, key = await _uploaded(_cancel())
+    turn = await _ask(world, key, "hủy dòng 2 vì khách bỏ dòng")
+    assert turn.proposal is not None
+    with pytest.raises(PermissionDeniedError):
+        await world.services.assistant.confirm(
+            AN.context(), key, turn.seq, turn.proposal.content_hash
+        )
+    assert _writes(world) == []
+
+
+def test_a_stated_cancel_binds_its_reason_and_reads_back_from_storage() -> None:
+    stated = ProposedBravoWrite(
+        case_kind=CaseKind.ORDER,
+        case_id=SO_UUID,
+        case_version=4,
+        line_no=2,
+        field="cancel",
+        value="khách bỏ dòng",
+        prompt="sales.question_intent@1.6.0",
+    )
+    other = ProposedBravoWrite(**{**_fields(stated), "value": "khách đổi ý"})
+    # A confirmation of another reason's hash proposes nothing.
+    assert stated.content_hash != other.content_hash
+    assert ProposedBravoWrite.from_stored(stated.stored()) == stated

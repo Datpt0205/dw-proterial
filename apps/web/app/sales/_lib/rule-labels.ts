@@ -1038,7 +1038,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: ASSISTANT_HELP,
     },
     "words.write_which_field": {
-      label: "Hỏi lại ghi ngày hay số lượng",
+      label: "Hỏi lại đổi ngày, số lượng hay hủy dòng",
       help: ASSISTANT_HELP,
     },
     "words.write_which_value": {
@@ -1064,6 +1064,22 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "words.write_done": {
       label: "Đã gửi đề xuất ghi Bravo",
       help: ASSISTANT_HELP,
+    },
+    "words.write_cancel_confirm": {
+      label: "Nói lại đề xuất hủy dòng trước khi xác nhận",
+      help: "{so}: số SO, {line}: dòng, {reason}: lý do hủy.",
+    },
+    "words.write_which_reason": {
+      label: "Hỏi lý do hủy dòng",
+      help: "{line}: dòng.",
+    },
+    "words.write_reason_too_long": {
+      label: "Lý do hủy dài quá",
+      help: "{limit}: số ký tự tối đa.",
+    },
+    "words.write_cancel_done": {
+      label: "Đã gửi đề xuất hủy dòng",
+      help: "{line}: dòng.",
     },
     "words.work_head": {
       label: "Mở đầu danh sách việc đang chờ",

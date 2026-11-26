@@ -450,6 +450,26 @@
               "{more}"
             ]
           },
+          "write_cancel_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Cancel Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{line}",
+              "{reason}",
+              "{so}"
+            ]
+          },
+          "write_cancel_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Cancel Done",
+            "type": "string",
+            "x-placeholders": [
+              "{line}"
+            ]
+          },
           "write_confirm": {
             "maxLength": 300,
             "minLength": 1,
@@ -500,6 +520,15 @@
             "type": "string",
             "x-placeholders": []
           },
+          "write_reason_too_long": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Reason Too Long",
+            "type": "string",
+            "x-placeholders": [
+              "{limit}"
+            ]
+          },
           "write_which_field": {
             "maxLength": 300,
             "minLength": 1,
@@ -516,6 +545,15 @@
             "type": "string",
             "x-placeholders": [
               "{lines}"
+            ]
+          },
+          "write_which_reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Which Reason",
+            "type": "string",
+            "x-placeholders": [
+              "{line}"
             ]
           },
           "write_which_value": {
@@ -586,6 +624,10 @@
           "write_no_so",
           "write_orders_only",
           "write_done",
+          "write_cancel_confirm",
+          "write_which_reason",
+          "write_reason_too_long",
+          "write_cancel_done",
           "assign_confirm",
           "assign_which",
           "assign_nobody",

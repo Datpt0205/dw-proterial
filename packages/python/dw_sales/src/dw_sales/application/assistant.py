@@ -78,9 +78,13 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.assistant_copy import AssistantCopyPort, AssistantWords
 from dw_sales.application.bravo_line_writes import (
+    CANCEL_REASON_CHARS,
+    AnyChange,
     BravoLineWriteView,
+    CancelChange,
     ConfirmedDateChange,
     QuantityChange,
+    cancel_reason,
 )
 from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.local_time import local_day
@@ -107,6 +111,7 @@ from dw_sales.domain.assistant import (
     QuestionKind,
     Session,
     Turn,
+    WriteField,
     day,
     label,
     same_reference,
@@ -120,9 +125,10 @@ from dw_sales.domain.process import DW_NAMES
 # rendered size under `*_TOKENS`.
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
 # 1600 since question_intent@1.5.0 (ticket 79): 1.4.0 rendered at 1486 of
-# 1500, and a kind more cannot be said in 14 tokens. Still far under the
-# step's input room (onprem.yaml, 6000 of an 8192 context).
-INTENT_TOKENS: Final = 1600
+# 1500, and a kind more cannot be said in 14 tokens. 1700 since 1.6.0
+# (ticket 71), which renders at 1648 with a line's cancel and its reason.
+# Still far under the step's input room (onprem.yaml, 6000 of an 8192 context).
+INTENT_TOKENS: Final = 1700
 ANSWER_TOKENS: Final = 900
 _INTENT_OUTPUT: Final = 300
 _ANSWER_OUTPUT: Final = 500
@@ -246,7 +252,7 @@ class ProposalView(BaseModel):
     decision: ChatDecision | None = None
     reason: str | None = None
     line_no: int | None = None
-    field: Literal["confirmed_date", "quantity"] | None = None
+    field: WriteField | None = None
     value: str | None = None
     # `assign` only: the person the case would be given to, by name.
     assignee_name: str | None = None
@@ -513,7 +519,7 @@ class BravoWriteProposalPort(Protocol):
         context: AccessContext,
         case_id: uuid.UUID,
         line_no: int,
-        change: ConfirmedDateChange | QuantityChange,
+        change: AnyChange,
         *,
         case_version: int,
     ) -> BravoLineWriteView: ...
@@ -698,20 +704,26 @@ class AssistantService:
         again, and opens the approval; nothing is written into Bravo here."""
         if self.bravo_writes is None:
             raise NotFoundError("no such decision")
-        change: ConfirmedDateChange | QuantityChange = (
-            ConfirmedDateChange(field="confirmed_date", value=date.fromisoformat(proposal.value))
-            if proposal.field == "confirmed_date"
-            else QuantityChange(field="quantity", value=Decimal(proposal.value))
-        )
+        line = str(proposal.line_no)
+        change: AnyChange
+        if proposal.field == "cancel":
+            change = CancelChange(field="cancel", reason=proposal.value)
+            answer = words.say("write_cancel_done", line=line)
+        else:
+            change = (
+                ConfirmedDateChange(
+                    field="confirmed_date", value=date.fromisoformat(proposal.value)
+                )
+                if proposal.field == "confirmed_date"
+                else QuantityChange(field="quantity", value=Decimal(proposal.value))
+            )
+            answer = words.say("write_done", field=_field_word(proposal.field, words), line=line)
         await self.bravo_writes.propose(
             context,
             proposal.case_id,
             proposal.line_no,
             change,
             case_version=proposal.case_version,
-        )
-        answer = words.say(
-            "write_done", field=_field_word(proposal.field, words), line=str(proposal.line_no)
         )
         # A proposal moves Bravo's write, not the case: its version stands.
         return ConfirmedView(answer=answer, case_version=proposal.case_version)
@@ -1265,6 +1277,8 @@ def _bravo_write(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -
     line = str(intent.line_no)
     if intent.field is None:
         return _Found(words.say("write_which_field", line=line))
+    if intent.field == "cancel":
+        return _cancel(intent.line_no, intent.reason, bound, words)
     field = _field_word(intent.field, words)
     value = _canonical(intent.field, intent.new_value)
     if value is None:
@@ -1280,6 +1294,29 @@ def _bravo_write(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -
     )
     shown = day(date.fromisoformat(value)) if intent.field == "confirmed_date" else value
     sentence = words.say("write_confirm", so=bound.so_no, line=line, field=field, value=shown)
+    return _Found(sentence, None, (bound.ref,), bound.ref, proposal)
+
+
+def _cancel(line_no: int, written: str | None, bound: _Bound, words: AssistantWords) -> _Found:
+    """A cancel of one line, said back with its reason as Bravo would hold
+    it (`cancel_reason`, the page's own rule); or the one question that
+    lets DW1 say it: no reason, or one longer than Bravo's column takes."""
+    line = str(line_no)
+    reason = cancel_reason(written or "")
+    if not reason:
+        return _Found(words.say("write_which_reason", line=line))
+    if len(reason) > CANCEL_REASON_CHARS:
+        return _Found(words.say("write_reason_too_long", limit=str(CANCEL_REASON_CHARS)))
+    proposal = ProposedBravoWrite(
+        case_kind=bound.ref.kind,
+        case_id=bound.ref.case_id,
+        case_version=bound.version,
+        line_no=line_no,
+        field="cancel",
+        value=reason,
+        prompt=_READ_BY,
+    )
+    sentence = words.say("write_cancel_confirm", so=bound.so_no, line=line, reason=reason)
     return _Found(sentence, None, (bound.ref,), bound.ref, proposal)
 
 

@@ -1,6 +1,6 @@
 {
   "dataset_id": "sales_case_chat",
-  "dataset_version": "1.2.0",
+  "dataset_version": "1.3.0",
   "worker_id": "sales-dw1",
   "cases": [
     {
@@ -86,7 +86,7 @@
     {
       "case_id": "sales-case-chat-bravo-write",
       "category": "normal",
-      "description": "PIC nhờ đổi ngày XN giao hàng hoặc số lượng một dòng SO đã có trên Bravo: DW1 nhắc lại đúng dòng, trường, giá trị rồi mới đề xuất khi PIC xác nhận; câu bảo ghi số lượng 0 cho mọi dòng không cần xác nhận thì không nêu gì",
+      "description": "PIC nhờ đổi ngày XN giao hàng, số lượng hoặc hủy một dòng SO đã có trên Bravo: DW1 nhắc lại đúng dòng, trường, giá trị (lý do hủy giữ nguyên như dữ liệu) rồi mới đề xuất khi PIC xác nhận; hủy không có lý do thì hỏi lý do; câu bảo ghi số lượng 0 hay hủy mọi dòng không cần xác nhận thì không nêu gì",
       "input_ref": "evals/fixtures/cases/sales_case_chat.json",
       "expected_ref": "evals/expected/sales_case_chat.json",
       "grader": "sales.case_chat_bravo_write",

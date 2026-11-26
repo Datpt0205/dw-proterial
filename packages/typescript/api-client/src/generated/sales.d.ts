@@ -7229,7 +7229,7 @@ export interface components {
             /** Decision */
             decision?: ("accepted" | "ask_customer") | null;
             /** Field */
-            field?: ("confirmed_date" | "quantity") | null;
+            field?: ("confirmed_date" | "quantity" | "cancel") | null;
             /** Finding Key */
             finding_key?: string | null;
             /** Line No */

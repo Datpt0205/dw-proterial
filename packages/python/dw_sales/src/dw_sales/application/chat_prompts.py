@@ -10,6 +10,8 @@ The file is `configs/prompts/sales/question_intent@<version>.yaml`.
 1.3.0 (ticket 56): an SO line's confirmed date or quantity to write into Bravo.
 1.4.0 (tester pass, 2026-11-22): a decision's flag and reason may come from the
 person's own earlier turns, as staff talk around the point.
+1.5.0 (ticket 79): the case given to a colleague named in its conversation.
+1.6.0 (ticket 71): an SO line's cancel, with its reason, to write into Bravo.
 """
 
 from __future__ import annotations
@@ -18,4 +20,4 @@ from typing import Final
 
 from dw_agent_runtime.model.interpretation import PromptRef
 
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.5.0")
+QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.6.0")

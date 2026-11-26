@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Final, Literal
+from typing import Final, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -71,9 +71,10 @@ class QuestionKind(StrEnum):
 # that need no typed value (`orders.DispositionKind`), in the API's words.
 ChatDecision = Literal["accepted", "ask_customer"]
 REASON_CHARS: Final = 200
-# What a PIC may ask the chat to write into Bravo: ticket 53's two runnable
-# kinds, in `bravo_line_writes.LineChange`'s words.
-WriteField = Literal["confirmed_date", "quantity"]
+# What a PIC may ask the chat to write into Bravo: ticket 53's confirmed
+# date and quantity, and ticket 71's cancel, in `bravo_line_writes.LineChange`'s
+# words.
+WriteField = Literal["confirmed_date", "quantity", "cancel"]
 
 
 class QuestionIntent(BaseModel):
@@ -87,9 +88,10 @@ class QuestionIntent(BaseModel):
     # The PO or request number as written, when the question names one.
     reference: str | None = Field(default=None, min_length=1, max_length=64)
     about_previous: bool = False
-    # `decide_finding` only: the flag's code as the case lists it to the
-    # model, which code then looks for among the case's open flags; the
-    # decision; and the reason as the person gave it.
+    # `decide_finding`: the flag's code as the case lists it to the model,
+    # which code then looks for among the case's open flags; the decision;
+    # and the reason as the person gave it. A cancel (`propose_bravo_write`,
+    # field "cancel") carries its reason here too.
     finding_code: str | None = Field(default=None, pattern=r"^[a-z_]{1,64}$")
     decision: ChatDecision | None = None
     reason: str | None = Field(default=None, min_length=1, max_length=REASON_CHARS)
@@ -178,7 +180,8 @@ class ProposedBravoWrite:
     (ticket 56 over ticket 53), bound like `ProposedDecision`: the PIC
     confirms `content_hash`, and code opens the write's approval only for
     content that still hashes to it on a case still at ``case_version``.
-    ``value`` is canonical: an ISO date, or a quantity with no exponent."""
+    ``value`` is canonical: an ISO date, a quantity with no exponent, or a
+    cancel's reason as `bravo_line_writes.cancel_reason` collapses it."""
 
     case_kind: CaseKind
     case_id: uuid.UUID
@@ -216,7 +219,7 @@ class ProposedBravoWrite:
     @classmethod
     def from_stored(cls, row: Mapping[str, object]) -> ProposedBravoWrite:
         field_name = str(row["field"])
-        if field_name not in ("confirmed_date", "quantity"):
+        if field_name not in get_args(WriteField):
             raise ValueError(f"unknown field {field_name!r}")
         version, line_no = row["case_version"], row["line_no"]
         if not isinstance(version, int) or not isinstance(line_no, int):

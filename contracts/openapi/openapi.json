@@ -17073,7 +17073,8 @@
               {
                 "enum": [
                   "confirmed_date",
-                  "quantity"
+                  "quantity",
+                  "cancel"
                 ],
                 "type": "string"
               },

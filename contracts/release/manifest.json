@@ -48,6 +48,16 @@
       "version": "1.3.0"
     },
     {
+      "checksum": "2c58c72e0b9edf2129e9d17bfe4ca9bfa312455ee4d0e61b992760bf3ba09e7f",
+      "copy_id": "sales_assistant",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "83a498492cfef376d65f280be25671a9c37d1a0a84080270d96440e85e49fd4b",
+      "copy_id": "sales_assistant",
+      "version": "1.5.0"
+    },
+    {
       "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
       "copy_id": "sales_documents",
       "version": "1.0.0"
@@ -126,6 +136,11 @@
       "checksum": "8662169e75ba3f12cc1ddd809c838dc5b949b48527618751cd1d784f75f0a824",
       "copy_id": "sales_reminders",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "1ddaf74ab06558a939272a1b1d05de2a696031d6552f66d17e898711cf9e6cbe",
+      "copy_id": "sales_reminders",
+      "version": "1.2.0"
     }
   ],
   "eval_datasets": [
@@ -465,7 +480,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "15892ebb2fd07b3d5aa1ccd58a3c9765c476439c4f22d371685144cda75d0085",
+      "checksum": "b595655a66d79944edbcbd98940471a7e4cd294017fc87810867665cc67c2550",
       "dataset_id": "sales_case_chat",
       "files": [
         {
@@ -473,11 +488,11 @@
           "path": "evals/expected/sales_case_chat.json"
         },
         {
-          "checksum": "0d079f73cb09e4ddfce88dcc9c075807def5db4181582240a8953110ab1c63b1",
+          "checksum": "5aae1584334efbcab81bc5759bd526537044974c618111c0f2bbaf1bd5787e67",
           "path": "evals/fixtures/cases/sales_case_chat.json"
         }
       ],
-      "version": "1.2.0"
+      "version": "1.3.0"
     },
     {
       "checksum": "113f26c797000704a86b6e34a88a9d784c6881281b11ab00b6fb8d3ac07b4963",
@@ -1194,7 +1209,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "07dc5d053b1ab0773cdbe4e6875d63b0049f3c80",
+  "git_sha": "501778ce7bbcdc3fea8914253dbab28d78f054a0",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -1729,6 +1744,16 @@
       "version": "1.4.0"
     },
     {
+      "checksum": "ff3b9f58c8608e3f743f989744c96bc3bd57cf2941d94319ed23c662cfff6833",
+      "prompt_id": "sales.question_intent",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "a0c1d6d8e53c234c4242abf454fbff8fddd8b8f24b65f7eac37634a37b26050f",
+      "prompt_id": "sales.question_intent",
+      "version": "1.6.0"
+    },
+    {
       "checksum": "5c0bd624d3852ac7bd851c684de12b1d2b6376612aff93ca0359f59fb4203481",
       "prompt_id": "sales.reply_draft",
       "version": "1.0.0"
@@ -1955,7 +1980,7 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.7.0",
+      "prompt_bundle_version": "1.9.0",
       "toolset_version": "1.1.0",
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"

@@ -57,7 +57,7 @@ const READ_AS: Record<Turn["kind"], string> = {
   explain_thread: "Hiểu là nhờ tóm tắt chuỗi thư",
   decide_finding: "Hiểu là bạn quyết định một cờ của hồ sơ",
   propose_bravo_write:
-    "Hiểu là nhờ ghi ngày XN hoặc số lượng một dòng vào Bravo",
+    "Hiểu là nhờ ghi ngày XN, số lượng hoặc hủy một dòng trong Bravo",
   assign_case: "Hiểu là nhờ giao hồ sơ cho một người",
   out_of_scope: "Câu này ngoài những gì DW1 trả lời",
 };
