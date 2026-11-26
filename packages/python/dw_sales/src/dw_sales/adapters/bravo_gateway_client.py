@@ -110,6 +110,7 @@ class BravoGatewayClient:
                     quantity=x.quantity,
                     confirmed_date=x.confirmed_date,
                     rowversion=x.rowversion,
+                    cancel_state=x.cancel_state,
                 )
                 for x in state.lines
             ),

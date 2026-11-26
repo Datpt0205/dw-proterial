@@ -211,7 +211,9 @@ _SO = SalesOrderState(
     so_id=10,
     so_no="SO-0001",
     lines=(
-        SoLineState(20, 1, "PRV-1", Decimal("1200.50"), date(2026, 12, 1), "0x00000000000007D2"),
+        SoLineState(
+            20, 1, "PRV-1", Decimal("1200.50"), date(2026, 12, 1), "0x00000000000007D2", ""
+        ),
     ),
 )
 

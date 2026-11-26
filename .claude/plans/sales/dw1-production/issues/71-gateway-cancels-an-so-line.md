@@ -135,3 +135,63 @@ Left, and why:
 - DW's own case lines are not updated after a Bravo write (date and quantity
   the same, pre-existing): the case still shows the old quantity after a
   written cancel.
+
+**2026-11-26, the review of the three commits.** Seven findings, each read
+in the code first; all seven held, none rejected.
+
+- **The reason's limit was DW's, said as Bravo's.** 58 came from the
+  proposal's 64-character `after_value` minus "Hủy: "; Bravo's
+  `CancelRemark` is nvarchar(192) (the 11-19 survey reads
+  `sys.columns.max_length` 384 bytes, `01-ket-qua-khao-sat.rpt`). Now
+  `CANCEL_REASON_CHARS = 192`, measured in UTF-16 units as SQL Server
+  measures (`cancel_reason_fits`, used by the page's body and the chat), the
+  gateway's `CancelLine` refuses a longer one by the same count
+  (`CANCEL_REMARK_UNITS`; it allowed 512 before, so a long reason would have
+  failed at SQL Server), a test holds the two equal, migration `0662b6f0a31c`
+  widens `ck_bravo_line_writes_values` to 197 for `after_value`, and the web
+  field takes 192 (held to the OpenAPI contract). The copy's "tối đa {limit}
+  ký tự ghi vào Bravo" is now Bravo's fact.
+- **A cancel of a line Bravo already holds cancelled was proposed.** The SO
+  read (`so.by_number@1`) carries `IsCancel` as read (`SoLineState.cancel_state`);
+  DW refuses any change of a line that is not open in Bravo: `Cancel` (seen
+  in trace 3) as cancelled, any other non-empty value as unknown (no trace
+  shows one). The gateway refuses the same at check 4, before the ledger's
+  claim (`unmeasured: a write on a line Bravo holds cancelled`), so a
+  proposal opened before the cancel cannot write either.
+- **A chat turn could propose again after its proposal was rejected.** A
+  proposal leaves the case's version as it is, and the one-open index lapses
+  once settled. The approval's id is now the turn's
+  (`uuid5(session, "bravo_write:<seq>")`), and `BravoLineWrites.propose`
+  refuses an id already used (`already_proposed`); a new statement is a new
+  turn and proposes. The route's body cannot name an id.
+- **The approver could not see what they approved.** `bravo_write.` has its
+  own web host: `/approvals` draws the SO, line, item, field, Bravo's value
+  → the new one, the content hash's first 8 characters, a cancel's warning,
+  and a link to the case. The panel's latest proposal links to its approval.
+- **A settled write's answer was not shown.** The view carries `check`; the
+  panel says where a refused or in-doubt write stopped (labels
+  `BRAVO_WRITE_CHECK`), and the gateway's reason and the warnings or
+  differences open on the line's "?".
+- **The case chat's catalog did not name the cancel.** Copy
+  `sales_assistant@1.6.0` (`case_catalog` only); release manifest regenerated.
+- **No web test drew a cancel in the history.** Added, with the approval's
+  drawing, the stop step and the answer.
+
+Mutations, each red when its guard was removed: the turn's id check, the
+cancelled-line and unknown-state refusals, the UTF-16 measure (DW and the
+gateway), the widened `after` bound, the gateway's `IsCancel` refusal, the
+copy pin (1.5.0 back), and on the web the cancel branch of the value shown,
+the approval host's registration and the stop-step line. Ran: unit (dw_sales Bravo writes, assistant, views, live lane, stages;
+the API's OpenAPI snapshot, release manifest and Sales routes; gateway;
+dw_bravo), Postgres (`test_bravo_line_writes_db`, a 197-character
+`after_value` stored and 198 refused; `test_assistant_sessions_db`), eval
+`sales_case_chat@1.3.0` 7/7, web tsc, and the whole vitest suite: 892 of 895, three timeouts under
+the suite's load (two new popover tests, given 60 s and green on rerun;
+`quote-preview`, green alone).
+
+Left, unchanged: the UAT proof that turns `so.line.cancel@1` on; ticket 50's
+process-group call; `test_bravo_so_layout` and `test_bravo_rq_layout` still
+count the 11-20 trace's saves and fail on trace 3 (not caused here). Also failing, in code this change does not touch: `test_model_readiness::test_every_model_step_is_a_switch_of_the_rules_and_has_one_bar` (a `shadow` switch on `ModelAssist` that is no `ModelStep`), and `quote-preview.test.tsx` times out only under the full web suite's load. The
+gateway's reason is still a machine code (shown on click, behind the step's
+Vietnamese label): a sentence per reason is the gateway's to own, not a second
+table in the web.

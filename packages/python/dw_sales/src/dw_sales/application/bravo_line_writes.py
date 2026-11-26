@@ -42,7 +42,15 @@ from decimal import Decimal
 from types import TracebackType
 from typing import Annotated, Any, Final, Literal, Protocol, Self
 
-from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+)
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
@@ -83,8 +91,14 @@ class BravoUnreachableError(Exception):
 # ------------------------------------------------------------------ the change
 
 
-# A cancel's reason as the approval shows it after "Hủy: " (64 in all).
-CANCEL_REASON_CHARS: Final = 58
+# A cancel's reason is written into Bravo's `CancelRemark`, nvarchar(192)
+# (the 11-19 survey: `sys.columns.max_length` 384 bytes). SQL Server counts
+# UTF-16 code units; the gateway's contract refuses a longer reason by the
+# same count (`dw_bravo.contract.CANCEL_REMARK_UNITS`, which a test holds
+# equal to this one: the application does not import the gateway's contract).
+CANCEL_REASON_CHARS: Final = 192
+# The approval shows a cancel as "Hủy: <reason>".
+CANCEL_SHOWN: Final = "Hủy: "
 
 
 def cancel_reason(text: str) -> str:
@@ -94,8 +108,20 @@ def cancel_reason(text: str) -> str:
     return " ".join(text.split())
 
 
+def cancel_reason_fits(reason: str) -> bool:
+    """Whether Bravo's `CancelRemark` holds the reason, measured as SQL
+    Server measures it (a character outside the BMP takes two units)."""
+    return len(reason.encode("utf-16-le")) // 2 <= CANCEL_REASON_CHARS
+
+
 def _cancel_reason(value: object) -> object:
     return cancel_reason(value) if isinstance(value, str) else value
+
+
+def _fits_cancel_remark(reason: str) -> str:
+    if not cancel_reason_fits(reason):
+        raise ValueError(f"longer than Bravo's CancelRemark ({CANCEL_REASON_CHARS})")
+    return reason
 
 
 class ConfirmedDateChange(BaseModel):
@@ -128,6 +154,7 @@ class CancelChange(BaseModel):
         str,
         BeforeValidator(_cancel_reason),
         Field(min_length=1, max_length=CANCEL_REASON_CHARS),
+        AfterValidator(_fits_cancel_remark),
     ]
 
 
@@ -150,7 +177,8 @@ def _text(value: object) -> str | None:
 @dataclass(frozen=True)
 class BravoSoLine:
     """One row of an SO's lines as Bravo holds it (`B30BizDocDetailSO`):
-    `quantity` is `Quantity9`, `confirmed_date` `EstimatedTimeDelivery`."""
+    `quantity` is `Quantity9`, `confirmed_date` `EstimatedTimeDelivery`,
+    `cancel_state` "Order status" (`IsCancel`) as read: '' on an open line."""
 
     line_id: int
     po_line: int
@@ -158,6 +186,7 @@ class BravoSoLine:
     quantity: Decimal
     confirmed_date: date | None
     rowversion: str
+    cancel_state: str
 
 
 @dataclass(frozen=True)
@@ -218,7 +247,19 @@ class ApprovalSignerPort(Protocol):
 
 def before_value(change: AnyChange, line: BravoSoLine) -> str | None:
     """Bravo's value the change replaces, as text: a cancel replaces the
-    line's quantity. Refuses a change Bravo already holds."""
+    line's quantity. Refuses a change Bravo already holds, and any change of
+    a line that is not open in Bravo: no trace shows a person typing into a
+    cancelled line, and an "Order status" no trace shows is not read as open."""
+    if line.cancel_state == "Cancel":
+        raise ConflictError(
+            "Bravo đã hủy dòng này: không ghi thêm",
+            details={"rule": "line_cancelled_in_bravo"},
+        )
+    if line.cancel_state != "":
+        raise ConflictError(
+            "Bravo giữ dòng này ở trạng thái DW chưa biết: không ghi",
+            details={"rule": "line_state_unknown", "is_cancel": line.cancel_state[:24]},
+        )
     if isinstance(change, CancelChange):
         return _text(line.quantity)
     held: object = line.confirmed_date if change.field == "confirmed_date" else line.quantity
@@ -248,7 +289,7 @@ class BravoWriteAsked(BaseModel):
     item_code: str = Field(max_length=64)
     field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None = Field(default=None, max_length=64)
-    after: str = Field(max_length=64)
+    after: str = Field(max_length=len(CANCEL_SHOWN) + CANCEL_REASON_CHARS)
     kind: str = Field(max_length=64)
     command: dict[str, Any]
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -311,6 +352,9 @@ class BravoLineWriteView(BaseModel):
     before: str | None
     after: str
     status: WriteStatus
+    # The gateway's step that refused or stopped the write (ticket 63's
+    # order), with its reason and the rules' warnings, as the gateway said.
+    check: str | None
     reason: str | None
     warnings: tuple[str, ...]
     proposed_at: AwareDatetime
@@ -325,6 +369,7 @@ class BravoLineWriteView(BaseModel):
             before=write.before,
             after=write.after,
             status=write.status,
+            check=write.check,
             reason=write.reason,
             warnings=write.warnings,
             proposed_at=write.proposed_at,
@@ -456,7 +501,11 @@ class BravoLineWrites:
         change: AnyChange,
         *,
         case_version: int,
+        approval_id: uuid.UUID | None = None,
     ) -> BravoLineWriteView:
+        """``approval_id``: the id a caller binds the proposal to, so one
+        statement proposes once (the case assistant's turn, whose proposal
+        leaves the case's version as it is); a new one when None."""
         await self.gate.require(
             context,
             SalesScopes.CASE_READ,
@@ -467,6 +516,7 @@ class BravoLineWrites:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             stored = await work.orders.get(case_id)
+            spent = approval_id is not None and await work.bravo_writes.get(approval_id) is not None
         # A case the caller may not see (record visibility) is not found, as
         # every read of a case answers.
         if stored is None or not seen_by(context, CaseKind.ORDER, stored):
@@ -476,6 +526,11 @@ class BravoLineWrites:
             raise ConflictError(STALE_CASE_VERSION, details={"rule": "stale_case_version"})
         if line_no not in {line.line_no for line in case.lines}:
             raise NotFoundError("no such line", details={"line_no": line_no})
+        if spent:
+            raise ConflictError(
+                "đề xuất này đã được gửi một lần: muốn đề xuất lại thì hỏi lại DW1",
+                details={"rule": "already_proposed"},
+            )
         if case.bravo_so_no is None:
             raise ConflictError(
                 "đơn chưa có số SO Bravo: chưa ghi được",
@@ -501,7 +556,7 @@ class BravoLineWrites:
                 "loại ghi này chưa chạy được",
                 details={"kind": prepared.kind, "pending": prepared.pending},
             )
-        approval_id, now = self.ids.new_uuid(), self.clock.now()
+        approval_id, now = approval_id or self.ids.new_uuid(), self.clock.now()
         write = BravoLineWrite(
             approval_id=approval_id,
             case_id=case_id,
@@ -511,7 +566,7 @@ class BravoLineWrites:
             field=change.field,
             before=before,
             after=(
-                f"Hủy: {change.reason}"
+                f"{CANCEL_SHOWN}{change.reason}"
                 if isinstance(change, CancelChange)
                 else str(_text(change.value))
             ),

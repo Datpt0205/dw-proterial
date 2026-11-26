@@ -335,12 +335,16 @@ class WritePipeline:
             layout = await self.engine.layout(kind.screen)
         except (RuleRefusedError, UndecidableError) as refused:
             raise _RefusedError("rules", f"layout_could_not_be_read: {refused}") from None
-        if isinstance(command, CancelLine):
-            line = stored.lines[_line_index(stored, command.line.line_id)]
-            if not is_empty(line.get("Divide")):
-                # The traced cancel of a split group's first line also cleared
-                # `Divide` by hand; what a person does there is not measured.
-                raise _RefusedError("rules", "unmeasured: a cancel of a split line")
+        line = stored.lines[_line_index(stored, command.line.line_id)]  # type: ignore[union-attr]
+        if not is_empty(line.get("IsCancel")):
+            # "Order status" set: no trace shows a person typing into a line
+            # Bravo already holds cancelled (a second cancel would recompute
+            # the first one's cancelled quantity, price and amount from 0).
+            raise _RefusedError("rules", "unmeasured: a write on a line Bravo holds cancelled")
+        if isinstance(command, CancelLine) and not is_empty(line.get("Divide")):
+            # The traced cancel of a split group's first line also cleared
+            # `Divide` by hand; what a person does there is not measured.
+            raise _RefusedError("rules", "unmeasured: a cancel of a split line")
         branch = str(stored.header.get("BranchCode") or "")
         session = await self.engine.session(user, branch, self.now())
         runner = RuleRunner(layout, self.engine.procedures(), self.engine.references(), session)

@@ -3098,6 +3098,8 @@ export interface components {
             approval_id: string;
             /** Before */
             before: string | null;
+            /** Check */
+            check: string | null;
             /**
              * Field
              * @enum {string}

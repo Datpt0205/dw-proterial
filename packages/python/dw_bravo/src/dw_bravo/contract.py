@@ -41,6 +41,16 @@ _ROWVERSION: Final = re.compile(r"^0x[0-9A-F]{16}$")
 _CODE: Final = re.compile(r"^[^\x00-\x1f]{1,64}$")
 _CONTROL: Final = re.compile(r"[\x00-\x1f]")
 _TEXT_LIMIT: Final = 512
+# `B30BizDocDetailSO.CancelRemark` is nvarchar(192): the 11-19 survey reads its
+# `sys.columns.max_length` as 384 bytes (`01-ket-qua-khao-sat.rpt`). SQL Server
+# counts UTF-16 code units, so a character outside the BMP takes two.
+CANCEL_REMARK_UNITS: Final = 192
+
+
+def utf16_units(text: str) -> int:
+    """The length SQL Server's nvarchar measures: UTF-16 code units."""
+    return len(text.encode("utf-16-le")) // 2
+
 
 # pydantic reads this on a stdlib dataclass: the gateway refuses a field the
 # contract does not name instead of dropping it.
@@ -160,7 +170,10 @@ class CancelLine:
     (`CancelRemark`); the layout computes the rest (cancelled date, quantity,
     price and amount, the zeroed price and amounts). The reason was added
     while this version was still pending, before any approval named it: no
-    stored token, switch or tenant rule version carries a cancel without it."""
+    stored token, switch or tenant rule version carries a cancel without it.
+    The reason is as long as `CancelRemark` holds (`CANCEL_REMARK_UNITS`);
+    no approval named a longer one before this bound replaced the generic
+    512 (DW proposed at most 58 characters until then)."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
     kind: ClassVar[str] = "so.line.cancel"
@@ -172,7 +185,8 @@ class CancelLine:
     def __post_init__(self) -> None:
         if not self.reason.strip():
             raise ContractError("a cancel needs its reason")
-        _text("reason", self.reason)
+        if utf16_units(self.reason) > CANCEL_REMARK_UNITS:
+            raise ContractError(f"reason is longer than CancelRemark's {CANCEL_REMARK_UNITS}")
 
 
 @dataclass(frozen=True)
@@ -484,6 +498,10 @@ class SoLineState:
     quantity: Decimal  # Quantity9
     confirmed_date: date | None  # EstimatedTimeDelivery
     rowversion: str  # timestamp
+    # "Order status" (`IsCancel`, NOT NULL, default ''): '' on an open line,
+    # 'Cancel' once cancelled (UAT trace 11-25 17:31:50). Carried as read, so
+    # a value no trace shows is the caller's to refuse, never read as open.
+    cancel_state: str  # IsCancel
 
     def __post_init__(self) -> None:
         _rowversion("rowversion", self.rowversion)

@@ -1919,6 +1919,17 @@
             ],
             "title": "Before"
           },
+          "check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check"
+          },
           "field": {
             "enum": [
               "confirmed_date",
@@ -1987,6 +1998,7 @@
           "before",
           "after",
           "status",
+          "check",
           "reason",
           "warnings",
           "proposed_at",
@@ -2305,7 +2317,7 @@
             "type": "string"
           },
           "reason": {
-            "maxLength": 58,
+            "maxLength": 192,
             "minLength": 1,
             "title": "Reason",
             "type": "string"

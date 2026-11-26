@@ -42,7 +42,9 @@ SCOPE = SalesScope(TenantId(TENANT), WorkspaceId(uuid.UUID(int=0xB)))
 SO = SalesOrderState(
     so_id=10,
     so_no="SO-1",
-    lines=(SoLineState(20, 1, "PRV-1", Decimal("12.5"), date(2026, 12, 1), "0x00000000000007D2"),),
+    lines=(
+        SoLineState(20, 1, "PRV-1", Decimal("12.5"), date(2026, 12, 1), "0x00000000000007D2", ""),
+    ),
 )
 
 

@@ -8,7 +8,7 @@ gateway is a fake that records what it was sent."""
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace, TracebackType
@@ -20,7 +20,14 @@ from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ApproveAndResumeService, ProposedDecision
 from dw_bravo.approval_token import ApprovalTokenSigner, ApprovalTokenVerifier
-from dw_bravo.contract import CancelLine, LineRef, SetConfirmedDate, SetQuantity, content_hash
+from dw_bravo.contract import (
+    CANCEL_REMARK_UNITS,
+    CancelLine,
+    LineRef,
+    SetConfirmedDate,
+    SetQuantity,
+    content_hash,
+)
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
@@ -62,11 +69,11 @@ SO = BravoSo(
     so_id=10,
     so_no="SO2611-000161",
     lines=(
-        BravoSoLine(20, 1, "PRV-1", Decimal(1200), date(2026, 12, 1), ROWVERSION),
-        BravoSoLine(21, 2, "PRV-2", Decimal(5), None, "0x00000000000007D3"),
+        BravoSoLine(20, 1, "PRV-1", Decimal(1200), date(2026, 12, 1), ROWVERSION, ""),
+        BravoSoLine(21, 2, "PRV-2", Decimal(5), None, "0x00000000000007D3", ""),
         # PO line 3 split in Bravo: two rows.
-        BravoSoLine(22, 3, "PRV-3", Decimal(2), None, "0x00000000000007D4"),
-        BravoSoLine(23, 3, "PRV-3", Decimal(1), None, "0x00000000000007D5"),
+        BravoSoLine(22, 3, "PRV-3", Decimal(2), None, "0x00000000000007D4", ""),
+        BravoSoLine(23, 3, "PRV-3", Decimal(1), None, "0x00000000000007D5", ""),
     ),
 )
 KEY = Ed25519PrivateKey.generate()
@@ -367,6 +374,59 @@ def test_a_cancel_reason_is_measured_after_its_spaces_are_collapsed() -> None:
     assert CancelChange(field="cancel", reason=padded).reason == "x" * CANCEL_REASON_CHARS
     with pytest.raises(ValidationError):
         CancelChange(field="cancel", reason="x" * (CANCEL_REASON_CHARS + 1))
+
+
+def test_a_cancel_reason_is_as_long_as_bravos_cancelremark_holds() -> None:
+    # nvarchar(192) (the 11-19 survey), which the gateway's contract holds
+    # too: two copies of one Bravo fact, held equal here.
+    assert CANCEL_REASON_CHARS == CANCEL_REMARK_UNITS == 192
+    # SQL Server counts UTF-16 units: a character outside the BMP takes two.
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason="x" * (CANCEL_REASON_CHARS - 1) + "😀")
+
+
+async def test_a_cancel_with_the_longest_reason_bravo_holds_is_proposed() -> None:
+    world = World()
+    reason = "ý" * CANCEL_REASON_CHARS
+
+    request = await _proposed(world, CancelChange(field="cancel", reason=reason))
+
+    assert request.payload["after"] == "Hủy: " + reason
+    assert world.store.rows[request.id].after == "Hủy: " + reason
+
+
+def _bravo_holding_line_1(cancel_state: str) -> Bravo:
+    held = BravoSo(SO.so_id, SO.so_no, (replace(SO.lines[0], cancel_state=cancel_state),))
+    return Bravo(orders={SO.so_no: held})
+
+
+@pytest.mark.parametrize(
+    ("cancel_state", "rule"),
+    [("Cancel", "line_cancelled_in_bravo"), ("Close", "line_state_unknown")],
+)
+@pytest.mark.parametrize(
+    "change",
+    [
+        CancelChange(field="cancel", reason="khách bỏ"),
+        QuantityChange(field="quantity", value=Decimal(5)),
+        ConfirmedDateChange(field="confirmed_date", value=date(2026, 12, 8)),
+    ],
+    ids=["cancel", "quantity", "date"],
+)
+async def test_a_line_not_open_in_bravo_is_not_proposed(
+    cancel_state: str, rule: str, change: CancelChange | QuantityChange | ConfirmedDateChange
+) -> None:
+    # No trace shows a write on a cancelled line; an "Order status" no trace
+    # shows is not read as open (ticket 71's review).
+    world = World()
+
+    with pytest.raises(ConflictError) as refused:
+        await _service(world, _bravo_holding_line_1(cancel_state)).propose(
+            PIC_CONTEXT, CASE, 1, change, case_version=VERSION
+        )
+
+    assert refused.value.details["rule"] == rule
+    assert world.approvals.requests == {} and world.store.rows == {}
 
 
 def test_the_page_body_refuses_a_blank_cancel_reason() -> None:

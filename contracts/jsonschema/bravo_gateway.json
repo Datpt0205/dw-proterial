@@ -625,7 +625,7 @@
     "properties": {
       "content": {
         "additionalProperties": false,
-        "description": "The whole line cancelled, as a person does it on the SO screen (UAT\ntrace 11-25 17:31:50, ticket 71): \"Order status\" (`IsCancel`) set to\n`Cancel`, the remaining quantity (`Quantity9`) typed as 0, and the reason\n(`CancelRemark`); the layout computes the rest (cancelled date, quantity,\nprice and amount, the zeroed price and amounts). The reason was added\nwhile this version was still pending, before any approval named it: no\nstored token, switch or tenant rule version carries a cancel without it.",
+        "description": "The whole line cancelled, as a person does it on the SO screen (UAT\ntrace 11-25 17:31:50, ticket 71): \"Order status\" (`IsCancel`) set to\n`Cancel`, the remaining quantity (`Quantity9`) typed as 0, and the reason\n(`CancelRemark`); the layout computes the rest (cancelled date, quantity,\nprice and amount, the zeroed price and amounts). The reason was added\nwhile this version was still pending, before any approval named it: no\nstored token, switch or tenant rule version carries a cancel without it.\nThe reason is as long as `CancelRemark` holds (`CANCEL_REMARK_UNITS`);\nno approval named a longer one before this bound replaced the generic\n512 (DW proposed at most 58 characters until then).",
         "properties": {
           "line": {
             "$ref": "#/$defs/LineRef"

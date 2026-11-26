@@ -13,7 +13,7 @@ from decimal import Decimal
 import pytest
 from gateway_fakes import LINE, gateway, token
 
-from dw_bravo.contract import CancelLine, ContractError
+from dw_bravo.contract import CANCEL_REMARK_UNITS, CancelLine, ContractError, SetQuantity
 from dw_bravo_gateway.pipeline import Edit, typed_edits
 from dw_bravo_gateway.statements import render_update
 
@@ -76,3 +76,36 @@ async def test_a_cancel_of_a_split_groups_line_is_refused_before_the_approval_is
     assert (result.check, result.reason) == ("rules", "unmeasured: a cancel of a split line")
     assert approval not in gw.ledger.entries
     assert gw.bravo.batches == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [CANCEL, SetQuantity(line=LINE, quantity=Decimal(2))],
+    ids=["cancel_again", "quantity_of_a_cancelled_line"],
+)
+async def test_a_write_on_a_line_bravo_holds_cancelled_is_refused_before_the_approval_is_spent(
+    command: CancelLine | SetQuantity,
+) -> None:
+    # No trace shows a person typing into a cancelled line; a second cancel
+    # would recompute the first one's cancelled quantity and amount from 0.
+    gw = gateway()
+    gw.bravo.document.lines[0]["IsCancel"] = "Cancel"
+    approval = uuid.uuid4()
+
+    result = await gw.pipeline.execute(command, token(command, approval=approval))
+
+    assert (result.check, result.reason) == (
+        "rules",
+        "unmeasured: a write on a line Bravo holds cancelled",
+    )
+    assert approval not in gw.ledger.entries
+    assert gw.bravo.batches == []
+
+
+def test_a_reason_longer_than_cancelremark_is_not_a_command() -> None:
+    # nvarchar(192), counted in UTF-16 units as SQL Server counts them.
+    assert CancelLine(line=LINE, reason="x" * CANCEL_REMARK_UNITS).reason
+    with pytest.raises(ContractError, match="CancelRemark"):
+        CancelLine(line=LINE, reason="x" * (CANCEL_REMARK_UNITS + 1))
+    with pytest.raises(ContractError, match="CancelRemark"):
+        CancelLine(line=LINE, reason="x" * (CANCEL_REMARK_UNITS - 1) + "😀")

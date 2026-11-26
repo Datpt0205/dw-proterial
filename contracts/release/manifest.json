@@ -58,6 +58,11 @@
       "version": "1.5.0"
     },
     {
+      "checksum": "948a978636f3cc337ca153c1ddf0025d89f9cd7816782402cd8a77c9b120ad58",
+      "copy_id": "sales_assistant",
+      "version": "1.6.0"
+    },
+    {
       "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
       "copy_id": "sales_documents",
       "version": "1.0.0"
@@ -1209,7 +1214,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "501778ce7bbcdc3fea8914253dbab28d78f054a0",
+  "git_sha": "214b86d6bf40903364a572b06f7b7c354269ad3c",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [

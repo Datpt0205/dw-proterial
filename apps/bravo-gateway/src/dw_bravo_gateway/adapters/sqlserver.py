@@ -182,7 +182,7 @@ class SqlServerBravo:
                 raise AmbiguousDocumentError(so_no)
             [header] = headers
             rows = self._rows(
-                "SELECT Id, POLine, ItemCode, Quantity9, EstimatedTimeDelivery, timestamp"
+                "SELECT Id, POLine, ItemCode, Quantity9, EstimatedTimeDelivery, timestamp, IsCancel"
                 " FROM dbo.B30BizDocDetailSO WHERE BizDocId = ? ORDER BY BuiltinOrder",
                 (header["BizDocId"],),
             )
@@ -629,6 +629,7 @@ def _line_state(row: Mapping[str, object]) -> SoLineState:
         quantity=Decimal(str(row["Quantity9"])),
         confirmed_date=when.date() if isinstance(when, datetime) else None,
         rowversion=str(rowversion(row["timestamp"])),
+        cancel_state=str(row["IsCancel"]),
     )
 
 

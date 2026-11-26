@@ -62,7 +62,9 @@ class Bravo:
             so_id=10,
             so_no=SO_NO,
             lines=tuple(
-                BravoSoLine(20 + n, n, f"PRV-{n}", Decimal(100), date(2026, 12, 1), f"0x{n:016X}")
+                BravoSoLine(
+                    20 + n, n, f"PRV-{n}", Decimal(100), date(2026, 12, 1), f"0x{n:016X}", ""
+                )
                 for n in range(1, lines + 1)
             ),
         )
@@ -264,6 +266,45 @@ async def test_a_cancel_is_said_back_with_its_reason_and_proposed_only_once_conf
     assert (write.line_no, write.field, write.after) == (2, "cancel", "Hủy: khách bỏ dòng")
     assert write.kind == "so.line.cancel@1" and write.status == "proposed"
     assert "hủy dòng 2" in done.answer and done.case_version == case.case_version
+
+
+async def test_a_turn_proposes_once_even_after_its_proposal_is_rejected() -> None:
+    # A proposal leaves the case's version as it is, and the one-open rule
+    # lapses once the first proposal is settled: the turn itself is spent.
+    world, _, _, key = await _uploaded(_cancel(reason="khách bỏ dòng"))
+    turn = await _ask(world, key, "hủy dòng 2 vì khách bỏ dòng")
+    assert turn.proposal is not None
+    await world.services.assistant.confirm(
+        _writer(AN.context()), key, turn.seq, turn.proposal.content_hash
+    )
+    held = world.store.state(ALPHA).bravo_writes
+    ((approval_id, first),) = held.items()
+    held[approval_id] = first.model_copy(
+        update={"status": "rejected", "decided_by": AN.user_id, "settled_at": first.proposed_at}
+    )
+
+    with pytest.raises(ConflictError) as refused:
+        await world.services.assistant.confirm(
+            _writer(AN.context()), key, turn.seq, turn.proposal.content_hash
+        )
+
+    assert refused.value.details["rule"] == "already_proposed"
+    assert [w.status for w in _writes(world)] == ["rejected"]
+    # A new statement of the same cancel is a new turn, and proposes.
+    again = await _ask(world, key, "hủy dòng 2 vì khách bỏ dòng")
+    assert again.proposal is not None
+    await world.services.assistant.confirm(
+        _writer(AN.context()), key, again.seq, again.proposal.content_hash
+    )
+    assert sorted(w.status for w in _writes(world)) == ["proposed", "rejected"]
+
+
+async def test_a_question_the_case_chat_does_not_take_is_told_it_can_cancel_a_line() -> None:
+    # A feature nobody is told about is not there: the case's own catalog,
+    # said when a question is out of scope, names the cancel (copy 1.6.0).
+    world, _, _, key = await _uploaded({"kind": "out_of_scope"})
+    turn = await _ask(world, key, "thời tiết hôm nay thế nào")
+    assert turn.proposal is None and "hủy một dòng SO" in turn.answer
 
 
 @pytest.mark.parametrize(

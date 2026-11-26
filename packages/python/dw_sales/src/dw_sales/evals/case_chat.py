@@ -384,7 +384,9 @@ class _Bravo:
             so_id=10,
             so_no=so_no,
             lines=tuple(
-                BravoSoLine(20 + n, n, f"PRV-{n}", Decimal(100), date(2026, 12, 1), f"0x{n:016X}")
+                BravoSoLine(
+                    20 + n, n, f"PRV-{n}", Decimal(100), date(2026, 12, 1), f"0x{n:016X}", ""
+                )
                 for n in range(1, 10)
             ),
         )

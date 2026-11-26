@@ -85,6 +85,7 @@ from dw_sales.application.bravo_line_writes import (
     ConfirmedDateChange,
     QuantityChange,
     cancel_reason,
+    cancel_reason_fits,
 )
 from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.local_time import local_day
@@ -512,7 +513,8 @@ class AssignmentPort(Protocol):
 class BravoWriteProposalPort(Protocol):
     """Proposes an SO line's write into Bravo as ticket 53's own service
     does: it checks the caller's right and record visibility, the case's
-    version, and the row Bravo holds, and opens the write's approval."""
+    version, and the row Bravo holds, and opens the write's approval; once
+    per ``approval_id``."""
 
     async def propose(
         self,
@@ -522,6 +524,7 @@ class BravoWriteProposalPort(Protocol):
         change: AnyChange,
         *,
         case_version: int,
+        approval_id: uuid.UUID | None = None,
     ) -> BravoLineWriteView: ...
 
 
@@ -643,7 +646,8 @@ class AssistantService:
         turn = next((t for t in turns if t.seq == seq), None)
         proposal = turn.proposal if turn is not None else None
         if (
-            proposal is None
+            turn is None
+            or proposal is None
             or proposal.case_id != bound.ref.case_id
             or proposal.case_kind is not bound.ref.kind
         ):
@@ -653,7 +657,7 @@ class AssistantService:
         if proposal.case_version != bound.version:
             raise ConflictError("the case changed since the decision was stated")
         if isinstance(proposal, ProposedBravoWrite):
-            return await self._propose_write(context, proposal, words)
+            return await self._propose_write(context, turn, proposal, words)
         if isinstance(proposal, ProposedAssignment):
             if self.assignment is None:
                 raise NotFoundError("no such decision", details={"seq": seq})
@@ -697,11 +701,18 @@ class AssistantService:
         return rules.model_assist.on(ModelStep.CASE_CHAT)
 
     async def _propose_write(
-        self, context: AccessContext, proposal: ProposedBravoWrite, words: AssistantWords
+        self,
+        context: AccessContext,
+        turn: Turn,
+        proposal: ProposedBravoWrite,
+        words: AssistantWords,
     ) -> ConfirmedView:
         """A confirmed write, proposed through ticket 53's own service as the
         confirming person: it checks their right, the case and Bravo's row
-        again, and opens the approval; nothing is written into Bravo here."""
+        again, and opens the approval; nothing is written into Bravo here.
+        A proposal leaves the case's version as it is, so the version alone
+        would let a turn propose again once its first proposal is rejected
+        or settled: the approval's id is the turn's, and a turn proposes once."""
         if self.bravo_writes is None:
             raise NotFoundError("no such decision")
         line = str(proposal.line_no)
@@ -724,6 +735,7 @@ class AssistantService:
             proposal.line_no,
             change,
             case_version=proposal.case_version,
+            approval_id=uuid.uuid5(turn.session_id, f"bravo_write:{turn.seq}"),
         )
         # A proposal moves Bravo's write, not the case: its version stands.
         return ConfirmedView(answer=answer, case_version=proposal.case_version)
@@ -1305,7 +1317,7 @@ def _cancel(line_no: int, written: str | None, bound: _Bound, words: AssistantWo
     reason = cancel_reason(written or "")
     if not reason:
         return _Found(words.say("write_which_reason", line=line))
-    if len(reason) > CANCEL_REASON_CHARS:
+    if not cancel_reason_fits(reason):
         return _Found(words.say("write_reason_too_long", limit=str(CANCEL_REASON_CHARS)))
     proposal = ProposedBravoWrite(
         case_kind=bound.ref.kind,
