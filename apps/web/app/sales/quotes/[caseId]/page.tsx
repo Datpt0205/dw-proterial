@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Alert,
@@ -67,11 +67,7 @@ import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
-import {
-  WithCaseChat,
-  useCaseChatOffers,
-  type CaseOffers,
-} from "../../_components/case-chat";
+import { WithCaseChat, useCaseChatOffers } from "../../_components/case-chat";
 import {
   SourceDrawer,
   type SourceTarget,
@@ -85,6 +81,7 @@ import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
 import { PcsPricePanel } from "./pcs-price";
 import { SendPanel, SIGNABLE } from "./send-panel";
+import { useQuoteChatOffers, waitsOnCustomer } from "./chat-offers";
 
 export default function QuotePage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -96,12 +93,6 @@ export default function QuotePage() {
       </WithCaseChat>
     </ScopeGate>
   );
-}
-
-/** The quote waits on the customer's answer about the spec: a reminder
- * may be drafted. */
-function waitsOnCustomer(status: string): boolean {
-  return status === "spec_discussion";
 }
 
 function QuoteDetail() {
@@ -142,22 +133,8 @@ function QuoteDetail() {
     work.reload();
   }, [quote, work]);
   // The page's own controls for a step asked in its conversation (ticket
-  // 46), under the same conditions the page draws them with below. A
-  // quote has no model-worded mail to the customer: none is offered.
-  const status = data?.status;
-  const offers = useMemo<CaseOffers>(() => {
-    if (status === undefined) return {};
-    return {
-      thread_summary: <ThreadSummary kind="quote" caseId={caseId} />,
-      ...(waitsOnCustomer(status)
-        ? {
-            customer_reminder: (
-              <CustomerReminder kind="quote" caseId={caseId} />
-            ),
-          }
-        : {}),
-    };
-  }, [caseId, status]);
+  // 46), under the same conditions the page draws them with below.
+  const offers = useQuoteChatOffers(caseId, data?.status);
   useCaseChatOffers(offers);
 
   if (quote.loading) return <RegionState kind="loading" />;

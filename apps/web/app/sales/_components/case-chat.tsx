@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Card, Drawer, FloatButton, Grid } from "antd";
+import { Button, Card, Drawer, FloatButton, Grid } from "antd";
 import { CommentOutlined } from "@ant-design/icons";
 import type { AssistantCase, SalesSchemas } from "@dw/api-client";
 import { AssistantConversation } from "./assistant-conversation";
@@ -132,5 +132,68 @@ export function WithCaseChat({
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Hides the general widget while it is mounted. */
+function HideWidget() {
+  useHideAssistantWidget();
+  return null;
+}
+
+/**
+ * A case's conversation from its item in "Việc của tôi" (ticket 79), with the
+ * controls the case page offers it (`useOrderChatOffers`,
+ * `useQuoteChatOffers`) and what to reload once something is decided in it.
+ * A button in the item opens it in a drawer, from the right at `lg` and up
+ * and as a bottom sheet below (ui-quality §9), mounted on first open and
+ * kept, so an answer still arriving is not lost; nothing is read, and so
+ * nothing marked seen, before it is opened. Never inline in the row: the chat
+ * follows its newest turn by scrolling its nearest scrolling ancestor, which
+ * inside a row is the work list itself. The general widget hides while it is
+ * open, so one screen never offers two chats.
+ */
+export function ItemCaseChat({
+  onCase,
+  offers,
+  onDecided,
+}: {
+  onCase: AssistantCase;
+  offers: CaseOffers;
+  onDecided: () => void;
+}) {
+  const lg = Grid.useBreakpoint().lg;
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  return (
+    <>
+      <Button
+        icon={<CommentOutlined aria-hidden />}
+        onClick={() => {
+          setMounted(true);
+          setOpen(true);
+        }}
+      >
+        {TITLE}
+      </Button>
+      {open ? <HideWidget /> : null}
+      {mounted ? (
+        <Drawer
+          open={open}
+          onClose={() => setOpen(false)}
+          placement={lg === false ? "bottom" : "right"}
+          size={lg === false ? "88vh" : 440}
+          title={TITLE}
+        >
+          <AssistantConversation
+            onCase={onCase}
+            examples={EXAMPLES}
+            catalog={CATALOG}
+            offers={offers}
+            onDecided={onDecided}
+          />
+        </Drawer>
+      ) : null}
+    </>
   );
 }

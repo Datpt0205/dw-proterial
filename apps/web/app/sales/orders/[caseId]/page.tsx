@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -20,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
-import type { ReplyKind, SalesSchemas } from "@dw/api-client";
+import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
@@ -64,7 +58,8 @@ import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
-import { AgentReply, AGENT_KINDS } from "./agent-reply";
+import { AgentReply } from "./agent-reply";
+import { agentDraft, useOrderChatOffers, waitsOnCustomer } from "./chat-offers";
 import { AgreementPanel } from "./agreement";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -75,7 +70,6 @@ import {
   useCaseChatDecided,
   WithCaseChat,
   useCaseChatOffers,
-  type CaseOffers,
 } from "../../_components/case-chat";
 import {
   SourceDrawer,
@@ -113,19 +107,6 @@ export default function OrderPage() {
       </WithCaseChat>
     </ScopeGate>
   );
-}
-
-/** "Bản AI soạn" beside a template draft the model may word (ticket 32),
- * or null: one answer for the files panel and the case's conversation. */
-function agentDraft(caseId: string, kind: string): ReactNode {
-  return AGENT_KINDS.has(kind) ? (
-    <AgentReply key={kind} caseId={caseId} kind={kind as ReplyKind} />
-  ) : null;
-}
-
-/** The order waits on the customer's corrected PO: a reminder may be drafted. */
-function waitsOnCustomer(status: Order["status"]): boolean {
-  return status === "correction_requested";
 }
 
 /** Where a value of the order was read: a header field, or a line's field. */
@@ -201,25 +182,11 @@ function OrderDetail() {
   );
   // The page's own controls for a step asked in its conversation (ticket
   // 46), under the same conditions the page draws them with below.
-  const status = data?.status;
-  const available = artifacts.data?.available;
-  const offers = useMemo<CaseOffers>(() => {
-    if (status === undefined) return {};
-    const drafts = (available ?? [])
-      .map((k) => agentDraft(caseId, k))
-      .filter((node) => node !== null);
-    return {
-      thread_summary: <ThreadSummary kind="order" caseId={caseId} />,
-      ...(waitsOnCustomer(status)
-        ? {
-            customer_reminder: (
-              <CustomerReminder kind="order" caseId={caseId} />
-            ),
-          }
-        : {}),
-      ...(drafts.length ? { reply_draft: <>{drafts}</> } : {}),
-    };
-  }, [caseId, status, available]);
+  const offers = useOrderChatOffers(
+    caseId,
+    data?.status,
+    artifacts.data?.available,
+  );
   useCaseChatOffers(offers);
 
   if (order.loading) return <RegionState kind="loading" />;

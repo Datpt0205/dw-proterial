@@ -20,7 +20,10 @@ import { OrderActions } from "../orders/[caseId]/actions";
 import { QuoteActions } from "../quotes/[caseId]/actions";
 import { ApprovalPanel } from "../quotes/[caseId]/approval";
 import { SendPanel, SIGNABLE } from "../quotes/[caseId]/send-panel";
+import { useOrderChatOffers } from "../orders/[caseId]/chat-offers";
+import { useQuoteChatOffers } from "../quotes/[caseId]/chat-offers";
 import { useCaseArtifacts } from "./artifacts-panel";
+import { ItemCaseChat } from "./case-chat";
 import { GuardedButton } from "./guarded-button";
 
 type Today = SalesSchemas["TodayView"];
@@ -275,7 +278,8 @@ export function TodayReminders({
 /**
  * The decision of one waiting item, in its row (ticket 48): the case page's
  * own buttons, with the case's own rules (`OrderActions`, `QuoteActions`,
- * the quotation's send and approval panels), so nothing is decided twice.
+ * the quotation's send and approval panels), so nothing is decided twice,
+ * and the case's own conversation a button away (ticket 79).
  * What needs the source opened says so and links to it; a mail is decided in
  * the inbox, linked at the message.
  */
@@ -309,6 +313,13 @@ function OrderDecision({
     `sales/order/${caseId}`,
     useCallback(() => salesApi().order(caseId), [caseId]),
   );
+  const artifacts = useCaseArtifacts("order", caseId, order.data?.case_version);
+  // The case page's own controls for a step asked in the item's chat.
+  const offers = useOrderChatOffers(
+    caseId,
+    order.data?.status,
+    artifacts.data?.available,
+  );
   const changed = useCallback(() => {
     order.reload();
     onChanged();
@@ -327,6 +338,11 @@ function OrderDecision({
         viewer={viewer}
         sourceOpened={labels.length === 0}
         onChanged={changed}
+      />
+      <ItemCaseChat
+        onCase={{ kind: "order", caseId }}
+        offers={offers}
+        onDecided={changed}
       />
       {labels.length ? (
         // The button above says why; this says where.
@@ -353,6 +369,7 @@ function QuoteDecision({
     useCallback(() => salesApi().quote(caseId), [caseId]),
   );
   const artifacts = useCaseArtifacts("quote", caseId, quote.data?.case_version);
+  const offers = useQuoteChatOffers(caseId, quote.data?.status);
   const changed = useCallback(() => {
     quote.reload();
     onChanged();
@@ -376,6 +393,11 @@ function QuoteDecision({
           onDone={changed}
         />
       ) : null}
+      <ItemCaseChat
+        onCase={{ kind: "quote", caseId }}
+        offers={offers}
+        onDecided={changed}
+      />
       <Link href={`/sales/quotes/${caseId}`}>Mở hồ sơ</Link>
     </Space>
   );

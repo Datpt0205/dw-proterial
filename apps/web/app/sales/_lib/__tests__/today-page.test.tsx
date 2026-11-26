@@ -121,11 +121,26 @@ const api = {
   })),
   order: vi.fn(async () => waiting),
   resumeReview: vi.fn(async () => waiting),
+  artifacts: vi.fn(async () => ({
+    case_version: waiting.case_version,
+    available: [],
+    artifacts: [],
+  })),
+  // The item's case conversation (ticket 79).
+  assistantConversation: vi.fn(async () => ({
+    case: { kind: "order", case_id: waiting.case_id, label: "PO" },
+    turns: [] as unknown[],
+  })),
+  assistantConfirm: vi.fn(async () => ({
+    answer: "Đã giao hồ sơ cho Hoàng Thị Diệu.",
+    case_version: waiting.case_version + 1,
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
 import MyWorkPage from "../../page";
 import { SalesFrameProvider } from "../../_components/sales-frame";
+import { AssistantWidget } from "../../_components/assistant-widget";
 
 // jsdom draws no layout: a row scrolled to is a call, not a movement.
 Element.prototype.scrollIntoView = vi.fn();
@@ -141,7 +156,9 @@ function page() {
   return render(
     <UiProvider>
       <SalesFrameProvider>
-        <MyWorkPage />
+        <AssistantWidget>
+          <MyWorkPage />
+        </AssistantWidget>
       </SalesFrameProvider>
     </UiProvider>,
   );
@@ -272,6 +289,159 @@ describe("Việc cần làm, one place", () => {
       expect(
         screen.getByRole("link", { name: "Mở hồ sơ" }).getAttribute("href"),
       ).toBe("/sales/orders/gone-1");
+    },
+    SLOW,
+  );
+});
+
+const TITLE = "Hỏi DW1 về hồ sơ này";
+const HASH = "ab12cd34".repeat(8);
+const ON_CASE = { kind: "order", caseId: waiting.case_id };
+
+/** The order's item, opened by a push's deep link: its chat's button. */
+async function openItemChat() {
+  items = [
+    item(waiting.case_id, "2026-10-04T05:00:00Z", "2026-10-05T01:00:00Z"),
+  ];
+  search = new URLSearchParams({ item: `order:${waiting.case_id}` });
+  page();
+  return (await screen.findByText(TITLE, undefined, { timeout: 8000 })).closest(
+    "button",
+  )!;
+}
+
+describe("The item's case conversation (ticket 79)", () => {
+  it(
+    "opens the case's own conversation from the item, read only once opened",
+    async () => {
+      const button = await openItemChat();
+      expect(button.closest(".ant-table-expanded-row")).toBeTruthy();
+      // Opening the item does not read the conversation, so nothing is
+      // marked seen that nobody saw.
+      expect(api.assistantConversation).not.toHaveBeenCalled();
+      fireEvent.click(button);
+      await waitFor(() =>
+        expect(api.assistantConversation).toHaveBeenCalledWith(ON_CASE),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "answers a step with the case page's own control at this point of the case",
+    async () => {
+      api.assistantConversation.mockResolvedValueOnce({
+        case: { kind: "order", case_id: waiting.case_id, label: "PO" },
+        turns: [
+          {
+            seq: 1,
+            asked_at: "2026-10-05T02:00:00+00:00",
+            question: "Nhắc khách",
+            kind: "remind_customer",
+            answer: "Bấm nút dưới đây để DW1 soạn thư nhắc khách.",
+            cites: [],
+            answered_by: "code",
+            offer: "customer_reminder",
+          },
+        ],
+      });
+      fireEvent.click(await openItemChat());
+      // The order waits on the customer's corrected PO: the reminder is the
+      // case page's own control, not the chat's "no control here".
+      expect(
+        await screen.findByText("DW1 soạn thư nhắc khách", undefined, {
+          timeout: 8000,
+        }),
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Ở bước hiện tại, trang hồ sơ không có nút cho việc này.",
+        ),
+      ).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "gives the case from the item's chat only once pressed, then reads the work again",
+    async () => {
+      api.assistantConversation.mockResolvedValueOnce({
+        case: { kind: "order", case_id: waiting.case_id, label: "PO" },
+        turns: [
+          {
+            seq: 3,
+            asked_at: "2026-10-05T02:00:00+00:00",
+            question: "giao cho Diệu nhé",
+            kind: "assign_case",
+            answer:
+              "Giao hồ sơ cho Hoàng Thị Diệu? Bấm Xác nhận để giao; người nhận được báo ngay.",
+            cites: [],
+            answered_by: "code",
+            proposal: {
+              action: "assign",
+              assignee_name: "Hoàng Thị Diệu",
+              case_version: waiting.case_version,
+              content_hash: HASH,
+            },
+          },
+        ],
+      });
+      fireEvent.click(await openItemChat());
+      const give = (
+        await screen.findByText("Giao cho Hoàng Thị Diệu", undefined, {
+          timeout: 8000,
+        })
+      ).closest("button")!;
+      expect(api.assistantConfirm).not.toHaveBeenCalled();
+      const reads = api.myWork.mock.calls.length;
+      fireEvent.click(give);
+      await waitFor(() =>
+        expect(api.assistantConfirm.mock.calls[0]!.slice(0, 3)).toEqual([
+          ON_CASE,
+          3,
+          HASH,
+        ]),
+      );
+      // The list is read again: the case is no longer this person's.
+      await waitFor(() =>
+        expect(api.myWork.mock.calls.length).toBeGreaterThan(reads),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "hides the general widget while the item's chat is open, and gives it back",
+    async () => {
+      const button = await openItemChat();
+      expect(screen.getByRole("button", { name: "Hỏi DW1" })).toBeTruthy();
+      fireEvent.click(button);
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "Hỏi DW1" })).toBeNull(),
+      );
+      fireEvent.click(document.querySelector(".ant-drawer-close")!);
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Hỏi DW1" })).toBeTruthy(),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "keeps a mail's item to its link in the inbox, with no case conversation",
+    async () => {
+      items = [
+        item("m-1", "2026-10-04T05:00:00Z", "2026-10-05T01:00:00Z", "message"),
+      ];
+      search = new URLSearchParams({ item: "message:m-1" });
+      page();
+      expect(
+        await screen.findByText("Mở thư trong Hộp thư để xử lý", undefined, {
+          timeout: 8000,
+        }),
+      ).toBeTruthy();
+      expect(screen.queryByText(TITLE)).toBeNull();
+      expect(api.assistantConversation).not.toHaveBeenCalled();
     },
     SLOW,
   );
