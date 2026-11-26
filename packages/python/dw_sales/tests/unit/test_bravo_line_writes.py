@@ -30,6 +30,7 @@ from dw_sales.adapters.bravo_contract import BravoContract, ContractSigner
 from dw_sales.application.access import Gate
 from dw_sales.application.bravo_line_writes import (
     BRAVO_WRITE_APPROVAL,
+    CANCEL_REASON_CHARS,
     BravoCommandsPort,
     BravoLineWrite,
     BravoLineWrites,
@@ -48,6 +49,7 @@ from dw_sales.application.bravo_line_writes import (
 )
 from dw_sales.application.runs import APPROVAL_PREFIX
 from dw_sales.application.stages import Stage, StageHandlers
+from dw_sales.presentation.routes import BravoWriteBody
 
 pytestmark = pytest.mark.unit
 
@@ -345,9 +347,35 @@ async def test_a_cancel_is_proposed_with_its_reason_against_the_row_bravo_holds(
     assert (payload["before"], payload["after"]) == ("1200", "Hủy: Khách hủy dòng")
 
 
-def test_a_cancel_without_its_reason_is_not_a_change() -> None:
+@pytest.mark.parametrize("reason", ["", "   ", "\n\t "])
+def test_a_cancel_without_its_reason_is_not_a_change(reason: str) -> None:
     with pytest.raises(ValidationError):
-        CancelChange(field="cancel", reason="")
+        CancelChange(field="cancel", reason=reason)
+
+
+def test_a_cancel_reason_is_proposed_as_one_spaced_line() -> None:
+    # One normalisation for the page and the assistant: the reason hashed and
+    # written into Bravo's CancelRemark is the collapsed one.
+    change = CancelChange(field="cancel", reason="  Khách   bỏ\n dòng  ")
+
+    assert change.reason == "Khách bỏ dòng"
+
+
+def test_a_cancel_reason_is_measured_after_its_spaces_are_collapsed() -> None:
+    padded = "  " + "x" * CANCEL_REASON_CHARS + "  "
+
+    assert CancelChange(field="cancel", reason=padded).reason == "x" * CANCEL_REASON_CHARS
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason="x" * (CANCEL_REASON_CHARS + 1))
+
+
+def test_the_page_body_refuses_a_blank_cancel_reason() -> None:
+    # FastAPI validates the POST body with this model: a blank reason is a 422
+    # before any approval is opened.
+    with pytest.raises(ValidationError):
+        BravoWriteBody.model_validate(
+            {"case_version": 1, "change": {"field": "cancel", "reason": "   "}}
+        )
 
 
 @pytest.mark.parametrize(

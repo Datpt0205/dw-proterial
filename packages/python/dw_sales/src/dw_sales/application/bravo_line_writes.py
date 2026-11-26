@@ -42,7 +42,7 @@ from decimal import Decimal
 from types import TracebackType
 from typing import Annotated, Any, Final, Literal, Protocol, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
@@ -87,6 +87,17 @@ class BravoUnreachableError(Exception):
 CANCEL_REASON_CHARS: Final = 58
 
 
+def cancel_reason(text: str) -> str:
+    """A cancel's reason as it is proposed, hashed and written: runs of
+    whitespace as one space, none at either end. Blank is no reason. The one
+    owner of this rule, for the page's body and the assistant's reading."""
+    return " ".join(text.split())
+
+
+def _cancel_reason(value: object) -> object:
+    return cancel_reason(value) if isinstance(value, str) else value
+
+
 class ConfirmedDateChange(BaseModel):
     """ "XN giao hàng": the line's confirmed delivery date."""
 
@@ -113,7 +124,11 @@ class CancelChange(BaseModel):
     model_config = _FROZEN
 
     field: Literal["cancel"]
-    reason: str = Field(min_length=1, max_length=CANCEL_REASON_CHARS)
+    reason: Annotated[
+        str,
+        BeforeValidator(_cancel_reason),
+        Field(min_length=1, max_length=CANCEL_REASON_CHARS),
+    ]
 
 
 LineChange = Annotated[
