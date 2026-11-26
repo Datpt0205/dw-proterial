@@ -157,6 +157,7 @@ from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.bravo_ledger_health import SqlBravoLedgerHealth
 from dw_sales.adapters.persistence.bravo_mirror import SqlBravoMirror
 from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.labelled_cases import RETENTION_KEY as LABELLED_CASES_KEY
@@ -209,6 +210,13 @@ from dw_worker.composition import (
     release_manifest_ref,
 )
 from dw_worker.consumers import ConsumerRegistry
+from dw_worker.consumers.bravo_ledger_health import (
+    BRAVO_LEDGER_HEALTH_LANE,
+    build_bravo_ledger_health_consumer,
+)
+from dw_worker.consumers.bravo_ledger_health import (
+    INTERVAL_SECONDS as BRAVO_LEDGER_HEALTH_INTERVAL_SECONDS,
+)
 from dw_worker.consumers.bravo_sync import (
     BRAVO_SYNC_INTERVAL_SECONDS,
     build_bravo_sync_consumer,
@@ -1196,7 +1204,7 @@ def build_registry(
         )
         if (pusher := web_push(settings, sessions)) is not None:
             web_push_delivery_consumer = build_web_push_delivery_consumer(
-                SqlChannelOutbox(sessions), pusher
+                SqlChannelOutbox(sessions), pusher, telemetry=telemetry
             )
         if settings.zalo_send_enabled:
             channel_delivery_consumer = build_channel_delivery_consumer(
@@ -1205,6 +1213,7 @@ def build_registry(
                 address_of=SqlZaloLink(sessions).zalo_id_for,
                 sender=ZaloBotClient(bot_token=settings.zalo_bot_token.get_secret_value()),
                 web_url=settings.public_web_url,
+                telemetry=telemetry,
             )
         # One bot, one reader (ADR 0008): poll mode polls, webhook mode drains
         # what the API's webhook queued. Both feed the same inbound entry.
@@ -1407,6 +1416,14 @@ def build_registry(
                     )
                 ),
                 interval_seconds=BRAVO_WATCH_INTERVAL_SECONDS,
+            )
+        # The gateway's writes waiting for a person, for the operator's
+        # alerts (sales ticket 84): wherever a gateway writes the ledger.
+        if settings.bravo_gateway_url:
+            registry.register(
+                BRAVO_LEDGER_HEALTH_LANE,
+                build_bravo_ledger_health_consumer(SqlBravoLedgerHealth(sessions), telemetry),
+                interval_seconds=BRAVO_LEDGER_HEALTH_INTERVAL_SECONDS,
             )
         # Bravo's facts copied into DW by rowversion (sales ticket 50): the
         # gateway's one tenant, its copy under that tenant's row security.

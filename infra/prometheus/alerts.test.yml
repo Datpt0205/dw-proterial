@@ -61,3 +61,71 @@ tests:
       - eval_time: 30m
         alertname: DwLaneStale
         exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      # Seeded at 0 when the worker built the lane, then one given up on.
+      - series: 'dw_channel_delivery_exhausted_total{job="dw-worker",channel="zalo"}'
+        values: "0x10 1x60"
+      - series: 'dw_channel_delivery_exhausted_total{job="dw-worker",channel="web_push"}'
+        values: "0x70"
+      # Two in doubt already when the window opens, a third at minute 20.
+      - series: 'dw_bravo_writes_needing_a_person{job="dw-worker"}'
+        values: "2x20 3x100"
+      # An event pending for 50 minutes, then drained.
+      - series: 'dw_outbox_oldest_pending_age_seconds{job="dw-worker"}'
+        values: "0+60x50 0x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DwDeliveryExhausted
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: DwDeliveryExhausted
+        exp_alerts:
+          - exp_labels: { job: dw-worker, channel: zalo, severity: warning }
+            exp_annotations:
+              summary: "zalo: a notification was given up on after every retry"
+              description: >
+                zalo gave up on 1 notification(s)
+                in the last hour; the inbox still holds each one.
+      # Two that were already there are not news.
+      - eval_time: 15m
+        alertname: DwBravoWriteNeedsAPerson
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: DwBravoWriteNeedsAPerson
+        exp_alerts:
+          - exp_labels: { job: dw-worker, severity: warning }
+            exp_annotations:
+              summary: "A Bravo write needs a person to check Bravo"
+              description: >
+                The gateway's ledger now holds 3
+                write(s) in doubt or written with differences. Open the case and
+                read the SO in Bravo before anything else is written to it.
+      # 30 minutes on with no new one, the rule clears.
+      - eval_time: 1h
+        alertname: DwBravoWriteNeedsAPerson
+        exp_alerts: []
+      # Pending past 1800 s at minute 30, firing after the 10-minute `for:`.
+      - eval_time: 35m
+        alertname: DwOutboxEventStuck
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: DwOutboxEventStuck
+        exp_alerts:
+          - exp_labels: { job: dw-worker, severity: warning }
+            exp_annotations:
+              summary: "An outbox event has waited more than 30 minutes"
+              description: >
+                The oldest pending outbox event dw-worker handles is
+                45m 0s old.
+      - eval_time: 1h10m
+        alertname: DwOutboxEventStuck
+        exp_alerts: []
+      - eval_time: 50m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels: { severity: none }
+            exp_annotations:
+              summary: "The alert pipeline is running"
+              description: "Always firing; its absence means alerts cannot reach anyone."

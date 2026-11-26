@@ -12,8 +12,14 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
+  routes:
+    # Always firing (alerts.yml, Sales ticket 84): read from the API by the
+    # host's relay as proof the pipeline runs, and sent to nobody.
+    - matchers: ['alertname="Watchdog"']
+      receiver: blackhole
 
 receivers:
+  - name: blackhole
   - name: webhook
     webhook_configs:
       - url: "__ALERTMANAGER_WEBHOOK_URL__"

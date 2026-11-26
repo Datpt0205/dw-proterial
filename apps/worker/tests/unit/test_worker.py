@@ -624,3 +624,15 @@ def test_dw1_is_built_where_deployed_on_the_stored_mailbox_only(
         catalog = mount[0].services.master_data.catalog
         assert isinstance(catalog, SnapshotSalesCatalog)
         assert (catalog.fallback is None) is settings.is_deployed
+
+
+def test_the_bravo_ledger_health_lane_runs_wherever_a_gateway_writes() -> None:
+    """Ticket 84: a deployment with a gateway counts its writes that wait for a
+    person; one without a gateway has no ledger to count."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    assert "bravo_ledger_health" not in build_registry(bare_settings(database_url=db)).all()
+    registry = build_registry(
+        bare_settings(database_url=db, bravo_gateway_url="http://bravo-gateway:8080")
+    )
+    assert "bravo_ledger_health" in registry.all()
+    assert registry.interval_for("bravo_ledger_health", 5.0) == 300.0

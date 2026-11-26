@@ -131,3 +131,63 @@ groups:
             {{ $labels.lane }} last finished a tick without an error
             {{ $value | humanizeDuration }} ago. Its log in dw-worker says why
             ("consumer {{ $labels.lane }} failed").
+
+      - alert: DwOutboxEventStuck
+        # Sales ticket 84. The gauge was emitted and read by no rule. An event
+        # pending half an hour is one lane not draining (a handler that keeps
+        # failing retries until its attempts are spent; a spent one is told to
+        # the tenant's administrators by `outbox_alarms`). 1800 s is a
+        # starting point until the plant's traffic measures it.
+        expr: dw_outbox_oldest_pending_age_seconds > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An outbox event has waited more than 30 minutes"
+          description: >
+            The oldest pending outbox event dw-worker handles is
+            {{ $value | humanizeDuration }} old.
+
+      - alert: DwDeliveryExhausted
+        # Sales ticket 84. A notification a channel gave up on after every
+        # retry: the chat provider or the push service kept failing. Only
+        # this end is counted; a person who unlinked or whose phone dropped
+        # the subscription is not the system failing. The counter starts at
+        # 0 per channel, so the first one counts.
+        expr: increase(dw_channel_delivery_exhausted_total[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.channel }}: a notification was given up on after every retry"
+          description: >
+            {{ $labels.channel }} gave up on {{ $value | humanize }} notification(s)
+            in the last hour; the inbox still holds each one.
+
+      - alert: DwBravoWriteNeedsAPerson
+        # Sales ticket 84. A Bravo write the gateway could not settle cleanly:
+        # sent with no answer, written with a read-back that differs, or
+        # claimed and never settled. Those ledger states are final, so the
+        # count never goes back down by itself; the rule fires when it rises
+        # and clears after 30 minutes. The PIC sees each one on its case.
+        expr: delta(dw_bravo_writes_needing_a_person[30m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A Bravo write needs a person to check Bravo"
+          description: >
+            The gateway's ledger now holds {{ with query "dw_bravo_writes_needing_a_person" }}{{ . | first | value }}{{ end }}
+            write(s) in doubt or written with differences. Open the case and
+            read the SO in Bravo before anything else is written to it.
+
+      - alert: Watchdog
+        # Sales ticket 84. Always firing, on purpose: the host's relay reads
+        # Alertmanager every few minutes and treats this one missing as the
+        # alert pipeline down (Prometheus, its rules, or Alertmanager), which
+        # an empty list of alerts could not tell apart from "all is well".
+        # Alertmanager routes it to no receiver.
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "The alert pipeline is running"
+          description: "Always firing; its absence means alerts cannot reach anyone."

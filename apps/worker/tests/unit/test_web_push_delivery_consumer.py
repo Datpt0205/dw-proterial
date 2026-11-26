@@ -14,6 +14,8 @@ from datetime import timedelta
 
 import pytest
 
+from dw_observability.metrics import DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL
+from dw_observability.telemetry import RecordingTelemetry
 from dw_worker.consumers.channel_delivery import MAX_ATTEMPTS, backoff
 from dw_worker.consumers.scope_failures import ScopesFailedError
 from dw_worker.consumers.web_push_delivery import TAG, build_web_push_delivery_consumer
@@ -105,11 +107,17 @@ class _Push:
         return _Result(self.reached)
 
 
+def _lane(outbox, push, telemetry=None):  # type: ignore[no-untyped-def]
+    return build_web_push_delivery_consumer(
+        outbox, push, telemetry=telemetry or RecordingTelemetry()
+    )
+
+
 async def test_a_push_a_device_took_is_sent_with_the_title_place_and_link_only() -> None:
     row, push = _Row(), _Push()
     outbox = _Outbox([row])
 
-    await build_web_push_delivery_consumer(outbox, push)()
+    await _lane(outbox, push)()
 
     assert row.outcome == ("sent",)
     [(tenant, workspace, person, payload)] = push.sent
@@ -130,7 +138,7 @@ async def test_a_push_a_device_took_is_sent_with_the_title_place_and_link_only()
 async def test_someone_no_longer_in_the_workspace_is_not_pushed() -> None:
     row, push = _Row(member=False), _Push()
 
-    await build_web_push_delivery_consumer(_Outbox([row]), push)()
+    await _lane(_Outbox([row]), push)()
 
     assert row.outcome == ("cancelled", "recipient_not_member") and push.sent == []
 
@@ -138,14 +146,14 @@ async def test_someone_no_longer_in_the_workspace_is_not_pushed() -> None:
 async def test_no_device_taking_it_fails_the_row_and_the_inbox_keeps_it() -> None:
     row = _Row()
 
-    await build_web_push_delivery_consumer(_Outbox([row]), _Push(reached=0))()
+    await _lane(_Outbox([row]), _Push(reached=0))()
 
     assert row.outcome == ("failed", "no_device_reached")
 
 
 async def test_the_push_service_raising_is_retried_then_given_up() -> None:
     row = _Row()
-    lane = build_web_push_delivery_consumer(_Outbox([row]), _Push(fail_with=OSError("down")))
+    lane = _lane(_Outbox([row]), _Push(fail_with=OSError("down")))
 
     await lane()
     assert row.outcome == ("retry", backoff(1)) and row.status == "pending"
@@ -166,5 +174,24 @@ async def test_a_scope_that_failed_mid_row_makes_the_tick_raise_after_the_others
 
     row = _Broken()
     with pytest.raises(ScopesFailedError):
-        await build_web_push_delivery_consumer(_Outbox([row]), _Push())()
+        await _lane(_Outbox([row]), _Push())()
     assert row.status == "pending"
+
+
+async def test_a_push_given_up_on_counts_once_and_no_device_counts_nothing() -> None:
+    """Ticket 84: no device taking it is the person's phone, not the system."""
+    telemetry = RecordingTelemetry()
+
+    def counted() -> list[float]:
+        return [
+            float(v)
+            for n, v, labels in telemetry.metrics
+            if n == DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL and labels == {"channel": "web_push"}
+        ]
+
+    await _lane(_Outbox([_Row()]), _Push(reached=0), telemetry)()
+    assert counted() == [0.0]
+    await _lane(
+        _Outbox([_Row(attempts=MAX_ATTEMPTS - 1)]), _Push(fail_with=OSError("down")), telemetry
+    )()
+    assert counted() == [0.0, 0.0, 1.0]

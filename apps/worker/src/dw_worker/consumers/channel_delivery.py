@@ -37,6 +37,8 @@ from typing import Protocol
 
 from dw_connectors.ports import ChatRecipientUnreachableError, ChatSenderPort
 from dw_kernel.channels import chat_reference
+from dw_observability.metrics import DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL
+from dw_observability.telemetry import TelemetryPort
 from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.channel_delivery")
@@ -45,6 +47,9 @@ logger = logging.getLogger("dw_worker.channel_delivery")
 # BASE_DELAY: 1, 2, 4 and 8 minutes, so a provider outage of a quarter of an
 # hour is ridden out and a dead chat is given up on the same morning.
 MAX_ATTEMPTS = 5
+# The reason a row gets at the ceiling; the one end that is the system's, not
+# the recipient's, and so the one `DwDeliveryExhausted` counts.
+EXHAUSTED = "attempts_exhausted"
 BASE_DELAY = timedelta(minutes=1)
 # Rows claimed per scope per tick, so one busy workspace cannot starve the
 # others of a tick; the rest wait for the next.
@@ -130,14 +135,15 @@ async def _deliver(
     address_of: AddressLookup,
     sender: ChatSenderPort,
     web_url: str,
-) -> None:
+) -> str | None:
+    """Settles the row; answers the reason when it ended ``failed``."""
     if not await claim.recipient_may_receive():
         await claim.mark_cancelled("recipient_not_member")
-        return
+        return None
     chat = await address_of(claim.recipient_user_id)
     if chat is None:
         await claim.mark_cancelled("recipient_unlinked")
-        return
+        return None
     text = compose(
         tenant_name=claim.tenant_name,
         workspace_name=claim.workspace_name,
@@ -149,17 +155,18 @@ async def _deliver(
         message_id = await sender.send_message(chat, text)
     except ChatRecipientUnreachableError as exc:
         await claim.mark_failed("recipient_unreachable", _error_text(exc))
-        return
+        return "recipient_unreachable"
     except Exception as exc:
         # Broad on purpose: every failure a provider has not named permanent is
         # worth another try, up to the ceiling.
         made = claim.attempts + 1
         if made >= MAX_ATTEMPTS:
-            await claim.mark_failed("attempts_exhausted", _error_text(exc))
-        else:
-            await claim.retry_later(_error_text(exc), backoff(made))
-        return
+            await claim.mark_failed(EXHAUSTED, _error_text(exc))
+            return EXHAUSTED
+        await claim.retry_later(_error_text(exc), backoff(made))
+        return None
     await claim.mark_sent(message_id, chat_reference(channel, chat))
+    return None
 
 
 def build_channel_delivery_consumer(
@@ -169,8 +176,12 @@ def build_channel_delivery_consumer(
     address_of: AddressLookup,
     sender: ChatSenderPort,
     web_url: str,
+    telemetry: TelemetryPort,
     batch_per_scope: int = BATCH_PER_SCOPE,
 ) -> Callable[[], Awaitable[None]]:
+    exhausted = {"channel": channel}
+    telemetry.add_metric(DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL, 0, exhausted)
+
     async def consume() -> None:
         failed = 0
         for scope in await outbox.due_scopes(channel):
@@ -179,13 +190,16 @@ def build_channel_delivery_consumer(
                     async with outbox.claim_next(channel, scope) as claim:
                         if claim is None:
                             break
-                        await _deliver(
+                        reason = await _deliver(
                             claim,
                             channel=channel,
                             address_of=address_of,
                             sender=sender,
                             web_url=web_url,
                         )
+                    # After the block: only a settlement that committed counts.
+                    if reason == EXHAUSTED:
+                        telemetry.add_metric(DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL, 1, exhausted)
             except Exception:
                 # One scope's database trouble must not hold up the others; the
                 # row it was on rolled back to pending. Logged without ids that

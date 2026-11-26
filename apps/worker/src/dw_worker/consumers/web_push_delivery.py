@@ -30,8 +30,11 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Final, Protocol
 
+from dw_observability.metrics import DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL
+from dw_observability.telemetry import TelemetryPort
 from dw_worker.consumers.channel_delivery import (
     BATCH_PER_SCOPE,
+    EXHAUSTED,
     MAX_ATTEMPTS,
     ChannelOutboxPort,
     ClaimedDelivery,
@@ -75,10 +78,11 @@ def payload(claim: ClaimedDelivery) -> dict[str, object]:
     }
 
 
-async def _deliver(claim: ClaimedDelivery, scope: DeliveryScopeRef, push: PushPort) -> None:
+async def _deliver(claim: ClaimedDelivery, scope: DeliveryScopeRef, push: PushPort) -> str | None:
+    """Settles the row; answers the reason when it ended ``failed``."""
     if not await claim.recipient_may_receive():
         await claim.mark_cancelled("recipient_not_member")
-        return
+        return None
     try:
         result = await push.push(
             scope.tenant_id, scope.workspace_id, claim.recipient_user_id, payload(claim)
@@ -87,22 +91,27 @@ async def _deliver(claim: ClaimedDelivery, scope: DeliveryScopeRef, push: PushPo
         made = claim.attempts + 1
         error = type(exc).__name__  # an endpoint is a capability URL: never logged
         if made >= MAX_ATTEMPTS:
-            await claim.mark_failed("attempts_exhausted", error)
-        else:
-            await claim.retry_later(error, backoff(made))
-        return
+            await claim.mark_failed(EXHAUSTED, error)
+            return EXHAUSTED
+        await claim.retry_later(error, backoff(made))
+        return None
     if result.reached == 0:
         await claim.mark_failed("no_device_reached", "no device took the push")
-        return
+        return "no_device_reached"
     await claim.mark_sent(CHANNEL, CHANNEL)
+    return None
 
 
 def build_web_push_delivery_consumer(
     outbox: ChannelOutboxPort,
     push: PushPort,
     *,
+    telemetry: TelemetryPort,
     batch_per_scope: int = BATCH_PER_SCOPE,
 ) -> Callable[[], Awaitable[None]]:
+    exhausted = {"channel": CHANNEL}
+    telemetry.add_metric(DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL, 0, exhausted)
+
     async def consume() -> None:
         failed = 0
         for scope in await outbox.due_scopes(CHANNEL):
@@ -111,7 +120,10 @@ def build_web_push_delivery_consumer(
                     async with outbox.claim_next(CHANNEL, scope) as claim:
                         if claim is None:
                             break
-                        await _deliver(claim, scope, push)
+                        reason = await _deliver(claim, scope, push)
+                    # After the block: only a settlement that committed counts.
+                    if reason == EXHAUSTED:
+                        telemetry.add_metric(DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL, 1, exhausted)
             except Exception:
                 logger.exception("web push delivery: a scope failed; the next tick retries")
                 failed += 1

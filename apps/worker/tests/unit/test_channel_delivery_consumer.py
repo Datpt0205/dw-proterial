@@ -19,6 +19,8 @@ import pytest
 
 from dw_connectors.ports import ChatRecipientUnreachableError
 from dw_kernel.channels import chat_reference
+from dw_observability.metrics import DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL
+from dw_observability.telemetry import RecordingTelemetry
 from dw_worker.consumers.channel_delivery import (
     BASE_DELAY,
     MAX_ATTEMPTS,
@@ -104,13 +106,26 @@ class _Chat:
         return f"m{len(self.sent)}"
 
 
-def _lane(outbox: _Outbox, chat: _Chat, links: dict[uuid.UUID, str]):  # type: ignore[no-untyped-def]
+def _lane(outbox, chat, links, telemetry=None):  # type: ignore[no-untyped-def]
     async def address_of(user_id: uuid.UUID) -> str | None:
         return links.get(user_id)
 
     return build_channel_delivery_consumer(
-        outbox, channel="zalo", address_of=address_of, sender=chat, web_url=WEB
+        outbox,
+        channel="zalo",
+        address_of=address_of,
+        sender=chat,
+        web_url=WEB,
+        telemetry=telemetry or RecordingTelemetry(),
     )
+
+
+def _exhausted(telemetry: RecordingTelemetry) -> list[float]:
+    return [
+        float(value)
+        for name, value, labels in telemetry.metrics
+        if name == DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL and labels == {"channel": "zalo"}
+    ]
 
 
 async def test_a_linked_member_is_sent_the_message_once() -> None:
@@ -201,3 +216,49 @@ def test_the_message_never_carries_the_body_a_code_or_anything_but_its_four_part
         web_url="https://portal.example",
     )
     assert text == "[Acme · Vận hành]\nCó việc cần duyệt\nhttps://portal.example/"
+
+
+async def test_only_a_row_given_up_on_counts_and_the_count_starts_at_zero() -> None:
+    """Ticket 84: `DwDeliveryExhausted` reads this. The series exists at 0 from
+    the start (or `increase()` would miss the first), a retry and a
+    recipient-side end count nothing, and the ceiling counts once."""
+    telemetry = RecordingTelemetry()
+    retried, gone, given_up = _Row(), _Row(), _Row(attempts=MAX_ATTEMPTS - 1)
+    chat = _Chat(
+        fail_with=[OSError("down"), ChatRecipientUnreachableError("gone"), OSError("down")]
+    )
+    links = {r.recipient_user_id: "z" for r in (retried, gone, given_up)}
+
+    lane = _lane(_Outbox([retried, gone, given_up]), chat, links, telemetry)
+    assert _exhausted(telemetry) == [0.0]
+    await lane()
+
+    assert [retried.outcome and retried.outcome[0], gone.outcome, given_up.outcome] == [
+        "retry",
+        ("failed", "recipient_unreachable"),
+        ("failed", "attempts_exhausted"),
+    ]
+    assert _exhausted(telemetry) == [0.0, 1.0]
+
+
+async def test_a_row_given_up_on_whose_commit_failed_is_not_counted() -> None:
+    """Counted after the claim's transaction ends: a rollback leaves it pending."""
+
+    @dataclass
+    class _CommitFails(_Outbox):
+        @asynccontextmanager
+        async def claim_next(self, channel: str, scope: _Scope) -> AsyncIterator[_Row | None]:
+            due = self._due()
+            yield due[0] if due else None
+            raise RuntimeError("commit lost")
+
+    telemetry = RecordingTelemetry()
+    row = _Row(attempts=MAX_ATTEMPTS - 1)
+    with pytest.raises(ScopesFailedError):
+        await _lane(
+            _CommitFails([row]),
+            _Chat(fail_with=[OSError("down")]),
+            {row.recipient_user_id: "z"},
+            telemetry,
+        )()
+    assert _exhausted(telemetry) == [0.0]
