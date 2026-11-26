@@ -63,6 +63,7 @@ function write(overrides: Partial<Write> = {}): Write {
     before: "6100",
     after: "6000",
     status: "proposed",
+    check: null,
     reason: null,
     warnings: [],
     proposed_at: "2026-11-26T02:00:00Z",
@@ -128,6 +129,71 @@ describe(
       expect(propose(2).disabled).toBe(true);
       expect(screen.getByText(NO_SCOPE)).toBeTruthy();
     });
+
+    it("draws a cancel in the history as the cancel it is, with its approval", async () => {
+      WRITES = [
+        write({ field: "cancel", before: "6100", after: "Hủy: khách bỏ" }),
+      ];
+      panel(twoLines());
+      expect(
+        await screen.findByText("Hủy dòng: 6.100 → Hủy: khách bỏ"),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("link", { name: "Phiếu duyệt" }).getAttribute("href"),
+      ).toBe("/approvals/a-1");
+    });
+
+    // A popover opened on top of the table: the slowest render here.
+    it(
+      "says where the gateway stopped a write and what it answered",
+      { timeout: 60_000 },
+      async () => {
+        WRITES = [
+          write({
+            status: "refused",
+            check: "switch",
+            reason: "write_kind_disabled",
+            warnings: ["SO_W12"],
+          }),
+        ];
+        panel(twoLines());
+        expect(
+          await screen.findByText("Ở bước: Loại ghi chưa bật cho đơn vị"),
+        ).toBeTruthy();
+        fireEvent.click(
+          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+        );
+        expect(
+          await screen.findByText("Bravo trả lời: write_kind_disabled"),
+        ).toBeTruthy();
+        expect(screen.getByText("Cảnh báo, khác biệt: SO_W12")).toBeTruthy();
+      },
+    );
+
+    // A popover opened on top of the table: the slowest render here.
+    it(
+      "shows what a write with differences wrote differently",
+      { timeout: 60_000 },
+      async () => {
+        WRITES = [
+          write({
+            status: "written_with_differences",
+            check: "write",
+            warnings: ["Quantity9"],
+          }),
+        ];
+        panel(twoLines());
+        await screen.findByText("Đã ghi, Bravo lưu khác");
+        // It was written: no "stopped at" for it.
+        expect(screen.queryByText(/Ở bước/)).toBeNull();
+        fireEvent.click(
+          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+        );
+        expect(
+          await screen.findByText("Cảnh báo, khác biệt: Quantity9"),
+        ).toBeTruthy();
+      },
+    );
 
     it("offers one proposal per line while the line's last one waits", async () => {
       WRITES = [write({ status: "proposed" })];

@@ -263,6 +263,22 @@ export const BRAVO_WRITE_FIELD = {
   cancel: "Hủy dòng",
 } as const;
 
+/**
+ * The gateway's step that refused or stopped a Bravo write, in its order
+ * (ticket 63; `dw_bravo_gateway.pipeline.Check`).
+ */
+export const BRAVO_WRITE_CHECK = {
+  token: "Phiếu duyệt",
+  kind: "Loại ghi chưa chạy",
+  switch: "Loại ghi chưa bật cho đơn vị",
+  ledger: "Phiếu duyệt đã dùng",
+  identity: "User Bravo của người duyệt",
+  right: "Quyền trong Bravo",
+  rules: "Quy tắc màn hình Bravo",
+  lock: "Dòng đang khóa trong Bravo",
+  write: "Lúc ghi vào Bravo",
+} as const;
+
 /** Design's result for a line in Bravo (`DesignCheck`). */
 export const DESIGN_VERDICT = {
   quote: "Báo giá được",

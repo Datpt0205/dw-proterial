@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -17,12 +18,14 @@ import type { Dayjs } from "dayjs";
 import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { InfoTip, StatusTag, type StatusTone } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
-import { formatDate, fromPickerDay, toPickerDay } from "../../../../lib/dates";
+import { fromPickerDay, toPickerDay } from "../../../../lib/dates";
 import { errorCode } from "../../../../lib/error-message";
 import { formatQuantity, parseAmountInput } from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
+import { bravoWriteValue } from "../../_lib/bravo-write";
 import { ActionError } from "../../_lib/errors";
 import {
+  BRAVO_WRITE_CHECK,
   BRAVO_WRITE_FIELD,
   BRAVO_WRITE_STATUS,
   label,
@@ -41,10 +44,12 @@ type Field = Write["field"];
 type Change = SalesSchemas["BravoWriteBody"]["change"];
 
 /**
- * A cancel's reason as the server takes it (`CANCEL_REASON_CHARS`), and a
- * quantity's decimals (`QuantityChange`): the test holds both to the contract.
+ * A cancel's reason as the server takes it (`CANCEL_REASON_CHARS`: Bravo's
+ * `CancelRemark`, nvarchar(192); `maxLength` counts UTF-16 units, as SQL
+ * Server does), and a quantity's decimals (`QuantityChange`): the test holds
+ * both to the contract.
  */
-export const CANCEL_REASON_CHARS = 58;
+export const CANCEL_REASON_CHARS = 192;
 export const QUANTITY_DECIMALS = 4;
 
 export const NO_SCOPE =
@@ -65,13 +70,44 @@ export function openFor(writes: readonly Write[], lineNo: number): boolean {
   return writes.some((w) => w.line_no === lineNo && w.status === "proposed");
 }
 
-/** A proposal's value as a person reads it: a day, a quantity, or the cancel. */
-function shown(field: Field, value: string | null): string {
-  if (value === null) return "—";
-  if (field === "confirmed_date") return formatDate(value);
-  // A cancel replaces the quantity with "Hủy: <reason>".
-  if (field === "cancel" && value.startsWith("Hủy")) return value;
-  return formatQuantity(value);
+/** Where the gateway stopped a write that did not go through. */
+const STOPPED = new Set<Write["status"]>(["refused", "in_doubt"]);
+
+/**
+ * A line's latest proposal: its state, what it changes, the approval it
+ * opened, and, once the gateway answered, where it stopped and what it said.
+ */
+function LatestWrite({ write: w }: { write: Write }) {
+  const stoppedAt =
+    STOPPED.has(w.status) && w.check
+      ? `Ở bước: ${label(BRAVO_WRITE_CHECK, w.check)}`
+      : null;
+  return (
+    <Space orientation="vertical" size={0}>
+      <Space wrap size={4}>
+        <StatusTag tone={TONE[w.status]}>
+          {label(BRAVO_WRITE_STATUS, w.status)}
+        </StatusTag>
+        <span>
+          {`${label(BRAVO_WRITE_FIELD, w.field)}: ${bravoWriteValue(w.field, w.before)} → ${bravoWriteValue(w.field, w.after)}`}
+        </span>
+        <Link href={`/approvals/${w.approval_id}`}>Phiếu duyệt</Link>
+      </Space>
+      {stoppedAt || w.reason || w.warnings.length > 0 ? (
+        <Space wrap size={4}>
+          {stoppedAt ? <Typography.Text>{stoppedAt}</Typography.Text> : null}
+          {w.reason || w.warnings.length > 0 ? (
+            <InfoTip label={`Bravo trả lời về dòng ${w.line_no}`}>
+              {w.reason ? <div>Bravo trả lời: {w.reason}</div> : null}
+              {w.warnings.length > 0 ? (
+                <div>Cảnh báo, khác biệt: {w.warnings.join("; ")}</div>
+              ) : null}
+            </InfoTip>
+          ) : null}
+        </Space>
+      ) : null}
+    </Space>
+  );
 }
 
 /**
@@ -166,17 +202,7 @@ function BravoWrites({
                 key: "latest",
                 render: (_: unknown, l: Line) => {
                   const w = latest(l.line_no);
-                  if (!w) return "Chưa có";
-                  return (
-                    <Space wrap size={4}>
-                      <StatusTag tone={TONE[w.status]}>
-                        {label(BRAVO_WRITE_STATUS, w.status)}
-                      </StatusTag>
-                      <span>
-                        {`${label(BRAVO_WRITE_FIELD, w.field)}: ${shown(w.field, w.before)} → ${shown(w.field, w.after)}`}
-                      </span>
-                    </Space>
-                  );
+                  return w ? <LatestWrite write={w} /> : "Chưa có";
                 },
               },
               {
