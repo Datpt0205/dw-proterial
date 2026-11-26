@@ -343,6 +343,16 @@ Nhớ: sau `demo-reset`, muốn chạy lại thì **làm lại bước 2b** (c�
   ẩn danh.
 - **Lỡ `demo-reset` giữa buổi:** mọi hồ sơ về 0 và quyền rộng của An mất — phải
   làm lại bước 2b và chạy lại từ 3.1.
+- **Màn quản trị platform (Tenant / Operator / Support) báo lỗi / tải không ra**
+  trong khi màn Sales vẫn chạy: role `dw_provisioner` trong volume Postgres
+  (được dùng lại giữa các checkout) bị thiếu hoặc sai mật khẩu — chỉ tạo lúc
+  khởi tạo volume lần đầu. Sửa một lần, không mất dữ liệu:
+  `DW_ADMIN_DATABASE_URL=postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:$DW_POSTGRES_HOST_PORT/postgres uv run python scripts/create_provisioner_role.py`
+  (lấy biến từ `.env`). Role nằm ở tầng cluster nên còn qua mọi lần
+  `make dev`/`infra-up` sau đó.
+- **Docker tự tắt giữa buổi (máy 16 GB, chạy full stack + 3 cửa sổ):** cả
+  `make dev` chết theo (một tiến trình con tắt là cả cụm tắt). Bật lại Docker
+  Desktop, `make infra-up`, rồi `make dev` — data trong volume còn nguyên.
 
 ---
 
