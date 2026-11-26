@@ -15,6 +15,7 @@ from typing import Protocol
 
 from dw_sales.application.followups import FollowupTick
 from dw_sales.application.ports import SalesScope
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_followups")
 
@@ -39,6 +40,7 @@ def build_sales_followups_consumer(
     lane: FollowupsLane, scopes: ScopesPort
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 tick = await lane.tick(scope)
@@ -46,10 +48,12 @@ def build_sales_followups_consumer(
                 # Broad on purpose, like the loop's own: the next workspace
                 # still gets its tick.
                 logger.exception("sales_followups: the tick failed in one workspace")
+                failed += 1
                 continue
             if tick.sent:
                 logger.info("sales_followups: %d notification(s) sent", len(tick.sent))
             if tick.deferred:
                 logger.info("sales_followups: %d deferred to working hours", tick.deferred)
+        raise_if_failed("sales_followups", failed)
 
     return consume

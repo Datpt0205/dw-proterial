@@ -109,3 +109,25 @@ groups:
         annotations:
           summary: "{{ $labels.job }} is down: logs or traces are not being kept"
           description: "Prometheus has not been able to scrape {{ $labels.job }} for 5 minutes."
+
+      - alert: DwLaneStale
+        # Sales ticket 84. A worker lane that has not finished a clean tick
+        # for three of its own intervals, and never less than 30 minutes: one
+        # that fails every tick, fails in one workspace every tick (the scope
+        # loops raise after the last scope), hangs, or never once succeeded.
+        # The interval is the worker's own (`dw_lane_interval_seconds`, from
+        # `ConsumerRegistry.interval_for`), so no lane's cadence is copied
+        # here. The 30-minute floor keeps a fast queue lane with one slow model
+        # call from paging; it is a starting point, not a measurement.
+        expr: >
+          (time() - dw_lane_last_ok_timestamp_seconds)
+            > clamp_min(3 * dw_lane_interval_seconds, 1800)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker lane {{ $labels.lane }} has not finished a clean tick"
+          description: >
+            {{ $labels.lane }} last finished a tick without an error
+            {{ $value | humanizeDuration }} ago. Its log in dw-worker says why
+            ("consumer {{ $labels.lane }} failed").

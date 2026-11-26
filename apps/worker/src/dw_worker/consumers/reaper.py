@@ -30,6 +30,7 @@ from typing import Any, Protocol
 from dw_kernel.ports import UtcClock
 from dw_observability.metrics import DW_REAPER_REAPED_TOTAL
 from dw_observability.telemetry import TelemetryPort
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.reaper")
 
@@ -72,15 +73,18 @@ def build_reaper_consumer(
     """
 
     async def consume() -> None:
+        failed = 0
         now = clock.now()
         for target in targets:
             try:
                 reaped = await target.queue.reap_stale(older_than=now - target.stale_after)
             except Exception:
                 logger.exception("reaping %s failed", target.name)
+                failed += 1
                 continue
             if reaped:
                 logger.warning("reaped %d abandoned %s row(s)", len(reaped), target.name)
                 telemetry.add_metric(DW_REAPER_REAPED_TOTAL, len(reaped), {"queue": target.name})
+        raise_if_failed("reaper", failed)
 
     return consume

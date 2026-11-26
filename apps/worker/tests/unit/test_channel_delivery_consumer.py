@@ -26,6 +26,7 @@ from dw_worker.consumers.channel_delivery import (
     build_channel_delivery_consumer,
     compose,
 )
+from dw_worker.consumers.scope_failures import ScopesFailedError
 
 pytestmark = pytest.mark.unit
 
@@ -174,7 +175,8 @@ async def test_the_last_allowed_attempt_failing_fails_the_row() -> None:
 
 
 async def test_one_row_failing_to_settle_does_not_stop_the_lane() -> None:
-    """A database error mid-row is logged; the lane returns, the next tick retries."""
+    """A database error mid-row is logged and the row stays pending for the
+    next tick; the lane then raises, so its tick is not clean (ticket 84)."""
 
     @dataclass
     class _Broken(_Row):
@@ -182,7 +184,8 @@ async def test_one_row_failing_to_settle_does_not_stop_the_lane() -> None:
             raise RuntimeError("connection lost")
 
     row = _Broken()
-    await _lane(_Outbox([row]), _Chat(), {row.recipient_user_id: "z-1"})()
+    with pytest.raises(ScopesFailedError):
+        await _lane(_Outbox([row]), _Chat(), {row.recipient_user_id: "z-1"})()
     assert row.status == "pending"
 
 

@@ -23,6 +23,7 @@ from typing import Protocol
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.prompt_optimiser import Outcome
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_learning")
 
@@ -59,12 +60,14 @@ def build_sales_examples_consumer(
     term is not enforced, and nothing is pruned)."""
 
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 indexed = await lane.tick(scope)
             except Exception:
                 # Broad on purpose: a line not indexed is only not shown yet.
                 logger.exception("sales_examples: indexing failed in one workspace")
+                failed += 1
                 continue
             if indexed:
                 logger.info("sales_examples: indexed %d decided line(s)", indexed)
@@ -72,6 +75,7 @@ def build_sales_examples_consumer(
         if before is not None:
             # Raises: a vector outliving its case is the retention failing.
             await prune(before)
+        raise_if_failed("sales_examples", failed)
 
     return consume
 
@@ -80,16 +84,19 @@ def build_sales_prompt_optimiser_consumer(
     lane: OptimiserLane, scopes: ScopesPort
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 outcome = await lane.tick(scope)
             except Exception:
                 logger.exception("sales_prompt_optimiser: the tick failed in one workspace")
+                failed += 1
                 continue
             logger.info(
                 "sales_prompt_optimiser: %s",
                 outcome.reason,
                 extra={"proposed": outcome.proposed},
             )
+        raise_if_failed("sales_prompt_optimiser", failed)
 
     return consume

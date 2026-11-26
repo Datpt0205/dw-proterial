@@ -15,6 +15,7 @@ from typing import Protocol
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.autonomy import StepThreshold
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_auto_apply")
 
@@ -39,6 +40,7 @@ def build_sales_auto_apply_consumer(
     lane: ThresholdsLane, scopes: ScopesPort
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 stored = await lane.tick(scope)
@@ -46,9 +48,11 @@ def build_sales_auto_apply_consumer(
                 # Broad on purpose, like the loop's own: the next workspace
                 # still gets its tick.
                 logger.exception("sales_auto_apply: the tick failed in one workspace")
+                failed += 1
                 continue
             stopped = sum(1 for t in stored if t.stopped)
             if stopped:
                 logger.warning("sales_auto_apply: %d step(s) stopped by their audits", stopped)
+        raise_if_failed("sales_auto_apply", failed)
 
     return consume

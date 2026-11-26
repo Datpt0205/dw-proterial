@@ -37,6 +37,7 @@ from typing import Protocol
 
 from dw_connectors.ports import ChatRecipientUnreachableError, ChatSenderPort
 from dw_kernel.channels import chat_reference
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.channel_delivery")
 
@@ -171,6 +172,7 @@ def build_channel_delivery_consumer(
     batch_per_scope: int = BATCH_PER_SCOPE,
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await outbox.due_scopes(channel):
             try:
                 for _ in range(batch_per_scope):
@@ -189,5 +191,7 @@ def build_channel_delivery_consumer(
                 # row it was on rolled back to pending. Logged without ids that
                 # would name a person.
                 logger.exception("channel delivery: a scope failed; the next tick retries")
+                failed += 1
+        raise_if_failed(f"channel_delivery:{channel}", failed)
 
     return consume

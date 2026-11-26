@@ -38,6 +38,7 @@ from dw_worker.consumers.channel_delivery import (
     DeliveryScopeRef,
     backoff,
 )
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.web_push_delivery")
 
@@ -103,6 +104,7 @@ def build_web_push_delivery_consumer(
     batch_per_scope: int = BATCH_PER_SCOPE,
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await outbox.due_scopes(CHANNEL):
             try:
                 for _ in range(batch_per_scope):
@@ -112,5 +114,7 @@ def build_web_push_delivery_consumer(
                         await _deliver(claim, scope, push)
             except Exception:
                 logger.exception("web push delivery: a scope failed; the next tick retries")
+                failed += 1
+        raise_if_failed("web_push_delivery", failed)
 
     return consume

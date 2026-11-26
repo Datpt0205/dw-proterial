@@ -1,8 +1,11 @@
 import asyncio
+import time
 from pathlib import Path
 
 import pytest
 
+from dw_observability.metrics import DW_LANE_INTERVAL_SECONDS, DW_LANE_LAST_OK_TIMESTAMP_SECONDS
+from dw_observability.telemetry import NullTelemetry, RecordingTelemetry
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.health import beat, is_alive
 from dw_worker.main import build_registry, run_worker
@@ -46,7 +49,9 @@ async def test_worker_runs_consumers_and_shuts_down(tmp_path: Path) -> None:
     registry.register("counter", counting_consumer)
     shutdown = asyncio.Event()
 
-    worker_task = asyncio.create_task(run_worker(settings, registry, shutdown))
+    worker_task = asyncio.create_task(
+        run_worker(settings, registry, shutdown, telemetry=NullTelemetry())
+    )
     await asyncio.sleep(0.3)
     shutdown.set()
     await asyncio.wait_for(worker_task, timeout=2)
@@ -68,11 +73,72 @@ async def test_failing_consumer_does_not_kill_worker(tmp_path: Path) -> None:
 
     registry.register("broken", broken_consumer)
     shutdown = asyncio.Event()
-    worker_task = asyncio.create_task(run_worker(settings, registry, shutdown))
+    worker_task = asyncio.create_task(
+        run_worker(settings, registry, shutdown, telemetry=NullTelemetry())
+    )
     await asyncio.sleep(0.3)
     assert not worker_task.done(), "worker must survive consumer failures"
     shutdown.set()
     await asyncio.wait_for(worker_task, timeout=2)
+
+
+async def _run_briefly(registry: ConsumerRegistry, tmp_path: Path) -> RecordingTelemetry:
+    settings = WorkerSettings(
+        heartbeat_file=tmp_path / "hb",
+        heartbeat_interval_seconds=0.05,
+        poll_interval_seconds=0.05,
+    )
+    telemetry = RecordingTelemetry()
+    shutdown = asyncio.Event()
+    task = asyncio.create_task(run_worker(settings, registry, shutdown, telemetry=telemetry))
+    await asyncio.sleep(0.3)
+    shutdown.set()
+    await asyncio.wait_for(task, timeout=2)
+    return telemetry
+
+
+def _last_ok(telemetry: RecordingTelemetry, lane: str) -> list[float]:
+    return [
+        float(value)
+        for name, value, labels in telemetry.gauges
+        if name == DW_LANE_LAST_OK_TIMESTAMP_SECONDS and labels == {"lane": lane}
+    ]
+
+
+async def test_a_clean_tick_moves_the_lanes_last_ok_and_a_failing_one_does_not(
+    tmp_path: Path,
+) -> None:
+    """Sales ticket 84: the gauge `DwLaneStale` reads. A lane is seeded with
+    the start time once, then moved only by a tick that returned cleanly."""
+    registry = ConsumerRegistry()
+
+    async def fine() -> None: ...
+
+    async def broken() -> None:
+        raise RuntimeError("boom")
+
+    registry.register("fine", fine)
+    registry.register("broken", broken, interval_seconds=0.05)
+    started = time.time()
+    telemetry = await _run_briefly(registry, tmp_path)
+
+    fine_ticks = _last_ok(telemetry, "fine")
+    assert len(fine_ticks) >= 3, "seeded once, then once per clean tick"
+    assert fine_ticks == sorted(fine_ticks) and fine_ticks[0] >= started
+    assert len(_last_ok(telemetry, "broken")) == 1, "only the seed: no tick was clean"
+    assert (DW_LANE_INTERVAL_SECONDS, 0.05, {"lane": "broken"}) in telemetry.gauges
+
+
+async def test_a_tick_that_never_returns_leaves_the_lane_at_its_seed(tmp_path: Path) -> None:
+    """A hung lane (a stalled share under the drop folder) records nothing."""
+    registry = ConsumerRegistry()
+
+    async def hung() -> None:
+        await asyncio.Event().wait()
+
+    registry.register("hung", hung)
+    telemetry = await _run_briefly(registry, tmp_path)
+    assert len(_last_ok(telemetry, "hung")) == 1
 
 
 def bare_settings(**overrides: object) -> WorkerSettings:

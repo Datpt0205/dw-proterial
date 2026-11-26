@@ -23,6 +23,7 @@ import contextlib
 import json
 import logging
 import signal
+import time
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
@@ -56,6 +57,7 @@ from dw_knowledge.retention import SqlKnowledgeRetention, SqlSupersededVersionRe
 from dw_memory.policy import MemoryWritePolicy
 from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
+from dw_observability.metrics import DW_LANE_INTERVAL_SECONDS, DW_LANE_LAST_OK_TIMESTAMP_SECONDS
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import ValkeyCache
@@ -825,14 +827,20 @@ def web_push(
     )
 
 
-def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
-    """Wire the lanes this process hosts, skipping any whose infra is absent."""
+def build_registry(
+    settings: WorkerSettings, telemetry: TelemetryPort | None = None
+) -> ConsumerRegistry:
+    """Wire the lanes this process hosts, skipping any whose infra is absent.
+
+    ``telemetry``: the one `main` also hands `run_worker`; built here when a
+    caller (a test) has none."""
     registry = ConsumerRegistry()
     clock = SystemClock()
     # Uuid7: a memory id that sorts by when it was learned makes the
     # keyset page over `created_at` stable without a second column.
     ids = Uuid7Generator()
-    telemetry = _build_worker_telemetry(settings)
+    if telemetry is None:
+        telemetry = _build_worker_telemetry(settings)
 
     # Every queue this process wired, with the window its jobs deserve. A queue
     # this host did not wire stays absent rather than being reaped with a
@@ -1766,6 +1774,8 @@ async def run_worker(
     settings: WorkerSettings,
     registry: ConsumerRegistry,
     shutdown_event: asyncio.Event,
+    *,
+    telemetry: TelemetryPort,
 ) -> None:
     logger.info("worker starting, consumers=%s", sorted(registry.all()))
     await registry.run_start_checks()
@@ -1781,6 +1791,13 @@ async def run_worker(
     async def consumer_loop(name: str) -> None:
         consumer = registry.all()[name]
         interval = registry.interval_for(name, settings.poll_interval_seconds)
+        lane = {"lane": name}
+        # Lane health (Sales ticket 84): the start time first, so a lane that
+        # never once succeeds goes stale instead of being absent; then the
+        # time of each clean tick. A tick that raises or never returns leaves
+        # it where it was, and `DwLaneStale` compares it with the interval.
+        telemetry.set_gauge(DW_LANE_INTERVAL_SECONDS, interval, lane)
+        telemetry.set_gauge(DW_LANE_LAST_OK_TIMESTAMP_SECONDS, time.time(), lane)
         while not shutdown_event.is_set():
             try:
                 await consumer()
@@ -1788,6 +1805,8 @@ async def run_worker(
                 # Broad on purpose: one lane's bad tick must not take the
                 # process down and stop every other lane with it.
                 logger.exception("consumer %s failed; backing off", name)
+            else:
+                telemetry.set_gauge(DW_LANE_LAST_OK_TIMESTAMP_SECONDS, time.time(), lane)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(shutdown_event.wait(), timeout=interval)
 
@@ -1815,7 +1834,8 @@ def main() -> None:
     from prometheus_client import start_http_server
 
     start_http_server(settings.metrics_port)
-    registry = build_registry(settings)
+    telemetry = _build_worker_telemetry(settings)
+    registry = build_registry(settings, telemetry)
     shutdown_event = asyncio.Event()
 
     async def runner() -> None:
@@ -1823,7 +1843,7 @@ def main() -> None:
         for sig in (signal.SIGINT, signal.SIGTERM):
             with contextlib.suppress(NotImplementedError):  # Windows lacks add_signal_handler
                 loop.add_signal_handler(sig, shutdown_event.set)
-        await run_worker(settings, registry, shutdown_event)
+        await run_worker(settings, registry, shutdown_event, telemetry=telemetry)
 
     asyncio.run(runner())
 

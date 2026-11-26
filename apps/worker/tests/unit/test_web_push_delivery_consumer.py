@@ -15,6 +15,7 @@ from datetime import timedelta
 import pytest
 
 from dw_worker.consumers.channel_delivery import MAX_ATTEMPTS, backoff
+from dw_worker.consumers.scope_failures import ScopesFailedError
 from dw_worker.consumers.web_push_delivery import TAG, build_web_push_delivery_consumer
 
 pytestmark = pytest.mark.unit
@@ -152,3 +153,18 @@ async def test_the_push_service_raising_is_retried_then_given_up() -> None:
     row.attempts, row.outcome = MAX_ATTEMPTS - 1, None
     await lane()
     assert row.outcome == ("failed", "attempts_exhausted")
+
+
+async def test_a_scope_that_failed_mid_row_makes_the_tick_raise_after_the_others() -> None:
+    """The row rolls back to pending for the next tick; the lane then raises so
+    its tick is not recorded as clean (ticket 84)."""
+
+    @dataclass
+    class _Broken(_Row):
+        async def mark_sent(self, external_message_id: str, chat_reference: str) -> None:
+            raise RuntimeError("connection lost")
+
+    row = _Broken()
+    with pytest.raises(ScopesFailedError):
+        await build_web_push_delivery_consumer(_Outbox([row]), _Push())()
+    assert row.status == "pending"

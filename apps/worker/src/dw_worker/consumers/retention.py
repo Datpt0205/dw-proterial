@@ -5,18 +5,18 @@ how often, and the answer is hourly. Retention is a size control, not a
 correctness one - a row that outlives its window by an hour harms nobody, and a
 delete loop running every few seconds spends a connection to discover that.
 
-A failed pass is logged and retried next hour rather than escalated. There is no
-partial state to repair: each table's batch is its own statement, and whatever
-was deleted stays deleted.
+A failed pass is retried next hour. There is no partial state to repair: each
+table's batch is its own statement, and whatever was deleted stays deleted. It
+is not swallowed here, though: `run_worker`'s loop logs it and records no clean
+tick, so a lane that keeps failing goes stale and `DwLaneStale` says so (Sales
+ticket 84). Swallowed, the `partitions` lane, whose failure sends rows into the
+DEFAULT partition, read as healthy forever.
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Protocol
-
-logger = logging.getLogger("dw_worker.retention")
 
 
 class RetentionPrunePort(Protocol):
@@ -39,11 +39,8 @@ INTERVAL_SECONDS = 3600.0
 
 def build_retention_consumer(prune: RetentionPrunePort) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
-        try:
-            await prune.prune()
-        except Exception:
-            # Broad and logged: this is housekeeping, and housekeeping that can
-            # take the worker down is worse than housekeeping that skips an hour.
-            logger.exception("retention pass failed; the next tick will try again")
+        # Not caught: the loop's own broad catch keeps the worker up, and only
+        # there does a failed pass count against the lane's health.
+        await prune.prune()
 
     return consume
