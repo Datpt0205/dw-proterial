@@ -11,6 +11,7 @@ import { Card, Drawer, FloatButton, Grid } from "antd";
 import { CommentOutlined } from "@ant-design/icons";
 import type { AssistantCase, SalesSchemas } from "@dw/api-client";
 import { AssistantConversation } from "./assistant-conversation";
+import { useHideAssistantWidget } from "./assistant-widget";
 
 const TITLE = "Hỏi DW1 về hồ sơ này";
 
@@ -68,7 +69,8 @@ export function useCaseChatDecided(reload: () => void) {
  * bottom sheet (ui-quality §9), mounted on first open and kept, so an answer
  * still arriving is not lost by closing it. The page's own content keeps its
  * place in the tree whichever way it is drawn, so a breakpoint never reloads
- * the case.
+ * the case. The general "Hỏi DW1" widget hides here: the case's conversation
+ * is the one this page offers.
  */
 export function WithCaseChat({
   onCase,
@@ -77,6 +79,7 @@ export function WithCaseChat({
   onCase: AssistantCase;
   children: ReactNode;
 }) {
+  useHideAssistantWidget();
   // Undefined until measured: neither is drawn, so a desktop never flashes
   // the phone's button and a phone never reads (and so clears) the chat.
   const lg = Grid.useBreakpoint().lg;

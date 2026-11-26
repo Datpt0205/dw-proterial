@@ -1,12 +1,37 @@
 "use client";
 
-import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Alert, Flex, Input, Skeleton, Space, Tag, Typography } from "antd";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import {
+  Alert,
+  Avatar,
+  Flex,
+  Input,
+  Skeleton,
+  Space,
+  Tag,
+  theme,
+  Typography,
+} from "antd";
+import {
+  BulbOutlined,
+  LinkOutlined,
+  MessageOutlined,
+  RobotOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 // One component per path: the package's index also loads its diagram and
 // code renderers (mermaid), which no chat here draws.
+import ActionsCopy from "@ant-design/x/es/actions/ActionsCopy";
 import Bubble from "@ant-design/x/es/bubble";
 import Prompts from "@ant-design/x/es/prompts";
 import Sender from "@ant-design/x/es/sender";
+import Think from "@ant-design/x/es/think";
 import ThoughtChain from "@ant-design/x/es/thought-chain";
 import Welcome from "@ant-design/x/es/welcome";
 import XProvider from "@ant-design/x/es/x-provider";
@@ -95,6 +120,36 @@ export interface AssistantChatProps {
   error?: ReactNode;
 }
 
+/** The nearest ancestor that scrolls itself (a drawer's body, a side
+ * panel), never the page: following the newest turn must not move the case
+ * the person is reading. */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (
+    let p = el.parentElement;
+    p && p !== document.body;
+    p = p.parentElement
+  ) {
+    const y = getComputedStyle(p).overflowY;
+    if ((y === "auto" || y === "scroll") && p.scrollHeight > p.clientHeight) {
+      return p;
+    }
+  }
+  return null;
+}
+
+/** A finished step and the one under way, as `ThoughtChain` draws them. */
+function chainOf(steps: ChatStep[], running: boolean) {
+  return steps.map((step, index) => ({
+    key: step.key,
+    title: step.title,
+    description: step.description,
+    status:
+      running && index === steps.length - 1
+        ? ("loading" as const)
+        : ("success" as const),
+  }));
+}
+
 /**
  * One chat frame for every worker's Q&A, on Ant Design X (CLAUDE.md "Web UI",
  * 2026-11-04): the person's question on the right; the worker's answer on the
@@ -103,6 +158,13 @@ export interface AssistantChatProps {
  * Shift+Enter breaks the line, never mid-composition (the `Sender` waits for
  * Telex and Gboard). Domain-neutral: the app says what a step and a record
  * are, and links them.
+ *
+ * Drawn like an agent at work (Đạt, 2026-11-26, antd and Ant Design X parts
+ * only): avatars for the worker and the person; while answering, a `Think`
+ * panel whose `ThoughtChain` shows the server's steps as they arrive, the
+ * one under way loading; once answered, the steps fold into "đã làm gì", and
+ * the answer can be copied. Every step shown is one the server sent: the
+ * frame never invents progress.
  */
 export function AssistantChat({
   worker,
@@ -134,19 +196,69 @@ export function AssistantChat({
     const trimmed = text.trim();
     if (trimmed && !pending && !blocked) onAsk(trimmed.slice(0, maxLength));
   };
+  const { token } = theme.useToken();
+  // The newest turn stays in view: whenever the frame changes size (a turn
+  // added, words arriving, a hidden tab shown), its own scroll box goes to
+  // the end.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = root.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const follow = new ResizeObserver(() => {
+      const box = scroller(el);
+      if (box) box.scrollTop = box.scrollHeight;
+    });
+    follow.observe(el);
+    return () => follow.disconnect();
+  }, []);
+  const workerAvatar = (size?: number) => (
+    <Avatar
+      size={size}
+      icon={<RobotOutlined aria-hidden />}
+      style={{ backgroundColor: token.colorPrimary }}
+    />
+  );
+  const personAvatar = <Avatar icon={<UserOutlined aria-hidden />} />;
+  const answerText = (text: string) => (
+    <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
+      {text}
+    </Typography.Paragraph>
+  );
+  const asked = (text: string) => (
+    <Bubble
+      placement="end"
+      avatar={personAvatar}
+      variant="filled"
+      shape="corner"
+      content={text}
+    />
+  );
 
   return (
     <XProvider locale={VI_VN}>
-      <Flex vertical gap={12}>
+      <Flex vertical gap={12} ref={root}>
         {loading ? (
-          <Skeleton active paragraph={{ rows: 4 }} />
+          <Skeleton active avatar paragraph={{ rows: 4 }} />
         ) : turns.length === 0 && !pending ? (
           <Flex vertical gap={12}>
-            <Welcome title={`Hỏi đáp ${worker}`} description={catalog} />
+            <Welcome
+              icon={workerAvatar(48)}
+              title={`Hỏi đáp ${worker}`}
+              description={catalog}
+            />
             <Prompts
-              title="Thử hỏi"
+              title={
+                <Space size={6}>
+                  <BulbOutlined aria-hidden />
+                  <span>Thử hỏi</span>
+                </Space>
+              }
               wrap
-              items={examples.map((text) => ({ key: text, description: text }))}
+              items={examples.map((text) => ({
+                key: text,
+                icon: <MessageOutlined aria-hidden />,
+                description: text,
+              }))}
               onItemClick={({ data }) => ask(String(data.description ?? ""))}
             />
           </Flex>
@@ -160,53 +272,52 @@ export function AssistantChat({
             {turns.map((turn) => (
               <li key={turn.key}>
                 <Flex vertical gap={8}>
-                  <Bubble placement="end" content={turn.question} />
+                  {asked(turn.question)}
                   <Bubble
                     placement="start"
+                    avatar={workerAvatar()}
+                    variant="outlined"
+                    shape="corner"
                     header={
-                      <Space size={4}>
-                        <Typography.Text strong>{worker}</Typography.Text>
-                        {turn.byModel ? <Tag>Máy viết</Tag> : null}
-                      </Space>
+                      <Flex vertical gap={6}>
+                        <Space size={4}>
+                          <Typography.Text strong>{worker}</Typography.Text>
+                          {turn.byModel ? (
+                            <Tag icon={<RobotOutlined aria-hidden />}>
+                              Máy viết
+                            </Tag>
+                          ) : null}
+                        </Space>
+                        {turn.steps.length ? (
+                          <Think
+                            title={`${worker} đã làm gì · ${turn.steps.length} bước`}
+                            defaultExpanded={false}
+                          >
+                            <ThoughtChain items={chainOf(turn.steps, false)} />
+                          </Think>
+                        ) : null}
+                      </Flex>
                     }
                     content={turn.answer}
-                    contentRender={(text) => (
-                      <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
-                        {text}
-                      </Typography.Paragraph>
-                    )}
+                    contentRender={answerText}
                     footer={
-                      <Flex vertical gap={4}>
-                        {turn.steps.length ? (
-                          <ThoughtChain
-                            items={[
-                              {
-                                key: "done",
-                                title: `${worker} đã làm gì`,
-                                collapsible: true,
-                                status: "success",
-                                content: (
-                                  <ThoughtChain
-                                    items={turn.steps.map((step) => ({
-                                      key: step.key,
-                                      title: step.title,
-                                      description: step.description,
-                                      status: "success",
-                                    }))}
-                                  />
-                                ),
-                              },
-                            ]}
+                      <Flex vertical gap={6}>
+                        <Flex align="center" gap={8} wrap>
+                          <ActionsCopy
+                            text={turn.answer}
+                            aria-label="Sao chép câu trả lời"
                           />
-                        ) : null}
-                        {turn.cites.length ? (
-                          <Space wrap size={4}>
-                            <Typography.Text>Căn cứ:</Typography.Text>
-                            {turn.cites.map((cite) => (
-                              <span key={cite.key}>{cite.label}</span>
-                            ))}
-                          </Space>
-                        ) : null}
+                          {turn.cites.length ? (
+                            <Space wrap size={4}>
+                              <Typography.Text>
+                                <LinkOutlined aria-hidden /> Căn cứ:
+                              </Typography.Text>
+                              {turn.cites.map((cite) => (
+                                <span key={cite.key}>{cite.label}</span>
+                              ))}
+                            </Space>
+                          ) : null}
+                        </Flex>
                         {turn.action ?? null}
                       </Flex>
                     }
@@ -219,28 +330,43 @@ export function AssistantChat({
               // first answer can take a minute while the model loads.
               <li>
                 <Flex vertical gap={8}>
-                  {question.trim() ? (
-                    <Bubble placement="end" content={question.trim()} />
-                  ) : null}
-                  <Typography.Text role="status">
-                    {live?.steps.at(-1)?.title ?? `${worker} đang trả lời…`}
-                  </Typography.Text>
+                  {question.trim() ? asked(question.trim()) : null}
+                  <Think
+                    title={
+                      <Typography.Text role="status">
+                        {live?.steps.at(-1)?.title ?? `${worker} đang trả lời…`}
+                      </Typography.Text>
+                    }
+                    loading
+                    blink
+                    defaultExpanded
+                  >
+                    {live?.steps.length ? (
+                      <ThoughtChain items={chainOf(live.steps, true)} />
+                    ) : null}
+                  </Think>
                   {live?.answer ? (
                     <Bubble
                       placement="start"
+                      avatar={workerAvatar()}
+                      variant="outlined"
+                      shape="corner"
                       header={
                         <Typography.Text strong>{worker}</Typography.Text>
                       }
                       content={live.answer}
                       streaming
-                      contentRender={(text) => (
-                        <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
-                          {text}
-                        </Typography.Paragraph>
-                      )}
+                      contentRender={answerText}
                     />
                   ) : (
-                    <Bubble placement="start" loading content="" />
+                    <Bubble
+                      placement="start"
+                      avatar={workerAvatar()}
+                      variant="outlined"
+                      shape="corner"
+                      loading
+                      content=""
+                    />
                   )}
                 </Flex>
               </li>
