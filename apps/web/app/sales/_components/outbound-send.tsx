@@ -15,10 +15,18 @@ import { GuardedButton } from "./guarded-button";
 
 type Mail = SalesSchemas["OutboundMailView"];
 
-/** The send drafts each lane sends (`SENDABLE` on the server). */
-export const SENDABLE: Record<"order" | "quote", string> = {
-  order: "confirmation_draft",
-  quote: "send_draft",
+/** The customer drafts each case may send (`SENDABLE` on the server,
+ * ticket 76): every mail DW1 drafts to the customer, never one to Design. */
+export const SENDABLE: Record<"order" | "quote", readonly string[]> = {
+  order: [
+    "confirmation_draft",
+    "correction_request",
+    "change_can_do_draft",
+    "change_options_draft",
+    "internal_change_notice",
+    "cannot_supply_draft",
+  ],
+  quote: ["send_draft", "spec_discussion_draft", "decline_draft"],
 };
 
 const PREPARE: Record<"order" | "quote", string> = {
@@ -52,20 +60,23 @@ function said(mail: Mail): string {
 }
 
 /**
- * "Gửi cho khách" (2026-10-29): the case's current send draft sent from the
- * viewer's own mailbox, through their outbox folder and their own Power
+ * "Gửi cho khách" (2026-10-29): one of the case's customer drafts sent from
+ * the viewer's own mailbox, through their outbox folder and their own Power
  * Automate flow. Nothing goes until they press and confirm; where the
  * deployment has no outbox yet, the button says so and the `.eml` stays the
- * way. The status reads itself again while a mail is on its way.
+ * way. What it says is this draft's own mail, read again while it travels.
  */
 export function OutboundSend({
   kind,
   caseId,
+  draftKind,
   draft,
 }: {
   kind: "order" | "quote";
   caseId: string;
-  /** The current send draft, downloadable; absent: nothing to send yet. */
+  /** Which customer draft this sends (one of `SENDABLE[kind]`). */
+  draftKind: string;
+  /** That draft at the current version, downloadable; absent: not drafted yet. */
   draft: Artifact | undefined;
 }) {
   const { hasScope } = useAuth();
@@ -76,7 +87,9 @@ export function OutboundSend({
     `sales/${kind}/${caseId}/outbound`,
     useCallback(() => salesApi().outbound(kind, caseId), [kind, caseId]),
   );
-  const latest = mails.data?.mails[0];
+  const latest = draft
+    ? mails.data?.mails.find((m) => m.artifact_id === draft.artifact_id)
+    : undefined;
   const travelling =
     latest?.status === "queued" || latest?.status === "written";
   const reload = mails.reload;
@@ -92,11 +105,11 @@ export function OutboundSend({
     : !hasScope(PREPARE[kind])
       ? "Chỉ người chuẩn bị hồ sơ mới gửi được thư cho khách."
       : !draft
-        ? `Soạn “${label(ARTIFACT_KIND, SENDABLE[kind])}” ở trên trước.`
+        ? `Soạn “${label(ARTIFACT_KIND, draftKind)}” ở trên trước.`
         : travelling || latest?.status === "sent"
           ? "Thư này đã được gửi hoặc đang trên đường đi."
           : null;
-  const id = `send/${caseId}`;
+  const id = `send/${caseId}/${draftKind}`;
 
   const send = () => {
     if (!draft) return;
@@ -139,7 +152,7 @@ export function OutboundSend({
           loading={pending === id}
           onClick={send}
         >
-          Gửi cho khách từ hộp thư của bạn
+          Gửi “{label(ARTIFACT_KIND, draftKind)}” từ hộp thư của bạn
         </GuardedButton>
       </Flex>
       {latest ? (

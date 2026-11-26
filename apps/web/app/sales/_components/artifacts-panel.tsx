@@ -115,15 +115,20 @@ export function ArtifactsPanel({
   const beside = (list.data?.available ?? [])
     .map((k) => [k, besideDraft?.(k) ?? null] as const)
     .filter(([, node]) => node !== null);
-  // "Gửi cho khách" for the lane's send draft, once it may be drafted.
-  const sendKind = SENDABLE[kind];
-  const showSend =
-    artifacts.some((a) => a.kind === sendKind) ||
-    (list.data?.available ?? []).includes(sendKind);
-  const sendDraft = artifacts.find(
-    (a) =>
-      a.kind === sendKind && a.case_version === caseVersion && a.downloadable,
-  );
+  // "Gửi cho khách" for each customer draft the case may send now (ticket
+  // 76): one control per draft, beside the others, in the server's order.
+  const sends = SENDABLE[kind]
+    .filter(
+      (k) =>
+        artifacts.some((a) => a.kind === k) ||
+        (list.data?.available ?? []).includes(k),
+    )
+    .map((k) => ({
+      kind: k,
+      draft: artifacts.find(
+        (a) => a.kind === k && a.case_version === caseVersion && a.downloadable,
+      ),
+    }));
 
   const render = async (artifactKind: string) => {
     const body = { case_version: caseVersion, kind: artifactKind };
@@ -274,9 +279,15 @@ export function ArtifactsPanel({
               {node}
             </section>
           ))}
-          {showSend ? (
-            <OutboundSend kind={kind} caseId={caseId} draft={sendDraft} />
-          ) : null}
+          {sends.map((send) => (
+            <OutboundSend
+              key={send.kind}
+              kind={kind}
+              caseId={caseId}
+              draftKind={send.kind}
+              draft={send.draft}
+            />
+          ))}
           <ActionError error={error} />
         </div>
       )}

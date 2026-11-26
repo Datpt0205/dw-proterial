@@ -25,7 +25,9 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.quotes import QuoteStatus
 from dw_sales.evals.graders import AN, CALLERS, GIANG, OUTSIDER, READER, _quote_duties
-from dw_sales.evals.world import ALPHA, BETA, Directory, SampleSet, World, open_world
+from dw_sales.evals.world import ALPHA, BETA, Directory, SampleSet, SampleWith, World, open_world
+
+from .test_update_loop import ASKED, PULL_IN, QUANTITY, _asked, _in_loop, _pc, _render, _reply
 
 pytestmark = pytest.mark.unit
 
@@ -84,6 +86,7 @@ async def _rig(tmp_path: Path) -> Rig:
         outbox=FolderOutbox(tmp_path),
         artifact_bytes=world.objects,
         quotes=world.services.quote_commands,
+        answers=world.services.update_loops,
         access=Directory(CALLERS),
         notifications=told,
         clock=clock,
@@ -234,3 +237,57 @@ async def test_nothing_is_queued_where_the_deployment_has_no_outbox(tmp_path: Pa
     with pytest.raises(ConflictError, match="chưa được nối"):
         await off.send(SENDER.context(), CaseKind.QUOTE, rig.case_id, rig.draft_id, case_version=1)
     assert not (await off.mails(AN.context(), CaseKind.QUOTE, rig.case_id)).enabled
+
+
+# ------------------------------------------- ticket 76: every customer draft
+
+
+async def test_a_changes_answer_sent_from_dw1_records_it_sent_on_the_receipt(
+    tmp_path: Path,
+) -> None:
+    """A change's answer ("6-DW4", PC can do it) is sent from the PIC's own
+    mailbox in one press; the receipt records "Ghi đã gửi khách" as the PIC,
+    so the case waits on the customer without a second press."""
+    with SampleWith([_reply(html=PULL_IN)]) as sample:
+        world = open_world(REPO, sample, CALLERS)
+        case_id, _ = await _in_loop(world)
+        await _asked(world, case_id)
+        await _pc(world, case_id, (QUANTITY, ASKED))
+        draft = await _render(world, case_id, "change_can_do_draft")
+        assert world.order(case_id).update_loop.step == "answer_customer"  # type: ignore[union-attr]
+        lane = OutboundLane(
+            uow=world.store,
+            scopes=Scopes([ALPHA]),
+            outbox=FolderOutbox(tmp_path),
+            artifact_bytes=world.objects,
+            quotes=world.services.quote_commands,
+            answers=world.services.update_loops,
+            access=Directory(CALLERS),
+            notifications=Told(),
+            clock=FixedClock(world.store.clock.now()),
+            ids=Uuid4Generator(),
+        )
+        mail = await world.services.outbound.send(
+            AN.context(),
+            CaseKind.ORDER,
+            case_id,
+            draft.artifact_id,
+            case_version=world.order(case_id).case_version,
+        )
+        (tmp_path / mail.mailbox / "outbox").mkdir(parents=True)
+        await lane.tick()
+        assert world.order(case_id).update_loop.step == "answer_customer"  # type: ignore[union-attr]
+        FakeFlow(tmp_path).run()
+        await lane.tick()
+
+        loop = world.order(case_id).update_loop
+        assert loop is not None and loop.step == "waiting_customer"
+        answered = [e for e in world.audit() if e.action == "sales.order.update_answer_sent"]
+        assert [e.actor_id.value for e in answered] == [AN.user_id]
+
+
+async def test_a_draft_to_design_is_never_sent_to_the_customer(tmp_path: Path) -> None:
+    from dw_sales.application.outbound_mail import SENDABLE
+
+    for kinds in SENDABLE.values():
+        assert not kinds & {"design_request_draft", "design_code_request", "ycbg_draft"}

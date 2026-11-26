@@ -917,6 +917,7 @@ def build_dw1(
                 outbox=FolderOutbox(outbox_dir),
                 artifact_bytes=artifact_bytes,
                 quotes=assembly.services.quote_commands,
+                answers=assembly.services.update_loops,
                 access=requester_access,
                 notifications=notifications,
                 clock=clock,

@@ -19,10 +19,11 @@ folder the plant syncs) is run the other way:
    rollout, everyone), and the person is told.
 3. **Their flow** sends it from their Outlook (it lands in their Sent Items,
    replies come back to them) and writes a receipt.
-4. **The worker** reads the receipt: `sent`, and a quotation is marked "Đã
-   gửi KH" as the person who pressed (resolved again, cut to the prepare
-   scope, through the same command the button uses); or `failed`, and they
-   are told. A mail written and not receipted within `RECEIPT_WITHIN` is
+4. **The worker** reads the receipt: `sent`, and where the sending is itself
+   the case's step it is recorded as the person who pressed (resolved again,
+   cut to the prepare scope, through the same command the button uses): a
+   quotation "Đã gửi KH", a change's answer "Ghi đã gửi khách"; or `failed`,
+   and they are told. A mail written and not receipted within `RECEIPT_WITHIN` is
    `stalled`, and they are told to send the `.eml` themselves.
 
 Nothing is sent without a person pressing, and nothing a model wrote decides
@@ -77,11 +78,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger("dw_sales.outbound_mail")
 
 SALES_OUTBOUND_LANE: Final = "sales_outbound"
-# The send drafts each lane may send, by artifact kind.
+# The drafts a person may send from DW1, by artifact kind: every mail DW1
+# drafts to the customer (`Drafting.customer_email`), never one to Design or
+# PC (ticket 76). Each opens only where its own gate does (artifacts_service).
 SENDABLE: Final[Mapping[CaseKind, frozenset[str]]] = {
-    CaseKind.QUOTE: frozenset({"send_draft"}),
-    CaseKind.ORDER: frozenset({"confirmation_draft"}),
+    CaseKind.QUOTE: frozenset({"send_draft", "spec_discussion_draft", "decline_draft"}),
+    CaseKind.ORDER: frozenset(
+        {
+            "confirmation_draft",
+            "correction_request",
+            "change_can_do_draft",
+            "change_options_draft",
+            "internal_change_notice",
+            "cannot_supply_draft",
+        }
+    ),
 }
+# The drafts whose sending is itself a step of the case, recorded on the
+# receipt as the person who pressed, through the step's own button command.
+# The others were recorded before the draft opened (a correction requested,
+# a quotation declined), and the confirmation names each line's dates, which
+# its own "Ghi đã gửi xác nhận" asks for.
+_ANSWERS: Final = frozenset({"change_can_do_draft", "change_options_draft"})
 # Who may send: whoever prepares the case.
 _SEND_SCOPE: Final[Mapping[CaseKind, SalesScopes]] = {
     CaseKind.QUOTE: SalesScopes.QUOTE_PREPARE,
@@ -336,8 +354,17 @@ class QuoteSentPort(Protocol):
     ) -> object: ...
 
 
-# The person's access when their quotation is marked sent: nothing more.
+class AnswerSentPort(Protocol):
+    """ "Ghi đã gửi khách" of a change's answer (`UpdateLoops.answer_sent`)."""
+
+    async def answer_sent(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> object: ...
+
+
+# The person's access when their case's step is recorded: nothing more.
 _SENT_CEILING: Final = frozenset({SalesScopes.QUOTE_PREPARE.value, SalesScopes.CASE_READ.value})
+_ANSWER_CEILING: Final = frozenset({SalesScopes.ORDER_PREPARE.value, SalesScopes.CASE_READ.value})
 
 _TOLD: Final[Mapping[str, tuple[str, str]]] = {
     "not_connected": (
@@ -388,6 +415,7 @@ class OutboundLane:
     outbox: OutboxFolderPort
     artifact_bytes: ArtifactBytesPort
     quotes: QuoteSentPort
+    answers: AnswerSentPort
     access: RequesterAccessPort
     notifications: NotificationSenderPort
     clock: UtcClock
@@ -442,9 +470,32 @@ class OutboundLane:
         if receipt.status == "failed":
             return await self._settle(scope, mail, "failed", "flow_failed")
         done = await self._settle(scope, mail, "sent", None)
-        if done and mail.case_kind is CaseKind.QUOTE:
+        if not done:
+            return done
+        async with self.uow(scope) as work:
+            record = await work.artifacts.get(mail.artifact_id)
+        kind = None if record is None else record.kind
+        if mail.case_kind is CaseKind.QUOTE and kind == "send_draft":
             await self._mark_sent(scope, mail)
+        elif mail.case_kind is CaseKind.ORDER and kind in _ANSWERS:
+            await self._mark_answer_sent(scope, mail)
         return done
+
+    async def _mark_answer_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
+        """ "Ghi đã gửi khách" of a change's answer as the person who pressed;
+        a case that moved on meanwhile (recorded by hand) is left."""
+        access = await self.access.find_linked_access(
+            mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
+        )
+        if access is None:
+            return
+        context = context_from(access)
+        try:
+            async with self.uow(scope) as work:
+                case = (await stored_order(work, mail.case_id, viewer=context)).case
+            await self.answers.answer_sent(context, mail.case_id, case_version=case.case_version)
+        except (ConflictError, NotFoundError) as left:
+            logger.info("sales_outbound: a sent answer was not recorded: %s", type(left).__name__)
 
     async def _mark_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
         """ "Đã gửi KH" as the person who pressed, through the button's own

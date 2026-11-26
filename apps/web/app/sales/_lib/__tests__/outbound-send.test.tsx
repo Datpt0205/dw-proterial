@@ -44,12 +44,17 @@ afterEach(() => {
 function renderIt(draft: Artifact | undefined = DRAFT) {
   render(
     <UiProvider>
-      <OutboundSend kind="quote" caseId="c-1" draft={draft} />
+      <OutboundSend
+        kind="quote"
+        caseId="c-1"
+        draftKind="send_draft"
+        draft={draft}
+      />
     </UiProvider>,
   );
 }
 
-const BUTTON = { name: /Gửi cho khách từ hộp thư của bạn/ };
+const BUTTON = { name: /Gửi “.*” từ hộp thư của bạn/ };
 
 describe("Gửi cho khách (2026-10-29)", () => {
   it("sends the draft from the viewer's mailbox only after they confirm", async () => {
@@ -101,5 +106,26 @@ describe("Gửi cho khách (2026-10-29)", () => {
     ).toBeTruthy();
     const button = await screen.findByRole("button", BUTTON);
     expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says only this draft's own mail, not another draft's of the case", async () => {
+    outbound.mockResolvedValue({
+      enabled: true,
+      mails: [
+        {
+          mail_id: "m-9",
+          artifact_id: "another-draft",
+          mailbox: "an.nguyen@alpha.local",
+          status: "sent",
+          error: null,
+          queued_at: "2026-10-29T03:00:00Z",
+          settled_at: "2026-10-29T03:01:00Z",
+        },
+      ],
+    });
+    renderIt();
+    const button = await screen.findByRole("button", BUTTON);
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(/Đã gửi từ/)).toBeNull();
   });
 });
