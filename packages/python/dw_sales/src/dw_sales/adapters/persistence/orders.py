@@ -104,6 +104,7 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
             case.unapplied_decision.model_dump(mode="json") if case.unapplied_decision else None
         ),
         "pc_request": case.pc_request.model_dump(mode="json") if case.pc_request else None,
+        "pc_reply": case.pc_reply.model_dump(mode="json") if case.pc_reply else None,
         "design_requests": [r.model_dump(mode="json") for r in case.design_requests],
         "update_loop": case.update_loop.model_dump(mode="json") if case.update_loop else None,
         "confirmation": case.confirmation.model_dump(mode="json") if case.confirmation else None,
@@ -422,6 +423,7 @@ _CASE_FIELDS = (
     "superseded_by_case",
     "unapplied_decision",
     "pc_request",
+    "pc_reply",
     "design_requests",
     "update_loop",
     "confirmation",

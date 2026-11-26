@@ -28,7 +28,9 @@ from typing import Any
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.pc_dates import PC_DATES, PcDatesView
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import BETA, SampleSet, open_world
@@ -117,6 +119,7 @@ def grade_golden(
         "all": {"right": round(right / len(golden), 3)},
         "latency": latency(ctx.live_model, PC_DATES.prompt_id),
     }
+    details["bar"] = bar_verdict(ModelStep.PC_REPLY, details)
     if ctx.live_model is None and right != len(golden):
         return GradeResult.fail("a date the mail bears out was dropped", **details)
     return GradeResult.ok(**details)

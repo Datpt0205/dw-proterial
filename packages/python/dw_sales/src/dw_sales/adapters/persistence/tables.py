@@ -75,6 +75,9 @@ order_cases = sa.Table(
     # Sales asked PC for the delivery dates and waits (ticket 07, migration
     # 91f83937dbf1): the lines asked, who and when; NULL otherwise.
     sa.Column("pc_request", JSONB(none_as_null=True)),
+    # PC's mail read by DW1 while the case waits on PC (ticket 77, migration
+    # 79418de5ab48): the dates proposed and the mails read; NULL otherwise.
+    sa.Column("pc_reply", JSONB(none_as_null=True)),
     # Sales asked Design for a new PRV code and waits, line by line (ticket
     # 06, migration 3d139b41fec1): the line, who and when; empty otherwise.
     sa.Column("design_requests", JSONB, nullable=False, server_default="[]"),

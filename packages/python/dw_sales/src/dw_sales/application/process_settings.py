@@ -220,10 +220,17 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             # The delivery date DW1 suggests, and how long DW1 waits on PC's
             # answer before reminding the PIC (ticket 07); the model reading
             # PC's own change of a confirmed order (ticket 10); the mailboxes PC
-            # answers from (2026-11-23).
+            # answers from (2026-11-23), and DW1 reading their mail itself
+            # (ticket 77).
             _step(
                 StepId.O4,
-                _in(_ORDER, "short_lead_time", "model_assist.internal_change", "pc_mailboxes"),
+                _in(
+                    _ORDER,
+                    "short_lead_time",
+                    "model_assist.internal_change",
+                    "pc_mailboxes",
+                    "model_assist.pc_reply",
+                ),
                 _severities("requested_date_short_lt", "requested_date_missing"),
                 _in(_FOLLOWUPS, "waiting_pc"),
             ),

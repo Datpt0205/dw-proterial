@@ -364,6 +364,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Chat của hồ sơ nêu quyết định để PIC xác nhận",
       help: "PIC nói trong chat của hồ sơ (chấp nhận cờ, đổi ngày XN hoặc số lượng một dòng SO); DW1 nhắc lại đúng điều sẽ ghi và chỉ ghi khi PIC bấm Xác nhận. Tắt: chat không nêu gì, PIC dùng nút trên trang. Bật lại cần lần đo đạt ngưỡng.",
     },
+    "model_assist.pc_reply": {
+      label: "Tự đọc thư PC trả ngày giao",
+      help: "Khi đơn đang chờ PC, DW1 tự đọc thư từ hộp thư PC trong cấu hình và đề xuất ngày cho từng dòng; PIC bấm Đúng hoặc Sửa từng dòng, không dòng nào được ghi khi chưa bấm. Bật cần lần đo đạt ngưỡng.",
+    },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
       label: "Số PO đầu cần xác nhận từng giá trị",

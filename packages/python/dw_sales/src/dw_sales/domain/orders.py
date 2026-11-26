@@ -270,6 +270,47 @@ class PcRequest(BaseModel):
         )
 
 
+class PcReplyDate(BaseModel):
+    """One date PC's mail gives one delivery of a line asked (ticket 77), the
+    words it rests on, and the mail it was read from."""
+
+    model_config = _FROZEN
+
+    line_no: int = Field(ge=1)
+    delivery: int = Field(ge=1)
+    date: date
+    quote: str = Field(min_length=1, max_length=40)
+    message_id: str = Field(min_length=1, max_length=998)
+    received_at: AwareDatetime
+
+
+class PcReply(BaseModel):
+    """PC's mail read by DW1 while the case waits on PC (ticket 77): the dates
+    it gives, a proposal the PIC confirms line by line ("Đúng") or corrects
+    through the answer form; nothing of the case's values changes until they
+    do. ``messages``: every mail read for this wait, a date or none, so none
+    is read twice."""
+
+    model_config = _FROZEN
+
+    dates: tuple[PcReplyDate, ...] = ()
+    messages: tuple[str, ...] = Field(min_length=1)
+    read_at: AwareDatetime
+    prompt_ref: str = Field(min_length=1, max_length=120)
+    model_profile: str = Field(min_length=1, max_length=120)
+
+    def of(self, line_no: int) -> tuple[PcReplyDate, ...]:
+        """The line's dates, by delivery."""
+        return tuple(
+            sorted((d for d in self.dates if d.line_no == line_no), key=lambda d: d.delivery)
+        )
+
+    def keeping(self, lines: Iterable[int]) -> PcReply:
+        """The proposal for ``lines`` only."""
+        kept = set(lines)
+        return self.model_copy(update={"dates": tuple(d for d in self.dates if d.line_no in kept)})
+
+
 class DesignRequest(BaseModel):
     """Sales asked Design to create a PRV code for line ``line_no``, which no
     item fits (ticket 06): who recorded the request sent, and when, the
@@ -2173,6 +2214,9 @@ class OrderCase(BaseModel):
     # Sales asked PC for the delivery dates and waits (ticket 07): only where
     # PC's answer is recorded, and cleared once every line asked has it.
     pc_request: PcRequest | None = None
+    # PC's mail DW1 read while the case waits on PC (ticket 77): a proposal
+    # per line, only for lines asked and unchanged since; ends with the wait.
+    pc_reply: PcReply | None = None
     # Sales asked Design for a new PRV code, line by line (ticket 06): only
     # where mappings are decided, each for a line still without a code.
     design_requests: tuple[DesignRequest, ...] = ()
@@ -2235,6 +2279,11 @@ class OrderCase(BaseModel):
                 raise ValueError(f"a {self.status} case does not wait on PC")
             if not set(self.pc_request.lines) <= line_numbers:
                 raise ValueError("PC is asked about a line the case lacks")
+        if self.pc_reply is not None:
+            if self.pc_request is None:
+                raise ValueError("PC's mail is read only while the case waits on PC")
+            if not {d.line_no for d in self.pc_reply.dates} <= set(self.pc_request.lines):
+                raise ValueError("PC's mail is proposed only for the lines asked")
         if self.design_requests:
             asked = [request.line_no for request in self.design_requests]
             if len(asked) != len(set(asked)):
@@ -3179,7 +3228,71 @@ class OrderCase(BaseModel):
                 },
             )
         request = PcRequest(lines=self.pc_lines(), by=actor.user_id, at=at)
-        return self._next(self.status, pc_request=request)
+        # A new wait: what PC wrote before it answers the old one.
+        return self._next(self.status, pc_request=request, pc_reply=None)
+
+    def read_pc_reply(
+        self,
+        message_id: str,
+        received_at: datetime,
+        dates: Sequence[tuple[int, int, date, str]],
+        *,
+        at: datetime,
+        prompt_ref: str,
+        model_profile: str,
+    ) -> OrderCase:
+        """PC's mail ``message_id`` read by DW1 (ticket 77): ``dates`` (line,
+        delivery, date, the words) proposed for the lines asked that have no
+        answer since the request, nothing recorded. Only while the case waits
+        on PC, for a mail received since it was asked, and once per mail. Per
+        line the newer mail's dates stand: PC answering line 1, then line 2,
+        then line 1 again leaves line 1's later dates and line 2's."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        request = self.pc_request
+        if request is None:
+            raise ConflictError(
+                "the case does not wait on PC", details={**details, "rule": "pc_not_waiting"}
+            )
+        if received_at < request.at:
+            raise ConflictError(
+                "the mail was received before PC was asked",
+                details={**details, "rule": "pc_reply_before_request"},
+            )
+        held = self.pc_reply
+        if held is not None and message_id in held.messages:
+            raise ConflictError(
+                "this mail of PC's was read already", details={**details, "rule": "pc_reply_read"}
+            )
+        found = {line.line_no: line.pc_answer for line in self.lines}
+        open_lines = {
+            no
+            for no in request.lines
+            if (answer := found.get(no)) is None or answer.at < request.at
+        }
+        new = [
+            PcReplyDate(
+                line_no=line_no,
+                delivery=delivery,
+                date=day,
+                quote=quote,
+                message_id=message_id,
+                received_at=received_at,
+            )
+            for line_no, delivery, day, quote in dates
+            if line_no in open_lines
+        ]
+        older = held.dates if held is not None else ()
+        newest: dict[int, datetime] = {}
+        for d in (*older, *new):
+            newest[d.line_no] = max(newest.get(d.line_no, d.received_at), d.received_at)
+        reply = PcReply(
+            dates=tuple(d for d in (*older, *new) if d.received_at == newest[d.line_no]),
+            messages=(*(held.messages if held is not None else ()), message_id),
+            read_at=at,
+            prompt_ref=prompt_ref,
+            model_profile=model_profile,
+        )
+        return self._next(self.status, pc_reply=reply)
 
     def pc_answered(
         self,
@@ -4160,6 +4273,22 @@ class OrderCase(BaseModel):
         lines = cast(Sequence[OrderLine], changes.get("lines", self.lines))
         waiting = _waiting_on_design(self.design_requests, status, lines)
         changes.setdefault("design_requests", waiting)
+        # PC's mail read by DW1 (ticket 77) ends with the wait, and holds a
+        # line only while the line is as it was when the dates answered it:
+        # an answer recorded, a correction or a change drops the line's.
+        reply = cast(PcReply | None, changes.get("pc_reply", self.pc_reply))
+        request = cast(PcRequest | None, changes.get("pc_request", self.pc_request))
+        if reply is not None:
+            before = {line.line_no: line for line in self.lines}
+            changes["pc_reply"] = (
+                None
+                if request is None
+                else reply.keeping(
+                    line.line_no
+                    for line in lines
+                    if before.get(line.line_no) == line and line.line_no in request.lines
+                )
+            )
         if status not in CONFIRMATION_LEFT:
             # What left and the customer's answer belong to that confirmation:
             # a revision, a decline or an accepted change clears them.

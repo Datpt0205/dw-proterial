@@ -2311,6 +2311,11 @@
             "title": "Message Intent",
             "type": "boolean"
           },
+          "pc_reply": {
+            "default": false,
+            "title": "Pc Reply",
+            "type": "boolean"
+          },
           "po_body_extraction": {
             "default": false,
             "title": "Po Body Extraction",

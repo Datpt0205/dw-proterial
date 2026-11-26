@@ -407,6 +407,7 @@ async def test_the_locked_paths_are_served_with_their_reason_and_nothing_else_is
         (RuleKey.ORDER_RULES, "model_assist.skill_reply_drafts"): model,
         (RuleKey.ORDER_RULES, "model_assist.internal_change"): model,
         (RuleKey.ORDER_RULES, "model_assist.case_chat"): model,
+        (RuleKey.ORDER_RULES, "model_assist.pc_reply"): model,
         (RuleKey.QUOTE_RULES, "design_mailboxes"): LockReason.TRUST,
         (RuleKey.FOLLOWUPS, "working_hours.time_zone"): LockReason.TWO_OWNERS,
     }
@@ -505,6 +506,8 @@ _OFF_IN_TESTS: Final = frozenset(
         ModelStep.SKILL_REPLY_DRAFTS,
         # And the document forms (ticket 42 family 3).
         ModelStep.SKILL_DOCUMENT_FORMS,
+        # And DW1 reading PC's mail itself (ticket 77): no test version says.
+        ModelStep.PC_REPLY,
     }
 )
 

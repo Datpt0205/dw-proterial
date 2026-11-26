@@ -89,3 +89,37 @@ outside the askable states.
 Left: the lane reading PC's reply into a proposal (below, next slice), and
 "the reminder goes to PC first" (an automatic mail with nobody pressing:
 ADR 0015 makes anything sent T2, so it waits on Đạt's word).
+
+**2026-11-27, slice 3a: where PC's reply is kept, and its switch.**
+`OrderCase.pc_reply` (`PcReply`, migration `79418de5ab48`, a jsonb object
+column under the table's existing grants and RLS): the dates PC's mail gives
+the lines asked, each with its words and the mail it came from, and every
+mail read for this wait, so none is read twice. `read_pc_reply` takes one
+mail only while the case waits on PC, only one received since the request,
+only once; it keeps dates for lines asked that have no answer since the
+request, and per line the newer mail's dates stand (PC answering line 1,
+then line 2, leaves both). Nothing of the case's values changes. One rule
+in `_next`: the proposal ends with the wait (so answering the last line
+closes both, never refused) and keeps a line only while the line is as it
+was when the dates answered it (an answer, a correction or a change drops
+it); asking again starts with none. The validator refuses a proposal
+without a wait or for a line not asked.
+
+The reading has no person pressing, so it is a model step
+(dw_sales ADR 0005 decision 8): `ModelStep.PC_REPLY`, switch
+`model_assist.pc_reply`, **off where a version does not say** (no platform
+version says; no config bump), tier `PERSON_APPROVES` (each line waits on
+the PIC; making it apply itself is a later ADR 0015 decision), bar 0.85 on
+`all.right` of `sales.pc_date_golden` (the golden mails Sales' own reading
+of PC's mail is graded on), not measured live, so not ready anywhere. The
+same migration admits `pc_reply` in the four step CHECKs. Process settings
+show the switch at O4 beside `pc_mailboxes`, labelled. Contracts and API
+types regenerated (the ModelStep enum, the rules schema).
+
+Tests: domain 7 (`test_pc_replies.py`), PC integration 6 (round trip in its
+own tenant only, the CHECK), schema 41, readiness, process settings, order
+rules. Mutations, each red: ask_pc keeping the old proposal; `_next` not
+narrowing it; a mail older than the request taken; the newer-wins rule
+dropped; the migration not admitting the step. Also fixed: the readiness
+test that holds switches to steps had been red since 11-24 (`shadow` is one
+switch for every shadow reading, not a step).

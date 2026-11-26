@@ -146,6 +146,8 @@ class ModelStep(StrEnum):
     INTERNAL_CHANGE = "internal_change"
     # The case chat's reading of what the PIC states there (ticket 56/57).
     CASE_CHAT = "case_chat"
+    # PC's mail read by DW1 while an order waits on PC (ticket 77).
+    PC_REPLY = "pc_reply"
 
 
 # The steps whose reading can run in shadow (ticket 67): each has the two
@@ -289,6 +291,13 @@ class ModelAssist(BaseModel):
     # is refused until its live eval passed (`ModelReadiness.unready`). Off:
     # the chat states nothing and points to the case page's controls.
     case_chat: bool = True
+    # A local model reads the mail PC writes from the tenant's `pc_mailboxes`
+    # while an order waits on PC, with no person pressing (ticket 77), as
+    # `pc_dates` reads a mail Sales picks; code keeps a date only where the
+    # mail writes it whole on a line asked, and proposes it. The PIC confirms
+    # each line or corrects it: nothing is recorded by the reading. Off where
+    # a version does not say (Đạt, 2026-11-26, by recommendation).
+    pc_reply: bool = False
     # Every step with a shadow consumer (`SHADOW_STEPS`) reads in shadow
     # while it is not on and passing (ticket 67, dw_sales ADR 0015 decision
     # 4): the model reads where one is configured, its result is stored and

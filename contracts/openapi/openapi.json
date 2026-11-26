@@ -12377,7 +12377,8 @@
           "skill_reply_drafts",
           "triage_card",
           "internal_change",
-          "case_chat"
+          "case_chat",
+          "pc_reply"
         ],
         "title": "ModelStep",
         "type": "string"

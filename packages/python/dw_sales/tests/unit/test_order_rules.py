@@ -123,6 +123,8 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
         ModelStep.SKILL_REPLY_DRAFTS,
         # And the document forms (ticket 42 family 3).
         ModelStep.SKILL_DOCUMENT_FORMS,
+        # And DW1 reading PC's mail itself (ticket 77): no test version says.
+        ModelStep.PC_REPLY,
     }
     assert all(steps_on.model_assist.on(step) for step in ModelStep if step not in off)
     assert not any(steps_on.model_assist.on(step) for step in off)

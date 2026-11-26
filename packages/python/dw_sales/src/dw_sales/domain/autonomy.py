@@ -122,6 +122,10 @@ STEP_TIERS: Final[Mapping[ModelStep, Tier]] = MappingProxyType(
         # A flag's decision or a Bravo write stated in the case chat is
         # recorded only once the PIC confirms that statement (ticket 56).
         ModelStep.CASE_CHAT: Tier.PERSON_APPROVES,
+        # PC's dates read from PC's mail are recorded only as the PIC confirms
+        # each line (ticket 77): reversible, so it may later apply itself
+        # once measured (ADR 0015), which needs a decision first.
+        ModelStep.PC_REPLY: Tier.PERSON_APPROVES,
     }
 )
 

@@ -1,5 +1,6 @@
-"""Ticket 07 against real Postgres (migration 91f83937dbf1): the wait on PC
-(`sales.order_cases.pc_request`) and PC's answer per line
+"""Tickets 07 and 77 against real Postgres (migrations 91f83937dbf1 and
+79418de5ab48): the wait on PC (`sales.order_cases.pc_request`), PC's mail
+read by DW1 (`sales.order_cases.pc_reply`) and PC's answer per line
 (`sales.order_lines.pc_answer`).
 
 A case asked of PC and a line PC split read back as the domain left them; the
@@ -132,8 +133,37 @@ async def test_a_waiting_pc_delivery_is_a_record_the_check_admits(
         await work.commit()
 
 
+async def test_pc_s_mail_read_by_dw1_reads_back_in_its_own_tenant_only(
+    small_run: OrderRun, uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    """Ticket 77 (migration 79418de5ab48): the proposal read from PC's mail
+    is stored with the case and read back as the domain left it; another
+    workspace or tenant reads no such case."""
+    case = _m01(small_run)
+    reviewing = case.start_review()
+    asked = reviewing.ask_pc(Actor(user_id=AN_ID), T0)
+    read = asked.read_pc_reply(
+        "<pc-01@proterial.example>",
+        T0 + timedelta(minutes=5),
+        [(1, 1, DEC_12, "12/12/2026")],
+        at=T0 + timedelta(minutes=6),
+        prompt_ref="sales.pc_dates@1.0.0",
+        model_profile="test",
+    )
+    await _save(uow, small_run, case, reviewing, asked, read)
+
+    async with uow(world.alpha) as work:
+        stored = await work.orders.get(case.case_id)
+    assert stored is not None and stored.case == read
+    assert stored.case.pc_reply is not None and stored.case.line(1).pc_answer is None
+    for other in (world.alpha_other, world.beta):
+        async with uow(other) as work:
+            assert await work.orders.get(case.case_id) is None
+
+
 @pytest.mark.parametrize(
-    ("table", "column"), [("order_cases", "pc_request"), ("order_lines", "pc_answer")]
+    ("table", "column"),
+    [("order_cases", "pc_request"), ("order_lines", "pc_answer"), ("order_cases", "pc_reply")],
 )
 async def test_a_request_or_an_answer_that_is_not_an_object_is_refused(
     migrator: AsyncEngine, small_run: OrderRun, table: str, column: str
