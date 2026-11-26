@@ -36,22 +36,28 @@ Cách này **không sửa luật** — chỉ cấp các bộ quyền vốn hợp
 
 ---
 
-## 1. Dựng stack (làm 1 lần, ~10 phút, lần đầu lâu hơn vì build image)
+## 1. Dựng stack (chạy bằng Docker; lần đầu lâu vì build image)
 
-Bật Docker Desktop trước. Rồi ở thư mục `dw-proterial`, chạy lần lượt:
+Bật **Docker Desktop** và **Ollama** (biểu tượng ở khay hệ thống) trước. Rồi ở
+thư mục `dw-proterial`, chạy lần lượt:
 
 ```sh
-make infra-up          # Postgres, Keycloak, S3, reader... trong Docker
-make db-migrate        # tạo schema
-make demo-reset        # về trạng thái bắt đầu: 45 thư chưa xử lý, chưa có hồ sơ
-DW_WORKER_SALES_INBOX_LANE=false make dev   # API :8300, web :3300, worker
+make docker-up         # build + chạy tất cả trong Docker: Postgres, Keycloak, S3, reader, API, worker, web
+make demo-reset        # về trạng thái bắt đầu: chưa có hồ sơ, chưa có hội thoại chat
 ```
 
-- Lần đầu build image `reader` (LibreOffice, Tesseract) mất vài phút — bình thường.
-- `DW_WORKER_SALES_INBOX_LANE=false`: tắt làn tự-xử-lý để anh **tự bấm** theo thứ
-  tự demo. (Muốn xem DW tự chạy thì bỏ biến này — xem mục 6.)
+- **Vì sao Docker, không `make dev`** (Đạt, 26/11): bản build sẵn, bấm trang nào
+  mở ngay; `make dev` biên dịch từng trang lúc bấm nên demo chậm. Sửa code thì
+  phải `make docker-up` lại.
+- **DW tự đọc hộp thư:** worker trong Docker bật làn tự xử lý, nên vài phút sau
+  `demo-reset` DW đã đọc hết thư mẫu mà không ai bấm. Trên Hộp thư nút sẽ là
+  **"DW xử lý lại"** — dùng nó ở các bước cần cho DW đọc lại một thư.
+- **Ollama phải đang chạy** cho chat "Hỏi DW1": DW dùng model để hiểu câu hỏi.
+  Container gọi Ollama trên máy qua `host.docker.internal:11434`. Ollama tắt thì
+  câu hỏi trả "DW1 chưa hiểu câu hỏi".
 - Cổng: **web = http://localhost:3300**, API = http://localhost:8300.
-- `make demo-reset` xóa sạch hồ sơ demo và seed lại — chạy lại **trước mỗi buổi**.
+- `make demo-reset` xóa sạch hồ sơ demo và hội thoại chat, seed lại — chạy lại
+  **trước mỗi buổi**.
 
 > Khuyến nghị: chạy `make test-web-sales` một lần trước buổi demo. Nếu nó xanh,
 > nghĩa là toàn bộ nút bấm trong kịch bản còn đúng.
@@ -290,6 +296,13 @@ Mở nhanh một cửa sổ ẩn danh, `/dev-login`:
 ## 6. Các màn "hay ho" khác — tour 5 phút
 
 Ở **Cửa sổ 1 (An)** hoặc **2 (Giang)** tùy quyền:
+- **Chat "Hỏi DW1"** — nút tròn góc phải dưới trên mọi trang Sales (trừ trang
+  hồ sơ). Tab **Phiên**: lời chào, câu hỏi gợi ý (bấm là hỏi luôn), các phiên đã
+  hỏi. Tab **Tin nhắn**: hỏi "Tôi còn việc gì?" để khán giả thấy DW **làm từng
+  bước** (khung đang xử lý, chuỗi bước chạy trực tiếp) rồi trả lời kèm căn cứ.
+  Mở một hồ sơ: chat chung tự ẩn, bên phải là **chat riêng của hồ sơ đó** (hỏi
+  "Hồ sơ này đang ở bước nào?"). Nói một câu: mỗi người một hội thoại riêng,
+  không ai đọc được của người khác, câu trả lời không có số tiền.
 - **`/approvals`** (Duyệt) — hộp duyệt HITL; lượt chạy DW **dừng rồi tiếp** khi có
   quyết định.
 - **`/audit`** (Nhật ký kiểm toán) — mọi lượt chạy/quyết định theo thứ tự; việc
@@ -298,9 +311,8 @@ Mở nhanh một cửa sổ ẩn danh, `/dev-login`:
   nhiêu / vì sao (câu chuyện tự chủ bằng số).
 - **`/memory`** (Bộ nhớ), **`/knowledge`** (Tri thức), **`/integrations`** (Tích
   hợp — danh mục công cụ + chính sách) — xem nhanh để thấy bề rộng nền tảng.
-- **DW tự xử lý thư**: dừng `make dev`, chạy `make demo-reset` rồi `make dev`
-  (không đặt biến tắt làn). Sau ~1 phút DW tự đọc hết hộp thư mà không ai bấm —
-  cho thấy chế độ tự động.
+- **DW tự xử lý thư**: trên Docker đây là mặc định (mục 1) — mở Hộp thư ngay
+  sau `demo-reset` để khán giả thấy thư được đọc dần mà không ai bấm.
 
 ---
 
@@ -322,7 +334,8 @@ Mặc định AI **tắt** → demo mượt. Muốn khoe AI đọc thư, mô t�
 
 ```sh
 make demo-reset        # về trạng thái bắt đầu (và xóa quyền rộng đã cấp cho An)
-# rồi tắt để nhẹ máy:
+# rồi tắt để nhẹ máy (dữ liệu trong volume vẫn giữ):
+make docker-down
 docker desktop stop; wsl --shutdown   # tùy môi trường
 ```
 
@@ -332,11 +345,22 @@ Nhớ: sau `demo-reset`, muốn chạy lại thì **làm lại bước 2b** (c�
 
 ## 9. Hay vấp ở đâu (cho người lần đầu)
 
-- **Bấm "DW xử lý" mà đứng mãi "Đang chờ DW1":** worker chưa chạy, hoặc reader
-  chưa lên. Kiểm tra `make dev` còn chạy và image `reader` đã build xong.
-- **Thư có file đều "chưa đọc được tệp đính kèm":** xem `.env` có
-  `DW_SALES_MALWARE_SCAN=skip` và `reader-gateway` đang chạy (`make dev` không tới
-  được clamav nên phải skip).
+- **Bấm "DW xử lý" mà đứng mãi "Đang chờ DW1":** worker hoặc reader chưa lên.
+  `docker ps` phải thấy `worker` và `reader` ở trạng thái healthy.
+- **Thư có file đều "chưa đọc được tệp đính kèm":** `docker ps` phải thấy
+  `clamav` healthy (full stack quét bằng clamd, không theo `skip` của `.env`).
+- **Chat "Hỏi DW1" trả "DW1 chưa hiểu câu hỏi":**
+  - Ollama chưa chạy: mở Ollama rồi hỏi lại.
+  - Ollama chạy nhưng thiếu model: profile `onprem` gọi
+    `qwen3.8-flash-next-q2_0` (model của nhà máy). Máy demo dùng bí danh của
+    bản 9B: `ollama cp qwen3.5-9b-dw qwen3.8-flash-next-q2_0` (làm 1 lần,
+    không tốn thêm ổ đĩa; gỡ bằng `ollama rm qwen3.8-flash-next-q2_0`).
+  - Câu đầu tiên chờ khoảng 1 phút: model đang nạp lên GPU, các câu sau vài giây.
+    Hỏi thử một câu trước giờ demo.
+  - Đừng chạy API bằng `make dev` cho demo: API trên máy không tới được
+    `host.docker.internal`, mỗi câu hỏi chờ hết timeout.
+- **Đừng tắt `clamav`** để lấy RAM: full stack quét tệp đính kèm bằng clamd,
+  tắt đi thì thư có file không đọc được. Đóng ứng dụng khác thay vì vậy.
 - **Cấp quyền cho An xong mà An vẫn không thấy giá:** chưa tải lại trang/đăng nhập
   lại ở Cửa sổ 1 để nhận quyền mới.
 - **3 cửa sổ bị lẫn phiên:** dùng **Chrome Profiles** (3 profile riêng) thay vì
@@ -348,11 +372,11 @@ Nhớ: sau `demo-reset`, muốn chạy lại thì **làm lại bước 2b** (c�
   (được dùng lại giữa các checkout) bị thiếu hoặc sai mật khẩu — chỉ tạo lúc
   khởi tạo volume lần đầu. Sửa một lần, không mất dữ liệu:
   `DW_ADMIN_DATABASE_URL=postgresql+asyncpg://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:$DW_POSTGRES_HOST_PORT/postgres uv run python scripts/create_provisioner_role.py`
-  (lấy biến từ `.env`). Role nằm ở tầng cluster nên còn qua mọi lần
-  `make dev`/`infra-up` sau đó.
-- **Docker tự tắt giữa buổi (máy 16 GB, chạy full stack + 3 cửa sổ):** cả
-  `make dev` chết theo (một tiến trình con tắt là cả cụm tắt). Bật lại Docker
-  Desktop, `make infra-up`, rồi `make dev` — data trong volume còn nguyên.
+  (lấy biến từ `.env`). Role nằm ở tầng cluster nên còn qua mọi lần khởi
+  động sau đó.
+- **Docker tự tắt giữa buổi (máy 16 GB, full stack + Ollama + 3 cửa sổ):** bật
+  lại Docker Desktop rồi `make docker-up` (không build lại nếu code không đổi) —
+  data trong volume còn nguyên. Đóng bớt tab/ứng dụng khác trước buổi demo.
 
 ---
 
