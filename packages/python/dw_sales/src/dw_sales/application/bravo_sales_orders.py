@@ -469,7 +469,7 @@ class ReadBackService:
         )
         scope = sales_scope(context)
         async with self.sales(scope) as work:
-            stored = await stored_order(work, case_id, viewer=context)
+            stored = await stored_order(work, case_id, viewer=context, export_control=True)
         async with self.uow(scope) as work:
             found = await work.read_backs.get(case_id)
         if found is None:

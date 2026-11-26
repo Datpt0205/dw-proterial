@@ -6151,6 +6151,11 @@ export interface components {
             duplicate_of_so: string | null;
             /** Export Control Mode */
             export_control_mode: string | null;
+            /**
+             * Export Hold Only
+             * @default false
+             */
+            export_hold_only: boolean;
             /** Findings */
             findings: components["schemas"]["OrderFindingView"][];
             /** Header Anchors */

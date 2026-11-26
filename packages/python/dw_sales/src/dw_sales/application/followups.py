@@ -26,7 +26,8 @@ of `sales.case.assign`. ``export_control`` (ticket 78): whoever may
 acknowledge the NOC/ESF hold, the holders of both its capability's scope and
 `sales.order.prepare` (`_decide` asks for both); while nobody holds both, the
 heads, told that nobody may (so a tenant that never granted the permission
-set is not left with silent holds). All through `ScopeHoldersPort`, the
+set is not left with silent holds), recorded under `STAND_IN_STAGE` so the
+person granted both later is still told of that revision. All through `ScopeHoldersPort`, the
 function that builds the access context, so who is told and who may act
 cannot disagree. Nobody to tell: nothing is recorded, and it is owed again
 next tick.
@@ -61,6 +62,7 @@ the follow-up, the stage and how many were told, never who or what.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
@@ -74,7 +76,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import lane_audit_event, system_actor
-from dw_sales.application.access import SalesScopes, capability_scope
+from dw_sales.application.access import EXPORT_CONTROL_SCOPES, SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.next_steps import checker_scope
 from dw_sales.application.overview_ports import BUCKETS, Bucket, FollowupPolicyPort
@@ -105,7 +107,6 @@ from dw_sales.domain.followups import (
     owed,
     turn_status,
 )
-from dw_sales.domain.orders import Capability
 from dw_sales.domain.quotes import QuoteStatus
 
 logger = logging.getLogger("dw_sales.followups")
@@ -115,16 +116,14 @@ SALES_FOLLOWUPS_LANE: Final = "sales_followups"
 # The brief's row in the record: its follow-up and its stage.
 BRIEF: Final = "morning_brief"
 BRIEF_STAGE: Final = "brief"
+# The heads told that nobody may acknowledge an NOC/ESF hold: recorded under
+# its own stage, so the revision stays owed to the export-control PIC and
+# whoever is granted both scopes later is still told (ticket 78 review).
+STAND_IN_STAGE: Final = "stand_in"
 _RESOURCE_CASE: Final = {CaseKind.ORDER: "sales_order_case", CaseKind.QUOTE: "sales_quote_case"}
 _LINK: Final = {CaseKind.ORDER: "/sales/orders/{}", CaseKind.QUOTE: "/sales/quotes/{}"}
 _HEADS: Final = frozenset({SalesScopes.CASE_ASSIGN.value})
 _PICS: Final = frozenset({SalesScopes.ORDER_PREPARE.value, SalesScopes.QUOTE_PREPARE.value})
-# Who may acknowledge an NOC/ESF hold: the capability's scope, and the scope
-# `orders_service._decide` asks of every decision on a finding.
-_EXPORT_CONTROL: Final = (
-    frozenset({capability_scope(Capability.ACKNOWLEDGE_EXPORT_CONTROL).value}),
-    frozenset({SalesScopes.ORDER_PREPARE.value}),
-)
 # Every status a case waits on someone in: the brief counts them, and every
 # status a follow-up watches is one (`test_followups.py` holds the two).
 LOADED: Final[Mapping[CaseKind, frozenset[str]]] = {
@@ -199,6 +198,12 @@ class FollowupTick:
 
 def key_of(due: Due) -> FollowupKey:
     return FollowupKey(due.followup.value, due.stage.value, str(due.case.case_id), due.since)
+
+
+def stand_in_key(due: Due) -> FollowupKey:
+    """What the heads' notice standing in for the export-control PIC is
+    recorded under: ``due``'s key at `STAND_IN_STAGE`."""
+    return dataclasses.replace(key_of(due), stage=STAND_IN_STAGE)
 
 
 def source_key(key: FollowupKey, scope: SalesScope) -> str:
@@ -325,7 +330,8 @@ class FollowupLane:
             )
             stages = owed(policy, cases, now, turns=WHOSE_TURN)
             brief_key = None if slot is None else _brief_key(slot)
-            asked = [key_of(d) for d in stages] + ([brief_key] if brief_key else [])
+            stood_in = [stand_in_key(d) for d in stages if "export_control" in d.notify]
+            asked = [key_of(d) for d in stages] + stood_in + ([brief_key] if brief_key else [])
             done = await work.followups.already_sent(asked) if asked else frozenset()
         pending = [d for d in stages if key_of(d) not in done]
         sent: list[str] = []
@@ -337,7 +343,9 @@ class FollowupLane:
         told: dict[uuid.UUID, list[Due]] = {}
         for due in pending:
             recorded = await self._record_silence(scope, policy, due)
-            delivered = await self._remind(scope, policy, copy, due, now, recorded=recorded)
+            delivered = await self._remind(
+                scope, policy, copy, due, now, recorded=recorded, done=done
+            )
             if delivered is not None:
                 key, recipients = delivered
                 sent.append(key)
@@ -378,14 +386,18 @@ class FollowupLane:
         now: datetime,
         *,
         recorded: bool = False,
+        done: frozenset[FollowupKey] = frozenset(),
     ) -> tuple[str, list[uuid.UUID]] | None:
         """The source key and whom it told, when this tick recorded it; None
         when not delivered, or recorded already by another worker (which
-        pushes it, so a person's phone rings once)."""
+        pushes it, so a person's phone rings once). ``done``: what was
+        recorded before this tick, where the heads' stand-in is looked up."""
         recipients, stand_in = await self._audience(scope, due)
         if not recipients:
             return None
-        key = key_of(due)
+        key = stand_in_key(due) if stand_in else key_of(due)
+        if key in done:
+            return None
         title, body = reminder_text(copy, policy, due, now, recorded=recorded, stand_in=stand_in)
         try:
             await self.notifications.deliver(
@@ -447,12 +459,15 @@ class FollowupLane:
         return told, stand_in
 
     async def _export_control(self, scope: SalesScope) -> list[uuid.UUID]:
-        """Who may acknowledge an NOC/ESF hold: the holders of every scope of
-        `_EXPORT_CONTROL`. The assignee among them is told too: no
+        """Who may acknowledge an NOC/ESF hold: the holders of every one of
+        `EXPORT_CONTROL_SCOPES`. The assignee among them is told too: no
         separation of duties covers the acknowledgement."""
-        ack, prepare = _EXPORT_CONTROL
-        may_prepare = set(await self._holding(scope, prepare))
-        return [person for person in await self._holding(scope, ack) if person in may_prepare]
+        first, *rest = sorted(EXPORT_CONTROL_SCOPES)
+        found = await self._holding(scope, frozenset({first.value}))
+        for each in rest:
+            holding = set(await self._holding(scope, frozenset({each.value})))
+            found = [person for person in found if person in holding]
+        return found
 
     async def _holding(self, scope: SalesScope, scopes: frozenset[str]) -> list[uuid.UUID]:
         return await self.holders.holding(scope.tenant_id.value, scope.workspace_id.value, scopes)

@@ -55,7 +55,11 @@ DW1_WORKER_VERSION = "1.0.0"
 
 
 async def stored_order(
-    work: SalesUnitOfWork, case_id: uuid.UUID, *, viewer: AccessContext | None
+    work: SalesUnitOfWork,
+    case_id: uuid.UUID,
+    *,
+    viewer: AccessContext | None,
+    export_control: bool = False,
 ) -> Stored[OrderCase]:
     """The case, in the caller's workspace only: another tenant's or another
     workspace's id reads as not found, never as forbidden.
@@ -63,9 +67,14 @@ async def stored_order(
     ``viewer``: the person reading, who sees only what `sees_case` lets them
     (a case outside it reads as not found too); None for DW1's own lanes and
     a settlement, which act for the whole workspace. Required, so every
-    caller says which it is."""
+    caller says which it is.
+
+    ``export_control``: True only for a read and for the NOC/ESF hold's own
+    acknowledgement, the two things a hold lets the export-control PIC do
+    on an order that is not theirs (ticket 78). Every other step leaves it
+    False, so a hold opens no close, no self-check, no Bravo write."""
     stored = await work.orders.get(case_id)
-    if stored is None or not seen_by(viewer, CaseKind.ORDER, stored):
+    if stored is None or not seen_by(viewer, CaseKind.ORDER, stored, export_control=export_control):
         raise NotFoundError("no such order case", details={"case_id": str(case_id)})
     return stored
 
@@ -80,15 +89,21 @@ async def stored_quote(
 
 
 def seen_by(
-    viewer: AccessContext | None, kind: CaseKind, stored: Stored[OrderCase] | Stored[QuoteCase]
+    viewer: AccessContext | None,
+    kind: CaseKind,
+    stored: Stored[OrderCase] | Stored[QuoteCase],
+    *,
+    export_control: bool = False,
 ) -> bool:
+    """``export_control``: as `stored_order`'s, True only where the caller
+    reads (a list, a page) or acknowledges the hold."""
     case = stored.case
     return viewer is None or sees_case(
         viewer,
         kind,
         case.status.value,
         stored.origin.assigned_to,
-        export_held=isinstance(case, OrderCase) and case.awaits_export_control,
+        export_held=export_control and isinstance(case, OrderCase) and case.awaits_export_control,
     )
 
 

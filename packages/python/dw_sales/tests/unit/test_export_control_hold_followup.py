@@ -13,6 +13,7 @@ Over the in-memory world, as `test_followups_lane.py`; the store's SQL is
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -160,7 +161,29 @@ async def test_a_holder_of_the_ack_scope_alone_is_never_told() -> None:
     [(recipients, _, title, body)] = rig.sender.holds()
     assert recipients == (GIANG.user_id,)
     assert "chưa ai có quyền xác nhận" in title
+    # Ticket 78 review: the set alone is still nobody, so the words ask for
+    # both grants the acknowledgement needs, not the set alone.
     assert "PIC kiểm soát xuất khẩu" in body
+    assert "Sales phụ trách (PIC)" in body
+
+
+async def test_the_pic_granted_after_the_heads_stood_in_is_still_told_once() -> None:
+    """Ticket 78 review: the heads' notice is recorded under its own stage,
+    so the revision is still owed to the export-control PIC. The heads are
+    told once while nobody may; then An, granted both, is told once; then
+    nobody again."""
+    rig = await _rig((ACK_ONLY, DIEU, GIANG, KHOA))
+    await rig.tick()
+    await rig.tick()
+    [(heads, *_)] = rig.sender.holds()
+    assert heads == (GIANG.user_id,)
+
+    rig.lane = dataclasses.replace(rig.lane, holders=Holders((ACK_ONLY, AN, DIEU, GIANG, KHOA)))
+    await rig.tick()
+    await rig.tick()
+    told = [recipients for recipients, *_ in rig.sender.holds()]
+    assert told == [(GIANG.user_id,), (AN.user_id,)]
+    assert "chưa ai" not in rig.sender.holds()[1][2]
 
 
 async def test_with_an_export_control_pic_the_head_is_not_told() -> None:

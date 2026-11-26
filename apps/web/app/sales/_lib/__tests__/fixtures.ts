@@ -180,6 +180,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     design_requests: [],
     quote_links: [],
     internal_change_open: false,
+    export_hold_only: false,
     lines: [line],
     ...overrides,
   };

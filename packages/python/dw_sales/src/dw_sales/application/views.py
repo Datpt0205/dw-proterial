@@ -1268,6 +1268,10 @@ class OrderCaseView(BaseModel):
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
     # None for anyone else, since it tells how colleagues read the case.
     unopened_values: list[UnopenedValue] | None = None
+    # The caller sees this order only because its NOC/ESF hold waits on them
+    # (ticket 78, `visibility.sees_case`): they read it and decide the hold,
+    # and no other step on it is theirs. The page offers no other control.
+    export_hold_only: bool = False
 
 
 class ThreadMessageView(BaseModel):
@@ -1566,6 +1570,7 @@ def order_case(
     change_requests: Sequence[ChangeRequest] = (),
     confirmation_copy: InboundMessage | None = None,
     quote_links: Sequence[QuoteLinkView] = (),
+    export_hold_only: bool = False,
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1699,6 +1704,7 @@ def order_case(
             if cross_checker
             else None
         ),
+        export_hold_only=export_hold_only,
     )
 
 

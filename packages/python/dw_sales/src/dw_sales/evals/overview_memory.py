@@ -121,7 +121,8 @@ class PythonOverviewReader:
             case, assigned = stored.case, stored.origin.assigned_to
             mine = case.status in wanted.order_statuses and assigned in (None, me)
             check = wanted.cross_checks and case.status is OrderStatus.UPLOADED_TO_BRAVO
-            if mine or check:
+            held = wanted.export_holds and case.awaits_export_control
+            if mine or check or held:
                 row = OpenOrder(
                     case_id=case.case_id,
                     status=case.status,
@@ -129,6 +130,7 @@ class PythonOverviewReader:
                     received_at=case.received_at,
                     due=case.due,
                     assigned_to=assigned,
+                    export_held=case.awaits_export_control,
                 )
                 group = case.due.isoformat() if case.due else NO_DUE
                 entries.append(_entry(group, case.received_at, case.case_id, row))

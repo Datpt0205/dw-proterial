@@ -607,7 +607,7 @@ class BravoLineWrites:
         )
         async with self.uow(sales_scope(context)) as work:
             stored = await work.orders.get(case_id)
-            if stored is None or not seen_by(context, CaseKind.ORDER, stored):
+            if stored is None or not seen_by(context, CaseKind.ORDER, stored, export_control=True):
                 raise NotFoundError("no such order case", details={"case_id": str(case_id)})
             return [BravoLineWriteView.of(w) for w in await work.bravo_writes.of_case(case_id)]
 

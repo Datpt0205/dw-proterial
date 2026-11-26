@@ -355,7 +355,7 @@ class ChangeRequests:
         """The order's requests, oldest first, for whoever reads the order."""
         await self._require(context, case_id, SalesScopes.CASE_READ)
         async with self.uow(sales_scope(context)) as work:
-            await stored_order(work, case_id, viewer=context)
+            await stored_order(work, case_id, viewer=context, export_control=True)
             requests = await work.change_requests.for_case(case_id)
         return [change_request_view(r, prices=self.gate.prices(context)) for r in requests]
 

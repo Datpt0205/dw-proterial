@@ -13,9 +13,12 @@ it to a case, whose owner is its assignee:
 - a case waiting on a checker step (a cross-check, a quotation's approval)
   that the caller may take: they are the one asked to check it;
 - an order held on an open `missing_noc_esf` (`OrderCase.awaits_export_control`)
-  to a holder of the scope that acknowledges it: the export-control PIC is
-  told of it (ticket 78) and must be able to open and decide it. Only while
-  it holds: acknowledged, it is the assignee's again.
+  to the export-control PIC (`EXPORT_CONTROL_SCOPES`): they are told of it
+  (ticket 78) and must be able to open and decide it. Only while it holds,
+  and only for a read or the acknowledgement itself (the caller says so,
+  `support.stored_order`'s ``export_control``): seeing it is not owning it,
+  so every other step on another PIC's order reads as not found as before.
+  Acknowledged, it is the assignee's again.
 
 A case outside these reads as not found, never as forbidden: a 403 would
 confirm the case exists.
@@ -26,10 +29,9 @@ from __future__ import annotations
 import uuid
 
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import capability_scope
+from dw_sales.application.access import EXPORT_CONTROL_SCOPES
 from dw_sales.application.next_steps import checker_scope
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.orders import Capability
 
 
 def sees_case(
@@ -41,14 +43,13 @@ def sees_case(
     export_held: bool = False,
 ) -> bool:
     """``export_held``: the order awaits the export-control PIC
-    (`OrderCase.awaits_export_control`); False for a quote, and the narrow
-    reading when a caller does not say."""
+    (`OrderCase.awaits_export_control`) and the call is one the hold opens
+    to them (a read, or its acknowledgement); False for a quote, for every
+    other step, and the narrow reading when a caller does not say."""
     owners = viewer.visible_owners
     if owners is None or assigned_to is None or assigned_to in owners:
         return True
-    if export_held and viewer.has_scope(
-        capability_scope(Capability.ACKNOWLEDGE_EXPORT_CONTROL).value
-    ):
+    if export_held and all(viewer.has_scope(scope.value) for scope in EXPORT_CONTROL_SCOPES):
         return True
     checker = checker_scope(kind, status)
     return checker is not None and viewer.has_scope(checker.value)

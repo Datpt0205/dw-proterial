@@ -107,6 +107,9 @@ class WorkFilter:
     cross_checks: bool
     # Quotations pending approval that the caller did not price.
     approvals: bool
+    # Orders held on an open NOC/ESF (`OrderCase.awaits_export_control`),
+    # whoever is assigned: the caller may acknowledge one (ticket 78).
+    export_holds: bool
     # Owners whose routed messages are the caller's (the pool included);
     # empty: no message is.
     message_owners: frozenset[str]
@@ -123,6 +126,8 @@ class OpenOrder:
     # `OrderCase.due`, as the case was last saved.
     due: date | None
     assigned_to: uuid.UUID | None
+    # `OrderCase.awaits_export_control`, as the case was last saved.
+    export_held: bool = False
 
 
 type WorkRow = OpenOrder | Stored[QuoteCase] | LoggedMessage

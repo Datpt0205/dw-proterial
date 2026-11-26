@@ -13540,6 +13540,11 @@
             ],
             "title": "Export Control Mode"
           },
+          "export_hold_only": {
+            "default": false,
+            "title": "Export Hold Only",
+            "type": "boolean"
+          },
           "findings": {
             "items": {
               "$ref": "#/components/schemas/OrderFindingView"

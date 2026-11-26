@@ -1,6 +1,6 @@
 # 78 — Push whoever's turn it is
 
-Status: done 2026-11-27 — the platform push and the checkers (11-26), the export-control PIC and push off at sign-out (11-27); one consent gap left as a follow-up (below)
+Status: done 2026-11-27 — the platform push and the checkers (11-26), the export-control PIC and push off at sign-out (11-27), its review's five findings fixed (11-27); one consent gap left as a follow-up (below)
 Blocked by: none
 Category: enhancement (platform + Sales)
 
@@ -130,3 +130,62 @@ moves an endpoint to its newest owner). Fix when wanted: store the
 principal id with the subscription on turn-on, and have `renewPush`
 unsubscribe instead of renewing for another principal (key on the person,
 not the workspace, or switching workspace would turn push off).
+
+**2026-11-27, review (5 findings, all held after checking, all fixed).**
+- **The hold opened every step, not only the acknowledgement (security).**
+  Reproduced first: as the export PIC in a restricted tenant, `close` on
+  Diệu's held `in_review` order succeeded. `stored_order`/`seen_by` take
+  `export_control` (default False): the hold clause applies only where the
+  caller reads (order get, list, line trail, activity, history, pipeline
+  board, read-back, Bravo writes list, change requests, finding
+  explanation, thread summary, source and mail text, artifact list and
+  download) and in `dispose` of the `missing_noc_esf` key; every other
+  step (close, prepare, resume, value and mapping edits, Bravo line
+  proposals, PC, Design, quotes, mail) reads it as not found as before.
+  This settles the owed decision above by narrowing, the fail-closed
+  reading. The order view carries `export_hold_only`; the order page then
+  narrows the viewer to read scopes (`onHeldOrder`) so no control the
+  server refuses is drawn enabled, and says in one line why.
+- **One answer to who the export-control PIC is.**
+  `access.EXPORT_CONTROL_SCOPES` (the capability's scope and
+  `sales.order.prepare`), read by `sees_case`, the lane's audience and the
+  work list. A holder of the set alone no longer reads held orders (they
+  could not decide them). The web's NOC control asks both
+  (`mayAcknowledgeExport`), and says "Cần thêm vai Sales phụ trách (PIC)"
+  to the set alone.
+- **The stand-in words now fix the problem.** `sales_reminders@1.4.0`:
+  grant the set to someone with the role "Sales phụ trách (PIC)" (both
+  are needed); the rule's help in `rule-labels.ts` says the same.
+- **The PIC granted after the heads stood in is told.** The heads' notice
+  is recorded under its own stage `stand_in` (`STAND_IN_STAGE`, migration
+  `d217eda10ac8` adds it to `ck_followup_deliveries_stage`, rebuilt from
+  what it holds), so the revision stays owed to the export PIC; the heads
+  are not told twice (the stand-in key is looked up with the rest).
+- **The hold is in "Việc của tôi".** `WorkFilter.export_holds` and
+  `OpenOrder.export_held` (SQL: the follow-ups' `export_held()` reused, so
+  one expression); a held order is the export PIC's item
+  (`acknowledge_export`, "Xác nhận NOC/ESF") whoever is assigned, until
+  acknowledged. `WHOSE_TURN` stays `pic`/`head`: the hold is a finding, so
+  the work list reads it from the case, not from a status.
+- Measured: unit `test_case_visibility.py` 18 cases (+4 tests, +1 case),
+  `test_export_control_hold_followup.py` 8 (+1), 18 related dw_sales unit
+  files green; Postgres 16 `test_export_control_hold_db.py` 10 (+3: the
+  stand-in recorded apart, the work list's SQL admitting the held order
+  to the export PIC alone and not after acknowledgement nor to another
+  tenant, the migration down/up on its own database),
+  `test_sales_schema.py`, `test_sales_overview_sql.py` (SQL = in-memory
+  work list, now with an export-holds-only filter); OpenAPI snapshot
+  current; web `sales-ui.test.tsx` +2, full vitest 904/905 (the one red,
+  `quote-preview.test.tsx`'s known timeout under load, green alone), tsc
+  clean. Mutations red: the read-only flag ignored in
+  `seen_by`; `dispose` not passing it; visibility on the ack scope alone;
+  `export_hold_only` forced false; the artifact list loaded narrow; the
+  stand-in recorded under the hold's key; the stand-in `done` check
+  dropped; the stand-in keys not asked; the migration without `stand_in`;
+  `export_holds` false, `any` for `all`, the hold item without the scope
+  check, the SQL branch reading every order; web: the NOC control on the ack scope alone, the held-order
+  viewer keeping every scope, or losing `exportControl`.
+
+Left: the pipeline board's "Việc của bạn" (`my_action`) does not name the
+hold for the export PIC (the board lists the order; its card says nothing
+of the hold for them).

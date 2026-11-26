@@ -124,10 +124,11 @@ def _pcs_price_asked_at() -> sa.ColumnElement[datetime]:
     return sa.case((waits, _at(body[("production_type_set", "at")].astext)), else_=sa.null())
 
 
-def _export_held() -> sa.ColumnElement[bool]:
+def export_held() -> sa.ColumnElement[bool]:
     """`OrderCase.awaits_export_control`, read without the case: a status
     where the export-control PIC may decide it, and an open `missing_noc_esf`
-    on the current revision (ticket 78). Never the finding's own time: every
+    on the current revision (ticket 78). The follow-ups and the work list
+    (`overview.SqlOverviewReader.work_page`) both read it. Never the finding's own time: every
     save rewrites the findings (`_replace_findings`), so the wait is the
     revision's arrival, `received_at`, and owed once per revision."""
     held = (
@@ -216,7 +217,7 @@ class SqlFollowupStore:
             sa.null().label("pcs_price_asked_at"),
             # An NOC/ESF hold waiting on the export-control PIC (ticket 78).
             # Its statuses are all loaded already (`LOADED`), so no filter.
-            _export_held().label("export_held"),
+            export_held().label("export_held"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),

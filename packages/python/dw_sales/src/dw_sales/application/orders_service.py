@@ -90,6 +90,7 @@ from dw_sales.domain.orders import (
     AskCustomer,
     CloseReason,
     CorrectedBySales,
+    FindingCode,
     FindingDisposition,
     Open,
     OrderCase,
@@ -132,7 +133,8 @@ class OrderQueries:
         return [
             order_summary(s.case, s.origin.assigned_to)
             for s in stored
-            if (kept is None or s.case.case_id in kept) and seen_by(context, CaseKind.ORDER, s)
+            if (kept is None or s.case.case_id in kept)
+            and seen_by(context, CaseKind.ORDER, s, export_control=True)
         ]
 
     async def get(self, context: AccessContext, case_id: uuid.UUID) -> OrderCaseView:
@@ -141,7 +143,7 @@ class OrderQueries:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            stored = await stored_order(work, case_id, viewer=context)
+            stored = await stored_order(work, case_id, viewer=context, export_control=True)
             logged = await work.messages.list_all()
             servings = await work.served.servings(CaseKind.ORDER, case_id)
             sent = {s.message_id: s for s in await work.sent.list_all()}
@@ -177,6 +179,8 @@ class OrderQueries:
             change_requests=requests,
             confirmation_copy=confirmation_copy(stored.case, thread.sent, artifacts),
             quote_links=quote_links,
+            # Read through the hold alone: the narrow reading refuses it.
+            export_hold_only=not seen_by(context, CaseKind.ORDER, stored),
         )
 
     async def line_trail(
@@ -190,7 +194,7 @@ class OrderQueries:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            stored = await stored_order(work, case_id, viewer=context)
+            stored = await stored_order(work, case_id, viewer=context, export_control=True)
         if all(line.po_line.line_no != line_no for line in stored.case.lines):
             raise NotFoundError(
                 "no such line", details={"case_id": str(case_id), "line_no": line_no}
@@ -271,6 +275,9 @@ class OrderCommands:
             finding_key=finding_key,
             reason_code=disposition,
             labels=labels,
+            # The NOC/ESF hold's own decision: the one step the hold opens to
+            # the export-control PIC on an order that is not theirs (ticket 78).
+            export_control=finding_key.partition(":")[0] == FindingCode.MISSING_NOC_ESF.value,
         )
 
     async def _shadow_label(
@@ -544,11 +551,15 @@ class OrderCommands:
         field: str | None = None,
         reason_code: str | None = None,
         labels: Callable[[OrderCase, OrderCase, datetime], list[LabelledCase]] | None = None,
+        export_control: bool = False,
     ) -> CaseChangeView:
         await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
         actor, now = order_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_order(work, case_id, viewer=context)).case
+            stored = await stored_order(
+                work, case_id, viewer=context, export_control=export_control
+            )
+            case = stored.case
             same_version(case_id, case.case_version, case_version)
             after = decided(lambda: step(case, actor, now))
             event = person_event(

@@ -478,6 +478,7 @@ export const ACTION = {
   reprice: "Định giá lại",
   send: "Gửi báo giá cho khách",
   record_master_list: "Xác nhận master list",
+  acknowledge_export: "Xác nhận NOC/ESF",
 } as const;
 
 /**

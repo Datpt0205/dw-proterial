@@ -14,6 +14,7 @@ import pytest
 
 from dw_kernel.errors import NotFoundError
 from dw_platform.application.access_context import AccessContext
+from dw_sales.application.access import SalesScopes
 from dw_sales.application.inbox_service import _shown
 from dw_sales.application.visibility import sees_case
 from dw_sales.domain.dispositions import (
@@ -22,7 +23,7 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
-from dw_sales.domain.orders import OrderCase
+from dw_sales.domain.orders import CloseReason, OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
@@ -31,6 +32,15 @@ pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 OTHER = uuid.UUID(int=0xFEED)
+# Holds the "PIC kiểm soát xuất khẩu" permission set and reads cases, and
+# prepares no order: the acknowledgement asks both (`_decide`), so the hold
+# is not theirs to decide and not theirs to see (ticket 78 review).
+ACK_ONLY = Caller(
+    uuid.UUID(int=0xAC),
+    "Trần Kiểm Soát",
+    "kiem.soat@alpha.local",
+    frozenset({SalesScopes.CASE_READ, SalesScopes.COMPLIANCE_ACK}),
+)
 
 
 def _restricted(caller: Caller, *reports: Caller) -> AccessContext:
@@ -121,6 +131,7 @@ async def test_another_pics_quote_is_not_found_on_any_read() -> None:
         (AN, True, True),  # holds sales.compliance.ack: the hold is theirs to decide
         (AN, False, False),  # acknowledged, or never held: the assignee's again
         (KHOA, True, False),  # prepares orders, acknowledges nothing
+        (ACK_ONLY, True, False),  # acknowledges, prepares nothing: may not decide it
     ],
 )
 def test_the_export_control_pic_sees_an_order_only_while_it_holds_on_them(
@@ -177,6 +188,59 @@ async def test_the_export_control_pic_opens_and_decides_a_hold_on_anothers_order
         await services.orders.get(an, held.case_id)
 
 
+async def test_the_hold_lets_the_export_control_pic_read_and_acknowledge_and_nothing_else() -> None:
+    """Ticket 78 review: seeing a held order is not owning it. While the hold
+    waits on An, An may read Diệu's order and decide the hold, and every
+    other step on it reads as not found, as it would without the hold: a
+    close, the self-check, a value correction. Diệu's order is untouched."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    commands, an = world.services.order_commands, _restricted(AN)
+
+    with pytest.raises(NotFoundError):
+        await commands.close(
+            an,
+            held.case_id,
+            case_version=held.case_version,
+            reason=CloseReason.NOT_AN_ORDER,
+            superseded_by=None,
+        )
+    with pytest.raises(NotFoundError):
+        await commands.prepare(an, held.case_id, case_version=held.case_version)
+    with pytest.raises(NotFoundError):
+        await commands.resume_review(an, held.case_id, case_version=held.case_version)
+    assert world.order(held.case_id) == held
+
+    # The reads the order's page makes, and the acknowledgement, stay open;
+    # the page is told the order is An's for the hold alone, and offers no
+    # other control. Diệu, whose order it is, is told nothing of the kind.
+    seen = await world.services.orders.get(an, held.case_id)
+    assert seen.case_id == held.case_id and seen.export_hold_only
+    assert not (await world.services.orders.get(_restricted(DIEU), held.case_id)).export_hold_only
+    assert (await world.services.artifacts.order_artifacts(an, held.case_id)) is not None
+    await commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert not world.order(held.case_id).awaits_export_control
+
+
+async def test_a_holder_of_the_acknowledging_set_alone_never_reads_the_held_order() -> None:
+    """The set "PIC kiểm soát xuất khẩu" without `sales.order.prepare`: the
+    acknowledgement would be refused, so the held order is not shown either
+    (one answer to who the export-control PIC is: `EXPORT_CONTROL_SCOPES`)."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    ack_only = _restricted(ACK_ONLY)
+    with pytest.raises(NotFoundError):
+        await world.services.orders.get(ack_only, held.case_id)
+    assert held.case_id not in {s.case_id for s in await world.services.orders.summaries(ack_only)}
+
+
 async def test_a_mail_routed_to_a_named_pic_is_theirs_and_their_heads_alone() -> None:
     """M11 (a delivery change) is routed to the customer's Sales PIC, whom
     master data knows by address. Until 2026-11-12 the inbox read that owner
@@ -216,3 +280,37 @@ def test_a_routed_mail_whose_pic_is_no_member_is_every_pics_to_pick_up() -> None
     theirs = gone.model_copy(update={"owner": AN.member().email})
     assert not _shown(_restricted(DIEU), theirs, set(), members)
     assert _shown(_restricted(AN), theirs, set(), members)
+
+
+async def _work(world: World, viewer: AccessContext, case_id: uuid.UUID) -> set[str]:
+    items = (await world.services.overview.my_work(viewer)).items
+    return {i.action for i in items if i.id == str(case_id)}
+
+
+async def test_the_held_order_is_in_the_export_control_pics_work_until_acknowledged() -> None:
+    """Ticket 78 review: the hold is listed in "Việc của tôi" for whoever may
+    acknowledge it, not only told once: a notice dismissed or aged out of
+    the feed left it nowhere. Diệu, whose order it is, keeps her self-check;
+    Khoa (prepares, acknowledges nothing) and the set alone are not given
+    it. Acknowledged, it leaves An's list."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    an = _restricted(AN)
+
+    assert await _work(world, an, held.case_id) == {"acknowledge_export"}
+    assert await _work(world, AN.context(), held.case_id) == {"acknowledge_export"}
+    assert await _work(world, _restricted(DIEU), held.case_id) == {"self_check"}
+    assert await _work(world, _restricted(KHOA), held.case_id) == set()
+    assert await _work(world, _restricted(ACK_ONLY), held.case_id) == set()
+
+    await world.services.order_commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert await _work(world, an, held.case_id) == set()
+    assert await _work(world, _restricted(DIEU), held.case_id) == {"self_check"}
+

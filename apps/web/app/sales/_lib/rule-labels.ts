@@ -689,7 +689,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "waiting_pcs_price.remind.notify": { label: "Nhắc ai" },
     export_control_hold: {
       label: "Đơn thiếu NOC/ESF chờ xác nhận",
-      help: "Báo ngay cho người phụ trách kiểm soát xuất khẩu (nhóm quyền PIC kiểm soát xuất khẩu), mỗi bản PO một lần. Chưa ai có quyền này thì báo Trưởng bộ phận để giao quyền.",
+      help: "Báo ngay cho người phụ trách kiểm soát xuất khẩu (vai Sales phụ trách và nhóm quyền PIC kiểm soát xuất khẩu), mỗi bản PO một lần. Chưa ai có đủ cả hai thì báo Trưởng bộ phận để giao quyền.",
     },
     "export_control_hold.enabled": { label: "Bật báo đơn thiếu NOC/ESF" },
     implied_acceptance: {

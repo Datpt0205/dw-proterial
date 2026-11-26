@@ -47,7 +47,11 @@ import {
 } from "../../_lib/served";
 import { coverageStatement } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
-import { exportControlHold, isOpen } from "../../_lib/order-actions";
+import {
+  exportControlHold,
+  isOpen,
+  onHeldOrder,
+} from "../../_lib/order-actions";
 import { useSalesViewer } from "../../_lib/viewer";
 import {
   ArtifactsPanel,
@@ -180,7 +184,7 @@ function OrderDetail() {
     if (data) document.title = `PO ${data.po_no} · Đơn hàng · Sales`;
   }, [data]);
 
-  const viewer = useSalesViewer();
+  const signedIn = useSalesViewer();
   const reload = useCallback(() => {
     order.reload();
     work.reload();
@@ -221,6 +225,10 @@ function OrderDetail() {
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
     return <LoadError error={order.error} onRetry={order.reload} />;
+
+  // Seen only through its NOC/ESF hold (ticket 78): the hold is the one
+  // control the server lets this person press on someone else's order.
+  const viewer = data.export_hold_only ? onHeldOrder(signedIn) : signedIn;
 
   // A PO written in the mail (AI item 4): its one source is the mail's text.
   const fromMail = data.attachment_id === null;
@@ -332,6 +340,14 @@ function OrderDetail() {
               : `Quy tắc kiểm soát xuất khẩu đang chặn xác nhận đơn có cờ ${label(FINDING_CODE, "missing_noc_esf")}.`
           }
           description="Chưa thể gửi xác nhận cho khách."
+        />
+      ) : null}
+      {data.export_hold_only ? (
+        <Alert
+          type="info"
+          showIcon
+          role="note"
+          title="Bạn mở đơn này để xác nhận NOC/ESF; các bước khác do người phụ trách đơn làm."
         />
       ) : null}
       {data.superseded_by_case ? (
