@@ -126,3 +126,40 @@ Left: an approval or a return said as a sentence in the chat (a new
 measurement in ticket 83's attestation run); the buttons for the same
 decisions are already in the item. Accepting PC's date waits on ticket 77's
 PC-reply lane (DW reading `pc_dates` on its own).
+
+### 2026-11-27 — review: the held order's chat offered what the server refuses
+
+Checked against the code before fixing; two findings, one shape.
+
+- **Real, fixed on the server.** On an order read through its NOC/ESF hold
+  alone (`export_hold_only`), the artifact list's `available` was computed
+  under the wide reading, so "Bản AI soạn" (the chat's `reply_draft` offer,
+  and the files panel's draw buttons) was listed to the export-control PIC,
+  and every draw reads the order narrowly and answers 404. `_Cases.load` now
+  returns whether the caller may act on the case (`seen_by`, the narrow
+  reading), and the list offers no draw where they may not; downloading
+  stays open. One owner: the chat's offer still follows `available`, so the
+  web needed no second copy of the rule.
+- **Real, fixed.** The case's conversation stated to that PIC what the
+  page's commands refuse them: a decision on any open flag (only
+  `missing_noc_esf` is theirs, `dispose`'s `export_control`), a Bravo write
+  and an assignment. `_Bound.held_only` narrows the flags shown to the
+  model and stated to the hold alone and states no write or assignment;
+  before, an assignment asked by someone also holding `sales.case.assign`
+  raised the turn as not found.
+- **Real, same class, fixed:** the case page's "Bản AI soạn" under a
+  customer's question (`question_answer`) was drawn enabled on a held-only
+  order; `reply_drafts` reads it narrowly. Not drawn there now.
+- **Rejected:** the customer reminder on a held order. It is offered only in
+  `correction_requested`, and a hold exists only in `_ACKNOWLEDGEABLE`
+  (in_review, prepared, uploaded_to_bravo, cross_checked, change_review),
+  so `export_hold_only` and the reminder never meet; a today-page test of
+  that state would test a state the server cannot produce.
+
+Tests: `test_export_control_hold` +1 (An, reading Khoa's cross-checked held
+order through the hold, is offered no draw; Khoa is), `test_case_visibility`
++4 (the chat states the hold's decision and confirms it, states no other
+flag, and answers a write and an assignment as it answers a reader), web
+`case-replies` +1. Mutations, each red then restored: `acts` forced true;
+the flag filter dropped (both cases red); the write guard dropped; the
+assignment guard dropped; the page's `export_hold_only` check dropped.

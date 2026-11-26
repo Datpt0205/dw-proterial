@@ -7,16 +7,20 @@ found, on every path a person reads a case through."""
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from dw_kernel.errors import NotFoundError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.inbox_service import _shown
 from dw_sales.application.visibility import sees_case
+from dw_sales.domain.assistant import CaseKey
 from dw_sales.domain.dispositions import (
     CaseKind,
     DispositionKind,
@@ -25,7 +29,8 @@ from dw_sales.domain.dispositions import (
 )
 from dw_sales.domain.orders import CloseReason, OrderCase
 from dw_sales.domain.quotes import QuoteCase
-from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA
+from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA, READER
+from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
@@ -314,3 +319,78 @@ async def test_the_held_order_is_in_the_export_control_pics_work_until_acknowled
     assert await _work(world, an, held.case_id) == set()
     assert await _work(world, _restricted(DIEU), held.case_id) == {"self_check"}
 
+
+class _Reader(Recorded):
+    """Reads every question in a case's conversation as ``reading``."""
+
+    def __init__(self, reading: dict[str, Any]) -> None:
+        super().__init__(raw={})
+        self.reading = reading
+        self.flags: list[Any] = []
+
+    async def interpret(self, prompt: Any, inputs: Any, schema: Any, **kwargs: Any) -> Any:
+        if prompt == QUESTION_INTENT:
+            self.flags.append(json.loads(inputs["flags"]))
+            return schema.model_validate(self.reading)
+        return schema.model_validate({"answer": "x"})
+
+
+@pytest.mark.parametrize(
+    ("code", "stated"),
+    [("quotation_missing", False), ("missing_noc_esf", True)],
+)
+async def test_the_held_orders_chat_states_only_the_hold_to_its_export_control_pic(
+    code: str, stated: bool
+) -> None:
+    """Ticket 79 review: in the conversation of Diệu's held order, An is
+    stated the hold's decision to confirm, the one flag the page's command
+    lets An decide there; another flag is not stated (its confirmation
+    would read as not found), and the model is shown the hold alone."""
+    model = _Reader(
+        {"kind": "decide_finding", "finding_code": code, "decision": "accepted", "reason": "ok"}
+    )
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=model, measured=False)
+    held = await _held_order_of_dieu(world)
+    assert {f.code.value for f in held.findings if f.is_open} >= {code}
+    key = CaseKey(CaseKind.ORDER, held.case_id)
+
+    turn = (await world.services.assistant.ask(_restricted(AN), "chấp nhận cờ", key)).turn
+    assert (turn.proposal is not None) is stated
+    assert [f["code"] for f in model.flags[-1]] == ["missing_noc_esf"]
+    if stated:
+        assert turn.proposal is not None
+        await world.services.assistant.confirm(
+            _restricted(AN), key, turn.seq, turn.proposal.content_hash
+        )
+        assert not world.order(held.case_id).awaits_export_control
+
+
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"kind": "propose_bravo_write", "line_no": 1, "field": "quantity", "new_value": "5"},
+        {"kind": "assign_case", "assignee": "Khoa"},
+    ],
+)
+async def test_the_held_orders_chat_states_no_write_or_assignment_to_its_export_control_pic(
+    reading: dict[str, Any],
+) -> None:
+    """Ticket 79 review: An, here also holding the scopes that write into
+    Bravo and give cases, reads Diệu's order through its hold alone. Both
+    services read the order narrowly and refuse it, so the conversation
+    answers An as it answers someone without those scopes."""
+    model = _Reader(reading)
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=model, measured=False)
+    held = await _held_order_of_dieu(world)
+    key = CaseKey(CaseKind.ORDER, held.case_id)
+    scoped = _restricted(AN)
+    wider = scoped.model_copy(
+        update={
+            "scopes": scoped.scopes | {SalesScopes.BRAVO_WRITE.value, SalesScopes.CASE_ASSIGN.value}
+        }
+    )
+
+    turn = (await world.services.assistant.ask(wider, "làm giúp", key)).turn
+    reader = (await world.services.assistant.ask(READER.context(), "làm giúp", key)).turn
+    assert turn.proposal is None
+    assert turn.answer == reader.answer

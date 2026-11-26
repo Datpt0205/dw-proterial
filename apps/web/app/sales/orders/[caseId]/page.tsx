@@ -542,6 +542,9 @@ function OrderDetail() {
         sent={data.thread_sent}
         before={data.thread_before}
         answer={(reply) =>
+          // Seen through the hold alone: the draft reads the order as the
+          // assignee's and would be refused (ticket 79 review).
+          !data.export_hold_only &&
           reply.intents.some((i) => i.intent === "asks") ? (
             <AgentReply
               caseId={data.case_id}

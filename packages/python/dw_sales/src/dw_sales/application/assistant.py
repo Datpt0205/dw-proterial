@@ -119,6 +119,7 @@ from dw_sales.domain.assistant import (
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import ModelStep
+from dw_sales.domain.orders import FindingCode
 from dw_sales.domain.process import DW_NAMES
 
 # The prompts: `QUESTION_INTENT` (`chat_prompts`, the case chat's model step)
@@ -785,6 +786,7 @@ class AssistantService:
             writing = (
                 stating
                 and self.bravo_writes is not None
+                and not bound.held_only
                 and self.gate.allows(context, SalesScopes.BRAVO_WRITE)
             )
             # A case is given only by someone the assignment service lets
@@ -793,6 +795,7 @@ class AssistantService:
             assigning = (
                 stating
                 and self.assignment is not None
+                and not bound.held_only
                 and self.gate.allows(context, SalesScopes.CASE_ASSIGN)
             )
             if (
@@ -860,10 +863,14 @@ class AssistantService:
             for order in await self.orders.summaries(context):
                 if order.case_id == case.case_id:
                     whole = await self.orders.get(context, case.case_id)
+                    # Read through its NOC/ESF hold alone (ticket 78): the
+                    # hold is the one flag the page's command lets this
+                    # person decide, and nothing else is theirs to state.
                     flags = tuple(
                         _Flag(f.key, f.code.value, f.line_no, frozenset(f.allowed))
                         for f in whole.findings
                         if f.disposition.kind == "open"
+                        and (not whole.export_hold_only or f.code is FindingCode.MISSING_NOC_ESF)
                     )
                     return _Bound(
                         _order_ref(order),
@@ -873,6 +880,7 @@ class AssistantService:
                         flags=flags,
                         lines=tuple(line.line_no for line in whole.lines),
                         so_no=whole.bravo_so_no,
+                        held_only=whole.export_hold_only,
                     )
         else:
             for quote in await self.quotes.summaries(context):
@@ -1148,6 +1156,8 @@ class _Bound:
     # An order's PO line numbers and its SO number in Bravo (ticket 56 over 53).
     lines: tuple[int, ...] = ()
     so_no: str | None = None
+    # An order the caller reads through its NOC/ESF hold alone (ticket 78).
+    held_only: bool = False
 
     def sentence(self, words: AssistantWords) -> str:
         said = order_sentence if self.ref.kind is CaseKind.ORDER else quote_sentence

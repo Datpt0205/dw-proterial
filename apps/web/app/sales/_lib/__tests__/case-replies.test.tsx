@@ -271,6 +271,36 @@ describe("the model's answer to a customer's question (ticket 32)", () => {
     },
     SLOW,
   );
+
+  it(
+    "is not offered on an order read through its NOC/ESF hold alone (ticket 79 review)",
+    async () => {
+      // The server reads the draft's order as the assignee's: the export
+      // PIC pressing it would be told the order does not exist.
+      shown = {
+        ...waiting(
+          [
+            reply({
+              message_id: "R2",
+              intents: [
+                { intent: "asks", quotes: ["When is line 2 delivered?"] },
+              ],
+              proposal: null,
+            }),
+          ],
+          "in_review",
+        ),
+        export_hold_only: true,
+      };
+      page();
+
+      expect(
+        await screen.findByText("“When is line 2 delivered?”"),
+      ).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Bản AI soạn" })).toBeNull();
+    },
+    SLOW,
+  );
 });
 
 describe("a mail Sales sent in the case's thread (tickets 25 and 26)", () => {
