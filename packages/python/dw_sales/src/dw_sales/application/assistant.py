@@ -42,6 +42,7 @@ see on every turn. A case conversation's focus is its case.
 from __future__ import annotations
 
 import json
+import unicodedata
 import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, aclosing
@@ -74,6 +75,7 @@ from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.assistant_copy import AssistantCopyPort, AssistantWords
 from dw_sales.application.bravo_line_writes import (
     BravoLineWriteView,
@@ -98,6 +100,7 @@ from dw_sales.domain.assistant import (
     CaseRef,
     ChatDecision,
     Proposal,
+    ProposedAssignment,
     ProposedBravoWrite,
     ProposedDecision,
     QuestionIntent,
@@ -116,7 +119,10 @@ from dw_sales.domain.process import DW_NAMES
 # and `assistant_answer@1.0.0.yaml`; a test holds each to its file and its
 # rendered size under `*_TOKENS`.
 ASSISTANT_ANSWER: Final = PromptRef("sales.assistant_answer", "1.0.0")
-INTENT_TOKENS: Final = 1500
+# 1600 since question_intent@1.5.0 (ticket 79): 1.4.0 rendered at 1486 of
+# 1500, and a kind more cannot be said in 14 tokens. Still far under the
+# step's input room (onprem.yaml, 6000 of an 8192 context).
+INTENT_TOKENS: Final = 1600
 ANSWER_TOKENS: Final = 900
 _INTENT_OUTPUT: Final = 300
 _ANSWER_OUTPUT: Final = 500
@@ -235,13 +241,15 @@ class ProposalView(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    action: Literal["decide_finding", "bravo_write"] = "decide_finding"
+    action: Literal["decide_finding", "bravo_write", "assign"] = "decide_finding"
     finding_key: str | None = None
     decision: ChatDecision | None = None
     reason: str | None = None
     line_no: int | None = None
     field: Literal["confirmed_date", "quantity"] | None = None
     value: str | None = None
+    # `assign` only: the person the case would be given to, by name.
+    assignee_name: str | None = None
     case_version: int
     content_hash: str
 
@@ -301,6 +309,13 @@ def _turn_view(turn: Turn, *, on_case: bool) -> TurnView:
 
 
 def _proposal_view(proposal: Proposal) -> ProposalView:
+    if isinstance(proposal, ProposedAssignment):
+        return ProposalView(
+            action="assign",
+            assignee_name=proposal.name,
+            case_version=proposal.case_version,
+            content_hash=proposal.content_hash,
+        )
     if isinstance(proposal, ProposedBravoWrite):
         return ProposalView(
             action="bravo_write",
@@ -470,6 +485,24 @@ class FindingDecisionPort(Protocol):
     ) -> CaseChangeView: ...
 
 
+class AssignmentPort(Protocol):
+    """`AssignmentService`: who a case may be given to, and giving it."""
+
+    async def candidates(
+        self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
+    ) -> Sequence[AssigneeView]: ...
+
+    async def reassign(
+        self,
+        context: AccessContext,
+        kind: CaseKind,
+        case_id: uuid.UUID,
+        *,
+        assignee: uuid.UUID | None,
+        case_version: int,
+    ) -> CaseChangeView: ...
+
+
 class BravoWriteProposalPort(Protocol):
     """Proposes an SO line's write into Bravo as ticket 53's own service
     does: it checks the caller's right and record visibility, the case's
@@ -522,6 +555,9 @@ class AssistantService:
     # the chat states anything for the PIC to confirm (ticket 57); None:
     # the rules are not read and the chat states nothing.
     rules: OrderRulesPort | None = None
+    # Who a case may be given to, and the giving (ticket 79); None: the chat
+    # gives no case.
+    assignment: AssignmentPort | None = None
 
     async def conversation(
         self, context: AccessContext, case: CaseKey | None = None
@@ -612,6 +648,20 @@ class AssistantService:
             raise ConflictError("the case changed since the decision was stated")
         if isinstance(proposal, ProposedBravoWrite):
             return await self._propose_write(context, proposal, words)
+        if isinstance(proposal, ProposedAssignment):
+            if self.assignment is None:
+                raise NotFoundError("no such decision", details={"seq": seq})
+            # The service checks the right and the version again, as the
+            # page's "Giao lại" does.
+            change = await self.assignment.reassign(
+                context,
+                proposal.case_kind,
+                proposal.case_id,
+                assignee=proposal.assignee,
+                case_version=proposal.case_version,
+            )
+            answer = words.say("assign_done", case=bound.ref.label, person=proposal.name)
+            return ConfirmedView(answer=answer, case_version=change.case_version)
         if self.decisions is None:
             raise NotFoundError("no such decision", details={"seq": seq})
         flag = next((f for f in bound.flags if f.key == proposal.finding_key), None)
@@ -713,7 +763,35 @@ class AssistantService:
                 and self.bravo_writes is not None
                 and self.gate.allows(context, SalesScopes.BRAVO_WRITE)
             )
-            found = _in_case(intent, bound, words, deciding=deciding, writing=writing)
+            # A case is given only by someone the assignment service lets
+            # give it, among the people it would list (ticket 79).
+            candidates: Sequence[Candidate] = ()
+            assigning = (
+                stating
+                and self.assignment is not None
+                and self.gate.allows(context, SalesScopes.CASE_ASSIGN)
+            )
+            if (
+                assigning
+                and self.assignment is not None
+                and intent is not None
+                and intent.kind is QuestionKind.ASSIGN_CASE
+            ):
+                candidates = [
+                    Candidate(c.user_id, c.display_name)
+                    for c in await self.assignment.candidates(
+                        context, bound.ref.kind, bound.ref.case_id
+                    )
+                ]
+            found = _in_case(
+                intent,
+                bound,
+                words,
+                deciding=deciding,
+                writing=writing,
+                assigning=assigning,
+                candidates=candidates,
+            )
         else:
             found = await self._find(context, intent, focus, words)
         answer: str = found.sentence
@@ -775,7 +853,12 @@ class AssistantService:
         else:
             for quote in await self.quotes.summaries(context):
                 if quote.case_id == case.case_id:
-                    return _Bound(_quote_ref(quote), quote.rfq_no, quote_facts(quote, zone))
+                    return _Bound(
+                        _quote_ref(quote),
+                        quote.rfq_no,
+                        quote_facts(quote, zone),
+                        version=quote.case_version,
+                    )
         raise NotFoundError(
             "no such case", details={"kind": case.kind.value, "case_id": str(case.case_id)}
         )
@@ -861,6 +944,7 @@ class AssistantService:
                 | QuestionKind.EXPLAIN_THREAD
                 | QuestionKind.DECIDE_FINDING
                 | QuestionKind.PROPOSE_BRAVO_WRITE
+                | QuestionKind.ASSIGN_CASE
             ):
                 # A flag is decided, and a Bravo write proposed, in its case's
                 # own conversation (ticket 56): here, the link to it, nothing
@@ -1053,6 +1137,8 @@ def _in_case(
     *,
     deciding: bool = False,
     writing: bool = False,
+    assigning: bool = False,
+    candidates: Sequence[Candidate] = (),
 ) -> _Found:
     """A case conversation's answer: the bound case's facts, or a pointer
     elsewhere. Nothing here looks another case up, whatever the question
@@ -1077,6 +1163,10 @@ def _in_case(
             if not writing:
                 return _Found(f"{words.out_of_scope_case} {words.case_catalog}")
             return _bravo_write(intent, bound, words)
+        case QuestionKind.ASSIGN_CASE:
+            if not assigning:
+                return _Found(words.assign_not_yours)
+            return _assignment(intent, bound, candidates, words)
         case QuestionKind.ORDER_STATUS | QuestionKind.QUOTE_STATUS:
             if intent.reference is not None and not same_reference(intent.reference, bound.number):
                 only = words.say("only_this_case", case=bound.ref.label)
@@ -1190,6 +1280,56 @@ def _bravo_write(intent: QuestionIntent, bound: _Bound, words: AssistantWords) -
     )
     shown = day(date.fromisoformat(value)) if intent.field == "confirmed_date" else value
     sentence = words.say("write_confirm", so=bound.so_no, line=line, field=field, value=shown)
+    return _Found(sentence, None, (bound.ref,), bound.ref, proposal)
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """A person the case may be given to (`AssignmentService.candidates`)."""
+
+    user_id: uuid.UUID
+    name: str
+
+
+def _folded(text: str) -> str:
+    """Lower case, no diacritics, single spaces: "Lâm Minh Khoa" as "lam minh khoa"."""
+    decomposed = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return " ".join(plain.casefold().split())
+
+
+def _matches(written: str, candidate: Candidate) -> bool:
+    """Whether the person named is this candidate: their whole name, or the
+    given name a colleague calls them by (the last word of a Vietnamese name)."""
+    named, full = _folded(written), _folded(candidate.name)
+    return bool(named) and (named == full or named == full.rsplit(" ", 1)[-1])
+
+
+def _assignment(
+    intent: QuestionIntent, bound: _Bound, candidates: Sequence[Candidate], words: AssistantWords
+) -> _Found:
+    """The case given to the one person the head named, said back for them to
+    confirm; or the one question that lets DW1 say it. The person is one of
+    the case's candidates, matched by code: nothing the model wrote is an id."""
+    if intent.reference is not None and not same_reference(intent.reference, bound.number):
+        only = words.say("only_this_case", case=bound.ref.label)
+        return _Found(f"{only} {words.elsewhere}")
+    if not candidates:
+        return _Found(words.assign_nobody)
+    named = [c for c in candidates if intent.assignee and _matches(intent.assignee, c)]
+    if len(named) != 1:
+        listed = ", ".join(c.name for c in candidates)
+        return _Found(words.say("assign_which", people=listed))
+    (person,) = named
+    proposal = ProposedAssignment(
+        case_kind=bound.ref.kind,
+        case_id=bound.ref.case_id,
+        case_version=bound.version,
+        assignee=person.user_id,
+        name=person.name,
+        prompt=_READ_BY,
+    )
+    sentence = words.say("assign_confirm", case=bound.ref.label, person=person.name)
     return _Found(sentence, None, (bound.ref,), bound.ref, proposal)
 
 

@@ -373,6 +373,7 @@ def assemble(
     line_writes = BravoLineWrites(
         bravo_writes_uow, gate, bravo_orders, write_bravo_versions(bravo_commands), clock, ids
     )
+    assignment = AssignmentService(uow, gate, clock, ids, holders, directory, notifications)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
@@ -419,7 +420,7 @@ def assemble(
         master_data=MasterDataService(gate, catalog),
         customer_notations=CustomerNotations(gate, notations, catalog, clock, ids),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),
-        assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
+        assignment=assignment,
         routed_mail=RoutedMailService(uow, gate, directory, clock, ids, catalog),
         layouts=LayoutService(
             uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks, intake
@@ -543,6 +544,8 @@ def assemble(
             bravo_writes=line_writes,
             # Whether the chat states either: `model_assist.case_chat` (ticket 57).
             rules=intake.rules,
+            # A case given in its conversation is "Giao lại" itself (ticket 79).
+            assignment=assignment,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled, design=book

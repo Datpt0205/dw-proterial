@@ -117,6 +117,13 @@ class AssistantWords(BaseModel):
     write_no_so: str = _words()
     write_orders_only: str = _words()
     write_done: str = _words("field", "line")
+    # The case given to a person named in its conversation (ticket 79): said
+    # back for the head to confirm, then given through "Giao lại".
+    assign_confirm: str = _words("case", "person")
+    assign_which: str = _words("people")
+    assign_nobody: str = _words()
+    assign_not_yours: str = _words()
+    assign_done: str = _words("case", "person")
     # What the chat shows while a turn is worked on.
     step_read: str = _words(max_length=60)
     step_look: str = _words(max_length=60)

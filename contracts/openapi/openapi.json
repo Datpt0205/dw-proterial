@@ -16999,10 +16999,22 @@
             "default": "decide_finding",
             "enum": [
               "decide_finding",
-              "bravo_write"
+              "bravo_write",
+              "assign"
             ],
             "title": "Action",
             "type": "string"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
           },
           "case_version": {
             "title": "Case Version",
@@ -17773,6 +17785,7 @@
           "explain_thread",
           "decide_finding",
           "propose_bravo_write",
+          "assign_case",
           "out_of_scope"
         ],
         "title": "QuestionKind",

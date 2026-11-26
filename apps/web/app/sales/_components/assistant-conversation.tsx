@@ -58,6 +58,7 @@ const READ_AS: Record<Turn["kind"], string> = {
   decide_finding: "Hiểu là bạn quyết định một cờ của hồ sơ",
   propose_bravo_write:
     "Hiểu là nhờ ghi ngày XN hoặc số lượng một dòng vào Bravo",
+  assign_case: "Hiểu là nhờ giao hồ sơ cho một người",
   out_of_scope: "Câu này ngoài những gì DW1 trả lời",
 };
 
@@ -113,7 +114,9 @@ function ProposalConfirm({
           disabled={done !== null}
           onClick={() => void confirm()}
         >
-          Xác nhận
+          {proposal.action === "assign" && proposal.assignee_name
+            ? `Giao cho ${proposal.assignee_name}`
+            : "Xác nhận"}
         </Button>
         <Typography.Text>
           Hồ sơ phiên bản {proposal.case_version} · mã{" "}

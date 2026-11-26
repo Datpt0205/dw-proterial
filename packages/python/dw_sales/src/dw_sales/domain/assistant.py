@@ -60,6 +60,10 @@ class QuestionKind(StrEnum):
     # into Bravo (ticket 56 over ticket 53): DW1 says back exactly what it
     # would propose, and proposes it for approval only when the PIC confirms.
     PROPOSE_BRAVO_WRITE = "propose_bravo_write"
+    # The head gives the case to a person named in the chat (ticket 79): DW1
+    # finds exactly one of the people the case may be given to and says it
+    # back; the case is given only when the head confirms that statement.
+    ASSIGN_CASE = "assign_case"
     OUT_OF_SCOPE = "out_of_scope"
 
 
@@ -95,6 +99,10 @@ class QuestionIntent(BaseModel):
     line_no: int | None = Field(default=None, ge=1, le=99_999)
     field: WriteField | None = None
     new_value: str | None = Field(default=None, min_length=1, max_length=32)
+    # `assign_case` only: the person as the question names them (a name, a
+    # given name, an address), which code looks for among the case's
+    # candidates; never an id.
+    assignee: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,14 +232,66 @@ class ProposedBravoWrite:
         )
 
 
-Proposal = ProposedDecision | ProposedBravoWrite
+@dataclass(frozen=True, slots=True)
+class ProposedAssignment:
+    """The case given to one person, as DW1 states it in the case's
+    conversation (ticket 79), bound like `ProposedDecision`: the head confirms
+    `content_hash` (the person and the name they were shown), and code gives
+    the case only on a case still at ``case_version``, through the assignment
+    service, which checks the right again."""
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    case_version: int
+    assignee: uuid.UUID
+    name: str
+    prompt: str | None = None
+
+    def _content(self) -> dict[str, object]:
+        return {
+            "action": "assign",
+            "case_kind": self.case_kind.value,
+            "case_id": str(self.case_id),
+            "case_version": self.case_version,
+            "assignee": str(self.assignee),
+            "name": self.name,
+        }
+
+    def stored(self) -> dict[str, object]:
+        return {**self._content(), **({} if self.prompt is None else {"prompt": self.prompt})}
+
+    @property
+    def content_hash(self) -> str:
+        canonical = json.dumps(
+            self._content(), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def from_stored(cls, row: Mapping[str, object]) -> ProposedAssignment:
+        version = row["case_version"]
+        if not isinstance(version, int):
+            raise ValueError("case_version is not an integer")
+        return cls(
+            case_kind=CaseKind(str(row["case_kind"])),
+            case_id=uuid.UUID(str(row["case_id"])),
+            case_version=version,
+            assignee=uuid.UUID(str(row["assignee"])),
+            name=str(row["name"]),
+            prompt=None if row.get("prompt") is None else str(row["prompt"]),
+        )
+
+
+Proposal = ProposedDecision | ProposedBravoWrite | ProposedAssignment
 
 
 def proposal_from_stored(row: Mapping[str, object]) -> Proposal:
-    """A turn's stored statement: a Bravo write names its action; a flag's
-    decision, stored before there was a second kind, names none."""
+    """A turn's stored statement: a Bravo write and an assignment name their
+    action; a flag's decision, stored before there was a second kind, none."""
     if row.get("action") == "bravo_write":
         return ProposedBravoWrite.from_stored(row)
+    if row.get("action") == "assign":
+        return ProposedAssignment.from_stored(row)
     return ProposedDecision.from_stored(row)
 
 

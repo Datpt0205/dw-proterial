@@ -12,6 +12,49 @@
             "type": "string",
             "x-placeholders": []
           },
+          "assign_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{case}",
+              "{person}"
+            ]
+          },
+          "assign_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Done",
+            "type": "string",
+            "x-placeholders": [
+              "{case}",
+              "{person}"
+            ]
+          },
+          "assign_nobody": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Nobody",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "assign_not_yours": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Not Yours",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "assign_which": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Which",
+            "type": "string",
+            "x-placeholders": [
+              "{people}"
+            ]
+          },
           "case_catalog": {
             "maxLength": 300,
             "minLength": 1,
@@ -543,6 +586,11 @@
           "write_no_so",
           "write_orders_only",
           "write_done",
+          "assign_confirm",
+          "assign_which",
+          "assign_nobody",
+          "assign_not_yours",
+          "assign_done",
           "step_read",
           "step_look"
         ],

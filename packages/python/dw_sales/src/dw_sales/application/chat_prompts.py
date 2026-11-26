@@ -18,4 +18,4 @@ from typing import Final
 
 from dw_agent_runtime.model.interpretation import PromptRef
 
-QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.4.0")
+QUESTION_INTENT: Final = PromptRef("sales.question_intent", "1.5.0")

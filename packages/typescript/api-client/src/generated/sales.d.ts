@@ -7187,7 +7187,9 @@ export interface components {
              * @default decide_finding
              * @enum {string}
              */
-            action: "decide_finding" | "bravo_write";
+            action: "decide_finding" | "bravo_write" | "assign";
+            /** Assignee Name */
+            assignee_name?: string | null;
             /** Case Version */
             case_version: number;
             /** Content Hash */
@@ -7223,7 +7225,7 @@ export interface components {
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
          */
-        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "propose_bravo_write" | "out_of_scope";
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "propose_bravo_write" | "assign_case" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
