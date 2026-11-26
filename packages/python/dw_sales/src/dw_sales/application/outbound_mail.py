@@ -73,6 +73,7 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
 if TYPE_CHECKING:
+    from dw_sales.application.design_requests import DesignMailboxesPort
     from dw_sales.application.processing import RequesterAccessPort
 
 logger = logging.getLogger("dw_sales.outbound_mail")
@@ -93,6 +94,13 @@ SENDABLE: Final[Mapping[CaseKind, frozenset[str]]] = {
             "cannot_supply_draft",
         }
     ),
+}
+# The drafts a person may send to Design (ticket 77): addressed only to the
+# tenant's Design mailboxes (`QuoteRules.design_mailboxes`, the one setting
+# that names Design), never to a customer, and a customer draft never to them.
+INTERNAL_SENDABLE: Final[Mapping[CaseKind, frozenset[str]]] = {
+    CaseKind.QUOTE: frozenset({"design_request_draft"}),
+    CaseKind.ORDER: frozenset({"design_code_request"}),
 }
 # The drafts whose sending is itself a step of the case, recorded on the
 # receipt as the person who pressed, through the step's own button command.
@@ -221,6 +229,8 @@ class OutboundMailService:
     # Whether the deployment names an outbox share: until then nothing is
     # queued, and the page says so.
     enabled: bool
+    # The tenant's Design mailboxes, the only recipients of a draft to Design.
+    design: DesignMailboxesPort | None = None
 
     async def mails(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -263,7 +273,7 @@ class OutboundMailService:
                 record is None
                 or record.case_kind is not kind
                 or record.case_id != case_id
-                or record.kind not in SENDABLE[kind]
+                or record.kind not in SENDABLE[kind] | INTERNAL_SENDABLE[kind]
             ):
                 raise NotFoundError("no such send draft", details={"artifact_id": str(artifact_id)})
             gates = QUOTE_GATES if kind is CaseKind.QUOTE else ORDER_GATES
@@ -277,14 +287,26 @@ class OutboundMailService:
                     details={"rule": "draft_not_current", "case_version": case.case_version},
                 )
             data = await self.artifact_bytes.get_object(record.object_key(scope))
-            customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
-            contacts = {c.address.lower() for c in customer.contacts} if customer else set()
             to = recipients(data)
-            if not to or not set(to) <= contacts:
-                raise ConflictError(
-                    "người nhận không nằm trong danh bạ khách ở dữ liệu chủ",
-                    details={"rule": "recipient_not_a_contact"},
+            if record.kind in INTERNAL_SENDABLE[kind]:
+                design = (
+                    ()
+                    if self.design is None
+                    else ((await self.design.quote_rules(scope)).design_mailboxes)
                 )
+                if not to or not set(to) <= {a.lower() for a in design}:
+                    raise ConflictError(
+                        "người nhận không phải hộp thư Design trong cấu hình",
+                        details={"rule": "recipient_not_design"},
+                    )
+            else:
+                customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
+                contacts = {c.address.lower() for c in customer.contacts} if customer else set()
+                if not to or not set(to) <= contacts:
+                    raise ConflictError(
+                        "người nhận không nằm trong danh bạ khách ở dữ liệu chủ",
+                        details={"rule": "recipient_not_a_contact"},
+                    )
             mailbox = await self._mailbox(context)
             now = self.clock.now()
             mail = OutboundMail(
@@ -347,9 +369,14 @@ class OutboundScopesPort(Protocol):
 
 
 class QuoteSentPort(Protocol):
-    """ "Đã gửi KH", as the person who pressed (`QuoteCommands.sent`)."""
+    """ "Đã gửi KH" and "Đã gửi Design", as the person who pressed
+    (`QuoteCommands.sent`, `QuoteCommands.design_sent`)."""
 
     async def sent(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> object: ...
+
+    async def design_sent(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
     ) -> object: ...
 
@@ -475,8 +502,8 @@ class OutboundLane:
         async with self.uow(scope) as work:
             record = await work.artifacts.get(mail.artifact_id)
         kind = None if record is None else record.kind
-        if mail.case_kind is CaseKind.QUOTE and kind == "send_draft":
-            await self._mark_sent(scope, mail)
+        if mail.case_kind is CaseKind.QUOTE and kind in ("send_draft", "design_request_draft"):
+            await self._mark_sent(scope, mail, design=kind == "design_request_draft")
         elif mail.case_kind is CaseKind.ORDER and kind in _ANSWERS:
             await self._mark_answer_sent(scope, mail)
         return done
@@ -497,7 +524,7 @@ class OutboundLane:
         except (ConflictError, NotFoundError) as left:
             logger.info("sales_outbound: a sent answer was not recorded: %s", type(left).__name__)
 
-    async def _mark_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
+    async def _mark_sent(self, scope: SalesScope, mail: OutboundMail, *, design: bool) -> None:
         """ "Đã gửi KH" as the person who pressed, through the button's own
         command; a case that moved on meanwhile (marked by hand) is left."""
         access = await self.access.find_linked_access(
@@ -509,7 +536,8 @@ class OutboundLane:
         try:
             async with self.uow(scope) as work:
                 case = (await stored_quote(work, mail.case_id, viewer=context)).case
-            await self.quotes.sent(context, mail.case_id, case_version=case.case_version)
+            record = self.quotes.design_sent if design else self.quotes.sent
+            await record(context, mail.case_id, case_version=case.case_version)
         except (ConflictError, NotFoundError) as left:
             logger.info("sales_outbound: a sent quotation was not marked: %s", type(left).__name__)
 

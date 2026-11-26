@@ -15,8 +15,9 @@ import { GuardedButton } from "./guarded-button";
 
 type Mail = SalesSchemas["OutboundMailView"];
 
-/** The customer drafts each case may send (`SENDABLE` on the server,
- * ticket 76): every mail DW1 drafts to the customer, never one to Design. */
+/** The drafts each case may send from the viewer's mailbox: every mail DW1
+ * drafts to the customer (`SENDABLE`, ticket 76) and the requests to Design,
+ * which go only to the tenant's Design mailboxes (`INTERNAL_SENDABLE`, 77). */
 export const SENDABLE: Record<"order" | "quote", readonly string[]> = {
   order: [
     "confirmation_draft",
@@ -25,8 +26,14 @@ export const SENDABLE: Record<"order" | "quote", readonly string[]> = {
     "change_options_draft",
     "internal_change_notice",
     "cannot_supply_draft",
+    "design_code_request",
   ],
-  quote: ["send_draft", "spec_discussion_draft", "decline_draft"],
+  quote: [
+    "send_draft",
+    "spec_discussion_draft",
+    "decline_draft",
+    "design_request_draft",
+  ],
 };
 
 const PREPARE: Record<"order" | "quote", string> = {
@@ -114,10 +121,10 @@ export function OutboundSend({
   const send = () => {
     if (!draft) return;
     modal.confirm({
-      title: `Gửi “${label(ARTIFACT_KIND, draft.kind)}” cho khách?`,
+      title: `Gửi “${label(ARTIFACT_KIND, draft.kind)}”?`,
       content:
         "Thư đi từ hộp thư Outlook của bạn, tới người nhận ghi trong thư nháp, kèm các tệp đính kèm. Gửi rồi không thu hồi được.",
-      okText: "Gửi cho khách",
+      okText: "Gửi",
       cancelText: "Chưa gửi",
       autoFocusButton: "cancel",
       onOk: async () => {

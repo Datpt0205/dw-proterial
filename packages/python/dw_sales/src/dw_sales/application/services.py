@@ -545,7 +545,7 @@ def assemble(
             rules=intake.rules,
         ),
         outbound=OutboundMailService(
-            uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
+            uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled, design=book
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays, catalog),
         prompts=PromptVersionsService(uow, gate, prompts),

@@ -63,9 +63,7 @@ describe("Gửi cho khách (2026-10-29)", () => {
     renderIt();
     fireEvent.click(await screen.findByRole("button", BUTTON));
     expect(sendArtifact).not.toHaveBeenCalled();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Gửi cho khách" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Gửi" }));
     await waitFor(() =>
       expect(sendArtifact).toHaveBeenCalledWith(
         "quote",

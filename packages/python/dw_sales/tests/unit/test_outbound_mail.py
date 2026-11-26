@@ -24,7 +24,7 @@ from dw_sales.application.outbound_mail import (
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.quotes import QuoteStatus
-from dw_sales.evals.graders import AN, CALLERS, GIANG, OUTSIDER, READER, _quote_duties
+from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, OUTSIDER, READER, _quote_duties
 from dw_sales.evals.world import ALPHA, BETA, Directory, SampleSet, SampleWith, World, open_world
 
 from .test_update_loop import ASKED, PULL_IN, QUANTITY, _asked, _in_loop, _pc, _render, _reply
@@ -286,8 +286,90 @@ async def test_a_changes_answer_sent_from_dw1_records_it_sent_on_the_receipt(
         assert [e.actor_id.value for e in answered] == [AN.user_id]
 
 
-async def test_a_draft_to_design_is_never_sent_to_the_customer(tmp_path: Path) -> None:
-    from dw_sales.application.outbound_mail import SENDABLE
+async def test_a_draft_to_design_is_never_a_customer_draft(tmp_path: Path) -> None:
+    from dw_sales.application.outbound_mail import INTERNAL_SENDABLE, SENDABLE
 
-    for kinds in SENDABLE.values():
-        assert not kinds & {"design_request_draft", "design_code_request", "ycbg_draft"}
+    for kind, kinds in SENDABLE.items():
+        assert not kinds & INTERNAL_SENDABLE[kind]
+        assert "ycbg_draft" not in kinds | INTERNAL_SENDABLE[kind]
+
+
+async def test_a_request_to_design_goes_to_designs_mailboxes_and_records_it_sent(
+    tmp_path: Path,
+) -> None:
+    """Ticket 77: the YCBG's request to Design is sent from the PIC's mailbox
+    in one press, to the tenant's Design mailboxes only; the receipt records
+    "Đã gửi Design" as the PIC."""
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
+    commands = world.services.quote_commands
+    seen = await world.process_each(DIEU, [FIXTURE["rfq"]])
+    ((disposition, _),) = seen.values()
+    case_id = disposition.case_id
+    assert case_id is not None
+
+    def version() -> int:
+        return world.quote(case_id).case_version
+
+    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no=None)
+    ycbg = FIXTURE["ycbg"]
+    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no=ycbg)
+    (draft,) = await world.services.artifacts.render_quote(
+        DIEU.context(), case_id, kind="design_request_draft", case_version=version()
+    )
+    lane = OutboundLane(
+        uow=world.store,
+        scopes=Scopes([ALPHA]),
+        outbox=FolderOutbox(tmp_path),
+        artifact_bytes=world.objects,
+        quotes=world.services.quote_commands,
+        answers=world.services.update_loops,
+        access=Directory(CALLERS),
+        notifications=Told(),
+        clock=FixedClock(world.store.clock.now()),
+        ids=Uuid4Generator(),
+    )
+    mail = await world.services.outbound.send(
+        DIEU.context(), CaseKind.QUOTE, case_id, draft.artifact_id, case_version=version()
+    )
+    (tmp_path / mail.mailbox / "outbox").mkdir(parents=True)
+    await lane.tick()
+    FakeFlow(tmp_path).run()
+    await lane.tick()
+
+    assert world.quote(case_id).status is QuoteStatus.SENT_TO_DESIGN
+    sent = [e for e in world.audit() if e.action == "sales.quote.sent_to_design"]
+    assert [e.actor_id.value for e in sent] == [DIEU.user_id]
+
+
+@dataclass
+class _OtherDesign:
+    """Design's mailboxes as configured after the draft named another."""
+
+    async def quote_rules(self, scope: SalesScope) -> Any:
+        @dataclass
+        class _Rules:
+            design_mailboxes: tuple[str, ...] = ("design-moved@alpha.local",)
+
+        return _Rules()
+
+
+async def test_a_request_to_design_is_refused_when_it_names_no_configured_design_mailbox(
+    tmp_path: Path,
+) -> None:
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
+    commands = world.services.quote_commands
+    ((disposition, _),) = (await world.process_each(DIEU, [FIXTURE["rfq"]])).values()
+    case_id = disposition.case_id
+    assert case_id is not None
+    version = lambda: world.quote(case_id).case_version  # noqa: E731
+    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no=None)
+    await commands.ycbg(DIEU.context(), case_id, case_version=version(), ycbg_no=FIXTURE["ycbg"])
+    (draft,) = await world.services.artifacts.render_quote(
+        DIEU.context(), case_id, kind="design_request_draft", case_version=version()
+    )
+    outbound = replace(world.services.outbound, design=_OtherDesign())
+
+    with pytest.raises(ConflictError, match="hộp thư Design"):
+        await outbound.send(
+            DIEU.context(), CaseKind.QUOTE, case_id, draft.artifact_id, case_version=version()
+        )

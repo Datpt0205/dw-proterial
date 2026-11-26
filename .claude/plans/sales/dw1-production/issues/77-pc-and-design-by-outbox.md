@@ -1,6 +1,6 @@
 # 77 — PC and Design by the outbox; DW reads PC's reply itself
 
-Status: ready-for-agent (default below; Đạt may veto the internal recipients)
+Status: in-progress — Design by the outbox done 2026-11-26; PC's draft and the PC-reply lane left
 Blocked by: none for the code; ticket 23 for live sending
 Category: enhancement (UX, flow steps 3, 4, 11, Q3)
 
@@ -29,3 +29,24 @@ reminder after 24 h reminds the PIC, not PC or Design.
 - Mock outbox + a PC reply in the mock mailbox: the date is proposed on the
   case without any PIC action; a reply from an address outside
   `pc_mailboxes` proposes nothing.
+
+## Comments
+
+**2026-11-26, slice 1: Design by the outbox.** Decided by recommendation
+(Đạt 11-26): internal mail goes through the outbox, recipients only from
+tenant config. `INTERNAL_SENDABLE`: the quotation's `design_request_draft`
+and the order's `design_code_request` may be sent from the PIC's mailbox,
+and only when every recipient is one of the tenant's `design_mailboxes`
+(refused otherwise: "người nhận không phải hộp thư Design trong cấu hình");
+a customer draft is never one of them. The quotation's receipt records "Đã
+gửi Design" as the PIC (`QuoteCommands.design_sent`). The order's request is
+recorded per line by "Ghi đã gửi Design", which the draft does not name line
+by line, so that stays the person's press. Web: the two drafts get their send
+button; the confirmation no longer says "cho khách". Tests: outbound 13 (sent
+to Design and recorded as Diệu; a draft naming no configured Design mailbox
+refused); the recipient guard mutated → red.
+
+Left: PC. The request to PC is text on the page (`PcRequests.draft`), not a
+draft file: it needs an `.eml` draft addressed to `pc_mailboxes` (order rules)
+before it can go through the outbox, then "Ghi đã hỏi PC" on the receipt;
+then the lane reading PC's reply (`pc_dates`) on its own.
