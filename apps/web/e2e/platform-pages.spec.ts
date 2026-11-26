@@ -102,7 +102,7 @@ test("the shell is reached by its Vietnamese names", async ({ page }) => {
     page.getByRole("heading", { level: 1, name: "Nhật ký kiểm toán" }),
   ).toBeVisible();
 
-  // Bell, account menu and the feedback button, by name.
+  // Bell and account menu, by name; no feedback button (removed 2026-11-26).
   await expect(page.getByRole("button", { name: /^Thông báo/ })).toBeVisible();
   await page.getByRole("button", { name: /^Tài khoản/ }).click();
   await expect(page.getByRole("menuitem", { name: "Đăng xuất" })).toBeVisible();
@@ -116,9 +116,9 @@ test("the shell is reached by its Vietnamese names", async ({ page }) => {
       .getByText("Quản trị nền tảng", { exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("button", { name: "Gửi phản hồi" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Gửi phản hồi" })).toHaveCount(
+    0,
+  );
 });
 
 test("the Sales bar fits one row, its pages folded into submenus", async ({

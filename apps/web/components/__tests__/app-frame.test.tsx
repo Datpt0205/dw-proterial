@@ -298,7 +298,7 @@ describe("the shell's navbar", () => {
   });
 });
 
-describe("the feedback button (spec 003 US5, browser look 2026-10-24)", () => {
+describe("no feedback button (removed 2026-11-26); room kept for a floating one", () => {
   /** antd's breakpoints for a screen `width` px wide. */
   function screenOf(width: number) {
     Object.defineProperty(window, "matchMedia", {
@@ -335,24 +335,20 @@ describe("the feedback button (spec 003 US5, browser look 2026-10-24)", () => {
         </AppFrame>
       </UiProvider>,
     );
-    return screen.getByRole("button", { name: "Gửi phản hồi" });
   }
 
-  it("on a phone sits among the bar's actions, floating over nothing", () => {
-    screenOf(390);
-    const button = shell();
-    expect(button.closest(".ant-float-btn")).toBeNull();
-    expect(button.closest("header")).not.toBeNull();
+  it.each([390, 1440])("at %ipx draws no feedback button", (width) => {
+    screenOf(width);
+    shell();
+    expect(screen.queryByRole("button", { name: "Gửi phản hồi" })).toBeNull();
   });
 
-  it("from md up floats bottom-left, with room kept under the page", () => {
+  it("keeps room under the page for a context's floating button", () => {
     screenOf(1440);
-    const button = shell();
-    expect(button.closest(".ant-float-btn")).not.toBeNull();
-    expect(button.closest("header")).toBeNull();
+    shell();
     const room = screen
       .getByText("Nội dung trang")
-      .closest("[data-feedback-room]");
+      .closest("[data-float-room]");
     expect(room?.className).toContain("md:pb-20");
   });
 });
