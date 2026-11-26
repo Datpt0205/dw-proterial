@@ -13,6 +13,7 @@ import { ActionError } from "../_lib/errors";
 import { unopenedSources } from "../_lib/served";
 import { slaOf } from "../_lib/sla";
 import { useAction } from "../_lib/use-action";
+import { onHeldOrder } from "../_lib/order-actions";
 import { useResource } from "../_lib/use-resource";
 import { useSalesViewer } from "../_lib/viewer";
 import { OrderActions } from "../orders/[caseId]/actions";
@@ -303,7 +304,7 @@ function OrderDecision({
   caseId: string;
   onChanged: () => void;
 }) {
-  const viewer = useSalesViewer();
+  const signedIn = useSalesViewer();
   const order = useResource(
     `sales/order/${caseId}`,
     useCallback(() => salesApi().order(caseId), [caseId]),
@@ -315,6 +316,9 @@ function OrderDecision({
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !order.data)
     return <LoadError error={order.error} onRetry={order.reload} />;
+  // Seen only through its NOC/ESF hold (ticket 78): read and the hold, as
+  // on the case page, so no control the server refuses is drawn enabled.
+  const viewer = order.data.export_hold_only ? onHeldOrder(signedIn) : signedIn;
   const { labels } = unopenedSources(order.data);
   return (
     <Space orientation="vertical" className="w-full">

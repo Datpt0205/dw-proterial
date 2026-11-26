@@ -241,6 +241,27 @@ describe("Việc cần làm, one place", () => {
   );
 
   it(
+    "draws an order seen through its NOC/ESF hold with no step the server refuses",
+    async () => {
+      // Ticket 78: the held order is the export PIC's item whoever is
+      // assigned; the item narrows the viewer as the case page does.
+      api.order.mockResolvedValueOnce({ ...waiting, export_hold_only: true });
+      items = [
+        item(waiting.case_id, "2026-10-04T05:00:00Z", "2026-10-05T01:00:00Z"),
+      ];
+      search = new URLSearchParams({ item: `order:${waiting.case_id}` });
+      page();
+      const resume = (
+        await screen.findByText("Khách giữ PO: xem xét lại", undefined, {
+          timeout: 8000,
+        })
+      ).closest("button")!;
+      expect(resume.disabled).toBe(true);
+    },
+    SLOW,
+  );
+
+  it(
     "says when a push's item no longer waits on the person",
     async () => {
       search = new URLSearchParams({ item: "order:gone-1" });
