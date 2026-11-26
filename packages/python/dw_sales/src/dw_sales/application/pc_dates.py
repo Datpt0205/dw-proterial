@@ -337,6 +337,14 @@ class PcDateReplies:
         return await reading(self.model, case, text, run)
 
 
+def fits(model: InterpretationPort, text: str) -> bool:
+    """Whether ``text`` is short enough to be read at all: a longer one is
+    never cut (a cut date is a wrong date), and reads as unavailable."""
+    return (
+        len(text) <= MAX_TEXT and estimated_tokens(text) <= model.max_input_tokens - PROMPT_TOKENS
+    )
+
+
 async def reading(
     model: InterpretationPort, case: OrderCase, text: str, run: RunContext
 ) -> PcDatesView:
@@ -344,7 +352,7 @@ async def reading(
     (`checked`), with no gate of its own: the caller is the gate, a person's
     press (`PcDateReplies.read`) or the tenant's switch (`PcReplyLane`)."""
     stamp = {"prompt_ref": str(PC_DATES), "model_profile": model.model_profile}
-    if len(text) > MAX_TEXT or estimated_tokens(text) > model.max_input_tokens - PROMPT_TOKENS:
+    if not fits(model, text):
         return PcDatesView(**stamp, status="unavailable")
     try:
         answer = await model.interpret(

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field, replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -541,3 +542,68 @@ async def test_a_sent_request_to_pc_the_case_cannot_record_is_told_to_the_pic(
 
     assert told.calls == [((AN.user_id,), "Thư hỏi PC đã gửi nhưng chưa ghi được")]
     assert world.order(case_id).pc_request is None
+
+
+async def _sent_then(world: World, case_id: uuid.UUID, tmp_path: Path, between: Any) -> None:
+    """The request to PC pressed, ``between`` done before its receipt is
+    read, then the receipt."""
+    from .test_pc_dates import _naming_pc
+
+    await _naming_pc(world, PC_BOX)
+    pressed = world.store.clock.now()
+    mail = await _send_order(world, case_id, await _pc_draft(world, case_id))
+    lane = _lane(world, tmp_path)
+    (tmp_path / mail.mailbox / "outbox").mkdir(parents=True)
+    await lane.tick()
+    world.store.clock.advance_to(pressed + RECEIPT_WITHIN / 6)
+    await between()
+    FakeFlow(tmp_path).run()
+    world.store.clock.advance_to(pressed + RECEIPT_WITHIN / 3)
+    await lane.tick()
+
+
+async def test_a_receipt_after_pc_answered_every_line_asked_opens_no_wait(
+    tmp_path: Path,
+) -> None:
+    """PC answered (recorded by the PIC) between the press and the receipt:
+    the receipt must not reopen a wait PC already answered."""
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+
+    async def answer_all() -> None:
+        for line in world.order(case_id).lines:
+            await world.services.pc_requests.answer(
+                AN.context(),
+                case_id,
+                line.line_no,
+                case_version=world.order(case_id).case_version,
+                deliveries=[(line.effective.quantity, date(2026, 12, 5))],
+            )
+
+    await _sent_then(world, case_id, tmp_path, answer_all)
+
+    case = world.order(case_id)
+    assert all(line.pc_answer is not None for line in case.lines)
+    assert case.pc_request is None
+    assert not [e for e in world.audit() if e.action == "sales.order.pc_asked"]
+
+
+async def test_a_receipt_after_the_pic_asked_again_by_hand_leaves_that_wait(
+    tmp_path: Path,
+) -> None:
+    from .test_pc_requests import _in_review
+
+    world, case_id = await _in_review()
+
+    async def ask_by_hand() -> None:
+        await world.services.pc_requests.ask(
+            AN.context(), case_id, case_version=world.order(case_id).case_version
+        )
+
+    await _sent_then(world, case_id, tmp_path, ask_by_hand)
+
+    asked = [e for e in world.audit() if e.action == "sales.order.pc_asked"]
+    request = world.order(case_id).pc_request
+    assert len(asked) == 1  # the hand's only
+    assert request is not None and request.at == world.store.clock.now() - RECEIPT_WITHIN / 6

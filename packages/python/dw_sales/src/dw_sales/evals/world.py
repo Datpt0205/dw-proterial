@@ -833,11 +833,10 @@ class _Followups:
             ]
             pc_asked_at = customer_asked_at = design_asked_at = quote_open_since = None
             pcs_price_asked_at = None
-            design_checked = pc_proposed = False
+            design_checked = False
             if isinstance(case, OrderCase):
                 reference, customer, due = case.header.po_no, case.customer_code, case.due
                 pc_asked_at = case.pc_request.at if case.pc_request else None
-                pc_proposed = case.pc_reply is not None and bool(case.pc_reply.dates)
                 loop = case.update_loop
                 if loop is not None and loop.step == "waiting_pc":
                     pc_asked_at = loop.since
@@ -875,7 +874,6 @@ class _Followups:
                     assigned_to=stored.origin.assigned_to,
                     due=due,
                     pc_asked_at=pc_asked_at,
-                    pc_proposed=pc_proposed,
                     customer_asked_at=customer_asked_at,
                     implied_from=implied_from,
                     design_asked_at=design_asked_at,

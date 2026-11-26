@@ -171,7 +171,6 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         assigned_to=row["assigned_to"],
         due=_day(row["due"]),
         pc_asked_at=row["pc_asked_at"],
-        pc_proposed=bool(row["pc_proposed"]),
         customer_asked_at=row["customer_asked_at"],
         implied_from=row["implied_from"],
         design_asked_at=row["design_asked_at"],
@@ -205,10 +204,6 @@ class SqlFollowupStore:
             # (ticket 29); NULL while none.
             sa.func.coalesce(_at(_O.c.pc_request["at"].astext), _loop_since("waiting_pc")).label(
                 "pc_asked_at"
-            ),
-            # Dates read from PC's mail for the wait (ticket 77).
-            (sa.func.coalesce(sa.func.jsonb_array_length(_O.c.pc_reply["dates"]), 0) > 0).label(
-                "pc_proposed"
             ),
             # The start of the update loop's wait on the customer (ticket 29).
             _loop_since("waiting_customer").label("customer_asked_at"),
@@ -248,7 +243,6 @@ class SqlFollowupStore:
             _Q.c.quote_due.label("due"),
             sa.func.coalesce(_entered(CaseKind.QUOTE, _Q), _Q.c.received_at).label("since"),
             sa.null().label("pc_asked_at"),
-            sa.false().label("pc_proposed"),
             sa.null().label("customer_asked_at"),
             sa.null().label("implied_from"),
             sa.null().label("design_asked_at"),

@@ -157,8 +157,8 @@ async def test_pc_s_mail_read_by_dw1_reads_back_in_its_own_tenant_only(
         waiting = [s.case.case_id for s in await work.orders.waiting_on_pc()]
         followed = {c.case_id: c for c in await work.followups.cases(LOADED, received_since=T0)}
     assert stored is not None and stored.case == read
-    # PC answered: the wait's reminder reads the proposal (ticket 77).
-    assert followed[case.case_id].pc_proposed and followed[case.case_id].pc_asked_at == T0
+    # Read, not recorded: the wait is still the reminder's (ticket 77).
+    assert followed[case.case_id].pc_asked_at == T0
     assert stored.case.pc_reply is not None and stored.case.line(1).pc_answer is None
     # What the reader of PC's mail looks at (`sales_pc_replies`): this case,
     # in its own workspace only.

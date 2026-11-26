@@ -16,10 +16,14 @@ Where the tenant turns `model_assist.pc_reply` on, its live eval met the bar
   Sales' own uses, every date checked by code.
 - **what is kept**: `OrderCase.read_pc_reply`, a proposal per line asked;
   nothing of the case's values changes. A mail read to no date is kept as
-  read too, so it costs one call. The model unavailable: nothing is kept,
-  and the next tick reads it again.
+  read too, so it costs one call. A mail that could not be read (the
+  model down, its answer not valid) is read again each tick for
+  `RETRY_FOR` after it arrived, then kept as read with no date and the PIC
+  told to read it; one too long to read at all (`pc_dates.fits`) is that
+  at once. Never read for ever, on the GPU interactive steps share, and
+  never dropped silently.
 
-The PIC is told when a mail gave dates (no PO number in the words, as every
+The PIC is told when a mail gave dates, or could not be read (no PO number in the words, as every
 push is), and confirms or corrects each line on the case (`PcRequests`). Off,
 not ready, no mailbox named, or DW1 paused: nothing is read. The lane audits
 as itself (ADR 0011), counts only.
@@ -31,6 +35,7 @@ import hashlib
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Final, Protocol
 
 from dw_agent_runtime.model.interpretation import InterpretationPort
@@ -42,7 +47,7 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.case_store import CaseEvent, EventActor, SalesUnitOfWorkFactory, Stored
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
-from dw_sales.application.pc_dates import reading, written_in
+from dw_sales.application.pc_dates import fits, reading, written_in
 from dw_sales.application.ports import InboxPort, NotificationSenderPort, SalesScope
 from dw_sales.application.salesorder_pairs import lane_run
 from dw_sales.application.support import DW1_WORKER_ID, DW1_WORKER_VERSION
@@ -59,6 +64,15 @@ _TOLD: Final = (
     "PC đã trả lời ngày giao",
     "DW1 đọc thư PC và đề xuất ngày cho {lines} dòng. Mở đơn để bấm Đúng hoặc Sửa từng dòng.",
 )
+# Said when PC's mail could not be read: the PIC reads it.
+_UNREAD: Final = (
+    "DW1 không đọc được thư PC",
+    "Có thư PC trả lời về một đơn đang chờ PC mà DW1 không đọc được. "
+    "Mở đơn, xem thư PC và ghi ngày bằng tay.",
+)
+# How long after it arrived a mail DW1 could not read is tried again, one
+# call a tick (module docstring).
+RETRY_FOR: Final = timedelta(hours=1)
 
 
 class PcReplyScopesPort(Protocol):
@@ -148,32 +162,40 @@ class PcReplyLane:
             case = answered_by(message, [s.case for s in waiting.values()], pc)
             if case is None:
                 continue
-            stored = await self._read(scope, waiting[case.case_id], message)
-            if stored is None:
+            kept = await self._read(scope, waiting[case.case_id], message)
+            if kept is None:
                 continue
+            stored, unread = kept
             read += 1
             waiting[case.case_id] = stored
+            if unread:
+                await self._tell(scope, stored, message, _UNREAD)
+                continue
             before = case.pc_reply.dates if case.pc_reply else ()
             after = stored.case.pc_reply.dates if stored.case.pc_reply else ()
             fresh = {d.line_no for d in after if d.message_id == message.message_id}
             if fresh and set(after) != set(before):
                 proposed += 1
-                await self._tell(scope, stored, message, len(fresh))
+                title, body = _TOLD
+                await self._tell(scope, stored, message, (title, body.format(lines=len(fresh))))
         return PcReplyTick(read=read, proposed=proposed)
 
     async def _read(
         self, scope: SalesScope, stored: Stored[OrderCase], message: InboundMessage
-    ) -> Stored[OrderCase] | None:
+    ) -> tuple[Stored[OrderCase], bool] | None:
         """``message`` read for the case, kept with its event and audit row in
-        one transaction; None when nothing was kept (the model unavailable,
-        or the case moved on while it was read)."""
+        one transaction, and whether it was kept unread (module docstring);
+        None when nothing was kept (to be read again, or the case moved on
+        while it was read)."""
         case = stored.case
         run_id = self.ids.new_uuid()
         run = lane_run(SALES_PC_REPLIES_LANE, scope, run_id, self.worker_id, self.worker_version)
-        view = await reading(self.model, case, newest_part(message).text, run)
-        if view.status == "unavailable":
-            return None
+        text = newest_part(message).text
+        view = await reading(self.model, case, text, run)
         now = self.clock.now()
+        unread = view.status == "unavailable"
+        if unread and fits(self.model, text) and now - message.received_at < RETRY_FOR:
+            return None
         try:
             after = case.read_pc_reply(
                 message.message_id,
@@ -217,6 +239,7 @@ class PcReplyLane:
                     details={
                         "case_version": after.case_version,
                         "dates": len(view.dates),
+                        "unread": unread,
                         "dropped": view.dropped,
                         "step": ModelStep.PC_REPLY.value,
                         "prompt": view.prompt_ref,
@@ -224,17 +247,21 @@ class PcReplyLane:
                 )
             )
             await work.commit()
-        return Stored(after, stored.origin)
+        return Stored(after, stored.origin), unread
 
     async def _tell(
-        self, scope: SalesScope, stored: Stored[OrderCase], message: InboundMessage, lines: int
+        self,
+        scope: SalesScope,
+        stored: Stored[OrderCase],
+        message: InboundMessage,
+        words: tuple[str, str],
     ) -> None:
         """The case's assignee, else who asked PC, told once per mail."""
         request = stored.case.pc_request
         who = stored.origin.assigned_to or (request.by if request is not None else None)
         if who is None:
             return
-        title, body = _TOLD
+        title, body = words
         mail = hashlib.sha256(message.message_id.encode()).hexdigest()[:16]
         try:
             await self.notifications.deliver(
@@ -242,11 +269,11 @@ class PcReplyLane:
                 recipients=[who],
                 source_key=f"{SALES_PC_REPLIES_LANE}:{stored.case.case_id}:{mail}",
                 title=title,
-                body=body.format(lines=lines),
+                body=body,
                 link=f"/sales/orders/{stored.case.case_id}",
             )
         except Exception:
             logger.exception("sales_pc_replies: the PIC was not told")
 
 
-__all__ = ["SALES_PC_REPLIES_LANE", "PcReplyLane", "PcReplyTick", "answered_by"]
+__all__ = ["RETRY_FOR", "SALES_PC_REPLIES_LANE", "PcReplyLane", "PcReplyTick", "answered_by"]

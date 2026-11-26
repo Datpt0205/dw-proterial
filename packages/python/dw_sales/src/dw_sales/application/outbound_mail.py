@@ -566,9 +566,11 @@ class OutboundLane:
     async def _mark_pc_asked(self, scope: SalesScope, mail: OutboundMail) -> None:
         """ "Ghi đã hỏi PC" as the person who pressed, from when they pressed
         (the mail's `queued_at`, so a reply PC wrote before the receipt came
-        back still answers it). A case that cannot take it any more (in Bravo
-        meanwhile) is left, and the person is told: the mail went, and the
-        case does not say so."""
+        back still answers it). A case that already says so since the press
+        (asked again by hand, or every line it would ask answered) is left as
+        it is (`OrderCase.pc_asked_since`). A case that cannot take it any
+        more (in Bravo meanwhile) is left, and the person is told: the mail
+        went, and the case does not say so."""
         access = await self.access.find_linked_access(
             mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
         )
@@ -578,6 +580,8 @@ class OutboundLane:
         try:
             async with self.uow(scope) as work:
                 case = (await stored_order(work, mail.case_id, viewer=context)).case
+            if case.pc_asked_since(mail.queued_at):
+                return
             await self.pc.ask(
                 context, mail.case_id, case_version=case.case_version, sent_at=mail.queued_at
             )

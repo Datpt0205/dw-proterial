@@ -414,15 +414,6 @@ def test_an_order_whose_pc_answer_is_recorded_is_owed_no_pc_reminder() -> None:
     assert ("waiting_pc", "remind") not in _owed(_asked_pc(None), MONDAY_8 + 72 * HOUR)
 
 
-def test_an_order_whose_pc_reply_dw1_read_is_owed_no_pc_reminder() -> None:
-    """Ticket 77: once DW1 read dates from PC's mail, PC has answered and the
-    PIC was told to confirm them; "PC chưa trả lời" would be false."""
-    asked = MONDAY_8
-    proposed = replace(_asked_pc(asked), pc_proposed=True)
-    assert ("waiting_pc", "remind") in _owed(_asked_pc(asked), asked + 72 * HOUR)
-    assert ("waiting_pc", "remind") not in _owed(proposed, asked + 72 * HOUR)
-
-
 def test_the_pc_reminder_is_the_tenants_number_and_switch() -> None:
     later = _policy(waiting_pc={"remind": {"after_hours": 48, "notify": ["pic", "head"]}})
     case = _asked_pc(MONDAY_8)

@@ -23,7 +23,7 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ports import Uuid4Generator
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.case_store import CaseEvent, EventActor
-from dw_sales.application.pc_replies import PcReplyLane, answered_by
+from dw_sales.application.pc_replies import RETRY_FOR, PcReplyLane, answered_by
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.orders import Actor, OrderCase, OrderStatus
 from dw_sales.evals.graders import AN, CALLERS, GIANG
@@ -125,6 +125,17 @@ async def test_asking_again_starts_a_new_wait_with_nothing_proposed() -> None:
     read = _read(world.order(case_id), "PC01", (1, DEC_05))
     again = read.ask_pc(Actor(user_id=AN.user_id), read.pc_request.at + 5 * MINUTE)  # type: ignore[union-attr]
     assert again.pc_reply is None
+
+
+async def test_a_request_recorded_late_keeps_what_pc_wrote_after_it_was_made() -> None:
+    """A request recorded from its outbox receipt starts when the PIC
+    pressed: PC's mail DW1 read since then answers it, and is kept."""
+    world, case_id = await _asked()
+    read = _read(world.order(case_id), "PC01", (1, DEC_05), late=2)
+    pressed = read.pc_request.at + MINUTE  # type: ignore[union-attr]
+    again = read.ask_pc(Actor(user_id=AN.user_id), pressed)
+    assert _lines(again) == {1: DEC_05}
+    assert again.pc_reply is not None and again.pc_reply.messages == ("PC01",)
 
 
 async def test_answering_a_line_drops_its_proposal_and_the_last_answer_ends_both() -> None:
@@ -379,6 +390,47 @@ async def test_a_model_down_keeps_nothing_and_the_mail_is_read_again_next_tick()
         rig.sample.__exit__(None, None, None)
 
 
+PC_MAIL_AT = datetime.fromisoformat(str(PC_MAIL["received_at"]))
+
+
+def _unread(rig: Rig) -> list[Any]:
+    return [n for n in rig.told() if n.title == "DW1 không đọc được thư PC"]
+
+
+async def test_a_mail_still_unread_an_hour_after_it_came_is_left_to_the_pic() -> None:
+    """A mail DW1 cannot read (the model down, or an answer that never
+    validates) is not read every tick for as long as the order waits: an
+    hour after it arrived it is kept as read with no date, and the PIC told
+    to read it."""
+    rig = await _rig([_mail()], model=_Down())
+    try:
+        rig.world.store.clock.advance_to(PC_MAIL_AT + RETRY_FOR - MINUTE)
+        await rig.lane.tick()
+        assert rig.world.order(rig.case_id).pc_reply is None and _unread(rig) == []
+        rig.world.store.clock.advance_to(PC_MAIL_AT + RETRY_FOR)
+        await rig.lane.tick()
+        await rig.lane.tick()
+        reply = rig.world.order(rig.case_id).pc_reply
+        assert reply is not None and reply.dates == () and reply.messages == ("PC01",)
+        assert len(rig.model.calls) == 2  # not read again once left
+        (told,) = _unread(rig)
+        assert AN.user_id in told.recipients and PO_M01 not in told.title + told.body
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
+async def test_a_mail_too_long_to_read_is_left_to_the_pic_at_once_with_no_call() -> None:
+    long = f"{PC_MAIL['body']}\n" + "Ghi chú thêm của PC. " * 500
+    rig = await _rig([_mail(body=long)])
+    try:
+        await rig.lane.tick()
+        reply = rig.world.order(rig.case_id).pc_reply
+        assert reply is not None and reply.dates == () and rig.model.calls == []
+        assert len(_unread(rig)) == 1
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
 async def test_a_mail_read_to_no_date_is_kept_as_read_and_not_read_again() -> None:
     rig = await _rig([_mail()], model=Answering({"dates": []}))
     try:
@@ -526,6 +578,20 @@ async def test_dung_needs_the_mail_opened_again_at_the_cases_new_version() -> No
         rig.sample.__exit__(None, None, None)
 
 
+async def test_a_proposal_does_not_stop_the_reminder_that_pcs_dates_are_not_recorded() -> None:
+    """PC's mail dated lines 1 and 2 of three: line 3 still waits on PC, and
+    no line's date is recorded until the PIC presses, so the `waiting_pc`
+    reminder ("chưa ghi được ngày PC trả lời") stands."""
+    from .test_pc_requests import _pc_reminders
+
+    rig = await _proposed()
+    try:
+        assert set(_lines(rig.world.order(rig.case_id))) == {1, 2}
+        assert len(await _pc_reminders(rig.world, rig.case_id, 24)) == 1
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
 async def test_sua_records_another_date_and_labels_it_a_correction() -> None:
     rig = await _proposed()
     try:
@@ -562,7 +628,12 @@ async def test_dung_is_refused_without_prepare_stale_with_none_proposed_or_elsew
         with pytest.raises(NotFoundError):
             await _accept(rig, 3)  # DW1 proposed nothing for line 3
         with pytest.raises(NotFoundError):
-            await _open(rig, "PC99")  # a mail the proposal was not read from
+            await _open(rig, "PC99")  # a mail the mailbox does not hold
+        # The customer's own PO mail, stored in the same mailbox: not PC's
+        # proposal, so not served here and not recorded as opened.
+        assert await rig.world.inbox.get_message(ALPHA, "M01") is not None
+        with pytest.raises(NotFoundError):
+            await _open(rig, "M01")
         with pytest.raises(NotFoundError):
             await _accept(rig, caller=OUTSIDER, scope=BETA)
         assert rig.world.order(rig.case_id).line(1).pc_answer is None and _labels(rig) == []

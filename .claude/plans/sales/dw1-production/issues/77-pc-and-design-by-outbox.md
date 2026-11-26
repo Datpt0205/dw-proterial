@@ -232,3 +232,55 @@ Left, and why:
 - Not tested against real RLS for the lane end to end (the unit world plus
   the SQL `waiting_on_pc` negative stand in); an integration run of the
   lane over two tenants is owed.
+
+**2026-11-27, review of slices 2-3c: seven findings checked, all real, all
+fixed.**
+- The outbox receipt recorded "Ghi đã hỏi PC" against the case as it is when
+  the receipt is read, backdated to the press. If the PIC recorded PC's answer
+  for every line in between, the wait reopened on answered lines and nothing
+  closed it again. A wait the PIC recorded by hand after the press was also
+  reset. Now `OrderCase.pc_asked_since(queued_at)` leaves the case alone when
+  a wait was recorded since the press, or when PC's answers recorded since
+  cover every line it would ask (`_mark_pc_asked`). `ask_pc` keeps what DW1
+  read from mail received since its `at` (`PcReply.since`), so a proposal read
+  between the press and the receipt is not dropped and read again. Tests: outbound 2
+  (answered in between: no wait, no second `pc_asked`; asked by hand in
+  between: that wait stands), pc_replies 1 (a late-recorded request keeps the
+  mail read after it). Mutations, each red: the receipt check removed (both
+  outbound), `since` replaced by None.
+- The lane read an "unavailable" mail again every tick for as long as the
+  order waited: one GPU call every 5 min for an answer that never validates,
+  and a mail too long to read was never proposed and never told. Now
+  (`pc_replies.RETRY_FOR`, 1 h after the mail arrived; a code bound on
+  retries, not a business number) a mail still unread is kept as read with
+  no date, the audit row says `unread`, and the PIC is told "DW1 không đọc
+  được thư PC" once. A mail `pc_dates.fits` refuses (extracted from
+  `reading`, one owner) is that at once, with no call. Tests 2. Mutations,
+  each red: no age bound, no `fits`, not told.
+- Findings 3 and 5 (one defect): `waiting_pc` was suppressed for the whole case
+  once any line held a proposal, so lines PC never answered, and a proposal
+  the PIC never acted on, got no follow-up. Decision: the suppression is
+  removed (`WaitingCase.pc_proposed` and its SQL are gone). The reminder says
+  "chưa ghi được ngày PC trả lời", which stays true until the PIC records the
+  dates. A precise per-line rule would have meant a second copy of "which lines
+  still wait" in SQL. This way a line can get one reminder too many, but none
+  is missed. Test: a proposal for lines 1-2 of 3 still gets its reminder at 24 h
+  (red when the world builder hides the wait behind a proposal); the PC
+  integration test no longer reads `pc_proposed`.
+- `reply_mail`'s negative test could not fail ("PC99" is in no mailbox). Now
+  the customer's own PO mail M01, which the same mailbox stores, is not found.
+  Red when `message_id in named` is removed.
+- Web: "Xem thư" is a `GuardedButton`, disabled with the reason in words for a
+  viewer without `sales.order.prepare` (the route refuses them). The
+  machine-read chip is the glossary's `ValueStateTag state="dw"` ("Máy đọc"),
+  not an ad-hoc "Máy đọc, cần kiểm". Web pc-request 7. Mutations, each red:
+  reason forced to null, the ad-hoc tag back.
+
+Ran: dw_sales unit pc_replies, outbound_mail, followups, pc_requests,
+pc_dates, update_loop, followup_waits and artifacts green; integration
+pc_requests_db, outbound_mails_db, followup_waits_db, pcs_followup_db and
+sales_followups_db green on Postgres; worker unit green; web tsc clean and
+vitest 925/926 (quote-preview timed out under full-suite load, and passes
+alone). mypy: 10 errors that were already there, in test files this change
+does not touch at those lines (test_outbound_mail imports, test_pc_replies'
+`answered_by` test, test_demo_reset, test_shadow_readings).

@@ -37,6 +37,7 @@ import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { GuardedButton } from "../../_components/guarded-button";
 import { Quantity } from "../../_components/money";
+import { ValueStateTag } from "../../_components/tags";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = Order["lines"][number];
@@ -46,11 +47,12 @@ const PREPARE = "sales.order.prepare";
 // Where PC's answer is taken (`OrderCase.ask_pc`, `pc_answered`): before the
 // order is in Bravo. In Bravo, PC's dates are the update loop's (ticket 29).
 const ASKABLE: readonly string[] = ["in_review", "prepared"];
+const NO_PREPARE =
+  "Bạn không có quyền ghi trên đơn hàng (cần vai Sales phụ trách).";
 
 /** Why PC cannot be asked or answered from DW1 now; null when it can. */
 function pcReason(order: Order, viewer: Viewer): string | null {
-  if (!viewer.hasScope(PREPARE))
-    return "Bạn không có quyền ghi trên đơn hàng (cần vai Sales phụ trách).";
+  if (!viewer.hasScope(PREPARE)) return NO_PREPARE;
   if (!ASKABLE.includes(order.status))
     return "Chỉ hỏi và ghi ngày PC khi đơn đang xem xét, trước khi nhập Bravo.";
   return null;
@@ -157,7 +159,7 @@ export function PcRequestPanel({
       const unopened = mails.some((m) => opened[m] !== order.case_version);
       return (
         <Space orientation="vertical" size={4}>
-          <StatusTag tone="pri">Máy đọc, cần kiểm</StatusTag>
+          <ValueStateTag state="dw" />
           {proposed.map((d) => (
             <Typography.Text key={d.delivery}>
               {proposed.length > 1 ? `Đợt ${d.delivery}: ` : ""}
@@ -166,15 +168,18 @@ export function PcRequestPanel({
           ))}
           <Space wrap size="small">
             {mails.map((m) => (
-              <Button
+              // PC's mail is served to `sales.order.prepare` only.
+              <GuardedButton
                 key={m}
                 size="small"
                 type="link"
+                inlineReason={false}
+                reason={viewer.hasScope(PREPARE) ? null : NO_PREPARE}
                 onClick={() => setReading(m)}
                 aria-label={`Xem thư PC cho dòng ${l.line_no}`}
               >
                 Xem thư
-              </Button>
+              </GuardedButton>
             ))}
             <GuardedButton
               size="small"

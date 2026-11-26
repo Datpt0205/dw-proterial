@@ -264,10 +264,13 @@ class PcRequest(BaseModel):
 
     def answered(self, lines: Iterable[OrderLine]) -> bool:
         """Whether every line asked has PC's answer since the request."""
-        found = {line.line_no: line.pc_answer for line in lines}
-        return all(
-            (answer := found.get(no)) is not None and answer.at >= self.at for no in self.lines
-        )
+        return _pc_answered_since(self.lines, lines, self.at)
+
+
+def _pc_answered_since(asked: Iterable[int], lines: Iterable[OrderLine], at: datetime) -> bool:
+    """Whether every line of ``asked`` has PC's answer recorded at or after ``at``."""
+    found = {line.line_no: line.pc_answer for line in lines}
+    return all((answer := found.get(no)) is not None and answer.at >= at for no in asked)
 
 
 class PcReplyDate(BaseModel):
@@ -309,6 +312,12 @@ class PcReply(BaseModel):
         """The proposal for ``lines`` only."""
         kept = set(lines)
         return self.model_copy(update={"dates": tuple(d for d in self.dates if d.line_no in kept)})
+
+    def since(self, at: datetime) -> PcReply | None:
+        """What mail received at or after ``at`` proposed, which answers a
+        request made then; None when none did. Every mail stays read."""
+        dates = tuple(d for d in self.dates if d.received_at >= at)
+        return self.model_copy(update={"dates": dates}) if dates else None
 
 
 class DesignRequest(BaseModel):
@@ -3228,8 +3237,22 @@ class OrderCase(BaseModel):
                 },
             )
         request = PcRequest(lines=self.pc_lines(), by=actor.user_id, at=at)
-        # A new wait: what PC wrote before it answers the old one.
-        return self._next(self.status, pc_request=request, pc_reply=None)
+        # A new wait: what PC wrote before it answers the old one; what DW1
+        # read from mail received since ``at`` (a request recorded from its
+        # outbox receipt, ticket 77) answers this one.
+        reply = self.pc_reply.since(at) if self.pc_reply is not None else None
+        return self._next(self.status, pc_request=request, pc_reply=reply)
+
+    def pc_asked_since(self, at: datetime) -> bool:
+        """Whether a request to PC made at ``at`` and recorded only later (a
+        mail queued at the press, recorded on its outbox receipt, ticket 77)
+        has nothing left to record: a wait recorded at or after ``at``
+        stands, or PC's answers recorded since cover every line it would
+        ask. Recording it then would reopen a wait PC already answered."""
+        held = self.pc_request
+        if held is not None and held.at >= at:
+            return True
+        return _pc_answered_since(self.pc_lines(), self.lines, at)
 
     def read_pc_reply(
         self,

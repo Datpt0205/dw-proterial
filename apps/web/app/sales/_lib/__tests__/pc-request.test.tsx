@@ -165,7 +165,8 @@ describe("PC's mail read by DW1 (ticket 77)", () => {
 
   it("shows the date as the machine's, and Đúng waits until the mail is opened", async () => {
     page(proposed());
-    expect(await screen.findByText("Máy đọc, cần kiểm")).toBeTruthy();
+    // The glossary's value state, drawn as every machine-read value is.
+    expect(await screen.findByText("Máy đọc")).toBeTruthy();
     expect(
       screen.getByText(/30\/11\/2026 · trong thư: “30\/11\/2026”/),
     ).toBeTruthy();
@@ -192,6 +193,20 @@ describe("PC's mail read by DW1 (ticket 77)", () => {
     );
   });
 
+  it("keeps PC's mail closed, with the reason, to a viewer who cannot prepare", async () => {
+    SCOPES = ["sales.case.read"];
+    page(proposed());
+    const open = (await screen.findByLabelText(
+      "Xem thư PC cho dòng 1",
+    )) as HTMLButtonElement;
+    expect(open.disabled).toBe(true);
+    fireEvent.click(open);
+    expect(api.pcReplyMail).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByText(/cần vai Sales phụ trách/).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("opens Sửa as the answer form filled with DW1's reading", async () => {
     page(proposed());
     fireEvent.click(await screen.findByLabelText("Sửa ngày PC cho dòng 1"));
@@ -202,6 +217,6 @@ describe("PC's mail read by DW1 (ticket 77)", () => {
   it("shows no reading where DW1 read none", async () => {
     page(order({ status: "in_review" }));
     await screen.findByText("Hỏi PC ngày giao");
-    expect(screen.queryByText("Máy đọc, cần kiểm")).toBeNull();
+    expect(screen.queryByText("Máy đọc")).toBeNull();
   });
 });
