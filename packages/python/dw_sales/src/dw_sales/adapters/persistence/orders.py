@@ -453,6 +453,9 @@ class SqlOrderCaseRepository:
     async def list_all(self) -> Sequence[Stored[OrderCase]]:
         return list(reversed(await _load(self.session, sa.true())))
 
+    async def waiting_on_pc(self) -> Sequence[Stored[OrderCase]]:
+        return list(reversed(await _load(self.session, _C.c.pc_request.is_not(None))))
+
     async def cases_for_po(self, customer_code: str, po_no: str) -> Sequence[OrderCase]:
         return [found.case for found in await _load(self.session, _for_po(customer_code, po_no))]
 

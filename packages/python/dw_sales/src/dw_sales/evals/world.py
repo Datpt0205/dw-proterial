@@ -434,6 +434,14 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
     async def list_all(self) -> Sequence[Stored[CaseT]]:
         return list(reversed(self._held.values()))
 
+    async def waiting_on_pc(self) -> Sequence[Stored[CaseT]]:
+        """An order store's: the cases waiting on PC (a quote never does)."""
+        return [
+            stored
+            for stored in reversed(self._held.values())
+            if isinstance(stored.case, OrderCase) and stored.case.pc_request is not None
+        ]
+
     async def add(self, case: CaseT, origin: CaseOrigin, event: CaseEvent) -> None:
         if case.case_id in self._held or any(
             _message_of(s.case) == _message_of(case) for s in self._held.values()

@@ -123,3 +123,48 @@ narrowing it; a mail older than the request taken; the newer-wins rule
 dropped; the migration not admitting the step. Also fixed: the readiness
 test that holds switches to steps had been red since 11-24 (`shadow` is one
 switch for every shadow reading, not a step).
+
+**2026-11-27, slice 3b: the lane that reads PC's reply.** Worker lane
+`sales_pc_replies` (`application/pc_replies.py`, every 300 s, built only
+where the worker reaches a model server). Per workspace it reads nothing
+unless the tenant names `pc_mailboxes`, `model_assist.pc_reply` is on and
+the step's live eval passed (`ModelStepGatePort`); then, over the orders
+waiting on PC (`orders.waiting_on_pc()`, SQL `pc_request IS NOT NULL`), it
+picks PC's answer by code alone: a verified mail from a PC mailbox, received
+since the request (the request's `at` is the mail's `queued_at` when sent
+through the outbox, slice 2), naming the PO or the Bravo SO of exactly one
+waiting order (a mail naming two is left to the person's list: line numbers
+repeat across orders), not read already. Its newest part only (DW1's own
+request quoted below is never read, so the customer's requested date is
+never proposed as PC's) goes through `pc_dates.reading`, the reading
+Sales' own uses (split out of `PcDateReplies.read`, unchanged for the
+person). Kept with `work.orders.save`, a worker case event
+`order.pc_reply_read` and one lane audit row (counts only), with
+`require_running` asked inside that transaction; a case that moved while
+the mail was read is read again next tick; the model down keeps nothing and
+reads again; a mail read to no date is kept as read (one call). The PIC is
+told once per mail that gave dates, the assignee or else who asked PC, with
+no PO number. `pc_dates`'s docstring no longer says internal mail never
+reaches DW1.
+
+Tests: `test_pc_replies.py` 22 (acceptance: the mock PC reply proposed
+with no PIC action, nothing recorded, the wait open, the PIC told once
+without the PO, read once; a colleague, the customer, an unverified mail, a
+mail before the request, another order's: nothing; switch off, no PC
+mailbox, not waiting, not measured: no model call; paused; model down;
+no-date mail; a reply quoting only DW1's request; a mail naming two
+waiting orders), worker registration, PC integration (`waiting_on_pc` in
+its own workspace only), `sales_pc_dates` eval smoke PASS 5/5 with the
+bar reported, import contracts 17 kept. Mutations, each red: the sender
+filter, the received-since bound, the verified check, empty mailboxes
+read as any sender, the one-order rule, the step gate, the pause check,
+the full text read instead of the newest part, the lane not registered.
+Also: `dw_worker/main.py` had an unsorted import in HEAD (ruff I001), fixed
+by `ruff --fix` on the file.
+
+Left (next): the PIC's "Đúng" per line and its source gate (ui-quality §7),
+the labelled case on each "Đúng"/"Sửa", the PC panel showing the proposal,
+the `waiting_pc` reminder while a proposal waits, and whether accepting
+marks PC's routed mail handled. Owed by measurement, not code: whether
+Proterial's internal Exchange mail reads as verified (SPF/DKIM/DMARC pass);
+if not, the lane, like the person's list, sees none of PC's mail.

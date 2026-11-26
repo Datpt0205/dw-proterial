@@ -385,6 +385,11 @@ class OrderCaseStorePort(Protocol):
         """Every case of the workspace, newest first."""
         ...
 
+    async def waiting_on_pc(self) -> Sequence[Stored[OrderCase]]:
+        """The workspace's cases waiting on PC (`OrderCase.pc_request`), newest
+        first: what the reader of PC's mail looks at (ticket 77)."""
+        ...
+
     async def add(self, case: OrderCase, origin: CaseOrigin, event: CaseEvent) -> None:
         """A case just opened. Refused with a conflict when the case, its
         message, or (for an original) its PO number is already stored."""

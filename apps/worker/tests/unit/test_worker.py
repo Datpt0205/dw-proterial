@@ -361,6 +361,30 @@ def test_dw1s_decided_lines_are_indexed_wherever_dw1_runs_and_optimised_only_wit
     assert lanes.isdisjoint(build_registry(deployed).all())
 
 
+def test_pcs_mail_is_read_only_where_dw1_reaches_a_model_every_five_minutes() -> None:
+    """Sales ticket 77: PC's mail is read while an order waits on PC only by
+    a process that reaches a model server, every five minutes; not on a
+    database alone, and not with no model (the tenant's switch decides the
+    rest, per tick)."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_pc_replies" not in build_registry(bare_settings(database_url=db)).all()
+    no_model = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    assert "sales_pc_replies" not in build_registry(no_model).all()
+
+    with_model = bare_settings(
+        database_url=db,
+        s3_endpoint_url=s3,
+        sales_inbox_lane=False,
+        model_provider="onprem",
+        onprem_model_base_url="http://model:11434/v1",
+        outbound_allowed_hosts=["model"],
+    )
+    registry = build_registry(with_model)
+    assert "sales_pc_replies" in registry.all()
+    assert registry.interval_for("sales_pc_replies", 1.0) == 300.0
+
+
 def test_dw1s_rule_drafts_are_swept_wherever_dw1_drafts_them() -> None:
     """ "Tạo từ tệp mẫu": a draft its event lost, or one nobody asks after for
     30 days, is dealt with by a lane of its own, under the name the drafting

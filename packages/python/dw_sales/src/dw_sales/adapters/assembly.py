@@ -144,6 +144,7 @@ from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_intake import CustomerPoReading, OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.outbound_mail import OutboundLane
+from dw_sales.application.pc_replies import PcReplyLane
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import (
     ArtifactBytesPort,
@@ -268,6 +269,10 @@ class Dw1Mount:
     # "Gửi cho khách": the lane writing jobs to the outbox share and reading
     # its receipts; built with the drain, given the share.
     outbound: OutboundLane | None = None
+    # What reads PC's mail while an order waits on PC and proposes its dates
+    # (ticket 77): built where a model is wired; reads only where the
+    # tenant's `model_assist.pc_reply` is on and its live eval passed.
+    pc_replies: PcReplyLane | None = None
     # What fills the examples index from the decided lines (ticket 43): built
     # where an index is given.
     examples: ExampleIndexLane | None = None
@@ -795,6 +800,23 @@ def build_dw1(
         ),
         activity=activity,
         mail_drop=dropped,
+        pc_replies=(
+            None
+            if interpretation is None
+            else PcReplyLane(
+                uow=uow,
+                scopes=SqlFollowupScopes(session_factory),
+                inbox=inbox,
+                rules=tenant_rules,
+                steps=readiness,
+                model=interpretation,
+                notifications=notifications,
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+            )
+        ),
         examples=indexing,
         skill_replay=(
             None

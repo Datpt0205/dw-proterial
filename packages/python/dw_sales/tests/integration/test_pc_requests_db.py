@@ -154,11 +154,16 @@ async def test_pc_s_mail_read_by_dw1_reads_back_in_its_own_tenant_only(
 
     async with uow(world.alpha) as work:
         stored = await work.orders.get(case.case_id)
+        waiting = [s.case.case_id for s in await work.orders.waiting_on_pc()]
     assert stored is not None and stored.case == read
     assert stored.case.pc_reply is not None and stored.case.line(1).pc_answer is None
+    # What the reader of PC's mail looks at (`sales_pc_replies`): this case,
+    # in its own workspace only.
+    assert case.case_id in waiting
     for other in (world.alpha_other, world.beta):
         async with uow(other) as work:
             assert await work.orders.get(case.case_id) is None
+            assert case.case_id not in {s.case.case_id for s in await work.orders.waiting_on_pc()}
 
 
 @pytest.mark.parametrize(

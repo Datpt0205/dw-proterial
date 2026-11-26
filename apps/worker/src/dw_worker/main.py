@@ -180,6 +180,7 @@ from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.mail_drop import MAIL_DROP_LANE
 from dw_sales.application.outbound_mail import SALES_OUTBOUND_LANE
+from dw_sales.application.pc_replies import SALES_PC_REPLIES_LANE
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.prompt_optimiser import OPTIMISER_LANE, SecurityCase, security_cases
@@ -216,7 +217,6 @@ from dw_worker.consumers.bravo_watch import (
 )
 from dw_worker.consumers.bravo_writes import build_bravo_write_handler
 from dw_worker.consumers.channel_delivery import build_channel_delivery_consumer
-from dw_worker.consumers.web_push_delivery import build_web_push_delivery_consumer
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
@@ -272,6 +272,10 @@ from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
 from dw_worker.consumers.sales_outbound import INTERVAL_SECONDS as SALES_OUTBOUND_INTERVAL_SECONDS
 from dw_worker.consumers.sales_outbound import build_sales_outbound_consumer
 from dw_worker.consumers.sales_pairs_retention import build_sales_pairs_retention_consumer
+from dw_worker.consumers.sales_pc_replies import (
+    INTERVAL_SECONDS as SALES_PC_REPLIES_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_pc_replies import build_sales_pc_replies_consumer
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -287,6 +291,7 @@ from dw_worker.consumers.sales_skill_replay import (
     INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
+from dw_worker.consumers.web_push_delivery import build_web_push_delivery_consumer
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -903,6 +908,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
     sales_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     sales_outbound_consumer: Callable[[], Awaitable[None]] | None = None
+    # PC's mail read while an order waits on PC (Sales ticket 77): only where
+    # this process reaches a model server; it reads nothing while the
+    # tenant's switch is off.
+    sales_pc_replies_consumer: Callable[[], Awaitable[None]] | None = None
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
@@ -1253,6 +1262,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     sales_outbound_consumer = build_sales_outbound_consumer(
                         mount.outbound, _fake_flow(settings)
                     )
+                if mount.pc_replies is not None:
+                    sales_pc_replies_consumer = build_sales_pc_replies_consumer(mount.pc_replies)
                 if mount.mail_drop is not None:
                     sales_mail_drop_consumer = build_sales_mail_drop_consumer(
                         mount.mail_drop, mailbox
@@ -1480,6 +1491,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             SALES_OUTBOUND_LANE,
             sales_outbound_consumer,
             interval_seconds=SALES_OUTBOUND_INTERVAL_SECONDS,
+        )
+    if sales_pc_replies_consumer is not None:
+        registry.register(
+            SALES_PC_REPLIES_LANE,
+            sales_pc_replies_consumer,
+            interval_seconds=SALES_PC_REPLIES_INTERVAL_SECONDS,
         )
     # And its follow-ups and morning brief (ticket 42), which only notify, so
     # no ReapTarget either.
