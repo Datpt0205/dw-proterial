@@ -102,3 +102,62 @@ only): 05, 06, 03b and 03c all complete.
 - A real cancel (item 2 above): the trace's one cancel save clears `IsCancel`; nothing
   shows what a cancel writes.
 - `B00UserList.Expire` (tinyint): the gateway reads a set value as an inactive user.
+
+**2026-11-26, `02-trace-3.csv` read** (local only, `Downloads/DB-Bravo-5-extract/DB-Bravo`;
+the file holds every `dw_trace_uat*.xel` on the host, so it repeats 11-20 and
+11-25; new rows: 11-25 16:38–17:32 and 11-26 08:00–15:41).
+- **F, a cancel: traced** (test SO `SO2611-000002`, 17:31:50, both lines in
+  one save). The client sends the whole cancel in one UPDATE per line:
+  `IsCancel='Cancel'`, `CancelDate` (today), `CancelQuantity` (the old
+  quantity), `CancelPrice` (the old unit price), `CancelAmount`,
+  `CancelRemark` (typed), `CancelPRS=DEFAULT`, and `Quantity`, `Quantity9`,
+  `UnitCost`, the four amounts to 0, `OriginalUnitCost=DEFAULT`; the first line
+  also `Remark`, `BoxQuantity`, `QuantityGroup`, `Divide` to 0. The 0s are
+  sent by the client (the screen's own rules), not by a trigger. Header:
+  totals and `TotalQuantity` to 0.
+- **E, a split: traced once, not cleanly** (17:28:58). One save did three
+  things: deleted an empty line added at 16:56, set a quantity on a line that
+  had 0 saved, and split it 135 + 115. Original line UPDATE: `Quantity`,
+  `Quantity9`, amounts, `BoxQuantity` (= Quantity9 / (QuantityBox × Length),
+  the layout's `Eval_BoxQuantity_SetValue`), `QuantityBox` 0→1,
+  `QuantityGroup` = the total (250), `GroupDivi`, `Divide` = 1. New line
+  INSERT: the copied columns plus `OriginalQuantity`, `GroupDivi`, `POLine` 0,
+  `QuantityBox` 0, no `QuantityGroup`/`Divide`/`BoxQuantity`. Header: totals,
+  `TotalQuantity`, `LMEFixed`. Item `01-01-0001` (a roller, unit Pc), not
+  the bobbin/drum item asked for, so the shape is known and a clean split of a
+  saved quantity on a cable item is still the `uat_proof` the switch needs.
+- **A new SO by typing: traced again** (16:53:33, header and one line), and
+  **a new line's `QuantityBox` is in the layouts after all**: the grid layout
+  8213 binds the item lookup (`vB20Item_Lookup`) into the line on `ItemCode`
+  (`QuantityBox`, `Length`, `CoilBox`, `BasePriceCode`, `Specification`,
+  `DesignNumber`, `CartonSize`…), and the data layout 8212 sets
+  `QuantityBox = 1` when `CartonSize='-'` (`Eval_Detail_QuantityBox_SetValue`).
+  The runner reads neither the grid's `bindingMembers` nor applies it to a new
+  line yet.
+- **G, a unit price change: not traced.** `so.line.set_price` stays pending.
+- **Every save ends in `exec usp_B30BizDocProcess_CreateProcess @_BizDocId,
+  @_BizProcessGroupUnique=NULL, @_BranchCode, @_DocCode`** on the same
+  session right after the statements; the gateway does not call it (and its
+  write login holds no EXECUTE). Before it, `usp_B20BizProcessGroup` runs on
+  another session (a read for the process group); after, the list refreshes
+  through `usp_B30BizDocDetail_Transferred`.
+- **The command right is not in any save.** The client calls
+  `usp_sys_GetControlPermission(@UserId, '<screen>')` when a screen opens and
+  `ufn_sys_GetTablePermissionExprAll` per table (row filters), and receives
+  the rest at login (`usp_sys_Login`, a compressed output); no
+  `ufn_B00Permission_Getdata` call appears. Bravo's permission editor shows
+  the storage: `B00Permission` (`UserId` or `RoleId`, `NoOpen`, `NoDisplay`,
+  `NoInherit`, `IsActive`) joined to `B00PermissionData`
+  (`ParentCommandKey`, `SubCommandKey` New/Edit/Print/Export/Delete…). How
+  the client combines a user's row, its roles' rows and `NoInherit` is not
+  visible in SQL.
+- **The change log is in `<db>_Log`**: Bravo's History screen reads
+  `B8_Hitachi_Cable_UAT_Log.dbo.B30BizDoc$0` by `__$LastWriteAt`; whether a
+  trigger writes it (so the write login needs a user there) is still script 07.
+  The client itself writes `<db>_Log.dbo.B00CommandLog` only at login/logout.
+- **DW2 material, 11-26** (many Purchasing users on UAT): PRs created by New
+  (header + 1–3 `B30BizDocDetail` lines), a PR edited, a PO created from a PR
+  (`B30BizDocDetailPO`), PRs approved through `ApprovalVouchersPR`
+  (`usp_B30AccDoc_ApprovalVouchers` with the documents as XML; `DocStatus`
+  10→13; refusals "Người dùng không có quyền duyệt chứng từ số …"). Not
+  traced: a PO's date change.
