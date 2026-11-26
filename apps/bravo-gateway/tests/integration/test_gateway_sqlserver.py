@@ -151,8 +151,13 @@ def logins() -> tuple[Login, Login]:
         "CREATE FUNCTION dbo.ufn_Prevent_Edit (@_BizDocId varchar(16) = '', @_RowId varchar(16) = '',"
         " @_DocCode varchar(2) = 'SO') RETURNS int AS"
         " BEGIN RETURN CASE WHEN @_RowId = 'LOCKED' THEN 1 ELSE 0 END END",
+        # Bravo's rights folding, as its result shape: the rows a test sets.
+        "CREATE TABLE dbo.PermissionRows (UserId int, Kind char(1), CommandKey nvarchar(24),"
+        " SubCommandKey nvarchar(24), NoOpen int, NoDisplay int, NoAddNew int, NoEdit int)",
         "CREATE FUNCTION dbo.ufn_B00Permission_Getdata (@_UserId int, @_RoleId int,"
-        " @_PermissionType char(1)) RETURNS TABLE AS RETURN SELECT 1 AS NoEdit",
+        " @_PermissionType char(1)) RETURNS TABLE AS RETURN SELECT CommandKey, SubCommandKey,"
+        " NoOpen, NoDisplay, NoAddNew, NoEdit FROM dbo.PermissionRows"
+        " WHERE UserId = @_UserId AND Kind = @_PermissionType",
         "CREATE FUNCTION dbo.ufn_sys_GetPermissionUserListTable (@_UserId int)"
         " RETURNS TABLE AS RETURN SELECT @_UserId AS UserId",
         "CREATE TABLE dbo.B00Command (Id int PRIMARY KEY, CommandKey varchar(24), DLLName varchar(64),"
@@ -196,6 +201,7 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B00ImportSetting (Id, CommandKey, IsActive, LayoutData) TO dw_test_read",
         "GRANT EXECUTE ON dbo.usp_sys_GetControlPermission TO dw_test_read",
         "GRANT EXECUTE ON dbo.ufn_Prevent_Edit TO dw_test_read",
+        "GRANT SELECT ON dbo.ufn_B00Permission_Getdata TO dw_test_read",
         "GRANT SELECT ON dbo.B00Command TO dw_test_read",
         *(
             f"GRANT VIEW DEFINITION ON dbo.{name} TO dw_test_read"
@@ -371,6 +377,29 @@ async def test_the_live_command_right_is_unmeasured_and_refuses(
     result = await _pipeline(bravo).execute(command, token(command))
 
     assert (result.check, result.reason) == ("right", "command_right_unknown")
+
+
+async def test_the_command_right_reads_bravos_own_folding_once_its_keys_are_measured(
+    logins: tuple[Login, Login], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dw_bravo_gateway.adapters import sqlserver
+
+    monkeypatch.setattr(
+        sqlserver,
+        "COMMAND_KEYS",
+        {
+            "EDIT_BizDocSO": sqlserver.CommandKeys(
+                explorer="BizDocSO", editor="EDIT_BizDocSO", sub_commands={"update": ("Edit",)}
+            )
+        },
+    )
+    bravo = SqlServerBravo(*logins, templates={})
+    assert await bravo.command_right(2413, "EDIT_BizDocSO", "update") == "allowed"
+    _run(DB, "INSERT INTO dbo.PermissionRows VALUES (2413, '3', 'EDIT_BizDocSO', '', 0, 0, 0, 1)")
+    try:
+        assert await bravo.command_right(2413, "EDIT_BizDocSO", "update") == "denied"
+    finally:
+        _run(DB, "DELETE FROM dbo.PermissionRows")
 
 
 async def test_identity_reads_one_active_user_per_employee_code(

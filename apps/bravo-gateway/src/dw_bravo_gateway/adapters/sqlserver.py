@@ -253,7 +253,21 @@ class SqlServerBravo:
     async def command_right(
         self, user_id: int, command_key: str, operation: Literal["update", "insert"]
     ) -> CommandRight:
-        return "unknown"
+        keys = COMMAND_KEYS.get(command_key)
+        if keys is None:
+            return "unknown"  # which Bravo commands carry this screen's rights: not measured
+        rows = await self._in_thread(
+            lambda: self._rows(
+                "SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit, '1' AS Kind"
+                " FROM dbo.ufn_B00Permission_Getdata(?, NULL, '1')"
+                " UNION ALL SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit,"
+                " '2' FROM dbo.ufn_B00Permission_Getdata(?, NULL, '2')"
+                " UNION ALL SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit,"
+                " '3' FROM dbo.ufn_B00Permission_Getdata(?, NULL, '3')",
+                (user_id, user_id, user_id),
+            )
+        )
+        return decide_command_right(rows, keys, operation)
 
     # ---------------------------------------------------------- documents
 
@@ -523,6 +537,57 @@ def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
         value = statement.parameters[name]
         values.append(_binary(str(value)) if name == "_Original_timestamp" else value)
     return _NAMED.sub("?", update), tuple(values)
+
+
+@dataclass(frozen=True)
+class CommandKeys:
+    """Where Bravo keeps a screen's rights (`B00PermissionData`): the list
+    command that opens it, the sub-commands an operation uses there, and the
+    editing form's own key for its operations."""
+
+    explorer: str
+    editor: str
+    sub_commands: Mapping[str, tuple[str, ...]]  # operation -> SubCommandKeys
+
+
+# Which Bravo commands carry a screen's rights. Empty until script 10 (ticket
+# 75) has shown, for users whose Bravo behaviour is known, that these keys
+# reproduce what the client lets each of them do: until then the answer is
+# "unknown" and every live write is refused, as before.
+COMMAND_KEYS: Final[Mapping[str, CommandKeys]] = {}
+
+
+def decide_command_right(
+    rows: Sequence[Mapping[str, object]],
+    keys: CommandKeys,
+    operation: Literal["update", "insert"],
+) -> CommandRight:
+    """What `ufn_B00Permission_Getdata` (Bravo's own function, which folds a
+    user's rows, their groups' and their roles' with `NoInherit`) says of an
+    operation: by command (type 1), by sub-command (type 2), by the editing
+    form's operation (type 3). Bravo's rights are deny-lists: a row with a
+    flag set denies; no row allows."""
+
+    def flag(row: Mapping[str, object], name: str) -> bool:
+        return str(row.get(name) or 0) not in ("0", "")
+
+    subs = {s.lower() for s in keys.sub_commands.get(operation, ())}
+    if not subs:
+        return "unknown"
+    for row in rows:
+        kind, command = str(row.get("Kind")), str(row.get("CommandKey") or "").lower()
+        sub = str(row.get("SubCommandKey") or "").lower()
+        if kind == "1" and command in (keys.explorer.lower(), keys.editor.lower()):
+            if flag(row, "NoOpen"):
+                return "denied"
+        elif kind == "2" and command == keys.explorer.lower() and sub in subs:
+            if flag(row, "NoOpen") or flag(row, "NoDisplay"):
+                return "denied"
+        elif kind == "3" and command == keys.editor.lower():
+            barred = "NoEdit" if operation == "update" else "NoAddNew"
+            if flag(row, barred) or flag(row, "NoOpen"):
+                return "denied"
+    return "allowed"
 
 
 def bind_step(step: ProcedureStep) -> tuple[str, tuple[object, ...]]:

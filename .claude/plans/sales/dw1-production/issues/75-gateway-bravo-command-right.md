@@ -1,6 +1,6 @@
 # 75 — Gateway: Bravo's command right, measured
 
-Status: ready-for-human (a script on UAT), then ready-for-agent
+Status: ready-for-human — code done 2026-11-26; script 10 on UAT fills `COMMAND_KEYS`
 Blocked by: none
 Category: research → enhancement (ticket 63 check 3)
 
@@ -30,3 +30,23 @@ roles' rows and `NoInherit` combine is not visible in SQL.
 ## Acceptance
 
 - The three measured users each get the answer the client gives them.
+
+## Comments
+
+**2026-11-26, the rule is Bravo's own.** The schema (`03-B8_Hitachi_Cable_schema.sql`)
+holds `ufn_B00Permission_Getdata(@_UserId, @_RoleId, @_PermissionType)`: it
+folds a user's rows, their parent groups' and their roles' by `BuiltinOrder`,
+`NoInherit` cutting what lies above (`usp_sys_GetControlPermission` does the
+same per column); type 1 is by command (NoOpen/NoDisplay), 2 by sub-command,
+3 the editing form's operations (NoAddNew, NoEdit…). So the gateway does not
+re-derive anything: `SqlServerBravo.command_right` reads that function for the
+three types and `decide_command_right` applies the deny-list (a flag on the
+screen's commands denies; no row allows). Which keys carry the SO screen's
+rights (`BizDocSO` with sub-commands Edit/Save/New? `EDIT_BizDocSO`?) is the
+one unmeasured fact: `COMMAND_KEYS` is empty, so the answer stays "unknown"
+and every live write is refused until script 10's three users show the keys
+reproduce what the client lets each do. Unit 10 (deny/allow per type, a
+flag on another command does not deny, the empty map); SQL Server 21/21 with
+the function's shape stubbed; the deny line mutated → red. Script 08 (local)
+grants the read login SELECT on the function. Script 10 (local,
+`docs/proterial/sql/10-quyen-lenh-so-uat.sql`) is ready for the UAT session.
