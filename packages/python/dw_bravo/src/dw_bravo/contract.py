@@ -154,16 +154,25 @@ class SetQuantity:
 
 @dataclass(frozen=True)
 class CancelLine:
-    """The whole line cancelled (`IsCancel`); a partial cancel is a split,
-    then this on the part that goes (ticket 53). What the client writes for a
-    cancel is not yet traced (the 11-20 trace holds only a cancel cleared), so
-    the gateway refuses this kind until it is (`WriteKind.pending`)."""
+    """The whole line cancelled, as a person does it on the SO screen (UAT
+    trace 11-25 17:31:50, ticket 71): "Order status" (`IsCancel`) set to
+    `Cancel`, the remaining quantity (`Quantity9`) typed as 0, and the reason
+    (`CancelRemark`); the layout computes the rest (cancelled date, quantity,
+    price and amount, the zeroed price and amounts). The reason was added
+    while this version was still pending, before any approval named it: no
+    stored token, switch or tenant rule version carries a cancel without it."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
     kind: ClassVar[str] = "so.line.cancel"
     version: ClassVar[int] = 1
 
     line: LineRef
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason.strip():
+            raise ContractError("a cancel needs its reason")
+        _text("reason", self.reason)
 
 
 @dataclass(frozen=True)
@@ -258,13 +267,9 @@ WRITE_KINDS: Final[dict[str, WriteKind]] = {
         # and the layout computed the rest of what the client wrote.
         WriteKind(SetConfirmedDate, "EDIT_BizDocSO", _SO_TABLES, "update"),
         WriteKind(SetQuantity, "EDIT_BizDocSO", _SO_TABLES, "update"),
-        WriteKind(
-            CancelLine,
-            "EDIT_BizDocSO",
-            _SO_TABLES,
-            "update",
-            pending="a real cancel's save is not traced (ticket 52 item 2)",
-        ),
+        # Traced 11-25 17:31:50: IsCancel, the quantity typed to 0 and the
+        # reason; the layout computed the rest (ticket 71).
+        WriteKind(CancelLine, "EDIT_BizDocSO", _SO_TABLES, "update"),
         # A split's further parts are new lines, and creation is an INSERT:
         # both wait on the shared template before their columns are known.
         WriteKind(

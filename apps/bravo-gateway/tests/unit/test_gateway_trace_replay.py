@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from gateway_fakes import SIGNER, TENANT, VERIFIER, WORKSPACE, FakeLedger, FakeRights, FakeSwitches
 
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
+from dw_bravo.contract import CancelLine, LineRef, SetConfirmedDate, SetQuantity
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.testing import sql_trace
@@ -95,8 +95,16 @@ class TraceBravo:
     async def layout(self, screen: str) -> Layout:
         return self.screen_layout
 
+    # Procedures answered with the save's own recorded call whatever the
+    # parameters: set only where the save differs from the client's in a way
+    # the test names (the cancel test's header totals).
+    as_recorded: frozenset[str] = frozenset()
+
     def procedures(self) -> ProcedurePort:
-        return self.replay.procedures(self.state)
+        inner = self.replay.procedures(self.state)
+        if not self.as_recorded:
+            return inner
+        return _AsRecorded(inner, self.state.window, self.as_recorded)
 
     def references(self) -> ReferencePort:
         from dw_bravo.testing.replay import _NoReferences
@@ -105,6 +113,24 @@ class TraceBravo:
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return self.replay.session_for(self.state.save)
+
+
+@dataclass
+class _AsRecorded:
+    """Answers the named procedures with the window's recorded call, whatever
+    parameters the gateway's plan passes; every other call as recorded."""
+
+    inner: ProcedurePort
+    window: list[sql_trace.ProcedureCall]
+    names: frozenset[str]
+
+    def call(
+        self, command: str, parameters: Mapping[str, object], outputs: Sequence[str]
+    ) -> Mapping[str, object]:
+        if command in self.names:
+            recorded = next(c for c in self.window if c.command == command)
+            parameters = recorded.parameters
+        return self.inner.call(command, parameters, outputs)
 
 
 def _fixed(at: datetime) -> Callable[[], datetime]:
@@ -266,6 +292,109 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
         map(tuple, skipped)
     )
     print(f"covered {covered} ({edits} Edit), skipped {skipped}; held back:", sorted(refusals))
+
+
+async def test_a_traced_cancel_is_the_clients_own_statement() -> None:
+    """Ticket 71: the 11-25 17:31:50 save cancelled two lines of a test SO.
+    The gateway cancels one line per command; for the line outside a split
+    group it must send the client's UPDATE, value for value. The header's
+    totals differ (the client cancelled both lines in one save), so only the
+    header's columns are compared."""
+    statements = sql_trace.read(Path(TRACE or ""))
+    saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
+    cancels = [
+        s
+        for s in saves
+        if any(w.values.get("IsCancel") == "Cancel" for w in s.writes if w.kind == "update")
+    ]
+    if not cancels:
+        pytest.skip("this trace holds no cancel (the 11-25 trace on does)")
+    calls = [
+        c for c in sql_trace.procedure_calls(statements) if c.statement.screen == "EDIT_BizDocSO"
+    ]
+    context = _CONTEXT.search(cancels[0].writes[0].statement.sql)
+    assert context is not None
+    _, user_id, _, branch, _ = context.group(1).split("@")
+    layout = read_layout(
+        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
+        "EDIT_BizDocSO",
+        missing_template="BizDocEditor",
+    )
+    replay = so_screen_replay(layout, int(user_id), branch)
+    user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
+    state = next(st for st in replay.states(saves, calls) if st.save is cancels[0])
+    before_h, before_l, _, _, written = replay.before_after(state)
+    before = _stored(before_h, before_l, written, replay)
+    checked = 0
+    for label, theirs in written.items():
+        if label == "Parent" or theirs.values.get("IsCancel") != "Cancel":
+            continue
+        index = next(
+            i
+            for i, line in enumerate(before.lines)
+            if Decimal(str(line["BuiltinOrder"])) == Decimal(str(theirs.values["BuiltinOrder"]))
+        )
+        line = before.lines[index]
+        if line.get("Divide") not in (None, "", Decimal(0)):
+            continue  # a split group's line: refused as unmeasured (its own test)
+        command = CancelLine(
+            line=LineRef(
+                so_id=int(Decimal(str(before.header["Id"]))),
+                line_id=int(Decimal(str(line["Id"]))),
+                line_rowversion=str(line["timestamp"]),
+            ),
+            reason=str(theirs.values["CancelRemark"]),
+        )
+        at = state.save.at.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        bravo = TraceBravo(layout, replay, state, user, before, before)
+        # One line's cancel leaves the header's total where the client's
+        # two-line save did not; the process group the header's rule looks
+        # up for that total is not what this test measures (ticket 50 runs
+        # it live), so it is answered as recorded.
+        bravo.as_recorded = frozenset({"usp_B20BizProcessGroup"})
+        pipeline = WritePipeline(
+            verifier=VERIFIER,
+            switches=FakeSwitches(),
+            ledger=FakeLedger(),
+            directory=bravo,
+            rights=FakeRights(),
+            documents=bravo,
+            engine=bravo,
+            writer=bravo,
+            now=_fixed(at),
+            tenant_id=TENANT,
+            screens=dict(SCREENS),
+            pace=WritePace(),
+        )
+        token = SIGNER.sign(
+            approval_id=uuid.uuid4(),
+            tenant_id=TENANT,
+            workspace_id=WORKSPACE,
+            command=command,
+            bravo_user_id=user.id,
+            employee_code="NV-TRACE",
+            now=at,
+        )
+
+        preview = await pipeline.preview(command, token)
+
+        batch = preview.batch
+        assert batch is not None, preview
+        assert batch.context == context.group(1)
+        ours = next(s for s in batch.statements if s.table == theirs.table)
+        client_update = _UPDATE.search(theirs.statement.sql)
+        assert client_update is not None
+        assert _assignments(ours.sql) == _assignments(client_update.group(0))
+        for name, value in ours.parameters.items():
+            if name.startswith(("_Original_", "_Id")):
+                continue
+            assert _equal(value, theirs.values.get(name[1:])), name
+        header = next(s for s in batch.statements if s.table == written["Parent"].table)
+        client_header = _UPDATE.search(written["Parent"].statement.sql)
+        assert client_header is not None
+        assert _assignments(header.sql) == _assignments(client_header.group(0))
+        checked += 1
+    assert checked >= 1
 
 
 _SET = re.compile(r"^(UPDATE TOP \(1\) \w+ SET )(.*?)( WHERE .*)$")

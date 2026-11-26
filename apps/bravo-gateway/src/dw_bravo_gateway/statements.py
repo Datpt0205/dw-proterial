@@ -116,7 +116,10 @@ def render_update(
             raise ValueError(f"{name!r} is not a column name the client writes")
     if not table.isalnum() or not read_back_key.isalnum():
         raise ValueError("table and key are Bravo's own names")
-    assignments = ",".join(f"[{n}]=@_{n}" for n in names)
+    # A NULL is written as the column's DEFAULT, never as a NULL parameter:
+    # every NULL the client set in the UAT traces (11-20 to 11-26) reads so.
+    nulls = {n for n, c in zip(names, ordered, strict=True) if columns[c] is None}
+    assignments = ",".join(f"[{n}]=DEFAULT" if n in nulls else f"[{n}]=@_{n}" for n in names)
     sql = (
         f"UPDATE TOP (1) {table} SET {assignments},[ModifiedAt]=DEFAULT"
         " WHERE Id=@_Original_Id AND timestamp=@_Original_timestamp;"
@@ -124,7 +127,7 @@ def render_update(
         f" FROM {table} WHERE Id=@_Id;"
     )
     parameters: dict[str, object] = {
-        f"_{n}": columns[c] for n, c in zip(names, ordered, strict=True)
+        f"_{n}": columns[c] for n, c in zip(names, ordered, strict=True) if n not in nulls
     }
     parameters |= {"_Original_Id": row_id, "_Original_timestamp": rowversion, "_Id": row_id}
     return Statement(table=table, row_id=row_id, sql=sql, parameters=parameters)

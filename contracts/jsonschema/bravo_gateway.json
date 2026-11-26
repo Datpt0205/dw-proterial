@@ -621,18 +621,23 @@
       }
     },
     "additionalProperties": false,
-    "description": "A write: The whole line cancelled (`IsCancel`); a partial cancel is a split,",
+    "description": "A write: The whole line cancelled, as a person does it on the SO screen (UAT",
     "properties": {
       "content": {
         "additionalProperties": false,
-        "description": "The whole line cancelled (`IsCancel`); a partial cancel is a split,\nthen this on the part that goes (ticket 53). What the client writes for a\ncancel is not yet traced (the 11-20 trace holds only a cancel cleared), so\nthe gateway refuses this kind until it is (`WriteKind.pending`).",
+        "description": "The whole line cancelled, as a person does it on the SO screen (UAT\ntrace 11-25 17:31:50, ticket 71): \"Order status\" (`IsCancel`) set to\n`Cancel`, the remaining quantity (`Quantity9`) typed as 0, and the reason\n(`CancelRemark`); the layout computes the rest (cancelled date, quantity,\nprice and amount, the zeroed price and amounts). The reason was added\nwhile this version was still pending, before any approval named it: no\nstored token, switch or tenant rule version carries a cancel without it.",
         "properties": {
           "line": {
             "$ref": "#/$defs/LineRef"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
           }
         },
         "required": [
-          "line"
+          "line",
+          "reason"
         ],
         "title": "CancelLine",
         "type": "object"

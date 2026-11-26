@@ -110,6 +110,8 @@ def stored() -> StoredDocument:
                 "Amount9": Decimal(6),
                 "Made": Decimal(2),
                 "EstimatedTimeDelivery": None,
+                "IsCancel": None,
+                "CancelRemark": None,
                 "ModifiedBy": 1,
                 "timestamp": ROWVERSION,
             }
@@ -125,6 +127,8 @@ def stored() -> StoredDocument:
                 "Made",
                 "ModifiedBy",
                 "EstimatedTimeDelivery",
+                "IsCancel",
+                "CancelRemark",
             ],
         },
         prevent_edit={"R20": 0},

@@ -256,11 +256,39 @@ def test_a_rule_only_the_template_defines_refuses() -> None:
         run.edit(doc, "Parent", 0, "Kind", "Sample")
 
 
-def test_money_evaluator_null_operand_over_a_value_refuses() -> None:
+def test_money_evaluator_counts_a_null_operand_as_zero() -> None:
+    # UAT trace 11-25 17:31:50: the client wrote UnitCost 0 over a NULL
+    # OriginalUnitCost; "left alone" would have kept the old value.
     doc, run = document(), runner()
     run.load(doc)
-    with pytest.raises(RuleRefusedError, match="NULL operand"):
-        run.edit(doc, "Detail", 0, "Price", None)
+    run.edit(doc, "Detail", 0, "Price", None)
+    assert doc.children["Detail"][0].get("Amount") == Decimal(0)
+
+
+# A rule setting two columns, one of them read by a money rule homed on the
+# other's change: the shape of Bravo's cancel reset (`OriginalUnitCost,UnitCost`).
+RESET_LAYOUT = LAYOUT.replace(
+    "    <Group><Eval_Mark /></Group>\n",
+    "    <Group><Eval_Mark /></Group>\n    <Cut><Eval_Reset /></Cut>\n",
+).replace(
+    "    <Eval_Order>",
+    "    <Eval_Reset><DataMember>Price,Amount</DataMember><Value>NULL</Value>"
+    "<Expr>Cut = 1</Expr></Eval_Reset>\n    <Eval_Order>",
+    1,
+)
+
+
+def test_a_rule_setting_several_columns_sets_them_all_before_their_events() -> None:
+    doc, run = document(), runner(RESET_LAYOUT)
+    doc.children["Detail"][0].set("Cut", None)
+    run.load(doc)
+    run.edit(doc, "Detail", 0, "Cut", Decimal(1))
+    line = doc.children["Detail"][0]
+    # Price and Amount are both NULL first; Price's change then runs the
+    # money rule over the NULL, leaving Amount 0, as the client's cancel does.
+    # One at a time, Amount's own reset would come last and leave it NULL.
+    assert line.get("Price") is None
+    assert line.get("Amount") == Decimal(0)
 
 
 def test_validators_fire_by_level() -> None:

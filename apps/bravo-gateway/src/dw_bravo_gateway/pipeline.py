@@ -36,13 +36,14 @@ from zoneinfo import ZoneInfo
 from dw_bravo.approval_token import ApprovalClaims, ApprovalTokenVerifier, TokenRefusedError
 from dw_bravo.contract import (
     WRITE_KINDS,
+    CancelLine,
     SetConfirmedDate,
     SetQuantity,
     WriteCommand,
     WriteKind,
     content_hash,
 )
-from dw_bravo.expression import UNKNOWN, RuleRefusedError, UndecidableError
+from dw_bravo.expression import UNKNOWN, RuleRefusedError, UndecidableError, is_empty
 from dw_bravo.runner import Document, Row, RuleRunner, SavePlan, _same
 from dw_bravo_gateway.ports import (
     Batch,
@@ -118,6 +119,16 @@ def typed_edits(command: WriteCommand) -> list[Edit]:
         ]
     if isinstance(command, SetQuantity):
         return [Edit("Detail", "Quantity9", Decimal(command.quantity))]
+    if isinstance(command, CancelLine):
+        # The order the screen allows (UAT trace 11-25 17:31:50, ticket 71):
+        # the quantity opens for typing only once "Order status" is set, and
+        # the cancelled price is taken from the unit price before the zero
+        # quantity resets it.
+        return [
+            Edit("Detail", "IsCancel", "Cancel"),
+            Edit("Detail", "CancelRemark", command.reason),
+            Edit("Detail", "Quantity9", Decimal(0)),
+        ]
     raise UnmeasuredError(f"what a person types for {type(command).__name__} is not traced")
 
 
@@ -323,6 +334,12 @@ class WritePipeline:
             layout = await self.engine.layout(kind.screen)
         except (RuleRefusedError, UndecidableError) as refused:
             raise _RefusedError("rules", f"layout_could_not_be_read: {refused}") from None
+        if isinstance(command, CancelLine):
+            line = stored.lines[_line_index(stored, command.line.line_id)]
+            if not is_empty(line.get("Divide")):
+                # The traced cancel of a split group's first line also cleared
+                # `Divide` by hand; what a person does there is not measured.
+                raise _RefusedError("rules", "unmeasured: a cancel of a split line")
         branch = str(stored.header.get("BranchCode") or "")
         session = await self.engine.session(user, branch, self.now())
         runner = RuleRunner(layout, self.engine.procedures(), self.engine.references(), session)
@@ -412,6 +429,10 @@ class WritePipeline:
             lowered = {k.lower(): v for k, v in row.items()}
             for column, value in written.columns.items():
                 if column.lower() == "modifiedby":
+                    continue
+                if value is None:
+                    # Written as DEFAULT, as the client does: the column's own
+                    # default decides what Bravo holds (statements.render_update).
                     continue
                 if not _same(_normal(lowered.get(column.lower())), _normal(value)):
                     differences.append(f"{written.table}#{written.row}.{column}")

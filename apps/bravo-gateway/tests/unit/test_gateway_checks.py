@@ -13,7 +13,6 @@ from decimal import Decimal
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from gateway_fakes import (
-    LINE,
     NOW,
     PIC,
     SET_DATE,
@@ -25,7 +24,7 @@ from gateway_fakes import (
 )
 
 from dw_bravo.approval_token import ApprovalTokenSigner
-from dw_bravo.contract import CancelLine, CreateSalesOrder, SalesOrderLine, SetConfirmedDate
+from dw_bravo.contract import CreateSalesOrder, SalesOrderLine, SetConfirmedDate
 from dw_bravo_gateway.ports import BravoUser, ColumnRight, LedgerEntry
 from dw_bravo_gateway.statements import SCREENS
 
@@ -130,7 +129,6 @@ async def test_a_tenant_written_into_the_token_after_signing_is_refused() -> Non
 @pytest.mark.parametrize(
     "command",
     [
-        CancelLine(line=LINE),
         CreateSalesOrder(
             case_ref="M01",
             doc_date=date(2026, 11, 21),
@@ -147,7 +145,7 @@ async def test_a_tenant_written_into_the_token_after_signing_is_refused() -> Non
             ),
         ),
     ],
-    ids=["cancel_untraced", "create_waits_on_03c"],
+    ids=["create_waits_on_03c"],
 )
 async def test_a_kind_not_yet_measured_is_refused_even_when_approved(command: object) -> None:
     gw = gateway()

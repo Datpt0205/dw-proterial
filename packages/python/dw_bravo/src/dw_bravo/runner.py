@@ -511,13 +511,29 @@ class RuleRunner:
                 for r in doc.rows(table)
                 if condition(narrowed, _RowScope(self, doc, table, r, scope.trigger))
             ]
+        members = rule.data_members()
         for target in rows:
             target_scope = _RowScope(self, doc, table, target, scope.trigger)
             value = self._rounded(rule, evaluate(text, target_scope), target_scope)
-            for column in rule.data_members():
+            if len(members) == 1 or suppress:
+                for column in members:
+                    self._assign(
+                        doc, table, target, column, value, rule.name, scope.trigger, suppress, depth
+                    )
+                continue
+            # A rule setting several columns sets them all, then each change
+            # raises its events (UAT trace 11-25 17:31:50: the reset of
+            # `OriginalUnitCost,UnitCost` on a cancel leaves `UnitCost` 0, the
+            # money rule's, which only holds when both are set first).
+            changed = [c for c in members if self._will_change(table, target, c, value)]
+            for column in changed:
+                self._column_event(doc, table, target, "ColumnChanging", column, depth)
+            for column in members:
                 self._assign(
-                    doc, table, target, column, value, rule.name, scope.trigger, suppress, depth
+                    doc, table, target, column, value, rule.name, scope.trigger, True, depth
                 )
+            for column in changed:
+                self._column_event(doc, table, target, "ColumnChanged", column, depth)
 
     def _money_rule(
         self,
@@ -545,11 +561,10 @@ class RuleRunner:
             raise RuleRefusedError(f"{rule.name} names no DataMember")
         current = scope.column(column) if row.has(column) else None
         if value is None:
-            # Two readings fit the trace: a NULL operand counts as 0, or the
-            # column is left alone. They agree while the column is empty.
-            if is_empty(current):
-                return
-            raise RuleRefusedError(f"{rule.name}: NULL operand over {column}={current!r}")
+            # A NULL operand counts as 0: on the 11-25 cancel the client wrote
+            # `UnitCost` 0 over `OriginalUnitCost` NULL (UAT trace 17:31:50),
+            # which "left alone" would have kept at 1100 or NULL.
+            value = Decimal(0)
         value = self._rounded(rule, value, scope)
         margin_text = rule.setting("zResultMarginValue")
         if margin_text and not _same(current, value):
@@ -588,6 +603,22 @@ class RuleRunner:
             )
 
     # --------------------------------------------------------- assignment
+
+    def _will_change(self, table: str, row: Row, column: str, value: object) -> bool:
+        """Whether setting ``column`` to ``value`` changes it; refuses, as
+        `_assign` does, a column not in hand whose change would fire rules."""
+        current = row.get(column) if row.has(column) else None
+        spec = self.layout.tables[table]
+        handled = any(
+            column.lower() in spec.column_events.get(e, {})
+            for e in ("ColumnChanging", "ColumnChanged")
+        )
+        if current is UNKNOWN and handled:
+            raise UndecidableError(
+                f"{table}.{column} was not in hand, "
+                "so whether setting it fires its rules is not known"
+            )
+        return not _same(current, value)
 
     def _assign(
         self,
