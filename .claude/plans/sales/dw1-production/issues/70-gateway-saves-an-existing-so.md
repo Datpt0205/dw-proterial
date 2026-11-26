@@ -1,6 +1,6 @@
 # 70 — Gateway: save an existing SO (the `Edit` context)
 
-Status: ready-for-agent
+Status: resolved (2026-11-26)
 Blocked by: none
 Category: enhancement (ticket 63)
 
@@ -29,3 +29,16 @@ stored SO's save is now traced three times: `EDIT_BizDocSO|Edit` in
   client's context line `EDIT_BizDocSO|Edit ...` and its UPDATE; before the
   change it is refused as unmeasured (test fails without the entry).
 - An operation with no traced word is still refused.
+
+## Comments
+
+**2026-11-26, done.** `SCREENS["EDIT_BizDocSO"].context_event` is
+`{"update": "Edit", "insert": "New"}`. The replay test now reads each save's
+own word: an `Edit` save is rendered by the shipped table with no override (the
+11-25 13:28 date save, covered in `02-trace-2.csv` and `02-trace-3.csv`); a
+`New` window's saves (11-20) keep naming their word. The 11-25 quantity save on
+a split pair writes five columns at once (a split's re-quantity), so it is not
+a single-column command and is skipped, as the 11-20 split was. The trace
+reader now skips a parameter bound to a batch variable (`@_X=@p1`, the PR
+approval rows of 11-26), which crashed it. Mutation: the update word removed
+→ 8 gateway tests red.

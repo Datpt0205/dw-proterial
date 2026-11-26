@@ -69,9 +69,12 @@ SCREENS: Final[Mapping[str, ScreenTables]] = {
         header="B30BizDoc",
         lines={"Detail": "B30BizDocDetailSO"},
         read_back_key={"B30BizDoc": "BizDocId", "B30BizDocDetailSO": "RowId"},
-        # Only `New` is traced, and only for a document created in the same
-        # session; a save of an existing SO is ticket 52's to trace.
-        context_event={},
+        # The client's word for a save (ticket 70): `Edit` for an SO opened
+        # from the list (UAT trace 11-25, the date and quantity saves, and
+        # 11-26's cancel and split), `New` for a document created in the
+        # same window (11-20, 11-25 16:53). The gateway only ever writes a
+        # stored SO, so an update is `Edit`; `New` is the create's.
+        context_event={"update": "Edit", "insert": "New"},
     ),
 }
 

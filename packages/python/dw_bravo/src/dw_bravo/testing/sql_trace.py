@@ -25,7 +25,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-_PARAM = re.compile(r"@_(\w+)=(N'(?:[^']|'')*'|'(?:[^']|'')*'|DEFAULT|NULL|@\w+ output|[^,]*)")
+_PARAM = re.compile(r"@_(\w+)=(N'(?:[^']|'')*'|'(?:[^']|'')*'|DEFAULT|NULL|@\w+ output|@\w+|[^,]*)")
 _WRITE = re.compile(
     r"(INSERT INTO (\w+) \((.*?)\) VALUES|UPDATE TOP \(1\) (\w+) SET (.*?) WHERE)", re.S
 )
@@ -115,8 +115,8 @@ def _values(sql: str) -> dict[str, object]:
     out: dict[str, object] = {}
     for match in _PARAM.finditer(sql[start + 2 :]):
         name, raw = match.group(1), match.group(2)
-        if raw.endswith(" output"):
-            continue
+        if raw.endswith(" output") or raw.startswith("@"):
+            continue  # bound to a variable the batch declared: no literal value
         out[name] = literal(raw)
     return out
 
@@ -148,7 +148,7 @@ def procedure_calls(statements: list[Statement]) -> Iterator[ProcedureCall]:
         parameters: dict[str, object] = {}
         for param in _PARAM.finditer(match.group(2)):
             raw = param.group(2)
-            if raw.endswith(" output") or raw == "default":
+            if raw.endswith(" output") or raw == "default" or raw.startswith("@"):
                 continue
             parameters[param.group(1)] = literal(raw)
         yield ProcedureCall(statement, match.group(1), parameters)

@@ -71,11 +71,9 @@ ROWVERSION = "0x00000000000007D2"
 LINE = LineRef(so_id=10, line_id=20, line_rowversion=ROWVERSION)
 SET_DATE = SetConfirmedDate(line=LINE, confirmed_date=date(2026, 12, 1))
 SET_QUANTITY = SetQuantity(line=LINE, quantity=Decimal(5))
-# The context's event for these tests only: what the client sends for a save
-# of an existing SO is not measured (statements.SCREENS refuses it).
-TEST_SCREENS = {
-    "EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": "Edit"})
-}
+# The shipped screens: the client's word for a stored SO's save is traced
+# (`Edit`, ticket 70).
+TEST_SCREENS = dict(SCREENS)
 
 
 def token(

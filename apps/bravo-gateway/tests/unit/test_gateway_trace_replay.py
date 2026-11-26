@@ -152,20 +152,30 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
     traced_context = _CONTEXT.search(saves[0].writes[0].statement.sql)
     assert traced_context is not None
     _, user_id, _, branch, _ = traced_context.group(1).split("@")
-    event = traced_context.group(1).split("@")[0].strip().split("|")[1]
     layout = read_layout(
         (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
         "EDIT_BizDocSO",
         missing_template="BizDocEditor",
     )
     replay = so_screen_replay(layout, int(user_id), branch)
-    # The trace's session saved with `<screen>|<event>`; the shipped table
-    # measures none for an existing SO, so the replay names the traced one.
-    screens = {"EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": event})}
     user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
 
     covered, skipped, refusals = 0, [], set()
+    edits = 0
     for state in replay.states(saves, calls):
+        # Each save carries its window's word: `Edit` for an SO opened from
+        # the list, the gateway's only case, rendered by the shipped table
+        # as is (ticket 70); `New` for one created in the same window, which
+        # the gateway never updates, so the replay names it to compare.
+        saved_context = _CONTEXT.search(state.save.writes[0].statement.sql)
+        assert saved_context is not None
+        event = saved_context.group(1).split("@")[0].strip().split("|")[1]
+        if event == "Edit":
+            screens = dict(SCREENS)
+        else:
+            screens = {
+                "EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": event})
+            }
         result = replay._replay_update(state.save, state.header, state.lines, state.window)
         roots = [(label, cols) for label, cols in result.roots.items()]
         before_h, before_l, _, after_l, written = replay.before_after(state)
@@ -243,19 +253,19 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
                     continue
                 assert _equal(value, theirs.values.get(name[1:])), (state.save.at, name)
         covered += 1
+        edits += event == "Edit"
 
-    # Three of the six saved UPDATEs are a gateway command (a quantity, two
-    # confirmed dates). The others: a header's PO number (not a command), a
-    # split's first half (`Divide`; its new line waits on script 03c), and a
-    # cancel being cleared (IsCancel, CancelPrice, CancelQuantity set to
-    # NULL), which is not a cancel; a real one is ticket 52's to trace.
-    assert covered == 3, skipped
-    assert sorted(map(tuple, skipped)) == [
-        ("Divide",),
-        ("IsCancel", "CancelPrice", "CancelQuantity"),
-        ("POCustomer",),
-    ]
-    print("held back:", sorted(refusals))
+    # The 11-20 trace: three of its six saved UPDATEs are a gateway command (a
+    # quantity, two confirmed dates), all in a `New` window. The others: a
+    # header's PO number (not a command), a split's first half (`Divide`),
+    # and a cancel being cleared (IsCancel, CancelPrice, CancelQuantity set
+    # to NULL). A later trace file holds those rows and more, so these are
+    # floors; an `Edit` save (11-25 on) must be covered by the shipped table.
+    assert covered >= 3, skipped
+    assert {("Divide",), ("IsCancel", "CancelPrice", "CancelQuantity"), ("POCustomer",)} <= set(
+        map(tuple, skipped)
+    )
+    print(f"covered {covered} ({edits} Edit), skipped {skipped}; held back:", sorted(refusals))
 
 
 _SET = re.compile(r"^(UPDATE TOP \(1\) \w+ SET )(.*?)( WHERE .*)$")
