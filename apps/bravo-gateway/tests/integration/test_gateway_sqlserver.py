@@ -158,6 +158,14 @@ def logins() -> tuple[Login, Login]:
         "CREATE TABLE dbo.B00Command (Id int PRIMARY KEY, CommandKey varchar(24), DLLName varchar(64),"
         " ClassName varchar(64), CtorArgs nvarchar(max), MethodName varchar(64), InvokeArgs nvarchar(max))",
         "INSERT INTO dbo.B00Command VALUES (1, 'EDIT_BizDocSO', 'Bravo.dll', 'DataEditor', N'x', NULL, NULL)",
+        # Bravo's business-process step every save ends with (ticket 74): here
+        # it records its arguments and the user the context names.
+        "CREATE TABLE dbo.ProcessLog (Id int IDENTITY PRIMARY KEY, BizDocId varchar(16),"
+        " BranchCode varchar(3), DocCode varchar(2), UserId int)",
+        "CREATE PROCEDURE dbo.usp_B30BizDocProcess_CreateProcess @_BizDocId varchar(16),"
+        " @_BizProcessGroupUnique varchar(32) = NULL, @_BranchCode varchar(3), @_DocCode varchar(2)"
+        " AS INSERT INTO dbo.ProcessLog (BizDocId, BranchCode, DocCode, UserId) VALUES"
+        " (@_BizDocId, @_BranchCode, @_DocCode, dbo.ufn_sys_GetUserIdFromContext_Info(CONTEXT_INFO()))",
         "CREATE PROCEDURE dbo.usp_sys_GetControlPermission @_UserId int, @_CommandKey varchar(24) AS"
         " SELECT TableName, ColumnName, NoAddNew, NoEdit FROM dbo.Rights WHERE UserId = @_UserId",
         "INSERT INTO dbo.B30BizDoc (BizDocId, DocNo, BranchCode, DocDate, TotalQuantity,"
@@ -197,6 +205,7 @@ def logins() -> tuple[Login, Login]:
                 "ufn_B00Permission_Getdata",
                 "ufn_sys_GetPermissionUserListTable",
                 "ufn_Prevent_Edit",
+                "usp_B30BizDocProcess_CreateProcess",
             )
         ),
         "GRANT VIEW DEFINITION ON dbo.B30BizDoc TO dw_test_read",
@@ -207,6 +216,7 @@ def logins() -> tuple[Login, Login]:
         "GRANT UPDATE ON dbo.B30BizDoc (TotalQuantity, ModifiedBy, ModifiedAt) TO dw_test_write",
         "GRANT UPDATE ON dbo.B30BizDocDetailSO (Quantity9, Amount9, EstimatedTimeDelivery,"
         " ModifiedBy, ModifiedAt) TO dw_test_write",
+        "GRANT EXECUTE ON dbo.usp_B30BizDocProcess_CreateProcess TO dw_test_write",
     )
     connection = _sa(DB)
     cursor = connection.cursor()  # type: ignore[attr-defined]
@@ -285,6 +295,37 @@ async def test_the_pics_write_under_column_grants_reaches_bravos_trigger(
     assert (line["Quantity9"], line["Amount9"], line["ModifiedBy"]) == (5, 10, 2413)
     assert after.header["TotalQuantity"] == 6
     assert _logged_users()[-1] == 2413  # the trigger read the PIC from the context
+    # Bravo's process step ran after the statements, as the PIC (ticket 74).
+    assert _process_log()[-1] == ("D1", "A01", "SO", 2413)
+
+
+def _process_log() -> list[tuple[object, ...]]:
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("SELECT BizDocId, BranchCode, DocCode, UserId FROM dbo.ProcessLog ORDER BY Id")
+    rows = [tuple(row) for row in cursor.fetchall()]
+    connection.close()  # type: ignore[attr-defined]
+    return rows
+
+
+async def test_a_process_step_that_fails_takes_the_write_back(
+    logins: tuple[Login, Login],
+) -> None:
+    bravo = _Allowed(*logins, templates={})
+    command = SetQuantity(line=await _line(bravo, "R1"), quantity=Decimal(7))
+    before = await bravo.load("EDIT_BizDocSO", 1)
+    _run(DB, "REVOKE EXECUTE ON dbo.usp_B30BizDocProcess_CreateProcess TO dw_test_write")
+    try:
+        result = await _pipeline(bravo).execute(command, token(command))
+    finally:
+        _run(DB, "GRANT EXECUTE ON dbo.usp_B30BizDocProcess_CreateProcess TO dw_test_write")
+
+    # Sent and refused by Bravo: in doubt to the gateway, but the transaction
+    # rolled back, so Bravo holds the line as it was.
+    assert result.outcome == "in_doubt", result
+    after = await bravo.load("EDIT_BizDocSO", 1)
+    line = next(x for x in after.lines if x["RowId"] == "R1")
+    assert line["Quantity9"] == next(x for x in before.lines if x["RowId"] == "R1")["Quantity9"]
 
 
 async def test_a_stale_line_is_refused_by_the_rowversion(logins: tuple[Login, Login]) -> None:

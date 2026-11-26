@@ -58,11 +58,12 @@ from dw_bravo_gateway.ports import (
     ColumnRight,
     CommandRight,
     DocumentNotFoundError,
+    ProcedureStep,
     StaleRowError,
     Statement,
     StoredDocument,
 )
-from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 T = TypeVar("T")
 
@@ -493,6 +494,8 @@ class SqlServerBravo:
                         cursor.execute(sql, values)
                         if cursor.rowcount != 1:
                             raise StaleRowError(statement.table)
+                    for step in batch.steps:
+                        cursor.execute(*bind_step(step))
                     connection.commit()
                 except BaseException:
                     connection.rollback()
@@ -522,12 +525,25 @@ def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
     return _NAMED.sub("?", update), tuple(values)
 
 
+def bind_step(step: ProcedureStep) -> tuple[str, tuple[object, ...]]:
+    """`EXEC dbo.<procedure> @_P=?, ...` for one of the procedures a save runs
+    (`statements.PROCESS_PROCEDURE` only), its arguments bound by position."""
+    if step.name != PROCESS_PROCEDURE:
+        raise ValueError(f"{step.name!r} is not a procedure a save runs")
+    names = list(step.parameters)
+    if not all(n.startswith("_") and n[1:].isalnum() for n in names):
+        raise ValueError("a procedure's parameters are Bravo's own names")
+    sql = f"EXEC dbo.{step.name} " + ",".join(f"@{n}=?" for n in names) + ";"
+    return sql, tuple(step.parameters[n] for n in names)
+
+
 # The routines every write depends on, by what they are to the watch: the
 # context parser Bravo's triggers read the PIC from, and the rights and lock
 # functions the gateway asks (ticket 65's list).
 ROUTINES: Final[Mapping[str, Literal["routine", "context_parser"]]] = {
     "ufn_sys_GetUserIdFromContext_Info": "context_parser",
     "usp_sys_GetControlPermission": "routine",
+    PROCESS_PROCEDURE: "routine",
     "ufn_B00Permission_Getdata": "routine",
     "ufn_sys_GetPermissionUserListTable": "routine",
     "ufn_Prevent_Edit": "routine",

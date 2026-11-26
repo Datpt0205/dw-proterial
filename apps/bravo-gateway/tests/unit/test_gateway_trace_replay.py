@@ -35,7 +35,7 @@ from dw_bravo.testing import sql_trace
 from dw_bravo.testing.replay import SaveState, ScreenReplay, group_saves, so_screen_replay
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
 from dw_bravo_gateway.ports import Batch, BravoUser, StoredDocument
-from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 LAYOUTS = os.environ.get("DW_BRAVO_LAYOUTS")
 TRACE = os.environ.get("DW_BRAVO_TRACE")
@@ -278,6 +278,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
                 if name.startswith(("_Original_", "_Id")):
                     continue
                 assert _equal(value, theirs.values.get(name[1:])), (state.save.at, name)
+        _assert_the_clients_process_step(batch.steps, calls, state.save.at)
         covered += 1
         edits += event == "Edit"
 
@@ -393,8 +394,23 @@ async def test_a_traced_cancel_is_the_clients_own_statement() -> None:
         client_header = _UPDATE.search(written["Parent"].statement.sql)
         assert client_header is not None
         assert _assignments(header.sql) == _assignments(client_header.group(0))
+        _assert_the_clients_process_step(batch.steps, calls, state.save.at)
         checked += 1
     assert checked >= 1
+
+
+def _assert_the_clients_process_step(
+    steps: Sequence[object], calls: list[sql_trace.ProcedureCall], at: datetime
+) -> None:
+    """Ticket 74: the save's process step is the client's, argument for
+    argument, where the trace records one at the save's second."""
+    traced = [c for c in calls if c.command == PROCESS_PROCEDURE and c.statement.at == at]
+    if not traced:
+        return  # the 11-20 trace's first sessions did not record it
+    [step] = steps
+    assert step.name == PROCESS_PROCEDURE  # type: ignore[attr-defined]
+    ours = {k[1:]: v for k, v in step.parameters.items()}  # type: ignore[attr-defined]
+    assert ours == dict(traced[-1].parameters), (at, ours)
 
 
 _SET = re.compile(r"^(UPDATE TOP \(1\) \w+ SET )(.*?)( WHERE .*)$")

@@ -145,11 +145,22 @@ class Statement:
 
 
 @dataclass(frozen=True)
+class ProcedureStep:
+    """A Bravo procedure the client runs after a save's statements, with the
+    parameter values it passes (`statements.process_step`)."""
+
+    name: str
+    parameters: Mapping[str, object]
+
+
+@dataclass(frozen=True)
 class Batch:
-    """One save: the context line, then its statements, in one transaction."""
+    """One save: the context line, then its statements, then the procedures
+    the client runs after them, in one transaction."""
 
     context: str
     statements: Sequence[Statement]
+    steps: Sequence[ProcedureStep] = ()
 
 
 class Writer(Protocol):

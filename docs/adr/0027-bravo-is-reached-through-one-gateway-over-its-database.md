@@ -195,3 +195,26 @@ sets that no layout holds), the gateway's write login is granted exactly
 those columns (`docs/proterial/sql/08`), and its UAT acceptance passed
 (decision 7). No approval workflow exists in Bravo for SO or quotations
 (script 05, 2026-11-25): the approval is DW's, before the entry.
+
+## Amendment 2026-11-26: the write runs Bravo's process step (ticket 74)
+
+Decided by recommendation on Đạt's instruction of 2026-11-26 ("làm theo
+khuyến nghị").
+
+Every save in the three UAT traces (11-20, 11-25, 11-26) ends with
+`exec dbo.usp_B30BizDocProcess_CreateProcess @_BizDocId, @_BizProcessGroupUnique=NULL,
+@_BranchCode, @_DocCode` on the saving session. A write that skipped it would
+leave Bravo's business-process rows for the document behind what a person's
+save leaves. So the gateway runs that one procedure after its statements, in
+the same transaction and under the same context, with the client's
+arguments; a failure takes the whole write back (shown on SQL Server 2017).
+
+- Still nothing of DW's is created in Bravo's database. The write login gains
+  `EXECUTE` on this one Bravo procedure (`docs/proterial/sql/08`), and the
+  read login `VIEW DEFINITION` on it, so the change watch (ticket 65) sees a
+  change to it and pauses the writes that depend on it.
+- The adapter runs only that procedure (`bind_step` refuses any other name),
+  bound by position, never with text built from a request.
+- Through ownership chaining the procedure writes its own tables without
+  grants of the login: that is Bravo's own code doing what it does for every
+  person's save, and the reason the procedure is watched.

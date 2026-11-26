@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from dw_bravo.runner import WriteCommand
-from dw_bravo_gateway.ports import Batch, Statement
+from dw_bravo_gateway.ports import Batch, ProcedureStep, Statement
 
 _CONTEXT_WIDTH: Final = 50
 _CONTEXT_LIMIT: Final = 128  # varbinary(128)
@@ -54,6 +54,8 @@ class ScreenTables:
     # The event word of the context for a save, by operation. Absent: not
     # measured, so refused.
     context_event: Mapping[str, str]
+    # The document code the client passes the process step (`DocCode`).
+    doc_code: str
 
     def table_for(self, layout_key: str) -> str:
         if layout_key == "Parent":
@@ -75,8 +77,35 @@ SCREENS: Final[Mapping[str, ScreenTables]] = {
         # same window (11-20, 11-25 16:53). The gateway only ever writes a
         # stored SO, so an update is `Edit`; `New` is the create's.
         context_event={"update": "Edit", "insert": "New"},
+        doc_code="SO",
     ),
 }
+
+# The procedure every save of a document ends with in the UAT traces (11-20
+# to 11-26): Bravo's business-process rows for the document. The gateway
+# runs it after its statements, in the same transaction (ticket 74, ADR
+# 0027 amendment); the write login holds EXECUTE on it and nothing else.
+PROCESS_PROCEDURE: Final = "usp_B30BizDocProcess_CreateProcess"
+
+
+def process_step(screen: str, header: Mapping[str, object]) -> ProcedureStep:
+    """The process step after a save, with the client's arguments: the
+    document's `BizDocId` and `BranchCode`, no process group, the screen's
+    document code (`exec dbo.usp_B30BizDocProcess_CreateProcess
+    @_BizDocId='…SO',@_BizProcessGroupUnique=NULL,@_BranchCode='A01',
+    @_DocCode='SO'` in every traced save)."""
+    biz_doc_id, branch = header.get("BizDocId"), header.get("BranchCode")
+    if not biz_doc_id or not branch:
+        raise UnmeasuredError("the document's BizDocId or BranchCode for its process step")
+    return ProcedureStep(
+        name=PROCESS_PROCEDURE,
+        parameters={
+            "_BizDocId": str(biz_doc_id),
+            "_BizProcessGroupUnique": None,
+            "_BranchCode": str(branch),
+            "_DocCode": SCREENS[screen].doc_code,
+        },
+    )
 
 
 def context_line(command: str, event: str | None, user_id: int, branch: str, year: int) -> str:

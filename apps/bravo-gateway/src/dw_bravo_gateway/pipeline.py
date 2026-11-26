@@ -27,7 +27,7 @@ import asyncio
 import uuid
 import weakref
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 from typing import Literal
@@ -65,6 +65,7 @@ from dw_bravo_gateway.statements import (
     ScreenTables,
     UnmeasuredError,
     context_line,
+    process_step,
     render_save,
 )
 
@@ -397,9 +398,10 @@ class WritePipeline:
             for i, line in enumerate(stored.lines):
                 rows[(key, i)] = (line["Id"], str(line["timestamp"]))
         try:
-            return render_save(
+            batch = render_save(
                 kind.screen, plan.commands, rows, stored.column_order, context=context
             )
+            return replace(batch, steps=(process_step(kind.screen, stored.header),))
         except UnmeasuredError as unmeasured:
             raise _RefusedError("write", f"unmeasured: {unmeasured}") from None
 
