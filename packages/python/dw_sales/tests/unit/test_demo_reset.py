@@ -26,6 +26,11 @@ def test_the_reset_refuses_any_profile_but_local_and_test(
         demo_reset.main()
 
 
+def test_the_reset_clears_the_conversations_whose_answers_cite_its_cases() -> None:
+    # A kept conversation links to cases the reset deleted (2026-11-26).
+    assert demo_reset.tables.assistant_sessions in demo_reset._CLEARED
+
+
 def test_the_reset_clears_only_the_demo_personas_tenants() -> None:
     assert demo_reset.demo_tenants() == sorted(
         [sid("tenant", "tenant-alpha"), sid("tenant", "tenant-beta")], key=str
