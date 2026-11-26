@@ -276,7 +276,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.skill_reply_drafts",
                 ),
                 _severities("missing_noc_esf"),
-                _in(_FOLLOWUPS, "implied_acceptance"),
+                _in(_FOLLOWUPS, "implied_acceptance", "export_control_hold"),
             ),
             _step(StepId.O11),
             # Reading the RFQ (a quote step whose switch lives in the order rules).

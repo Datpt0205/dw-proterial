@@ -30,12 +30,14 @@ from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.order_quotes import SETTLED
-from dw_sales.domain.orders import OrderStatus
+from dw_sales.domain.orders import FindingCode, OrderStatus, export_acknowledgeable_statuses
 
 _D = tables.followup_deliveries
 _O = tables.order_cases
 _Q = tables.quote_cases
 _E = tables.case_events
+_R = tables.order_revisions
+_F = tables.order_findings
 _SCOPES = sa.text("SELECT tenant_id, workspace_id FROM sales.followup_scopes()")
 
 
@@ -122,6 +124,36 @@ def _pcs_price_asked_at() -> sa.ColumnElement[datetime]:
     return sa.case((waits, _at(body[("production_type_set", "at")].astext)), else_=sa.null())
 
 
+def _export_held() -> sa.ColumnElement[bool]:
+    """`OrderCase.awaits_export_control`, read without the case: a status
+    where the export-control PIC may decide it, and an open `missing_noc_esf`
+    on the current revision (ticket 78). Never the finding's own time: every
+    save rewrites the findings (`_replace_findings`), so the wait is the
+    revision's arrival, `received_at`, and owed once per revision."""
+    held = (
+        sa.select(_F.c.id)
+        .join(
+            _R,
+            sa.and_(
+                _R.c.id == _F.c.revision_id,
+                _R.c.tenant_id == _F.c.tenant_id,
+                _R.c.workspace_id == _F.c.workspace_id,
+            ),
+        )
+        .where(
+            _R.c.tenant_id == _O.c.tenant_id,
+            _R.c.workspace_id == _O.c.workspace_id,
+            _R.c.case_id == _O.c.id,
+            _R.c.superseded_at.is_(None),
+            _F.c.code == FindingCode.MISSING_NOC_ESF.value,
+            _F.c.disposition == "open",
+        )
+        .exists()
+    )
+    statuses = sorted(s.value for s in export_acknowledgeable_statuses())
+    return sa.and_(_O.c.status.in_(statuses), held)
+
+
 def _day(text: str | None) -> date | None:
     return None if text is None else date.fromisoformat(text)
 
@@ -144,6 +176,7 @@ def _case(kind: CaseKind, row: RowMapping) -> WaitingCase:
         quote_open_since=row["quote_open_since"],
         design_checked=bool(row["design_checked"]),
         pcs_price_asked_at=row["pcs_price_asked_at"],
+        export_held=bool(row["export_held"]),
     )
 
 
@@ -181,6 +214,9 @@ class SqlFollowupStore:
             _quote_open_since().label("quote_open_since"),
             sa.false().label("design_checked"),
             sa.null().label("pcs_price_asked_at"),
+            # An NOC/ESF hold waiting on the export-control PIC (ticket 78).
+            # Its statuses are all loaded already (`LOADED`), so no filter.
+            _export_held().label("export_held"),
         ).where(
             sa.or_(
                 _O.c.status.in_(sorted(statuses.get(CaseKind.ORDER, frozenset()))),
@@ -214,6 +250,7 @@ class SqlFollowupStore:
             _Q.c.body["design_check"].astext.isnot(None).label("design_checked"),
             # A pcs case waiting for the GM's price (ticket 05).
             _pcs_price_asked_at().label("pcs_price_asked_at"),
+            sa.false().label("export_held"),
         ).where(
             sa.or_(
                 _Q.c.status.in_(sorted(statuses.get(CaseKind.QUOTE, frozenset()))),

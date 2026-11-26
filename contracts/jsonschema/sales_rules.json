@@ -1284,6 +1284,22 @@
         "title": "BeforeStage",
         "type": "object"
       },
+      "ExportControlHoldRule": {
+        "additionalProperties": false,
+        "description": "An order held on an open NOC/ESF finding: tell the export-control PIC\nat once, the holders of the scope that acknowledges it (ticket 78).",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt báo ngay cho người phụ trách kiểm soát xuất khẩu khi đơn hàng thiếu NOC/ESF chờ họ xác nhận (chưa ai được giao quyền này thì báo Trưởng bộ phận).",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ExportControlHoldRule",
+        "type": "object"
+      },
       "ImpliedAcceptanceRule": {
         "additionalProperties": false,
         "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): DW1 records the agreement\nitself and tells the PIC once, who may undo it with one press (ticket 82,\ndw_sales ADR 0011 amendment); with ``record`` off, the PIC records it.",
@@ -1620,6 +1636,10 @@
     "additionalProperties": false,
     "description": "Every timing and switch of DW1's follow-ups and its morning brief.",
     "properties": {
+      "export_control_hold": {
+        "$ref": "#/$defs/ExportControlHoldRule",
+        "description": "Đơn hàng thiếu NOC/ESF chờ người phụ trách kiểm soát xuất khẩu."
+      },
       "implied_acceptance": {
         "$ref": "#/$defs/ImpliedAcceptanceRule",
         "description": "Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
@@ -1706,7 +1726,8 @@
       "your_turn",
       "waiting_design_code",
       "waiting_quote",
-      "waiting_pcs_price"
+      "waiting_pcs_price",
+      "export_control_hold"
     ],
     "title": "SalesFollowups",
     "type": "object"
@@ -3093,6 +3114,12 @@
               "{count}"
             ]
           },
+          "export_control_hold": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Export Control Hold",
+            "type": "string"
+          },
           "head_order": {
             "maxLength": 60,
             "minLength": 1,
@@ -3198,6 +3225,7 @@
           "waiting_design_code",
           "waiting_quote",
           "waiting_pcs_price",
+          "export_control_hold",
           "batch_title",
           "batch_body",
           "order",
@@ -3210,6 +3238,12 @@
         "additionalProperties": false,
         "description": "One reminder per follow-up, and per way it reads (`followups.Followup`;\nwhich one a case gets is code's, `followups.reminder_text`).",
         "properties": {
+          "export_control_hold": {
+            "$ref": "#/$defs/SinceReminder"
+          },
+          "export_control_unheld": {
+            "$ref": "#/$defs/SinceReminder"
+          },
           "implied_acceptance": {
             "$ref": "#/$defs/SinceReminder"
           },
@@ -3283,7 +3317,9 @@
           "waiting_customer_spec",
           "waiting_design_code",
           "waiting_quote",
-          "waiting_pcs_price"
+          "waiting_pcs_price",
+          "export_control_hold",
+          "export_control_unheld"
         ],
         "title": "ReminderWords",
         "type": "object"

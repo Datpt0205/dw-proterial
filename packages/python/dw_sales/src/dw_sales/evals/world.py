@@ -872,6 +872,9 @@ class _Followups:
                     quote_open_since=quote_open_since,
                     design_checked=design_checked,
                     pcs_price_asked_at=pcs_price_asked_at,
+                    # Ticket 78: the SQL store reads the same from the
+                    # current revision's findings.
+                    export_held=isinstance(case, OrderCase) and case.awaits_export_control,
                 )
             )
         return found

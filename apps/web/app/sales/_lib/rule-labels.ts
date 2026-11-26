@@ -687,6 +687,11 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_pcs_price.remind.notify": { label: "Nhắc ai" },
+    export_control_hold: {
+      label: "Đơn thiếu NOC/ESF chờ xác nhận",
+      help: "Báo ngay cho người phụ trách kiểm soát xuất khẩu (nhóm quyền PIC kiểm soát xuất khẩu), mỗi bản PO một lần. Chưa ai có quyền này thì báo Trưởng bộ phận để giao quyền.",
+    },
+    "export_control_hold.enabled": { label: "Bật báo đơn thiếu NOC/ESF" },
     implied_acceptance: {
       label: "Khách im lặng quá hạn xác nhận",
       help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 tự ghi đồng ý ngầm (nếu bật) và báo một lần cho Sales phụ trách; Sales hoàn tác được bằng một nút.",
@@ -917,6 +922,28 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Nội dung",
       help: REMINDER_HELP,
     },
+    "reminders.export_control_hold": {
+      label: "Đơn thiếu NOC/ESF chờ xác nhận",
+    },
+    "reminders.export_control_hold.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_hold.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_unheld": {
+      label: "Đơn thiếu NOC/ESF mà chưa ai có quyền xác nhận",
+    },
+    "reminders.export_control_unheld.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_unheld.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
     next_steps: {
       label: "Việc cần làm tiếp",
       help: "Câu nói Sales làm gì tiếp khi đến lượt, ghi trong lời nhắc và bản tin.",
@@ -960,6 +987,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "push.waiting_design_code": { label: "Chờ Design tạo mã quá lâu" },
     "push.waiting_quote": { label: "Chờ báo giá quá lâu" },
     "push.waiting_pcs_price": { label: "Chờ giá GM quá lâu" },
+    "push.export_control_hold": { label: "Chờ xác nhận NOC/ESF" },
     "push.batch_title": {
       label: "Tiêu đề khi có nhiều việc cùng lúc",
       help: REMINDER_HELP,

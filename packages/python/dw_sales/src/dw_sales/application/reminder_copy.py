@@ -121,6 +121,10 @@ class ReminderWords(BaseModel):
     waiting_quote: HoursReminder
     # A pcs quote waiting for the GM's price (ticket 05).
     waiting_pcs_price: HoursReminder
+    # An order held on an open NOC/ESF finding, to the export-control PIC;
+    # and to the heads while nobody may acknowledge it (ticket 78).
+    export_control_hold: SinceReminder
+    export_control_unheld: SinceReminder
 
 
 def _plain(max_length: int) -> Any:
@@ -232,6 +236,7 @@ class PushWords(BaseModel):
     waiting_design_code: str = _plain(60)
     waiting_quote: str = _plain(60)
     waiting_pcs_price: str = _plain(60)
+    export_control_hold: str = _plain(60)
     batch_title: str = Field(min_length=1, max_length=60, json_schema_extra=_named(_BATCH))
     batch_body: str = _plain(120)
     # The case's kind, before its number.
@@ -257,6 +262,7 @@ class PushWords(BaseModel):
         "waiting_design_code",
         "waiting_quote",
         "waiting_pcs_price",
+        "export_control_hold",
         "batch_body",
         "order",
         "quote",

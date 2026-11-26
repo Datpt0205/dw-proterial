@@ -1998,6 +1998,13 @@ def design_wait_statuses() -> frozenset[OrderStatus]:
     return _EDITABLE
 
 
+def export_acknowledgeable_statuses() -> frozenset[OrderStatus]:
+    """Where the export-control PIC may acknowledge `missing_noc_esf`
+    (`dispose`), read-only: what `OrderCase.awaits_export_control` reads, and
+    the follow-ups' SQL with it (ticket 78)."""
+    return _ACKNOWLEDGEABLE
+
+
 def quote_wait_statuses() -> frozenset[OrderStatus]:
     """Where an order waits on a quote case opened from it (ticket 09): where
     it was opened, before the self-check that refuses an open one

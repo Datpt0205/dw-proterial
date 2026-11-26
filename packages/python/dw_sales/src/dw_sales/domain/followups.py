@@ -44,6 +44,12 @@ on a case changes because a reminder went out. The person decides.
 - ``waiting_pcs_price``: a quote case marked pcs without the GM/BC Manager's
   price recorded (ticket 05), from when it was marked, while it is not yet
   sent. Sales may not price it meanwhile; DW1 never mails the GM.
+- ``export_control_hold``: an order held on an open `missing_noc_esf` where
+  the export-control PIC may acknowledge it (`OrderCase.awaits_export_control`,
+  ticket 78), told once to them as the current PO revision's wait (its
+  arrival: the finding is raised when a revision is checked). A finding, not
+  a status, so "your turn" cannot see it. Who they are is the lane's to
+  resolve (``export_control``, never a tenant's to name on another rule).
 
 ``quote_waiting_design`` stops once Design's result was read from Bravo's
 YCBG export (`QuoteCase.design_check`, ticket 16): the status stays
@@ -89,6 +95,9 @@ Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 WEEKDAYS: Final[tuple[Weekday, ...]] = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 # Who is told: the case's assigned Sales PIC, or the head of Sales.
 Audience = Literal["pic", "head"]
+# Whom a due stage tells: a tenant's audience, or the export-control PIC,
+# whom only the export-control hold tells (no rule may name them).
+Told = Audience | Literal["export_control"]
 _CLOCK = r"^([01]\d|2[0-3]):[0-5]\d$"
 _HOURS_LIMIT: Final = 24 * 60  # sixty days
 
@@ -113,6 +122,9 @@ class Followup(StrEnum):
     WAITING_QUOTE = "waiting_quote"
     # A pcs quote case waits for the GM/BC Manager's price (ticket 05).
     WAITING_PCS_PRICE = "waiting_pcs_price"
+    # An order held on an open NOC/ESF finding waits for the export-control
+    # PIC (ticket 78).
+    EXPORT_CONTROL_HOLD = "export_control_hold"
 
 
 class Stage(StrEnum):
@@ -289,6 +301,20 @@ class WaitingPcsPriceRule(BaseModel):
     enabled: bool = Field(description="Bật hoặc tắt nhắc báo giá hàng pcs đang chờ giá GM.")
     remind: AfterStage = Field(
         description="Nhắc khi báo giá đã đánh dấu pcs mà sau số giờ này chưa ghi giá GM."
+    )
+
+
+class ExportControlHoldRule(BaseModel):
+    """An order held on an open NOC/ESF finding: tell the export-control PIC
+    at once, the holders of the scope that acknowledges it (ticket 78)."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(
+        description=(
+            "Bật hoặc tắt báo ngay cho người phụ trách kiểm soát xuất khẩu khi đơn hàng thiếu "
+            "NOC/ESF chờ họ xác nhận (chưa ai được giao quyền này thì báo Trưởng bộ phận)."
+        )
     )
 
 
@@ -481,6 +507,11 @@ class SalesFollowups(BaseModel):
     waiting_pcs_price: WaitingPcsPriceRule = Field(
         description="Báo giá hàng pcs đang chờ giá GM/BC Manager."
     )
+    # 1.8.0 (ticket 78): a version written before it reads it as the
+    # platform's current version has it (`read_over`).
+    export_control_hold: ExportControlHoldRule = Field(
+        description="Đơn hàng thiếu NOC/ESF chờ người phụ trách kiểm soát xuất khẩu."
+    )
     # 1.5.0 (ticket 48): a version written before the field shows the number,
     # as every push before it would have.
     push: PushRule = Field(
@@ -542,6 +573,9 @@ class WaitingCase:
     # When a quote case was marked pcs, while its GM price is not recorded
     # (`QuoteCase.waits_on_pcs_price`, ticket 05); None otherwise.
     pcs_price_asked_at: datetime | None = None
+    # The order awaits the export-control PIC (`OrderCase.awaits_export_control`,
+    # ticket 78); its wait is the current revision's, from ``received_at``.
+    export_held: bool = False
 
 
 # The statuses each follow-up watches.
@@ -603,7 +637,7 @@ class Due:
     stage: Stage
     # When the wait began: the episode the stage is owed for.
     since: datetime
-    notify: tuple[Audience, ...]
+    notify: tuple[Told, ...]
 
 
 def due_soon(due: date, today: date, policy: SalesFollowups) -> bool:
@@ -728,6 +762,18 @@ def owed(
             # Told once, to the PIC, as the days run out: the PIC records it.
             found.append(
                 Due(case, Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY, case.implied_from, ("pic",))
+            )
+        if policy.export_control_hold.enabled and order and case.export_held:
+            # Told once per PO revision: a save rewrites the findings, never
+            # the revision's arrival.
+            found.append(
+                Due(
+                    case,
+                    Followup.EXPORT_CONTROL_HOLD,
+                    Stage.NOTIFY,
+                    case.received_at,
+                    ("export_control",),
+                )
             )
         if orders.enabled and order and case.status in _ORDER_UNCONFIRMED:
             found += _after(

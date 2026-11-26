@@ -27,7 +27,7 @@ Hiện trạng đọc từ code ngày 2026-11-26; số ticket trỏ vào
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | Sales PIC                      | **Việc của tôi** (`/sales`, cài như app, push về iPhone). Mở một việc ra: đề xuất của DW, các nút, và chat của chính hồ sơ đó. |
 | Trưởng phòng Sales / Manager   | Việc của tôi, có push: duyệt, giao lại người, ngay tại chỗ.                                                                    |
-| Người kiểm chéo, PIC xuất khẩu | Việc của tôi, có push (hiện **chưa được push**, ticket 78).                                                                    |
+| Người kiểm chéo, PIC xuất khẩu | Việc của tôi, có push (ticket 78; đơn thiếu NOC/ESF báo PIC xuất khẩu, chưa ai có quyền thì báo Trưởng phòng).                 |
 | Khách hàng                     | Thư, từ hộp thư của PIC.                                                                                                       |
 | PC, Design                     | Thư như hôm nay; Design vẫn làm trên Bravo. Không bắt họ dùng thêm một cổng.                                                   |
 | Bravo                          | Không ai phải vào Bravo để làm lại việc DW đã làm: DW ghi qua gateway dưới user của người duyệt (ADR 0027).                    |

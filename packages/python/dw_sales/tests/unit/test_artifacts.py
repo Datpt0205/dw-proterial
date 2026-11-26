@@ -172,7 +172,7 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
-FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.7.0.yaml")
+FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.8.0.yaml")
 ARTIFACT_COPY = ArtifactCopy(
     emails=load_copy(COPY / "sales_emails@1.5.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.3.0.yaml", SalesDocumentCopy),
