@@ -938,6 +938,29 @@
         "pattern": "^1\\.0$",
         "title": "Schema Version",
         "type": "string"
+      },
+      "target": {
+        "default": "uat",
+        "enum": [
+          "uat",
+          "production"
+        ],
+        "title": "Target",
+        "type": "string"
+      },
+      "target_uat_proof": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Target Uat Proof"
       }
     },
     "required": [

@@ -121,6 +121,19 @@ async def test_no_approved_version_is_uat() -> None:
     assert lookup.asked == ["sales_bravo_writes"]
 
 
+def test_production_as_the_schema_writes_it_reads_as_production() -> None:
+    document = BravoWrites(
+        schema_version="1.0",
+        policy_id="sales_bravo_writes",
+        policy_version="1.1.0",
+        kinds={},
+        target="production",
+        target_uat_proof="UAT 2026-12-01 run 3",
+    ).model_dump(mode="json")
+
+    assert target_of(document) == "production"
+
+
 def test_a_version_from_before_the_target_is_uat() -> None:
     assert target_of(_document()) == "uat"
     assert target_of({"kinds": {}}) == "uat"

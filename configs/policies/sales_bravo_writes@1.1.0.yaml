@@ -1,0 +1,31 @@
+schema_version: "1.0"
+policy_id: sales_bravo_writes
+policy_version: "1.1.0"
+
+# Which Bravo writes DW1 performs itself, through the Bravo gateway (ADR 0027,
+# sales ticket 63). Every kind is off here, and stays off for a company until
+# it has reproduced a PIC's own save column for column on Bravo UAT: a company
+# switches one on in its own version of this policy, proposed and approved by
+# two people, naming the UAT run that proved it (`uat_proof`). Validated by
+# `dw_sales.domain.bravo_writes.BravoWrites`; read by the gateway before each
+# write. While a kind is off, the PIC keys the change in Bravo by hand, from
+# the paste sheet.
+#
+# 1.1.0 (ticket 85): which Bravo DW1 reads and writes, `uat` or `production`.
+# UAT here; a company names production in its own version, decided by a
+# second person like every rule, with the UAT run that proved the gateway
+# end to end (`target_uat_proof`). A proposal read from one Bravo never
+# writes the other: the gateway refuses a write whose stamp is not the
+# target now.
+target: uat
+kinds:
+  so.line.set_confirmed_date@1:
+    enabled: false
+  so.line.set_quantity@1:
+    enabled: false
+  so.line.cancel@1:
+    enabled: false
+  so.line.split@1:
+    enabled: false
+  so.create@1:
+    enabled: false

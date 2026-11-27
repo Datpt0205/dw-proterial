@@ -1177,6 +1177,14 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Bằng chứng trên UAT",
       help: "Lần chạy trên Bravo UAT đã khớp từng cột với lần PIC lưu tay; bắt buộc khi bật.",
     },
+    target: {
+      label: "Ghi vào Bravo nào",
+      help: "Bravo UAT để chạy thử; Bravo thật khi dùng thật. Đổi sang Bravo khác thì mọi đề xuất đọc từ Bravo cũ bị từ chối khi ghi, cần đề xuất lại.",
+    },
+    target_uat_proof: {
+      label: "Bằng chứng chạy trên UAT",
+      help: "Lần chạy trên Bravo UAT đã ghi đúng từ đầu đến cuối; bắt buộc khi chọn Bravo thật.",
+    },
   },
 };
 
@@ -1219,6 +1227,9 @@ const VALUES: Record<string, string> = {
   "so.line.cancel@1": "Huỷ một dòng SO",
   "so.line.split@1": "Tách một dòng SO",
   "so.create@1": "Tạo SO mới",
+  // Which Bravo DW1 reads and writes (`sales_bravo_writes.target`, ticket 85).
+  uat: "Bravo UAT (chạy thử)",
+  production: "Bravo thật",
   pic: "Sales phụ trách",
   head: "Trưởng bộ phận",
   mon: "Thứ Hai",
