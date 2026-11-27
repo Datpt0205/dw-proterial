@@ -99,3 +99,15 @@ Category: deployment
   also said the lock is not enforced; that is by design: the lock only
   decides where the field is edited, and a rules version still goes
   through proposal and approval.
+- **`autonomy_level: A1` read like DW1's bound and was not.** The comment in
+  `configs/workers/sales.yaml` said a person makes every decision; since
+  tickets 44, 81 and 82, `sales_auto_apply`, `sales_cross_check_on_match`
+  and implied acceptance act by themselves, outside the runner, and none
+  reads the worker's level. The comment now says what the level bounds (a
+  tool call of a run through the runner; every DW1 tool is `none`, held by
+  `test_dw1_runtime.py`) and what bounds each lane instead (`STEP_TIERS`,
+  `sales_order_rules.autonomy`, `implied_acceptance.record`). Comment only,
+  so no test of its own. Left as found: the background lanes' run contexts
+  stamp `autonomy_level="A1"` by hand (`salesorder_pairs.lane_run`,
+  `skill_replay`), and `domain/followups.py`'s docstring still says "DW1
+  never records" implied acceptance.
