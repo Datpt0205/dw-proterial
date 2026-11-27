@@ -262,3 +262,35 @@ async def test_a_row_given_up_on_whose_commit_failed_is_not_counted() -> None:
             telemetry,
         )()
     assert _exhausted(telemetry) == [0.0]
+
+
+@dataclass
+class _TwoWorkspaces:
+    """Two workspaces due, the first one's row failing to settle."""
+
+    first: _Outbox
+    second: _Outbox
+
+    async def due_scopes(self, channel: str) -> list[_Scope]:
+        return [s for o in (self.first, self.second) for s in await o.due_scopes(channel)]
+
+    def claim_next(self, channel: str, scope: _Scope):  # type: ignore[no-untyped-def]
+        outbox = self.first if scope == self.first.scope else self.second
+        return outbox.claim_next(channel, scope)
+
+
+async def test_a_workspace_that_failed_does_not_stop_the_next_one_being_sent() -> None:
+    """The raise comes after the last workspace (ticket 84): the one behind the
+    failing one is still served this tick."""
+
+    @dataclass
+    class _Broken(_Row):
+        async def mark_sent(self, external_message_id: str, chat_reference: str) -> None:
+            raise RuntimeError("connection lost")
+
+    broken, fine = _Broken(), _Row()
+    links = {broken.recipient_user_id: "z-1", fine.recipient_user_id: "z-2"}
+    with pytest.raises(ScopesFailedError, match="channel_delivery:zalo: 1 scope"):
+        await _lane(_TwoWorkspaces(_Outbox([broken]), _Outbox([fine])), _Chat(), links)()
+    assert broken.status == "pending"
+    assert fine.outcome == ("sent", "m2", chat_reference("zalo", "z-2"))

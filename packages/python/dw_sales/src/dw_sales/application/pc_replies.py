@@ -83,6 +83,9 @@ class PcReplyScopesPort(Protocol):
 class PcReplyTick:
     read: int = 0
     proposed: int = 0
+    # Workspaces whose read raised. The others were still read; the worker
+    # raises after the tick so the lane's health sees it (Sales ticket 84).
+    failed: int = 0
 
 
 def _names(case: OrderCase) -> list[str]:
@@ -138,15 +141,16 @@ class PcReplyLane:
     worker_version: str
 
     async def tick(self) -> PcReplyTick:
-        read = proposed = 0
+        read = proposed = failed = 0
         for scope in await self.scopes.scopes():
             try:
                 done = await self._scope(scope)
             except Exception:
                 logger.exception("sales_pc_replies: a workspace was not read")
+                failed += 1
                 continue
             read, proposed = read + done.read, proposed + done.proposed
-        return PcReplyTick(read=read, proposed=proposed)
+        return PcReplyTick(read=read, proposed=proposed, failed=failed)
 
     async def _scope(self, scope: SalesScope) -> PcReplyTick:
         rules = await self.rules.rules(scope)

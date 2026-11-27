@@ -195,3 +195,56 @@ async def test_a_push_given_up_on_counts_once_and_no_device_counts_nothing() -> 
         _Outbox([_Row(attempts=MAX_ATTEMPTS - 1)]), _Push(fail_with=OSError("down")), telemetry
     )()
     assert counted() == [0.0, 0.0, 1.0]
+
+
+async def test_a_push_given_up_on_whose_commit_failed_is_not_counted() -> None:
+    """Counted after the claim's transaction ends: a rollback leaves it pending
+    (ticket 84), the same rule as channel delivery's, in this lane's own copy."""
+
+    @dataclass
+    class _CommitFails(_Outbox):
+        @asynccontextmanager
+        async def claim_next(self, channel: str, scope: _Scope) -> AsyncIterator[_Row | None]:
+            due = self._due()
+            yield due[0] if due else None
+            raise RuntimeError("commit lost")
+
+    telemetry = RecordingTelemetry()
+    row = _Row(attempts=MAX_ATTEMPTS - 1)
+    with pytest.raises(ScopesFailedError):
+        await _lane(_CommitFails([row]), _Push(fail_with=OSError("down")), telemetry)()
+    assert [
+        float(v)
+        for n, v, labels in telemetry.metrics
+        if n == DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL and labels == {"channel": "web_push"}
+    ] == [0.0]
+
+
+@dataclass
+class _TwoWorkspaces:
+    """Two workspaces due, the first one's row failing to settle."""
+
+    first: _Outbox
+    second: _Outbox
+
+    async def due_scopes(self, channel: str) -> list[_Scope]:
+        return [s for o in (self.first, self.second) for s in await o.due_scopes(channel)]
+
+    def claim_next(self, channel: str, scope: _Scope):  # type: ignore[no-untyped-def]
+        outbox = self.first if scope == self.first.scope else self.second
+        return outbox.claim_next(channel, scope)
+
+
+async def test_a_workspace_that_failed_does_not_stop_the_next_one_being_pushed() -> None:
+    """The raise comes after the last workspace (ticket 84): the one behind the
+    failing one is still served this tick."""
+
+    @dataclass
+    class _Broken(_Row):
+        async def mark_sent(self, external_message_id: str, chat_reference: str) -> None:
+            raise RuntimeError("connection lost")
+
+    broken, fine = _Broken(), _Row()
+    with pytest.raises(ScopesFailedError, match="web_push_delivery: 1 scope"):
+        await _lane(_TwoWorkspaces(_Outbox([broken]), _Outbox([fine])), _Push())()
+    assert (broken.status, fine.status) == ("pending", "sent")

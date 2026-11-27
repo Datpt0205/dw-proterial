@@ -25,10 +25,11 @@ from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.case_store import CaseEvent, EventActor
 from dw_sales.application.pc_replies import RETRY_FOR, PcReplyLane, answered_by
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import Actor, OrderCase, OrderStatus
 from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.recorded import Recorded
-from dw_sales.evals.world import ALPHA, World, measured_gate, open_world
+from dw_sales.evals.world import ALPHA, BETA, World, measured_gate, open_world
 
 from .test_pc_dates import FAILED, PC_MAIL, RIGHT, Answering
 from .test_pc_requests import _in_review
@@ -369,6 +370,30 @@ async def test_a_step_not_measured_for_the_tenant_reads_nothing() -> None:
         rig.sample.__exit__(None, None, None)
 
 
+async def test_a_workspace_that_raises_is_counted_and_the_next_one_is_still_read() -> None:
+    """Ticket 84: the worker raises on `failed`, so a lane failing in one
+    workspace every tick is not read as healthy, and the others are served."""
+    rig = await _rig([_mail()])
+    inner = rig.lane.rules
+
+    class _BetaDown:
+        async def rules(self, scope: SalesScope) -> OrderRules:
+            if scope == BETA:
+                raise RuntimeError("database went away")
+            return await inner.rules(scope)
+
+        async def rules_at(self, scope: SalesScope, ref: str) -> OrderRules | None:
+            raise NotImplementedError("not exercised by the lane")
+
+    try:
+        lane = replace(rig.lane, scopes=_Scopes(BETA, ALPHA), rules=_BetaDown())
+        tick = await lane.tick()
+        assert (tick.failed, tick.read) == (1, 1)
+        assert rig.world.order(rig.case_id).pc_reply is not None
+    finally:
+        rig.sample.__exit__(None, None, None)
+
+
 async def test_while_dw1_is_paused_nothing_is_kept() -> None:
     rig = await _rig([_mail()])
     try:
@@ -613,7 +638,6 @@ async def test_sua_records_another_date_and_labels_it_a_correction() -> None:
 async def test_dung_is_refused_without_prepare_stale_with_none_proposed_or_elsewhere() -> None:
     from dw_kernel.errors import NotFoundError, PermissionDeniedError
     from dw_sales.evals.graders import OUTSIDER, READER
-    from dw_sales.evals.world import BETA
 
     rig = await _proposed()
     try:
