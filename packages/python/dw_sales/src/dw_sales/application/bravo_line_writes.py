@@ -496,19 +496,22 @@ class BravoTargetsPort(Protocol):
 @dataclass(frozen=True)
 class BravoTargets:
     """What the order page's "Ghi vào Bravo" panel and the rules page show
-    beside the target switch: the gateway's own answer, read by anyone who
-    reads cases (names and booleans only)."""
+    beside the target switch: the gateway's own answer (names and booleans
+    only), read by anyone who reads cases or proposes rules. The second is
+    the tenant's rules editor, who may hold no Sales case scope and is the
+    one asked to switch (ticket 85 review)."""
 
     gate: Gate
     port: BravoTargetsPort
 
     async def now(self, context: AccessContext) -> BravoTargetsView:
-        await self.gate.require(
-            context,
-            SalesScopes.CASE_READ,
-            resource_type="workspace",
-            resource_id=str(context.workspace_id),
-        )
+        if not self.gate.allows(context, SalesScopes.RULES_PROPOSE):
+            await self.gate.require(
+                context,
+                SalesScopes.CASE_READ,
+                resource_type="workspace",
+                resource_id=str(context.workspace_id),
+            )
         try:
             return await self.port.targets(context.tenant_id)
         except BravoUnreachableError:

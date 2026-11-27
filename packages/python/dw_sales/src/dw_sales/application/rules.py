@@ -427,6 +427,10 @@ class RulesInForceView(BaseModel):
     versions: list[RuleVersionView]
     # The keys a version may be drafted for from the company's own file.
     draftable: list[RuleKey]
+    # The keys whose new version a second person decides, the head's own
+    # included (`DECIDED_BY_A_SECOND`): the page words them "Gửi duyệt" from
+    # this list, never from a copy of it (ticket 85 review).
+    decided_by_a_second: list[RuleKey]
 
 
 class RuleSchemaView(BaseModel):
@@ -612,6 +616,7 @@ class SalesRulesService:
             platform=[PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in keys],
             versions=[_view(v) for v in versions],
             draftable=sorted(DRAFTABLE),
+            decided_by_a_second=sorted(DECIDED_BY_A_SECOND),
         )
 
     async def schema(self, context: AccessContext, key: str) -> RuleSchemaView:

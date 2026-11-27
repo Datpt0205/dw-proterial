@@ -8316,6 +8316,8 @@ export interface components {
          * @description What applies to the tenant now, per key, and every version it holds.
          */
         RulesInForceView: {
+            /** Decided By A Second */
+            decided_by_a_second: components["schemas"]["RuleKey"][];
             /** Draftable */
             draftable: components["schemas"]["RuleKey"][];
             /** In Force */

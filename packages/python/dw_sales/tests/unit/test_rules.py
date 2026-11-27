@@ -185,6 +185,8 @@ async def test_the_heads_own_version_applies_at_once_and_is_audited_as_theirs() 
     assert applied.approval_id is None
     listed = await world.services.rules.list(GIANG.context())
     assert listed.in_force[RuleKey.ORDER_RULES] == "sales_order_rules@9.0.2"
+    # The page words the key "Áp dụng ngay" from this list (85 review).
+    assert RuleKey.ORDER_RULES not in listed.decided_by_a_second
     assert {v.version_id: v.status for v in listed.versions}[first] == "superseded"
     assert (await world.services.layouts.rules.rules(ALPHA)).cross_check_required
     actions = [e.action for e in world.audit() if e.resource_id == str(applied.version_id)]
@@ -206,6 +208,8 @@ async def test_the_heads_switch_to_bravo_production_waits_on_a_second_person() -
     assert proposed.approval_id is not None
     listed = await world.services.rules.list(GIANG.context())
     assert listed.in_force.get(RuleKey.BRAVO_WRITES) != "sales_bravo_writes@1.1.1"
+    # The page words it "Gửi duyệt" from the list the server decides by.
+    assert RuleKey.BRAVO_WRITES in listed.decided_by_a_second
     with pytest.raises(ConflictError) as refused:
         await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
     assert refused.value.details["rule"] == "maker_checker"

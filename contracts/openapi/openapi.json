@@ -21225,6 +21225,13 @@
       "RulesInForceView": {
         "description": "What applies to the tenant now, per key, and every version it holds.",
         "properties": {
+          "decided_by_a_second": {
+            "items": {
+              "$ref": "#/components/schemas/RuleKey"
+            },
+            "title": "Decided By A Second",
+            "type": "array"
+          },
           "draftable": {
             "items": {
               "$ref": "#/components/schemas/RuleKey"
@@ -21276,7 +21283,8 @@
           "layers",
           "platform",
           "versions",
-          "draftable"
+          "draftable",
+          "decided_by_a_second"
         ],
         "title": "RulesInForceView",
         "type": "object"

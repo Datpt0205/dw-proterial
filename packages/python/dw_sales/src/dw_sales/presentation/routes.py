@@ -2597,11 +2597,8 @@ def build_router(
     # Which Bravo the gateway reads and writes now, and which ones it holds
     # logins for (ticket 85): the tag on the order page's "Ghi vào Bravo"
     # panel and the gateway's answer beside the switch on the rules page.
-    @router.get(
-        "/bravo/targets",
-        response_model=BravoTargetsView,
-        dependencies=[scopes(SalesScopes.CASE_READ)],
-    )
+    # `sales.case.read` or `sales.rules.propose`, which the service checks.
+    @router.get("/bravo/targets", response_model=BravoTargetsView)
     async def bravo_targets(context: Ctx, svc: Svc) -> BravoTargetsView:
         return await svc.bravo_targets.now(context)
 

@@ -8,6 +8,12 @@ changed since; once a night it reads the whole table again, which is how a
 row Bravo deleted is seen (rowversion shows no deletion): a row a full pass
 did not see is marked gone, never deleted.
 
+Which Bravo answers is the tenant's target, UAT or production (ticket 85),
+and a rowversion is one database's counter. So a cursor keeps the target it
+was read from, and an answer from another one (a switch, or a cursor from
+before the target was kept) restarts the table: its copy is marked gone and
+it is read whole from the Bravo that answered (ticket 85 review).
+
 What may be read is this module's `SYNC_TABLES`, each column named by
 Bravo's schema (the 11-20 survey, `03-B8_Hitachi_Cable_schema.sql`): the
 black list (`B20BlackList`), LME (`B20LME`) and export control
@@ -105,8 +111,17 @@ class SyncUnavailableError(Exception):
     """The gateway, or Bravo behind it, did not answer."""
 
 
+@dataclass(frozen=True)
+class SyncAnswer:
+    """A page, and the Bravo that answered it (the gateway's `Bravo-Target`
+    header). The lane only compares targets, so it holds the name as text."""
+
+    target: str
+    page: SyncPage
+
+
 class SyncSource(Protocol):
-    async def changes(self, query: SyncQuery) -> SyncPage: ...
+    async def changes(self, query: SyncQuery) -> SyncAnswer: ...
 
 
 @dataclass(frozen=True)
@@ -114,6 +129,8 @@ class Cursor:
     last_row_version: str | None = None
     last_full_at: datetime | None = None
     last_read_at: datetime | None = None
+    # The Bravo `last_row_version` counts in; None before ticket 85's review.
+    target: str | None = None
 
 
 class MirrorStore(Protocol):
@@ -129,12 +146,20 @@ class MirrorStore(Protocol):
         self,
         table: str,
         *,
+        target: str,
         last_row_version: str | None,
         at: datetime,
         full_pass_seen: frozenset[int] | None,
     ) -> None:
-        """Move the cursor, clear the error, and after a full pass mark every
-        row it did not see as gone, in one transaction."""
+        """Move the cursor, read from ``target``, clear the error, and after
+        a full pass mark every row it did not see as gone, in one
+        transaction."""
+        ...
+
+    async def restart(self, table: str, at: datetime) -> None:
+        """Mark every row of ``table`` gone and forget its cursor (rowversion,
+        last full pass, target), in one transaction: the copy was another
+        Bravo's."""
         ...
 
     async def failed(self, table: str, error: str, at: datetime) -> None: ...
@@ -174,15 +199,32 @@ class BravoSync:
                 said[table] = "could not read"
         return said
 
+    async def _changes(self, table: str, after: str | None) -> SyncAnswer:
+        return await self.source.changes(SyncQuery(table, after=after))  # type: ignore[arg-type]
+
     async def _table(self, table: str, now: datetime) -> str:
         cursor = await self.store.cursor(table)
         full = full_pass_due(cursor, now)
         after = None if full else cursor.last_row_version
-        last = after
+        answer = await self._changes(table, after)
+        restarted = answer.target != cursor.target and cursor != Cursor()
+        if restarted:
+            # The cursor counts in another Bravo's rowversions, and the copy
+            # holds that Bravo's rows: forget both, read this one whole.
+            await self.store.restart(table, now)
+            cursor, full = Cursor(), True
+            if after is not None:
+                answer = await self._changes(table, None)
+        target = answer.target
+        last = None if full else cursor.last_row_version
         seen: set[int] = set()
         read = 0
-        for _ in range(self.max_pages):
-            page = await self.source.changes(SyncQuery(table, after=last))  # type: ignore[arg-type]
+        for n in range(self.max_pages):
+            if n:
+                answer = await self._changes(table, last)
+                if answer.target != target:
+                    raise SyncUnavailableError("the Bravo changed while the table was read")
+            page = answer.page
             if page.rows:
                 await self.store.keep(table, page.rows, now)
                 seen.update(r.row_id for r in page.rows)
@@ -195,6 +237,7 @@ class BravoSync:
             # read, and a full pass is not taken as complete.
             await self.store.finish(
                 table,
+                target=target,
                 last_row_version=last if not full else cursor.last_row_version,
                 at=now,
                 full_pass_seen=None,
@@ -202,11 +245,13 @@ class BravoSync:
             return f"{read} rows, more to read"
         await self.store.finish(
             table,
+            target=target,
             last_row_version=last if last is not None else cursor.last_row_version,
             at=now,
             full_pass_seen=frozenset(seen) if full else None,
         )
-        return f"{'full pass, ' if full else ''}{read} rows"
+        said = f"{'full pass, ' if full else ''}{read} rows"
+        return f"another Bravo answered, read again: {said}" if restarted else said
 
 
 def as_text(value: Any) -> str | None:

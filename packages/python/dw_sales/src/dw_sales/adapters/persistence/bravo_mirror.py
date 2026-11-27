@@ -76,7 +76,7 @@ class TenantMirror:
             row = (
                 await s.execute(
                     sa.text(
-                        "SELECT last_row_version, last_full_at, last_read_at"
+                        "SELECT last_row_version, last_full_at, last_read_at, target"
                         " FROM bravo.mirror_cursors WHERE table_name = :t"
                     ),
                     {"t": table},
@@ -111,6 +111,7 @@ class TenantMirror:
         self,
         table: str,
         *,
+        target: str,
         last_row_version: str | None,
         at: datetime,
         full_pass_seen: frozenset[int] | None,
@@ -119,9 +120,10 @@ class TenantMirror:
             await s.execute(
                 sa.text(
                     "INSERT INTO bravo.mirror_cursors (tenant_id, table_name, last_row_version,"
-                    " last_full_at, last_read_at) VALUES (:tenant, :t, :rv, :full, :at)"
+                    " last_full_at, last_read_at, target)"
+                    " VALUES (:tenant, :t, :rv, :full, :at, :target)"
                     " ON CONFLICT (tenant_id, table_name) DO UPDATE SET"
-                    " last_row_version = EXCLUDED.last_row_version,"
+                    " last_row_version = EXCLUDED.last_row_version, target = EXCLUDED.target,"
                     " last_full_at = COALESCE(EXCLUDED.last_full_at,"
                     " bravo.mirror_cursors.last_full_at),"
                     " last_read_at = EXCLUDED.last_read_at, last_error = NULL,"
@@ -133,6 +135,7 @@ class TenantMirror:
                     "rv": last_row_version,
                     "full": at if full_pass_seen is not None else None,
                     "at": at,
+                    "target": target,
                 },
             )
             if full_pass_seen is not None:
@@ -144,6 +147,23 @@ class TenantMirror:
                     ),
                     {"at": at, "t": table, "seen": sorted(full_pass_seen)},
                 )
+
+    async def restart(self, table: str, at: datetime) -> None:
+        async with tenant_session(self.session_factory, TenantScope(tenant_id=self.tenant_id)) as s:
+            await s.execute(
+                sa.text(
+                    "UPDATE bravo.mirror_rows SET gone_at = :at"
+                    " WHERE table_name = :t AND gone_at IS NULL"
+                ),
+                {"at": at, "t": table},
+            )
+            await s.execute(
+                sa.text(
+                    "UPDATE bravo.mirror_cursors SET last_row_version = NULL,"
+                    " last_full_at = NULL, target = NULL WHERE table_name = :t"
+                ),
+                {"t": table},
+            )
 
     async def failed(self, table: str, error: str, at: datetime) -> None:
         async with tenant_session(self.session_factory, TenantScope(tenant_id=self.tenant_id)) as s:

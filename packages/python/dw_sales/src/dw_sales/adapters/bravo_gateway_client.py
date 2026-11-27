@@ -22,7 +22,8 @@ What it answers:
 No answer, a timeout or a 5xx is "could not ask" (`BravoUnreachableError`),
 never a pass. An SO's answer names the Bravo it was read from (the
 `Bravo-Target` header, ticket 85); one that names none is "could not ask"
-too, so no proposal goes unstamped.
+too, so no proposal goes unstamped. A sync page's answer names it as well,
+so the lane never moves one Bravo's cursor with another's rows.
 
 **One tenant.** A gateway reaches one tenant's Bravo, and the client is
 built for that tenant (`tenant_id`): asked for any other tenant it answers
@@ -55,7 +56,7 @@ from dw_bravo.contract import (
     SalesOrderState,
     canonical_json,
 )
-from dw_bravo.sync import SyncPage, SyncQuery, SyncUnavailableError
+from dw_bravo.sync import SyncAnswer, SyncPage, SyncQuery, SyncUnavailableError
 from dw_kernel.errors import ConflictError
 from dw_sales.application.bravo_line_writes import (
     BravoSo,
@@ -176,9 +177,10 @@ class BravoGatewayClient:
     # ---- ticket 50's `dw_bravo.sync.SyncSource`, for the lane of this
     # client's own tenant
 
-    async def changes(self, query: SyncQuery) -> SyncPage:
+    async def changes(self, query: SyncQuery) -> SyncAnswer:
         try:
-            return _parsed(SyncPage, await self._read(query))
+            response = await self._read(query)
+            return SyncAnswer(target=_target(response), page=_parsed(SyncPage, response))
         except BravoUnreachableError as down:
             raise SyncUnavailableError(str(down)) from None
 
