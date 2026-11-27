@@ -111,3 +111,34 @@ Category: deployment
   stamp `autonomy_level="A1"` by hand (`salesorder_pairs.lane_run`,
   `skill_replay`), and `domain/followups.py`'s docstring still says "DW1
   never records" implied acceptance.
+
+### 2026-11-27 — full review (authz)
+
+- **A sent mail whose presser lost the scope stopped the outbound tick.**
+  The lane records "Đã gửi KH", "Ghi đã gửi khách" and "Ghi đã hỏi PC" as
+  the person who pressed, re-resolved at the receipt. A person still a
+  member but without `sales.quote.prepare` / `sales.order.prepare` by then
+  got a `PermissionDeniedError` from the service, which the lane did not
+  catch (only `ConflictError`, `NotFoundError`): the rest of that tick's
+  receipts and queued mails waited an interval, and the PIC of a request
+  to PC was not told it went unrecorded. Now all three marks catch it too;
+  the PC one tells the PIC (`pc_not_recorded`), as for a case that moved
+  on. Nothing was ever recorded without the scope (fail closed). Tests:
+  three in `test_outbound_mail.py`, red with `PermissionDeniedError` before
+  the change. Left as found: a lost scope on the quote and change-answer
+  receipts is logged only, nobody told, the same as a case marked by hand.
+- **No test held the service's own check on eleven mutations.** The route
+  checks first, but the outbound lane reaches `QuoteCommands.sent` /
+  `design_sent` and `UpdateLoops.answer_sent` with no route, so there the
+  service is the only check (failure-modes #5). `test_service_scopes.py`'s
+  table now calls `WorkerService.pause`, `upload_signed_quote`,
+  `OrderQuotes.recheck`, `Confirmations.sent` / `implied_undone`,
+  `ChangeRequests.add_line`, `UpdateLoops.pc_answer` / `answer_sent`,
+  `QuoteCommands.master_list`, `sent` and `design_sent`; the signed upload
+  also needs `sales.quote.prepare` besides reading. Each one red with its
+  `Gate.require` made a no-op (a pytest plugin, the tree untouched), and
+  the upload red with `sales.quote.prepare` alone dropped.
+- **The route test "scope before the Idempotency-Key" looked at POST only.**
+  The three PUT and two DELETE Sales routes were outside it (all correct
+  today). It now takes every method that is not a read; red when a PUT or
+  a DELETE route claims the key before its guard.
