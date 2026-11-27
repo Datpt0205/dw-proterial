@@ -82,7 +82,7 @@ function formLine(line: ReadLine): LineForm {
  * form (nothing is kept), Sales checks each line and presses "Áp dụng", the
  * one action that changes the order: it then goes to its Bravo update, its
  * cross-check and its confirmation again, and the notice to the customer is
- * a draft in "Tài liệu". A line PC cancels whole is ticked "PC huỷ cả dòng"
+ * a draft in "Tài liệu". A line PC cancels whole is ticked "PC hủy cả dòng"
  * and carries no delivery; a line already cancelled is not offered. Offered
  * only where the server says the order takes one (`internal_change_open`);
  * the server refuses anyway.
@@ -198,7 +198,7 @@ function InternalChangeDrawer({
     };
     modal.confirm({
       title: "Áp dụng thay đổi nội bộ",
-      content: `PO ${order.po_no}: ${lines.length} dòng đổi theo lịch PC${cancelled ? `, trong đó ${cancelled} dòng huỷ cả` : ""}. Đơn chuyển sang cập nhật Bravo, rồi kiểm chéo và xác nhận lại với khách.`,
+      content: `PO ${order.po_no}: ${lines.length} dòng đổi theo lịch PC${cancelled ? `, trong đó ${cancelled} dòng hủy cả` : ""}. Đơn chuyển sang cập nhật Bravo, rồi kiểm chéo và xác nhận lại với khách.`,
       okText: "Áp dụng",
       cancelText: "Chưa áp dụng",
       autoFocusButton: "cancel",
@@ -234,7 +234,7 @@ function InternalChangeDrawer({
       onClose={onClose}
       footer={
         <Flex justify="end" gap={8}>
-          <Button onClick={onClose}>Huỷ</Button>
+          <Button onClick={onClose}>Hủy</Button>
           <Button
             type="primary"
             loading={pending === applyId}
@@ -367,7 +367,7 @@ function InternalChangeDrawer({
                       name={[line.name, "cancelled"]}
                       valuePropName="checked"
                     >
-                      <Checkbox>PC huỷ cả dòng</Checkbox>
+                      <Checkbox>PC hủy cả dòng</Checkbox>
                     </Form.Item>
                     <Form.Item noStyle shouldUpdate>
                       {() =>

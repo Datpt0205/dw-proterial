@@ -166,7 +166,7 @@ describe("Thay đổi nội bộ (ticket 10)", () => {
     expect(await screen.findByText("Dòng 1: BRN-W-0007")).toBeTruthy();
     expect(screen.queryByText("Dòng 2: BRN-W-0007")).toBeNull();
     fireEvent.click(screen.getByText("Dòng 1: BRN-W-0007"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "PC huỷ cả dòng" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "PC hủy cả dòng" }));
     // A cancelled line asks for no delivery.
     await waitFor(() => expect(screen.queryByText("Thêm một đợt")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Áp dụng" }));
@@ -175,7 +175,7 @@ describe("Thay đổi nội bộ (ticket 10)", () => {
       expect(found).toBeTruthy();
       return found!;
     });
-    expect(asked.textContent).toContain("1 dòng huỷ cả");
+    expect(asked.textContent).toContain("1 dòng hủy cả");
     fireEvent.click(
       Array.from(asked.querySelectorAll("button")).find(
         (b) => b.textContent === "Áp dụng",

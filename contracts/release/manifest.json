@@ -133,6 +133,11 @@
       "version": "1.7.0"
     },
     {
+      "checksum": "09d24d874cde2426c51b47338d1cc6277c4b689e6d0a21186c6793797b80000f",
+      "copy_id": "sales_emails",
+      "version": "1.8.0"
+    },
+    {
       "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
       "copy_id": "sales_handoffs",
       "version": "1.0.0"
@@ -1239,7 +1244,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "222ba7bf6ca5f0ef7dd0ef1b104c399ad2905aa2",
+  "git_sha": "922c09b0ed21be1567b808439d9b2c7e68b1b653",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [

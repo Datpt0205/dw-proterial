@@ -1224,7 +1224,7 @@ const VALUES: Record<string, string> = {
   // The Bravo write kinds (`sales_bravo_writes`, ticket 63).
   "so.line.set_confirmed_date@1": "Đổi ngày XN giao hàng của một dòng SO",
   "so.line.set_quantity@1": "Đổi số lượng của một dòng SO",
-  "so.line.cancel@1": "Huỷ một dòng SO",
+  "so.line.cancel@1": "Hủy một dòng SO",
   "so.line.split@1": "Tách một dòng SO",
   "so.create@1": "Tạo SO mới",
   // Which Bravo DW1 reads and writes (`sales_bravo_writes.target`, ticket 85).

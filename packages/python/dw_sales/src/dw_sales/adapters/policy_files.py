@@ -141,7 +141,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
-        emails=load_copy(copy_dir / "sales_emails@1.7.0.yaml", SalesEmailCopy),
+        emails=load_copy(copy_dir / "sales_emails@1.8.0.yaml", SalesEmailCopy),
         documents=load_copy(copy_dir / "sales_documents@1.4.0.yaml", SalesDocumentCopy),
         upload=load_bravo_upload(policies_dir / "sales_bravo_upload@2.1.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.2.0.yaml", HandoffCopy),

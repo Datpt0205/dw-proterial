@@ -470,7 +470,7 @@ export function PricingForm({
         </Space>
         {suggested.size ? (
           <Typography.Paragraph type="secondary" className="!mt-2 !mb-0">
-            Giá gợi ý chỉ điền vào ô còn trống; bạn sửa tuỳ ý và giá được ghi là
+            Giá gợi ý chỉ điền vào ô còn trống; bạn sửa tùy ý và giá được ghi là
             quyết định của bạn.
           </Typography.Paragraph>
         ) : null}

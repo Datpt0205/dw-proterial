@@ -218,7 +218,7 @@ function UploadCard({ onSent }: { onSent: () => void }) {
           </Button>
         </Upload>
         <Typography.Text>
-          Chỉ cần điền trang muốn cập nhật; trang bỏ trống hoặc xoá khỏi tệp giữ
+          Chỉ cần điền trang muốn cập nhật; trang bỏ trống hoặc xóa khỏi tệp giữ
           như đang dùng.
         </Typography.Text>
       </Flex>

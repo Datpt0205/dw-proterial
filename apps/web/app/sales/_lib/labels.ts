@@ -480,7 +480,7 @@ export function intentKindLabel(reading: {
 export const THREAD_INTENT = {
   sends_po: "Gửi PO",
   requests_change: "Xin điều chỉnh",
-  cancels: "Huỷ",
+  cancels: "Hủy",
   accepts: "Đồng ý",
   rejects: "Không đồng ý",
   asks: "Hỏi",

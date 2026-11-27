@@ -21,7 +21,7 @@ from dw_purchasing.domain.master_lists import SHEETS
 _GUIDE: Final = "Hướng dẫn"
 _NOTES: Final = (
     "Điền mỗi trang một danh sách, dòng đầu là tên cột (giữ nguyên tên cột).",
-    "Chỉ cần điền trang muốn cập nhật: trang bị xoá khỏi tệp thì danh sách đó giữ như đang dùng.",
+    "Chỉ cần điền trang muốn cập nhật: trang bị xóa khỏi tệp thì danh sách đó giữ như đang dùng.",
     "Trang có trong tệp sẽ thay cả danh sách đang dùng khi được duyệt: dòng không có trong"
     " tệp sẽ bị bỏ.",
     "Ngày ghi dạng 2026-12-31 hoặc 31/12/2026. Nhiều email hoặc mã cách nhau dấu ;.",

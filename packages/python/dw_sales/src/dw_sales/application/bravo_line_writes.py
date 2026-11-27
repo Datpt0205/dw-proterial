@@ -752,7 +752,7 @@ class BravoWriteStamp:
         asked = asked_of(request)
         if self.signer is None:
             raise ConflictError(
-                "DW chưa có khoá ký phê duyệt ghi Bravo: chưa duyệt được",
+                "DW chưa có khóa ký phê duyệt ghi Bravo: chưa duyệt được",
                 details={"rule": "no_signing_key"},
             )
         commands = self.commands.at(asked.stage_version)
