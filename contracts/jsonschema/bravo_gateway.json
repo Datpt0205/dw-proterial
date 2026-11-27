@@ -861,7 +861,7 @@
     "properties": {
       "content": {
         "additionalProperties": false,
-        "description": "A line split into parts with Bravo's group fields (`QuantityGroup`,\n`GroupDivi`, `Divide`); the first part stays on the line, each further\npart is a new line. The parts' total is the layout's validator to check.",
+        "description": "A line split into parts with Bravo's group fields (`QuantityGroup`,\n`GroupDivi`, `Divide`); the first part stays on the line, each further\npart is a new line (UAT trace 11-25 17:28:58, ticket 73). The parts'\ntotal is the layout's validator to check (`CheckDivide`). At most ten\nparts, each a new line in one transaction; the bound was added while\nthis version was still pending, before any approval named it.",
         "properties": {
           "line": {
             "$ref": "#/$defs/LineRef"

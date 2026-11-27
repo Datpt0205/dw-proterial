@@ -145,7 +145,9 @@ def test_an_import_template_pauses_only_creation_on_that_screen() -> None:
 
     paused = react(template, {}).paused
 
-    assert set(paused) == {"so.create@1", "so.line.split@1"}
+    # A split is a save of a stored SO that adds lines in its grid (ticket
+    # 73): it uses no import template, so only creation pauses.
+    assert set(paused) == {"so.create@1"}
 
 
 def test_a_new_client_version_notices_and_pauses_until_the_replay() -> None:

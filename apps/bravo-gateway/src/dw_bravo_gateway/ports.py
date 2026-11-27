@@ -108,6 +108,12 @@ class StoredDocument:
     a rule that needs one). `column_order` is each table's column order, in
     which the client lists a statement's columns. `prevent_edit` is
     `ufn_Prevent_Edit` per line `RowId`: 1 when the line sits on a CDO.
+
+    What an INSERT needs of each table, from `sys.columns`: `no_default`, the
+    columns without a default (an INSERT lists them NULL), and `generated`,
+    the identity, rowversion and computed columns no statement writes, both
+    lower case. A table absent from either was not read, and a new row of it
+    is refused.
     """
 
     header: dict[str, object]
@@ -116,6 +122,8 @@ class StoredDocument:
     derived_lines: list[dict[str, object]] = field(default_factory=list)
     column_order: Mapping[str, Sequence[str]] = field(default_factory=dict)
     prevent_edit: Mapping[str, int | None] = field(default_factory=dict)
+    no_default: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    generated: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 class Documents(Protocol):
@@ -132,6 +140,11 @@ class Engine(Protocol):
     def references(self) -> ReferencePort: ...
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session: ...
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        """The columns of the view a layout loads a table from (its `Name`):
+        what the client's row of that table holds."""
+        ...
 
 
 @dataclass(frozen=True)

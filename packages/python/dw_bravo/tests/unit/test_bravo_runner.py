@@ -379,3 +379,64 @@ def test_two_different_definitions_of_one_rule_refuse_when_used() -> None:
     run.load(doc)
     with pytest.raises(RuleRefusedError, match="defined twice"):
         run.edit(doc, "Detail", 0, "Qty", Decimal(4))
+
+
+# A line added to the grid (ticket 73): the relation key and the `RowAdded`
+# rules come from the layout, as the SO screen's `ParentKey`/`ChildKey`
+# (`BizDocId`) and `RowAdded` do.
+ROWS_LAYOUT = LAYOUT.replace(
+    "<Name>vLine_Edit</Name><Alias>Detail</Alias>",
+    "<Name>vLine_Edit</Name><Alias>Detail</Alias><ParentKey>DocKey</ParentKey><ChildKey>DocKey</ChildKey>"
+    "<RowAdded><Eval_Detail_DocDate_FromParent /><Eval_Flagged>Empty(Parent.Customer)</Eval_Flagged>"
+    "<Eval_Fresh /></RowAdded>",
+).replace(
+    "<Eval_Order>",
+    "<Eval_Flagged><DataMember>Flag</DataMember><Value>1</Value></Eval_Flagged>"
+    "<Eval_Fresh><DataMember>Made</DataMember><Value>Qty</Value><Expr>Id &lt; 0</Expr></Eval_Fresh>"
+    "<Eval_Order>",
+)
+# Every column the line's view holds, NULL: a new grid line knows nothing yet.
+NEW_LINE: dict[str, object] = dict.fromkeys(
+    ["Item", "Qty", "Price", "Amount", "Usd", "Made", "Eta", "Group", "Ord", "DocDate"]
+)
+
+
+def test_an_added_row_takes_the_parents_key_a_negative_id_and_its_rowadded_rules() -> None:
+    doc, run = document(), runner(ROWS_LAYOUT)
+    doc.parent.set("DocKey", "K1")
+    run.load(doc)
+
+    first = run.add_row(doc, "Detail", NEW_LINE, stored=[*NEW_LINE, "CreatedBy"])
+    second = run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+    run.edit(doc, "Detail", first, "Qty", Decimal(3))
+
+    rows = doc.children["Detail"]
+    assert (first, second) == (2, 3)
+    assert [rows[i].get("Id") for i in (first, second)] == [Decimal(-1), Decimal(-2)]
+    assert rows[first].get("DocKey") == "K1"
+    assert rows[first].get("DocDate") == DAY  # RowAdded's rule
+    assert not rows[first].has("Flag")  # its use's condition does not hold
+    inserts = {c.row: dict(c.columns) for c in run.save(doc).commands if c.kind == "insert"}
+    assert set(inserts) == {first, second}
+    # The id is the client's own until Bravo gives one: never written.
+    assert "Id" not in inserts[first] and inserts[first]["DocKey"] == "K1"
+    assert inserts[first]["CreatedBy"] == Decimal(7)
+    assert "CreatedBy" not in inserts[second]
+
+
+def test_an_id_below_zero_is_what_a_new_rows_own_rules_read() -> None:
+    doc, run = document(), runner(ROWS_LAYOUT.replace("<Eta>", "<Qty><Eval_Fresh /></Qty><Eta>", 1))
+    doc.parent.set("DocKey", "K1")
+    run.load(doc)
+    index = run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+    run.edit(doc, "Detail", index, "Qty", Decimal(4))
+    run.edit(doc, "Detail", 0, "Qty", Decimal(9))
+    assert doc.children["Detail"][index].get("Made") == Decimal(4)
+    assert doc.children["Detail"][0].get("Made") == Decimal(0)  # a stored row: Id > 0
+
+
+def test_a_row_cannot_be_added_where_the_layout_names_no_relation() -> None:
+    doc, run = document(), runner()
+    run.load(doc)
+    with pytest.raises(RuleRefusedError, match="ParentKey"):
+        run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)

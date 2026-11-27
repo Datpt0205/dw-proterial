@@ -20,16 +20,24 @@ trace). An UPDATE's meaning does not depend on it (every value is a
 parameter), so the gateway lists them in the table's order and the replay
 compares the assignments as a set.
 
-What is not measured is refused (`UnmeasuredError`), never guessed: the
-context's event word for a save of an existing document (the trace holds a
-save after `New` only), and an INSERT's shape before the shared template
-(script 03c).
+An INSERT, measured on the five the UAT traces hold (11-20 10:26:40 and
+10:30:07, 11-25 16:53:33, 16:56:07 and 17:28:58):
+`INSERT INTO <t> ([c],...) VALUES (@_c,...);SELECT TOP (1)
+Id,<key>,CreatedAt,ModifiedAt,timestamp FROM <t> WHERE Id=SCOPE_IDENTITY();`,
+listing in the table's order every column the client's row holds that is
+not NULL, and every NULL one the table gives no default (passed as a NULL
+parameter); the row's key column (`RowId`) is written '' and Bravo's own
+trigger fills it. A save lists the header's UPDATE first, then the new
+lines' INSERTs, then the lines' UPDATEs (11-20 10:30:07, 11-25 16:56:07 and
+17:28:58).
+
+What is not measured is refused (`UnmeasuredError`), never guessed.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
 from dw_bravo.runner import WriteCommand
@@ -56,6 +64,10 @@ class ScreenTables:
     context_event: Mapping[str, str]
     # The document code the client passes the process step (`DocCode`).
     doc_code: str
+    # What the client's new line holds before anything is typed, beyond
+    # NULL: its key column '' in every traced INSERT, filled by Bravo's
+    # trigger (`DML_B30BizDocDetailSO_InsertUpdate_RowId`).
+    new_line: Mapping[str, object] = field(default_factory=dict)
 
     def table_for(self, layout_key: str) -> str:
         if layout_key == "Parent":
@@ -78,6 +90,7 @@ SCREENS: Final[Mapping[str, ScreenTables]] = {
         # stored SO, so an update is `Edit`; `New` is the create's.
         context_event={"update": "Edit", "insert": "New"},
         doc_code="SO",
+        new_line={"RowId": ""},
     ),
 }
 
@@ -162,6 +175,45 @@ def render_update(
     return Statement(table=table, row_id=row_id, sql=sql, parameters=parameters)
 
 
+def render_insert(
+    table: str,
+    columns: Mapping[str, object],
+    insertable: Sequence[str],
+    no_default: frozenset[str],
+    *,
+    read_back_key: str,
+) -> Statement:
+    """One INSERT as the client writes it. `columns` is the runner's set for
+    the new row (its non-NULL columns, `CreatedBy` included); `insertable`
+    the columns the client's row holds that the table stores, in the
+    table's order (its load view's columns that are the table's, less the
+    identity and the rowversion); `no_default` (lower case) the table's
+    columns without a default, which are listed NULL when the row has none.
+    INSERT is granted on the whole table (SQL Server has no column INSERT
+    grant), so this list is the only column guard the write login has."""
+    if not insertable:
+        raise UnmeasuredError(f"the columns a new row of {table} holds are not read")
+    position = {c.lower(): c for c in insertable}
+    unknown = [c for c in columns if c.lower() not in position]
+    if unknown:
+        raise UnmeasuredError(f"a new row of {table} holds no column {', '.join(sorted(unknown))}")
+    given = {c.lower(): v for c, v in columns.items()}
+    names = [c for c in insertable if given.get(c.lower()) is not None or c.lower() in no_default]
+    for name in names:
+        if not name.replace("_", "").isalnum():
+            raise ValueError(f"{name!r} is not a column name the client writes")
+    if not table.isalnum() or not read_back_key.isalnum():
+        raise ValueError("table and key are Bravo's own names")
+    sql = (
+        f"INSERT INTO {table} ({','.join(f'[{n}]' for n in names)})"
+        f" VALUES ({','.join(f'@_{n}' for n in names)});"
+        f"SELECT TOP (1) Id,{read_back_key},CreatedAt,ModifiedAt,timestamp"
+        f" FROM {table} WHERE Id=SCOPE_IDENTITY();"
+    )
+    parameters = {f"_{n}": given.get(n.lower()) for n in names}
+    return Statement(table=table, row_id=None, sql=sql, parameters=parameters)
+
+
 def render_save(
     screen: str,
     commands: Sequence[WriteCommand],
@@ -169,15 +221,35 @@ def render_save(
     column_order: Mapping[str, Sequence[str]],
     *,
     context: str,
+    insertable: Mapping[str, Sequence[str]] | None = None,
+    no_default: Mapping[str, frozenset[str]] | None = None,
 ) -> Batch:
-    """A plan's commands as one batch. `rows` gives each (layout table, row
-    index) its stored `Id` and the rowversion the write must hold."""
+    """A plan's commands as one batch, in the client's order: the header,
+    the new rows, the stored rows. `rows` gives each stored (layout table,
+    row index) its `Id` and the rowversion the write must hold; a new row
+    has neither, and its columns are checked against `insertable`."""
     tables = SCREENS[screen]
+    rank = {"header": 0, "insert": 1, "update": 2}
+    ordered = sorted(
+        commands,
+        key=lambda c: rank["header" if c.table == "Parent" else c.kind],
+    )
     statements: list[Statement] = []
-    for command in commands:
-        if command.kind != "update":
-            raise UnmeasuredError("an INSERT's statement waits on the shared template (03c)")
+    for command in ordered:
         table = tables.table_for(command.table)
+        if command.kind == "insert":
+            if command.table == "Parent":
+                raise UnmeasuredError("a new document's statements (ticket 72)")
+            statements.append(
+                render_insert(
+                    table,
+                    command.columns,
+                    (insertable or {}).get(table, ()),
+                    (no_default or {}).get(table, frozenset()),
+                    read_back_key=tables.read_back_key[table],
+                )
+            )
+            continue
         row_id, rowversion = rows[(command.table, command.row)]
         statements.append(
             render_update(

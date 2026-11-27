@@ -279,12 +279,39 @@ class SqlServerBravo:
         )
         return [str(r["name"]) for r in rows]
 
+    def _column_facts(self, table: str) -> tuple[list[str], frozenset[str], frozenset[str]]:
+        """A table's columns in order; those with no default (an INSERT lists
+        them NULL); those it generates (identity, rowversion, computed)."""
+        rows = self._rows(
+            "SELECT c.name, c.is_identity, c.is_computed, c.default_object_id,"
+            " TYPE_NAME(c.system_type_id) AS system_type"
+            " FROM sys.columns c WHERE c.object_id = OBJECT_ID(?) ORDER BY c.column_id",
+            (f"dbo.{table}",),
+        )
+        generated = frozenset(
+            str(r["name"]).lower()
+            for r in rows
+            if r["is_identity"] or r["is_computed"] or r["system_type"] == "timestamp"
+        )
+        no_default = frozenset(
+            str(r["name"]).lower()
+            for r in rows
+            if not r["default_object_id"] and str(r["name"]).lower() not in generated
+        )
+        return [str(r["name"]) for r in rows], no_default, generated
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        if not view.replace("_", "").isalnum():
+            raise UndecidableError(f"{view!r} is not a view name the layout gives")
+        return await self._in_thread(lambda: self._columns(view))
+
     async def load(self, screen: str, doc_id: int) -> StoredDocument:
         tables = SCREENS[screen]
         [line_table] = tables.lines.values()
 
         def work() -> StoredDocument:
-            order = {t: self._columns(t) for t in (tables.header, line_table)}
+            facts = {t: self._column_facts(t) for t in (tables.header, line_table)}
+            order = {t: f[0] for t, f in facts.items()}
             headers = self._rows(f"SELECT * FROM dbo.{tables.header} WHERE Id = ?", (doc_id,))
             if len(headers) != 1:
                 raise DocumentNotFoundError(doc_id)
@@ -305,7 +332,12 @@ class SqlServerBravo:
                 value = answer["locked"]
                 locks[str(line["RowId"])] = int(value) if value is not None else None  # type: ignore[call-overload]
             return StoredDocument(
-                header=header, lines=lines, column_order=order, prevent_edit=locks
+                header=header,
+                lines=lines,
+                column_order=order,
+                prevent_edit=locks,
+                no_default={t: f[1] for t, f in facts.items()},
+                generated={t: f[2] for t, f in facts.items()},
             )
 
         return await self._in_thread(work)

@@ -182,6 +182,9 @@ class FakeDirectory:
 class FakeRights:
     command: CommandRight = "allowed"
     columns: list[ColumnRight] = field(default_factory=list)
+    # Bravo's answer for one operation where it differs from `command`.
+    by_operation: dict[str, CommandRight] = field(default_factory=dict)
+    asked: list[str] = field(default_factory=list)
 
     async def column_rights(self, user_id: int, command_key: str) -> Sequence[ColumnRight]:
         return self.columns
@@ -189,7 +192,8 @@ class FakeRights:
     async def command_right(
         self, user_id: int, command_key: str, operation: Literal["update", "insert"]
     ) -> CommandRight:
-        return self.command
+        self.asked.append(operation)
+        return self.by_operation.get(operation, self.command)
 
 
 @dataclass
@@ -202,6 +206,10 @@ class FakeBravo:
     fail_with: Exception | None = None
     tamper: dict[str, object] = field(default_factory=dict)  # a trigger's own change
     version: int = 0x7D2
+    # Bravo's `DML_B30BizDocDetailSO_InsertUpdate_RowId`: a new line's RowId
+    # filled from its Id (off: the trigger's join found nothing).
+    fills_row_id: bool = True
+    tamper_new: dict[str, object] = field(default_factory=dict)  # on each new line
 
     async def load(self, screen: str, doc_id: int) -> StoredDocument:
         if doc_id != self.document.header["Id"]:
@@ -217,17 +225,27 @@ class FakeBravo:
         if self.fail_with is not None:
             raise self.fail_with
         rows = {"B30BizDoc": [self.document.header], "B30BizDocDetailSO": self.document.lines}
-        for statement in batch.statements:
+        updates = [s for s in batch.statements if s.row_id is not None]
+        for statement in updates:
             row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
             if row["timestamp"] != statement.parameters["_Original_timestamp"]:
                 raise StaleRowError(statement.table)
         for statement in batch.statements:
-            row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
+            if statement.row_id is None:
+                new_id = max(int(r["Id"]) for r in rows[statement.table]) + 1  # type: ignore[call-overload]
+                row = {"Id": new_id}
+                rows[statement.table].append(row)
+            else:
+                row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
             for name, value in statement.parameters.items():
                 if not name.startswith(("_Original_", "_Id")):
                     row[name[1:]] = value
             self.version += 1
             row["timestamp"] = f"0x{self.version:016X}"
+            if statement.row_id is None:
+                if self.fills_row_id:
+                    row["RowId"] = f"R{row['Id']}"
+                row.update(self.tamper_new)
         self.document.lines[0].update(self.tamper)
 
 
@@ -236,6 +254,7 @@ class FakeEngine:
     layout_: Layout = field(
         default_factory=lambda: read_layout(LAYOUT, "EDIT_BizDocSO", missing_template=None)
     )
+    views: dict[str, list[str]] = field(default_factory=dict)
 
     async def layout(self, screen: str) -> Layout:
         return self.layout_
@@ -248,6 +267,9 @@ class FakeEngine:
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return Session(user={"Id": Decimal(user.id)}, branch=branch, now=now.replace(tzinfo=None))
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        return self.views.get(view, [])
 
 
 @dataclass

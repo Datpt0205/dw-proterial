@@ -39,11 +39,13 @@ from dw_bravo.contract import (
     CancelLine,
     SetConfirmedDate,
     SetQuantity,
+    SplitLine,
     WriteCommand,
     WriteKind,
     content_hash,
 )
 from dw_bravo.expression import UNKNOWN, RuleRefusedError, UndecidableError, is_empty
+from dw_bravo.layout import Layout
 from dw_bravo.runner import Document, Row, RuleRunner, SavePlan, _same
 from dw_bravo_gateway.ports import (
     Batch,
@@ -107,10 +109,20 @@ class Edit:
     table: str  # the layout's table key
     column: str
     value: object
+    # The k-th line the command adds (`AddRow`), or None: the command's line.
+    new_row: int | None = None
 
 
-def typed_edits(command: WriteCommand) -> list[Edit]:
-    """What the person types for a command, as the 11-20 trace shows it."""
+@dataclass(frozen=True)
+class AddRow:
+    """A line added to the grid, as a person adds one."""
+
+    table: str
+
+
+def typed_edits(command: WriteCommand, *, group: str = "") -> list[Edit | AddRow]:
+    """What the person types for a command, as the UAT traces show it.
+    `group` is a split's group label (`group_label`)."""
     if isinstance(command, SetConfirmedDate):
         # Bravo holds dates as datetime at midnight (the trace's values).
         return [
@@ -130,6 +142,28 @@ def typed_edits(command: WriteCommand) -> list[Edit]:
             Edit("Detail", "CancelRemark", command.reason),
             Edit("Detail", "Quantity9", Decimal(0)),
         ]
+    if isinstance(command, SplitLine):
+        # The order the layout allows (ticket 73; UAT trace 11-25 17:28:58):
+        # "Divide" first, so `Eval_QuantityGroup_GetVaule` takes the line's
+        # whole quantity as the group's, and the line is the group's head
+        # before its label is typed (`Eval_Detail_Divi_GetData` copies a
+        # head's columns onto a labelled line without "Divide": onto the
+        # head itself, NULLs). Then the label, then the first part. Each
+        # further part is a new line: its label copies the head's item, PO
+        # line, price and the rest (the same rule), then its quantity
+        # (`OriginalQuantity` follows on a line with `Id < 0`).
+        edits: list[Edit | AddRow] = [
+            Edit("Detail", "Divide", Decimal(1)),
+            Edit("Detail", "GroupDivi", group),
+            Edit("Detail", "Quantity9", Decimal(command.parts[0].quantity)),
+        ]
+        for k, part in enumerate(command.parts[1:]):
+            edits += [
+                AddRow("Detail"),
+                Edit("Detail", "GroupDivi", group, new_row=k),
+                Edit("Detail", "Quantity9", Decimal(part.quantity), new_row=k),
+            ]
+        return edits
     raise UnmeasuredError(f"what a person types for {type(command).__name__} is not traced")
 
 
@@ -210,8 +244,8 @@ class WritePipeline:
             user = await self._identity(claims)
             await self._right(user, kind, command)
             stored = await self._load(kind, command)
-            plan, warnings, refusal = await self._plan(kind, command, stored, user)
-            batch = self._batch(kind, plan, stored, user)
+            plan, warnings, refusal, insertable = await self._plan(kind, command, stored, user)
+            batch = self._batch(kind, plan, stored, user, insertable)
             if refusal is None:
                 self._lock(plan, stored, warnings)
         except _RefusedError as refused:
@@ -259,15 +293,26 @@ class WritePipeline:
     # ------------------------------------------------------------ 3: right
 
     async def _right(self, user: BravoUser, kind: WriteKind, command: WriteCommand) -> None:
-        answer = await self.rights.command_right(user.id, kind.screen, kind.operation)
-        if answer != "allowed":
-            raise _RefusedError("right", f"command_right_{answer}")
+        edits = typed_edits(command)
+        operations: list[Literal["update", "insert"]] = [kind.operation]
+        if any(isinstance(e, AddRow) for e in edits) and "insert" not in operations:
+            # A line added to a stored SO's grid: whether Bravo asks the
+            # Edit right, the New right or both is not measured (ticket 75,
+            # script 10), so both are asked and either refusal refuses.
+            operations.append("insert")
+        for operation in operations:
+            answer = await self.rights.command_right(user.id, kind.screen, operation)
+            if answer != "allowed":
+                raise _RefusedError("right", f"command_right_{answer}")
         rights = await self.rights.column_rights(user.id, kind.screen)
         tables = self.screens[kind.screen]
-        for edit in typed_edits(command):
+        for edit in edits:
+            if isinstance(edit, AddRow):
+                continue
             table = tables.table_for(edit.table)
+            new = edit.new_row is not None or kind.operation == "insert"
             for right in rights:
-                barred = right.no_edit if kind.operation == "update" else right.no_add_new
+                barred = right.no_add_new if new else right.no_edit
                 if (
                     barred
                     and right.table.lower() == table.lower()
@@ -282,11 +327,11 @@ class WritePipeline:
     ) -> WriteResult:
         line_ref = command.line  # type: ignore[union-attr]
         stored = await self._load(kind, command)
-        plan, warnings, refusal = await self._plan(kind, command, stored, user)
+        plan, warnings, refusal, insertable = await self._plan(kind, command, stored, user)
         if refusal is not None:
             raise refusal
         self._lock(plan, stored, warnings)
-        batch = self._batch(kind, plan, stored, user)
+        batch = self._batch(kind, plan, stored, user, insertable)
         await self._paced()
         if not await self.ledger.claim(claims):
             raise _RefusedError("ledger", "approval_already_claimed", warnings)
@@ -320,22 +365,25 @@ class WritePipeline:
         return stored
 
     def _lock(self, plan: SavePlan, stored: StoredDocument, warnings: Sequence[str]) -> None:
-        """5: Bravo's own `ufn_Prevent_Edit`, per line written; no answer locks."""
+        """5: Bravo's own `ufn_Prevent_Edit`, per stored line written; no
+        answer locks. A new line is on no CDO; the line it splits is checked."""
         for written in plan.commands:
-            if written.table != "Parent":
+            if written.table != "Parent" and written.kind == "update":
                 row_key = str(stored.lines[written.row].get("RowId"))
                 if stored.prevent_edit.get(row_key) != 0:
                     raise _RefusedError("lock", "line_locked_or_could_not_check", warnings)
 
     async def _plan(
         self, kind: WriteKind, command: WriteCommand, stored: StoredDocument, user: BravoUser
-    ) -> tuple[SavePlan, tuple[str, ...], _RefusedError | None]:
-        """4: the plan, and the rules' refusal of it if any (raised by the caller)."""
+    ) -> tuple[SavePlan, tuple[str, ...], _RefusedError | None, Mapping[str, Sequence[str]]]:
+        """4: the plan, the rules' refusal of it if any (raised by the caller),
+        and the columns each table's new line may be inserted with."""
         try:
             layout = await self.engine.layout(kind.screen)
         except (RuleRefusedError, UndecidableError) as refused:
             raise _RefusedError("rules", f"layout_could_not_be_read: {refused}") from None
-        line = stored.lines[_line_index(stored, command.line.line_id)]  # type: ignore[union-attr]
+        line_index = _line_index(stored, command.line.line_id)  # type: ignore[union-attr]
+        line = stored.lines[line_index]
         if not is_empty(line.get("IsCancel")):
             # "Order status" set: no trace shows a person typing into a line
             # Bravo already holds cancelled (a second cancel would recompute
@@ -345,14 +393,32 @@ class WritePipeline:
             # The traced cancel of a split group's first line also cleared
             # `Divide` by hand; what a person does there is not measured.
             raise _RefusedError("rules", "unmeasured: a cancel of a split line")
+        group = ""
+        if isinstance(command, SplitLine):
+            _refuse_unmeasured_split(command, stored, line_index)
+            group = group_label(stored, line_index)
+        edits = typed_edits(command, group=group)
+        insertable: Mapping[str, Sequence[str]] = {}
+        new_line: dict[str, object] = {}
+        if any(isinstance(e, AddRow) for e in edits):
+            insertable, new_line = await self._new_line(kind, layout, stored)
         branch = str(stored.header.get("BranchCode") or "")
         session = await self.engine.session(user, branch, self.now())
         runner = RuleRunner(layout, self.engine.procedures(), self.engine.references(), session)
         doc = document_of(stored)
+        tables = self.screens[kind.screen]
         try:
             runner.load(doc)
-            for edit in typed_edits(command):
-                index = _line_index(stored, command.line.line_id) if edit.table != "Parent" else 0  # type: ignore[union-attr]
+            added: list[int] = []
+            for edit in edits:
+                if isinstance(edit, AddRow):
+                    columns = insertable[tables.table_for(edit.table)]
+                    added.append(runner.add_row(doc, edit.table, new_line, stored=columns))
+                    continue
+                if edit.table == "Parent":
+                    index = 0
+                else:
+                    index = line_index if edit.new_row is None else added[edit.new_row]
                 runner.edit(doc, edit.table, index, edit.column, edit.value)
             # A stored document, opened and saved: the template's guards on
             # those two commands (ticket 59).
@@ -377,10 +443,41 @@ class WritePipeline:
             refusal = _RefusedError(
                 "rules", "provisional: " + "; ".join(plan.provisional), warnings
             )
-        return plan, tuple(warnings), refusal
+        return plan, tuple(warnings), refusal, insertable
+
+    async def _new_line(
+        self, kind: WriteKind, layout: Layout, stored: StoredDocument
+    ) -> tuple[dict[str, Sequence[str]], dict[str, object]]:
+        """What a line added to this screen's grid holds: every column of
+        the view the layout loads it from, NULL but for the screen's traced
+        `new_line` values; and the columns an INSERT of it may list (the
+        view's that the table stores, less what the table generates)."""
+        tables = self.screens[kind.screen]
+        insertable: dict[str, Sequence[str]] = {}
+        values: dict[str, object] = {}
+        for key, table in tables.lines.items():
+            spec = layout.tables.get(key)
+            generated = stored.generated.get(table)
+            view = list(await self.engine.view_columns(spec.name)) if spec is not None else []
+            if not view or generated is None or table not in stored.column_order:
+                raise _RefusedError("rules", f"unmeasured: the columns a new line of {table} holds")
+            viewed = {c.lower() for c in view}
+            insertable[table] = [
+                c
+                for c in stored.column_order[table]
+                if c.lower() in viewed and c.lower() not in generated
+            ]
+            values = dict.fromkeys((c for c in view if c.lower() != "id"), None)
+            values |= dict(tables.new_line)
+        return insertable, values
 
     def _batch(
-        self, kind: WriteKind, plan: SavePlan, stored: StoredDocument, user: BravoUser
+        self,
+        kind: WriteKind,
+        plan: SavePlan,
+        stored: StoredDocument,
+        user: BravoUser,
+        insertable: Mapping[str, Sequence[str]],
     ) -> Batch:
         tables = self.screens[kind.screen]
         event = tables.context_event.get(kind.operation)
@@ -403,7 +500,13 @@ class WritePipeline:
                 rows[(key, i)] = (line["Id"], str(line["timestamp"]))
         try:
             batch = render_save(
-                kind.screen, plan.commands, rows, stored.column_order, context=context
+                kind.screen,
+                plan.commands,
+                rows,
+                stored.column_order,
+                context=context,
+                insertable=insertable,
+                no_default=stored.no_default,
             )
             return replace(batch, steps=(process_step(kind.screen, stored.header),))
         except UnmeasuredError as unmeasured:
@@ -417,24 +520,37 @@ class WritePipeline:
     async def _reconcile(
         self, kind: WriteKind, doc_id: int, plan: SavePlan, before: StoredDocument
     ) -> tuple[str, ...]:
-        """Every column written, read back: what Bravo holds must be what was planned."""
+        """Every column written, read back: what Bravo holds must be what was
+        planned. The new lines are the lines Bravo holds now and did not
+        before, in the client's order. Bravo's trigger fills a new line's
+        key column (`RowId`, written ''); one left '' would refuse every
+        later line of every SO (`IX_B30BizDocDetailSO_RowId_Unique`), so it
+        must read back filled."""
         try:
             after = await self.documents.load(kind.screen, doc_id)
         except (BravoUnavailableError, DocumentNotFoundError):
             return ("read_back_failed",)
+        tables = self.screens[kind.screen]
+        known = {line.get("Id") for line in before.lines}
+        added = iter([line for line in after.lines if line.get("Id") not in known])
         differences: list[str] = []
         for written in plan.commands:
-            row = (
-                after.header
-                if written.table == "Parent"
-                else _row_by_id(after, before.lines[written.row]["Id"])
-            )
+            key = ""
+            if written.table == "Parent":
+                row: dict[str, object] | None = after.header
+            elif written.kind == "insert":
+                row = next(added, None)
+                key = tables.read_back_key[tables.table_for(written.table)]
+                if row is not None and is_empty(row.get(key)):
+                    differences.append(f"{written.table}#{written.row}.{key}: not filled")
+            else:
+                row = _row_by_id(after, before.lines[written.row]["Id"])
             if row is None:
                 differences.append(f"{written.table}#{written.row}: row gone")
                 continue
             lowered = {k.lower(): v for k, v in row.items()}
             for column, value in written.columns.items():
-                if column.lower() == "modifiedby":
+                if column.lower() in ("modifiedby", key.lower()):
                     continue
                 if value is None:
                     # Written as DEFAULT, as the client does: the column's own
@@ -442,6 +558,7 @@ class WritePipeline:
                     continue
                 if not _same(_normal(lowered.get(column.lower())), _normal(value)):
                     differences.append(f"{written.table}#{written.row}.{column}")
+        differences += [f"a line not planned: Id {line.get('Id')}" for line in added]
         return tuple(differences)
 
 
@@ -456,6 +573,43 @@ def document_of(stored: StoredDocument) -> Document:
         for i, line in enumerate(stored.lines)
     ]
     return Document(parent=parent, children={"Detail": lines})
+
+
+def group_label(stored: StoredDocument, line_index: int) -> str:
+    """The label a split gives its group: the smallest positive number no
+    other line uses as `GroupDivi`. The line's own label is not kept: a label
+    left on a line that is not split marks no group (UAT trace 11-25: line 1
+    held '2' with `Divide` 0, and the PIC's split labelled it '1'). PICs typed
+    'A' (11-20) and '1' (11-25); Proterial's own convention is not known."""
+    used = {
+        str(line.get("GroupDivi")).strip()
+        for i, line in enumerate(stored.lines)
+        if i != line_index and not is_empty(line.get("GroupDivi"))
+    }
+    n = 1
+    while str(n) in used:
+        n += 1
+    return str(n)
+
+
+def _refuse_unmeasured_split(command: SplitLine, stored: StoredDocument, line_index: int) -> None:
+    """A split no trace shows a person making is refused, before the approval
+    is spent: of a line already in a group (it, or a line sharing its label,
+    holds `Divide`); of a line other lines follow (where Bravo puts the new
+    line, and whether it renumbers the rest, is not traced); with a
+    confirmed date on a part (no traced split typed one: ticket 52's UAT
+    split is to)."""
+    line = stored.lines[line_index]
+    label = str(line.get("GroupDivi") or "").strip()
+    if not is_empty(line.get("Divide")) or any(
+        label and not is_empty(other.get("Divide")) and str(other.get("GroupDivi")).strip() == label
+        for other in stored.lines
+    ):
+        raise _RefusedError("rules", "unmeasured: a split of a line already in a split group")
+    if line_index != len(stored.lines) - 1:
+        raise _RefusedError("rules", "unmeasured: a split of a line other lines follow")
+    if any(part.confirmed_date is not None for part in command.parts):
+        raise _RefusedError("rules", "unmeasured: a confirmed date on a split part")
 
 
 def _doc_id(command: WriteCommand) -> int:

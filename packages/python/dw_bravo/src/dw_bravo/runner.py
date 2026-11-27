@@ -11,6 +11,8 @@ What it does, all of it read from the layout:
 - `edit()` sets a column the way a person typing does: the column's
   `ColumnChanging` rules, the value, then its `ColumnChanged` rules, each
   assignment cascading through the same events;
+- `add_row()` adds a line as a person adds one to the grid: the relation key
+  from the parent, a negative `Id`, then the table's `RowAdded` rules;
 - `check()` runs the validators and sorts them into blocking, warning and
   undecided;
 - `save()` runs `ServerUpdating` and returns the columns the client would
@@ -303,6 +305,39 @@ class RuleRunner:
         self._assign(
             doc, table, row, column, value, rule=USER, trigger=column, suppress=False, depth=0
         )
+
+    def add_row(
+        self,
+        doc: Document,
+        table: str,
+        values: Mapping[str, object],
+        *,
+        stored: Iterable[str],
+    ) -> int:
+        """Add a row to a child table as a person adding a grid line does,
+        and return its index. ``values`` is every column the client's new row
+        holds (NULL where nothing is known yet: a rule reading a column the
+        row does not hold refuses); ``stored`` the ones an INSERT may list.
+        The row then takes the parent's relation key (the layout's
+        ``ParentKey``/``ChildKey``) and an ``Id`` below zero, as the client's
+        rows hold before a save (the layout's ``Id < 0`` rules read it; it is
+        never stored), and the table's ``RowAdded`` rules run."""
+        spec = self.layout.tables.get(table)
+        if table == PARENT or spec is None:
+            raise RuleRefusedError(f"{table} is not a child table of {self.layout.form}")
+        if spec.parent_key is None or spec.child_key is None:
+            raise RuleRefusedError(f"{table} names no ParentKey/ChildKey in {self.layout.form}")
+        if not doc.parent.has(spec.parent_key):
+            raise UndecidableError(f"{PARENT}.{spec.parent_key} is not in hand")
+        rows = doc.rows(table)
+        initial = dict(values)
+        initial[spec.child_key] = doc.parent.get(spec.parent_key)
+        initial["Id"] = Decimal(-(sum(1 for r in rows if r.new) + 1))
+        held = [c for c in stored if c.lower() not in ("id", spec.child_key.lower())]
+        row = Row(initial, stored=[*held, spec.child_key], new=True)
+        rows.append(row)
+        self._event(doc, table, row, "RowAdded")
+        return len(rows) - 1
 
     def check(self, doc: Document) -> Check:
         findings: list[Finding] = []

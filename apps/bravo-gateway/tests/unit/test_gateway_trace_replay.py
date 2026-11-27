@@ -114,6 +114,12 @@ class TraceBravo:
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return self.replay.session_for(self.state.save)
 
+    # The view's columns: what the client declared for a line's statement.
+    view: list[str] = field(default_factory=list)
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        return self.view
+
 
 @dataclass
 class _AsRecorded:

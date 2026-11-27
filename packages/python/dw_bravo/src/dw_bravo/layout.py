@@ -118,6 +118,10 @@ class Table:
     default_values: Mapping[str, str]
     expressions: Mapping[str, str]  # lower col -> expression
     temp_columns: Mapping[str, str | None]  # lower col -> default expression
+    # A child table's relation to its parent (`<ParentKey>`/`<ChildKey>`): the
+    # parent's column whose value a new row of this table takes in its own.
+    parent_key: str | None = None
+    child_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -281,6 +285,8 @@ class _Reader:
                 if temps is not None
                 else {}
             ),
+            parent_key=_text(element.find("ParentKey")),
+            child_key=_text(element.find("ChildKey")),
         )
 
 
