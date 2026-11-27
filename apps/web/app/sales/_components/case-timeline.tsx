@@ -15,10 +15,13 @@ import {
  * The case's place in its procedure (V3BidOverview's gate timeline, re-cut to
  * the WIV steps): the steps and the states each one holds come from the API's
  * overview (`WIV_STEPS`), so this draws no step table of its own. The current
- * steps are the ones whose states hold the case's state. No other step is drawn
+ * step is the one whose states hold the case's state. No other step is drawn
  * as done: DW1 runs its checks before the Bravo entry (the spec's deviation),
  * so the WIV order is not the order a case passes through, and a step drawn
- * as passed because it sits to the left would be a claim nobody made. A step
+ * as passed because it sits to the left would be a claim nobody made. A state
+ * two steps hold (`uploaded_to_bravo`: O3's entry and O7's self-check) makes
+ * the later one current and the earlier one passed, which the state itself
+ * says, so the case is never in two places at once. A step
  * outside this slice says so. A step is titled by the states it holds, its WIV
  * code beside: nobody at the desk reads "O7" (2026-10-27). Under the steps,
  * who acts next.
@@ -39,6 +42,10 @@ export function CaseTimeline({
     (s) => s.procedure === procedure,
   );
   const states = procedure === "WIV-03-012" ? ORDER_STATE : QUOTE_STATE;
+  const at = steps.reduce(
+    (last, step, index) => (step.states.includes(status) ? index : last),
+    -1,
+  );
   if (!steps.length)
     return (
       <Alert
@@ -60,24 +67,29 @@ export function CaseTimeline({
             titlePlacement="vertical"
             // antd marks `current` (0 by default) as the active step whatever
             // its status says, which drew "Đã nhận" as where every case is.
-            current={steps.findIndex((s) => s.states.includes(status))}
+            current={at}
             aria-label="Các bước của quy trình"
-            items={steps.map((step) => ({
+            items={steps.map((step, index) => ({
               title: step.states.length
                 ? step.states.map((s) => label(states, s)).join(" · ")
                 : label(STEP_COVERAGE, step.coverage),
-              status: !step.states.includes(status)
-                ? "wait"
-                : status === "closed" || status === "declined"
-                  ? "error"
-                  : "process",
+              status:
+                index !== at
+                  ? step.states.includes(status)
+                    ? "finish"
+                    : "wait"
+                  : status === "closed" || status === "declined"
+                    ? "error"
+                    : "process",
               content: [
                 step.step_id,
-                step.states.includes(status)
+                index === at
                   ? "Hồ sơ đang ở bước này"
-                  : step.coverage === "yes" || !step.states.length
-                    ? null
-                    : label(STEP_COVERAGE, step.coverage),
+                  : step.states.includes(status)
+                    ? "Đã qua bước này"
+                    : step.coverage === "yes" || !step.states.length
+                      ? null
+                      : label(STEP_COVERAGE, step.coverage),
               ]
                 .filter(Boolean)
                 .join(" · "),

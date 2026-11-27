@@ -22,3 +22,15 @@ Category: deployment
 
 - A PIC receives a real customer mail, prepares an order, and sends the
   confirmation from their own mailbox, all inside DW, on the plant's machine.
+
+## Comments
+
+### 2026-11-27 — full review (functions), fixes that belong to no other ticket
+
+- **Two current steps.** An order at `uploaded_to_bravo` read "Hồ sơ đang ở
+  bước này" on O3 and on O7: `WIV_STEPS` lists the state under both, and the
+  timeline marked every step holding it. The later step is now current and
+  the earlier one reads "Đã qua bước này" (the state says the entry
+  happened). `WIV_STEPS` is unchanged: the overview's per-step figures read
+  it. `case-timeline.test.tsx`'s fixture now has O3 as the server does (it
+  had only O7, so it could not see this); red on the old component.
