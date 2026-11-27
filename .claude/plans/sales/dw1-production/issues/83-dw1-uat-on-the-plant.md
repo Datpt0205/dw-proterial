@@ -42,3 +42,15 @@ Category: deployment
   among the rules she may see, and that price rules show only to whoever
   reads prices; the subtitle reads "quy tắc bạn được xem". Test in
   `rules.test.tsx` (both personas), red with the scope check forced true.
+- **A reply no model read, and "DW1 đã làm gì" beside it.** The reply line
+  always said "Chưa đọc: bước mô hình đang tắt", but `outcome` is null also
+  when the reader is on and not yet at its bar (`model_steps.allows`); it
+  now says "Chưa đọc: bước AI tắt hoặc chưa đạt" (the AI state words), and
+  the trial reading that may have run stays in "DW1 đã làm gì". There the
+  result tag read "Model không trả lời" beside the kind "Mô hình không trả
+  lời": the tag is Vietnamese now and the kind line is not repeated. A
+  model step's `process_steps` name both procedures' steps, so a quote
+  showed the reply reader's "O1": a case's entries now name only their own
+  procedure's steps. Tests in `case-activity.test.tsx` and
+  `case-replies.test.tsx`, red under each mutation (no procedure filter, the
+  kind line always drawn, the old reply wording).

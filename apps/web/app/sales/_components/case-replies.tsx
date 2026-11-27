@@ -22,6 +22,13 @@ type Intent = SalesSchemas["IntentView"];
 type Proposal = Reply["proposal"];
 
 /**
+ * A customer's reply no model read for the case (`outcome` null): the
+ * reader is off, or on and not yet at its bar (`model_steps.allows`). Either
+ * way a trial reading may still have run, which "DW1 đã làm gì" lists.
+ */
+export const REPLY_NOT_READ = "Chưa đọc: bước AI tắt hoặc chưa đạt";
+
+/**
  * The case's mail thread (tickets 32, 24, 25 and 26): the customer's mails
  * before the case opened ("Trao đổi trước PO", each opening in the inbox),
  * the replies the thread attached to it and the mails Sales sent on it
@@ -136,11 +143,7 @@ function ReplyRow({ reply, answer }: { reply: Reply; answer: ReactNode }) {
         <ReadingTag
           outcome={reply.outcome}
           intents={reply.intents}
-          off={
-            reply.picked_by
-              ? "Sales chọn hồ sơ: chưa đọc"
-              : "Chưa đọc: bước mô hình đang tắt"
-          }
+          off={reply.picked_by ? "Sales chọn hồ sơ: chưa đọc" : REPLY_NOT_READ}
         />
       </Space>
       <FallbackNote fallback={reply.fallback} />

@@ -808,7 +808,7 @@ export const ACTIVITY_KIND: Record<
 export const ACTIVITY_RESULT = {
   accepted: "Đã chấp nhận",
   to_person: "Chuyển cho người",
-  unavailable: "Model không trả lời",
+  unavailable: "Mô hình không trả lời",
 } as const;
 
 /**

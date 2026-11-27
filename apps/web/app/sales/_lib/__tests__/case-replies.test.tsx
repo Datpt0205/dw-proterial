@@ -196,7 +196,9 @@ describe("a customer's reply in the case's thread (ticket 32)", () => {
       page();
 
       expect(
-        await screen.findByText("Chưa đọc: bước mô hình đang tắt"),
+        // Off, or on and not at its bar: either way no model read it for
+        // the case (full review, 2026-11-27).
+        await screen.findByText("Chưa đọc: bước AI tắt hoặc chưa đạt"),
       ).toBeTruthy();
       expect(screen.queryByText("Đề xuất từ luồng thư")).toBeNull();
       expect(
