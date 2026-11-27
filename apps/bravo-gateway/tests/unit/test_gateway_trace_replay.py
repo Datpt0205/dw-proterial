@@ -282,6 +282,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
             writer=bravo,
             now=_fixed(at),
             tenant_id=TENANT,
+            target="uat",
             screens=screens,
             pace=WritePace(),
         )
@@ -401,6 +402,7 @@ async def test_a_traced_cancel_is_the_clients_own_statement() -> None:
             writer=bravo,
             now=_fixed(at),
             tenant_id=TENANT,
+            target="uat",
             screens=dict(SCREENS),
             pace=WritePace(),
         )
@@ -561,6 +563,7 @@ async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: 
         writer=bravo,
         now=_fixed(when),
         tenant_id=TENANT,
+        target="uat",
         screens=screens,
         pace=WritePace(),
     )

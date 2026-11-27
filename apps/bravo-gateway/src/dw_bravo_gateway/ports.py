@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Literal, Protocol
 
 from dw_bravo.approval_token import ApprovalClaims
-from dw_bravo.contract import CustomerPoRows, SalesOrderState
+from dw_bravo.contract import BravoTarget, CustomerPoRows, SalesOrderState
 from dw_bravo.layout import Layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.sync import SyncPage, SyncQuery
@@ -236,8 +236,14 @@ SwitchState = Literal["enabled", "off", "paused"]
 
 class Switches(Protocol):
     """Whether a tenant's write kind may run: off until a person with the
-    right enables it after UAT (ticket 63 g), paused by the watch (ticket 65)."""
+    right enables it after UAT (ticket 63 g), paused by the watch (ticket 65);
+    and which Bravo the tenant's reads and writes go to (ticket 85)."""
 
     async def state(
         self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str
     ) -> SwitchState: ...
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        """The tenant's target now; None when its rule names none the
+        gateway can read (refused, never read as either)."""
+        ...

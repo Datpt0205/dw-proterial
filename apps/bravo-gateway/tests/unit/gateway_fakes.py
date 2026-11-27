@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from dw_bravo.adapters.recorded import RecordedProcedures, RecordedReferences
 from dw_bravo.approval_token import ApprovalClaims, ApprovalTokenSigner, ApprovalTokenVerifier
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
+from dw_bravo.contract import BravoTarget, LineRef, SetConfirmedDate, SetQuantity
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
@@ -34,6 +34,7 @@ from dw_bravo_gateway.ports import (
     SwitchState,
 )
 from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.targets import TargetBravo, Targets
 
 LAYOUT = """<root><Tables>
 <ParentTable>
@@ -138,9 +139,13 @@ def stored() -> StoredDocument:
 @dataclass
 class FakeSwitches:
     state_: SwitchState = "enabled"
+    target_: BravoTarget | None = "uat"
 
     async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         return self.state_
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        return self.target_
 
 
 @dataclass
@@ -296,9 +301,16 @@ def gateway(**over: object) -> Gateway:
         writer=bravo,
         now=lambda: NOW,
         tenant_id=TENANT,
+        target="uat",
         screens=TEST_SCREENS,
         pace=WritePace(),
     )
     for name, value in over.items():
         setattr(pipeline, name, value)
     return Gateway(pipeline, switches, ledger, directory, rights, bravo)
+
+
+def targets(gw: Gateway, **reads: object) -> Targets:
+    """The gateway's router over one target, UAT: the pipeline and ``reads``
+    (`orders`, `directory`, `sync`, `fingerprints`)."""
+    return Targets(TENANT, gw.switches, {"uat": TargetBravo(gw.pipeline, **reads)})  # type: ignore[arg-type]

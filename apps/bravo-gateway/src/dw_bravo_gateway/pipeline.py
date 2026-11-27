@@ -3,7 +3,8 @@
 1. **The approval token** (`dw_bravo.approval_token`): signed, unexpired,
    for exactly this command (kind and content hash). Everything the write
    needs to know about who and which tenant is read from it, never from the
-   request. Then what the token alone decides: the kind is one the gateway
+   request. Then the target (ticket 85): the tenant's Bravo now is the one
+   this pipeline reaches. Then what the token alone decides: the kind is one the gateway
    may run (`WriteKind.pending`), the tenant has it switched on and the watch
    has not paused it, and the approval id was not spent.
 2. **Identity is live** (ticket 64): exactly one active Bravo user holds the
@@ -36,6 +37,7 @@ from zoneinfo import ZoneInfo
 from dw_bravo.approval_token import ApprovalClaims, ApprovalTokenVerifier, TokenRefusedError
 from dw_bravo.contract import (
     WRITE_KINDS,
+    BravoTarget,
     CancelLine,
     SetConfirmedDate,
     SetQuantity,
@@ -75,7 +77,9 @@ from dw_bravo_gateway.statements import (
 VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
 
 Outcome = Literal["written", "already_written", "refused", "in_doubt", "written_with_differences"]
-Check = Literal["token", "kind", "switch", "ledger", "identity", "right", "rules", "lock", "write"]
+Check = Literal[
+    "token", "target", "kind", "switch", "ledger", "identity", "right", "rules", "lock", "write"
+]
 
 
 @dataclass(frozen=True)
@@ -216,12 +220,15 @@ class WritePipeline:
     # The one DW tenant whose Bravo this gateway reaches: a token another
     # tenant's approval signed is refused, whatever its switches say.
     tenant_id: uuid.UUID
+    # Which of the tenant's Bravos the ports above reach (ticket 85).
+    target: BravoTarget
     screens: Mapping[str, ScreenTables] = field(default_factory=lambda: dict(SCREENS))
     pace: WritePace = field(default_factory=WritePace)
 
     async def execute(self, command: WriteCommand, token: str) -> WriteResult:
         try:
             claims, kind = self._token(command, token)
+            await self._target(claims)
             await self._kind(claims, kind)
             existing = await self.ledger.find(claims)
             if existing is not None:
@@ -241,6 +248,7 @@ class WritePipeline:
         """Checks 1-5 without the ledger's claim or the write."""
         try:
             claims, kind = self._token(command, token)
+            await self._target(claims)
             await self._kind(claims, kind)
             user = await self._identity(claims)
             await self._right(user, kind, command)
@@ -270,6 +278,15 @@ class WritePipeline:
         if claims.content_hash != content_hash(command):
             raise _RefusedError("token", "content_changed_since_approval")
         return claims, WRITE_KINDS[key]
+
+    async def _target(self, claims: ApprovalClaims) -> None:
+        """The tenant's target, read now, is the Bravo this pipeline reaches:
+        a switch made after the write was routed here refuses it."""
+        current = await self.switches.target(claims.tenant_id)
+        if current is None:
+            raise _RefusedError("target", "target_unreadable")
+        if current != self.target:
+            raise _RefusedError("target", "target_changed")
 
     async def _kind(self, claims: ApprovalClaims, kind: WriteKind) -> None:
         if kind.pending is not None:

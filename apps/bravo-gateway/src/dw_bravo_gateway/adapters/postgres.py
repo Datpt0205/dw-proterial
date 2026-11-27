@@ -21,6 +21,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_bravo.approval_token import ApprovalClaims
+from dw_bravo.contract import BravoTarget
 from dw_bravo_gateway.ports import LedgerEntry, LedgerStatus, SwitchState
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
@@ -129,6 +130,12 @@ class SqlPauses:
 # Which rule key switches a kind on, by the kind's prefix: DW1's SO writes
 # are Sales' (`dw_sales.domain.bravo_writes`). A kind no key covers is off.
 SWITCH_KEYS: Final[Mapping[str, str]] = {"so.": "sales_bravo_writes"}
+# Which rule names the tenant's Bravo target (ticket 85): the same version
+# the switches are read from.
+TARGET_KEY: Final = "sales_bravo_writes"
+# `platform.rule_versions` is narrowed by tenant only (a version applies to
+# the whole tenant): a target read binds no workspace of its own.
+_NO_WORKSPACE: Final = WorkspaceId(uuid.UUID(int=0))
 
 
 @dataclass(frozen=True)
@@ -143,9 +150,10 @@ class SqlSwitches:
     a kind switched off applies to the next write.
 
     The document's schema is `dw_sales.domain.bravo_writes.BravoWrites`; this
-    reads only `kinds.<kind>.enabled` and `uat_proof`, and anything not
-    exactly as that schema writes it reads as off
-    (`test_gateway_switches.py` holds the two together).
+    reads only `kinds.<kind>.enabled` and `uat_proof`, and `target` with its
+    `target_uat_proof`, and anything not exactly as that schema writes it
+    reads as off, or as no target (`test_gateway_switches.py` holds the two
+    together).
     """
 
     lookup: SqlRuleVersionLookup
@@ -165,6 +173,24 @@ class SqlSwitches:
         if version is None:
             return "off"  # the platform's file: every kind off
         return "enabled" if switched_on(version.document, kind) else "off"
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        version = await self.lookup.approved(_Scope(TenantId(tenant_id), _NO_WORKSPACE), TARGET_KEY)
+        if version is None:
+            return "uat"  # the platform's file: UAT
+        return target_of(version.document)
+
+
+def target_of(document: Mapping[str, object]) -> BravoTarget | None:
+    """UAT unless the version names production with the UAT run that proved
+    the gateway there; a version from before the field (1.0.0) is UAT."""
+    target = document.get("target", "uat")
+    if target == "uat":
+        return "uat"
+    proof = document.get("target_uat_proof")
+    if target == "production" and isinstance(proof, str) and proof.strip():
+        return "production"
+    return None
 
 
 def switched_on(document: Mapping[str, object], kind: str) -> bool:

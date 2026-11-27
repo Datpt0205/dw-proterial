@@ -294,6 +294,7 @@ def _pipeline(bravo: SqlServerBravo) -> WritePipeline:
         writer=bravo,
         now=lambda: NOW,
         tenant_id=TENANT,
+        target="uat",
         screens=TEST_SCREENS,
         pace=WritePace(),
     )

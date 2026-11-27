@@ -320,6 +320,20 @@ WRITE_KINDS: Final[dict[str, WriteKind]] = {
 }
 
 
+# -------------------------------------------------------------------- targets
+
+# Which Bravo the gateway reaches for a tenant (sales ticket 85): its UAT
+# database or the one the company runs on. The tenant's approved
+# `sales_bravo_writes` version names it; the approval token carries the one a
+# proposal was read from, and the gateway refuses a write whose stamp is not
+# the tenant's target now.
+BravoTarget = Literal["uat", "production"]
+BRAVO_TARGETS: Final[tuple[BravoTarget, ...]] = ("uat", "production")
+# The response header a read's answer names its target in: what a proposal
+# made from that read is stamped with.
+TARGET_HEADER: Final = "Bravo-Target"
+
+
 # ---------------------------------------------------------------------- reads
 
 

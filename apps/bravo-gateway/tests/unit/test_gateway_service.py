@@ -11,11 +11,12 @@ from typing import Any
 
 import httpx
 import pytest
-from gateway_fakes import PIC, SET_QUANTITY, FakeDirectory, gateway, token
+from gateway_fakes import PIC, SET_QUANTITY, FakeDirectory, gateway, targets, token
 from pydantic import TypeAdapter
 
 from dw_bravo.approval_token import generate_key_pair
 from dw_bravo.contract import (
+    BravoTarget,
     CustomerPoRow,
     CustomerPoRows,
     SalesOrderState,
@@ -37,12 +38,20 @@ pytestmark = pytest.mark.unit
 _COMPLETE: dict[str, Any] = {
     "tenant_id": "00000000-0000-0000-0000-00000000a000",
     "database_url": "postgresql+asyncpg://dw_app:x@postgres/dw",
-    "bravo_host": "bravo",
-    "bravo_database": "B8",
-    "bravo_read_user": "dw_read",
-    "bravo_read_password": "r",
-    "bravo_write_user": "dw_write",
-    "bravo_write_password": "w",
+    "uat_host": "bravo",
+    "uat_database": "B8_Hitachi_Cable_UAT",
+    "uat_read_user": "dw_read",
+    "uat_read_password": "r",
+    "uat_write_user": "dw_write",
+    "uat_write_password": "w",
+}
+_PRODUCTION: dict[str, Any] = {
+    "production_host": "bravo-prod",
+    "production_database": "B8_Hitachi_Cable",
+    "production_read_user": "dw_read_p",
+    "production_read_password": "rp",
+    "production_write_user": "dw_write_p",
+    "production_write_password": "wp",
 }
 
 
@@ -70,16 +79,76 @@ def test_locally_without_a_key_it_starts_and_verifies_nothing() -> None:
 @pytest.mark.parametrize(
     "change",
     [
-        {"bravo_write_password": ""},
+        {"uat_write_password": ""},
         {"database_url": None},
-        {"bravo_write_user": "dw_read"},
+        {"uat_write_user": "dw_read"},
         {"tenant_id": None},
+        {"uat_database": ""},
+        {"production_host": "bravo-prod"},
+        {**_PRODUCTION, "production_write_user": "dw_read_p"},
     ],
-    ids=["no_write_password", "no_ledger", "one_login_for_both", "no_tenant"],
+    ids=[
+        "no_write_password",
+        "no_ledger",
+        "one_login_for_both",
+        "no_tenant",
+        "no_database",
+        "production_half_configured",
+        "production_one_login_for_both",
+    ],
 )
 def test_half_configured_does_not_start(change: dict[str, object]) -> None:
     with pytest.raises(SettingsError):
         GatewaySettings(profile="local", **{**_COMPLETE, **change}).check_startable()
+
+
+def test_each_target_has_its_own_logins_and_an_absent_one_is_not_there() -> None:
+    uat_only = GatewaySettings(profile="local", **_COMPLETE)
+    both = GatewaySettings(profile="local", **_COMPLETE, **_PRODUCTION)
+    production_only = GatewaySettings(
+        profile="local",
+        tenant_id=_COMPLETE["tenant_id"],
+        database_url=_COMPLETE["database_url"],
+        uat_database="B8_Hitachi_Cable_UAT",  # a name alone is no target
+        **_PRODUCTION,
+    )
+
+    assert set(uat_only.targets()) == {"uat"}
+    assert both.targets()["production"].database == "B8_Hitachi_Cable"
+    assert both.targets()["uat"].read_user == "dw_read"
+    assert set(production_only.targets()) == {"production"}
+    production_only.check_startable()
+
+
+def test_no_target_at_all_does_not_start() -> None:
+    settings = GatewaySettings(
+        profile="local",
+        tenant_id=_COMPLETE["tenant_id"],
+        database_url=_COMPLETE["database_url"],
+        uat_database="B8_Hitachi_Cable_UAT",
+        production_database="B8_Hitachi_Cable",
+    )
+
+    with pytest.raises(SettingsError, match="at least one Bravo"):
+        settings.check_startable()
+
+
+_LEGACY = {k.replace("uat_", "bravo_"): v for k, v in _COMPLETE.items()}
+
+
+def test_the_single_set_before_ticket_85_is_read_as_uat() -> None:
+    settings = GatewaySettings(profile="local", **_LEGACY)
+
+    settings.check_startable()
+    assert set(settings.targets()) == {"uat"}
+    assert settings.targets()["uat"].host == "bravo"
+
+
+def test_the_old_set_and_the_uat_set_together_do_not_start() -> None:
+    settings = GatewaySettings(profile="local", **_LEGACY, uat_host="other", uat_read_user="x")
+
+    with pytest.raises(SettingsError, match="keep the UAT ones only"):
+        settings.check_startable()
 
 
 def test_deployed_never_talks_to_bravo_in_clear() -> None:
@@ -97,7 +166,7 @@ def test_deployed_never_talks_to_bravo_in_clear() -> None:
 
 def _client() -> tuple[httpx.AsyncClient, object]:
     gw = gateway()
-    app = create_app(gw.pipeline)
+    app = create_app(targets(gw))
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://gw"), gw
 
 
@@ -164,7 +233,7 @@ class _Fingerprints:
     def __init__(self, down: bool = False) -> None:
         self.down = down
 
-    async def fingerprint(self, environment: str) -> object:
+    async def fingerprint(self, environment: BravoTarget) -> object:
         from datetime import UTC, datetime
 
         from dw_bravo.watch import Component, Fingerprint
@@ -173,29 +242,30 @@ class _Fingerprints:
         if self.down:
             raise BravoUnavailableError("no answer")
         return Fingerprint(
-            "production", datetime(2026, 11, 21, tzinfo=UTC), (Component("columns", "T", "d"),)
+            environment, datetime(2026, 11, 21, tzinfo=UTC), (Component("columns", "T", "d"),)
         )
 
 
 @pytest.mark.parametrize(
     ("source", "asked", "status"),
     [
-        (_Fingerprints(), "production", 200),
-        (_Fingerprints(), "uat", 404),
-        (_Fingerprints(True), "production", 503),
-        (None, "production", 404),
+        (_Fingerprints(), "uat", 200),
+        (_Fingerprints(), "production", 404),
+        (_Fingerprints(True), "uat", 503),
+        (None, "uat", 404),
     ],
-    ids=["served", "another_bravo", "bravo_down", "not_wired"],
+    ids=["served", "a_target_not_configured", "bravo_down", "not_wired"],
 )
 async def test_the_fingerprint_route(source: object, asked: str, status: int) -> None:
     gw = gateway()
-    app = create_app(gw.pipeline, fingerprints=source)  # type: ignore[arg-type]
+    app = create_app(targets(gw, fingerprints=source))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://gw") as c:
         response = await c.get(f"/v1/fingerprint/{asked}")
 
     assert response.status_code == status
     if status == 200:
         assert response.json()["components"][0]["kind"] == "columns"
+        assert response.json()["environment"] == asked
 
 
 def test_an_empty_tenant_from_compose_reads_as_not_configured() -> None:
@@ -245,7 +315,7 @@ class _Orders:
 
 async def _read(query: dict[str, object], **wired: object) -> httpx.Response:
     gw = gateway()
-    app = create_app(gw.pipeline, **wired)  # type: ignore[arg-type]
+    app = create_app(targets(gw, **wired))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://gw") as c:
         return await c.post("/v1/reads", json={"query": query})
 
