@@ -33,10 +33,10 @@ _FIND = sa.text(
 )
 _CLAIM = sa.text(
     "INSERT INTO bravo.write_ledger"
-    " (tenant_id, workspace_id, approval_id, kind, content_hash, bravo_user_id, status,"
-    "  claimed_at)"
+    " (tenant_id, workspace_id, approval_id, kind, content_hash, bravo_user_id, target,"
+    "  status, claimed_at)"
     " VALUES (:tenant_id, :workspace_id, :approval_id, :kind, :content_hash, :bravo_user_id,"
-    "  'claimed', :now)"
+    "  :target, 'claimed', :now)"
     " ON CONFLICT (tenant_id, approval_id) DO NOTHING"
 )
 _SETTLE = sa.text(
@@ -83,6 +83,7 @@ class SqlLedger:
                     "kind": claims.kind,
                     "content_hash": claims.content_hash,
                     "bravo_user_id": claims.bravo_user_id,
+                    "target": claims.target,
                     "now": datetime.now(UTC),
                 },
             )

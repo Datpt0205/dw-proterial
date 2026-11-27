@@ -20,6 +20,7 @@ from pydantic import TypeAdapter, ValidationError
 from dw_bravo.approval_token import ApprovalTokenSigner
 from dw_bravo.contract import (
     WRITE_KINDS,
+    BravoTarget,
     CancelLine,
     ContractError,
     LineRef,
@@ -94,6 +95,7 @@ class ContractSigner:
         content: dict[str, Any],
         bravo_user_id: int,
         employee_code: str,
+        target: BravoTarget,
         now: datetime,
     ) -> str:
         return self.signer.sign(
@@ -103,5 +105,6 @@ class ContractSigner:
             command=command_of(kind, content),
             bravo_user_id=bravo_user_id,
             employee_code=employee_code,
+            target=target,
             now=now,
         )

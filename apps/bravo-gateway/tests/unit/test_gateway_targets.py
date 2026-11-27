@@ -70,7 +70,7 @@ async def test_a_read_goes_to_the_current_target_and_names_it(current: str, so_n
 async def test_a_write_lands_in_the_current_target_only() -> None:
     routed, uat, production = _two("production")
 
-    result = await routed.execute(SET_QUANTITY, token(SET_QUANTITY))
+    result = await routed.execute(SET_QUANTITY, token(SET_QUANTITY, target="production"))
 
     assert result.outcome == "written"
     assert len(production.batches) == 1 and uat.batches == []
@@ -129,3 +129,24 @@ async def test_the_targets_route_says_which_is_current_and_which_are_configured(
         answer = (await c.get("/v1/targets")).json()
 
     assert answer == {"current": "uat", "configured": {"uat": True, "production": False}}
+
+
+@pytest.mark.parametrize(
+    ("stamped", "current"),
+    [("uat", "production"), ("production", "uat")],
+    ids=["read_on_uat_never_writes_production", "read_on_production_never_writes_uat"],
+)
+async def test_a_write_stamped_with_another_target_is_refused_at_the_pipeline(
+    stamped: str, current: str
+) -> None:
+    routed, uat, production = _two(current)
+    approved = token(SET_QUANTITY, target=stamped)  # type: ignore[arg-type]
+
+    result = await routed.reach[current].pipeline.execute(SET_QUANTITY, approved)  # type: ignore[index]
+
+    assert (result.outcome, result.check, result.reason) == (
+        "refused",
+        "target",
+        "target_changed",
+    )
+    assert uat.batches == [] and production.batches == []

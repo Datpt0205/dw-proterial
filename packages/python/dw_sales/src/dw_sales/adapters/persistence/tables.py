@@ -851,6 +851,8 @@ bravo_line_writes = sa.Table(
     sa.Column("kind", sa.Text, nullable=False),
     sa.Column("command", JSONB, nullable=False),
     sa.Column("content_hash", sa.Text, nullable=False),
+    # The Bravo the line was read from (ticket 85, migration f04b1390d99f).
+    sa.Column("target", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("check_name", sa.Text),
     sa.Column("reason", sa.Text),

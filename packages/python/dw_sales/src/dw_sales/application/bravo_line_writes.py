@@ -70,6 +70,7 @@ from dw_sales.application.case_store import (
 from dw_sales.application.ports import NotificationSenderPort, SalesScope
 from dw_sales.application.stages import Stage, StageHandlers
 from dw_sales.application.support import seen_by
+from dw_sales.domain.bravo_writes import BravoTarget
 from dw_sales.domain.dispositions import CaseKind
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -194,6 +195,9 @@ class BravoSo:
     so_id: int
     so_no: str
     lines: tuple[BravoSoLine, ...]
+    # The Bravo the gateway read it from (ticket 85): what a proposal made
+    # from it is stamped with, and the only one it may be written to.
+    target: BravoTarget
 
 
 @dataclass(frozen=True)
@@ -241,6 +245,7 @@ class ApprovalSignerPort(Protocol):
         content: dict[str, Any],
         bravo_user_id: int,
         employee_code: str,
+        target: BravoTarget,
         now: datetime,
     ) -> str: ...
 
@@ -293,6 +298,9 @@ class BravoWriteAsked(BaseModel):
     kind: str = Field(max_length=64)
     command: dict[str, Any]
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    # The Bravo the line was read from (ticket 85): the decider sees it, and
+    # the token carries it; an approval opened before has none and is refused.
+    target: BravoTarget
     required_scope: Literal["sales.bravo.write"]
     # The write-Bravo stage version the case runs on (ticket 61): the command
     # set that prepared ``command`` is the one that checks its hash.
@@ -315,6 +323,7 @@ class BravoLineWrite(BaseModel):
     kind: str
     command: dict[str, Any]
     content_hash: str
+    target: BravoTarget
     status: WriteStatus = "proposed"
     check: str | None = None
     reason: str | None = Field(default=None, max_length=500)
@@ -339,6 +348,7 @@ class BravoLineWrite(BaseModel):
             kind=self.kind,
             command=self.command,
             content_hash=self.content_hash,
+            target=self.target,
             required_scope=SalesScopes.BRAVO_WRITE.value,
         )
 
@@ -351,6 +361,7 @@ class BravoLineWriteView(BaseModel):
     field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None
     after: str
+    target: BravoTarget
     status: WriteStatus
     # The gateway's step that refused or stopped the write (ticket 63's
     # order), with its reason and the rules' warnings, as the gateway said.
@@ -368,6 +379,7 @@ class BravoLineWriteView(BaseModel):
             field=write.field,
             before=write.before,
             after=write.after,
+            target=write.target,
             status=write.status,
             check=write.check,
             reason=write.reason,
@@ -459,10 +471,57 @@ class BravoGatewayPort(Protocol):
         ...
 
 
+class BravoTargetsView(BaseModel):
+    """Which Bravo the gateway reads and writes for the tenant now, and
+    which ones it holds logins for (ticket 85), as the gateway answered.
+    `connected` False: no gateway, or none answered; nothing is known."""
+
+    model_config = _FROZEN
+
+    connected: bool
+    current: BravoTarget | None
+    uat: bool
+    production: bool
+
+
+NOT_CONNECTED: Final = BravoTargetsView(connected=False, current=None, uat=False, production=False)
+
+
+class BravoTargetsPort(Protocol):
+    async def targets(self, tenant_id: uuid.UUID) -> BravoTargetsView:
+        """The gateway's answer; `BravoUnreachableError` when none came."""
+        ...
+
+
+@dataclass(frozen=True)
+class BravoTargets:
+    """What the order page's "Ghi vào Bravo" panel and the rules page show
+    beside the target switch: the gateway's own answer, read by anyone who
+    reads cases (names and booleans only)."""
+
+    gate: Gate
+    port: BravoTargetsPort
+
+    async def now(self, context: AccessContext) -> BravoTargetsView:
+        await self.gate.require(
+            context,
+            SalesScopes.CASE_READ,
+            resource_type="workspace",
+            resource_id=str(context.workspace_id),
+        )
+        try:
+            return await self.port.targets(context.tenant_id)
+        except BravoUnreachableError:
+            return NOT_CONNECTED
+
+
 class BravoNotConnected:
     """Every Bravo port, where no gateway is configured: a read could not
     ask (a proposal and a decision are refused), and a decided write is
     refused with that reason, never left waiting."""
+
+    async def targets(self, tenant_id: uuid.UUID) -> BravoTargetsView:
+        raise BravoUnreachableError("no Bravo gateway is configured")
 
     async def sales_order(self, tenant_id: uuid.UUID, so_no: str) -> BravoSo | None:
         raise BravoUnreachableError("no Bravo gateway is configured")
@@ -573,6 +632,7 @@ class BravoLineWrites:
             kind=prepared.kind,
             command=prepared.content,
             content_hash=prepared.content_hash,
+            target=so.target,
             proposed_by=context.principal_id,
             proposed_at=now,
         )
@@ -718,6 +778,7 @@ class BravoWriteStamp:
             content=asked.command,
             bravo_user_id=users[0],
             employee_code=code,
+            target=asked.target,
             now=self.clock.now(),
         )
         return {"token": token}
@@ -861,6 +922,7 @@ def _audit(
             "line_no": write.line_no,
             "kind": write.kind,
             "content_hash": write.content_hash,
+            "target": write.target,
             "status": write.status,
             **({"check": write.check} if write.check else {}),
         },
@@ -881,6 +943,9 @@ __all__ = [
     "BravoOrdersPort",
     "BravoSo",
     "BravoSoLine",
+    "BravoTargets",
+    "BravoTargetsPort",
+    "BravoTargetsView",
     "BravoUnreachableError",
     "BravoUsersPort",
     "BravoWriteAsked",

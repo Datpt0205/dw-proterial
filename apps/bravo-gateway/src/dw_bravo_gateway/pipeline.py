@@ -3,10 +3,11 @@
 1. **The approval token** (`dw_bravo.approval_token`): signed, unexpired,
    for exactly this command (kind and content hash). Everything the write
    needs to know about who and which tenant is read from it, never from the
-   request. Then the target (ticket 85): the tenant's Bravo now is the one
-   this pipeline reaches. Then what the token alone decides: the kind is one the gateway
-   may run (`WriteKind.pending`), the tenant has it switched on and the watch
-   has not paused it, and the approval id was not spent.
+   request. Then the target (ticket 85): the Bravo the token was stamped
+   with is the tenant's target now, and the one this pipeline reaches. Then
+   what the token alone decides: the kind is one the gateway may run
+   (`WriteKind.pending`), the tenant has it switched on and the watch has
+   not paused it, and the approval id was not spent.
 2. **Identity is live** (ticket 64): exactly one active Bravo user holds the
    employee code, and it is the user the approval stamped.
 3. **Bravo's right**, from Bravo's own routines: the command right, and
@@ -280,12 +281,14 @@ class WritePipeline:
         return claims, WRITE_KINDS[key]
 
     async def _target(self, claims: ApprovalClaims) -> None:
-        """The tenant's target, read now, is the Bravo this pipeline reaches:
-        a switch made after the write was routed here refuses it."""
+        """The Bravo the proposal was read from (the token's stamp) is the
+        tenant's target now, and the one this pipeline reaches: a proposal
+        read from UAT never writes production, nor the reverse, and a switch
+        made after the write was routed here refuses it."""
         current = await self.switches.target(claims.tenant_id)
         if current is None:
             raise _RefusedError("target", "target_unreadable")
-        if current != self.target:
+        if claims.target != current or current != self.target:
             raise _RefusedError("target", "target_changed")
 
     async def _kind(self, claims: ApprovalClaims, kind: WriteKind) -> None:

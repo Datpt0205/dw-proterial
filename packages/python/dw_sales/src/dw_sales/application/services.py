@@ -36,6 +36,8 @@ from dw_sales.application.bravo_line_writes import (
     BravoCommandsPort,
     BravoLineWrites,
     BravoOrdersPort,
+    BravoTargets,
+    BravoTargetsPort,
     BravoWriteDecisions,
     BravoWriteWorkFactory,
     CaseBravoWrites,
@@ -221,6 +223,8 @@ class SalesServices:
     bravo_facts: BravoFactsService
     # An SO line's change proposed for writing into Bravo (ticket 53).
     bravo_writes: BravoLineWrites
+    # Which Bravo the gateway reads and writes now, and which it can (ticket 85).
+    bravo_targets: BravoTargets
     gate: Gate
 
 
@@ -260,6 +264,8 @@ def assemble(
     # An SO in Bravo, read through the gateway, and the unit of work that
     # holds a proposed write with its approval (ticket 53).
     bravo_orders: BravoOrdersPort,
+    # Which Bravo the gateway reaches for the tenant (ticket 85).
+    bravo_targets: BravoTargetsPort,
     bravo_commands: BravoCommandsPort,
     bravo_writes_uow: BravoWriteWorkFactory,
     # A customer's PO as Bravo holds it, for the read-back (ticket 51); None:
@@ -570,6 +576,7 @@ def assemble(
         bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
         bravo_facts=BravoFactsService(bravo_facts_store, gate, clock),
         bravo_writes=line_writes,
+        bravo_targets=BravoTargets(gate, bravo_targets),
         gate=gate,
     )
     decisions = CaseDecisions(

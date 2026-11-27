@@ -54,6 +54,7 @@ async def _proposed(
         kind="so.line.set_confirmed_date@1",
         command={"line": {"so_id": 10}, "confirmed_date": "2026-12-08"},
         content_hash="a" * 64,
+        target="uat",
         proposed_by=PIC,
         proposed_at=NOW,
     )

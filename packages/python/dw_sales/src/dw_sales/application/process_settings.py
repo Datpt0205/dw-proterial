@@ -699,6 +699,10 @@ _BRAVO_WRITES = (
     "which Bravo writes DW1 performs: switched on per kind with its UAT proof on"
     " /sales/rules, never from a step of the process (ticket 63)"
 )
+_BRAVO_TARGET = (
+    "which Bravo DW1 reads and writes, UAT or production: switched on /sales/rules"
+    " beside the gateway's answer for each, never from a step of the process (ticket 85)"
+)
 _LEARNED = (
     "each customer's own rules: learned from a worked example on the customer's row of"
     " the master data and approved there, never edited on a page (ticket 38)"
@@ -753,6 +757,8 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
             for path in ("schema_version", "policy_id", "policy_version")
         },
         Placement(RuleKey.BRAVO_WRITES, "kinds"): _BRAVO_WRITES,
+        Placement(RuleKey.BRAVO_WRITES, "target"): _BRAVO_TARGET,
+        Placement(RuleKey.BRAVO_WRITES, "target_uat_proof"): _BRAVO_TARGET,
     }
 )
 

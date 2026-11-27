@@ -2060,6 +2060,7 @@ def open_world(
         # Bravo read through the gateway (ticket 53): not connected unless a
         # test hands its own SO and command builder.
         bravo_orders=bravo_orders or BravoNotConnected(),
+        bravo_targets=BravoNotConnected(),
         bravo_commands=bravo_commands or BravoNotConnected(),
         bravo_po=None,
         bravo_writes_uow=store,

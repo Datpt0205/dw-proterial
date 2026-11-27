@@ -14,11 +14,15 @@ What it answers:
 - `BravoGatewayPort`: a write, with the gateway's answer;
 - `BravoCustomerPoPort`: a customer's PO as Bravo holds it, for the
   read-back (`so.by_customer_po`, ticket 51);
+- `BravoTargetsPort`: which Bravo the gateway reaches for the tenant now,
+  and which it holds logins for (`/v1/targets`, ticket 85);
 - `dw_bravo.sync.SyncSource`: the facts DW copies (`sync.changes`, ticket
   50), for the `bravo_sync` lane of this client's tenant.
 
 No answer, a timeout or a 5xx is "could not ask" (`BravoUnreachableError`),
-never a pass.
+never a pass. An SO's answer names the Bravo it was read from (the
+`Bravo-Target` header, ticket 85); one that names none is "could not ask"
+too, so no proposal goes unstamped.
 
 **One tenant.** A gateway reaches one tenant's Bravo, and the client is
 built for that tenant (`tenant_id`): asked for any other tenant it answers
@@ -40,6 +44,9 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from dw_bravo.contract import (
+    BRAVO_TARGETS,
+    TARGET_HEADER,
+    BravoTarget,
     BravoUserQuery,
     BravoUsers,
     CustomerPoQuery,
@@ -53,6 +60,7 @@ from dw_kernel.errors import ConflictError
 from dw_sales.application.bravo_line_writes import (
     BravoSo,
     BravoSoLine,
+    BravoTargetsView,
     BravoUnreachableError,
     GatewayAnswer,
 )
@@ -100,6 +108,7 @@ class BravoGatewayClient:
             )
         state = _parsed(SalesOrderState, response)
         return BravoSo(
+            target=_target(response),
             so_id=state.so_id,
             so_no=state.so_no,
             lines=tuple(
@@ -173,6 +182,24 @@ class BravoGatewayClient:
         except BravoUnreachableError as down:
             raise SyncUnavailableError(str(down)) from None
 
+    # ---- ticket 85's `BravoTargetsPort`
+
+    async def targets(self, tenant_id: uuid.UUID) -> BravoTargetsView:
+        self._for(tenant_id)
+        try:
+            response = await self.client.get(
+                f"{self.base_url.rstrip('/')}/v1/targets", timeout=self.read_timeout_seconds
+            )
+        except httpx.HTTPError as failed:
+            raise BravoUnreachableError(type(failed).__name__) from None
+        answer = _parsed(_TargetsAnswer, response)
+        return BravoTargetsView(
+            connected=True,
+            current=answer.current,
+            uat=answer.configured.get("uat", False),
+            production=answer.configured.get("production", False),
+        )
+
     # ---- writes
 
     async def write(self, kind: str, content: dict[str, Any], token: str) -> GatewayAnswer:
@@ -195,6 +222,22 @@ class BravoGatewayClient:
             )
         except (KeyError, TypeError):
             raise BravoUnreachableError("an answer the gateway does not give") from None
+
+
+@dataclass(frozen=True)
+class _TargetsAnswer:
+    """The gateway's `/v1/targets` answer (`dw_bravo_gateway.api`)."""
+
+    current: BravoTarget | None
+    configured: dict[BravoTarget, bool]
+
+
+def _target(response: httpx.Response) -> BravoTarget:
+    named = response.headers.get(TARGET_HEADER)
+    for target in BRAVO_TARGETS:
+        if named == target:
+            return target
+    raise BravoUnreachableError("the gateway did not say which Bravo it read")
 
 
 def _parsed[T](shape: type[T], response: httpx.Response) -> T:

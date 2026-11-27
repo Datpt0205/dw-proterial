@@ -46,6 +46,7 @@ from dw_bravo_gateway.ports import (
     ReadBack,
 )
 from dw_bravo_gateway.statements import context_line, process_step, render_insert, render_save
+from dw_bravo_gateway.targets import TargetBravo, Targets
 
 SERVER = os.environ.get("DW_BRAVO_TEST_MSSQL")
 
@@ -952,4 +953,88 @@ async def test_a_new_so_is_read_back_by_scope_identity_and_its_line_and_step_car
             " ON c.default_object_id = d.object_id WHERE c.object_id = OBJECT_ID('dbo.B30BizDoc')"
             " AND c.name = 'CreatedAt'); EXEC('ALTER TABLE dbo.B30BizDoc DROP CONSTRAINT ' + @c)",
             "ALTER TABLE dbo.B30BizDoc DROP COLUMN CreatedAt",
+        )
+
+
+# ---------------------------------------------------- two targets (ticket 85)
+
+PROD_DB = "BravoGatewayTestProd"
+
+
+def _quantity(database: str, row_id: str) -> Decimal:
+    connection = _sa(database)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("SELECT Quantity9 FROM dbo.B30BizDocDetailSO WHERE RowId = ?", (row_id,))
+    [(quantity,)] = cursor.fetchall()
+    connection.close()  # type: ignore[attr-defined]
+    return Decimal(quantity)
+
+
+def _drained(*statements: str) -> None:
+    """BACKUP and RESTORE report progress as result sets: each is read to
+    its end, or the server stops the statement when the cursor moves on."""
+    connection = _sa("master")
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    for statement in statements:
+        cursor.execute(statement)
+        while cursor.nextset():
+            pass
+    connection.close()  # type: ignore[attr-defined]
+
+
+async def test_a_write_lands_only_in_the_bravo_it_was_stamped_with(
+    logins: tuple[Login, Login],
+) -> None:
+    # Production stands in as a copy of the UAT database, with its own
+    # users mapped to the same logins: two databases, one write each way.
+    _drained(
+        f"BACKUP DATABASE {DB} TO DISK = '/var/opt/mssql/data/{DB}.bak' WITH INIT",
+        f"IF DB_ID('{PROD_DB}') IS NOT NULL BEGIN ALTER DATABASE {PROD_DB} SET SINGLE_USER"
+        f" WITH ROLLBACK IMMEDIATE; DROP DATABASE {PROD_DB}; END",
+        f"RESTORE DATABASE {PROD_DB} FROM DISK = '/var/opt/mssql/data/{DB}.bak' WITH"
+        f" MOVE '{DB}' TO '/var/opt/mssql/data/{PROD_DB}.mdf',"
+        f" MOVE '{DB}_log' TO '/var/opt/mssql/data/{PROD_DB}_log.ldf'",
+    )
+    try:
+        read, write = logins
+        uat = _Allowed(read, write, templates={})
+        production = _Allowed(
+            replace(read, database=PROD_DB), replace(write, database=PROD_DB), templates={}
+        )
+        switches = FakeSwitches(target_="production")
+        routed = Targets(
+            TENANT,
+            switches,
+            {
+                "uat": TargetBravo(replace(_pipeline(uat), switches=switches)),
+                "production": TargetBravo(
+                    replace(_pipeline(production), switches=switches, target="production")
+                ),
+            },
+        )
+        uat_before = _quantity(DB, "R1")
+        held = _quantity(PROD_DB, "R1")
+        command = SetQuantity(line=await _line(production, "R1"), quantity=held + 2)
+
+        read_on_uat = await routed.execute(command, token(command, target="uat"))
+        written = await routed.execute(command, token(command, target="production"))
+
+        assert (read_on_uat.check, read_on_uat.reason) == ("target", "target_changed")
+        assert written.outcome == "written", written
+        assert _quantity(PROD_DB, "R1") == held + 2
+        assert _quantity(DB, "R1") == uat_before
+
+        # Switched back to UAT: a proposal read on production writes nowhere.
+        switches.target_ = "uat"
+        again = SetQuantity(line=await _line(production, "R1"), quantity=held + 3)
+        refused = await routed.execute(again, token(again, target="production"))
+
+        assert (refused.check, refused.reason) == ("target", "target_changed")
+        assert _quantity(PROD_DB, "R1") == held + 2
+        assert _quantity(DB, "R1") == uat_before
+    finally:
+        _run(
+            "master",
+            f"ALTER DATABASE {PROD_DB} SET SINGLE_USER WITH ROLLBACK IMMEDIATE",
+            f"DROP DATABASE {PROD_DB}",
         )

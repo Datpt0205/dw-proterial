@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/bravo/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Targets */
+        get: operations["bravo_targets_api_v1_sales_bravo_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/bravo/watch": {
         parameters: {
             query?: never;
@@ -3172,6 +3189,11 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "rejected" | "written" | "written_with_differences" | "refused" | "in_doubt";
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "uat" | "production";
             /** Warnings */
             warnings: string[];
         };
@@ -3252,6 +3274,22 @@ export interface components {
              * @enum {string}
              */
             source: "export" | "gateway";
+        };
+        /**
+         * BravoTargetsView
+         * @description Which Bravo the gateway reads and writes for the tenant now, and
+         *     which ones it holds logins for (ticket 85), as the gateway answered.
+         *     `connected` False: no gateway, or none answered; nothing is known.
+         */
+        BravoTargetsView: {
+            /** Connected */
+            connected: boolean;
+            /** Current */
+            current: ("uat" | "production") | null;
+            /** Production */
+            production: boolean;
+            /** Uat */
+            uat: boolean;
         };
         /**
          * BravoWriteBody
@@ -10224,6 +10262,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableStateView"][];
+                };
+            };
+        };
+    };
+    bravo_targets_api_v1_sales_bravo_targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoTargetsView"];
                 };
             };
         };

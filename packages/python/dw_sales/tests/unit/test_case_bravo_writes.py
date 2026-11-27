@@ -67,6 +67,7 @@ class Bravo:
                 )
                 for n in range(1, lines + 1)
             ),
+            target="uat",
         )
 
     async def sales_order(self, tenant_id: object, so_no: str) -> BravoSo | None:

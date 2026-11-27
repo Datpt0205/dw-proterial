@@ -67,7 +67,11 @@ from dw_sales.application.assistant import (
 )
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
 from dw_sales.application.bravo_facts import TableStateView
-from dw_sales.application.bravo_line_writes import BravoLineWriteView, LineChange
+from dw_sales.application.bravo_line_writes import (
+    BravoLineWriteView,
+    BravoTargetsView,
+    LineChange,
+)
 from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.bravo_watch import BaselineAcceptedView, WatchStateView
 from dw_sales.application.catalog_imports import (
@@ -2589,6 +2593,17 @@ def build_router(
     )
     async def bravo_watch(context: Ctx, svc: Svc) -> WatchStateView:
         return WatchStateView.of(await svc.bravo_watch.state(context))
+
+    # Which Bravo the gateway reads and writes now, and which ones it holds
+    # logins for (ticket 85): the tag on the order page's "Ghi vào Bravo"
+    # panel and the gateway's answer beside the switch on the rules page.
+    @router.get(
+        "/bravo/targets",
+        response_model=BravoTargetsView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def bravo_targets(context: Ctx, svc: Svc) -> BravoTargetsView:
+        return await svc.bravo_targets.now(context)
 
     # When DW last read each of Bravo's fact tables (ticket 50): pages read
     # DW's copy and say how fresh it is.

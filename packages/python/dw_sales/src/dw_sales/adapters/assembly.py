@@ -626,6 +626,7 @@ def build_dw1(
         bravo_watch_store=SqlBravoWatch(session_factory, audit),
         bravo_facts_store=SqlBravoMirror(session_factory),
         bravo_orders=bravo,
+        bravo_targets=bravo,
         bravo_commands=BravoContract(),
         bravo_po=bravo_gateway,
         bravo_writes_uow=uow,

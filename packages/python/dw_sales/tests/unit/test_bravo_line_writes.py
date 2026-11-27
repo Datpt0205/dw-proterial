@@ -75,6 +75,7 @@ SO = BravoSo(
         BravoSoLine(22, 3, "PRV-3", Decimal(2), None, "0x00000000000007D4", ""),
         BravoSoLine(23, 3, "PRV-3", Decimal(1), None, "0x00000000000007D5", ""),
     ),
+    target="uat",
 )
 KEY = Ed25519PrivateKey.generate()
 
@@ -396,7 +397,7 @@ async def test_a_cancel_with_the_longest_reason_bravo_holds_is_proposed() -> Non
 
 
 def _bravo_holding_line_1(cancel_state: str) -> Bravo:
-    held = BravoSo(SO.so_id, SO.so_no, (replace(SO.lines[0], cancel_state=cancel_state),))
+    held = replace(SO, lines=(replace(SO.lines[0], cancel_state=cancel_state),))
     return Bravo(orders={SO.so_no: held})
 
 
@@ -623,6 +624,35 @@ async def test_a_decision_that_cannot_be_signed_is_refused(
         "bravo_down": None,
     }[request.node.callspec.id]
     assert refused.value.details.get("rule") == expected
+
+
+@pytest.mark.parametrize("target", ["uat", "production"])
+async def test_the_proposal_and_its_token_carry_the_bravo_the_line_was_read_from(
+    target: str,
+) -> None:
+    # Ticket 85: stamped with the Bravo the gateway read the SO from, shown
+    # to the decider and signed into the token the gateway checks.
+    world = World()
+    read = Bravo(orders={SO.so_no: replace(SO, target=target)})  # type: ignore[arg-type]
+
+    request = await _proposed(world, service=_service(world, read))
+    stamp = await _stamp(read).stamp(request, object(), PIC_CONTEXT)
+
+    assert request.payload["target"] == target
+    assert world.store.rows[request.id].target == target
+    claims = ApprovalTokenVerifier({"k1": KEY.public_key()}).verify(
+        str(stamp["token"]), now=NOW + timedelta(minutes=1)
+    )
+    assert claims.target == target
+
+
+async def test_an_approval_opened_before_the_target_was_stamped_is_not_signed() -> None:
+    world = World()
+    request = await _proposed(world)
+    del request.payload["target"]
+
+    with pytest.raises(ConflictError):
+        await _stamp().stamp(request, object(), PIC_CONTEXT)
 
 
 async def test_a_payload_whose_command_no_longer_hashes_as_proposed_is_not_signed() -> None:

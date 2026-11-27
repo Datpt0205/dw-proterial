@@ -1983,6 +1983,14 @@
             "title": "Status",
             "type": "string"
           },
+          "target": {
+            "enum": [
+              "uat",
+              "production"
+            ],
+            "title": "Target",
+            "type": "string"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -1997,6 +2005,7 @@
           "field",
           "before",
           "after",
+          "target",
           "status",
           "check",
           "reason",
@@ -2230,6 +2239,47 @@
           "read_at"
         ],
         "title": "BravoReadBack",
+        "type": "object"
+      },
+      "BravoTargetsView": {
+        "additionalProperties": false,
+        "description": "Which Bravo the gateway reads and writes for the tenant now, and\nwhich ones it holds logins for (ticket 85), as the gateway answered.\n`connected` False: no gateway, or none answered; nothing is known.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "enum": [
+                  "uat",
+                  "production"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "production": {
+            "title": "Production",
+            "type": "boolean"
+          },
+          "uat": {
+            "title": "Uat",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connected",
+          "current",
+          "uat",
+          "production"
+        ],
+        "title": "BravoTargetsView",
         "type": "object"
       },
       "BravoWriteBody": {
@@ -32928,6 +32978,27 @@
           }
         },
         "summary": "Bravo Facts",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/bravo/targets": {
+      "get": {
+        "operationId": "bravo_targets_api_v1_sales_bravo_targets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BravoTargetsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bravo Targets",
         "tags": [
           "sales"
         ]

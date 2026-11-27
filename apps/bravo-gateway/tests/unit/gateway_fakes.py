@@ -78,7 +78,11 @@ TEST_SCREENS = dict(SCREENS)
 
 
 def token(
-    command: object = SET_DATE, *, approval: uuid.UUID | None = None, user: int = 2413
+    command: object = SET_DATE,
+    *,
+    approval: uuid.UUID | None = None,
+    user: int = 2413,
+    target: BravoTarget = "uat",
 ) -> str:
     return SIGNER.sign(
         approval_id=approval or uuid.uuid4(),
@@ -87,6 +91,7 @@ def token(
         command=command,
         bravo_user_id=user,
         employee_code="NV001",
+        target=target,
         now=NOW,
     )
 

@@ -71,6 +71,7 @@ async def test_a_bad_signature_is_refused() -> None:
         command=SET_DATE,
         bravo_user_id=2413,
         employee_code="NV001",
+        target="uat",
         now=NOW,
     )
     gw = gateway()
