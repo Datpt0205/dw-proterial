@@ -67,6 +67,11 @@ from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 T = TypeVar("T")
 
+# `B00Layout.IsTemplate` of a screen's two layouts (script 03a, 2026-11-19;
+# script 06): 3 the `<DataSource>`, 0 the form. A shared template is 1 or 2.
+DATA_SOURCE: Final = 3
+FORM: Final = 0
+
 
 @dataclass(frozen=True)
 class Login:
@@ -344,18 +349,29 @@ class SqlServerBravo:
 
     # ------------------------------------------------------------- engine
 
-    async def layout(self, screen: str) -> Layout:
-        rows = await self._in_thread(
-            lambda: self._rows(
-                "SELECT l.Id, d.LayoutData FROM dbo.B00Layout l"
-                " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
-                " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) = 0",
-                (screen,),
-            )
+    def _screen_layouts(self, screen: str, columns: str = "") -> list[dict[str, object]]:
+        """A screen's active rows in `B00Layout`: its `<DataSource>` (the
+        tables and rules, `IsTemplate` 3) and its form (the window's
+        controls, `IsTemplate` 0). Every `EDIT_*` screen of script 03a's
+        survey (2026-11-19) and script 06's has one of each: 8212 and 8213
+        for `EDIT_BizDocSO`."""
+        return self._rows(
+            f"SELECT l.Id, l.IsTemplate{columns}, d.LayoutData FROM dbo.B00Layout l"
+            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
+            " WHERE l.FormName = ? AND l.IsActive = 1"
+            f" AND l.IsTemplate IN ({DATA_SOURCE}, {FORM}) ORDER BY l.Id",
+            (screen,),
         )
+
+    async def layout(self, screen: str) -> Layout:
+        rows = [
+            r
+            for r in await self._in_thread(lambda: self._screen_layouts(screen))
+            if r["IsTemplate"] == DATA_SOURCE
+        ]
         if len(rows) != 1:
             # Which of several the client opens is not measured.
-            raise UndecidableError(f"{len(rows)} active layouts for {screen}")
+            raise UndecidableError(f"{len(rows)} active DataSource layouts for {screen}")
         name = self.templates.get(screen)
         layout = read_layout(layout_xml(rows[0]["LayoutData"]), screen, missing_template=name)
         if name is None:
@@ -496,31 +512,38 @@ class SqlServerBravo:
         )
 
     def _layout_components(self, screen: str) -> list[Component]:
-        rows = self._rows(
-            "SELECT l.Id, l.ModifiedAt, l.ModifiedBy, d.LayoutData FROM dbo.B00Layout l"
-            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
-            " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) = 0",
-            (screen,),
-        )
-        found = []
-        for row in rows:
-            unknown: tuple[str, ...] = ()
+        """The screen's layout as one component named for the screen (what
+        the watch keys a screen's writes on): its DataSource and its form,
+        either changed changes it. A DataSource the runner cannot read, or
+        not exactly one, is named in `unknown`."""
+        rows = self._screen_layouts(screen, ", l.ModifiedAt, l.ModifiedBy")
+        if not rows:
+            return []
+        sources = [r for r in rows if r["IsTemplate"] == DATA_SOURCE]
+        unknown: list[str] = []
+        if len(sources) != 1:
+            unknown.append(f"{len(sources)} active DataSource layouts")
+        for row in sources:
             try:
                 read_layout(layout_xml(row["LayoutData"]), screen, missing_template=None)
             except (UndecidableError, RuleRefusedError, ValueError) as refused:
-                unknown = (str(refused)[:200],)
-            data = row["LayoutData"]
-            found.append(
-                Component(
-                    "layout",
-                    screen if len(rows) == 1 else f"{screen}#{row['Id']}",
-                    _digest(bytes(data) if isinstance(data, bytes | bytearray) else data),
-                    modified_at=str(row["ModifiedAt"]),
-                    modified_by=str(row["ModifiedBy"]),
-                    unknown=unknown,
-                )
+                unknown.append(str(refused)[:200])
+        latest = max(rows, key=lambda r: str(r["ModifiedAt"]))
+
+        def data(row: Mapping[str, object]) -> object:
+            value = row["LayoutData"]
+            return bytes(value) if isinstance(value, bytes | bytearray) else value
+
+        return [
+            Component(
+                "layout",
+                screen,
+                _digest(repr([(r["Id"], r["IsTemplate"], _digest(data(r))) for r in rows])),
+                modified_at=str(latest["ModifiedAt"]),
+                modified_by=str(latest["ModifiedBy"]),
+                unknown=tuple(unknown),
             )
-        return found
+        ]
 
     # ------------------------------------------------------------- writer
 

@@ -88,6 +88,10 @@ TEMPLATE = (
 )
 
 
+# A form layout's shape (8213): the window's controls, no <Tables>.
+FORM_LAYOUT = "<root><menuStrip1 /><panelEditor><Controls /></panelEditor></root>"
+
+
 def _zipped(text: str) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
@@ -232,10 +236,16 @@ def logins() -> tuple[Login, Login]:
     )
     connection = _sa(DB)
     cursor = connection.cursor()  # type: ignore[attr-defined]
+    # The screen's two rows as Bravo holds them (script 03a, 8212 and 8213):
+    # the DataSource at IsTemplate 3, the form (no <Tables>) at 0.
     cursor.execute(
-        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (1, 0, 'EDIT_BizDocSO', 1)"
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (1, 3, 'EDIT_BizDocSO', 1)"
     )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (1, ?)", (_zipped(LAYOUT),))
+    cursor.execute(
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (3, 0, 'EDIT_BizDocSO', 1)"
+    )
+    cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (3, ?)", (_zipped(FORM_LAYOUT),))
     cursor.execute(
         "INSERT INTO dbo.B00ImportSetting VALUES (7, 'EDIT_BizDocSO', 1, ?)", (_zipped(TEMPLATE),)
     )
@@ -527,7 +537,7 @@ async def test_two_active_layouts_for_the_screen_refuse_rather_than_pick_one(
     connection = _sa(DB)
     cursor = connection.cursor()  # type: ignore[attr-defined]
     cursor.execute(
-        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (2, 0, 'EDIT_BizDocSO', 1)"
+        "INSERT INTO dbo.B00Layout (Id, IsTemplate, FormName, IsActive) VALUES (2, 3, 'EDIT_BizDocSO', 1)"
     )
     cursor.execute("INSERT INTO dbo.B00LayoutData VALUES (2, ?)", (_zipped(LAYOUT),))
     connection.close()  # type: ignore[attr-defined]
@@ -571,6 +581,36 @@ async def test_the_fingerprint_sees_a_trigger_and_a_column_change(
         ("trigger", "DML_B30BizDocDetailSO_ChangeLog"),
     }
     assert react(diff(before, after), {}).paused  # the dependent kinds pause
+
+
+async def test_the_screens_data_source_is_its_layout_and_its_form_is_watched_with_it(
+    logins: tuple[Login, Login],
+) -> None:
+    """Bravo keeps a screen's tables and rules at IsTemplate 3 and its window
+    at 0 (script 03a: 8212 and 8213). The layout is read from the first; a
+    change to either changes the screen's one layout component, so the
+    writes that depend on it pause."""
+    bravo = SqlServerBravo(*logins, templates={})
+    layout = await bravo.layout("EDIT_BizDocSO")
+    assert layout.parent.name == "vB30BizDoc_Edit"
+    before = await bravo.fingerprint("production")
+    [component] = [c for c in before.components if c.kind == "layout"]
+    assert (component.name, component.unknown) == ("EDIT_BizDocSO", ())
+
+    _run(DB, "UPDATE dbo.B00LayoutData SET LayoutData = LayoutData + 0x00 WHERE Id = 3")
+    try:
+        after = await bravo.fingerprint("production")
+    finally:
+        _run(
+            DB,
+            "UPDATE dbo.B00LayoutData SET LayoutData = SUBSTRING(LayoutData, 1,"
+            " DATALENGTH(LayoutData) - 1) WHERE Id = 3",
+        )
+
+    from dw_bravo.watch import diff, react
+
+    assert {(c.kind, c.name) for c in diff(before, after)} == {("layout", "EDIT_BizDocSO")}
+    assert react(diff(before, after), {}).paused
 
 
 async def test_the_fingerprint_sees_an_import_template_change_and_names_one_it_cannot_read(
