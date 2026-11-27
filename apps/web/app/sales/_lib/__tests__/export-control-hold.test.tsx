@@ -64,6 +64,13 @@ const api = {
   order: vi.fn(async () => shown),
   // Nothing read back from Bravo yet (ticket 03).
   bravoWrites: vi.fn(async () => []),
+  // The Bravo the write panel names (ticket 85).
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat" as const,
+    uat: true,
+    production: false,
+  })),
   bravoReadBack: vi.fn(async () => ({
     read_back: null,
     stale: false,

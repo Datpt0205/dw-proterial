@@ -222,3 +222,13 @@ fail-closed pending Đạt's word, one left to Đạt.
   stays Đạt's decision.
 - Confirm the old credential set refusing to start (rather than being read
   by its old `environment`).
+
+### 2026-11-27 — full review (functions): four more mocks without `bravoTargets`
+
+`case-audit`, `cross-check-on-match`, `export-control-hold` and
+`order-stalled` render the order page, whose "Ghi vào Bravo" panel calls
+`salesApi().bravoTargets()` since 2de7cb9d; their mocks never had it, so 16
+tests threw `bravoTargets is not a function` and asserted nothing after it
+(16 failed / 12 passed, run alone). Each mock now answers UAT; 28/28 pass.
+The review's "CI does not run the web suite" is not so: `ci.yml` runs
+`pnpm --filter @dw/web test`; PR 21 was merged without waiting for it.
