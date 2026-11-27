@@ -142,3 +142,25 @@ its_number_in_the_clients_line_order` fails on SQL Server because its schema
 has no `IsCancel`, which `c81fc553` added to the read; `test_bravo_so_layout`
 and `test_bravo_rq_layout` count the 11-20 trace's saves and fail on
 `02-trace-3.csv` (known since ticket 71).
+
+## 2026-11-27 — review findings, checked
+
+- **Fixed:** a view name `SqlServerBravo.view_columns` refuses (a layout
+  `Name` with `dbo.` or brackets) escaped `execute` and `preview` as
+  `UndecidableError` (a 500; nothing written, approval unspent). `_new_line`
+  now refuses it as `rules`, "unmeasured: the columns a new line of <table>
+  holds: <why>", like every other unread fact on this path.
+  `test_a_view_name_the_engine_will_not_read_is_a_refusal_not_an_error`
+  was red before the fix (on execute and preview).
+- **Pinned:** a three-part split (100 + 90 + 60) through the pipeline:
+  inserts at `BuiltinOrder` 2 and 3 with their own quantities and
+  `OriginalQuantity`, the head's update last, read back as written. Red under
+  `added[edit.new_row]` -> `added[0]` and under reconcile pairing new lines in
+  reverse. `added[-1]` stays green and is not a gap: `typed_edits` interleaves
+  each `AddRow` with its edits, so the last row added is always `new_row`.
+- **Pinned in CI:** the replay's answer to a procedure several lines fit
+  (`_ReplayProcedures.call`): agreeing lines answer, disagreeing ones stay
+  undecided, on a layout written for the test (no Bravo data). Red under
+  `len(answers) != 1` -> `== 0`; before, only the local-trace replay ran it.
+- Ran: gateway and dw_bravo unit suites green; the trace replay with the local
+  trace and layouts green (4 passed). Status unchanged.

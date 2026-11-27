@@ -458,9 +458,14 @@ class WritePipeline:
         for key, table in tables.lines.items():
             spec = layout.tables.get(key)
             generated = stored.generated.get(table)
-            view = list(await self.engine.view_columns(spec.name)) if spec is not None else []
+            unread = f"unmeasured: the columns a new line of {table} holds"
+            try:
+                view = list(await self.engine.view_columns(spec.name)) if spec is not None else []
+            except UndecidableError as refused:
+                # A layout `Name` the engine will not quote (`dbo.`, brackets).
+                raise _RefusedError("rules", f"{unread}: {refused}") from None
             if not view or generated is None or table not in stored.column_order:
-                raise _RefusedError("rules", f"unmeasured: the columns a new line of {table} holds")
+                raise _RefusedError("rules", unread)
             viewed = {c.lower() for c in view}
             insertable[table] = [
                 c

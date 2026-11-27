@@ -1,5 +1,6 @@
-"""Reading a trace's deletes, and replay states for a save that adds lines
-(ticket 73), on statements written for these tests (no Bravo data)."""
+"""Reading a trace's deletes, replay states for a save that adds lines, and
+the replay's answer to a procedure several lines fit (ticket 73), on
+statements written for these tests (no Bravo data)."""
 
 from __future__ import annotations
 
@@ -8,10 +9,11 @@ from decimal import Decimal
 
 import pytest
 
-from dw_bravo.layout import read_layout
+from dw_bravo.expression import UndecidableError
+from dw_bravo.layout import PARENT, read_layout
 from dw_bravo.ports import Session
 from dw_bravo.testing import sql_trace
-from dw_bravo.testing.replay import SaveGroup, ScreenReplay
+from dw_bravo.testing.replay import SaveGroup, ScreenReplay, _ReplayProcedures
 
 pytestmark = pytest.mark.unit
 
@@ -109,3 +111,46 @@ def test_a_save_that_adds_lines_is_a_state_only_when_asked_and_its_inserts_stay_
     assert set(written) == {"Parent", "Detail#1"}
     assert [line["Quantity9"] for line in before_l] == [Decimal(4)]
     assert [line["Quantity9"] for line in after_l] == [Decimal(3)]
+
+
+PROCEDURE_LAYOUT = """<root><Tables>
+<ParentTable><Name>vDoc_Edit</Name></ParentTable>
+<ChildTable_Detail>
+  <Name>vLine_Edit</Name><Alias>Detail</Alias>
+  <ColumnChanged><Eta>
+    <Eval_Cd><ClassName>BravoServerConstraint</ClassName><Command>ufn_Cd</Command>
+      <Parameters><Customer>Parent.Customer</Customer><Eta>Eta</Eta></Parameters>
+      <DataMember>CdDate</DataMember></Eval_Cd>
+  </Eta></ColumnChanged>
+</ChildTable_Detail></Tables></root>"""
+ETA = datetime(2026, 12, 1)
+
+
+def _procedures(*cd_dates: datetime) -> _ReplayProcedures:
+    """Lines that all fit one traced `ufn_Cd` call (a split's lines share an
+    item and a customer), each holding the `CdDate` given."""
+    call = sql_trace.ProcedureCall(
+        _statement("exec ufn_Cd"), "ufn_Cd", {"Customer": "C1", "Eta": ETA}
+    )
+    after: dict[str, list[dict[str, object]]] = {
+        PARENT: [{"Customer": "C1"}],
+        "Detail": [{"Eta": ETA, "CdDate": cd} for cd in cd_dates],
+    }
+    return _ReplayProcedures(
+        read_layout(PROCEDURE_LAYOUT, "EDIT_X", missing_template=None), [call], after
+    )
+
+
+def test_lines_that_agree_answer_a_procedure_they_all_fit() -> None:
+    answer = _procedures(datetime(2026, 11, 28), datetime(2026, 11, 28)).call(
+        "ufn_Cd", {"Customer": "C1", "Eta": ETA}, ["CdDate"]
+    )
+
+    assert answer == {"CdDate": datetime(2026, 11, 28)}
+
+
+def test_lines_that_disagree_leave_the_procedures_result_undecided() -> None:
+    procedures = _procedures(datetime(2026, 11, 28), datetime(2026, 11, 29))
+
+    with pytest.raises(UndecidableError, match="2 rows fit its parameters"):
+        procedures.call("ufn_Cd", {"Customer": "C1", "Eta": ETA}, ["CdDate"])

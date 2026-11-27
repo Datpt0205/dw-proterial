@@ -31,6 +31,7 @@ from gateway_fakes import (
 )
 
 from dw_bravo.contract import WRITE_KINDS, ContractError, SetQuantity, SplitLine, SplitPart
+from dw_bravo.expression import UndecidableError
 from dw_bravo.layout import read_layout
 from dw_bravo_gateway.pipeline import AddRow, Edit, group_label, typed_edits
 from dw_bravo_gateway.ports import ColumnRight, StoredDocument
@@ -480,6 +481,68 @@ async def test_a_new_line_whose_columns_are_not_read_is_refused(unread: dict[str
         "unmeasured: the columns a new line of B30BizDocDetailSO holds",
     )
     assert approval not in gw.ledger.entries
+
+
+@pytest.mark.usefixtures("unpended")
+async def test_a_view_name_the_engine_will_not_read_is_a_refusal_not_an_error() -> None:
+    # `SqlServerBravo.view_columns` refuses a layout `Name` it would have to
+    # quote (`dbo.` or brackets, which an admin can type into Bravo's layout
+    # row); that is an unread fact like any other, on the preview too.
+    gw = _gateway()
+
+    async def refuses(view: str) -> list[str]:
+        raise UndecidableError(f"{view!r} is not a view name the layout gives")
+
+    gw.pipeline.engine.view_columns = refuses  # type: ignore[method-assign]
+    approval = uuid.uuid4()
+    reason = (
+        "unmeasured: the columns a new line of B30BizDocDetailSO holds:"
+        " 'vB30BizDocDetailSO_Edit' is not a view name the layout gives"
+    )
+
+    result = await gw.pipeline.execute(SPLIT, token(SPLIT, approval=approval))
+    preview = await gw.pipeline.preview(SPLIT, token(SPLIT))
+
+    assert (result.outcome, result.check, result.reason) == ("refused", "rules", reason)
+    assert (preview.batch, preview.check, preview.reason) == (None, "rules", reason)
+    assert approval not in gw.ledger.entries and gw.bravo.batches == []
+
+
+@pytest.mark.usefixtures("unpended")
+async def test_a_split_in_three_inserts_each_new_line_in_order_and_reads_each_back() -> None:
+    # Every other test splits in two, so `new_row` is only ever 0: this pins
+    # the second new line's edits, its place in the order and the read-back
+    # pairing new lines with the plan's inserts one by one.
+    three = SplitLine(
+        line=LINE, parts=(SplitPart(Decimal(100)), SplitPart(Decimal(90)), SplitPart(Decimal(60)))
+    )
+    gw = _gateway()
+
+    result = await gw.pipeline.execute(three, token(three))
+
+    assert result.outcome == "written", result
+    [batch] = gw.bravo.batches
+    _, first, second, head = batch.statements
+    assert [(s.sql.split(" ", 1)[0], s.row_id) for s in (first, second, head)] == [
+        ("INSERT", None),
+        ("INSERT", None),
+        ("UPDATE", 20),
+    ]
+    assert [
+        {k: s.parameters[k] for k in ("_BuiltinOrder", "_Quantity9", "_OriginalQuantity")}
+        for s in (first, second)
+    ] == [
+        {"_BuiltinOrder": Decimal(2), "_Quantity9": Decimal(90), "_OriginalQuantity": Decimal(90)},
+        {"_BuiltinOrder": Decimal(3), "_Quantity9": Decimal(60), "_OriginalQuantity": Decimal(60)},
+    ]
+    assert first.parameters["_GroupDivi"] == second.parameters["_GroupDivi"] == "1"
+    assert head.parameters["_Quantity9"] == Decimal(100)
+    assert head.parameters["_QuantityGroup"] == Decimal(250)
+    assert [(x["RowId"], x["Quantity9"]) for x in gw.bravo.document.lines] == [
+        ("R20", Decimal(100)),
+        ("R21", Decimal(90)),
+        ("R22", Decimal(60)),
+    ]
 
 
 def test_an_insert_lists_what_the_row_holds_and_the_nulls_without_a_default() -> None:
