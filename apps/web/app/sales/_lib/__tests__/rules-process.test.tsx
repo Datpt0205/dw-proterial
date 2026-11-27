@@ -454,6 +454,12 @@ describe("the DW1 process page (2026-10-22)", () => {
       expect(canvas.querySelectorAll(".react-flow__minimap-node").length).toBe(
         PROCESS.lanes[0]!.nodes.length,
       );
+      // React Flow's attribution shows (hiding it is for Pro), bottom
+      // centre, between the controls (left) and the minimap (right).
+      const attribution = canvas.querySelector(".react-flow__attribution");
+      expect(attribution?.textContent).toBe("React Flow");
+      expect(attribution?.classList.contains("bottom")).toBe(true);
+      expect(attribution?.classList.contains("center")).toBe(true);
       // The controls speak Vietnamese.
       for (const name of ["Phóng to", "Thu nhỏ", "Xem cả quy trình"])
         expect(
