@@ -1701,6 +1701,7 @@ class OrderIntake:
             catalog_as_of=min(as_of, default=message.received_at),
             cross_check_required=rules.cross_check_required,
             export_control_mode=rules.export_control_mode,
+            cross_check_on_match=rules.cross_check_on_match,
             duplicate_of_case=history.duplicate_of_case,
             duplicate_of_so=history.duplicate_of_so,
             base_so_no=history.base_so_no,

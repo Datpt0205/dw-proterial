@@ -719,7 +719,11 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
         "lines": "\n".join(lines),
         "pic": _people_line(d, case.prepared_by),
         "checker": (
-            d.people.name(case.cross_checked_by)
+            # Passed by DW on Bravo's matching read-back (ticket 81): no
+            # person's name, which would say a person checked it.
+            bound.word("checked_on_read_back")
+            if case.cross_checked_on_read_back is not None
+            else d.people.name(case.cross_checked_by)
             if case.cross_checked_by is not None
             else bound.word("no_cross_check")
         ),
@@ -871,7 +875,12 @@ def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:
         (label(doc, "revision"), case.header.revision),
         (label(doc, "bravo_so_no"), case.bravo_so_no),
         (label(doc, "pic"), _people_line(d, case.prepared_by)),
-        (label(doc, "checker"), _people_line(d, case.cross_checked_by)),
+        (
+            label(doc, "checker"),
+            doc.word("checked_on_read_back")
+            if case.cross_checked_on_read_back is not None
+            else _people_line(d, case.cross_checked_by),
+        ),
     )
     sheet = Sheet(
         name=label(doc, "sheet"),

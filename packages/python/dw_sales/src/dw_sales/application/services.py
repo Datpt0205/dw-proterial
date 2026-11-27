@@ -58,6 +58,7 @@ from dw_sales.application.change_reading import ChangeReader
 from dw_sales.application.change_requests import ChangeRequests
 from dw_sales.application.confirmations import Confirmations
 from dw_sales.application.convert_gaps import ConvertGapService, ConvertGapsPort
+from dw_sales.application.cross_check_on_match import CrossCheckReopening
 from dw_sales.application.customer_notations import CustomerNotations, NotationLedgerPort
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
@@ -202,6 +203,8 @@ class SalesServices:
     internal_changes: InternalChanges
     # The confirmation sent, then the customer's agreement (ticket 28).
     confirmations: Confirmations
+    # A cross-check DW passed on Bravo's read-back, taken back (ticket 81).
+    cross_check_reopening: CrossCheckReopening
     # DW1's skills, and a version of one proposed for the head (ticket 40).
     skills: SkillsService
     # The description reading's prompt versions the optimiser proposed, for
@@ -484,6 +487,7 @@ def assemble(
             worker_version,
         ),
         confirmations=Confirmations(uow, gate, clock, ids, intake, pending, threads, directory),
+        cross_check_reopening=CrossCheckReopening(uow, gate, clock, ids),
         change_requests=ChangeRequests(
             uow,
             gate,

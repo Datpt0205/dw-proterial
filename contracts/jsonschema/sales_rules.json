@@ -2489,6 +2489,11 @@
       "autonomy": {
         "$ref": "#/$defs/Autonomy"
       },
+      "cross_check_on_match": {
+        "default": false,
+        "title": "Cross Check On Match",
+        "type": "boolean"
+      },
       "cross_check_required": {
         "title": "Cross Check Required",
         "type": "boolean"

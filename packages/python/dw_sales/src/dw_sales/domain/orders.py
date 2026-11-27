@@ -49,6 +49,11 @@ from dw_sales.domain.catalog import (
     PrvCode,
     Uom,
 )
+from dw_sales.domain.cross_check_on_match import (
+    EXCEPTION_ORDER,
+    OnMatchException,
+    ReadBackFacts,
+)
 from dw_sales.domain.description_reading import DescriptionReading, GateRoute
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.legacy_fonts import LegacyEncoding
@@ -2046,7 +2051,11 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
                 _S.CHANGE_REVIEW,
             }
         ),
-        _S.CROSS_CHECKED: frozenset({_S.CROSS_CHECKED, _S.CONFIRMATION_SENT, _S.CHANGE_REVIEW}),
+        # -> uploaded_to_bravo: a cross-check DW passed on a matching
+        # read-back, taken back before the confirmation left (ticket 81).
+        _S.CROSS_CHECKED: frozenset(
+            {_S.CROSS_CHECKED, _S.CONFIRMATION_SENT, _S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO}
+        ),
         # -> confirmed: the customer agreed (ADR 0011); -> change_review: they
         # declined it, or a revision or an accepted change arrived.
         _S.CONFIRMATION_SENT: frozenset({_S.CONFIRMED, _S.CHANGE_REVIEW}),
@@ -2209,6 +2218,11 @@ class OrderCase(BaseModel):
     catalog_as_of: AwareDatetime | None = None
     cross_check_required: bool | None = None
     export_control_mode: ExportControlMode | None = None
+    # Whether a matching read-back from Bravo may pass the cross-check
+    # (ticket 81, `OrderRules.cross_check_on_match`), stamped when checked;
+    # None, as on a case checked before the rule existed, is off. False once
+    # an automatic pass was taken back: that order's check is a person's.
+    cross_check_on_match: bool | None = None
     # Earlier revisions, oldest first, and what the current one changed.
     superseded: tuple[SupersededRevision, ...] = ()
     changes: tuple[LineChange, ...] = ()
@@ -2229,6 +2243,9 @@ class OrderCase(BaseModel):
     # Step 9.
     cross_checked_by: ActorId | None = None
     cross_checked_at: AwareDatetime | None = None
+    # The read-back the cross-check passed on, when DW passed it (ticket 81):
+    # the gateway answer's sha256. None: a person cross-checked it.
+    cross_checked_on_read_back: Sha256Hex | None = None
     # The last "trả lại" from the cross-check, kept with its reason.
     returned_reason: Note | None = None
     returned_by: ActorId | None = None
@@ -2353,6 +2370,10 @@ class OrderCase(BaseModel):
         if self.header_corrections:
             self.effective_document  # noqa: B018 -- validates the typed values
         self._stamps_fit_the_status()
+        if self.cross_check_on_match and self.cross_check_required is not True:
+            raise ValueError("a read-back passes only a cross-check the rules require")
+        if self.cross_checked_on_read_back is not None and self.cross_checked_by is None:
+            raise ValueError("a read-back passed a cross-check only with its checker")
         if self.cross_checked_by is not None and (
             self.cross_checked_by in (self.prepared_by, self.bravo_recorded_by)
             or self.cross_checked_by in self.earlier_makers
@@ -2609,6 +2630,7 @@ class OrderCase(BaseModel):
         catalog_as_of: datetime,
         cross_check_required: bool,
         export_control_mode: ExportControlMode,
+        cross_check_on_match: bool | None = None,
         duplicate_of_case: uuid.UUID | None = None,
         duplicate_of_so: str | None = None,
         base_so_no: str | None = None,
@@ -2621,6 +2643,7 @@ class OrderCase(BaseModel):
             catalog_as_of=catalog_as_of,
             cross_check_required=cross_check_required,
             export_control_mode=export_control_mode,
+            cross_check_on_match=cross_check_on_match,
             duplicate_of_case=duplicate_of_case,
             duplicate_of_so=duplicate_of_so,
             base_so_no=base_so_no,
@@ -3162,6 +3185,87 @@ class OrderCase(BaseModel):
             )
         self._require_not_a_maker(actor)
         return self._next(status, cross_checked_by=actor.user_id, cross_checked_at=at)
+
+    def on_match_exceptions(self, read_back: ReadBackFacts) -> tuple[OnMatchException, ...]:
+        """Why this order's cross-check may not pass on ``read_back`` (ticket
+        81): empty when it may. Each fact is read directly, never through
+        `makers`, which cannot tell a preparer who typed a value from one who
+        did not."""
+        found: set[OnMatchException] = set()
+        if not self.cross_check_on_match:
+            found.add(OnMatchException.RULES_OFF)
+        if not self.awaits_cross_check or self.unapplied_decision is not None:
+            found.add(OnMatchException.NOT_AWAITING)
+        if read_back.source != "gateway":
+            found.add(OnMatchException.NOT_FROM_BRAVO)
+        if read_back.case_version != self.case_version:
+            found.add(OnMatchException.STALE_READ_BACK)
+        if read_back.differences:
+            found.add(OnMatchException.DIFFERS)
+        if self.findings:
+            found.add(OnMatchException.FINDING)
+        if self.header_corrections or any(
+            line.corrections
+            or line.changes
+            or line.mapping.hand_entered
+            or line.pc_answer is not None
+            for line in self.lines
+        ):
+            found.add(OnMatchException.TYPED_BY_A_PERSON)
+        flags = [*self.document.header.flags, *(f for x in self.lines for f in x.po_line.flags)]
+        if (
+            self.document.opened_with_password
+            or any(f.gate == "applied" for f in flags)
+            or any(
+                x.basis.description_reading is not None
+                and x.basis.description_reading.gate == "applied"
+                for x in self.lines
+            )
+        ):
+            found.add(OnMatchException.APPLIED_BY_DW)
+        if self.superseded or self.update_loop is not None:
+            found.add(OnMatchException.REVISED)
+        return tuple(e for e in EXCEPTION_ORDER if e in found)
+
+    def cross_checked_on_match(
+        self, read_back: ReadBackFacts, digest: str, actor: Actor, at: datetime
+    ) -> OrderCase:
+        """uploaded_to_bravo -> cross_checked by DW, on a read-back from Bravo
+        that holds exactly the paste sheet (ticket 81): refused (409, naming
+        why) for anything `on_match_exceptions` finds, here where the effect
+        happens, whoever asked. ``actor`` is the lane's system actor, never a
+        maker; ``digest`` the gateway answer's sha256."""
+        if exceptions := self.on_match_exceptions(read_back):
+            raise ConflictError(
+                "the cross-check stays a person's",
+                details={
+                    "case_id": str(self.case_id),
+                    "rule": "cross_check_on_match",
+                    "exceptions": [e.value for e in exceptions],
+                },
+            )
+        passed = self.cross_check(actor, at)
+        return passed._next(passed.status, cross_checked_on_read_back=digest)
+
+    def reopen_cross_check(self, actor: Actor) -> OrderCase:
+        """cross_checked -> uploaded_to_bravo: a cross-check DW passed on a
+        matching read-back, taken back before the confirmation left (ticket
+        81), by someone who made none of the order. Its stamps are cleared,
+        and its check is a person's from then on (`cross_check_on_match`
+        False); the caller raises it again."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status is not _S.CROSS_CHECKED or self.cross_checked_on_read_back is None:
+            raise ConflictError(
+                "only a cross-check DW passed on Bravo's read-back is taken back",
+                details={**details, "rule": "not_passed_on_read_back"},
+            )
+        self._require_not_a_maker(actor)
+        return self._next(
+            transition(self.status, _S.UPLOADED_TO_BRAVO),
+            cross_checked_by=None,
+            cross_checked_at=None,
+            cross_check_on_match=False,
+        )
 
     def return_from_cross_check(self, reason: str, actor: Actor, at: datetime) -> OrderCase:
         """uploaded_to_bravo -> in_review: "trả lại", with the reason.
@@ -4103,6 +4207,7 @@ class OrderCase(BaseModel):
             catalog_as_of=revision.catalog_as_of,
             cross_check_required=revision.cross_check_required,
             export_control_mode=revision.export_control_mode,
+            cross_check_on_match=revision.cross_check_on_match,
             superseded=(
                 *self.superseded,
                 SupersededRevision(
@@ -4324,6 +4429,9 @@ class OrderCase(BaseModel):
         return {**_CLEARED_FROM_PREPARED, "earlier_makers": self._retired_makers()}
 
     def _next(self, status: OrderStatus, **changes: object) -> OrderCase:
+        if changes.get("cross_checked_by", self.cross_checked_by) is None:
+            # A cross-check cleared takes the read-back it passed on with it.
+            changes.setdefault("cross_checked_on_read_back", None)
         if status is not self.status:
             # A case that moves on no longer waits on the decision not applied.
             changes.setdefault("unapplied_decision", None)

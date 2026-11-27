@@ -47,6 +47,7 @@ from dw_sales.domain.orders import (
     LineMapping,
     OrderCase,
     OrderLine,
+    OrderStatus,
     PcAnswer,
     PoDocument,
     PoLine,
@@ -79,6 +80,8 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
         "catalog_as_of": case.catalog_as_of,
         "cross_check_required": case.cross_check_required,
         "export_control_mode": case.export_control_mode,
+        "cross_check_on_match": case.cross_check_on_match,
+        "cross_checked_on_read_back": case.cross_checked_on_read_back,
         "changes": [change.model_dump(mode="json") for change in case.changes],
         "duplicate_of_case": case.duplicate_of_case,
         "duplicate_of_so": case.duplicate_of_so,
@@ -400,6 +403,8 @@ _CASE_FIELDS = (
     "catalog_as_of",
     "cross_check_required",
     "export_control_mode",
+    "cross_check_on_match",
+    "cross_checked_on_read_back",
     "changes",
     "duplicate_of_case",
     "duplicate_of_so",
@@ -455,6 +460,15 @@ class SqlOrderCaseRepository:
 
     async def waiting_on_pc(self) -> Sequence[Stored[OrderCase]]:
         return list(reversed(await _load(self.session, _C.c.pc_request.is_not(None))))
+
+    async def awaiting_on_match(self) -> Sequence[Stored[OrderCase]]:
+        return await _load(
+            self.session,
+            sa.and_(
+                _C.c.status == OrderStatus.UPLOADED_TO_BRAVO.value,
+                _C.c.cross_check_on_match.is_(True),
+            ),
+        )
 
     async def cases_for_po(self, customer_code: str, po_no: str) -> Sequence[OrderCase]:
         return [found.case for found in await _load(self.session, _for_po(customer_code, po_no))]

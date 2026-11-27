@@ -407,3 +407,37 @@ def gate_route(
     if in_audit_sample(item_key, audit_share):
         return "audit"
     return "applied"
+
+
+# ------------------------------------------------- a step with no confidence --
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeTally:
+    """A code step's measured outcomes, for one tenant's workspace and one
+    basis (a new basis starts from none): ``cases`` the people's decisions on
+    items the step found eligible and did not apply, ``errors`` those they
+    did not keep; ``audits`` the decisions on items sampled for audit or
+    applied (an undo), ``audit_errors`` those not kept."""
+
+    cases: int = 0
+    errors: int = 0
+    audits: int = 0
+    audit_errors: int = 0
+
+
+def measured_route(
+    tally: OutcomeTally, alpha: float, *, item_key: str, audit_share: float
+) -> GateRoute:
+    """`gate_route` for a step code decides with no confidence to threshold
+    (ticket 81): a person decides it until the people's decisions on the
+    step's eligible items certify ``alpha`` (`cases_needed` of them, the exact
+    upper bound at most ``alpha``); certified and stopped by its audits, it
+    is shadow; sampled, a person decides it unaware; else it applies."""
+    if tally.cases < cases_needed(alpha) or upper_bound(tally.errors, tally.cases) > alpha:
+        return "person"
+    if audit_stopped(tally.audits, tally.audit_errors, alpha):
+        return "shadow"
+    if in_audit_sample(item_key, audit_share):
+        return "audit"
+    return "applied"

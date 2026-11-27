@@ -192,3 +192,11 @@ Decided in code, off:
 Owed before a tenant switches it on: Đạt's word that the unscanned decrypted
 bytes may be read without a person on each value (or a scan of the decrypted
 bytes before reading, which would be a reader-sandbox change).
+
+## Addendum 2026-11-27: one approval carved out of T2 (ticket 81)
+
+Status of this addendum: **Proposed**, off by default. The order's
+cross-check (WIV-03-012 step 9) may pass by DW on a matching read-back from
+Bravo at T1's target and audit share, by this ADR's method with a measure
+over the people's cross-checks instead of a model's confidence
+(`measured_route`). Every other approval stays T2. See ADR 0016.

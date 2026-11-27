@@ -121,11 +121,12 @@ from dw_sales.application.bravo_line_writes import (
     BravoWriteStamp,
     write_bravo_versions,
 )
-from dw_sales.application.bravo_sales_orders import SalesOrderScreen
+from dw_sales.application.bravo_sales_orders import BravoCustomerPoPort, SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.confirmations import SilenceRecorder
+from dw_sales.application.cross_check_on_match import CrossCheckOnMatchLane
 from dw_sales.application.customer_notations import NotationRecordPort
 from dw_sales.application.decisions import QuoteManagerSettlement
 from dw_sales.application.document_forms import DocumentFormReader, DocumentFormReplay
@@ -297,6 +298,10 @@ class Dw1Mount:
     # What drops readings made in shadow no person decided past their term
     # (ticket 67): built wherever DW1 is.
     shadow_retention: ShadowRetention | None = None
+    # What reads an order in Bravo back and passes its cross-check where the
+    # tenant's rules say so and it matches (ticket 81): built for a worker
+    # given the gateway; nothing passes without it.
+    cross_check_on_match: CrossCheckOnMatchLane | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -354,6 +359,9 @@ def build_dw1(
     # signed with: none, and Bravo is not connected (a proposal and a
     # decision are refused, never guessed).
     bravo_gateway: BravoGatewayClient | None = None,
+    # Bravo as the worker's cross-check lane reads it back (ticket 81): only
+    # a worker passes it, and without it the lane is not built.
+    cross_check_gateway: BravoCustomerPoPort | None = None,
     bravo_signer: ApprovalTokenSigner | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
@@ -818,6 +826,19 @@ def build_dw1(
             )
         ),
         examples=indexing,
+        cross_check_on_match=(
+            None
+            if cross_check_gateway is None
+            else CrossCheckOnMatchLane(
+                uow=uow,
+                read_backs=catalog_uow,
+                bravo=cross_check_gateway,
+                decisions=runs,
+                rules=tenant_rules,
+                clock=clock,
+                ids=ids,
+            )
+        ),
         skill_replay=(
             None
             if dw1_agent is None or agent_turns is None

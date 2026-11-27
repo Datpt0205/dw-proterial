@@ -634,9 +634,11 @@ function OrderDetail() {
                   {
                     key: "check",
                     label: "Kiểm chéo",
-                    children: data.cross_checked_by
-                      ? `${name(data.cross_checked_by)} · ${formatDateTime(data.cross_checked_at)}`
-                      : "Chưa",
+                    children: data.cross_checked_on_read_back
+                      ? `DW đối chiếu khớp với Bravo, không có người kiểm · ${formatDateTime(data.cross_checked_at)}`
+                      : data.cross_checked_by
+                        ? `${name(data.cross_checked_by)} · ${formatDateTime(data.cross_checked_at)}`
+                        : "Chưa",
                   },
                   {
                     key: "confirm",

@@ -1150,6 +1150,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/cross-check/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Cross Check */
+        post: operations["reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/customer-reminder": {
         parameters: {
             query?: never;
@@ -3229,6 +3246,12 @@ export interface components {
             rows_read: number;
             /** So No */
             so_no: string;
+            /**
+             * Source
+             * @default export
+             * @enum {string}
+             */
+            source: "export" | "gateway";
         };
         /**
          * BravoWriteBody
@@ -4615,7 +4638,7 @@ export interface components {
          * @description What makes a case move: the domain method that moves it.
          * @enum {string}
          */
-        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "undo_implied" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
+        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "undo_implied" | "reopen_cross_check" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
         /**
          * EdgeGuard
          * @description What the domain refuses a move without.
@@ -6155,6 +6178,8 @@ export interface components {
             /** Confirmed By */
             confirmed_by: string | null;
             coverage: components["schemas"]["CoverageView"];
+            /** Cross Check On Match */
+            cross_check_on_match?: boolean | null;
             /** Cross Check Required */
             cross_check_required: boolean | null;
             /** Cross Check Stalled */
@@ -6163,6 +6188,8 @@ export interface components {
             cross_checked_at: string | null;
             /** Cross Checked By */
             cross_checked_by: string | null;
+            /** Cross Checked On Read Back */
+            cross_checked_on_read_back?: string | null;
             /**
              * Currency
              * @enum {string}
@@ -12083,6 +12110,44 @@ export interface operations {
         };
     };
     correction_request_api_v1_sales_orders__case_id__correction_request_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post: {
         parameters: {
             query?: never;
             header?: {

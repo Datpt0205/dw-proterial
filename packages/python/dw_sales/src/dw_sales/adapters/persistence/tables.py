@@ -44,6 +44,10 @@ order_cases = sa.Table(
     sa.Column("catalog_as_of", _TS),
     sa.Column("cross_check_required", sa.Boolean),
     sa.Column("export_control_mode", sa.Text),
+    # Ticket 81 (d533225350dd): the rule's stamp, and the read-back a
+    # cross-check DW passed rests on.
+    sa.Column("cross_check_on_match", sa.Boolean),
+    sa.Column("cross_checked_on_read_back", sa.Text),
     sa.Column("changes", JSONB, nullable=False),
     sa.Column("duplicate_of_case", UUID(as_uuid=True)),
     sa.Column("duplicate_of_so", sa.Text),
@@ -534,6 +538,26 @@ order_bravo_read_backs = sa.Table(
     sa.Column("file_sha256", sa.Text, nullable=False),
     sa.Column("read_by", UUID(as_uuid=True), nullable=False),
     sa.Column("read_at", _TS, nullable=False),
+    # `export` or `gateway` (ticket 81, d533225350dd).
+    sa.Column("source", sa.Text, nullable=False, server_default="export"),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# What the cross-check lane did with one case version, and what a person then
+# decided (ticket 81, migration d533225350dd).
+order_cross_check_routes = sa.Table(
+    "order_cross_check_routes",
+    metadata,
+    *_scope(),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("case_version", sa.Integer, nullable=False),
+    sa.Column("basis", sa.Text, nullable=False),
+    sa.Column("route", sa.Text, nullable=False),
+    sa.Column("exceptions", JSONB, nullable=False),
+    sa.Column("outcome", sa.Text),
+    sa.Column("routed_at", _TS, nullable=False),
+    sa.Column("decided_at", _TS),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

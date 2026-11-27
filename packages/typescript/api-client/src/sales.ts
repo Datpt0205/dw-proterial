@@ -714,6 +714,16 @@ export class SalesApi {
     );
   }
 
+  /** A cross-check DW passed on Bravo's matching read-back, taken back by
+   * someone who made none of the order (ticket 81). */
+  reopenCrossCheck(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/cross-check/reopen">(
+      `/api/v1/sales/orders/${enc(caseId)}/cross-check/reopen`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   confirm(
     caseId: string,
     body: Body<"/api/v1/sales/orders/{case_id}/confirm">,

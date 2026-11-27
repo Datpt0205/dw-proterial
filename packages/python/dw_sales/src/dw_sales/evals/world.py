@@ -118,6 +118,7 @@ from dw_sales.application.catalog_imports import (
     CatalogSettlement,
 )
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.cross_check_on_match import CrossCheckRoute, Outcome
 from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED, QuoteManagerSettlement
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoff_kinds import HandoffKindReader
@@ -370,6 +371,8 @@ class _ScopeState:
     # Each step's threshold per prompt and model profile (ticket 44): what
     # the lane last stored, committed at once as the lane's own transaction.
     thresholds: dict[VersionKey, StepThreshold] = field(default_factory=dict)
+    # What the cross-check lane did per order version (ticket 81).
+    cross_check_routes: dict[tuple[uuid.UUID, int], CrossCheckRoute] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -393,6 +396,7 @@ class _ScopeState:
             labelled_cases=list(self.labelled_cases),
             shadow_readings=dict(self.shadow_readings),
             thresholds=dict(self.thresholds),
+            cross_check_routes=dict(self.cross_check_routes),
         )
 
 
@@ -440,6 +444,17 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
             stored
             for stored in reversed(self._held.values())
             if isinstance(stored.case, OrderCase) and stored.case.pc_request is not None
+        ]
+
+    async def awaiting_on_match(self) -> Sequence[Stored[CaseT]]:
+        """An order store's: the orders in Bravo whose rules say a matching
+        read-back passes them (ticket 81)."""
+        return [
+            stored
+            for stored in self._held.values()
+            if isinstance(stored.case, OrderCase)
+            and stored.case.status is OrderStatus.UPLOADED_TO_BRAVO
+            and stored.case.cross_check_on_match is True
         ]
 
     async def add(self, case: CaseT, origin: CaseOrigin, event: CaseEvent) -> None:
@@ -1024,6 +1039,45 @@ class _Outbound:
         return True
 
 
+class _CrossCheckRoutes:
+    """`CrossCheckRoutesPort` over one transaction's state: one per case
+    version, decided once, as the SQL store's key and update say."""
+
+    def __init__(self, held: dict[tuple[uuid.UUID, int], CrossCheckRoute]) -> None:
+        self._held = held
+
+    async def get(self, case_id: uuid.UUID, case_version: int) -> CrossCheckRoute | None:
+        return self._held.get((case_id, case_version))
+
+    async def add(self, route: CrossCheckRoute) -> None:
+        key = (route.case_id, route.case_version)
+        if key in self._held:
+            raise ConflictError("the case version is routed already")
+        self._held[key] = route
+
+    async def decide(
+        self, case_id: uuid.UUID, case_version: int, outcome: Outcome, at: datetime
+    ) -> bool:
+        held = self._held.get((case_id, case_version))
+        if held is None or held.outcome is not None:
+            return False
+        self._held[(case_id, case_version)] = held.model_copy(
+            update={"outcome": outcome, "decided_at": at}
+        )
+        return True
+
+    async def passed(self, case_id: uuid.UUID) -> CrossCheckRoute | None:
+        open_passes = [
+            r
+            for r in self._held.values()
+            if r.case_id == case_id and r.route == "applied" and r.outcome is None
+        ]
+        return max(open_passes, key=lambda r: r.case_version, default=None)
+
+    async def outcomes(self, basis: str) -> Iterable[CrossCheckRoute]:
+        return [r for r in self._held.values() if r.basis == basis and r.outcome is not None]
+
+
 class _Work:
     """`SalesUnitOfWork`: one scope's state, copied in, written back on commit."""
 
@@ -1048,6 +1102,7 @@ class _Work:
         self.change_requests = _ChangeRequests(state.change_requests)
         self.labelled_cases = _LabelledCases(state.labelled_cases)
         self.shadow_readings = _ShadowReadings(state.shadow_readings)
+        self.cross_check_routes = _CrossCheckRoutes(state.cross_check_routes)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)

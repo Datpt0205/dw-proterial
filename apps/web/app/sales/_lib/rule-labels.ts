@@ -177,6 +177,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Bắt buộc kiểm chéo trước khi xác nhận",
       help: "Tắt: đơn đã nhập Bravo được xác nhận ngay, không cần người thứ hai kiểm.",
     },
+    cross_check_on_match: {
+      label: "Cho qua kiểm chéo khi Bravo khớp",
+      help: "Bật (cần bật kiểm chéo): đơn mà DW đọc lại từ Bravo khớp từng dòng với bản đã duyệt, không có cờ nào và không ai nhập tay giá trị, mã hay ngày, được DW cho qua kiểm chéo, trong mức sai và tỷ lệ kiểm mẫu đã đặt. Đơn khác, đơn lệch và đơn được chọn kiểm mẫu vẫn chờ người kiểm chéo.",
+    },
     export_control_mode: {
       label: "Cờ thiếu NOC/ESF",
       help: "Giữ xác nhận: đơn không được xác nhận với khách cho tới khi PIC kiểm soát xuất khẩu chấp nhận cờ, kèm lý do. Chặn xác nhận: không xác nhận được kể cả khi đã chấp nhận.",

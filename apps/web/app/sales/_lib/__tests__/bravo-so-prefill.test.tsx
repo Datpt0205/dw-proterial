@@ -53,6 +53,7 @@ const READ: View = {
     read_by: AN,
     rows_read: 1,
     so_no: "SO-2611-0042",
+    source: "export",
   },
   stale: false,
   prices_hidden: false,

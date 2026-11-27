@@ -1234,6 +1234,9 @@ class OrderCaseView(BaseModel):
     catalog_as_of: datetime | None
     release_manifest_ref: str | None
     cross_check_required: bool | None
+    # Whether Bravo's matching read-back may pass the cross-check (ticket 81),
+    # as stamped; None reads as off.
+    cross_check_on_match: bool | None = None
     export_control_mode: str | None
     duplicate_of_case: uuid.UUID | None
     duplicate_of_so: str | None
@@ -1245,6 +1248,9 @@ class OrderCaseView(BaseModel):
     bravo_recorded_at: datetime | None
     bravo_entry_compared: bool
     cross_checked_by: uuid.UUID | None
+    # The gateway answer a cross-check DW passed rests on (ticket 81); None:
+    # a person cross-checked it, or nobody yet.
+    cross_checked_on_read_back: str | None = None
     cross_checked_at: datetime | None
     returned_reason: str | None
     returned_by: uuid.UUID | None
@@ -1677,6 +1683,7 @@ def order_case(
         catalog_as_of=case.catalog_as_of,
         release_manifest_ref=release_manifest_ref,
         cross_check_required=case.cross_check_required,
+        cross_check_on_match=case.cross_check_on_match,
         export_control_mode=case.export_control_mode,
         duplicate_of_case=case.duplicate_of_case,
         duplicate_of_so=case.duplicate_of_so,
@@ -1688,6 +1695,7 @@ def order_case(
         bravo_recorded_at=case.bravo_recorded_at,
         bravo_entry_compared=case.bravo_entry_compared,
         cross_checked_by=case.cross_checked_by,
+        cross_checked_on_read_back=case.cross_checked_on_read_back,
         cross_checked_at=case.cross_checked_at,
         returned_reason=case.returned_reason,
         returned_by=case.returned_by,

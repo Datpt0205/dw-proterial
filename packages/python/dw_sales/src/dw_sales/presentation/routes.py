@@ -1942,6 +1942,21 @@ def build_router(
         )
         return await idem.record(change)
 
+    # A cross-check DW passed on Bravo's read-back, taken back by a non-maker
+    # (ticket 81); the case refuses a maker (409).
+    @router.post(
+        "/orders/{case_id}/cross-check/reopen",
+        response_model=CaseChangeView,
+        dependencies=[scopes(SalesScopes.ORDER_CROSS_CHECK)],
+    )
+    async def reopen_cross_check(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.cross_check_reopening.reopen(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
     @router.post(
         "/orders/{case_id}/decline", response_model=CaseChangeView, dependencies=prepare_scope
     )

@@ -2207,6 +2207,15 @@
             "minLength": 1,
             "title": "So No",
             "type": "string"
+          },
+          "source": {
+            "default": "export",
+            "enum": [
+              "export",
+              "gateway"
+            ],
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
@@ -7014,6 +7023,7 @@
           "record_agreement",
           "record_decline",
           "undo_implied",
+          "reopen_cross_check",
           "apply_change",
           "draft_ycbg",
           "record_ycbg",
@@ -13416,6 +13426,17 @@
           "coverage": {
             "$ref": "#/components/schemas/CoverageView"
           },
+          "cross_check_on_match": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Check On Match"
+          },
           "cross_check_required": {
             "anyOf": [
               {
@@ -13454,6 +13475,17 @@
               }
             ],
             "title": "Cross Checked By"
+          },
+          "cross_checked_on_read_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Checked On Read Back"
           },
           "currency": {
             "enum": [
@@ -36176,6 +36208,77 @@
           }
         },
         "summary": "Correction Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/cross-check/reopen": {
+      "post": {
+        "operationId": "reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Cross Check",
         "tags": [
           "sales"
         ]

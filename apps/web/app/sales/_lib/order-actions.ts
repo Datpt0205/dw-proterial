@@ -60,6 +60,7 @@ export type OrderAction =
   | "crossCheck"
   | "returnOrder"
   | "resendCrossCheck"
+  | "reopenCrossCheck"
   | "confirm"
   | "close";
 
@@ -261,6 +262,15 @@ export function orderOffers(
             : `Chỉ người đã nhập Bravo cho đơn này hoặc ${HEAD} gửi kiểm chéo lại.`,
       };
   }
+
+  // A cross-check DW passed on Bravo's matching read-back (ticket 81),
+  // taken back by someone who may cross-check and made none of the order.
+  if (status === "cross_checked" && order.cross_checked_on_read_back)
+    offers.reopenCrossCheck = {
+      reason: !viewer.hasScope("sales.order.cross_check")
+        ? `Bạn không có quyền kiểm chéo đơn (cần vai ${PIC}).`
+        : makerReason(order, viewer),
+    };
 
   const confirmable =
     status === "cross_checked" ||

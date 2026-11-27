@@ -267,8 +267,9 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                 _in(_ORDER, "model_assist.case_chat"),
                 _in(_FOLLOWUPS, "waiting_customer"),
             ),
-            # Whether a second person cross-checks the Bravo entry.
-            _step(StepId.O9, _in(_ORDER, "cross_check_required")),
+            # Whether a second person cross-checks the Bravo entry, and
+            # whether Bravo's matching read-back passes it (ticket 81).
+            _step(StepId.O9, _in(_ORDER, "cross_check_required", "cross_check_on_match")),
             # Confirmation and the export-control hold; then each customer's
             # days of silence that count as agreement, and telling the PIC
             # when they pass (ticket 28); the model's wording of the mails to
@@ -447,6 +448,9 @@ class EdgeAction(StrEnum):
     RECORD_DECLINE = "record_decline"
     # An agreement by silence taken back (ticket 82).
     UNDO_IMPLIED = "undo_implied"
+    # A cross-check DW passed on Bravo's matching read-back, taken back by
+    # a non-maker before the confirmation left (ticket 81).
+    REOPEN_CROSS_CHECK = "reopen_cross_check"
     APPLY_CHANGE = "apply_change"
     DRAFT_YCBG = "draft_ycbg"
     RECORD_YCBG = "record_ycbg"
@@ -543,6 +547,9 @@ _ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
         _A.CONFIRM, "sales", _G.EXPORT_CONTROL_HOLD, _G.PC_CONFIRMED_DATE
     ),
     (_O.CROSS_CHECKED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CROSS_CHECKED, _O.UPLOADED_TO_BRAVO): _edge(
+        _A.REOPEN_CROSS_CHECK, "sales", _G.MAKER_CHECKER
+    ),
     (_O.CONFIRMATION_SENT, _O.CONFIRMED): _edge(_A.RECORD_AGREEMENT, "sales", _G.IMPLIED_DAYS),
     # A revision there moves the same way (`revise`); the decline is the
     # move this status adds.

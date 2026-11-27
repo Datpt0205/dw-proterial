@@ -219,8 +219,12 @@ def reply_facts(
             for line in case.lines
         ]
         facts["prepared_by"] = None if case.prepared_by is None else people.name(case.prepared_by)
+        # Nobody's name for a cross-check DW passed on Bravo's read-back
+        # (ticket 81): no person checked it.
         facts["checked_by"] = (
-            None if case.cross_checked_by is None else people.name(case.cross_checked_by)
+            None
+            if case.cross_checked_by is None or case.cross_checked_on_read_back is not None
+            else people.name(case.cross_checked_by)
         )
     else:
         facts["lines"] = _change_facts(case, language, asked=kind == "change_options_draft")

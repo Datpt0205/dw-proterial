@@ -137,6 +137,9 @@ _SALES_TABLES = (
     "sales.bravo_exports",
     "sales.bravo_export_files",
     "sales.order_bravo_read_backs",
+    # Migration d533225350dd (ticket 81): what the cross-check lane did per
+    # order version, and what a person then decided.
+    "sales.order_cross_check_routes",
 )
 
 
@@ -252,6 +255,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {"labelled_cases", "labelled_cases_default"} <= labelled
     for table in labelled:
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+    # A cross-check route is decided once and never removed (ticket 81).
+    assert {verb for tbl, verb in held if tbl == "order_cross_check_routes"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+    }
     # A proposed skill version's replay (ticket 40): a fact about one version.
     assert {verb for tbl, verb in held if tbl == "skill_replays"} == {"SELECT", "INSERT"}
     # A shadow reading is taken (deleted) when labelled, never rewritten.

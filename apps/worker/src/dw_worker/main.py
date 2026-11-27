@@ -176,6 +176,7 @@ from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.bravo_exports import BRAVO_EXPORT_UPLOADED, YCBG_EXPORT_UPLOADED_BEFORE
 from dw_sales.application.bravo_line_writes import BRAVO_WRITE_DECIDED
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
+from dw_sales.application.cross_check_on_match import CROSS_CHECK_ON_MATCH_LANE
 from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED
 from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
@@ -264,6 +265,12 @@ from dw_worker.consumers.sales_auto_apply import (
 from dw_worker.consumers.sales_auto_apply import build_sales_auto_apply_consumer
 from dw_worker.consumers.sales_bravo_exports import build_bravo_export_handler
 from dw_worker.consumers.sales_catalog import build_catalog_import_handler
+from dw_worker.consumers.sales_cross_check_on_match import (
+    INTERVAL_SECONDS as SALES_CROSS_CHECK_ON_MATCH_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_cross_check_on_match import (
+    build_sales_cross_check_on_match_consumer,
+)
 from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_followups import (
     INTERVAL_SECONDS as SALES_FOLLOWUPS_INTERVAL_SECONDS,
@@ -604,6 +611,15 @@ def build_sales(
         # proposed prompt version must pass (ticket 43).
         examples=examples,
         security=_description_security(),
+        # The orders whose rules let a matching read-back pass their
+        # cross-check, read back from Bravo (ticket 81): only with a gateway.
+        cross_check_gateway=(
+            BravoGatewayClient(
+                httpx.AsyncClient(), settings.bravo_gateway_url, settings.bravo_tenant_id
+            )
+            if settings.bravo_gateway_url and settings.bravo_tenant_id is not None
+            else None
+        ),
     )
     return mount, scope
 
@@ -928,6 +944,7 @@ def build_registry(
     # this process reaches a model server; it reads nothing while the
     # tenant's switch is off.
     sales_pc_replies_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_cross_check_on_match_consumer: Callable[[], Awaitable[None]] | None = None
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
@@ -1313,6 +1330,12 @@ def build_registry(
                 sales_auto_apply_consumer = build_sales_auto_apply_consumer(
                     thresholds, threshold_scopes
                 )
+                if mount.cross_check_on_match is not None:
+                    # An order's cross-check passed on Bravo's matching
+                    # read-back where its rules say so (ticket 81).
+                    sales_cross_check_on_match_consumer = build_sales_cross_check_on_match_consumer(
+                        mount.cross_check_on_match, threshold_scopes
+                    )
                 if mount.examples is not None:
                     sales_examples_consumer = build_sales_examples_consumer(
                         mount.examples,
@@ -1522,6 +1545,15 @@ def build_registry(
             SALES_PC_REPLIES_LANE,
             sales_pc_replies_consumer,
             interval_seconds=SALES_PC_REPLIES_INTERVAL_SECONDS,
+        )
+    # And the cross-check passed on Bravo's matching read-back (ticket 81),
+    # which writes a case only through its own versioned save, so no
+    # ReapTarget.
+    if sales_cross_check_on_match_consumer is not None:
+        registry.register(
+            CROSS_CHECK_ON_MATCH_LANE,
+            sales_cross_check_on_match_consumer,
+            interval_seconds=SALES_CROSS_CHECK_ON_MATCH_INTERVAL_SECONDS,
         )
     # And its follow-ups and morning brief (ticket 42), which only notify, so
     # no ReapTarget either.
