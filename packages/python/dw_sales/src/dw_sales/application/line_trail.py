@@ -404,12 +404,15 @@ def _case_steps(case: OrderCase, line: OrderLine) -> list[TrailStepView]:
             )
         )
     if case.cross_checked_by is not None:
+        # Passed by DW on Bravo's matching read-back (ticket 81): DW's, never
+        # drawn as a person's check.
+        by_dw = case.cross_checked_on_read_back is not None
         steps.append(
             TrailStepView(
                 kind="cross_checked",
-                code="cross_check",
-                decided_by="person",
-                actor_user_id=case.cross_checked_by,
+                code="cross_check_on_read_back" if by_dw else "cross_check",
+                decided_by="dw" if by_dw else "person",
+                actor_user_id=None if by_dw else case.cross_checked_by,
                 at=case.cross_checked_at,
             )
         )

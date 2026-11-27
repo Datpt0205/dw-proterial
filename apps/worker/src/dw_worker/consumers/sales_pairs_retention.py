@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol
 
 from dw_sales.application.ports import SalesScope
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_pairs_retention")
 
@@ -34,18 +35,26 @@ class PairsRetentionLane(Protocol):
 
 
 def build_sales_pairs_retention_consumer(
-    lane: PairsRetentionLane, scopes: ScopesPort
+    lane: PairsRetentionLane,
+    scopes: ScopesPort,
+    name: str = "sales_salesorder_pairs_retention",
 ) -> Callable[[], Awaitable[None]]:
+    """Paces any per-workspace retention lane; ``name`` is the lane's, for
+    the log (the shadow readings' too, ticket 67)."""
+
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 dropped = await lane.tick(scope)
             except Exception:
-                # Broad on purpose: a pair kept an hour longer is retried next
+                # Broad on purpose: a row kept an hour longer is retried next
                 # tick, and the other workspaces still get theirs.
-                logger.exception("sales_salesorder_pairs_retention: one workspace failed")
+                logger.exception("%s: one workspace failed", name)
+                failed += 1
                 continue
             if dropped:
-                logger.info("sales_salesorder_pairs_retention: dropped %d pair(s)", dropped)
+                logger.info("%s: dropped %d row(s)", name, dropped)
+        raise_if_failed(name, failed)
 
     return consume

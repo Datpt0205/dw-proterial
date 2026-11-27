@@ -374,7 +374,9 @@ export function comparisonRows(
       po: formatQuantity(quantity),
       values: each((i) => ({
         text:
-          i.pack_multiple === null ? "Chưa có" : formatQuantity(i.pack_multiple),
+          i.pack_multiple === null
+            ? "Chưa có"
+            : formatQuantity(i.pack_multiple),
         fits:
           Number(i.pack_multiple) > 0
             ? qty % Number(i.pack_multiple) === 0

@@ -187,3 +187,13 @@ It now takes the layout's path, for all eight rule keys at once:
 
 The route is gone and the test now looks for `/decision` and `/decisions`
 too.
+
+## Amendment 2026-11-27: a matching read-back may pass the cross-check (ticket 81, Proposed)
+
+Off unless a tenant's order rules say `cross_check_on_match`. Where they do,
+the worker's cross-check lane, not a route and not the run, may withdraw the
+pending `sales.order.cross_check` approval and move the order to
+`cross_checked` as its own system actor, for an order whose read-back from
+Bravo holds exactly the paste sheet and where nothing was a person's or DW's
+own decision, within ADR 0015's measured error and audit sample. Every
+person's decision stays the run's, as decided above. See ADR 0016.

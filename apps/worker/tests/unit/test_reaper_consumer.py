@@ -19,6 +19,7 @@ from dw_observability.metrics import DW_REAPER_REAPED_TOTAL
 from dw_observability.telemetry import RecordingTelemetry
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
+from dw_worker.consumers.scope_failures import ScopesFailedError
 
 pytestmark = pytest.mark.unit
 
@@ -74,7 +75,9 @@ async def test_one_broken_queue_does_not_block_the_others() -> None:
         RecordingTelemetry(),
     )
 
-    await consume()
+    # Then the lane says one queue failed, so its tick is not clean (ticket 84).
+    with pytest.raises(ScopesFailedError):
+        await consume()
 
     assert healthy.asked, "the second queue was still swept"
 

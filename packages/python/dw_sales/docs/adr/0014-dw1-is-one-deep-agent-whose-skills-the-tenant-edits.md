@@ -160,7 +160,6 @@ settled so, and is recorded here because no rule above moved.
   ceiling) and was not kept. On this model the step stays off and the
   one-call reading reads, as decision 4 says; the open question is below.
 
-
 ## Amended 2026-11-16 by dw_sales ADR 0015 decision 5
 
 The skill a mail needs is chosen by one constrained, scored call (a
@@ -232,7 +231,6 @@ stays code.
   own measurement is attested, and the one call is the reading every
   company with `message_intent` on has today.
 
-
 ## Applied 2026-11-16: the triage card and a kind taught from it (tickets 33 and 34, by the agent)
 
 ADR 0012 decision 2's third use and decision 3, rebuilt here: the card reads
@@ -285,7 +283,6 @@ skill. No rule above moved.
   cases 1.0), p50 1.65 s, p95 2.12 s; no injection moved a mail or named
   another customer's case. The step stays off until a company's own
   measurement is attested.
-
 
 ## Applied 2026-11-16: the document forms (ticket 42 family 3, by the agent)
 
@@ -346,7 +343,6 @@ and every check of every value stay code.
   (`Số lượng (m)`) is still deferred, because `verify_rfq` takes a unit only
   from the item's own line; reading it from the header cell of the same
   column would be a change to ticket 29's checks, left for a decision.
-
 
 ## Applied 2026-11-16: the hand-off and reply kinds (ticket 42 family 5, by the agent)
 

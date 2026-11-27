@@ -1,9 +1,33 @@
 {
-  "_comment": "What the recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) make of the sample mailbox's routed messages: M11 and M40 name their PO, which resolves to the case DW1 holds for it (M01's, M35's), and state no date code can parse ('tuần 46', 'tuần sau'), so no line is handed off; M31's PO is an ERP order of the sender's; M17 is a sample request with its item quoted.",
+  "_comment": "What the recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) make of the sample mailbox's routed messages: M11 and M40 name their PO, which resolves to the case DW1 holds for it (M01's, M35's), and state no date code can parse ('tuần 46', 'tuần sau'), so no line is handed off; M31's PO is an ERP order of the sender's; M17 is a sample request with its item quoted. 2026-11-23 (Đạt: CI's recordings re-recorded from Strata now, the plant's attested run later): every answer this set replays was re-recorded on Strata on Giang's home lab (qwen3.8-flash-next-q2_0, not attested); the floor above still holds on them.",
   "messages": {
-    "M11": { "reason": "delivery_change", "outcome": "read", "po_no": "VLX-PO-2609-0118", "lines": [], "to": "pc" },
-    "M17": { "reason": "sample_request", "outcome": "read", "po_no": null, "quotes": 1, "to": "pc" },
-    "M31": { "reason": "complaint", "outcome": "read", "po_no": "VLX-PO-2608-0102", "quotes": 1, "to": "qa" },
-    "M40": { "reason": "delivery_change", "outcome": "read", "po_no": "BRN-PO-2609-052", "lines": [], "to": "pc" }
+    "M11": {
+      "reason": "delivery_change",
+      "outcome": "read",
+      "po_no": "VLX-PO-2609-0118",
+      "lines": [],
+      "to": "pc"
+    },
+    "M17": {
+      "reason": "sample_request",
+      "outcome": "read",
+      "po_no": null,
+      "quotes": 1,
+      "to": "pc"
+    },
+    "M31": {
+      "reason": "complaint",
+      "outcome": "read",
+      "po_no": "VLX-PO-2608-0102",
+      "quotes": 1,
+      "to": "qa"
+    },
+    "M40": {
+      "reason": "delivery_change",
+      "outcome": "read",
+      "po_no": "BRN-PO-2609-052",
+      "lines": [],
+      "to": "pc"
+    }
   }
 }

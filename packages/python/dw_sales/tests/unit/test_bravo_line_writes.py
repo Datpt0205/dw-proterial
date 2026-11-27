@@ -8,7 +8,7 @@ gateway is a fake that records what it was sent."""
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace, TracebackType
@@ -16,10 +16,18 @@ from typing import Any, Self
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ApproveAndResumeService, ProposedDecision
 from dw_bravo.approval_token import ApprovalTokenSigner, ApprovalTokenVerifier
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity, content_hash
+from dw_bravo.contract import (
+    CANCEL_REMARK_UNITS,
+    CancelLine,
+    LineRef,
+    SetConfirmedDate,
+    SetQuantity,
+    content_hash,
+)
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
@@ -29,6 +37,8 @@ from dw_sales.adapters.bravo_contract import BravoContract, ContractSigner
 from dw_sales.application.access import Gate
 from dw_sales.application.bravo_line_writes import (
     BRAVO_WRITE_APPROVAL,
+    CANCEL_REASON_CHARS,
+    BravoCommandsPort,
     BravoLineWrite,
     BravoLineWrites,
     BravoSo,
@@ -37,12 +47,16 @@ from dw_sales.application.bravo_line_writes import (
     BravoWriteDecisions,
     BravoWriteSettlement,
     BravoWriteStamp,
+    CancelChange,
     ConfirmedDateChange,
     GatewayAnswer,
     PreparedWrite,
     QuantityChange,
+    write_bravo_versions,
 )
 from dw_sales.application.runs import APPROVAL_PREFIX
+from dw_sales.application.stages import Stage, StageHandlers
+from dw_sales.presentation.routes import BravoWriteBody
 
 pytestmark = pytest.mark.unit
 
@@ -55,12 +69,13 @@ SO = BravoSo(
     so_id=10,
     so_no="SO2611-000161",
     lines=(
-        BravoSoLine(20, 1, "PRV-1", Decimal(1200), date(2026, 12, 1), ROWVERSION),
-        BravoSoLine(21, 2, "PRV-2", Decimal(5), None, "0x00000000000007D3"),
+        BravoSoLine(20, 1, "PRV-1", Decimal(1200), date(2026, 12, 1), ROWVERSION, ""),
+        BravoSoLine(21, 2, "PRV-2", Decimal(5), None, "0x00000000000007D3", ""),
         # PO line 3 split in Bravo: two rows.
-        BravoSoLine(22, 3, "PRV-3", Decimal(2), None, "0x00000000000007D4"),
-        BravoSoLine(23, 3, "PRV-3", Decimal(1), None, "0x00000000000007D5"),
+        BravoSoLine(22, 3, "PRV-3", Decimal(2), None, "0x00000000000007D4", ""),
+        BravoSoLine(23, 3, "PRV-3", Decimal(1), None, "0x00000000000007D5", ""),
     ),
+    target="uat",
 )
 KEY = Ed25519PrivateKey.generate()
 
@@ -134,6 +149,8 @@ class Audit:
 class Orders:
     so_no: str | None = SO.so_no
     assigned_to: uuid.UUID = PIC
+    # What the case was stamped with when it opened (ticket 61).
+    stage_versions: dict[str, str] = field(default_factory=lambda: {"write_bravo": "1.0.0"})
 
     async def get(self, case_id: uuid.UUID) -> object:
         if case_id != CASE:
@@ -146,7 +163,9 @@ class Orders:
                 case_version=VERSION,
                 status=SimpleNamespace(value="checked"),
             ),
-            origin=SimpleNamespace(assigned_to=self.assigned_to),
+            origin=SimpleNamespace(
+                assigned_to=self.assigned_to, stage_versions=self.stage_versions
+            ),
         )
 
 
@@ -263,14 +282,20 @@ def _service(world: World, bravo: Bravo | None = None) -> BravoLineWrites:
         world,  # type: ignore[arg-type]
         Gate(ScopeAuthorizationService()),
         bravo or Bravo(),
-        BravoContract(),
+        write_bravo_versions(BravoContract()),
         _Clock(),
         _Ids(),
     )
 
 
-async def _proposed(world: World, change: object | None = None, line: int = 1) -> ApprovalRequest:
-    view = await _service(world).propose(
+async def _proposed(
+    world: World,
+    change: object | None = None,
+    line: int = 1,
+    *,
+    service: BravoLineWrites | None = None,
+) -> ApprovalRequest:
+    view = await (service or _service(world)).propose(
         PIC_CONTEXT,
         CASE,
         line,
@@ -313,6 +338,105 @@ async def test_a_quantity_change_names_the_quantity_column_bravo_holds() -> None
     )
     assert request.payload["content_hash"] == content_hash(expected)
     assert (request.payload["before"], request.payload["after"]) == ("1200", "1100")
+
+
+async def test_a_cancel_is_proposed_with_its_reason_against_the_row_bravo_holds() -> None:
+    # Ticket 71: the gateway runs the cancel since the 11-25 UAT trace.
+    world = World()
+
+    request = await _proposed(world, CancelChange(field="cancel", reason="Khách hủy dòng"))
+
+    expected = CancelLine(
+        line=LineRef(so_id=10, line_id=20, line_rowversion=ROWVERSION), reason="Khách hủy dòng"
+    )
+    payload = request.payload
+    assert payload["kind"] == "so.line.cancel@1"
+    assert payload["content_hash"] == content_hash(expected)
+    assert (payload["before"], payload["after"]) == ("1200", "Hủy: Khách hủy dòng")
+
+
+@pytest.mark.parametrize("reason", ["", "   ", "\n\t "])
+def test_a_cancel_without_its_reason_is_not_a_change(reason: str) -> None:
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason=reason)
+
+
+def test_a_cancel_reason_is_proposed_as_one_spaced_line() -> None:
+    # One normalisation for the page and the assistant: the reason hashed and
+    # written into Bravo's CancelRemark is the collapsed one.
+    change = CancelChange(field="cancel", reason="  Khách   bỏ\n dòng  ")
+
+    assert change.reason == "Khách bỏ dòng"
+
+
+def test_a_cancel_reason_is_measured_after_its_spaces_are_collapsed() -> None:
+    padded = "  " + "x" * CANCEL_REASON_CHARS + "  "
+
+    assert CancelChange(field="cancel", reason=padded).reason == "x" * CANCEL_REASON_CHARS
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason="x" * (CANCEL_REASON_CHARS + 1))
+
+
+def test_a_cancel_reason_is_as_long_as_bravos_cancelremark_holds() -> None:
+    # nvarchar(192) (the 11-19 survey), which the gateway's contract holds
+    # too: two copies of one Bravo fact, held equal here.
+    assert CANCEL_REASON_CHARS == CANCEL_REMARK_UNITS == 192
+    # SQL Server counts UTF-16 units: a character outside the BMP takes two.
+    with pytest.raises(ValidationError):
+        CancelChange(field="cancel", reason="x" * (CANCEL_REASON_CHARS - 1) + "😀")
+
+
+async def test_a_cancel_with_the_longest_reason_bravo_holds_is_proposed() -> None:
+    world = World()
+    reason = "ý" * CANCEL_REASON_CHARS
+
+    request = await _proposed(world, CancelChange(field="cancel", reason=reason))
+
+    assert request.payload["after"] == "Hủy: " + reason
+    assert world.store.rows[request.id].after == "Hủy: " + reason
+
+
+def _bravo_holding_line_1(cancel_state: str) -> Bravo:
+    held = replace(SO, lines=(replace(SO.lines[0], cancel_state=cancel_state),))
+    return Bravo(orders={SO.so_no: held})
+
+
+@pytest.mark.parametrize(
+    ("cancel_state", "rule"),
+    [("Cancel", "line_cancelled_in_bravo"), ("Close", "line_state_unknown")],
+)
+@pytest.mark.parametrize(
+    "change",
+    [
+        CancelChange(field="cancel", reason="khách bỏ"),
+        QuantityChange(field="quantity", value=Decimal(5)),
+        ConfirmedDateChange(field="confirmed_date", value=date(2026, 12, 8)),
+    ],
+    ids=["cancel", "quantity", "date"],
+)
+async def test_a_line_not_open_in_bravo_is_not_proposed(
+    cancel_state: str, rule: str, change: CancelChange | QuantityChange | ConfirmedDateChange
+) -> None:
+    # No trace shows a write on a cancelled line; an "Order status" no trace
+    # shows is not read as open (ticket 71's review).
+    world = World()
+
+    with pytest.raises(ConflictError) as refused:
+        await _service(world, _bravo_holding_line_1(cancel_state)).propose(
+            PIC_CONTEXT, CASE, 1, change, case_version=VERSION
+        )
+
+    assert refused.value.details["rule"] == rule
+    assert world.approvals.requests == {} and world.store.rows == {}
+
+
+def test_the_page_body_refuses_a_blank_cancel_reason() -> None:
+    # FastAPI validates the POST body with this model: a blank reason is a 422
+    # before any approval is opened.
+    with pytest.raises(ValidationError):
+        BravoWriteBody.model_validate(
+            {"case_version": 1, "change": {"field": "cancel", "reason": "   "}}
+        )
 
 
 @pytest.mark.parametrize(
@@ -448,7 +572,7 @@ def _stamp(
 ) -> BravoWriteStamp:
     return BravoWriteStamp(
         ContractSigner(ApprovalTokenSigner(KEY, "k1")) if key else None,
-        BravoContract(),
+        write_bravo_versions(BravoContract()),
         codes or Codes(),
         bravo or Bravo(),
         _Clock(),
@@ -500,6 +624,35 @@ async def test_a_decision_that_cannot_be_signed_is_refused(
         "bravo_down": None,
     }[request.node.callspec.id]
     assert refused.value.details.get("rule") == expected
+
+
+@pytest.mark.parametrize("target", ["uat", "production"])
+async def test_the_proposal_and_its_token_carry_the_bravo_the_line_was_read_from(
+    target: str,
+) -> None:
+    # Ticket 85: stamped with the Bravo the gateway read the SO from, shown
+    # to the decider and signed into the token the gateway checks.
+    world = World()
+    read = Bravo(orders={SO.so_no: replace(SO, target=target)})  # type: ignore[arg-type]
+
+    request = await _proposed(world, service=_service(world, read))
+    stamp = await _stamp(read).stamp(request, object(), PIC_CONTEXT)
+
+    assert request.payload["target"] == target
+    assert world.store.rows[request.id].target == target
+    claims = ApprovalTokenVerifier({"k1": KEY.public_key()}).verify(
+        str(stamp["token"]), now=NOW + timedelta(minutes=1)
+    )
+    assert claims.target == target
+
+
+async def test_an_approval_opened_before_the_target_was_stamped_is_not_signed() -> None:
+    world = World()
+    request = await _proposed(world)
+    del request.payload["target"]
+
+    with pytest.raises(ConflictError):
+        await _stamp().stamp(request, object(), PIC_CONTEXT)
 
 
 async def test_a_payload_whose_command_no_longer_hashes_as_proposed_is_not_signed() -> None:
@@ -620,7 +773,7 @@ async def test_a_kind_the_gateway_does_not_run_yet_is_not_proposed() -> None:
         world,  # type: ignore[arg-type]
         Gate(ScopeAuthorizationService()),
         Bravo(),
-        _Pending(),
+        write_bravo_versions(_Pending()),
         _Clock(),
         _Ids(),
     )
@@ -634,3 +787,65 @@ async def test_a_kind_the_gateway_does_not_run_yet_is_not_proposed() -> None:
             case_version=VERSION,
         )
     assert world.approvals.requests == {}
+
+
+# -------------------------------------- the stage version a case runs on (61) --
+
+
+class _Other(BravoContract):
+    """A second command set, as a new write-Bravo version would bring."""
+
+    def prepare(self, change: object, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
+        raise AssertionError("a case pinned to 1.0.0 is prepared by 1.0.0")
+
+
+def _served(**versions: BravoCommandsPort) -> StageHandlers[BravoCommandsPort]:
+    return StageHandlers(
+        Stage.WRITE_BRAVO, {k.removeprefix("v").replace("_", "."): v for k, v in versions.items()}
+    )
+
+
+async def test_the_proposal_names_the_stage_version_the_case_runs_on() -> None:
+    request = await _proposed(World())
+    assert request.payload["stage_version"] == "1.0.0"
+
+
+async def test_a_case_keeps_its_versions_command_set_when_a_newer_one_is_served() -> None:
+    """Acceptance 1: a case opened on 1.0.0 finishes on it after 1.1.0 ships."""
+    world = World()
+    service = _service(world)
+    service = BravoLineWrites(
+        service.uow,
+        service.gate,
+        service.orders,
+        _served(v1_0_0=BravoContract(), v1_1_0=_Other()),
+        service.clock,
+        service.ids,
+    )
+    request = await _proposed(world, service=service)
+    assert request.payload["kind"] == "so.line.set_confirmed_date@1"
+
+
+async def test_a_case_pinned_to_a_version_no_longer_served_is_refused_and_opens_nothing() -> None:
+    world = World(orders_=Orders(stage_versions={"write_bravo": "0.9.0"}))
+    with pytest.raises(ConflictError) as refused:
+        await _proposed(world)
+    assert refused.value.details["rule"] == "stage_version_unavailable"
+    assert world.approvals.requests == {} and world.store.rows == {}
+
+
+async def test_a_case_with_no_write_bravo_stamp_is_refused() -> None:
+    world = World(orders_=Orders(stage_versions={}))
+    with pytest.raises(ConflictError) as refused:
+        await _proposed(world)
+    assert refused.value.details["rule"] == "stage_not_pinned"
+
+
+async def test_a_decision_on_a_stage_version_no_longer_served_is_not_signed() -> None:
+    """The hash is checked by the command set of the version the proposal
+    names; one this deployment does not serve signs nothing."""
+    request = await _proposed(World())
+    request.payload["stage_version"] = "0.9.0"
+    with pytest.raises(ConflictError) as refused:
+        await _stamp().stamp(request, object(), PIC_CONTEXT)
+    assert refused.value.details["rule"] == "stage_version_unavailable"

@@ -111,7 +111,7 @@
       "requested_date_title": "納期",
       "page_label": null,
       "total_label": "合計",
-      "thousands_separator": ",",
+      "thousands_separator": "none",
       "decimal_separator": ".",
       "date_format": "%Y-%m-%d"
     },
@@ -230,10 +230,10 @@
       "date_format": "%d/%m/%Y"
     },
     "f77f8f885ac883f3ccd59c84": {
-      "po_no_label": "QRL-PO-1007-02",
+      "po_no_label": "Purchase Order",
       "revision_label": null,
-      "po_date_label": "10/05/2026",
-      "currency_label": "USD",
+      "po_date_label": "Order Date",
+      "currency_label": "Currency",
       "line_no_title": "Line No",
       "customer_item_code_title": "Supplier Part",
       "description_title": "Item Name",
@@ -246,7 +246,7 @@
       "total_label": "Total Amount",
       "thousands_separator": " ",
       "decimal_separator": ".",
-      "date_format": "%m/%d/%Y"
+      "date_format": "%d/%m/%Y"
     }
   }
 }

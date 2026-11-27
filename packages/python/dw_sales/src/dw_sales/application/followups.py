@@ -22,9 +22,15 @@ sent and nothing is recorded, so the first tick inside them sends it.
 
 **Who is told.** ``pic``: the case's assignee, or, while nobody is assigned,
 whoever may assign it (the head's `sales.case.assign`). ``head``: the holders
-of `sales.case.assign`. Both through `ScopeHoldersPort`, the function that
-builds the access context, so who is told and who may act cannot disagree.
-Nobody to tell: nothing is recorded, and it is owed again next tick.
+of `sales.case.assign`. ``export_control`` (ticket 78): whoever may
+acknowledge the NOC/ESF hold, the holders of both its capability's scope and
+`sales.order.prepare` (`_decide` asks for both); while nobody holds both, the
+heads, told that nobody may (so a tenant that never granted the permission
+set is not left with silent holds), recorded under `STAND_IN_STAGE` so the
+person granted both later is still told of that revision. All through `ScopeHoldersPort`, the
+function that builds the access context, so who is told and who may act
+cannot disagree. Nobody to tell: nothing is recorded, and it is owed again
+next tick.
 
 **The brief.** Once per working day per workspace, at or after the
 configured local time: the head a brief of the workspace, each PIC (a holder
@@ -56,6 +62,7 @@ the follow-up, the stage and how many were told, never who or what.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
@@ -69,8 +76,9 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import lane_audit_event, system_actor
-from dw_sales.application.access import SalesScopes
+from dw_sales.application.access import EXPORT_CONTROL_SCOPES, SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.next_steps import checker_scope
 from dw_sales.application.overview_ports import BUCKETS, Bucket, FollowupPolicyPort
 from dw_sales.application.overview_service import STATUS_BUCKETS, WHOSE_TURN
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
@@ -88,7 +96,6 @@ from dw_sales.application.reminder_copy import (
 )
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
-    Audience,
     BriefSlot,
     Due,
     Followup,
@@ -109,6 +116,10 @@ SALES_FOLLOWUPS_LANE: Final = "sales_followups"
 # The brief's row in the record: its follow-up and its stage.
 BRIEF: Final = "morning_brief"
 BRIEF_STAGE: Final = "brief"
+# The heads told that nobody may acknowledge an NOC/ESF hold: recorded under
+# its own stage, so the revision stays owed to the export-control PIC and
+# whoever is granted both scopes later is still told (ticket 78 review).
+STAND_IN_STAGE: Final = "stand_in"
 _RESOURCE_CASE: Final = {CaseKind.ORDER: "sales_order_case", CaseKind.QUOTE: "sales_quote_case"}
 _LINK: Final = {CaseKind.ORDER: "/sales/orders/{}", CaseKind.QUOTE: "/sales/quotes/{}"}
 _HEADS: Final = frozenset({SalesScopes.CASE_ASSIGN.value})
@@ -189,6 +200,12 @@ def key_of(due: Due) -> FollowupKey:
     return FollowupKey(due.followup.value, due.stage.value, str(due.case.case_id), due.since)
 
 
+def stand_in_key(due: Due) -> FollowupKey:
+    """What the heads' notice standing in for the export-control PIC is
+    recorded under: ``due``'s key at `STAND_IN_STAGE`."""
+    return dataclasses.replace(key_of(due), stage=STAND_IN_STAGE)
+
+
 def source_key(key: FollowupKey, scope: SalesScope) -> str:
     """The inbox's idempotency key: the record's key, in its workspace."""
     return (
@@ -264,6 +281,12 @@ class PushResult(Protocol):
     def removed(self) -> int: ...
 
 
+class ImpliedAgreementPort(Protocol):
+    """`Confirmations.record_implied`: the silence recorded as the lane."""
+
+    async def record_implied(self, context: AccessContext, case_id: uuid.UUID) -> bool: ...
+
+
 class PushNoticePort(Protocol):
     """A push to every device ``person`` turned notifications on from in the
     workspace (`dw_platform.application.web_push.WebPushService.push`). The
@@ -290,6 +313,9 @@ class FollowupLane:
     writer: BriefWriterPort | None = None
     # None where web push is off: the inbox alone tells people (ticket 48).
     push: PushNoticePort | None = None
+    # Where DW1 records a customer's silence as agreement (ticket 82); None:
+    # it only tells the PIC, as before.
+    agreements: ImpliedAgreementPort | None = None
 
     async def tick(self, scope: SalesScope) -> FollowupTick:
         policy = await self.policies.followups(scope)
@@ -304,7 +330,8 @@ class FollowupLane:
             )
             stages = owed(policy, cases, now, turns=WHOSE_TURN)
             brief_key = None if slot is None else _brief_key(slot)
-            asked = [key_of(d) for d in stages] + ([brief_key] if brief_key else [])
+            stood_in = [stand_in_key(d) for d in stages if "export_control" in d.notify]
+            asked = [key_of(d) for d in stages] + stood_in + ([brief_key] if brief_key else [])
             done = await work.followups.already_sent(asked) if asked else frozenset()
         pending = [d for d in stages if key_of(d) not in done]
         sent: list[str] = []
@@ -315,7 +342,10 @@ class FollowupLane:
         # many (ticket 48: several within a tick's few minutes ring once).
         told: dict[uuid.UUID, list[Due]] = {}
         for due in pending:
-            delivered = await self._remind(scope, policy, copy, due, now)
+            recorded = await self._record_silence(scope, policy, due)
+            delivered = await self._remind(
+                scope, policy, copy, due, now, recorded=recorded, done=done
+            )
             if delivered is not None:
                 key, recipients = delivered
                 sent.append(key)
@@ -331,6 +361,22 @@ class FollowupLane:
 
     # ------------------------------------------------------------- stages --
 
+    async def _record_silence(self, scope: SalesScope, policy: SalesFollowups, due: Due) -> bool:
+        """The customer's silence recorded as agreement by DW1 itself, where
+        the tenant lets it (`implied_acceptance.record`, ticket 82): internal,
+        undone by one press. The domain's fences are the command's."""
+        if (
+            due.followup is not Followup.IMPLIED_ACCEPTANCE
+            or not policy.implied_acceptance.record
+            or self.agreements is None
+        ):
+            return False
+        try:
+            return await self.agreements.record_implied(lane_context(scope), due.case.case_id)
+        except Exception:
+            logger.exception("sales_followups: a silence was not recorded")
+            return False
+
     async def _remind(
         self,
         scope: SalesScope,
@@ -338,15 +384,21 @@ class FollowupLane:
         copy: ReminderCopy,
         due: Due,
         now: datetime,
+        *,
+        recorded: bool = False,
+        done: frozenset[FollowupKey] = frozenset(),
     ) -> tuple[str, list[uuid.UUID]] | None:
         """The source key and whom it told, when this tick recorded it; None
         when not delivered, or recorded already by another worker (which
-        pushes it, so a person's phone rings once)."""
-        recipients = await self._audience(scope, due.notify, due.case.assigned_to)
+        pushes it, so a person's phone rings once). ``done``: what was
+        recorded before this tick, where the heads' stand-in is looked up."""
+        recipients, stand_in = await self._audience(scope, due)
         if not recipients:
             return None
-        key = key_of(due)
-        title, body = reminder_text(copy, policy, due, now)
+        key = stand_in_key(due) if stand_in else key_of(due)
+        if key in done:
+            return None
+        title, body = reminder_text(copy, policy, due, now, recorded=recorded, stand_in=stand_in)
         try:
             await self.notifications.deliver(
                 lane_context(scope),
@@ -372,19 +424,50 @@ class FollowupLane:
         )
         return (source_key(key, scope), recipients) if recorded else None
 
-    async def _audience(
-        self, scope: SalesScope, notify: Sequence[Audience], assignee: uuid.UUID | None
-    ) -> list[uuid.UUID]:
+    async def _audience(self, scope: SalesScope, due: Due) -> tuple[list[uuid.UUID], bool]:
+        """Whom ``due`` tells, and whether the heads stand in for an
+        export-control PIC nobody is. The assignee for their own step; the
+        heads, and, where the case waits on a checker (a cross-check, a
+        quotation's approval: `checker_scope`), every holder of that
+        checker's scope but the assignee, who may not check their own case
+        (Sales ticket 78: a colleague who cross-checks was never told); the
+        export-control PIC for an NOC/ESF hold, else the heads alone (no
+        checker: they are told nobody may acknowledge it, not to check)."""
+        assignee = due.case.assigned_to
         told: list[uuid.UUID] = []
+        stand_in = False
         heads: list[uuid.UUID] | None = None
-        for audience in notify:
-            if audience == "pic" and assignee is not None:
+        for audience in due.notify:
+            if audience == "export_control":
+                found = await self._export_control(scope)
+                if not found:
+                    heads = heads if heads is not None else await self._holding(scope, _HEADS)
+                    found, stand_in = list(heads), True
+            elif audience == "pic" and assignee is not None:
                 found = [assignee]
             else:
                 heads = heads if heads is not None else await self._holding(scope, _HEADS)
-                found = heads
+                found = list(heads)
+                checker = checker_scope(due.case.kind, due.case.status)
+                if checker is not None:
+                    found += [
+                        person
+                        for person in await self._holding(scope, frozenset({checker.value}))
+                        if person != assignee
+                    ]
             told += [person for person in found if person not in told]
-        return told
+        return told, stand_in
+
+    async def _export_control(self, scope: SalesScope) -> list[uuid.UUID]:
+        """Who may acknowledge an NOC/ESF hold: the holders of every one of
+        `EXPORT_CONTROL_SCOPES`. The assignee among them is told too: no
+        separation of duties covers the acknowledgement."""
+        first, *rest = sorted(EXPORT_CONTROL_SCOPES)
+        found = await self._holding(scope, frozenset({first.value}))
+        for each in rest:
+            holding = set(await self._holding(scope, frozenset({each.value})))
+            found = [person for person in found if person in holding]
+        return found
 
     async def _holding(self, scope: SalesScope, scopes: frozenset[str]) -> list[uuid.UUID]:
         return await self.holders.holding(scope.tenant_id.value, scope.workspace_id.value, scopes)
@@ -586,14 +669,28 @@ type Template = SinceReminder | HoursReminder | DueReminder | TurnReminder
 
 
 def reminder_text(
-    copy: ReminderCopy, policy: SalesFollowups, due: Due, now: datetime
+    copy: ReminderCopy,
+    policy: SalesFollowups,
+    due: Due,
+    now: datetime,
+    *,
+    recorded: bool = False,
+    stand_in: bool = False,
 ) -> tuple[str, str]:
     """A reminder's title and body, in the tenant's words: the case's number
     and customer code, when the wait began and how long the threshold is.
     Never an amount. Which template, and every value in it, is code's; a
-    template names only its own (`reminder_copy`), so the rest go unused."""
+    template names only its own (`reminder_copy`), so the rest go unused.
+
+    ``stand_in``: the heads are told of an NOC/ESF hold because nobody may
+    acknowledge it (ticket 78), so it says that, not "acknowledge it"."""
     case = due.case
     template, hours = _template(copy.reminders, policy, due, now)
+    if recorded:
+        # The silence DW1 recorded as agreement itself (ticket 82).
+        template = copy.reminders.implied_recorded
+    if stand_in:
+        template = copy.reminders.export_control_unheld
     values: dict[str, object] = {
         "ref": _reference(case),
         "customer": case.customer_code,
@@ -637,6 +734,8 @@ def _template(
             return words.waiting_quote, policy.waiting_quote.remind.after_hours
         case Followup.WAITING_PCS_PRICE, _:
             return words.waiting_pcs_price, policy.waiting_pcs_price.remind.after_hours
+        case Followup.EXPORT_CONTROL_HOLD, _:
+            return words.export_control_hold, None
         case Followup.WAITING_CUSTOMER, _ if case.customer_asked_at is not None:
             return words.waiting_customer_change, policy.waiting_customer.remind.after_hours
         case Followup.WAITING_CUSTOMER, _ if order:
@@ -819,6 +918,7 @@ _PUSH_KIND: Final[Mapping[tuple[Followup, Stage], _PushWord]] = MappingProxyType
         (Followup.WAITING_DESIGN_CODE, Stage.REMIND): lambda w: w.waiting_design_code,
         (Followup.WAITING_QUOTE, Stage.REMIND): lambda w: w.waiting_quote,
         (Followup.WAITING_PCS_PRICE, Stage.REMIND): lambda w: w.waiting_pcs_price,
+        (Followup.EXPORT_CONTROL_HOLD, Stage.NOTIFY): lambda w: w.export_control_hold,
     }
 )
 _HEAD_TURN: Final[Mapping[CaseKind, _PushWord]] = {

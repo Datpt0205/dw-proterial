@@ -115,6 +115,7 @@ const VIEW: View = {
   ],
   versions: [version({}), WAITING, REJECTED],
   draftable: ["sales_bravo_upload"],
+  decided_by_a_second: ["sales_bravo_writes"],
 };
 
 const PLATFORM_KPI: PlatformDocument[] = [
@@ -135,10 +136,17 @@ const api = {
     json_schema: SCHEMAS[key]!,
   })),
   rulePlatformDocuments: vi.fn(async () => PLATFORM_KPI),
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat",
+    uat: true,
+    production: false,
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
 import RulesPage from "../../rules/page";
+import { TARGET_UNREAD } from "../../_components/bravo-target";
 
 const SLOW = 30_000;
 
@@ -331,6 +339,80 @@ describe("the rules page (tickets 38, 40)", () => {
       ]);
       expect(idempotency).toMatch(/^[0-9a-f-]{36}$/);
       await waitFor(() => expect(api.rules).toHaveBeenCalledTimes(2));
+    },
+    SLOW,
+  );
+
+  it(
+    "words the head's version of a key the server says a second person decides as sent for approval (ticket 85 review)",
+    async () => {
+      scopes = [...scopes, "sales.rules.approve"];
+      // The server's list, not a copy in the page: here it names KPI.
+      api.rules.mockResolvedValueOnce({
+        ...VIEW,
+        decided_by_a_second: ["sales_kpi"],
+      });
+      renderPage();
+      expect(
+        await screen.findByText(
+          /Bản bạn sửa được áp dụng ngay, trừ 1 quy tắc cần người khác duyệt/,
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", {
+          name: "Sửa quy tắc: Quy tắc kiểm tra đơn hàng",
+        }),
+      ).toBeTruthy();
+      const hours = await openKpi("Đề xuất phiên bản mới");
+      fireEvent.change(hours, { target: { value: "6" } });
+      fireEvent.blur(hours);
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      expect(
+        await screen.findByRole("button", { name: "Gửi duyệt" }),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/một người duyệt khác quyết, kể cả phiên bản/),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "shows the rules editor which Bravo is in use, and holds the switch until it is read (ticket 85 review)",
+    async () => {
+      // The tenant's IT admin: `sales.rules.propose` and no Sales case read.
+      scopes = ["sales.rules.propose"];
+      renderPage();
+      expect(
+        await screen.findByText("Bravo UAT", { selector: "span.ant-tag" }),
+      ).toBeTruthy();
+      const button = screen.getByRole("button", {
+        name: "Đề xuất đổi Bravo DW1 đọc và ghi",
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+    },
+    SLOW,
+  );
+
+  it(
+    "does not offer the switch blind when which Bravo is in use could not be read",
+    async () => {
+      api.bravoTargets.mockRejectedValueOnce(
+        new ApiError(403, {
+          code: "permission_denied",
+          message: "Thiếu quyền sales.case.read",
+          details: {},
+        }),
+      );
+      renderPage();
+      expect(
+        await screen.findByText("Bạn không có quyền xem mục này"),
+      ).toBeTruthy();
+      const button = screen.getByRole("button", {
+        name: "Đề xuất đổi Bravo DW1 đọc và ghi",
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(screen.getByText(TARGET_UNREAD)).toBeTruthy();
     },
     SLOW,
   );
@@ -541,6 +623,7 @@ describe("the rules page for a proposer who reads no price (2026-10-21)", () => 
       scopes = ["sales.rules.propose"];
       api.rules.mockResolvedValueOnce({
         draftable: [],
+        decided_by_a_second: ["sales_bravo_writes"],
         in_force: { sales_kpi: VIEW.in_force.sales_kpi! },
         layers: { sales_kpi: "tenant" },
         platform: VIEW.platform.filter((p) => p.key === "sales_kpi"),

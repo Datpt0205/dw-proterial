@@ -126,6 +126,8 @@ _SALES_TABLES = (
     "sales.step_thresholds",
     # Migration e1b1e0cadb66 (ticket 40): a proposed skill version's replay.
     "sales.skill_replays",
+    # Migration a201f3d7ad6f (ticket 67): what a step read in shadow.
+    "sales.shadow_readings",
     # Migration 711e8b760139 (ticket 41): a customer's worked pairs.
     "sales.salesorder_pairs",
     # Migration 99ae8f7eb765 (ticket 37): each customer's notation record.
@@ -135,6 +137,9 @@ _SALES_TABLES = (
     "sales.bravo_exports",
     "sales.bravo_export_files",
     "sales.order_bravo_read_backs",
+    # Migration d533225350dd (ticket 81): what the cross-check lane did per
+    # order version, and what a person then decided.
+    "sales.order_cross_check_routes",
 )
 
 
@@ -250,8 +255,20 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {"labelled_cases", "labelled_cases_default"} <= labelled
     for table in labelled:
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+    # A cross-check route is decided once and never removed (ticket 81).
+    assert {verb for tbl, verb in held if tbl == "order_cross_check_routes"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+    }
     # A proposed skill version's replay (ticket 40): a fact about one version.
     assert {verb for tbl, verb in held if tbl == "skill_replays"} == {"SELECT", "INSERT"}
+    # A shadow reading is taken (deleted) when labelled, never rewritten.
+    assert {verb for tbl, verb in held if tbl == "shadow_readings"} == {
+        "SELECT",
+        "INSERT",
+        "DELETE",
+    }
     # A customer's worked pair (ticket 41): a PO and the file the PIC made,
     # never changed; withdrawn by a person or dropped past the tenant's term
     # (migration 985e4fa0cd4f).

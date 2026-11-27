@@ -123,6 +123,8 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
         ModelStep.SKILL_REPLY_DRAFTS,
         # And the document forms (ticket 42 family 3).
         ModelStep.SKILL_DOCUMENT_FORMS,
+        # And DW1 reading PC's mail itself (ticket 77): no test version says.
+        ModelStep.PC_REPLY,
     }
     assert all(steps_on.model_assist.on(step) for step in ModelStep if step not in off)
     assert not any(steps_on.model_assist.on(step) for step in off)
@@ -148,8 +150,13 @@ def test_the_platform_confirms_only_a_new_layouts_first_po() -> None:
     repo = Path(__file__).resolve().parents[5]
     rules = load_sales_policies(repo / "configs/policies", repo / "configs/copy").order_rules
     assert (rules.version, rules.layout_onboarding.uncertain_first_pos) == (
-        "sales_order_rules@1.15.0",
+        "sales_order_rules@1.18.0",
         1,
     )
     # No customer agrees by silence until Proterial names their days (ticket 28).
     assert rules.implied_acceptance == {}
+    # Every value of a password file waits for a person until Đạt says
+    # otherwise (ticket 80), and a version written before the key reads so.
+    assert rules.password_file == "every_value"
+    older = load_order_rules(repo / "configs/policies/sales_order_rules@1.16.0.yaml")
+    assert older.password_file == "every_value"

@@ -93,3 +93,25 @@ new version of this note.
   the processed Excel. Which Excel Proterial calls "processed" (B11) is
   theirs to confirm; the paste sheet carries an internal sheet naming the
   case version and template.
+
+## Amendment 2026-11-26: DW1 records the silence itself, undone by one press (ticket 82)
+
+Decided by recommendation on Đạt's instruction of 2026-11-26 ("làm theo
+khuyến nghị"), under dw_sales ADR 0015's risk tiers: recording that a
+customer's term of silence ran out is internal and reversible, so DW1 does
+it and a person may take it back.
+
+- The `sales_followups` lane, where the tenant's
+  `implied_acceptance.record` is on (the platform's default), records
+  `agreed("implied")` itself once the term stamped on the confirmation has run
+  out: as its own actor (`system_actor(sales_followups)`, a DW1 worker event),
+  through the same domain fences as a person's press (a term stamped, run
+  out, nothing in the update loop). It then tells the PIC so
+  (`sales_reminders.implied_recorded`).
+- **"Hoàn tác"** (`POST /orders/{id}/agreement/undo`,
+  `Confirmations.implied_undone`, `sales.order.prepare`): `confirmed →
+  confirmation_sent`, the agreement cleared, whoever recorded it. Only an
+  agreement by silence: a customer's words are a reply, never undone here.
+- A lane's move labels no shadow reading (`label_reply_move` already reads
+  a context with no scope as no person's decision).
+- With `record` off, the lane only tells, as before: a person records it.

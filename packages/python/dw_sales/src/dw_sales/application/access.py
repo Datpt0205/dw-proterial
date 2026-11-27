@@ -40,6 +40,9 @@ class SalesScopes(StrEnum):
     ORDER_RESEND_CROSS_CHECK = "sales.order.resend_cross_check"
     QUOTE_PREPARE = "sales.quote.prepare"
     QUOTE_APPROVE = "sales.quote.approve"
+    # WIV-03-023 section 4's second level: a Manager approves a quotation that
+    # comes with an order, after the check above (ticket 39).
+    QUOTE_MANAGER_APPROVE = "sales.quote.manager_approve"
     COMPLIANCE_ACK = "sales.compliance.ack"
     WORKER_PAUSE = "sales.worker.pause"
     WORKER_RESUME = "sales.worker.resume"
@@ -163,6 +166,16 @@ _CAPABILITIES: Final[Mapping[Capability, SalesScopes]] = MappingProxyType(
         Capability.ACKNOWLEDGE_EXPORT_CONTROL: SalesScopes.COMPLIANCE_ACK,
         Capability.RESEND_CROSS_CHECK: SalesScopes.ORDER_RESEND_CROSS_CHECK,
     }
+)
+
+
+# Who the export-control PIC is (ticket 78): every scope acknowledging an
+# NOC/ESF hold asks of one person, the capability's (the case checks it, read
+# from the table above) and `sales.order.prepare` (`orders_service._decide`
+# asks it of every decision on a finding). Who is told of a hold and who sees
+# the held order read this, so neither can name someone the decision refuses.
+EXPORT_CONTROL_SCOPES: Final = frozenset(
+    {_CAPABILITIES[Capability.ACKNOWLEDGE_EXPORT_CONTROL], SalesScopes.ORDER_PREPARE}
 )
 
 

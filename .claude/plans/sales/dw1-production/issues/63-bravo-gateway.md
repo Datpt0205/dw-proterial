@@ -180,3 +180,19 @@ component vs an EOL OpenSSL); the live `command_right` answers "unknown"
 existing SO's save is refused until traced; `Expire` (tinyint) read as
 inactive when set, `LockDate` not read as an account lock; with several
 active layouts for a screen the gateway refuses rather than pick one.
+
+**2026-11-26, from `02-trace-3.csv` (ticket 52's comment has the detail).**
+Enough to code, still off until UAT: `so.line.cancel` (traced: the whole
+cancel is one UPDATE per line, the 0s sent by the client) and `so.create`
+(traced twice; a new line's `QuantityBox`/`Length` come from the item lookup
+bound in grid layout 8213, then `QuantityBox = 1` when `CartonSize='-'`).
+`so.line.split`'s statements are known from one mixed save; its switch waits
+on a clean split of a cable item. Not enough: `so.line.set_price` (not
+traced); the command right (the client checks it from data loaded at login,
+not by a call at save; `B00Permission`'s columns are known, the combination of
+user, role and `NoInherit` is not). New gap: every client save ends with
+`usp_B30BizDocProcess_CreateProcess`; the gateway sends no such call and its
+write login has no EXECUTE, so either the gateway calls it after the write
+(a grant and an ADR 0027 amendment: a Bravo procedure the gateway executes) or
+a person must hear why Bravo's process view lags a DW write. Decision owed by
+Đạt.

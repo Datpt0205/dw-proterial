@@ -117,6 +117,19 @@ class AssistantWords(BaseModel):
     write_no_so: str = _words()
     write_orders_only: str = _words()
     write_done: str = _words("field", "line")
+    # A line's cancel (ticket 71): said back with its reason, then proposed;
+    # asked for its reason when it has none or one Bravo's column cannot hold.
+    write_cancel_confirm: str = _words("so", "line", "reason")
+    write_which_reason: str = _words("line")
+    write_reason_too_long: str = _words("limit")
+    write_cancel_done: str = _words("line")
+    # The case given to a person named in its conversation (ticket 79): said
+    # back for the head to confirm, then given through "Giao lại".
+    assign_confirm: str = _words("case", "person")
+    assign_which: str = _words("people")
+    assign_nobody: str = _words()
+    assign_not_yours: str = _words()
+    assign_done: str = _words("case", "person")
     # What the chat shows while a turn is worked on.
     step_read: str = _words(max_length=60)
     step_look: str = _words(max_length=60)

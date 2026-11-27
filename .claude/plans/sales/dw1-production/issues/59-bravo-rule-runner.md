@@ -145,3 +145,55 @@ configuration as it changes.
 
 Measured facts and file locations: `docs/proterial/bravo/BRAVO-NOI-BO.md`
 (gitignored).
+
+**2026-11-25, script 03c read (production).** The shared templates are in
+hand (decoded beside the layouts, local only). `BizDocEditor` holds menus
+and three command guards only: Edit needs `ISNULL(IsActive,1)=1`; New,
+NewAsCopy and Edit need `BRANCH('IsGroup')=0`; Edit and the saves need
+`BranchCode=BRANCH()`. `BizDocVoucher` adds Delete, Recall and Import guards
+on the branch and `Lock`. Neither defines the 6 validators with no
+`ClassName` nor a rule for a new line's `ConvertRate9` or `QuantityBox`:
+those are the client program's. The schema gives the columns' defaults
+(`DF_B30BizDocDetail_ConvertRate9` 1, `DF_B30BizDocDetail_QuantityBox` 0) and
+a `ufn_B30BizDoc_Default_QuantityBox(BasePriceCode, PackingType)` no object
+in the schema calls. Next: the runner applies the template's guards (so a
+plan is no longer provisional for want of the template), with `BRANCH()`
+read from the session; the 6 validators stay undecided until a UAT save
+shows their kind.
+
+**2026-11-25, the 11-20 trace's two SO line INSERTs read for the new-line
+columns** (local only): `ConvertRate9` 1.0 on both (the column's default, so
+settled), `QuantityBox` 1 on both, where the column's default is 0: the
+client sets it by a rule no layout holds (perhaps
+`ufn_B30BizDoc_Default_QuantityBox` by base price and packing). Two samples
+do not make a rule: a split or a create stays refused until Proterial or the
+vendor says how `QuantityBox` is set, or a traced split shows it on another
+item. The same trace holds one YCBG (`B30BizDocDetailRQ`) INSERT: a YCBG
+creation could be a write kind (none is defined; DW1's writes are the SO's).
+
+## Done (2026-11-25, the shared template applied)
+
+- `read_template` reads a shared template's `CommandValidators` as guards
+  (commands, condition, message) and refuses a template that sets or checks
+  anything else (an event, a rule, a child table), whole; `with_template`
+  completes a layout only with the template it names.
+- `RuleRunner.save(doc, commands=...)` checks each guard on the window's
+  commands (`("Edit", "Save")` for a stored document, `("New", "Save")` for
+  a new one): not true blocks, undecided blocks. `BRANCH('<column>')` reads
+  the session's `branch_info`.
+- The gateway reads the template from `B00Layout` (`IsTemplate > 0`) with the
+  screen's layout and the branch from `B00Branch`; a template absent or
+  unreadable leaves the plan provisional (never a write); the template rides
+  on the screen's `command` component, so a change to it pauses the writes
+  (ticket 65). The pipeline saves a stored document with `("Edit", "Save")`.
+- Script 08 (local) grants the read login `B00Branch (BranchCode, IsGroup,
+  IsActive)`.
+- Tests: unit 12 (template) + every dw_bravo test with the real layouts and
+  the 11-20 trace (Proterial's `BizDocEditor` reads as its three guards and
+  completes the SO screen); gateway SQL Server integration 19, two new (the
+  guards hold at a write and a group branch is refused; a template not
+  found stays provisional). Mutation 6/6 red.
+
+Left: the 6 validators with no `ClassName` and a new line's `QuantityBox`
+(the client program's, ticket 68's UAT session).
+

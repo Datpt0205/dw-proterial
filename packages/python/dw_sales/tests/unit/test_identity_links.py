@@ -193,7 +193,7 @@ def _service(
         told,
         ScopeAuthorizationService(),
         _Clock(),
-        _Ids(),  # type: ignore[arg-type]
+        _Ids(),
     )
     return service, store, told
 

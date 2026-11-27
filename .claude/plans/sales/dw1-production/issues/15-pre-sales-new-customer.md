@@ -1,7 +1,7 @@
 # 15 — Pre-sales before the RFQ: a new customer from approach to a Bravo code
 
-Status: needs-triage
-Blocked by: Đạt's call on scope (outside WIV-03-012 and WIV-03-023); Proterial's forms (RFQ form, new-customer form, company profile, catalogue)
+Status: wontfix in DW1 (2026-11-23): a change request if Proterial wants it
+Blocked by: none (decided: outside DW1)
 Category: enhancement
 
 ## Why
@@ -43,3 +43,9 @@ Bravo.
 - Whether this is in the contract's DW01 scope or a change request.
 
 ## Comments
+
+## Decided (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+Outside DW1: pre-sales is in neither WIV-03-012 nor WIV-03-023, and none
+of Proterial's forms for it are in hand. If Proterial asks for it, it is a
+change request priced on its own; the shape above is kept for that.

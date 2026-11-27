@@ -54,6 +54,7 @@ MODEL_STEPS = [
     "sales_assistant@1.0.0",
     "sales_salesorder_rules@1.0.0",
     "sales_salesorder_skill@1.0.0",
+    "sales_salesorder_skill_draft@1.0.0",
     "sales_change_request@1.0.0",
     "sales_thread_agent@1.0.0",
     "sales_skill_intents@1.0.0",
@@ -65,7 +66,7 @@ MODEL_STEPS = [
     "sales_handoff_kinds@1.0.0",
     "sales_reply_kinds@1.0.0",
     "sales_internal_change@1.0.0",
-    "sales_case_chat@1.2.0",
+    "sales_case_chat@1.3.0",
     "sales_po_body_examples@1.0.0",
 ]
 REASON = "the live model gave no usable answer"

@@ -75,6 +75,7 @@ from dw_sales.domain.change_requests import (
     ChangeRequestState,
     ReadBy,
 )
+from dw_sales.domain.cross_check_on_match import OnMatchException
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
@@ -82,6 +83,7 @@ from dw_sales.domain.followups import SalesFollowups, due_soon
 from dw_sales.domain.handoffs import Handoff, HandoffTeam
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
+from dw_sales.domain.order_checks import PasswordFileValues
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     AMOUNT_FIELDS,
@@ -617,6 +619,31 @@ class PcRequestStateView(BaseModel):
     lines: list[int]
     by: uuid.UUID
     at: datetime
+
+
+class PcReplyDateView(BaseModel):
+    """One date DW1 read from PC's mail for a delivery of a line (ticket 77),
+    the words it rests on and the mail it was read from: a proposal, never
+    a recorded value."""
+
+    model_config = _VIEW
+
+    line_no: int
+    delivery: int
+    date: date
+    quote: str
+    message_id: str
+    received_at: datetime
+
+
+class PcReplyView(BaseModel):
+    """PC's mail read by DW1 while the order waits on PC (ticket 77)."""
+
+    model_config = _VIEW
+
+    dates: list[PcReplyDateView]
+    read_at: datetime
+    prompt_ref: str
 
 
 class DesignRequestStateView(BaseModel):
@@ -1201,9 +1228,21 @@ class OrderCaseView(BaseModel):
     # How the bytes the PO was read from were made from the attachment (ticket
     # 27): a converted copy, or an OCR reading; None: read as it was sent.
     derivation: Derivation | None = None
+    # Read from a file opened with a password its mail carries (ticket 17):
+    # every value waits for a person, or, under rules that say so (ticket 80),
+    # only a value whose check failed. None: not opened with a password.
+    password_file: PasswordFileValues | None = None
     catalog_as_of: datetime | None
     release_manifest_ref: str | None
     cross_check_required: bool | None
+    # Whether Bravo's matching read-back may pass the cross-check (ticket 81),
+    # as stamped; None reads as off.
+    cross_check_on_match: bool | None = None
+    # Why DW did not pass this version's cross-check on Bravo's read-back
+    # (ticket 81): what the cross-checker looks at. None: not read at this
+    # version, or nothing found; an order that only the measure or the audit
+    # sample left to a person is not told so (ADR 0015's sample is unannounced).
+    cross_check_on_match_exceptions: list[OnMatchException] | None = None
     export_control_mode: str | None
     duplicate_of_case: uuid.UUID | None
     duplicate_of_so: str | None
@@ -1215,6 +1254,9 @@ class OrderCaseView(BaseModel):
     bravo_recorded_at: datetime | None
     bravo_entry_compared: bool
     cross_checked_by: uuid.UUID | None
+    # The gateway answer a cross-check DW passed rests on (ticket 81); None:
+    # a person cross-checked it, or nobody yet.
+    cross_checked_on_read_back: str | None = None
     cross_checked_at: datetime | None
     returned_reason: str | None
     returned_by: uuid.UUID | None
@@ -1253,6 +1295,8 @@ class OrderCaseView(BaseModel):
     change_requests: list[ChangeRequestView] = []
     # Sales asked PC for delivery dates and waits on the answer (ticket 07).
     pc_request: PcRequestStateView | None = None
+    # The dates DW1 read from PC's mail, proposed per line (ticket 77).
+    pc_reply: PcReplyView | None = None
     # Sales asked Design for a new PRV code and waits, per line (ticket 06).
     design_requests: list[DesignRequestStateView] = []
     # A customer's change on the order once it is in Bravo (ticket 29).
@@ -1268,6 +1312,10 @@ class OrderCaseView(BaseModel):
     # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
     # None for anyone else, since it tells how colleagues read the case.
     unopened_values: list[UnopenedValue] | None = None
+    # The caller sees this order only because its NOC/ESF hold waits on them
+    # (ticket 78, `visibility.sees_case`): they read it and decide the hold,
+    # and no other step on it is theirs. The page offers no other control.
+    export_hold_only: bool = False
 
 
 class ThreadMessageView(BaseModel):
@@ -1521,6 +1569,14 @@ def _seen_anchors(
     return {field: a for field, a in anchors if prices.amounts or field not in AMOUNT_FIELDS}
 
 
+def _password_file(document: PoDocument) -> PasswordFileValues | None:
+    """How the values of a file opened with a password wait for a person
+    (`OrderView.password_file`); None for a file opened without one."""
+    if not document.opened_with_password:
+        return None
+    return "failed_checks_only" if document.password_values_as_read else "every_value"
+
+
 def _legacy_anchor(document: PoDocument, prices: PriceView) -> SourceAnchor | None:
     """Where the first legacy text the viewer may see is: an anchor can quote
     the printed words, so a price typed in a legacy font is passed over for a
@@ -1566,6 +1622,8 @@ def order_case(
     change_requests: Sequence[ChangeRequest] = (),
     confirmation_copy: InboundMessage | None = None,
     quote_links: Sequence[QuoteLinkView] = (),
+    export_hold_only: bool = False,
+    on_match_exceptions: Sequence[OnMatchException] = (),
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1628,9 +1686,12 @@ def order_case(
         rules_version=case.rules_version,
         parser_version=document.parser_version,
         derivation=document.derivation,
+        password_file=_password_file(document),
         catalog_as_of=case.catalog_as_of,
         release_manifest_ref=release_manifest_ref,
         cross_check_required=case.cross_check_required,
+        cross_check_on_match=case.cross_check_on_match,
+        cross_check_on_match_exceptions=list(on_match_exceptions) or None,
         export_control_mode=case.export_control_mode,
         duplicate_of_case=case.duplicate_of_case,
         duplicate_of_so=case.duplicate_of_so,
@@ -1642,6 +1703,7 @@ def order_case(
         bravo_recorded_at=case.bravo_recorded_at,
         bravo_entry_compared=case.bravo_entry_compared,
         cross_checked_by=case.cross_checked_by,
+        cross_checked_on_read_back=case.cross_checked_on_read_back,
         cross_checked_at=case.cross_checked_at,
         returned_reason=case.returned_reason,
         returned_by=case.returned_by,
@@ -1688,6 +1750,15 @@ def order_case(
             if case.pc_request
             else None
         ),
+        pc_reply=(
+            PcReplyView(
+                dates=[PcReplyDateView.model_validate(d.model_dump()) for d in case.pc_reply.dates],
+                read_at=case.pc_reply.read_at,
+                prompt_ref=case.pc_reply.prompt_ref,
+            )
+            if case.pc_reply
+            else None
+        ),
         design_requests=[
             DesignRequestStateView.model_validate(r.model_dump()) for r in case.design_requests
         ],
@@ -1699,6 +1770,7 @@ def order_case(
             if cross_checker
             else None
         ),
+        export_hold_only=export_hold_only,
     )
 
 

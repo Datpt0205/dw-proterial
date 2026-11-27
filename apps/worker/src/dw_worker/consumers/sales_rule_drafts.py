@@ -32,6 +32,7 @@ from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rule_drafts import Swept
 from dw_worker.consumers.outbox import EventHandler, UndeliverableEventError
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 __all__ = [
     "INTERVAL_SECONDS",
@@ -85,6 +86,7 @@ class RuleDraftSweepPort(Protocol):
 
 def build_rule_draft_sweep_consumer(sweep: RuleDraftSweepPort) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await sweep.due():
             try:
                 swept = await sweep.sweep(scope)
@@ -92,6 +94,7 @@ def build_rule_draft_sweep_consumer(sweep: RuleDraftSweepPort) -> Callable[[], A
                 # Broad on purpose, like the loop's own: the next workspace
                 # is still swept.
                 logger.exception("sales_rule_drafts: the sweep failed in one workspace")
+                failed += 1
                 continue
             if swept.expired or swept.pruned:
                 logger.info(
@@ -99,5 +102,6 @@ def build_rule_draft_sweep_consumer(sweep: RuleDraftSweepPort) -> Callable[[], A
                     swept.expired,
                     swept.pruned,
                 )
+        raise_if_failed("sales_rule_drafts", failed)
 
     return consume

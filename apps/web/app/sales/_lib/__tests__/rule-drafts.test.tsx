@@ -167,6 +167,7 @@ const VIEW: View = {
   ],
   versions: [],
   draftable: ["sales_bravo_upload"],
+  decided_by_a_second: ["sales_bravo_writes"],
 };
 
 const PLATFORM: PlatformDocument[] = [
@@ -192,6 +193,13 @@ const api = {
     async (...args: unknown[]) => (void args, WORDS_QUEUED),
   ),
   ruleDraft: vi.fn(async (...args: unknown[]) => (void args, READY)),
+  // The rules page reads which Bravo DW1 uses (ticket 85).
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat" as const,
+    uat: true,
+    production: false,
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 

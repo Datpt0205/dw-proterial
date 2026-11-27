@@ -71,7 +71,10 @@ from dw_sales.domain.dispositions import (
     RoutingReason,
 )
 from dw_sales.domain.labelled_cases import triage_label
+from dw_sales.domain.message_intent import IntentKind
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.reply_intent import CaseReply
+from dw_sales.domain.shadow import item_key, shadow_label
 from dw_sales.domain.triage import CardVerdict, TriageCard, TriageStep
 
 _RESOURCE = "sales_message"
@@ -99,6 +102,10 @@ class HandledRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     note: str | None = Field(default=None, max_length=HANDLED_NOTE_MAX)
+    # What the mail was, in the person's word, one optional click (ticket
+    # 67): it labels what the model read of it in shadow. Never a route:
+    # the mail's disposition stays as it is.
+    kind: IntentKind | None = None
 
 
 class HandledView(BaseModel):
@@ -143,10 +150,16 @@ class RoutedMailService:
     catalog: SalesCatalogPort
 
     async def handle(
-        self, context: AccessContext, message_id: str, note: str | None
+        self,
+        context: AccessContext,
+        message_id: str,
+        note: str | None,
+        kind: IntentKind | None = None,
     ) -> HandledView:
         """The message marked handled by the caller, now. Marking one already
-        handled keeps the first mark: a second press changes nothing."""
+        handled keeps the first mark: a second press changes nothing. The
+        kind the caller says it was labels what `message_intent` read of it
+        in shadow (ticket 67), in the same transaction."""
         text = (note or "").strip() or None
         async with self.uow(sales_scope(context)) as work:
             logged = await self._routed(context, work, message_id)
@@ -154,8 +167,39 @@ class RoutedMailService:
                 return _view(message_id, logged)
             mark = MessageHandled(by=context.principal_id, at=self.clock.now(), note=text)
             await self._write(context, work, message_id, mark, "sales.message.handled")
+            if kind is not None:
+                await self._label_kind(context, work, message_id, kind, mark.at)
             await work.commit()
         return _view(message_id, mark)
+
+    async def _label_kind(
+        self,
+        context: AccessContext,
+        work: SalesUnitOfWork,
+        message_id: str,
+        kind: IntentKind,
+        at: datetime,
+    ) -> None:
+        step = ModelStep.MESSAGE_INTENT
+        reading = await work.shadow_readings.take(step, item_key(message_id, None, None, step))
+        if reading is None:
+            return
+        logged = await work.messages.logged(message_id)
+        customer = None if logged is None else logged.disposition.customer_code
+        await work.labelled_cases.append(
+            [
+                shadow_label(
+                    reading,
+                    kind,
+                    lane=CaseKind.ORDER,
+                    case_id=None,
+                    customer_code=customer,
+                    at=at,
+                    by=context.principal_id,
+                    new_id=self.ids.new_uuid,
+                )
+            ]
+        )
 
     async def reopen(self, context: AccessContext, message_id: str) -> HandledView:
         """The message open again, back on its owner's Việc cần làm."""

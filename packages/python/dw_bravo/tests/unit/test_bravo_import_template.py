@@ -32,6 +32,13 @@ def test_each_field_reads_its_column_and_the_lines_join_on_their_key() -> None:
     assert template.columns_read() == {"A", "B", "G", "S", "AA"}
 
 
+def test_a_template_declaring_a_doctype_is_refused_before_it_is_parsed() -> None:
+    """No Bravo template declares one; an entity in it is never expanded."""
+    bomb = '<!DOCTYPE BizDoc [<!ENTITY a "aaaaaaaaaa">]>' + _TEMPLATE
+    with pytest.raises(UndecidableError, match="DOCTYPE"):
+        read_import_template(bomb)
+
+
 @pytest.mark.parametrize(
     "xml",
     [

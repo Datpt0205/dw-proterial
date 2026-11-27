@@ -174,6 +174,7 @@ class SqlReadBacks(_Scoped):
             "file_sha256": read_back.file_sha256,
             "read_by": read_back.read_by,
             "read_at": read_back.read_at,
+            "source": read_back.source,
         }
         statement = pg_insert(_R).values(
             **scope_values(self.scope), case_id=read_back.case_id, **values
@@ -208,4 +209,5 @@ class SqlReadBacks(_Scoped):
             file_sha256=row["file_sha256"],
             read_by=row["read_by"],
             read_at=row["read_at"],
+            source=row["source"],
         )

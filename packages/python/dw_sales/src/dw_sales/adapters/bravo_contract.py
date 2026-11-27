@@ -20,6 +20,8 @@ from pydantic import TypeAdapter, ValidationError
 from dw_bravo.approval_token import ApprovalTokenSigner
 from dw_bravo.contract import (
     WRITE_KINDS,
+    BravoTarget,
+    CancelLine,
     ContractError,
     LineRef,
     SetConfirmedDate,
@@ -30,11 +32,12 @@ from dw_bravo.contract import (
 )
 from dw_kernel.errors import ConflictError
 from dw_sales.application.bravo_line_writes import (
+    AnyChange,
     BravoSo,
     BravoSoLine,
+    CancelChange,
     ConfirmedDateChange,
     PreparedWrite,
-    QuantityChange,
 )
 
 
@@ -59,13 +62,13 @@ def command_of(kind: str, content: dict[str, Any]) -> WriteCommand:
 class BravoContract:
     """`BravoCommandsPort`."""
 
-    def prepare(
-        self, change: ConfirmedDateChange | QuantityChange, so: BravoSo, line: BravoSoLine
-    ) -> PreparedWrite:
+    def prepare(self, change: AnyChange, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
         ref = LineRef(so_id=so.so_id, line_id=line.line_id, line_rowversion=line.rowversion)
         command: WriteCommand
         if isinstance(change, ConfirmedDateChange):
             command = SetConfirmedDate(line=ref, confirmed_date=change.value)
+        elif isinstance(change, CancelChange):
+            command = CancelLine(line=ref, reason=change.reason)
         else:
             command = SetQuantity(line=ref, quantity=change.value)
         kind = _key(command)
@@ -92,6 +95,7 @@ class ContractSigner:
         content: dict[str, Any],
         bravo_user_id: int,
         employee_code: str,
+        target: BravoTarget,
         now: datetime,
     ) -> str:
         return self.signer.sign(
@@ -101,5 +105,6 @@ class ContractSigner:
             command=command_of(kind, content),
             bravo_user_id=bravo_user_id,
             employee_code=employee_code,
+            target=target,
             now=now,
         )

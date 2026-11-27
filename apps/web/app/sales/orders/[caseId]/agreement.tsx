@@ -157,6 +157,28 @@ function AgreementCard({
                 {name(agreed.by)} ghi lúc {formatDateTime(agreed.at)}
               </Typography.Text>
               {agreed.message_id ? <MailLink id={agreed.message_id} /> : null}
+              {order.status === "confirmed" && agreed.how === "implied" ? (
+                <GuardedButton
+                  reason={viewer.hasScope(PREPARE) ? null : NO_SCOPE}
+                  loading={pending === "agreement/undo"}
+                  onClick={() =>
+                    confirmStep(
+                      "agreement/undo",
+                      "Hoàn tác đồng ý ngầm",
+                      "Đơn quay lại chờ khách trả lời xác nhận, như khi vừa gửi.",
+                      (key) =>
+                        salesApi().undoImpliedAgreement(
+                          order.case_id,
+                          version,
+                          key,
+                        ),
+                      "Đã hoàn tác: đơn chờ khách trả lời",
+                    )
+                  }
+                >
+                  Hoàn tác
+                </GuardedButton>
+              ) : null}
             </>
           ) : (
             <>
@@ -168,7 +190,7 @@ function AgreementCard({
           )}
           <InfoTip label="Đồng ý ngầm">
             {sent.term && sent.implied_from
-              ? `Khách này im lặng ${termText(sent.term)} được coi là đồng ý: từ ${formatDateTime(sent.implied_from)}. DW1 báo bạn khi đến hạn; chỉ người ghi, DW1 không tự ghi.`
+              ? `Khách này im lặng ${termText(sent.term)} được coi là đồng ý: từ ${formatDateTime(sent.implied_from)}. Đến hạn, DW1 tự ghi đồng ý ngầm (nếu quy tắc nhắc việc bật) và báo bạn; bạn hoàn tác được.`
               : "Khách này không có số ngày im lặng được coi là đồng ý (quy tắc kiểm tra PO): chỉ ghi khi khách trả lời."}
             {sent.message_id ? ` Thời điểm gửi lấy từ thư Sales đã gửi.` : ""}
           </InfoTip>

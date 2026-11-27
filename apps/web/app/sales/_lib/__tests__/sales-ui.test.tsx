@@ -43,6 +43,7 @@ import {
 import {
   MAKER_CHECKER,
   NO_CROSS_CHECK_REQUEST,
+  onHeldOrder,
   orderOffers,
   STALLED_CROSS_CHECK,
 } from "../order-actions";
@@ -477,5 +478,48 @@ describe("per-finding decisions", () => {
     expect(
       screen.getByText("Chỉ PIC kiểm soát xuất khẩu xác nhận cờ này."),
     ).toBeTruthy();
+  });
+
+  it("refuses NOC/ESF to the acknowledging set without the PIC role, as the server does", () => {
+    // Ticket 78 review: `_decide` asks `sales.order.prepare` of every
+    // decision, so the set alone is never offered a control it is refused.
+    const viewer = as(DIEU, ["sales.case.read", "sales.compliance.ack"]);
+    ui(
+      <FindingsPanel
+        order={twoOpen}
+        viewer={viewer}
+        onChanged={() => {}}
+        onOpenSource={() => {}}
+        onPickCode={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Cần thêm vai Sales phụ trách (PIC) để xác nhận cờ này.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("on an order seen through its hold alone, offers the hold and no other decision", () => {
+    // Ticket 78 review: the server refuses every other step on someone
+    // else's order, so the page draws them refused too.
+    const viewer = onHeldOrder(as(AN, [...PIC, "sales.compliance.ack"]));
+    ui(
+      <FindingsPanel
+        order={twoOpen}
+        viewer={viewer}
+        onChanged={() => {}}
+        onOpenSource={() => {}}
+        onPickCode={() => {}}
+      />,
+    );
+    expect(
+      screen.getAllByRole("radiogroup", { name: "Quyết định cho cờ này" }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByText("Chỉ PIC kiểm soát xuất khẩu xác nhận cờ này."),
+    ).toBeNull();
+    expect(viewer.hasScope("sales.case.read")).toBe(true);
+    expect(viewer.hasScope("sales.order.prepare")).toBe(false);
   });
 });

@@ -389,10 +389,14 @@ def test_the_kinds_are_the_ones_the_table_admits() -> None:
     # Ticket 56's Bravo write, admitted by `b5c316f405cd`.
     write = re.search(r"_NEW = \(([^)]*)\)", next(versions.glob("b5c316f405cd_*.py")).read_text())
     assert write is not None
+    # Ticket 79's case given in its conversation, admitted by `1bf300e276b7`.
+    give = re.search(r"_NEW = \(([^)]*)\)", next(versions.glob("1bf300e276b7_*.py")).read_text())
+    assert give is not None
     kinds = set(re.findall(r"'([a-z_]+)'", admitted.group(1)))
     kinds |= set(re.findall(r'"([a-z_]+)"', steps.group(1)))
     kinds |= set(re.findall(r'"([a-z_]+)"', decide.group(1)))
     kinds |= set(re.findall(r'"([a-z_]+)"', write.group(1)))
+    kinds |= set(re.findall(r'"([a-z_]+)"', give.group(1)))
     assert kinds == {k.value for k in QuestionKind}
 
 

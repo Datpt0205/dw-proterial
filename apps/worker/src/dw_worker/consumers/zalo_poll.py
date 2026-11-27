@@ -21,6 +21,11 @@ composition root, each with a context built from that person's own membership
 (ADR 0005-zalo-bot-is-the-first-chat-channel condition 2). Nothing here reads a context, a scope or
 a tenant out of an update. Because ``getUpdates`` acknowledges on read, an update that fails
 is not fetched again: the router records it as failed and tells the person.
+
+What the router cannot record (it raised past it: the database went away, the
+link store failed) is only logged, so the lane counts those and raises after
+the batch. Swallowed, a tick whose every update failed would read as clean and
+`DwLaneStale` could not fire (Sales ticket 84).
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from dw_connectors.ports import ChatSenderPort
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.zalo_poll")
 
@@ -51,6 +57,7 @@ def build_zalo_poll_consumer(
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
         updates = await bot.get_updates(offset=0)
+        failed = 0
         for update in updates:
             try:
                 await inbound.handle(update)
@@ -60,5 +67,7 @@ def build_zalo_poll_consumer(
                 # already, so the user simply sends it again. Logged without
                 # the update: it carries a chat id and the user's text.
                 logger.exception("zalo poll: failed to handle an update")
+                failed += 1
+        raise_if_failed("zalo_link_poll", failed, "update")
 
     return consume

@@ -18,6 +18,37 @@ type Finding = SalesSchemas["OrderFindingView"];
 export interface Viewer {
   principalId: string | null;
   hasScope: (scope: string) => boolean;
+  /**
+   * May acknowledge an NOC/ESF hold, where it was settled before the scopes
+   * were narrowed (`onHeldOrder`); absent, read from the scopes.
+   */
+  exportControl?: boolean;
+}
+
+/**
+ * May acknowledge an NOC/ESF hold: both scopes the server asks of one person
+ * (`access.EXPORT_CONTROL_SCOPES`), the "PIC kiểm soát xuất khẩu" set's and
+ * `sales.order.prepare`. The set alone is refused (ticket 78 review).
+ */
+export function mayAcknowledgeExport(viewer: Viewer): boolean {
+  return (
+    viewer.exportControl ??
+    (viewer.hasScope("sales.compliance.ack") &&
+      viewer.hasScope("sales.order.prepare"))
+  );
+}
+
+/**
+ * The viewer on an order they see only through its NOC/ESF hold
+ * (`export_hold_only`, ticket 78): they read it and decide the hold, and the
+ * server refuses every other step on it, so no other control is theirs.
+ */
+export function onHeldOrder(viewer: Viewer): Viewer {
+  return {
+    principalId: viewer.principalId,
+    exportControl: mayAcknowledgeExport(viewer),
+    hasScope: (scope) => scope.endsWith(".read") && viewer.hasScope(scope),
+  };
 }
 
 export type OrderAction =
@@ -29,6 +60,7 @@ export type OrderAction =
   | "crossCheck"
   | "returnOrder"
   | "resendCrossCheck"
+  | "reopenCrossCheck"
   | "confirm"
   | "close";
 
@@ -231,6 +263,15 @@ export function orderOffers(
       };
   }
 
+  // A cross-check DW passed on Bravo's matching read-back (ticket 81),
+  // taken back by someone who may cross-check and made none of the order.
+  if (status === "cross_checked" && order.cross_checked_on_read_back)
+    offers.reopenCrossCheck = {
+      reason: !viewer.hasScope("sales.order.cross_check")
+        ? `Bạn không có quyền kiểm chéo đơn (cần vai ${PIC}).`
+        : makerReason(order, viewer),
+    };
+
   const confirmable =
     status === "cross_checked" ||
     (status === "uploaded_to_bravo" && order.cross_check_required === false);
@@ -267,9 +308,10 @@ export function dispositionOffer(
 ): Offer | null {
   if (finding.code === "missing_noc_esf") {
     if (!ACKNOWLEDGEABLE.includes(order.status)) return null;
+    if (mayAcknowledgeExport(viewer)) return { reason: null };
     return {
       reason: viewer.hasScope("sales.compliance.ack")
-        ? null
+        ? `Cần thêm vai ${PIC} để xác nhận cờ này.`
         : `Chỉ ${EXPORT_PIC} xác nhận cờ này.`,
     };
   }

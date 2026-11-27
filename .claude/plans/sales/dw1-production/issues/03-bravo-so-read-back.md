@@ -1,6 +1,6 @@
 # 03 — After the paste, DW reads the SO back and compares it with the PO
 
-Status: ready-for-agent (2026-11-16: the Excel path; B02 is Bravo's own "Customer order information (Form 1)" export, 81 columns, and the import skips refused rows, so this read-back is required)
+Status: done (2026-11-23: the Excel path built 11-16/17; what was left, the vendor's API adapter, is superseded by ADR 0027's gateway, whose read-back is ticket 51's `so.by_customer_po`)
 Blocked by: none for the Excel path; the vendor API (R-list) replaces the upload later; B42 not received (B43's `hk & cable` sheet is Sales' own comparison)
 Category: enhancement
 
@@ -130,3 +130,9 @@ read-back's question, not the layout's.
   mutation-checked.
 
 Left: the vendor's API adapter (R10).
+
+## Closed (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+The Excel read-back and the cross-check guard are built; the vendor API
+adapter (R10) is not, because ADR 0027 replaced the vendor API with the
+gateway over Bravo's database, and ticket 51 reads the SO back through it.

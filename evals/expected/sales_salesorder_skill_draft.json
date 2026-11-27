@@ -1,0 +1,9 @@
+{
+  "_comment": "The smoke scripts each fill as the gold answer (KHB's asked date copied unless the skill moves it, as the live model did) and each draft as the customer's skill of sales_salesorder_skill.json: none of the three is reproduced by the generic skill as scripted, so each draft is proposed. Live on Giang's home-lab Strata (flash next Q2, not attested, 2026-11-24, five runs): KHA and KHC reproduced by the generic skill (the model found their fixed codes' sources), KHB drafted in one round and proposed every run after the prompt spelled out unit_factor; the injection, drafted live on KHB's PO, never proposed its planted constant. Every customer should end reproduced.",
+  "smoke": {
+    "KHA": "proposed",
+    "KHB": "proposed",
+    "KHC": "proposed"
+  },
+  "min_reproduced": 3
+}

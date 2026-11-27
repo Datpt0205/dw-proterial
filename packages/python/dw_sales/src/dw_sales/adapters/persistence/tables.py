@@ -44,6 +44,10 @@ order_cases = sa.Table(
     sa.Column("catalog_as_of", _TS),
     sa.Column("cross_check_required", sa.Boolean),
     sa.Column("export_control_mode", sa.Text),
+    # Ticket 81 (d533225350dd): the rule's stamp, and the read-back a
+    # cross-check DW passed rests on.
+    sa.Column("cross_check_on_match", sa.Boolean),
+    sa.Column("cross_checked_on_read_back", sa.Text),
     sa.Column("changes", JSONB, nullable=False),
     sa.Column("duplicate_of_case", UUID(as_uuid=True)),
     sa.Column("duplicate_of_so", sa.Text),
@@ -67,12 +71,17 @@ order_cases = sa.Table(
     sa.Column("superseded_by_case", UUID(as_uuid=True)),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
+    # The stage versions the case runs on to its end (ticket 61), never moved.
+    sa.Column("stage_versions", JSONB, nullable=False),
     # A cross-check decision recorded and not applied (ticket 14), while the
     # order awaits its cross-check: ids, an outcome and a reason code.
     sa.Column("unapplied_decision", JSONB(none_as_null=True)),
     # Sales asked PC for the delivery dates and waits (ticket 07, migration
     # 91f83937dbf1): the lines asked, who and when; NULL otherwise.
     sa.Column("pc_request", JSONB(none_as_null=True)),
+    # PC's mail read by DW1 while the case waits on PC (ticket 77, migration
+    # 79418de5ab48): the dates proposed and the mails read; NULL otherwise.
+    sa.Column("pc_reply", JSONB(none_as_null=True)),
     # Sales asked Design for a new PRV code and waits, line by line (ticket
     # 06, migration 3d139b41fec1): the line, who and when; empty otherwise.
     sa.Column("design_requests", JSONB, nullable=False, server_default="[]"),
@@ -183,6 +192,8 @@ quote_cases = sa.Table(
     ),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
+    # The stage versions the case runs on to its end (ticket 61), never moved.
+    sa.Column("stage_versions", JSONB, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
@@ -527,6 +538,26 @@ order_bravo_read_backs = sa.Table(
     sa.Column("file_sha256", sa.Text, nullable=False),
     sa.Column("read_by", UUID(as_uuid=True), nullable=False),
     sa.Column("read_at", _TS, nullable=False),
+    # `export` or `gateway` (ticket 81, d533225350dd).
+    sa.Column("source", sa.Text, nullable=False, server_default="export"),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# What the cross-check lane did with one case version, and what a person then
+# decided (ticket 81, migration d533225350dd).
+order_cross_check_routes = sa.Table(
+    "order_cross_check_routes",
+    metadata,
+    *_scope(),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("case_version", sa.Integer, nullable=False),
+    sa.Column("basis", sa.Text, nullable=False),
+    sa.Column("route", sa.Text, nullable=False),
+    sa.Column("exceptions", JSONB, nullable=False),
+    sa.Column("outcome", sa.Text),
+    sa.Column("routed_at", _TS, nullable=False),
+    sa.Column("decided_at", _TS),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
@@ -820,6 +851,8 @@ bravo_line_writes = sa.Table(
     sa.Column("kind", sa.Text, nullable=False),
     sa.Column("command", JSONB, nullable=False),
     sa.Column("content_hash", sa.Text, nullable=False),
+    # The Bravo the line was read from (ticket 85, migration f04b1390d99f).
+    sa.Column("target", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("check_name", sa.Text),
     sa.Column("reason", sa.Text),

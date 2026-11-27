@@ -237,6 +237,49 @@ if (Test-Path $bs) {
     [void](Report 'backup-verify' (($h -lt 35 * 24) -and $ver -and $ver.ok) "The monthly restore test has not passed for $([math]::Round($h / 24)) days.$why")
 }
 
+# --- 5d. What DW's own alerts say (Prometheus -> Alertmanager -> the VM's relay) -----
+# The VM's dw-alert-relay.sh (15-alert-relay.sh) copies Alertmanager's firing
+# alerts to B:\DW-Backup\status\alerts.json every 2 minutes; this mails them,
+# one check per alert and what it names (a lane, a channel), so a second lane
+# going stale is a second mail. Trusted only when fresh and holding the
+# always-firing Watchdog: an empty list cannot tell "all well" from
+# Prometheus or Alertmanager being down. Until the relay is installed (no
+# file seen yet) there is nothing to judge; once seen, a missing file fails.
+# An alert labelled `notice: event` (a Bravo write in doubt) clears by itself
+# while the thing it told of still stands: its clearing resets the check
+# without an "OK again" mail, which would read as fixed.
+$af = 'B:\DW-Backup\status\alerts.json'
+if ((Test-Path $af) -or $state['alert-relay.seen']) {
+    $state['alert-relay.seen'] = $true
+    $relay = $null
+    if (Test-Path $af) { try { $relay = Get-Content $af -Raw | ConvertFrom-Json } catch { } }
+    $age = if ($relay -and $relay.time) { ((Get-Date) - [datetime]$relay.time).TotalMinutes } else { [double]::PositiveInfinity }
+    $alerts = if ($relay) { @($relay.alerts) | Where-Object { $_ } } else { @() }
+    $watchdog = @($alerts | Where-Object { $_.name -eq 'Watchdog' }).Count -gt 0
+    $why = 'Alertmanager answers but its always-firing Watchdog is missing: Prometheus is down or not evaluating its rules.'
+    if ($age -ge 15) { $why = "The VM's alert relay has not written $af for $([math]::Round($age)) minutes (Alertmanager down, the relay timer stopped, or the share unmounted)." }
+    if (Report 'alert-relay' (($age -lt 15) -and $watchdog) "$why DW's own alerts cannot reach anyone until it is back.") {
+        # Not judged: with the relay down nothing is known about the alerts.
+    } else {
+        $firing = @{}
+        foreach ($a in $alerts | Where-Object { $_.name -ne 'Watchdog' }) {
+            $key = if ($a.which) { "alert-$($a.name)-$($a.which)" } else { "alert-$($a.name)" }
+            $firing[$key] = $true
+            $isEvent = $a.notice -eq 'event'
+            $state["$key.event"] = $isEvent
+            $tail = if ($isEvent) { ' This alert clears by itself after 30 minutes; what it tells of does not, so no "OK again" follows.' } else { '' }
+            [void](Report $key $false "$($a.summary) ($($a.name), $($a.severity)). Grafana and the dw-worker log say more.$tail")
+        }
+        foreach ($k in @($state.Keys | Where-Object { $_ -like 'alert-*.status' -and $_ -ne 'alert-relay.status' })) {
+            $name = $k -replace '\.status$', ''
+            if (-not $firing.ContainsKey($name) -and $state[$k] -eq 'failing') {
+                if ($state["$name.event"]) { $state[$k] = 'ok'; $state["$name.count"] = 0; Log "cleared (an event, nothing fixed): $name" }
+                else { [void](Report $name $true '') }
+            }
+        }
+    }
+}
+
 # --- 6. A restart Windows has been waiting for over 3 days --------------------------
 $pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 if ($pending) {

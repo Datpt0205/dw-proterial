@@ -22,9 +22,9 @@ import type { NavEntry, NavItem } from "./types";
 import { navPages } from "./visibility";
 
 /**
- * Platform-level nav (not owned by any bounded context). Sending feedback is
- * not a nav item — it is the round button at the bottom-left of every page
- * (spec 003 US5); only the admins' inbox is listed here, under Admin. The
+ * Platform-level nav (not owned by any bounded context). The feedback button
+ * (spec 003 US5) left this product's UI on 2026-11-26 (Đạt: it will not be
+ * used); the admins' inbox still lists what was sent, under Admin. The
  * provisioning area (ADR-002) is shown only to a Platform Operator. The admin
  * pages share one group: a top bar has room for a handful of entries, not
  * thirteen.

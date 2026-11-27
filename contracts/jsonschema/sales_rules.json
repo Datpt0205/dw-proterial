@@ -12,6 +12,49 @@
             "type": "string",
             "x-placeholders": []
           },
+          "assign_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{case}",
+              "{person}"
+            ]
+          },
+          "assign_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Done",
+            "type": "string",
+            "x-placeholders": [
+              "{case}",
+              "{person}"
+            ]
+          },
+          "assign_nobody": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Nobody",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "assign_not_yours": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Not Yours",
+            "type": "string",
+            "x-placeholders": []
+          },
+          "assign_which": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Assign Which",
+            "type": "string",
+            "x-placeholders": [
+              "{people}"
+            ]
+          },
           "case_catalog": {
             "maxLength": 300,
             "minLength": 1,
@@ -407,6 +450,26 @@
               "{more}"
             ]
           },
+          "write_cancel_confirm": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Cancel Confirm",
+            "type": "string",
+            "x-placeholders": [
+              "{line}",
+              "{reason}",
+              "{so}"
+            ]
+          },
+          "write_cancel_done": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Cancel Done",
+            "type": "string",
+            "x-placeholders": [
+              "{line}"
+            ]
+          },
           "write_confirm": {
             "maxLength": 300,
             "minLength": 1,
@@ -457,6 +520,15 @@
             "type": "string",
             "x-placeholders": []
           },
+          "write_reason_too_long": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Reason Too Long",
+            "type": "string",
+            "x-placeholders": [
+              "{limit}"
+            ]
+          },
           "write_which_field": {
             "maxLength": 300,
             "minLength": 1,
@@ -473,6 +545,15 @@
             "type": "string",
             "x-placeholders": [
               "{lines}"
+            ]
+          },
+          "write_which_reason": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Write Which Reason",
+            "type": "string",
+            "x-placeholders": [
+              "{line}"
             ]
           },
           "write_which_value": {
@@ -543,6 +624,15 @@
           "write_no_so",
           "write_orders_only",
           "write_done",
+          "write_cancel_confirm",
+          "write_which_reason",
+          "write_reason_too_long",
+          "write_cancel_done",
+          "assign_confirm",
+          "assign_which",
+          "assign_nobody",
+          "assign_not_yours",
+          "assign_done",
           "step_read",
           "step_look"
         ],
@@ -848,6 +938,29 @@
         "pattern": "^1\\.0$",
         "title": "Schema Version",
         "type": "string"
+      },
+      "target": {
+        "default": "uat",
+        "enum": [
+          "uat",
+          "production"
+        ],
+        "title": "Target",
+        "type": "string"
+      },
+      "target_uat_proof": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Target Uat Proof"
       }
     },
     "required": [
@@ -1194,13 +1307,35 @@
         "title": "BeforeStage",
         "type": "object"
       },
+      "ExportControlHoldRule": {
+        "additionalProperties": false,
+        "description": "An order held on an open NOC/ESF finding: tell the export-control PIC\nat once, the holders of the scope that acknowledges it (ticket 78).",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt báo ngay cho người phụ trách kiểm soát xuất khẩu khi đơn hàng thiếu NOC/ESF chờ họ xác nhận (chưa ai được giao quyền này thì báo Trưởng bộ phận).",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ExportControlHoldRule",
+        "type": "object"
+      },
       "ImpliedAcceptanceRule": {
         "additionalProperties": false,
-        "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): tell the PIC once, who\nrecords the agreement. DW1 never records it.",
+        "description": "A customer's days of silence after the confirmation have passed (the\ndays are the customer's, in the order rules): DW1 records the agreement\nitself and tells the PIC once, who may undo it with one press (ticket 82,\ndw_sales ADR 0011 amendment); with ``record`` off, the PIC records it.",
         "properties": {
           "enabled": {
             "description": "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO).",
             "title": "Enabled",
+            "type": "boolean"
+          },
+          "record": {
+            "default": true,
+            "description": "DW1 tự ghi khách đồng ý ngầm khi quá số ngày im lặng, rồi báo Sales phụ trách; Sales hoàn tác được bằng một nút.",
+            "title": "Record",
             "type": "boolean"
           }
         },
@@ -1524,6 +1659,10 @@
     "additionalProperties": false,
     "description": "Every timing and switch of DW1's follow-ups and its morning brief.",
     "properties": {
+      "export_control_hold": {
+        "$ref": "#/$defs/ExportControlHoldRule",
+        "description": "Đơn hàng thiếu NOC/ESF chờ người phụ trách kiểm soát xuất khẩu."
+      },
       "implied_acceptance": {
         "$ref": "#/$defs/ImpliedAcceptanceRule",
         "description": "Khách im lặng quá số ngày được coi là đồng ý với xác nhận đơn."
@@ -1610,7 +1749,8 @@
       "your_turn",
       "waiting_design_code",
       "waiting_quote",
-      "waiting_pcs_price"
+      "waiting_pcs_price",
+      "export_control_hold"
     ],
     "title": "SalesFollowups",
     "type": "object"
@@ -2194,6 +2334,11 @@
             "title": "Message Intent",
             "type": "boolean"
           },
+          "pc_reply": {
+            "default": false,
+            "title": "Pc Reply",
+            "type": "boolean"
+          },
           "po_body_extraction": {
             "default": false,
             "title": "Po Body Extraction",
@@ -2220,6 +2365,18 @@
             "default": false,
             "title": "Salesorder Skill",
             "type": "boolean"
+          },
+          "shadow": {
+            "default": true,
+            "title": "Shadow",
+            "type": "boolean"
+          },
+          "shadow_calls_per_hour": {
+            "default": 120,
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Shadow Calls Per Hour",
+            "type": "integer"
           },
           "skill_document_forms": {
             "default": false,
@@ -2355,6 +2512,11 @@
       "autonomy": {
         "$ref": "#/$defs/Autonomy"
       },
+      "cross_check_on_match": {
+        "default": false,
+        "title": "Cross Check On Match",
+        "type": "boolean"
+      },
       "cross_check_required": {
         "title": "Cross Check Required",
         "type": "boolean"
@@ -2410,6 +2572,24 @@
       },
       "model_assist": {
         "$ref": "#/$defs/ModelAssist"
+      },
+      "password_file": {
+        "default": "every_value",
+        "enum": [
+          "every_value",
+          "failed_checks_only"
+        ],
+        "title": "Password File",
+        "type": "string"
+      },
+      "pc_mailboxes": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "title": "Pc Mailboxes",
+        "type": "array"
       },
       "policy_id": {
         "const": "sales_order_rules",
@@ -2976,6 +3156,12 @@
               "{count}"
             ]
           },
+          "export_control_hold": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Export Control Hold",
+            "type": "string"
+          },
           "head_order": {
             "maxLength": 60,
             "minLength": 1,
@@ -3081,6 +3267,7 @@
           "waiting_design_code",
           "waiting_quote",
           "waiting_pcs_price",
+          "export_control_hold",
           "batch_title",
           "batch_body",
           "order",
@@ -3093,7 +3280,16 @@
         "additionalProperties": false,
         "description": "One reminder per follow-up, and per way it reads (`followups.Followup`;\nwhich one a case gets is code's, `followups.reminder_text`).",
         "properties": {
+          "export_control_hold": {
+            "$ref": "#/$defs/SinceReminder"
+          },
+          "export_control_unheld": {
+            "$ref": "#/$defs/SinceReminder"
+          },
           "implied_acceptance": {
+            "$ref": "#/$defs/SinceReminder"
+          },
+          "implied_recorded": {
             "$ref": "#/$defs/SinceReminder"
           },
           "order_unconfirmed_escalate": {
@@ -3157,12 +3353,15 @@
           "quote_deadline_late",
           "waiting_pc",
           "implied_acceptance",
+          "implied_recorded",
           "waiting_customer_change",
           "waiting_customer_correction",
           "waiting_customer_spec",
           "waiting_design_code",
           "waiting_quote",
-          "waiting_pcs_price"
+          "waiting_pcs_price",
+          "export_control_hold",
+          "export_control_unheld"
         ],
         "title": "ReminderWords",
         "type": "object"

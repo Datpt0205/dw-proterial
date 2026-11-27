@@ -36,6 +36,26 @@ DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS: Final = (
 )
 DW_REAPER_REAPED_TOTAL: Final = "dw_reaper_reaped_total"  # labels: queue
 
+# Sales ticket 84: is each worker lane still doing its job? Seeded with the
+# worker's start time and set again after every tick that returned cleanly, so
+# a lane that fails, hangs, or never once succeeded stops moving it; the
+# interval is the lane's own cadence (`ConsumerRegistry.interval_for`), so the
+# alert reads it from here instead of a second copy in alerts.yml.
+DW_LANE_LAST_OK_TIMESTAMP_SECONDS: Final = "dw_lane_last_ok_timestamp_seconds"  # labels: lane
+DW_LANE_INTERVAL_SECONDS: Final = "dw_lane_interval_seconds"  # labels: lane
+# A notification a channel gave up on after every retry (`attempts_exhausted`):
+# the provider or the push service kept failing. Counted after the row's
+# transaction commits, and started at 0 per channel so the first one counts.
+# A recipient-side end (unlinked, unreachable, no device) is routine and not
+# counted: it would mail the operator about one person's expired phone.
+DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL: Final = (
+    "dw_channel_delivery_exhausted_total"  # labels: channel
+)
+# The gateway's Bravo writes a person must look at, every tenant together
+# (`bravo.writes_needing_a_person()`): read from the ledger each tick, so it
+# is the ledger's number, not a count of settlements this process saw.
+DW_BRAVO_WRITES_NEEDING_A_PERSON: Final = "dw_bravo_writes_needing_a_person"  # no labels
+
 ALL_METRICS: Final = (
     DW_RUN_TOTAL,
     DW_RUN_DURATION_SECONDS,
@@ -51,4 +71,8 @@ ALL_METRICS: Final = (
     DW_OUTBOX_BACKLOG_SIZE,
     DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS,
     DW_REAPER_REAPED_TOTAL,
+    DW_LANE_LAST_OK_TIMESTAMP_SECONDS,
+    DW_LANE_INTERVAL_SECONDS,
+    DW_CHANNEL_DELIVERY_EXHAUSTED_TOTAL,
+    DW_BRAVO_WRITES_NEEDING_A_PERSON,
 )

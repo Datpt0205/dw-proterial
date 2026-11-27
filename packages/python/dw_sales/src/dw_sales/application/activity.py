@@ -576,7 +576,7 @@ class ActivityService:
             # is read.
             case: OrderCase | QuoteCase
             if kind is CaseKind.ORDER:
-                case = (await stored_order(work, case_id, viewer=context)).case
+                case = (await stored_order(work, case_id, viewer=context, export_control=True)).case
             else:
                 case = (await stored_quote(work, case_id, viewer=context)).case
             events = await work.overview.history(kind, case_id)

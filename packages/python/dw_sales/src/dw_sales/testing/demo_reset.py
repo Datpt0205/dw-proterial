@@ -4,7 +4,8 @@ mailbox, DW1 running, and the personas seeded.
 What it removes, in the tenants the personas belong to (and nowhere else):
 every order and quote case with its revisions, lines and findings, the case
 events, the message log, the processing queue, the sources served, the
-artifact records and the pause switch; the in-app notices Sales sent (every
+artifact records and the pause switch; the personas' conversations with DW1
+(their answers cite the cases removed); the in-app notices Sales sent (every
 `source_key` starts `sales.`), which would otherwise pile up across
 rehearsals and link to cases that are gone; and DW1's runs, their
 checkpoints and the `sales.` approvals they paused on with their
@@ -81,6 +82,10 @@ _CLEARED = (
     # And the mails a rehearsal asked DW1 to send.
     tables.outbound_mails,
     tables.worker_state,
+    # The personas' conversations with DW1 (ADR 0007), their turns by
+    # cascade: a rehearsal's answers cite cases the reset deletes, so a kept
+    # one links to "không tìm thấy" (found on the 2026-11-26 run).
+    tables.assistant_sessions,
     tables.order_cases,
     tables.quote_cases,
 )

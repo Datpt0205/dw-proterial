@@ -13,7 +13,6 @@ from decimal import Decimal
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from gateway_fakes import (
-    LINE,
     NOW,
     PIC,
     SET_DATE,
@@ -25,7 +24,7 @@ from gateway_fakes import (
 )
 
 from dw_bravo.approval_token import ApprovalTokenSigner
-from dw_bravo.contract import CancelLine, CreateSalesOrder, SalesOrderLine, SetConfirmedDate
+from dw_bravo.contract import CreateSalesOrder, SalesOrderLine, SetConfirmedDate
 from dw_bravo_gateway.ports import BravoUser, ColumnRight, LedgerEntry
 from dw_bravo_gateway.statements import SCREENS
 
@@ -72,6 +71,7 @@ async def test_a_bad_signature_is_refused() -> None:
         command=SET_DATE,
         bravo_user_id=2413,
         employee_code="NV001",
+        target="uat",
         now=NOW,
     )
     gw = gateway()
@@ -130,7 +130,6 @@ async def test_a_tenant_written_into_the_token_after_signing_is_refused() -> Non
 @pytest.mark.parametrize(
     "command",
     [
-        CancelLine(line=LINE),
         CreateSalesOrder(
             case_ref="M01",
             doc_date=date(2026, 11, 21),
@@ -147,7 +146,7 @@ async def test_a_tenant_written_into_the_token_after_signing_is_refused() -> Non
             ),
         ),
     ],
-    ids=["cancel_untraced", "create_waits_on_03c"],
+    ids=["create_waits_on_03c"],
 )
 async def test_a_kind_not_yet_measured_is_refused_even_when_approved(command: object) -> None:
     gw = gateway()
@@ -333,7 +332,12 @@ async def test_a_read_back_that_differs_is_reported_column_by_column() -> None:
 
 async def test_the_unmeasured_context_of_a_save_refuses_before_the_approval_is_spent() -> None:
     gw = gateway()
-    gw.pipeline.screens = dict(SCREENS)  # the shipped table: no event measured
+    # A screen whose save has no traced word (a new screen before its trace).
+    gw.pipeline.screens = {
+        "EDIT_BizDocSO": dataclasses.replace(
+            SCREENS["EDIT_BizDocSO"], context_event={"insert": "New"}
+        )
+    }
     approval = uuid.uuid4()
 
     result = await gw.pipeline.execute(SET_DATE, token(approval=approval))
@@ -354,8 +358,20 @@ async def test_bravo_not_answering_is_could_not_check() -> None:
     assert (result.outcome, result.reason) == ("refused", "bravo_unreachable_could_not_check")
 
 
-def test_the_shipped_screens_measure_no_context_for_an_existing_documents_save() -> None:
-    assert dict(SCREENS["EDIT_BizDocSO"].context_event) == {}
+def test_the_shipped_so_screen_saves_a_stored_so_as_the_client_does() -> None:
+    # Traced 11-25/26 (ticket 70): an SO opened from the list saves as `Edit`;
+    # one created in the window as `New`.
+    assert dict(SCREENS["EDIT_BizDocSO"].context_event) == {"update": "Edit", "insert": "New"}
+
+
+async def test_a_stored_sos_save_carries_the_clients_edit_context() -> None:
+    gw = gateway()
+    gw.pipeline.screens = dict(SCREENS)  # the shipped table, no test override
+
+    result = await gw.pipeline.preview(SET_DATE, token())
+
+    assert result.batch is not None, result
+    assert result.batch.context.startswith("EDIT_BizDocSO|Edit")
 
 
 async def test_a_confirmed_date_is_written_as_bravos_midnight_datetime() -> None:

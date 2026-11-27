@@ -256,6 +256,55 @@ export const BRAVO_WRITE_STATUS = {
   in_doubt: "Chưa rõ đã ghi chưa",
 } as const;
 
+/**
+ * Which Bravo DW1 reads and writes (ticket 85): the tag on every screen
+ * that writes, blue for the trial database, red for the one the company
+ * runs on.
+ */
+export const BRAVO_TARGET = {
+  uat: "Bravo UAT",
+  production: "Bravo thật",
+} as const;
+
+/** What a Bravo write changes on an SO line (tickets 53, 71). */
+export const BRAVO_WRITE_FIELD = {
+  confirmed_date: "Ngày XN giao hàng",
+  quantity: "Số lượng",
+  cancel: "Hủy dòng",
+} as const;
+
+/**
+ * The gateway's step that refused or stopped a Bravo write, in its order
+ * (ticket 63; `dw_bravo_gateway.pipeline.Check`).
+ */
+export const BRAVO_WRITE_CHECK = {
+  token: "Phiếu duyệt",
+  target: "Bravo đang dùng",
+  kind: "Loại ghi chưa chạy",
+  switch: "Loại ghi chưa bật cho đơn vị",
+  ledger: "Phiếu duyệt đã dùng",
+  identity: "User Bravo của người duyệt",
+  right: "Quyền trong Bravo",
+  rules: "Quy tắc màn hình Bravo",
+  lock: "Dòng đang khóa trong Bravo",
+  write: "Lúc ghi vào Bravo",
+} as const;
+
+/**
+ * Why the gateway refused at its `target` step (ticket 85;
+ * `dw_bravo_gateway.targets`, `pipeline`): the one check covers three
+ * reasons, each with its own way out. Another reason shows as the gateway
+ * said it.
+ */
+export const BRAVO_WRITE_REASON = {
+  target_changed:
+    "Bravo đang dùng đã đổi từ lúc đề xuất: đề xuất lại trên Bravo đang dùng",
+  target_unconfigured:
+    "Gateway chưa có tài khoản của Bravo đang dùng: nhờ quản trị cấp tài khoản",
+  target_unreadable:
+    "Quy tắc chưa chỉ rõ Bravo nào (Bravo thật cần lần chạy UAT): sửa quy tắc “DW1 tự ghi vào Bravo”",
+} as const;
+
 /** Design's result for a line in Bravo (`DesignCheck`). */
 export const DESIGN_VERDICT = {
   quote: "Báo giá được",
@@ -455,6 +504,7 @@ export const ACTION = {
   reprice: "Định giá lại",
   send: "Gửi báo giá cho khách",
   record_master_list: "Xác nhận master list",
+  acknowledge_export: "Xác nhận NOC/ESF",
 } as const;
 
 /**
@@ -476,6 +526,7 @@ export const CASE_EVENT = {
   "order.pc_asked": "Ghi đã hỏi PC ngày giao",
   "order.design_asked": "Ghi đã gửi Design đề nghị tạo mã",
   "order.pc_answer_recorded": "Ghi ngày PC trả lời",
+  "order.pc_reply_read": "DW1 đọc thư PC trả ngày giao",
   "order.quote_opened": "Mở báo giá cho dòng chưa có báo giá",
   "order.quote_rechecked": "Kiểm tra lại theo báo giá đã duyệt",
   "order.update_change_confirmed":
@@ -492,10 +543,13 @@ export const CASE_EVENT = {
   "order.cross_checked": "Kiểm chéo đạt",
   "order.returned": "Kiểm chéo trả lại",
   "order.cross_check_resent": "Gửi kiểm chéo lại",
+  "order.cross_checked_on_match": "DW cho qua kiểm chéo: Bravo khớp",
+  "order.cross_check_reopened": "Mở lại kiểm chéo DW đã cho qua",
   "order.decision_not_applied": "Quyết định không áp dụng được",
   "order.confirmed": "Gửi xác nhận cho khách",
   "order.confirmation_sent": "Ghi đã gửi xác nhận cho khách",
   "order.customer_agreed": "Ghi khách đã đồng ý xác nhận",
+  "order.implied_undone": "Hoàn tác đồng ý ngầm",
   "order.customer_declined": "Ghi khách từ chối xác nhận",
   "order.closed": "Đóng hồ sơ",
   "order.reassigned": "Giao cho người khác",
@@ -516,6 +570,7 @@ export const CASE_EVENT = {
   "quote.production_type_set": "Chọn mass hay pcs",
   "quote.pcs_price_recorded": "Ghi giá GM cho hàng pcs",
   "quote.submitted": "Trình duyệt",
+  "quote.checked": "Kiểm báo giá kèm đơn (chờ Manager duyệt)",
   "quote.approved": "Duyệt báo giá",
   "quote.returned": "Trả lại định giá",
   "quote.signed_copy_attached": "Tải lên bản báo giá đã ký",
@@ -543,6 +598,32 @@ export const DERIVATION = {
   converted: "Đọc từ bản chuyển đổi",
   ocr: "Đọc bằng OCR",
 } as const;
+
+/** How a file opened with a password waits for a person (ticket 80). */
+export const PASSWORD_FILE = {
+  every_value: "mọi giá trị chờ xác nhận",
+  failed_checks_only: "chỉ giá trị kiểm không đạt chờ xác nhận",
+} as const;
+
+/**
+ * Why DW did not pass an order's cross-check on Bravo's read-back (ticket
+ * 81), as the cross-checker reads it on the order.
+ */
+export const ON_MATCH_EXCEPTION: Record<
+  SalesSchemas["OnMatchException"],
+  string
+> = {
+  rules_off: "Quy tắc không bật tự kiểm chéo",
+  not_awaiting: "Đơn không ở bước chờ kiểm chéo",
+  not_from_bravo: "Đọc lại từ tệp xuất, không từ Bravo",
+  stale_read_back: "Đọc lại ở phiên bản hồ sơ khác",
+  differs: "Bravo khác bản đã duyệt",
+  so_no_differs: "Số SO trong Bravo khác số SO đã ghi",
+  finding: "Có cờ kiểm tra",
+  typed_by_a_person: "Có giá trị người nhập tay",
+  applied_by_dw: "Có giá trị DW tự áp dụng",
+  revised: "PO đã sửa hoặc khách đổi",
+};
 
 /** Flags a reader raises on a value it does not take on trust. */
 export const REGION_FLAG = {
@@ -622,6 +703,8 @@ export const EDGE_ACTION: Record<SalesSchemas["EdgeAction"], string> = {
   confirm: "Gửi xác nhận cho khách",
   record_agreement: "Ghi khách đồng ý (bằng lời hoặc im lặng quá hạn)",
   record_decline: "Ghi khách từ chối xác nhận",
+  undo_implied: "Hoàn tác đồng ý ngầm",
+  reopen_cross_check: "Mở lại kiểm chéo DW đã cho qua",
   apply_change: "Áp dụng thay đổi PO",
   draft_ycbg: "Soạn YCBG",
   record_ycbg: "Ghi số YCBG trên Bravo",
@@ -806,6 +889,7 @@ export const ARTIFACT_KIND = {
   internal_change_notice: "Thư báo khách thay đổi nội bộ (nháp)",
   convert_list_proposal: "Đề xuất bổ sung bảng quy đổi mã",
   design_code_request: "Phiếu nhờ Design tạo mã",
+  pc_request_draft: "Thư hỏi PC ngày giao (nháp)",
   cannot_supply_draft: "Thư báo không cung cấp được (nháp)",
   ycbg_draft: "YCBG (nháp, mẫu giả lập)",
   design_request_draft: "Thư gửi Design (nháp)",

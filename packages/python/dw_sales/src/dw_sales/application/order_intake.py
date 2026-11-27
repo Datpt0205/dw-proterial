@@ -101,8 +101,9 @@ from zoneinfo import ZoneInfo
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.agent_turn import TurnCeilingReachedError
+from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
-from dw_kernel.errors import ConflictError
+from dw_kernel.errors import ConflictError, QuotaExceededError
 from dw_platform.application.malware import (
     AttachmentInfectedError,
     AttachmentRefusedError,
@@ -141,6 +142,7 @@ from dw_sales.application.ports import (
     Snapshot,
 )
 from dw_sales.application.reply_intent import ReplyReader
+from dw_sales.application.shadow import ShadowReadings
 from dw_sales.application.support import decided
 from dw_sales.application.thread_agent import ThreadAgent
 from dw_sales.application.threads import ThreadedCase, named_cases
@@ -208,6 +210,13 @@ from dw_sales.domain.po_body_autonomy import may_apply_itself, model_read_values
 from dw_sales.domain.po_groups import ReadFile, one_per_po
 from dw_sales.domain.reply_intent import AgentFallback, Author, CaseReply, ReplyReading
 from dw_sales.domain.revision_hints import name_revision
+from dw_sales.domain.shadow import (
+    REPLY_SHADOW_STEPS,
+    description_shadows,
+    kind_shadow,
+    po_body_shadow,
+    reply_shadow,
+)
 
 
 class MessageKind(StrEnum):
@@ -481,6 +490,10 @@ class OrderIntake:
     # checked against. None: none is read here, and such a line keeps
     # `quotation_missing`, never a pass.
     linked_quotes: LinkedQuotesPort | None = None
+    # Where a step the tenant lists in shadow reads while it is not on and
+    # passing, and keeps what it read for a person's decision to label
+    # (ticket 67). None: nothing reads in shadow here.
+    shadow: ShadowReadings | None = None
 
     async def classify(
         self,
@@ -659,8 +672,105 @@ class OrderIntake:
             scope, message
         ):
             return Classification(MessageKind.DESIGN_REPLY)
+        await self._shadow_kind(scope, message, sender, rules, run)
+        if not self._carries_document(attached):
+            await self._shadow_body(scope, message, sender, rules, run)
         return _for_a_person(
             message, carries_document=self._carries_document(attached), sender=sender
+        )
+
+    async def _shadow_body(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> None:
+        """A PO written in a mail going to a person, read in shadow by
+        `po_body_extraction` where the sender is a customer (ticket 67): kept
+        for the order case of the same customer and PO number to label when
+        a person prepares it. A mail with no PO in it keeps nothing; a shadow
+        reading never fails the mail."""
+        step = ModelStep.PO_BODY_EXTRACTION
+        if self.body_pos is None or self.shadow is None or run is None or sender is None:
+            return
+        if not await self.shadow.shadows(scope, rules, step):
+            return
+        try:
+            read = await self.body_pos.read(
+                message,
+                scope=scope,
+                customer_code=sender.code,
+                received_on=await self._received_on(scope, message.received_at),
+                run=run,
+            )
+        except (ModelUnavailableError, BudgetExceededError, QuotaExceededError) as exc:
+            _LOG.info(
+                "shadow reading of %s gave nothing for %s in tenant %s: %s",
+                step.value,
+                message.message_id,
+                scope.tenant_id.value,
+                type(exc).__name__,
+            )
+            return
+        if isinstance(read, str):
+            return
+        await self.shadow.keep(
+            scope,
+            [
+                po_body_shadow(
+                    read,
+                    message_id=message.message_id,
+                    customer_code=sender.code,
+                    at=self.shadow.clock.now(),
+                    new_id=uuid.uuid4,
+                )
+            ],
+        )
+
+    async def _shadow_kind(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> None:
+        """The kind `message_intent` reads in shadow of a mail going to a
+        person (ticket 67): kept for the kind the person picks as they mark
+        it handled. A shadow reading never fails the mail."""
+        step = ModelStep.MESSAGE_INTENT
+        if self.intents is None or self.shadow is None or run is None:
+            return
+        if not await self.shadow.shadows(scope, rules, step):
+            return
+        try:
+            read = await self.intents.read(
+                scope, newest_part(message), sender, rules_version=rules.version, run=run
+            )
+        except (ModelUnavailableError, BudgetExceededError, QuotaExceededError) as exc:
+            _LOG.info(
+                "shadow reading of %s gave nothing for %s in tenant %s: %s",
+                step.value,
+                message.message_id,
+                scope.tenant_id.value,
+                type(exc).__name__,
+            )
+            return
+        if read is None:
+            return
+        await self.shadow.keep(
+            scope,
+            [
+                kind_shadow(
+                    read.route,
+                    read.reading,
+                    message_id=message.message_id,
+                    at=self.shadow.clock.now(),
+                    new_id=uuid.uuid4,
+                )
+            ],
         )
 
     async def customer_of(self, scope: SalesScope, message: InboundMessage) -> Customer | None:
@@ -881,7 +991,10 @@ class OrderIntake:
     ) -> IntakeOutcome:
         """A reply attached to the case its thread names, with a model's
         reading of it where the tenant's rules, a wired model and a DW1 run
-        allow. Nothing on the case changes: Sales confirms any step."""
+        allow. Nothing on the case changes: Sales confirms any step. Each
+        reply reader that is not on and passing reads it in shadow where the
+        tenant's rules allow (ticket 67), for the PIC's next move to label."""
+        rules = await self.rules.rules(scope)
         reading = (
             None
             if run is None
@@ -891,10 +1004,12 @@ class OrderIntake:
                 author="customer",
                 about=thread.question,
                 cases=(thread,),
-                rules=await self.rules.rules(scope),
+                rules=rules,
                 run=run,
             )
         )
+        if run is not None:
+            await self._shadow_reply(scope, message, thread, rules, run)
         disposition = MessageDisposition(
             message_id=message.message_id,
             kind=DispositionKind.ATTACHED_TO_CASE,
@@ -904,6 +1019,94 @@ class OrderIntake:
             reply=CaseReply(linked_to=thread.linked_to, reading=reading),
         )
         return IntakeOutcome(message.message_id, MessageKind.CASE_REPLY, disposition)
+
+    async def _shadow_reply(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        thread: ThreadedCase,
+        rules: OrderRules,
+        run: RunContext,
+    ) -> None:
+        """What each reply reader not on and passing reads of a customer's
+        reply in shadow, kept beside its case (ticket 67). A shadow reading
+        never fails the mail: a reader that gives nothing keeps nothing."""
+        if self.shadow is None:
+            return
+        kept = []
+        for step in REPLY_SHADOW_STEPS:
+            if await self._model_step(scope, rules, step):
+                continue
+            if not await self.shadow.shadows(scope, rules, step):
+                continue
+            reading = await self._shadow_read(scope, message, thread, rules, run, step)
+            shadow = (
+                None
+                if reading is None
+                else reply_shadow(
+                    step,
+                    reading,
+                    message_id=message.message_id,
+                    case_kind=thread.case_kind,
+                    case_id=thread.case_id,
+                    status=thread.status,
+                    at=self.shadow.clock.now(),
+                    new_id=uuid.uuid4,
+                )
+            )
+            if shadow is not None:
+                kept.append(shadow)
+        await self.shadow.keep(scope, kept)
+
+    async def _shadow_read(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        thread: ThreadedCase,
+        rules: OrderRules,
+        run: RunContext,
+        step: ModelStep,
+    ) -> ReplyReading | None:
+        """``step``'s reader alone on the reply, as it reads when it is on;
+        None where it gives no reading."""
+        try:
+            if step is ModelStep.SKILL_INTENTS:
+                if self.skill_agent is None:
+                    return None
+                return await self.skill_agent.read(
+                    scope,
+                    message,
+                    author="customer",
+                    about=thread.question,
+                    cases=(thread,),
+                    rules_version=rules.version,
+                    run=run,
+                    pick_floor=rules.model_assist.skill_pick_confidence,
+                )
+            if self.replies is None:
+                return None
+            return await self.replies.read(
+                newest_part(message),
+                author="customer",
+                about=thread.question,
+                rules_version=rules.version,
+                run=run,
+            )
+        except (
+            ModelUnavailableError,
+            TurnCeilingReachedError,
+            BudgetExceededError,
+            QuotaExceededError,
+        ) as exc:
+            # Ids and the reason only: never the message.
+            _LOG.info(
+                "shadow reading of %s gave nothing for %s in tenant %s: %s",
+                step.value,
+                message.message_id,
+                scope.tenant_id.value,
+                type(exc).__name__,
+            )
+            return None
 
     async def _read_thread(
         self,
@@ -1368,6 +1571,9 @@ class OrderIntake:
         run: RunContext | None,
     ) -> IntakeOutcome:
         document = _named_revision(message, document, rules.revision_marks)
+        if rules.password_file == "failed_checks_only":
+            # Ticket 80: each value waits on its own checks, as in any file.
+            document = document.with_password_values_as_read()
         header = document.header
         earlier = await self.cases.cases_for_po(scope, customer.code, header.po_no)
         seen = {
@@ -1403,11 +1609,21 @@ class OrderIntake:
             mapped_lines.append((po_line, map_line(po_line, entry=listed, items=item_rows)))
             if wants_reading(po_line, entry=listed):
                 unread.append(po_line)
+        item = f"{message.message_id}:{document.attachment_id or '-'}"
         read = await self._gated(
             scope,
-            await self._read(scope, unread, item_rows, rules, run, customer.code),
+            await self._read(
+                scope,
+                unread,
+                item_rows,
+                rules,
+                run,
+                customer.code,
+                message_id=message.message_id,
+                attachment_id=document.attachment_id,
+            ),
             rules,
-            item=f"{message.message_id}:{document.attachment_id or '-'}",
+            item=item,
         )
         checks: list[LineCheck] = []
         for po_line, by_code in mapped_lines:
@@ -1485,6 +1701,7 @@ class OrderIntake:
             catalog_as_of=min(as_of, default=message.received_at),
             cross_check_required=rules.cross_check_required,
             export_control_mode=rules.export_control_mode,
+            cross_check_on_match=rules.cross_check_on_match,
             duplicate_of_case=history.duplicate_of_case,
             duplicate_of_so=history.duplicate_of_so,
             base_so_no=history.base_so_no,
@@ -1781,19 +1998,42 @@ class OrderIntake:
         rules: OrderRules,
         run: RunContext | None,
         customer_code: str,
+        *,
+        message_id: str,
+        attachment_id: str | None,
     ) -> dict[int, MappedLine]:
         """The lines a model read (dw_sales ADR 0005), by line number: only
         where the tenant's rules turn it on and its live eval met the bar, a
         model is wired, and a DW1 run is doing the processing. Otherwise none,
         and every line keeps the mapping code gave it. The reading is shown
         the tenant's decided lines most like these, the case's customer's
-        first, as many as its rules say (ticket 43)."""
+        first, as many as its rules say (ticket 43). Not on and passing but
+        listed in shadow (ticket 67), the lines are read the same way and
+        kept for Sales' confirmation to label, and none is returned."""
         if not lines or self.descriptions is None or run is None:
             return {}
-        if not await self._model_step(scope, rules, ModelStep.DESCRIPTION_ATTRIBUTES):
-            return {}
+        step = ModelStep.DESCRIPTION_ATTRIBUTES
         showing = Showing(Lookup(customer_code, rules.learning.examples_per_line))
-        return await self.descriptions.read(lines, items, run=run, showing=showing)
+        if await self._model_step(scope, rules, step):
+            return await self.descriptions.read(lines, items, run=run, showing=showing)
+        if self.shadow is not None and await self.shadow.shadows(scope, rules, step):
+            try:
+                read = await self.descriptions.read(lines, items, run=run, showing=showing)
+            except (BudgetExceededError, QuotaExceededError):
+                # A shadow reading never stops the mail's own processing.
+                return {}
+            await self.shadow.keep(
+                scope,
+                description_shadows(
+                    read,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    rules=rules.version,
+                    at=self.shadow.clock.now(),
+                    new_id=uuid.uuid4,
+                ),
+            )
+        return {}
 
     async def _gated(
         self, scope: SalesScope, read: dict[int, MappedLine], rules: OrderRules, *, item: str

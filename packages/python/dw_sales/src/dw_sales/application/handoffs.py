@@ -89,6 +89,7 @@ from dw_sales.domain.handoffs import (
     quantity_at,
 )
 from dw_sales.domain.named_lines import LineNames, named_line, names_of
+from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.rfq_reading import parse_date, parse_document_no
 
 # The prompt the spans are copied with. Its file is
@@ -720,6 +721,25 @@ class PcAskedLine:
     uom: str
     # None: the PO prints it blank (date to follow).
     requested_date: date | None
+
+
+def pc_asked_lines(case: OrderCase) -> list[PcAskedLine]:
+    """The lines a request to PC asks about now (`OrderCase.pc_lines`), as
+    the case enters them: the one reading both the page's text
+    (`PcRequests.draft`) and the mail to PC (`pc_request_draft`) use."""
+    asked = set(case.pc_lines())
+    return [
+        PcAskedLine(
+            line_no=line.line_no,
+            prv_code=line.mapping.prv_code,
+            customer_item_code=line.effective.customer_item_code,
+            quantity=line.effective.quantity,
+            uom=line.effective.uom,
+            requested_date=line.effective.requested_date,
+        )
+        for line in case.lines
+        if line.line_no in asked
+    ]
 
 
 @dataclass(frozen=True, slots=True)

@@ -10,6 +10,7 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
 
 ## State
 
+- 2026-11-26, **the DW2 team's first questions answered; onboarding docs** (branch `docs/dw2-onboarding`, stacked on `feat/sales-chat-widget`, not pushed): `docs/dev/huong-dan-moi-truong-dev.md` (build and run on a Windows dev machine, personas for both DWs, model, tests, pitfalls) and `docs/dev/viec-chung-dw1-dw2.md` (17 shared parts with state and what is left; how mail reaches DW: a polled drop folder, not a push, and why not straight to disk; how DW2 plugs into the Bravo gateway: typed HTTP commands to the gateway, the gateway alone writing SQL under two column-granted logins, DW2's write kinds W11–W18 added to `dw_bravo.contract` and its switch key, a `bravo_write.<document>` approval with a stamp, a UAT trace per kind). **Owed by Đạt:** push the branch and open the PR to `dev` so the DW2 team can read them; assign the 'đề xuất người làm' column at the meeting.
 - 2026-11-13, **the BA's two real purchasing flows arrived** (outside git:
   `Downloads/DW2.drawio` "PURCHASING – NVL" new + mass, `Downloads/DW2-1.drawio`
   "PURCHASING – CCDC / máy móc / dịch vụ" with + without a quotation; decoded in

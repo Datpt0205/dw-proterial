@@ -18,6 +18,7 @@ from test_worker import bare_settings
 from dw_connectors.adapters.zalo_inbound import ZaloInbound
 from dw_connectors.adapters.zalo_link import ConnectToken, make_connect_token
 from dw_connectors.inbound import InboundMessage
+from dw_worker.consumers.scope_failures import ScopesFailedError
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.main import build_registry
 
@@ -142,7 +143,10 @@ async def test_one_tick_handles_both_payload_shapes_and_survives_a_bad_update() 
     )
     store = _FakeStore({first_claims.jti, second_claims.jti})
 
-    await _consumer(bot, store)()
+    # The bad one is counted and raised after the rest (ticket 84), so the
+    # tick is not recorded as clean.
+    with pytest.raises(ScopesFailedError, match="zalo_link_poll: 1 update"):
+        await _consumer(bot, store)()
 
     assert store.links == {"chat-ok": _USER}
     assert [chat for chat, _ in bot.sent] == ["chat-ok"]
@@ -169,7 +173,8 @@ async def test_free_text_in_a_poll_tick_reaches_the_router_and_a_failure_spares_
         ]
     )
 
-    await _consumer(bot, _FakeStore(set()), router)()
+    with pytest.raises(ScopesFailedError, match="zalo_link_poll: 1 update"):
+        await _consumer(bot, _FakeStore(set()), router)()
 
     assert [(m.message_id, m.text) for m in router.routed] == [("z2", "đề xuất SP")]
 

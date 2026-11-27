@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from dw_bravo.adapters.recorded import RecordedProcedures, RecordedReferences
 from dw_bravo.approval_token import ApprovalClaims, ApprovalTokenSigner, ApprovalTokenVerifier
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
+from dw_bravo.contract import BravoTarget, LineRef, SetConfirmedDate, SetQuantity
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
@@ -34,6 +34,7 @@ from dw_bravo_gateway.ports import (
     SwitchState,
 )
 from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.targets import TargetBravo, Targets
 
 LAYOUT = """<root><Tables>
 <ParentTable>
@@ -71,15 +72,17 @@ ROWVERSION = "0x00000000000007D2"
 LINE = LineRef(so_id=10, line_id=20, line_rowversion=ROWVERSION)
 SET_DATE = SetConfirmedDate(line=LINE, confirmed_date=date(2026, 12, 1))
 SET_QUANTITY = SetQuantity(line=LINE, quantity=Decimal(5))
-# The context's event for these tests only: what the client sends for a save
-# of an existing SO is not measured (statements.SCREENS refuses it).
-TEST_SCREENS = {
-    "EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": "Edit"})
-}
+# The shipped screens: the client's word for a stored SO's save is traced
+# (`Edit`, ticket 70).
+TEST_SCREENS = dict(SCREENS)
 
 
 def token(
-    command: object = SET_DATE, *, approval: uuid.UUID | None = None, user: int = 2413
+    command: object = SET_DATE,
+    *,
+    approval: uuid.UUID | None = None,
+    user: int = 2413,
+    target: BravoTarget = "uat",
 ) -> str:
     return SIGNER.sign(
         approval_id=approval or uuid.uuid4(),
@@ -88,6 +91,7 @@ def token(
         command=command,
         bravo_user_id=user,
         employee_code="NV001",
+        target=target,
         now=NOW,
     )
 
@@ -112,6 +116,8 @@ def stored() -> StoredDocument:
                 "Amount9": Decimal(6),
                 "Made": Decimal(2),
                 "EstimatedTimeDelivery": None,
+                "IsCancel": None,
+                "CancelRemark": None,
                 "ModifiedBy": 1,
                 "timestamp": ROWVERSION,
             }
@@ -127,6 +133,8 @@ def stored() -> StoredDocument:
                 "Made",
                 "ModifiedBy",
                 "EstimatedTimeDelivery",
+                "IsCancel",
+                "CancelRemark",
             ],
         },
         prevent_edit={"R20": 0},
@@ -136,9 +144,13 @@ def stored() -> StoredDocument:
 @dataclass
 class FakeSwitches:
     state_: SwitchState = "enabled"
+    target_: BravoTarget | None = "uat"
 
     async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         return self.state_
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        return self.target_
 
 
 @dataclass
@@ -180,6 +192,9 @@ class FakeDirectory:
 class FakeRights:
     command: CommandRight = "allowed"
     columns: list[ColumnRight] = field(default_factory=list)
+    # Bravo's answer for one operation where it differs from `command`.
+    by_operation: dict[str, CommandRight] = field(default_factory=dict)
+    asked: list[str] = field(default_factory=list)
 
     async def column_rights(self, user_id: int, command_key: str) -> Sequence[ColumnRight]:
         return self.columns
@@ -187,7 +202,8 @@ class FakeRights:
     async def command_right(
         self, user_id: int, command_key: str, operation: Literal["update", "insert"]
     ) -> CommandRight:
-        return self.command
+        self.asked.append(operation)
+        return self.by_operation.get(operation, self.command)
 
 
 @dataclass
@@ -200,6 +216,10 @@ class FakeBravo:
     fail_with: Exception | None = None
     tamper: dict[str, object] = field(default_factory=dict)  # a trigger's own change
     version: int = 0x7D2
+    # Bravo's `DML_B30BizDocDetailSO_InsertUpdate_RowId`: a new line's RowId
+    # filled from its Id (off: the trigger's join found nothing).
+    fills_row_id: bool = True
+    tamper_new: dict[str, object] = field(default_factory=dict)  # on each new line
 
     async def load(self, screen: str, doc_id: int) -> StoredDocument:
         if doc_id != self.document.header["Id"]:
@@ -215,17 +235,27 @@ class FakeBravo:
         if self.fail_with is not None:
             raise self.fail_with
         rows = {"B30BizDoc": [self.document.header], "B30BizDocDetailSO": self.document.lines}
-        for statement in batch.statements:
+        updates = [s for s in batch.statements if s.row_id is not None]
+        for statement in updates:
             row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
             if row["timestamp"] != statement.parameters["_Original_timestamp"]:
                 raise StaleRowError(statement.table)
         for statement in batch.statements:
-            row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
+            if statement.row_id is None:
+                new_id = max(int(r["Id"]) for r in rows[statement.table]) + 1  # type: ignore[call-overload]
+                row = {"Id": new_id}
+                rows[statement.table].append(row)
+            else:
+                row = next(r for r in rows[statement.table] if r["Id"] == statement.row_id)
             for name, value in statement.parameters.items():
                 if not name.startswith(("_Original_", "_Id")):
                     row[name[1:]] = value
             self.version += 1
             row["timestamp"] = f"0x{self.version:016X}"
+            if statement.row_id is None:
+                if self.fills_row_id:
+                    row["RowId"] = f"R{row['Id']}"
+                row.update(self.tamper_new)
         self.document.lines[0].update(self.tamper)
 
 
@@ -234,6 +264,7 @@ class FakeEngine:
     layout_: Layout = field(
         default_factory=lambda: read_layout(LAYOUT, "EDIT_BizDocSO", missing_template=None)
     )
+    views: dict[str, list[str]] = field(default_factory=dict)
 
     async def layout(self, screen: str) -> Layout:
         return self.layout_
@@ -246,6 +277,9 @@ class FakeEngine:
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return Session(user={"Id": Decimal(user.id)}, branch=branch, now=now.replace(tzinfo=None))
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        return self.views.get(view, [])
 
 
 @dataclass
@@ -272,9 +306,16 @@ def gateway(**over: object) -> Gateway:
         writer=bravo,
         now=lambda: NOW,
         tenant_id=TENANT,
+        target="uat",
         screens=TEST_SCREENS,
         pace=WritePace(),
     )
     for name, value in over.items():
         setattr(pipeline, name, value)
     return Gateway(pipeline, switches, ledger, directory, rights, bravo)
+
+
+def targets(gw: Gateway, **reads: object) -> Targets:
+    """The gateway's router over one target, UAT: the pipeline and ``reads``
+    (`orders`, `directory`, `sync`, `fingerprints`)."""
+    return Targets(TENANT, gw.switches, {"uat": TargetBravo(gw.pipeline, **reads)})  # type: ignore[arg-type]

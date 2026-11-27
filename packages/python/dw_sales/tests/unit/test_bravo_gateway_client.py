@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -24,10 +25,12 @@ from dw_bravo.sync import SyncPage, SyncQuery, SyncRow, SyncUnavailableError
 from dw_bravo_gateway.api import create_app
 from dw_bravo_gateway.pipeline import WriteResult
 from dw_bravo_gateway.ports import BravoUser, DocumentNotFoundError
+from dw_bravo_gateway.targets import TargetBravo, Targets
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.bravo_contract import BravoContract
 from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.application.bravo_line_writes import (
+    NOT_CONNECTED,
     BravoSo,
     BravoUnreachableError,
     ConfirmedDateChange,
@@ -42,7 +45,9 @@ SCOPE = SalesScope(TenantId(TENANT), WorkspaceId(uuid.UUID(int=0xB)))
 SO = SalesOrderState(
     so_id=10,
     so_no="SO-1",
-    lines=(SoLineState(20, 1, "PRV-1", Decimal("12.5"), date(2026, 12, 1), "0x00000000000007D2"),),
+    lines=(
+        SoLineState(20, 1, "PRV-1", Decimal("12.5"), date(2026, 12, 1), "0x00000000000007D2", ""),
+    ),
 )
 
 
@@ -80,8 +85,20 @@ class _Pipeline:
         return WriteResult("refused", "switch", "write_kind_off")
 
 
+@dataclass
+class _Switches:
+    target_: str | None = "uat"
+
+    async def target(self, tenant_id: uuid.UUID) -> str | None:
+        return self.target_
+
+
+def _targets(pipeline: object, current: str | None = "uat", **reads: object) -> Targets:
+    return Targets(TENANT, _Switches(current), {"uat": TargetBravo(pipeline, **reads)})  # type: ignore[arg-type]
+
+
 def _client(pipeline: _Pipeline | None = None) -> BravoGatewayClient:
-    app = create_app(pipeline or _Pipeline(), orders=_Bravo(), directory=_Bravo())  # type: ignore[arg-type]
+    app = create_app(_targets(pipeline or _Pipeline(), orders=_Bravo(), directory=_Bravo()))
     http = httpx.AsyncClient(transport=httpx.ASGITransport(app=app))
     return BravoGatewayClient(http, "http://gateway", TENANT)
 
@@ -90,7 +107,33 @@ async def test_an_so_read_through_the_gateway_is_sales_own_type() -> None:
     so = await _client().sales_order(TENANT, "SO-1")
 
     assert isinstance(so, BravoSo) and so.lines[0].quantity == Decimal("12.5")
+    assert so.target == "uat"  # the Bravo the gateway read it from (ticket 85)
     assert await _client().sales_order(TENANT, "SO-404") is None
+
+
+async def test_an_so_answer_that_names_no_bravo_is_could_not_ask() -> None:
+    def unnamed(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"so_id": 10, "so_no": "SO-1", "lines": []})
+
+    def another(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"so_id": 10, "so_no": "SO-1", "lines": []},
+            headers={"Bravo-Target": "staging"},
+        )
+
+    for handler in (unnamed, another):
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        with pytest.raises(BravoUnreachableError):
+            await BravoGatewayClient(http, "http://gateway", TENANT).sales_order(TENANT, "SO-1")
+
+
+async def test_a_target_without_logins_is_could_not_ask() -> None:
+    app = create_app(_targets(_Pipeline(), current="production", orders=_Bravo()))
+    http = httpx.AsyncClient(transport=httpx.ASGITransport(app=app))
+
+    with pytest.raises(BravoUnreachableError):
+        await BravoGatewayClient(http, "http://gateway", TENANT).sales_order(TENANT, "SO-1")
 
 
 async def test_only_active_bravo_users_are_counted() -> None:
@@ -191,14 +234,15 @@ async def test_the_sync_lane_reads_its_page_and_a_silent_gateway_is_could_not_re
         async def changes(self, query: SyncQuery) -> SyncPage:
             return SyncPage((SyncRow(3, "0x0000000000000003", {"Code": "X"}),))
 
-    app = create_app(_Pipeline(), sync=_Sync())  # type: ignore[arg-type]
+    app = create_app(_targets(_Pipeline(), sync=_Sync()))
     client = BravoGatewayClient(
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app)), "http://g", TENANT
     )
 
-    page = await client.changes(SyncQuery("B20BlackList"))
+    answer = await client.changes(SyncQuery("B20BlackList"))
 
-    assert page.rows[0].row_id == 3
+    assert answer.page.rows[0].row_id == 3
+    assert answer.target == "uat"  # the Bravo the gateway read (ticket 85 review)
 
     def down(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
@@ -208,3 +252,104 @@ async def test_the_sync_lane_reads_its_page_and_a_silent_gateway_is_could_not_re
     )
     with pytest.raises(SyncUnavailableError):
         await silent.changes(SyncQuery("B20BlackList"))
+
+
+async def test_a_sync_page_that_names_no_bravo_is_could_not_read() -> None:
+    def unnamed(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"rows": []})
+
+    client = BravoGatewayClient(
+        httpx.AsyncClient(transport=httpx.MockTransport(unnamed)), "http://g", TENANT
+    )
+    with pytest.raises(SyncUnavailableError):
+        await client.changes(SyncQuery("B20BlackList"))
+
+
+async def test_the_targets_are_the_gateways_own_answer() -> None:
+    answer = await _client().targets(TENANT)
+
+    assert (answer.connected, answer.current, answer.uat, answer.production) == (
+        True,
+        "uat",
+        True,
+        False,
+    )
+    with pytest.raises(BravoUnreachableError):
+        await _client().targets(uuid.uuid4())  # another tenant's: nothing sent
+
+
+class _Scopes:
+    """`SalesAuthorizationPort` over a fixed set of scopes."""
+
+    def __init__(self, *held: str) -> None:
+        self.held = set(held)
+
+    async def require(self, *, context: object, action: str, **_: object) -> None:
+        from dw_kernel.errors import PermissionDeniedError
+
+        if action not in self.held:
+            raise PermissionDeniedError(f"no {action}")
+
+    def is_allowed(self, context: object, action: str) -> bool:
+        return action in self.held
+
+
+class _CountingPort:
+    def __init__(self) -> None:
+        self.asked = 0
+
+    async def targets(self, tenant_id: uuid.UUID) -> object:
+        self.asked += 1
+        return NOT_CONNECTED
+
+
+async def test_the_targets_of_no_gateway_read_as_not_connected() -> None:
+    from dw_sales.application.access import Gate
+    from dw_sales.application.bravo_line_writes import BravoNotConnected, BravoTargets
+
+    caller = SimpleNamespace(tenant_id=TENANT, workspace_id=uuid.UUID(int=0xB))
+    gate = Gate(_Scopes("sales.case.read"))  # type: ignore[arg-type]
+    view = await BravoTargets(gate, BravoNotConnected()).now(caller)  # type: ignore[arg-type]
+
+    assert (view.connected, view.current, view.uat, view.production) == (
+        False,
+        None,
+        False,
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    "held",
+    [("sales.case.read",), ("sales.rules.propose",)],
+    ids=["case reader", "rules editor without case read"],
+)
+async def test_the_targets_are_read_by_a_case_reader_or_a_rules_proposer(
+    held: tuple[str, ...],
+) -> None:
+    # The tenant's rules editor holds `sales.rules.propose` only and is the
+    # one asked to switch: the card must say which Bravo is in use (85 review).
+    from dw_sales.application.access import Gate
+    from dw_sales.application.bravo_line_writes import BravoTargets
+
+    port = _CountingPort()
+    caller = SimpleNamespace(tenant_id=TENANT, workspace_id=uuid.UUID(int=0xB))
+
+    await BravoTargets(Gate(_Scopes(*held)), port).now(caller)  # type: ignore[arg-type]
+
+    assert port.asked == 1
+
+
+async def test_the_targets_are_refused_to_a_caller_who_neither_reads_cases_nor_proposes_rules() -> (
+    None
+):
+    from dw_kernel.errors import PermissionDeniedError
+    from dw_sales.application.access import Gate
+    from dw_sales.application.bravo_line_writes import BravoTargets
+
+    port = _CountingPort()
+    caller = SimpleNamespace(tenant_id=TENANT, workspace_id=uuid.UUID(int=0xB))
+    gate = Gate(_Scopes("sales.rules.approve", "sales.order.prepare"))  # type: ignore[arg-type]
+    with pytest.raises(PermissionDeniedError):
+        await BravoTargets(gate, port).now(caller)  # type: ignore[arg-type]
+    assert port.asked == 0

@@ -239,8 +239,8 @@ def _migration(revision: str) -> Any:
 def test_the_migration_holds_the_domains_sets() -> None:
     """`ck_reminder_marks_followup` and `ck_reminder_marks_customer_term`
     name exactly `REMINDERS` and `CUSTOMER_TERM`: the table's first list and
-    what `57bbf61ae6b8` (tickets 06 and 09) and `b01dba5d0433` (ticket 05)
-    admitted after it."""
+    what `57bbf61ae6b8` (tickets 06 and 09), `b01dba5d0433` (ticket 05) and
+    `fa17832cd08d` (ticket 78) admitted after it."""
     module = _migration("4bcfa82060fc")
 
     def listed(text: str) -> set[str]:
@@ -248,6 +248,7 @@ def test_the_migration_holds_the_domains_sets() -> None:
 
     admitted = set(_migration("57bbf61ae6b8")._NEW_REMINDERS)
     admitted |= set(_migration("b01dba5d0433")._NEW_REMINDERS)
+    admitted |= set(_migration("fa17832cd08d")._NEW_REMINDERS)
     assert listed(module._REMINDERS) | admitted == {f.value for f in REMINDERS}
     assert listed(module._CUSTOMER_TERM) == {f.value for f in CUSTOMER_TERM}
 

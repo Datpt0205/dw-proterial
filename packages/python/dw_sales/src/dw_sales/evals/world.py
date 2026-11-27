@@ -61,6 +61,7 @@ from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.notifications import SourcedNotification
+from dw_platform.domain.approval import ApprovalStatus
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_platform.testing.scanners import NoMalware
@@ -87,6 +88,7 @@ from dw_sales.application.bravo_line_writes import (
     BravoOrdersPort,
     BravoWriteStamp,
     WriteStatus,
+    write_bravo_versions,
 )
 from dw_sales.application.bravo_watch import WatchState
 from dw_sales.application.case_store import (
@@ -116,6 +118,8 @@ from dw_sales.application.catalog_imports import (
     CatalogSettlement,
 )
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.cross_check_on_match import CrossCheckRoute, Outcome
+from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED, QuoteManagerSettlement
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoff_kinds import HandoffKindReader
 from dw_sales.application.handoffs import HandoffReader
@@ -139,9 +143,10 @@ from dw_sales.application.prompt_versions import PromptDecisions, prompt_book
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
-from dw_sales.application.runs import subject_of
+from dw_sales.application.runs import DecisionType, subject_of
 from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.shadow import ShadowReadings
 from dw_sales.application.skill_pick import PickModelPort
 from dw_sales.application.skills import SKILLS_DECIDED, SkillSettlement
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -160,6 +165,7 @@ from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.order_quotes import SETTLED
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.shadow import ShadowReading
 from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.evals.recorded import ScriptedPick
@@ -359,9 +365,14 @@ class _ScopeState:
     change_requests: dict[uuid.UUID, ChangeRequest] = field(default_factory=dict)
     # What a person kept of a model's proposal (ticket 43), in the order written.
     labelled_cases: list[LabelledCase] = field(default_factory=list)
+    # What a step read in shadow (ticket 67), by step and item, until a
+    # decision takes it.
+    shadow_readings: dict[tuple[str, str], ShadowReading] = field(default_factory=dict)
     # Each step's threshold per prompt and model profile (ticket 44): what
     # the lane last stored, committed at once as the lane's own transaction.
     thresholds: dict[VersionKey, StepThreshold] = field(default_factory=dict)
+    # What the cross-check lane did per order version (ticket 81).
+    cross_check_routes: dict[tuple[uuid.UUID, int], CrossCheckRoute] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -383,7 +394,9 @@ class _ScopeState:
             sent=dict(self.sent),
             change_requests=dict(self.change_requests),
             labelled_cases=list(self.labelled_cases),
+            shadow_readings=dict(self.shadow_readings),
             thresholds=dict(self.thresholds),
+            cross_check_routes=dict(self.cross_check_routes),
         )
 
 
@@ -424,6 +437,25 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
 
     async def list_all(self) -> Sequence[Stored[CaseT]]:
         return list(reversed(self._held.values()))
+
+    async def waiting_on_pc(self) -> Sequence[Stored[CaseT]]:
+        """An order store's: the cases waiting on PC (a quote never does)."""
+        return [
+            stored
+            for stored in reversed(self._held.values())
+            if isinstance(stored.case, OrderCase) and stored.case.pc_request is not None
+        ]
+
+    async def awaiting_on_match(self) -> Sequence[Stored[CaseT]]:
+        """An order store's: the orders in Bravo whose rules say a matching
+        read-back passes them (ticket 81)."""
+        return [
+            stored
+            for stored in self._held.values()
+            if isinstance(stored.case, OrderCase)
+            and stored.case.status is OrderStatus.UPLOADED_TO_BRAVO
+            and stored.case.cross_check_on_match is True
+        ]
 
     async def add(self, case: CaseT, origin: CaseOrigin, event: CaseEvent) -> None:
         if case.case_id in self._held or any(
@@ -863,6 +895,9 @@ class _Followups:
                     quote_open_since=quote_open_since,
                     design_checked=design_checked,
                     pcs_price_asked_at=pcs_price_asked_at,
+                    # Ticket 78: the SQL store reads the same from the
+                    # current revision's findings.
+                    export_held=isinstance(case, OrderCase) and case.awaits_export_control,
                 )
             )
         return found
@@ -917,6 +952,46 @@ class _LabelledCases:
         self._held.extend(cases)
 
 
+class _ShadowReadings:
+    """`ShadowReadingRepositoryPort` over one transaction's state: one
+    reading per step and item, the first kept, as `uq_shadow_readings_item`
+    holds it; taken readings deleted as they are returned."""
+
+    def __init__(self, held: dict[tuple[str, str], ShadowReading]) -> None:
+        self._held = held
+
+    async def keep(self, readings: Sequence[ShadowReading]) -> int:
+        kept = 0
+        for reading in readings:
+            key = (reading.step.value, reading.item_key)
+            if key not in self._held:
+                self._held[key] = reading
+                kept += 1
+        return kept
+
+    async def take(self, step: ModelStep, item_key: str) -> ShadowReading | None:
+        return self._held.pop((step.value, item_key), None)
+
+    async def take_for_case(
+        self, steps: Sequence[ModelStep], case_id: uuid.UUID
+    ) -> Sequence[ShadowReading]:
+        wanted = {s.value for s in steps}
+        found = [
+            k for k, r in self._held.items() if r.case_id == case_id and r.step.value in wanted
+        ]
+        return [self._held.pop(k) for k in found]
+
+    async def take_matching(self, step: ModelStep, match_key: str) -> Sequence[ShadowReading]:
+        found = [k for k, r in self._held.items() if r.step is step and r.match_key == match_key]
+        return [self._held.pop(k) for k in found]
+
+    async def prune(self, before: datetime) -> int:
+        old = [k for k, r in self._held.items() if r.read_at < before]
+        for key in old:
+            del self._held[key]
+        return len(old)
+
+
 class _Outbound:
     """`OutboundMailStorePort` over one transaction's state: one active mail
     per artifact, as `uq_outbound_mails_active_artifact` holds it."""
@@ -964,6 +1039,45 @@ class _Outbound:
         return True
 
 
+class _CrossCheckRoutes:
+    """`CrossCheckRoutesPort` over one transaction's state: one per case
+    version, decided once, as the SQL store's key and update say."""
+
+    def __init__(self, held: dict[tuple[uuid.UUID, int], CrossCheckRoute]) -> None:
+        self._held = held
+
+    async def get(self, case_id: uuid.UUID, case_version: int) -> CrossCheckRoute | None:
+        return self._held.get((case_id, case_version))
+
+    async def add(self, route: CrossCheckRoute) -> None:
+        key = (route.case_id, route.case_version)
+        if key in self._held:
+            raise ConflictError("the case version is routed already")
+        self._held[key] = route
+
+    async def decide(
+        self, case_id: uuid.UUID, case_version: int, outcome: Outcome, at: datetime
+    ) -> bool:
+        held = self._held.get((case_id, case_version))
+        if held is None or held.outcome is not None:
+            return False
+        self._held[(case_id, case_version)] = held.model_copy(
+            update={"outcome": outcome, "decided_at": at}
+        )
+        return True
+
+    async def passed(self, case_id: uuid.UUID) -> CrossCheckRoute | None:
+        open_passes = [
+            r
+            for r in self._held.values()
+            if r.case_id == case_id and r.route == "applied" and r.outcome is None
+        ]
+        return max(open_passes, key=lambda r: r.case_version, default=None)
+
+    async def outcomes(self, basis: str) -> Iterable[CrossCheckRoute]:
+        return [r for r in self._held.values() if r.basis == basis and r.outcome is not None]
+
+
 class _Work:
     """`SalesUnitOfWork`: one scope's state, copied in, written back on commit."""
 
@@ -987,6 +1101,8 @@ class _Work:
         self.outbound = _Outbound(state.outbound)
         self.change_requests = _ChangeRequests(state.change_requests)
         self.labelled_cases = _LabelledCases(state.labelled_cases)
+        self.shadow_readings = _ShadowReadings(state.shadow_readings)
+        self.cross_check_routes = _CrossCheckRoutes(state.cross_check_routes)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
@@ -1443,6 +1559,42 @@ class World:
         """Each `sales.layout.decided` the decisions announced, carried out."""
         await self._settle(LAYOUT_DECIDED, self.layout_settlement)
 
+    async def decide_manager(
+        self,
+        caller: Caller,
+        quote_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A Manager's decision on a checked quotation with an order (ticket
+        39), as the API's `POST /approvals/{id}/decisions` makes it, on the
+        version shown; then carried out as the worker carries it out."""
+        waiting = [
+            request
+            for request in self.runtime.approvals.rows.values()
+            if request.approval_type == DecisionType.QUOTE_MANAGER.value
+            and request.status is ApprovalStatus.PENDING
+            and request.payload.get("case_id") == str(quote_id)
+        ]
+        if not waiting:
+            raise ConflictError(
+                "the quotation waits on no Manager", details={"rule": "no_decision"}
+            )
+        await self.runtime.approval_flow.decide(
+            approval_id=waiting[0].id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+            subject_version=self.quote(quote_id).case_version,
+        )
+        settlement = QuoteManagerSettlement(
+            self.store, self.layout_settlement.clock, self.layout_settlement.ids, self.notifications
+        )
+        await self._settle(QUOTE_MANAGER_DECIDED, settlement)
+
     async def decide_rules(
         self,
         caller: Caller,
@@ -1542,7 +1694,11 @@ class World:
     async def _settle(
         self,
         event_type: str,
-        settlement: LayoutSettlement | RuleSettlement | CatalogSettlement | SkillSettlement,
+        settlement: LayoutSettlement
+        | RuleSettlement
+        | CatalogSettlement
+        | SkillSettlement
+        | QuoteManagerSettlement,
     ) -> None:
         """Each event of ``event_type`` handed to its settlement with the
         envelope's tenancy and the decider, as the worker's handler hands it
@@ -1721,6 +1877,7 @@ def open_world(
     skill_pick: PickModelPort | None = None,
     bravo_orders: BravoOrdersPort | None = None,
     bravo_commands: BravoCommandsPort | None = None,
+    shadow: bool = False,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1881,6 +2038,9 @@ def open_world(
         design_senders=quotation,
         # The quote cases opened from an order (ticket 09).
         linked_quotes=store,
+        # Shadow readings (ticket 67) where a test asks for them: a smoke's
+        # scripted model answers the calls its case expects, no others.
+        shadow=ShadowReadings(gate=readiness, uow=store, clock=clock) if shadow else None,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications(clock=clock)
@@ -1900,6 +2060,7 @@ def open_world(
         # Bravo read through the gateway (ticket 53): not connected unless a
         # test hands its own SO and command builder.
         bravo_orders=bravo_orders or BravoNotConnected(),
+        bravo_targets=BravoNotConnected(),
         bravo_commands=bravo_commands or BravoNotConnected(),
         bravo_po=None,
         bravo_writes_uow=store,
@@ -1968,7 +2129,11 @@ def open_world(
         bravo_writes=assembly.bravo_write_decisions,
         # No signing key and no Bravo: a Bravo write is never approved here.
         bravo_stamp=BravoWriteStamp(
-            None, BravoNotConnected(), NoEmployeeCodes(), BravoNotConnected(), clock
+            None,
+            write_bravo_versions(BravoNotConnected()),
+            NoEmployeeCodes(),
+            BravoNotConnected(),
+            clock,
         ),
         worker_file=worker_file,
     )

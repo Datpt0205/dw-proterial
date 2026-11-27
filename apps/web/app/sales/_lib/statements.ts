@@ -6,6 +6,14 @@ type Quote = SalesSchemas["QuoteCaseView"];
 type Basis = SalesSchemas["LineBasisView"];
 
 /**
+ * A cross-check DW passed on Bravo's read-back (ticket 81), saying what the
+ * comparison covered and what it did not (ui-quality §7): the SO number and
+ * each row (`compare`), never the SO header.
+ */
+export const DW_PASS_COVERS =
+  "DW đối chiếu với Bravo, không có người kiểm: khớp số SO và từng dòng (mã hàng, số lượng, đơn giá, ngày); đầu SO (tiền tệ, điều kiện giao, thanh toán, ngày chứng từ) chưa đối chiếu";
+
+/**
  * The coverage statement (spec decision 12): what was read and checked on one
  * order, so a clean result says what it covered (ui-quality §7).
  * "Đã đọc 3/3 dòng trên 1 sheet; tổng khớp ô TOTAL (F12); 21 lượt kiểm tra × 3

@@ -196,12 +196,18 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
             # Design's new code before reminding the PIC (ticket 06).
             _step(
                 StepId.O2,
-                _in(_ORDER, "model_assist.description_attributes"),
+                _in(
+                    _ORDER,
+                    "model_assist.description_attributes",
+                    "model_assist.shadow",
+                    "model_assist.shadow_calls_per_hour",
+                ),
                 _severities("code_unmapped", "code_ambiguous"),
                 _in(_FOLLOWUPS, "waiting_design_code"),
             ),
             # Enter the PO: a new layout's first POs and a PO written in the
-            # mail, read value by value.
+            # mail, read value by value; a file opened with a password
+            # (ticket 80).
             _step(
                 StepId.O3,
                 _in(
@@ -209,15 +215,24 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "layout_onboarding.uncertain_first_pos",
                     "model_assist.layout_proposal",
                     "model_assist.po_body_extraction",
+                    "password_file",
                 ),
                 _severities("value_uncertain", "line_total_mismatch", "files_disagree"),
             ),
             # The delivery date DW1 suggests, and how long DW1 waits on PC's
             # answer before reminding the PIC (ticket 07); the model reading
-            # PC's own change of a confirmed order (ticket 10).
+            # PC's own change of a confirmed order (ticket 10); the mailboxes PC
+            # answers from (2026-11-23), and DW1 reading their mail itself
+            # (ticket 77).
             _step(
                 StepId.O4,
-                _in(_ORDER, "short_lead_time", "model_assist.internal_change"),
+                _in(
+                    _ORDER,
+                    "short_lead_time",
+                    "model_assist.internal_change",
+                    "pc_mailboxes",
+                    "model_assist.pc_reply",
+                ),
                 _severities("requested_date_short_lt", "requested_date_missing"),
                 _in(_FOLLOWUPS, "waiting_pc"),
             ),
@@ -252,8 +267,9 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                 _in(_ORDER, "model_assist.case_chat"),
                 _in(_FOLLOWUPS, "waiting_customer"),
             ),
-            # Whether a second person cross-checks the Bravo entry.
-            _step(StepId.O9, _in(_ORDER, "cross_check_required")),
+            # Whether a second person cross-checks the Bravo entry, and
+            # whether Bravo's matching read-back passes it (ticket 81).
+            _step(StepId.O9, _in(_ORDER, "cross_check_required", "cross_check_on_match")),
             # Confirmation and the export-control hold; then each customer's
             # days of silence that count as agreement, and telling the PIC
             # when they pass (ticket 28); the model's wording of the mails to
@@ -270,7 +286,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "model_assist.skill_reply_drafts",
                 ),
                 _severities("missing_noc_esf"),
-                _in(_FOLLOWUPS, "implied_acceptance"),
+                _in(_FOLLOWUPS, "implied_acceptance", "export_control_hold"),
             ),
             _step(StepId.O11),
             # Reading the RFQ (a quote step whose switch lives in the order rules).
@@ -430,6 +446,11 @@ class EdgeAction(StrEnum):
     # words or by silence past their days, or that they declined it (ticket 28).
     RECORD_AGREEMENT = "record_agreement"
     RECORD_DECLINE = "record_decline"
+    # An agreement by silence taken back (ticket 82).
+    UNDO_IMPLIED = "undo_implied"
+    # A cross-check DW passed on Bravo's matching read-back, taken back by
+    # a non-maker before the confirmation left (ticket 81).
+    REOPEN_CROSS_CHECK = "reopen_cross_check"
     APPLY_CHANGE = "apply_change"
     DRAFT_YCBG = "draft_ycbg"
     RECORD_YCBG = "record_ycbg"
@@ -526,11 +547,15 @@ _ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
         _A.CONFIRM, "sales", _G.EXPORT_CONTROL_HOLD, _G.PC_CONFIRMED_DATE
     ),
     (_O.CROSS_CHECKED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CROSS_CHECKED, _O.UPLOADED_TO_BRAVO): _edge(
+        _A.REOPEN_CROSS_CHECK, "sales", _G.MAKER_CHECKER
+    ),
     (_O.CONFIRMATION_SENT, _O.CONFIRMED): _edge(_A.RECORD_AGREEMENT, "sales", _G.IMPLIED_DAYS),
     # A revision there moves the same way (`revise`); the decline is the
     # move this status adds.
     (_O.CONFIRMATION_SENT, _O.CHANGE_REVIEW): _edge(_A.RECORD_DECLINE, "sales"),
     (_O.CONFIRMED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CONFIRMED, _O.CONFIRMATION_SENT): _edge(_A.UNDO_IMPLIED, "sales"),
     (_O.CHANGE_REVIEW, _O.UPLOADED_TO_BRAVO): _edge(
         _A.APPLY_CHANGE, "sales", _G.BLOCKING_FINDINGS, _G.ENTRY_COMPARED
     ),
@@ -674,6 +699,10 @@ _BRAVO_WRITES = (
     "which Bravo writes DW1 performs: switched on per kind with its UAT proof on"
     " /sales/rules, never from a step of the process (ticket 63)"
 )
+_BRAVO_TARGET = (
+    "which Bravo DW1 reads and writes, UAT or production: switched on /sales/rules"
+    " beside the gateway's answer for each, never from a step of the process (ticket 85)"
+)
 _LEARNED = (
     "each customer's own rules: learned from a worked example on the customer's row of"
     " the master data and approved there, never edited on a page (ticket 38)"
@@ -728,6 +757,8 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
             for path in ("schema_version", "policy_id", "policy_version")
         },
         Placement(RuleKey.BRAVO_WRITES, "kinds"): _BRAVO_WRITES,
+        Placement(RuleKey.BRAVO_WRITES, "target"): _BRAVO_TARGET,
+        Placement(RuleKey.BRAVO_WRITES, "target_uat_proof"): _BRAVO_TARGET,
     }
 )
 

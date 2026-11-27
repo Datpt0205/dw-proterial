@@ -105,6 +105,20 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
 ]);
 
 /**
+ * Whether the caller's own version of ``key`` applies without an approval:
+ * the head's does, but for a key a second person decides (tickets 63, 85),
+ * which the server lists (`decided_by_a_second`, the set it decides by).
+ * This only words the drawer; the server decides.
+ */
+export function appliesAtOnceFor(
+  view: Pick<RulesView, "decided_by_a_second">,
+  key: RuleKey,
+  approves: boolean,
+): boolean {
+  return approves && !view.decided_by_a_second.includes(key);
+}
+
+/**
  * Rules learned from a worked example and proven by replay (ticket 38),
  * never written in the editor: the server refuses them there, and the
  * button says where they are learned instead.

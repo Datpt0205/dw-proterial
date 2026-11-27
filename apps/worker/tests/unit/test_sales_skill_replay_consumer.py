@@ -11,6 +11,7 @@ import pytest
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.application.ports import SalesScope
 from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
+from dw_worker.consumers.scope_failures import ScopesFailedError
 
 pytestmark = pytest.mark.unit
 
@@ -34,7 +35,9 @@ async def test_one_workspace_failing_costs_the_others_nothing() -> None:
                 raise RuntimeError("model down")
             return 1
 
-    await build_sales_skill_replay_consumer(_Lane(), _Scopes())()
+    # The second is still served; then the lane says one failed (ticket 84).
+    with pytest.raises(ScopesFailedError):
+        await build_sales_skill_replay_consumer(_Lane(), _Scopes())()
     assert ticked == [first, second]
 
 

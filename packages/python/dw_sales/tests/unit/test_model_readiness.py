@@ -57,7 +57,8 @@ IDS = Uuid4Generator()
 
 def test_every_model_step_is_a_switch_of_the_rules_and_has_one_bar() -> None:
     switches = {name for name, f in ModelAssist.model_fields.items() if f.annotation is bool}
-    assert switches == {step.value for step in ModelStep}
+    # `shadow` switches every shadow reading at once (ticket 67), not a step.
+    assert switches - {"shadow"} == {step.value for step in ModelStep}
     assert set(BARS) == set(ModelStep)
     assert len({owner.dataset for owner in BARS.values()}) == len(ModelStep)
 

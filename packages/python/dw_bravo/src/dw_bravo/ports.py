@@ -53,3 +53,6 @@ class Session:
     lang_id: int = 0
     currency: Mapping[str, object] = field(default_factory=dict)
     config: Mapping[str, object] = field(default_factory=dict)
+    # The current branch's own attributes (`B00Branch`, by `branch`), what
+    # `BRANCH('<column>')` reads (the template's `BRANCH('IsGroup')`).
+    branch_info: Mapping[str, object] = field(default_factory=dict)

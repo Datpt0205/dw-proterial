@@ -779,12 +779,12 @@ quotation's.
 
 ## Who decided a step
 
-| Decided by | Label   |
-| ---------- | ------- |
-| `rule`     | Luật    |
-| `model`    | Mô hình |
+| Decided by | Label         |
+| ---------- | ------------- |
+| `rule`     | Luật          |
+| `model`    | Mô hình       |
 | `dw`       | DW tự áp dụng |
-| `person`   | Người   |
+| `person`   | Người         |
 
 ## Finding codes
 

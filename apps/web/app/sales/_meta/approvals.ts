@@ -1,5 +1,6 @@
 import type { Approval } from "@dw/contracts";
 import type { ApprovalHost } from "../../../lib/approvals/types";
+import { BravoWriteApprovalChanges } from "./bravo-write-approval";
 import { PromptApprovalChanges } from "./prompt-approval";
 import { RuleApprovalChanges } from "./rule-approval";
 import { SkillApprovalChanges } from "./skill-approval";
@@ -57,4 +58,18 @@ export const salesApprovalHost: ApprovalHost = {
     if (approval.approval_type === "sales.skills") return SkillApprovalChanges;
     return null;
   },
+};
+
+/**
+ * A DW1 line's write into Bravo (`bravo_write.sales_order`, tickets 53, 71):
+ * not under `sales.`, because its one decider is the person whose Bravo user
+ * writes it, and it is decided on `/approvals`, where this draws the SO line
+ * and the change; the order page's "Ghi vào Bravo" panel links to it.
+ */
+export const salesBravoWriteHost: ApprovalHost = {
+  prefix: "bravo_write.",
+  detail: (approval: Approval) =>
+    approval.approval_type === "bravo_write.sales_order"
+      ? BravoWriteApprovalChanges
+      : null,
 };

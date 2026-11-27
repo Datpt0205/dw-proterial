@@ -205,10 +205,22 @@ def _filters() -> list[WorkFilter]:
         quote_statuses=frozenset({"received", "ycbg_drafted", "approved", "sent"}),
         cross_checks=True,
         approvals=True,
+        export_holds=True,
         message_owners=frozenset({SALES_PIC_POOL}),
     )
     return [
         every_step,
+        # The export-control PIC's held orders alone, whoever is assigned
+        # (ticket 78): the SQL reads the hold as the case does.
+        WorkFilter(
+            principal_id=user_id(DIEU),
+            order_statuses=frozenset(),
+            quote_statuses=frozenset(),
+            cross_checks=False,
+            approvals=False,
+            export_holds=True,
+            message_owners=frozenset(),
+        ),
         # Someone else's view: the assignee rule leaves An's cases out.
         replace(every_step, principal_id=user_id(DIEU)),
         # The approver who priced nothing, and no messages.
@@ -218,6 +230,7 @@ def _filters() -> list[WorkFilter]:
             order_statuses=frozenset(),
             quote_statuses=frozenset(),
             cross_checks=False,
+            export_holds=False,
             message_owners=frozenset(),
         ),
         # Nothing at all.
@@ -227,18 +240,19 @@ def _filters() -> list[WorkFilter]:
             quote_statuses=frozenset(),
             cross_checks=False,
             approvals=False,
+            export_holds=False,
             message_owners=frozenset(),
         ),
     ]
 
 
-def _identity(entry: WorkEntry) -> tuple[str, str, str]:
+def _identity(entry: WorkEntry) -> tuple[str, str, str, bool]:
     row = entry.row
     kind = type(row).__name__
     key = getattr(row, "case_id", None) or getattr(getattr(row, "case", None), "case_id", None)
     if key is None:
         key = row.disposition.message_id  # type: ignore[union-attr]
-    return entry.position.group, kind, str(key)
+    return entry.position.group, kind, str(key), isinstance(row, OpenOrder) and row.export_held
 
 
 async def _walk_sql(api: Api, wanted: WorkFilter, limit: int) -> list[WorkEntry]:
@@ -360,7 +374,7 @@ async def history(api: Api, migrator: AsyncEngine) -> Api:
                 "INSERT INTO sales.order_cases (id, tenant_id, workspace_id, customer_code,"
                 " po_no, case_version, status, received_at, rules_version, catalog_as_of,"
                 " cross_check_required, export_control_mode, changes, bravo_entry_compared,"
-                " close_reason, closed_by, closed_at, release_manifest_ref, due)"
+                " close_reason, closed_by, closed_at, release_manifest_ref, due, stage_versions)"
                 " SELECT gen_random_uuid(), :t, :w, 'VLX', 'PO-H' || n, 2,"
                 " CASE WHEN n <= 3000 THEN 'closed' ELSE 'in_review' END,"
                 " CAST(:at AS timestamptz) - make_interval(mins => n),"
@@ -368,7 +382,8 @@ async def history(api: Api, migrator: AsyncEngine) -> Api:
                 " CASE WHEN n <= 3000 THEN 'not_an_order' END,"
                 " CASE WHEN n <= 3000 THEN CAST(:me AS uuid) END,"
                 " CASE WHEN n <= 3000 THEN CAST(:at AS timestamptz) END, 'sha256:history',"
-                " CASE WHEN n % 3 = 0 THEN to_char(DATE '2026-10-01' + n % 40, 'YYYY-MM-DD') END"
+                " CASE WHEN n % 3 = 0 THEN to_char(DATE '2026-10-01' + n % 40, 'YYYY-MM-DD') END,"
+                ' \'{"write_bravo": "1.0.0"}\'::jsonb'
                 " FROM generate_series(1, 3100) AS n"
             ),
             {

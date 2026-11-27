@@ -14,6 +14,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.application.followups import FollowupTick
 from dw_sales.application.ports import SalesScope
 from dw_worker.consumers.sales_followups import build_sales_followups_consumer
+from dw_worker.consumers.scope_failures import ScopesFailedError
 
 pytestmark = pytest.mark.unit
 
@@ -44,7 +45,9 @@ class _Scopes:
 async def test_every_workspace_with_cases_gets_its_tick_even_when_one_fails() -> None:
     lane = _Lane(failing=A)
 
-    await build_sales_followups_consumer(lane, _Scopes([A, B]))()
+    # B is still served; then the lane says one workspace failed (ticket 84).
+    with pytest.raises(ScopesFailedError):
+        await build_sales_followups_consumer(lane, _Scopes([A, B]))()
 
     assert lane.ticked == [A, B]
 

@@ -7,10 +7,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Card, Drawer, FloatButton, Grid } from "antd";
+import { Button, Card, Drawer, FloatButton, Grid } from "antd";
 import { CommentOutlined } from "@ant-design/icons";
 import type { AssistantCase, SalesSchemas } from "@dw/api-client";
 import { AssistantConversation } from "./assistant-conversation";
+import { useHideAssistantWidget } from "./assistant-widget";
 
 const TITLE = "Hỏi DW1 về hồ sơ này";
 
@@ -68,7 +69,8 @@ export function useCaseChatDecided(reload: () => void) {
  * bottom sheet (ui-quality §9), mounted on first open and kept, so an answer
  * still arriving is not lost by closing it. The page's own content keeps its
  * place in the tree whichever way it is drawn, so a breakpoint never reloads
- * the case.
+ * the case. The general "Hỏi DW1" widget hides here: the case's conversation
+ * is the one this page offers.
  */
 export function WithCaseChat({
   onCase,
@@ -77,6 +79,7 @@ export function WithCaseChat({
   onCase: AssistantCase;
   children: ReactNode;
 }) {
+  useHideAssistantWidget();
   // Undefined until measured: neither is drawn, so a desktop never flashes
   // the phone's button and a phone never reads (and so clears) the chat.
   const lg = Grid.useBreakpoint().lg;
@@ -129,5 +132,68 @@ export function WithCaseChat({
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Hides the general widget while it is mounted. */
+function HideWidget() {
+  useHideAssistantWidget();
+  return null;
+}
+
+/**
+ * A case's conversation from its item in "Việc của tôi" (ticket 79), with the
+ * controls the case page offers it (`useOrderChatOffers`,
+ * `useQuoteChatOffers`) and what to reload once something is decided in it.
+ * A button in the item opens it in a drawer, from the right at `lg` and up
+ * and as a bottom sheet below (ui-quality §9), mounted on first open and
+ * kept, so an answer still arriving is not lost; nothing is read, and so
+ * nothing marked seen, before it is opened. Never inline in the row: the chat
+ * follows its newest turn by scrolling its nearest scrolling ancestor, which
+ * inside a row is the work list itself. The general widget hides while it is
+ * open, so one screen never offers two chats.
+ */
+export function ItemCaseChat({
+  onCase,
+  offers,
+  onDecided,
+}: {
+  onCase: AssistantCase;
+  offers: CaseOffers;
+  onDecided: () => void;
+}) {
+  const lg = Grid.useBreakpoint().lg;
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  return (
+    <>
+      <Button
+        icon={<CommentOutlined aria-hidden />}
+        onClick={() => {
+          setMounted(true);
+          setOpen(true);
+        }}
+      >
+        {TITLE}
+      </Button>
+      {open ? <HideWidget /> : null}
+      {mounted ? (
+        <Drawer
+          open={open}
+          onClose={() => setOpen(false)}
+          placement={lg === false ? "bottom" : "right"}
+          size={lg === false ? "88vh" : 440}
+          title={TITLE}
+        >
+          <AssistantConversation
+            onCase={onCase}
+            examples={EXAMPLES}
+            catalog={CATALOG}
+            offers={offers}
+            onDecided={onDecided}
+          />
+        </Drawer>
+      ) : null}
+    </>
   );
 }

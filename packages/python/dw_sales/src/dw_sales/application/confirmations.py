@@ -42,12 +42,20 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
-from dw_sales.application.case_store import ArtifactRecord, SalesUnitOfWork, SalesUnitOfWorkFactory
+from dw_sales.application.case_store import (
+    ArtifactRecord,
+    CaseEvent,
+    EventActor,
+    SalesUnitOfWork,
+    SalesUnitOfWorkFactory,
+)
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.outgoing import outgoing_in
 from dw_sales.application.ports import MemberDirectoryPort
 from dw_sales.application.runs import PendingDecisionsPort, withdraw_if_left
 from dw_sales.application.support import (
+    DW1_WORKER_ID,
+    DW1_WORKER_VERSION,
     decided,
     person_event,
     same_version,
@@ -57,7 +65,7 @@ from dw_sales.application.support import (
 from dw_sales.application.threads import CaseThread, ThreadMembersPort, case_thread
 from dw_sales.application.views import CaseChangeView, order_change
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.orders import AgreementHow, OrderCase
+from dw_sales.domain.orders import Actor, AgreementHow, OrderCase
 
 _ORDER: Final = "sales_order_case"
 # The processed Excel a confirmation carries beside the customer's own PO
@@ -186,6 +194,22 @@ class Confirmations:
             await work.commit()
         return order_change(after)
 
+    async def implied_undone(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> CaseChangeView:
+        """ "Hoàn tác đồng ý ngầm": the order waits on the customer again
+        (ticket 82), whoever recorded the silence."""
+        await self._require(context, case_id)
+        now = self.clock.now()
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+            same_version(case_id, case.case_version, case_version)
+            after = decided(case.implied_undone)
+            event = person_event("order.implied_undone", context, now)
+            await save_order(work, context, self.ids, case, after, event)
+            await work.commit()
+        return order_change(after)
+
     async def declined(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
     ) -> CaseChangeView:
@@ -254,3 +278,39 @@ class Confirmations:
 
 
 __all__ = ["CONFIRMATION_EXCEL", "Confirmations", "confirmation_copy"]
+
+
+@dataclass(frozen=True)
+class SilenceRecorder:
+    """DW1 recording a customer's silence as agreement, for the follow-up
+    lane (ticket 82): only the store, the clock and the ids, so the worker
+    needs none of the confirmation's other collaborators."""
+
+    uow: SalesUnitOfWorkFactory
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def record_implied(self, context: AccessContext, case_id: uuid.UUID) -> bool:
+        """DW1 records the customer's silence as agreement itself (ticket 82,
+        dw_sales ADR 0011 amendment): ``context`` is the follow-up lane's own
+        (its system actor, no scope), the case read for the whole workspace.
+        The domain's own fences hold: a term stamped on the confirmation and
+        run out, nothing running in the update loop. False, and nothing
+        written, where the case moved on or the term does not let it."""
+        now = self.clock.now()
+        actor = Actor(user_id=context.principal_id)
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id, viewer=None)).case
+            try:
+                after = case.agreed("implied", actor, now)
+            except ConflictError:
+                return False
+            event = CaseEvent(
+                action="order.customer_agreed",
+                actor=EventActor.worker(DW1_WORKER_ID, DW1_WORKER_VERSION, initiated_by=None),
+                occurred_at=now,
+                reason_code="implied",
+            )
+            await save_order(work, context, self.ids, case, after, event)
+            await work.commit()
+        return True

@@ -488,3 +488,43 @@ def triage_label(
         rules=card.rules,
         decided_by=decided.by,
     )
+
+
+def pc_reply_label(
+    before: OrderCase,
+    after: OrderCase,
+    line_no: int,
+    *,
+    new_id: NewId,
+    at: AwareDatetime,
+    by: uuid.UUID,
+) -> LabelledCase | None:
+    """A line's answer from PC recorded by the person while DW1 had read
+    dates for it from PC's mail (`pc_reply`, ticket 77): the dates proposed,
+    delivery by delivery, beside the dates recorded. "Đúng" is a
+    confirmation; the answer form with other dates, or another split, a
+    correction. None where DW1 proposed nothing for the line."""
+    reply = before.pc_reply
+    proposed = reply.of(line_no) if reply is not None else ()
+    answer = after.line(line_no).pc_answer
+    if reply is None or not proposed or answer is None:
+        return None
+    newest = max(proposed, key=lambda d: d.received_at)
+    return LabelledCase(
+        label_id=new_id(),
+        decided_at=at,
+        step=ModelStep.PC_REPLY,
+        lane=CaseKind.ORDER,
+        case_id=before.case_id,
+        customer_code=before.customer_code,
+        message_id=newest.message_id,
+        attachment_id=None,
+        line_no=line_no,
+        field="pc_dates",
+        proposed=[d.date.isoformat() for d in proposed],
+        kept=[d.date.isoformat() for d in answer.deliveries],
+        prompt=reply.prompt_ref,
+        model_profile=reply.model_profile[:64],
+        rules=before.rules_version,
+        decided_by=by,
+    )

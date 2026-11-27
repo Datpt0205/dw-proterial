@@ -282,11 +282,18 @@ export class SalesApi {
   }
 
   /** A routed message marked handled, with an optional note: it leaves
-   * Việc cần làm and stays in the inbox (2026-10-27). */
-  markHandled(messageId: string, note: string | null, key: string) {
+   * Việc cần làm and stays in the inbox (2026-10-27). The optional kind is
+   * what the person says the mail was (ticket 67): it labels the model's
+   * shadow reading of it and routes nothing. */
+  markHandled(
+    messageId: string,
+    note: string | null,
+    key: string,
+    kind: SalesSchemas["HandledRequest"]["kind"] = null,
+  ) {
     return this.post<"/api/v1/sales/inbox/{message_id}/handled">(
       `/api/v1/sales/inbox/${enc(messageId)}/handled`,
-      { note },
+      { note, kind },
       key,
     );
   }
@@ -449,6 +456,37 @@ export class SalesApi {
   bravoReadBack(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}/bravo-read-back">(
       `/api/v1/sales/orders/${enc(caseId)}/bravo-read-back`,
+    );
+  }
+
+  /**
+   * Which Bravo the gateway reads and writes now, UAT or production, and
+   * which ones it holds logins for (ticket 85).
+   */
+  bravoTargets() {
+    return this.get<"/api/v1/sales/bravo/targets">(
+      "/api/v1/sales/bravo/targets",
+    );
+  }
+
+  /** The case's SO line changes proposed for Bravo, latest first (ticket 53). */
+  bravoWrites(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/bravo-writes">(
+      `/api/v1/sales/orders/${enc(caseId)}/bravo-writes`,
+    );
+  }
+
+  /** One SO line's date, quantity or cancel, proposed for Bravo (tickets 53, 71). */
+  proposeBravoWrite(
+    caseId: string,
+    lineNo: number,
+    body: Body<"/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/bravo-writes">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/bravo-writes`,
+      body,
+      key,
     );
   }
 
@@ -686,6 +724,16 @@ export class SalesApi {
     );
   }
 
+  /** A cross-check DW passed on Bravo's matching read-back, taken back by
+   * someone who made none of the order (ticket 81). */
+  reopenCrossCheck(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/cross-check/reopen">(
+      `/api/v1/sales/orders/${enc(caseId)}/cross-check/reopen`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   confirm(
     caseId: string,
     body: Body<"/api/v1/sales/orders/{case_id}/confirm">,
@@ -708,6 +756,16 @@ export class SalesApi {
     return this.post<"/api/v1/sales/orders/{case_id}/agreement">(
       `/api/v1/sales/orders/${enc(caseId)}/agreement`,
       body,
+      key,
+    );
+  }
+
+  /** An agreement by silence taken back, whoever recorded it: DW1 itself
+   * or a person (ticket 82). */
+  undoImpliedAgreement(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/agreement/undo">(
+      `/api/v1/sales/orders/${enc(caseId)}/agreement/undo`,
+      { case_version: caseVersion },
       key,
     );
   }
@@ -867,6 +925,29 @@ export class SalesApi {
     return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-answer">(
       `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/pc-answer`,
       body,
+      key,
+    );
+  }
+
+  /** PC's mail a proposal on the order was read from (ticket 77): opening it
+   * records it served to the caller at the case's version, which "Đúng"
+   * asks for. */
+  pcReplyMail(caseId: string, messageId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/pc-reply/mail">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-reply/mail?message_id=${enc(messageId)}`,
+    );
+  }
+
+  /** "Đúng" on one line's dates DW1 read from PC's mail (ticket 77). */
+  acceptPcReply(
+    caseId: string,
+    lineNo: number,
+    caseVersion: number,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept">(
+      `/api/v1/sales/orders/${enc(caseId)}/lines/${lineNo}/pc-reply/accept`,
+      { case_version: caseVersion },
       key,
     );
   }

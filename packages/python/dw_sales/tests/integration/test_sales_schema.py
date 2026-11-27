@@ -25,7 +25,7 @@ from dw_sales.adapters.skill_files import load_dw1_skills
 from dw_sales.application.bravo_exports import BravoScreen, ExportStatus
 from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
-from dw_sales.application.followups import BRIEF, BRIEF_STAGE
+from dw_sales.application.followups import BRIEF, BRIEF_STAGE, STAND_IN_STAGE
 from dw_sales.application.prompt_versions import PROMPT_KEY
 from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import RuleKey
@@ -86,7 +86,7 @@ _SETS: dict[str, set[str]] = {
     "ck_processing_jobs_error_code": set(get_args(JobError)),
     # What the follow-ups record (ticket 42).
     "ck_followup_deliveries_followup": _values(followups.Followup) | {BRIEF},
-    "ck_followup_deliveries_stage": _values(followups.Stage) | {BRIEF_STAGE},
+    "ck_followup_deliveries_stage": _values(followups.Stage) | {BRIEF_STAGE, STAND_IN_STAGE},
     # What a person marks in "Việc của tôi" (tickets 47, 06, 09).
     "ck_reminder_marks_followup": {f.value for f in REMINDERS},
     # A master-data import's list and status (ticket 41).

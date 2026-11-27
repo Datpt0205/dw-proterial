@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/bravo/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo Targets */
+        get: operations["bravo_targets_api_v1_sales_bravo_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/bravo/watch": {
         parameters: {
             query?: never;
@@ -876,6 +893,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/agreement/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Implied Agreement */
+        post: operations["undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/artifacts": {
         parameters: {
             query?: never;
@@ -1127,6 +1161,23 @@ export interface paths {
         put?: never;
         /** Correction Request */
         post: operations["correction_request_api_v1_sales_orders__case_id__correction_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/cross-check/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Cross Check */
+        post: operations["reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1392,6 +1443,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pc Reply Accept */
+        post: operations["pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
         parameters: {
             query?: never;
@@ -1486,6 +1554,23 @@ export interface paths {
         };
         /** Pc Mails */
         get: operations["pc_mails_api_v1_sales_orders__case_id__pc_mails_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/pc-reply/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pc Reply Mail */
+        get: operations["pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3081,11 +3166,13 @@ export interface components {
             approval_id: string;
             /** Before */
             before: string | null;
+            /** Check */
+            check: string | null;
             /**
              * Field
              * @enum {string}
              */
-            field: "confirmed_date" | "quantity";
+            field: "confirmed_date" | "quantity" | "cancel";
             /** Line No */
             line_no: number;
             /**
@@ -3102,6 +3189,11 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "rejected" | "written" | "written_with_differences" | "refused" | "in_doubt";
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "uat" | "production";
             /** Warnings */
             warnings: string[];
         };
@@ -3176,6 +3268,28 @@ export interface components {
             rows_read: number;
             /** So No */
             so_no: string;
+            /**
+             * Source
+             * @default export
+             * @enum {string}
+             */
+            source: "export" | "gateway";
+        };
+        /**
+         * BravoTargetsView
+         * @description Which Bravo the gateway reads and writes for the tenant now, and
+         *     which ones it holds logins for (ticket 85), as the gateway answered.
+         *     `connected` False: no gateway, or none answered; nothing is known.
+         */
+        BravoTargetsView: {
+            /** Connected */
+            connected: boolean;
+            /** Current */
+            current: ("uat" | "production") | null;
+            /** Production */
+            production: boolean;
+            /** Uat */
+            uat: boolean;
         };
         /**
          * BravoWriteBody
@@ -3186,7 +3300,7 @@ export interface components {
             /** Case Version */
             case_version: number;
             /** Change */
-            change: components["schemas"]["ConfirmedDateChange"] | components["schemas"]["QuantityChange"];
+            change: components["schemas"]["ConfirmedDateChange"] | components["schemas"]["QuantityChange"] | components["schemas"]["CancelChange"];
         };
         /** BriefView */
         BriefView: {
@@ -3206,6 +3320,21 @@ export interface components {
             opening: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * CancelChange
+         * @description The whole line cancelled in Bravo, with the person's reason (ticket 71:
+         *     "Order status" Cancel, the quantity to 0, the reason; the layout computes
+         *     the rest).
+         */
+        CancelChange: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            field: "cancel";
+            /** Reason */
+            reason: string;
         };
         /**
          * CardDecisionRequest
@@ -4547,7 +4676,7 @@ export interface components {
          * @description What makes a case move: the domain method that moves it.
          * @enum {string}
          */
-        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
+        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "record_agreement" | "record_decline" | "undo_implied" | "reopen_cross_check" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
         /**
          * EdgeGuard
          * @description What the domain refuses a move without.
@@ -4840,6 +4969,8 @@ export interface components {
          * @description The note a person may leave when they mark a message handled.
          */
         HandledRequest: {
+            /** Kind */
+            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "portal_notice" | "other") | null;
             /** Note */
             note?: string | null;
         };
@@ -5937,7 +6068,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card" | "internal_change" | "case_chat";
+        ModelStep: "description_attributes" | "salesorder_skill" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction" | "change_request" | "thread_agent" | "reply_draft" | "skill_intents" | "skill_mail_kinds" | "skill_document_forms" | "skill_handoffs" | "skill_reply_drafts" | "triage_card" | "internal_change" | "case_chat" | "pc_reply";
         /**
          * Multiply
          * @description Multiplies the value by another field's.
@@ -6020,6 +6151,13 @@ export interface components {
             /** Written */
             written: string | null;
         };
+        /**
+         * OnMatchException
+         * @description Why an order's cross-check stays a person's. Shown to the
+         *     cross-checker, so they know what to look at; never "sample".
+         * @enum {string}
+         */
+        OnMatchException: "rules_off" | "not_awaiting" | "not_from_bravo" | "stale_read_back" | "differs" | "so_no_differs" | "finding" | "typed_by_a_person" | "applied_by_dw" | "revised";
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -6085,6 +6223,10 @@ export interface components {
             /** Confirmed By */
             confirmed_by: string | null;
             coverage: components["schemas"]["CoverageView"];
+            /** Cross Check On Match */
+            cross_check_on_match?: boolean | null;
+            /** Cross Check On Match Exceptions */
+            cross_check_on_match_exceptions?: components["schemas"]["OnMatchException"][] | null;
             /** Cross Check Required */
             cross_check_required: boolean | null;
             /** Cross Check Stalled */
@@ -6093,6 +6235,8 @@ export interface components {
             cross_checked_at: string | null;
             /** Cross Checked By */
             cross_checked_by: string | null;
+            /** Cross Checked On Read Back */
+            cross_checked_on_read_back?: string | null;
             /**
              * Currency
              * @enum {string}
@@ -6115,6 +6259,11 @@ export interface components {
             duplicate_of_so: string | null;
             /** Export Control Mode */
             export_control_mode: string | null;
+            /**
+             * Export Hold Only
+             * @default false
+             */
+            export_hold_only: boolean;
             /** Findings */
             findings: components["schemas"]["OrderFindingView"][];
             /** Header Anchors */
@@ -6141,6 +6290,9 @@ export interface components {
             name_revision?: string | null;
             /** Parser Version */
             parser_version: string;
+            /** Password File */
+            password_file?: ("every_value" | "failed_checks_only") | null;
+            pc_reply?: components["schemas"]["PcReplyView"] | null;
             pc_request?: components["schemas"]["PcRequestStateView"] | null;
             /**
              * Po Date
@@ -6614,6 +6766,67 @@ export interface components {
              * @default 8000
              */
             text_max: number;
+        };
+        /**
+         * PcReplyDateView
+         * @description One date DW1 read from PC's mail for a delivery of a line (ticket 77),
+         *     the words it rests on and the mail it was read from: a proposal, never
+         *     a recorded value.
+         */
+        PcReplyDateView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Delivery */
+            delivery: number;
+            /** Line No */
+            line_no: number;
+            /** Message Id */
+            message_id: string;
+            /** Quote */
+            quote: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+        };
+        /**
+         * PcReplyMailView
+         * @description PC's mail a proposal was read from, as the PIC opens it: its newest
+         *     part, the words DW1 read (ticket 77).
+         */
+        PcReplyMailView: {
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * PcReplyView
+         * @description PC's mail read by DW1 while the order waits on PC (ticket 77).
+         */
+        PcReplyView: {
+            /** Dates */
+            dates: components["schemas"]["PcReplyDateView"][];
+            /** Prompt Ref */
+            prompt_ref: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
         };
         /**
          * PcRequestStateView
@@ -7185,7 +7398,9 @@ export interface components {
              * @default decide_finding
              * @enum {string}
              */
-            action: "decide_finding" | "bravo_write";
+            action: "decide_finding" | "bravo_write" | "assign";
+            /** Assignee Name */
+            assignee_name?: string | null;
             /** Case Version */
             case_version: number;
             /** Content Hash */
@@ -7193,7 +7408,7 @@ export interface components {
             /** Decision */
             decision?: ("accepted" | "ask_customer") | null;
             /** Field */
-            field?: ("confirmed_date" | "quantity") | null;
+            field?: ("confirmed_date" | "quantity" | "cancel") | null;
             /** Finding Key */
             finding_key?: string | null;
             /** Line No */
@@ -7221,7 +7436,7 @@ export interface components {
          * @description What DW1 answers (the agreed list), and everything else.
          * @enum {string}
          */
-        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "propose_bravo_write" | "out_of_scope";
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "draft_reply" | "remind_customer" | "explain_thread" | "decide_finding" | "propose_bravo_write" | "assign_case" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
@@ -8101,6 +8316,8 @@ export interface components {
          * @description What applies to the tenant now, per key, and every version it holds.
          */
         RulesInForceView: {
+            /** Decided By A Second */
+            decided_by_a_second: components["schemas"]["RuleKey"][];
             /** Draftable */
             draftable: components["schemas"]["RuleKey"][];
             /** In Force */
@@ -10051,6 +10268,26 @@ export interface operations {
             };
         };
     };
+    bravo_targets_api_v1_sales_bravo_targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BravoTargetsView"];
+                };
+            };
+        };
+    };
     bravo_watch_api_v1_sales_bravo_watch_get: {
         parameters: {
             query?: never;
@@ -11325,6 +11562,44 @@ export interface operations {
             };
         };
     };
+    undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_artifacts_api_v1_sales_orders__case_id__artifacts_get: {
         parameters: {
             query?: never;
@@ -11904,6 +12179,44 @@ export interface operations {
         };
     };
     correction_request_api_v1_sales_orders__case_id__correction_request_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post: {
         parameters: {
             query?: never;
             header?: {
@@ -12532,6 +12845,45 @@ export interface operations {
             };
         };
     };
+    pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                line_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get: {
         parameters: {
             query?: never;
@@ -12721,6 +13073,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PcMailsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get: {
+        parameters: {
+            query: {
+                message_id: string;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcReplyMailView"];
                 };
             };
             /** @description Validation Error */

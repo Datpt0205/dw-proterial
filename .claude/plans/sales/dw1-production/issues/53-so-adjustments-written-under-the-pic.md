@@ -1,6 +1,6 @@
 # 53 — SO adjustments written into Bravo under the PIC's user (phase 2)
 
-Status: in-progress — the date and the quantity built end to end offline (2026-11-21): proposed against Bravo's row, approved by the one person whose Bravo user writes it, signed in the decision, sent by the worker through the gateway. pending: split and creation (script 03c), cancel (a real cancel's trace, ticket 52 item 2), the existing SO's save context word and the command right (ticket 52), the case page's button (the case chat proposes a date or quantity since 2026-11-22, ticket 56 slice 2), and every UAT acceptance item
+Status: in-progress — the date and the quantity built end to end offline (2026-11-21): proposed against Bravo's row, approved by the one person whose Bravo user writes it, signed in the decision, sent by the worker through the gateway. pending: split and creation (script 03c), the existing SO's save context word and the command right (ticket 52), and every UAT acceptance item. Done since: the cancel (ticket 71, 2026-11-26) and the order page's panel "Ghi vào Bravo" (date, quantity, cancel; 2026-11-26), beside the case chat (since 2026-11-22)
 Blocked by: 63 (the gateway), 64 (identity; replaces the hand-made PIC ↔ Bravo user list)
 Category: enhancement
 
@@ -65,7 +65,7 @@ For each operation, on UAT:
   Bravo not answering, a second open proposal for the line.
 - **Decided by one person** (approval type `bravo_write.sales_order`,
   required scope `sales.bravo.write`, `makers` empty). **Decision taken here,
-  for Đạt to review:** the type is not under `sales.`, whose approvals want a
+  confirmed by Đạt 2026-11-23:** the type is not under `sales.`, whose approvals want a
   second person who made none of the case; ADR 0027 has "the PIC approves the
   exact content", and the write is the approver's own, under their own Bravo
   user, as when they type it into Bravo today. What stops a wrong write is
@@ -115,3 +115,9 @@ For each operation, on UAT:
   refused instead of retried).
 
 ## Comments
+
+**2026-11-26 (ticket 71).** The order page proposes a line's date, quantity
+or cancel: panel "Ghi vào Bravo" once the order has a Bravo SO, history for
+every case reader, "Đề xuất…" behind `sales.bravo.write` (disabled with the
+reason otherwise), one open proposal per line. The chat proposes a cancel
+too. Details and what is left: ticket 71's comment of the same day.

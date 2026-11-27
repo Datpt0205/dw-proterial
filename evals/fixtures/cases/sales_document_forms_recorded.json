@@ -195,7 +195,7 @@
       "items": [
         {
           "part": "EN-PDF-04-A1#p1",
-          "line_span": "Description: Multi-core cable 8C AWG24 tinned copper braid shield\nQuantity: to be advised\nRequired by: December 15, 2026",
+          "line_span": "Description: Multi-core cable 8C AWG24 tinned copper braid shield",
           "description_span": "Multi-core cable 8C AWG24 tinned copper braid shield",
           "customer_item_code_span": null,
           "quantity_span": "to be advised",
@@ -262,7 +262,7 @@
           "line_span": "Mặt hàng: Dây điện AWG22 màu vàng",
           "description_span": "Dây điện AWG22 màu vàng",
           "customer_item_code_span": null,
-          "quantity_span": "(sẽ báo sau)",
+          "quantity_span": null,
           "uom_span": null,
           "required_date_span": "18/12/2026",
           "target_price_span": null
@@ -326,18 +326,18 @@
           "line_span": "Mã VLX-31-0007: Cáp 3C AWG26 BRD GRY, SL 1.800 m, giao 25/11/2026",
           "description_span": "Cáp 3C AWG26 BRD GRY",
           "customer_item_code_span": "VLX-31-0007",
-          "quantity_span": null,
-          "uom_span": null,
+          "quantity_span": "1.800 m",
+          "uom_span": "m",
           "required_date_span": "25/11/2026",
           "target_price_span": null
         },
         {
           "part": "VI-PDF-03-A1#p1",
           "line_span": "Mã VLX-31-0008: Cáp 2C AWG24 BLK cuộn 305M, SL 2.440 m, giao 25/11/2026",
-          "description_span": "Cáp 2C AWG24 BLK",
+          "description_span": "Cáp 2C AWG24 BLK cuộn 305M",
           "customer_item_code_span": "VLX-31-0008",
-          "quantity_span": "cuộn 305M",
-          "uom_span": null,
+          "quantity_span": "2.440 m",
+          "uom_span": "m",
           "required_date_span": "25/11/2026",
           "target_price_span": null
         }
@@ -560,7 +560,7 @@
           "line_span": "1. Cáp 4 lõi AWG24 chống nhiễu lá nhôm - 1.220 m - cần trước 10/12/2026",
           "description_span": "Cáp 4 lõi AWG24 chống nhiễu lá nhôm",
           "customer_item_code_span": null,
-          "quantity_span": "1.220 m",
+          "quantity_span": "1.220",
           "uom_span": "m",
           "required_date_span": "10/12/2026",
           "target_price_span": null
@@ -570,7 +570,7 @@
           "line_span": "2. Dây điện AWG26 màu tím lõi đơn - 610 m - cần trước 10/12/2026",
           "description_span": "Dây điện AWG26 màu tím lõi đơn",
           "customer_item_code_span": null,
-          "quantity_span": "610 m",
+          "quantity_span": "610",
           "uom_span": "m",
           "required_date_span": "10/12/2026",
           "target_price_span": null

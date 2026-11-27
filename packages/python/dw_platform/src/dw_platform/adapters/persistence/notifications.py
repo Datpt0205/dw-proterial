@@ -28,11 +28,22 @@ DELIVER_NOTIFICATION = sa.text(
     "SELECT platform.deliver_notification("
     "CAST(:workspace_id AS uuid), CAST(:recipients AS uuid[]), :source_key, :title, :body, :link)"
 )
+# The same, queueing no web push (19a366484422): for a sender that pushes on
+# its own, batched, so nobody's phone rings twice for one item.
+DELIVER_WITHOUT_PUSH = sa.text(
+    "SELECT platform.deliver_notification("
+    "CAST(:workspace_id AS uuid), CAST(:recipients AS uuid[]), :source_key, :title, :body, :link,"
+    " false)"
+)
 
 
 @dataclass(frozen=True)
 class SqlNotificationRepository:
     session_factory: async_sessionmaker[AsyncSession]
+    # Whether a delivery also queues a web push for each recipient who turned
+    # push on (Sales ticket 78). False only where the composition root wires a
+    # sender that pushes itself (Sales' follow-ups, ticket 48).
+    push: bool = True
 
     async def latest(self, context: AccessContext, *, limit: int) -> Inbox:
         mine = sa.and_(
@@ -160,7 +171,7 @@ class SqlNotificationRepository:
             self.session_factory, TenantScope.from_access_context(context)
         ) as session:
             await session.execute(
-                DELIVER_NOTIFICATION,
+                DELIVER_NOTIFICATION if self.push else DELIVER_WITHOUT_PUSH,
                 {
                     "workspace_id": context.workspace_id,
                     "recipients": list(dict.fromkeys(recipients)),

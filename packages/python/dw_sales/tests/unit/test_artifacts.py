@@ -91,6 +91,7 @@ from dw_sales.application.artifacts_service import (
 )
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
+from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.local_time import local_day
 from dw_sales.application.order_artifacts import (
     bravo_upload,
@@ -172,12 +173,18 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
 # The owner of the tenant's time zone (`working_hours.time_zone`).
-FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.7.0.yaml")
+FOLLOWUPS = load_followups(POLICIES / "sales_followups@1.8.0.yaml")
+# PC's mailbox, which the platform's order rules leave to the tenant (ticket 77).
+ORDER_RULES = load_order_rules(POLICIES / "sales_order_rules@1.16.0.yaml").model_copy(
+    update={"pc_mailboxes": ("pc@alpha.local",)}
+)
 ARTIFACT_COPY = ArtifactCopy(
     emails=load_copy(COPY / "sales_emails@1.5.0.yaml", SalesEmailCopy),
     documents=load_copy(COPY / "sales_documents@1.3.0.yaml", SalesDocumentCopy),
     upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
+    handoffs=load_copy(COPY / "sales_handoffs@1.2.0.yaml", HandoffCopy),
     design_mailboxes=QUOTE_RULES.design_mailboxes,
+    pc_mailboxes=ORDER_RULES.pc_mailboxes,
     zone=FOLLOWUPS.working_hours.zone,
     salesorder=load_policy(POLICIES / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
 )
@@ -191,6 +198,8 @@ BOOK = platform_book(
     ARTIFACT_COPY.upload,
     FOLLOWUPS,
     ARTIFACT_COPY.salesorder,
+    ARTIFACT_COPY.handoffs,
+    ORDER_RULES,
 )
 WRITER = ArtifactFiles()
 GATE = Gate(ScopeAuthorizationService())
@@ -766,6 +775,7 @@ KINDS: dict[str, tuple[Builder, Builder]] = {
     "change_summary": (change_review_m07, _m04),
     "convert_list_proposal": (_candidate_m05, _m01),
     "design_code_request": (_m04, _m01),
+    "pc_request_draft": (_m01, _confirmed_m01),
     "cannot_supply_draft": (cannot_supply_m01, _m01),
     "ycbg_draft": (_quote("ycbg_drafted"), _quote("received")),
     "design_request_draft": (_quote("ycbg_recorded"), _quote("ycbg_drafted")),
@@ -880,6 +890,7 @@ async def test_each_kind_renders_at_its_state_with_template_version_and_hash(kin
             ARTIFACT_COPY.emails.version,
             ARTIFACT_COPY.documents.version,
             ARTIFACT_COPY.upload.policy_version,
+            ARTIFACT_COPY.handoffs.version,
         }
         assert record.template_ref.rsplit("@", 1)[1] in pinned, record.template_ref
         assert record.content_type in (XLSX, PDF, EML)
@@ -1572,6 +1583,8 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
         ARTIFACT_COPY.upload,
         FOLLOWUPS,
         ARTIFACT_COPY.salesorder,
+        ARTIFACT_COPY.handoffs,
+        ORDER_RULES,
     )
     world = World()
     case = await m10("approved")
@@ -1761,6 +1774,8 @@ def _tenant_book() -> TenantRuleBook:
         ARTIFACT_COPY.upload,
         FOLLOWUPS,
         ARTIFACT_COPY.salesorder,
+        ARTIFACT_COPY.handoffs,
+        ORDER_RULES,
     )
 
 

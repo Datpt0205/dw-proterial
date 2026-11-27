@@ -107,7 +107,7 @@
       "po_no_span": "NRV-PO-26-0190",
       "lot_no_span": "LOT 2605-077",
       "problem_quote_spans": [
-        "On PO NRV-PO-26-0190 we re-measured the reels before kitting. Reel 4 came out short by 200 m against the label, and reel 6 looks short as well."
+        "Reel 4 came out short by 200 m against the label, and reel 6 looks short as well."
       ]
     },
     "6c136ae9f3ef6e77145b7140": {
@@ -205,7 +205,7 @@
       "po_no_span": "VLX-PO-2608-0102",
       "lot_no_span": "LOT 2608-152",
       "problem_quote_spans": [
-        "For the cable delivered under VLX-PO-2608-0102, lot LOT 2608-152, our quality team needs the mill sheet and the insulation test report before they release it to production."
+        "our quality team needs the mill sheet and the insulation test report before they release it to production."
       ]
     },
     "ab663d1ee047967ba6af1cb2": {
@@ -258,7 +258,7 @@
       "po_no_span": "CVG-260610-05",
       "lines": [
         {
-          "line_or_item_span": "品番CVG-0005",
+          "line_or_item_span": "CVG-0005",
           "new_quantity_span": null,
           "new_date_span": "12月11日"
         }
@@ -268,7 +268,7 @@
       "po_no_span": "NRV-PO-26-0388",
       "lines": [
         {
-          "line_or_item_span": "1",
+          "line_or_item_span": "line 1",
           "new_quantity_span": null,
           "new_date_span": "20/11/2026"
         }
@@ -282,9 +282,10 @@
     },
     "d3629da5c27703615655bd7b": {
       "item_spans": [
-        "halogen-free single wire, AWG20, in black and red"
+        "halogen-free single wire, AWG20, in black",
+        "halogen-free single wire, AWG20, in red"
       ],
-      "quantity_span": null
+      "quantity_span": "a short coil per colour"
     },
     "d57e20277a4598ba6824315a": {
       "po_no_span": "NRV-PO-26-0388",
@@ -329,7 +330,7 @@
       "po_no_span": "VLX-PO-2602-0077",
       "lot_no_span": "LOT 2603-041",
       "problem_quote_spans": [
-        "Lô cáp giao theo đơn trên (số lô LOT 2603-041 trên nhãn cuộn), khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong.",
+        "khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong.",
         "Bên em đã tạm ngưng sử dụng lô này."
       ]
     }

@@ -1919,10 +1919,22 @@
             ],
             "title": "Before"
           },
+          "check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check"
+          },
           "field": {
             "enum": [
               "confirmed_date",
-              "quantity"
+              "quantity",
+              "cancel"
             ],
             "title": "Field",
             "type": "string"
@@ -1971,6 +1983,14 @@
             "title": "Status",
             "type": "string"
           },
+          "target": {
+            "enum": [
+              "uat",
+              "production"
+            ],
+            "title": "Target",
+            "type": "string"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -1985,7 +2005,9 @@
           "field",
           "before",
           "after",
+          "target",
           "status",
+          "check",
           "reason",
           "warnings",
           "proposed_at",
@@ -2194,6 +2216,15 @@
             "minLength": 1,
             "title": "So No",
             "type": "string"
+          },
+          "source": {
+            "default": "export",
+            "enum": [
+              "export",
+              "gateway"
+            ],
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
@@ -2210,6 +2241,47 @@
         "title": "BravoReadBack",
         "type": "object"
       },
+      "BravoTargetsView": {
+        "additionalProperties": false,
+        "description": "Which Bravo the gateway reads and writes for the tenant now, and\nwhich ones it holds logins for (ticket 85), as the gateway answered.\n`connected` False: no gateway, or none answered; nothing is known.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "enum": [
+                  "uat",
+                  "production"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "production": {
+            "title": "Production",
+            "type": "boolean"
+          },
+          "uat": {
+            "title": "Uat",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connected",
+          "current",
+          "uat",
+          "production"
+        ],
+        "title": "BravoTargetsView",
+        "type": "object"
+      },
       "BravoWriteBody": {
         "additionalProperties": false,
         "description": "A change of one SO line to write into Bravo (ticket 53): what changes\nand to what. Which Bravo row, and its rowversion, are read by DW.",
@@ -2222,6 +2294,7 @@
           "change": {
             "discriminator": {
               "mapping": {
+                "cancel": "#/components/schemas/CancelChange",
                 "confirmed_date": "#/components/schemas/ConfirmedDateChange",
                 "quantity": "#/components/schemas/QuantityChange"
               },
@@ -2233,6 +2306,9 @@
               },
               {
                 "$ref": "#/components/schemas/QuantityChange"
+              },
+              {
+                "$ref": "#/components/schemas/CancelChange"
               }
             ],
             "title": "Change"
@@ -2288,6 +2364,29 @@
           "at"
         ],
         "title": "BriefView",
+        "type": "object"
+      },
+      "CancelChange": {
+        "additionalProperties": false,
+        "description": "The whole line cancelled in Bravo, with the person's reason (ticket 71:\n\"Order status\" Cancel, the quantity to 0, the reason; the layout computes\nthe rest).",
+        "properties": {
+          "field": {
+            "const": "cancel",
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 192,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "CancelChange",
         "type": "object"
       },
       "CancelResult": {
@@ -6973,6 +7072,8 @@
           "confirm",
           "record_agreement",
           "record_decline",
+          "undo_implied",
+          "reopen_cross_check",
           "apply_change",
           "draft_ycbg",
           "record_ycbg",
@@ -7946,6 +8047,28 @@
         "additionalProperties": false,
         "description": "The note a person may leave when they mark a message handled.",
         "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "po",
+                  "quote_request",
+                  "design_reply",
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "portal_notice",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "note": {
             "anyOf": [
               {
@@ -12314,7 +12437,8 @@
           "skill_reply_drafts",
           "triage_card",
           "internal_change",
-          "case_chat"
+          "case_chat",
+          "pc_reply"
         ],
         "title": "ModelStep",
         "type": "string"
@@ -13046,6 +13170,23 @@
         "title": "OfferForm",
         "type": "object"
       },
+      "OnMatchException": {
+        "description": "Why an order's cross-check stays a person's. Shown to the\ncross-checker, so they know what to look at; never \"sample\".",
+        "enum": [
+          "rules_off",
+          "not_awaiting",
+          "not_from_bravo",
+          "stale_read_back",
+          "differs",
+          "so_no_differs",
+          "finding",
+          "typed_by_a_person",
+          "applied_by_dw",
+          "revised"
+        ],
+        "title": "OnMatchException",
+        "type": "string"
+      },
       "OpenYcbgView": {
         "properties": {
           "customer_code": {
@@ -13352,6 +13493,31 @@
           "coverage": {
             "$ref": "#/components/schemas/CoverageView"
           },
+          "cross_check_on_match": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Check On Match"
+          },
+          "cross_check_on_match_exceptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OnMatchException"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Check On Match Exceptions"
+          },
           "cross_check_required": {
             "anyOf": [
               {
@@ -13390,6 +13556,17 @@
               }
             ],
             "title": "Cross Checked By"
+          },
+          "cross_checked_on_read_back": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Checked On Read Back"
           },
           "currency": {
             "enum": [
@@ -13477,6 +13654,11 @@
             ],
             "title": "Export Control Mode"
           },
+          "export_hold_only": {
+            "default": false,
+            "title": "Export Hold Only",
+            "type": "boolean"
+          },
           "findings": {
             "items": {
               "$ref": "#/components/schemas/OrderFindingView"
@@ -13553,6 +13735,31 @@
           "parser_version": {
             "title": "Parser Version",
             "type": "string"
+          },
+          "password_file": {
+            "anyOf": [
+              {
+                "enum": [
+                  "every_value",
+                  "failed_checks_only"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password File"
+          },
+          "pc_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PcReplyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "pc_request": {
             "anyOf": [
@@ -15055,6 +15262,110 @@
           "mails"
         ],
         "title": "PcMailsView",
+        "type": "object"
+      },
+      "PcReplyDateView": {
+        "description": "One date DW1 read from PC's mail for a delivery of a line (ticket 77),\nthe words it rests on and the mail it was read from: a proposal, never\na recorded value.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "delivery": {
+            "title": "Delivery",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "delivery",
+          "date",
+          "quote",
+          "message_id",
+          "received_at"
+        ],
+        "title": "PcReplyDateView",
+        "type": "object"
+      },
+      "PcReplyMailView": {
+        "description": "PC's mail a proposal was read from, as the PIC opens it: its newest\npart, the words DW1 read (ticket 77).",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "subject",
+          "received_at",
+          "text"
+        ],
+        "title": "PcReplyMailView",
+        "type": "object"
+      },
+      "PcReplyView": {
+        "description": "PC's mail read by DW1 while the order waits on PC (ticket 77).",
+        "properties": {
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/PcReplyDateView"
+            },
+            "title": "Dates",
+            "type": "array"
+          },
+          "prompt_ref": {
+            "title": "Prompt Ref",
+            "type": "string"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dates",
+          "read_at",
+          "prompt_ref"
+        ],
+        "title": "PcReplyView",
         "type": "object"
       },
       "PcRequestStateView": {
@@ -16977,10 +17288,22 @@
             "default": "decide_finding",
             "enum": [
               "decide_finding",
-              "bravo_write"
+              "bravo_write",
+              "assign"
             ],
             "title": "Action",
             "type": "string"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
           },
           "case_version": {
             "title": "Case Version",
@@ -17010,7 +17333,8 @@
               {
                 "enum": [
                   "confirmed_date",
-                  "quantity"
+                  "quantity",
+                  "cancel"
                 ],
                 "type": "string"
               },
@@ -17751,6 +18075,7 @@
           "explain_thread",
           "decide_finding",
           "propose_bravo_write",
+          "assign_case",
           "out_of_scope"
         ],
         "title": "QuestionKind",
@@ -20900,6 +21225,13 @@
       "RulesInForceView": {
         "description": "What applies to the tenant now, per key, and every version it holds.",
         "properties": {
+          "decided_by_a_second": {
+            "items": {
+              "$ref": "#/components/schemas/RuleKey"
+            },
+            "title": "Decided By A Second",
+            "type": "array"
+          },
           "draftable": {
             "items": {
               "$ref": "#/components/schemas/RuleKey"
@@ -20951,7 +21283,8 @@
           "layers",
           "platform",
           "versions",
-          "draftable"
+          "draftable",
+          "decided_by_a_second"
         ],
         "title": "RulesInForceView",
         "type": "object"
@@ -32658,6 +32991,27 @@
         ]
       }
     },
+    "/api/v1/sales/bravo/targets": {
+      "get": {
+        "operationId": "bravo_targets_api_v1_sales_bravo_targets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BravoTargetsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bravo Targets",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/bravo/watch": {
       "get": {
         "operationId": "bravo_watch_api_v1_sales_bravo_watch_get",
@@ -34762,6 +35116,77 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/agreement/undo": {
+      "post": {
+        "operationId": "undo_implied_agreement_api_v1_sales_orders__case_id__agreement_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Implied Agreement",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/artifacts": {
       "get": {
         "operationId": "order_artifacts_api_v1_sales_orders__case_id__artifacts_get",
@@ -35893,6 +36318,77 @@
           }
         },
         "summary": "Correction Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/cross-check/reopen": {
+      "post": {
+        "operationId": "reopen_cross_check_api_v1_sales_orders__case_id__cross_check_reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Cross Check",
         "tags": [
           "sales"
         ]
@@ -37044,6 +37540,88 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/pc-reply/accept": {
+      "post": {
+        "operationId": "pc_reply_accept_api_v1_sales_orders__case_id__lines__line_no__pc_reply_accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Reply Accept",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/trail": {
       "get": {
         "operationId": "order_line_trail_api_v1_sales_orders__case_id__lines__line_no__trail_get",
@@ -37374,6 +37952,60 @@
           }
         },
         "summary": "Pc Mails",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/pc-reply/mail": {
+      "get": {
+        "operationId": "pc_reply_mail_api_v1_sales_orders__case_id__pc_reply_mail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "maxLength": 998,
+              "minLength": 1,
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PcReplyMailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pc Reply Mail",
         "tags": [
           "sales"
         ]

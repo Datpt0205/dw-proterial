@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   App,
@@ -30,12 +30,14 @@ import {
 import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
+import { ARTIFACT_KIND, label } from "../../_lib/labels";
 import type { Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { GuardedButton } from "../../_components/guarded-button";
 import { Quantity } from "../../_components/money";
+import { ValueStateTag } from "../../_components/tags";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = Order["lines"][number];
@@ -45,11 +47,12 @@ const PREPARE = "sales.order.prepare";
 // Where PC's answer is taken (`OrderCase.ask_pc`, `pc_answered`): before the
 // order is in Bravo. In Bravo, PC's dates are the update loop's (ticket 29).
 const ASKABLE: readonly string[] = ["in_review", "prepared"];
+const NO_PREPARE =
+  "Bạn không có quyền ghi trên đơn hàng (cần vai Sales phụ trách).";
 
 /** Why PC cannot be asked or answered from DW1 now; null when it can. */
 function pcReason(order: Order, viewer: Viewer): string | null {
-  if (!viewer.hasScope(PREPARE))
-    return "Bạn không có quyền ghi trên đơn hàng (cần vai Sales phụ trách).";
+  if (!viewer.hasScope(PREPARE)) return NO_PREPARE;
   if (!ASKABLE.includes(order.status))
     return "Chỉ hỏi và ghi ngày PC khi đơn đang xem xét, trước khi nhập Bravo.";
   return null;
@@ -57,8 +60,10 @@ function pcReason(order: Order, viewer: Viewer): string | null {
 
 /**
  * "Hỏi PC" (ticket 07): the request to PC DW1 drafts from the order, which
- * the person copies into Teams or a mail and sends from their own account
- * (DW1 sends nothing); "Ghi đã hỏi PC" starts the wait DW1 reminds on; and
+ * the person copies into Teams or a mail from their own account, or sends as
+ * the order's PC draft from the files panel (ticket 77: to the tenant's PC
+ * mailboxes only, recorded asked on its receipt); "Ghi đã hỏi PC" starts the
+ * wait DW1 reminds on; and
  * per line, PC's answer, a date or several dates splitting the line, each
  * with its first and current date.
  */
@@ -76,7 +81,16 @@ export function PcRequestPanel({
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const [answering, setAnswering] = useState<Line | null>(null);
+  // "Sửa" on DW1's reading of PC's mail opens the answer form with its dates.
+  const [prefill, setPrefill] = useState<
+    { quantity: string; date: string | null }[] | null
+  >(null);
+  // PC's mail open in its dialog, and each mail this person opened, by the
+  // case version it was served at: "Đúng" needs it at the current one.
+  const [reading, setReading] = useState<string | null>(null);
+  const [opened, setOpened] = useState<Record<string, number>>({});
   const reason = pcReason(order, viewer);
+  const proposals = order.pc_reply?.dates ?? [];
   const answered = order.lines.some((l) => l.pc_answer);
   const draft = useResource(
     `sales/orders/${order.case_id}/pc-request@${order.case_version}`,
@@ -107,6 +121,103 @@ export function PcRequestPanel({
     } else setError(result.error);
   };
 
+  const proposedFor = (line: Line) =>
+    proposals
+      .filter((d) => d.line_no === line.line_no)
+      .sort((a, b) => a.delivery - b.delivery);
+  const mailsOf = (line: Line) => [
+    ...new Set(proposedFor(line).map((d) => d.message_id)),
+  ];
+
+  const accept = async (line: Line) => {
+    const id = `pc/accept/${line.line_no}`;
+    const result = await run(
+      id,
+      { line: line.line_no, version: order.case_version },
+      (key) =>
+        salesApi().acceptPcReply(
+          order.case_id,
+          line.line_no,
+          order.case_version,
+          key,
+        ),
+      `Đã ghi ngày PC cho dòng ${line.line_no}`,
+    );
+    if (result.ok) {
+      setError(null);
+      onChanged();
+    } else setError(result.error);
+  };
+
+  const proposalColumn = {
+    title: "DW1 đọc thư PC",
+    key: "proposal",
+    render: (_: unknown, l: Line) => {
+      const proposed = proposedFor(l);
+      if (!proposed.length) return null;
+      const mails = mailsOf(l);
+      const unopened = mails.some((m) => opened[m] !== order.case_version);
+      return (
+        <Space orientation="vertical" size={4}>
+          <ValueStateTag state="dw" />
+          {proposed.map((d) => (
+            <Typography.Text key={d.delivery}>
+              {proposed.length > 1 ? `Đợt ${d.delivery}: ` : ""}
+              {formatDate(d.date)} · trong thư: “{d.quote}”
+            </Typography.Text>
+          ))}
+          <Space wrap size="small">
+            {mails.map((m) => (
+              // PC's mail is served to `sales.order.prepare` only.
+              <GuardedButton
+                key={m}
+                size="small"
+                type="link"
+                inlineReason={false}
+                reason={viewer.hasScope(PREPARE) ? null : NO_PREPARE}
+                onClick={() => setReading(m)}
+                aria-label={`Xem thư PC cho dòng ${l.line_no}`}
+              >
+                Xem thư
+              </GuardedButton>
+            ))}
+            <GuardedButton
+              size="small"
+              type="primary"
+              reason={
+                reason ?? (unopened ? "Mở thư PC trước khi bấm Đúng." : null)
+              }
+              loading={pending === `pc/accept/${l.line_no}`}
+              onClick={() => void accept(l)}
+              aria-label={`Đúng ngày PC cho dòng ${l.line_no}`}
+            >
+              Đúng
+            </GuardedButton>
+            <GuardedButton
+              size="small"
+              inlineReason={false}
+              reason={reason}
+              onClick={() => {
+                setPrefill(
+                  proposed.map((d, index) => ({
+                    quantity:
+                      l.pc_answer?.deliveries[index]?.quantity ??
+                      (proposed.length === 1 ? l.quantity : ""),
+                    date: d.date,
+                  })),
+                );
+                setAnswering(l);
+              }}
+              aria-label={`Sửa ngày PC cho dòng ${l.line_no}`}
+            >
+              Sửa
+            </GuardedButton>
+          </Space>
+        </Space>
+      );
+    },
+  };
+
   const request = draft.data;
   return (
     <Card size="small" title="Hỏi PC ngày giao">
@@ -124,6 +235,11 @@ export function PcRequestPanel({
                 {request.reminder_at
                   ? `DW1 nhắc lúc ${formatDateTime(request.reminder_at)} nếu PC chưa trả lời`
                   : "Nhắc chờ PC đang tắt trong quy tắc"}
+              </Typography.Text>
+            ) : null}
+            {proposals.length ? (
+              <Typography.Text>
+                DW1 đã đọc thư PC: bấm Đúng hoặc Sửa từng dòng bên dưới.
               </Typography.Text>
             ) : null}
           </Space>
@@ -172,6 +288,12 @@ export function PcRequestPanel({
             Ghi đã hỏi PC
           </GuardedButton>
         </Space>
+        {reason === null ? (
+          <Typography.Text type="secondary">
+            Hoặc soạn và gửi “{label(ARTIFACT_KIND, "pc_request_draft")}” ở mục
+            tệp và thư nháp: thư đi rồi DW1 tự ghi đã hỏi PC.
+          </Typography.Text>
+        ) : null}
         <ActionError error={error} />
         <Table<Line>
           size="small"
@@ -215,6 +337,7 @@ export function PcRequestPanel({
                   <Typography.Text>Chưa có</Typography.Text>
                 ),
             },
+            ...(proposals.length ? [proposalColumn] : []),
             {
               title: "",
               key: "action",
@@ -241,14 +364,15 @@ export function PcRequestPanel({
           quantity={answering.quantity}
           uom={answering.uom}
           initial={
-            answering.pc_answer
+            prefill ??
+            (answering.pc_answer
               ? answering.pc_answer.deliveries
               : [
                   {
                     quantity: answering.quantity,
                     date: answering.suggested_delivery_date ?? null,
                   },
-                ]
+                ])
           }
           send={(body, key) =>
             salesApi().recordPcAnswer(
@@ -258,15 +382,84 @@ export function PcRequestPanel({
               key,
             )
           }
-          onClose={() => setAnswering(null)}
+          onClose={() => {
+            setAnswering(null);
+            setPrefill(null);
+          }}
           onDone={() => {
             setAnswering(null);
+            setPrefill(null);
             draft.reload();
             onChanged();
           }}
         />
       ) : null}
+      {reading ? (
+        <PcMailDialog
+          order={order}
+          messageId={reading}
+          onLoaded={() =>
+            setOpened((was) => ({ ...was, [reading]: order.case_version }))
+          }
+          onClose={() => setReading(null)}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+/**
+ * PC's mail a proposal was read from (ticket 77), as DW1 read it: opening it
+ * records it served to this person at the case's version, which "Đúng" on
+ * the line asks for (ui-quality §7).
+ */
+function PcMailDialog({
+  order,
+  messageId,
+  onLoaded,
+  onClose,
+}: {
+  order: Order;
+  messageId: string;
+  onLoaded: () => void;
+  onClose: () => void;
+}) {
+  const mail = useResource(
+    `sales/orders/${order.case_id}/pc-reply/${messageId}@${order.case_version}`,
+    useCallback(
+      () => salesApi().pcReplyMail(order.case_id, messageId),
+      [order.case_id, messageId],
+    ),
+  );
+  const loaded = mail.data !== undefined && mail.data !== null;
+  useEffect(() => {
+    if (loaded) onLoaded();
+    // Once per load: the parent's callback changes identity every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+  return (
+    <Modal
+      open
+      width={640}
+      title={mail.data ? `Thư PC: ${mail.data.subject}` : "Thư PC"}
+      onCancel={onClose}
+      footer={<Button onClick={onClose}>Đóng</Button>}
+    >
+      {mail.loading ? (
+        <RegionState kind="loading" compact />
+      ) : mail.error ? (
+        <LoadError error={mail.error} onRetry={mail.reload} />
+      ) : mail.data ? (
+        <Space orientation="vertical" className="w-full">
+          <Typography.Text>
+            Từ {mail.data.sender} · {formatDateTime(mail.data.received_at)}
+          </Typography.Text>
+          <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
+            {mail.data.text}
+          </Typography.Paragraph>
+        </Space>
+      ) : null}
+    </Modal>
   );
 }
 

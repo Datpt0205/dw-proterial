@@ -16,7 +16,7 @@ import pytest
 
 from dw_bravo.adapters.recorded import RecordedProcedures, RecordedReferences
 from dw_bravo.expression import RuleRefusedError, UndecidableError, UnsupportedSyntaxError
-from dw_bravo.layout import read_layout
+from dw_bravo.layout import PARENT, read_layout
 from dw_bravo.ports import Session
 from dw_bravo.runner import Document, Row, RuleRunner
 
@@ -256,11 +256,39 @@ def test_a_rule_only_the_template_defines_refuses() -> None:
         run.edit(doc, "Parent", 0, "Kind", "Sample")
 
 
-def test_money_evaluator_null_operand_over_a_value_refuses() -> None:
+def test_money_evaluator_counts_a_null_operand_as_zero() -> None:
+    # UAT trace 11-25 17:31:50: the client wrote UnitCost 0 over a NULL
+    # OriginalUnitCost; "left alone" would have kept the old value.
     doc, run = document(), runner()
     run.load(doc)
-    with pytest.raises(RuleRefusedError, match="NULL operand"):
-        run.edit(doc, "Detail", 0, "Price", None)
+    run.edit(doc, "Detail", 0, "Price", None)
+    assert doc.children["Detail"][0].get("Amount") == Decimal(0)
+
+
+# A rule setting two columns, one of them read by a money rule homed on the
+# other's change: the shape of Bravo's cancel reset (`OriginalUnitCost,UnitCost`).
+RESET_LAYOUT = LAYOUT.replace(
+    "    <Group><Eval_Mark /></Group>\n",
+    "    <Group><Eval_Mark /></Group>\n    <Cut><Eval_Reset /></Cut>\n",
+).replace(
+    "    <Eval_Order>",
+    "    <Eval_Reset><DataMember>Price,Amount</DataMember><Value>NULL</Value>"
+    "<Expr>Cut = 1</Expr></Eval_Reset>\n    <Eval_Order>",
+    1,
+)
+
+
+def test_a_rule_setting_several_columns_sets_them_all_before_their_events() -> None:
+    doc, run = document(), runner(RESET_LAYOUT)
+    doc.children["Detail"][0].set("Cut", None)
+    run.load(doc)
+    run.edit(doc, "Detail", 0, "Cut", Decimal(1))
+    line = doc.children["Detail"][0]
+    # Price and Amount are both NULL first; Price's change then runs the
+    # money rule over the NULL, leaving Amount 0, as the client's cancel does.
+    # One at a time, Amount's own reset would come last and leave it NULL.
+    assert line.get("Price") is None
+    assert line.get("Amount") == Decimal(0)
 
 
 def test_validators_fire_by_level() -> None:
@@ -351,3 +379,109 @@ def test_two_different_definitions_of_one_rule_refuse_when_used() -> None:
     run.load(doc)
     with pytest.raises(RuleRefusedError, match="defined twice"):
         run.edit(doc, "Detail", 0, "Qty", Decimal(4))
+
+
+# A line added to the grid (ticket 73): the relation key and the `RowAdded`
+# rules come from the layout, as the SO screen's `ParentKey`/`ChildKey`
+# (`BizDocId`) and `RowAdded` do.
+ROWS_LAYOUT = LAYOUT.replace(
+    "<Name>vLine_Edit</Name><Alias>Detail</Alias>",
+    "<Name>vLine_Edit</Name><Alias>Detail</Alias><ParentKey>DocKey</ParentKey><ChildKey>DocKey</ChildKey>"
+    "<RowAdded><Eval_Detail_DocDate_FromParent /><Eval_Flagged>Empty(Parent.Customer)</Eval_Flagged>"
+    "<Eval_Fresh /></RowAdded>",
+).replace(
+    "<Eval_Order>",
+    "<Eval_Flagged><DataMember>Flag</DataMember><Value>1</Value></Eval_Flagged>"
+    "<Eval_Fresh><DataMember>Made</DataMember><Value>Qty</Value><Expr>Id &lt; 0</Expr></Eval_Fresh>"
+    "<Eval_Order>",
+)
+# Every column the line's view holds, NULL: a new grid line knows nothing yet.
+NEW_LINE: dict[str, object] = dict.fromkeys(
+    ["Item", "Qty", "Price", "Amount", "Usd", "Made", "Eta", "Group", "Ord", "DocDate"]
+)
+
+
+def test_an_added_row_takes_the_parents_key_a_negative_id_and_its_rowadded_rules() -> None:
+    doc, run = document(), runner(ROWS_LAYOUT)
+    doc.parent.set("DocKey", "K1")
+    run.load(doc)
+
+    first = run.add_row(doc, "Detail", NEW_LINE, stored=[*NEW_LINE, "CreatedBy"])
+    second = run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+    run.edit(doc, "Detail", first, "Qty", Decimal(3))
+
+    rows = doc.children["Detail"]
+    assert (first, second) == (2, 3)
+    assert [rows[i].get("Id") for i in (first, second)] == [Decimal(-1), Decimal(-2)]
+    assert rows[first].get("DocKey") == "K1"
+    assert rows[first].get("DocDate") == DAY  # RowAdded's rule
+    assert not rows[first].has("Flag")  # its use's condition does not hold
+    inserts = {c.row: dict(c.columns) for c in run.save(doc).commands if c.kind == "insert"}
+    assert set(inserts) == {first, second}
+    # The id is the client's own until Bravo gives one: never written.
+    assert "Id" not in inserts[first] and inserts[first]["DocKey"] == "K1"
+    assert inserts[first]["CreatedBy"] == Decimal(7)
+    assert "CreatedBy" not in inserts[second]
+
+
+def test_an_id_below_zero_is_what_a_new_rows_own_rules_read() -> None:
+    doc, run = document(), runner(ROWS_LAYOUT.replace("<Eta>", "<Qty><Eval_Fresh /></Qty><Eta>", 1))
+    doc.parent.set("DocKey", "K1")
+    run.load(doc)
+    index = run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+    run.edit(doc, "Detail", index, "Qty", Decimal(4))
+    run.edit(doc, "Detail", 0, "Qty", Decimal(9))
+    assert doc.children["Detail"][index].get("Made") == Decimal(4)
+    assert doc.children["Detail"][0].get("Made") == Decimal(0)  # a stored row: Id > 0
+
+
+def test_a_row_cannot_be_added_where_the_layout_names_no_relation() -> None:
+    doc, run = document(), runner()
+    run.load(doc)
+    with pytest.raises(RuleRefusedError, match="ParentKey"):
+        run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+
+
+# A lookup's `bindingMembers` (ticket 72), in 8212's shapes: a member renamed
+# on the way (`<DocStatus_Ct>DocStatus</DocStatus_Ct>`: the lookup's column,
+# then the row's) and a conditional one (`Eval_DocCode_BindingMembers`'
+# `Ma_Gd_Ct`, which sets `TransCode` only while it is empty).
+BINDING_LAYOUT = """<root><Tables><ParentTable><Name>vDoc_Edit</Name>
+<ColumnChanged><DocCode><Eval_DocCode_Bind /></DocCode></ColumnChanged>
+<Evaluators>
+  <Eval_DocCode_Bind><ClassName>BravoBindingMember</ClassName><DataMember>DocCode</DataMember>
+    <LookupKey>DmCt</LookupKey><bindingMembers><DocStatus_Ct>DocStatus</DocStatus_Ct>
+    <Ma_Gd_Ct><Condition_0><DataMember>TransCode</DataMember><Expr>Empty(TransCode)</Expr></Condition_0></Ma_Gd_Ct>
+    </bindingMembers></Eval_DocCode_Bind>
+</Evaluators>
+</ParentTable></Tables></root>"""
+
+
+def _bound(trans_code: object) -> Row:
+    references = RecordedReferences(
+        rows={("dmct", "SO"): {"DocStatus_Ct": Decimal(4), "Ma_Gd_Ct": "3201"}}
+    )
+    parent = Row({"Id": 1, "DocCode": None, "DocStatus": None, "TransCode": trans_code})
+    doc = Document(parent, {})
+    runner(BINDING_LAYOUT, references=references).edit(doc, PARENT, 0, "DocCode", "SO")
+    return doc.parent
+
+
+def test_a_binding_sets_the_rows_column_from_the_lookups_column() -> None:
+    assert _bound(None).get("DocStatus") == Decimal(4)
+
+
+def test_a_conditional_binding_member_sets_its_column_only_where_its_condition_holds() -> None:
+    assert _bound(None).get("TransCode") == "3201"
+    assert _bound("3101").get("TransCode") == "3101"
+
+
+def test_a_binding_shape_not_read_refuses_when_it_runs_and_not_before() -> None:
+    two = BINDING_LAYOUT.replace(
+        "</Condition_0></Ma_Gd_Ct>",
+        "</Condition_0><Condition_1><DataMember>TransTypeCode</DataMember><Expr>1=1</Expr></Condition_1></Ma_Gd_Ct>",
+    )
+    run = runner(two)  # the layout reads
+    doc = Document(Row({"Id": 1, "DocCode": None, "TransCode": None}), {})
+    with pytest.raises(RuleRefusedError, match="Ma_Gd_Ct"):
+        run.edit(doc, PARENT, 0, "DocCode", "SO")

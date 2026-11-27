@@ -11,21 +11,27 @@ two a proposed write needs (ticket 53), `so.by_number` and
 `user.by_employee_code`, and a PO's SO lines for the read-back
 (`so.by_customer_po`, ticket 51), and the facts DW copies by rowversion
 (`sync.changes`, ticket 50); every other read kind answers 501.
+
+Every read and write goes to the tenant's Bravo target now (`targets`,
+ticket 85), and a read's answer names it in the `Bravo-Target` header: what
+a proposal made from it is stamped with.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Literal, Protocol
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from dw_bravo.contract import (
     READ_KINDS,
     READ_RESULTS,
+    TARGET_HEADER,
     WRITE_KINDS,
+    BravoTarget,
     BravoUserQuery,
     BravoUsers,
     ContractError,
@@ -34,16 +40,12 @@ from dw_bravo.contract import (
     WriteCommand,
 )
 from dw_bravo.sync import SyncQuery
-from dw_bravo.watch import Fingerprint
-from dw_bravo_gateway.pipeline import WritePipeline
 from dw_bravo_gateway.ports import (
     AmbiguousDocumentError,
     BravoUnavailableError,
-    Directory,
     DocumentNotFoundError,
-    SalesOrders,
-    SyncTables,
 )
+from dw_bravo_gateway.targets import TargetRefusedError, Targets
 
 _TOKEN_LIMIT = 4096
 
@@ -90,18 +92,9 @@ def parse_query(envelope: _Envelope) -> object:
         raise HTTPException(422, "the query does not satisfy its contract") from None
 
 
-class FingerprintSource(Protocol):
-    async def fingerprint(self, environment: Literal["uat", "production"]) -> Fingerprint: ...
-
-
 def create_app(
-    pipeline: WritePipeline,
+    targets: Targets,
     *,
-    fingerprints: FingerprintSource | None = None,
-    orders: SalesOrders | None = None,
-    directory: Directory | None = None,
-    sync: SyncTables | None = None,
-    environment: Literal["uat", "production"] = "production",
     max_request_bytes: int = 64 * 1024,
     docs: bool = False,
 ) -> FastAPI:
@@ -125,14 +118,25 @@ def create_app(
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/v1/targets")
+    async def targets_now() -> dict[str, object]:
+        """Which Bravo the tenant's rule names now, and which ones this
+        gateway holds logins for (ticket 85): what the rules page shows
+        beside the switch. Names and booleans only."""
+        current = await targets.switches.target(targets.tenant_id)
+        return {"current": current, "configured": targets.configured()}
+
     @app.get("/v1/fingerprint/{asked}")
-    async def fingerprint(asked: str) -> dict[str, object]:
+    async def fingerprint(asked: BravoTarget) -> dict[str, object]:
         """What DW's writes depend on, for the `bravo_watch` lane (ticket 65):
-        names and digests of Bravo's own definitions, no business row."""
-        if fingerprints is None or asked != environment:
+        names and digests of Bravo's own definitions, no business row. Each
+        configured target answers by its own name."""
+        bravo = targets.reach.get(asked)
+        source = bravo.fingerprints if bravo is not None else None
+        if source is None:
             raise HTTPException(404, "this gateway does not read that Bravo")
         try:
-            measured = await fingerprints.fingerprint(environment)
+            measured = await source.fingerprint(asked)
         except BravoUnavailableError:
             raise HTTPException(503, "could not read Bravo") from None
         return {
@@ -145,8 +149,13 @@ def create_app(
         }
 
     @app.post("/v1/reads")
-    async def read(body: ReadRequest) -> dict[str, object]:
+    async def read(body: ReadRequest, response: Response) -> dict[str, object]:
         query = parse_query(body.query)
+        try:
+            target, bravo = await targets.now()
+        except TargetRefusedError as refused:
+            raise HTTPException(503, refused.reason) from None
+        orders, directory, sync = bravo.orders, bravo.directory, bravo.sync
         result: object
         try:
             if isinstance(query, SalesOrderQuery) and orders is not None:
@@ -168,16 +177,17 @@ def create_app(
             raise HTTPException(503, "could not read Bravo") from None
         shape = READ_RESULTS[f"{body.query.kind}@{body.query.version}"]
         answer: dict[str, object] = TypeAdapter(shape).dump_python(result, mode="json")
+        response.headers[TARGET_HEADER] = target
         return answer
 
     @app.post("/v1/writes")
     async def write(body: WriteRequest) -> dict[str, object]:
-        result = await pipeline.execute(parse_command(body.command), body.token)
+        result = await targets.execute(parse_command(body.command), body.token)
         return asdict(result)
 
     @app.post("/v1/writes/preview")
     async def preview(body: WriteRequest) -> dict[str, object]:
-        found = await pipeline.preview(parse_command(body.command), body.token)
+        found = await targets.preview(parse_command(body.command), body.token)
         return {
             "check": found.check,
             "reason": found.reason,

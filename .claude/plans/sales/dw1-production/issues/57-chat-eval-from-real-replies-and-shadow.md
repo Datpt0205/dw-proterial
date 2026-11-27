@@ -152,3 +152,10 @@ bao giờ làm 1 luồng thẳng mà chat hoặc email rất lòng vòng").
   plant's attested run is owed on 1.4.0.
 
 ## Comments
+
+## Decided (2026-11-23, Đạt ("làm theo khuyến nghị"))
+
+- **The bar stays 0.85** for the case chat (`BARS[CASE_CHAT]`).
+- **CI's recordings are re-recorded from Strata** (Giang's home lab) now,
+  not after the plant: done 2026-11-23 (`sales.md` State), the skill
+  intents keeping their plant recording; the plant's attested runs later.

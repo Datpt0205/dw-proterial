@@ -36,6 +36,14 @@ const api = {
   })),
   recordPcAsked: vi.fn(async () => ({ case_id: "c", case_version: 2 })),
   recordPcAnswer: vi.fn(async () => ({ case_id: "c", case_version: 2 })),
+  pcReplyMail: vi.fn(async () => ({
+    message_id: "PC01",
+    sender: "pc@proterial.example",
+    subject: "Re: ngày giao BRN-PO-1",
+    received_at: "2026-11-15T03:00:00Z",
+    text: "Dòng 1 giao được ngày 30/11/2026.",
+  })),
+  acceptPcReply: vi.fn(async () => ({ case_id: "c", case_version: 3 })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
@@ -79,6 +87,10 @@ describe("Hỏi PC (ticket 07)", () => {
     expect(await screen.findByText(/Ngày giao cho PO BRN-PO-1/)).toBeTruthy();
     expect(screen.getByText("Chờ PC trả ngày")).toBeTruthy();
     expect(screen.getByText(/DW1 nhắc lúc/)).toBeTruthy();
+    // Ticket 77: the same request goes from DW1 as a draft to PC's mailbox.
+    expect(
+      screen.getByText(/Thư hỏi PC ngày giao \(nháp\)”.*DW1 tự ghi đã hỏi PC/s),
+    ).toBeTruthy();
     fireEvent.click(button("Ghi đã hỏi PC"));
     await waitFor(() =>
       expect(api.recordPcAsked).toHaveBeenCalledWith(
@@ -113,6 +125,7 @@ describe("Hỏi PC (ticket 07)", () => {
       }),
     );
     expect(button("Ghi đã hỏi PC").disabled).toBe(true);
+    expect(screen.queryByText(/DW1 tự ghi đã hỏi PC/)).toBeNull();
     expect(
       screen.getByText(/Chỉ hỏi và ghi ngày PC khi đơn đang xem xét/),
     ).toBeTruthy();
@@ -126,5 +139,84 @@ describe("Hỏi PC (ticket 07)", () => {
     fireEvent.click(await screen.findByText("Thêm một đợt"));
     expect(await screen.findByText("Số lượng đợt 2")).toBeTruthy();
     expect(screen.getByText(/Tổng các đợt/)).toBeTruthy();
+  });
+});
+
+describe("PC's mail read by DW1 (ticket 77)", () => {
+  const proposed = () =>
+    order({
+      status: "in_review",
+      pc_request: { lines: [1], by: AN, at: "2026-11-15T02:00:00Z" },
+      pc_reply: {
+        dates: [
+          {
+            line_no: 1,
+            delivery: 1,
+            date: "2026-11-30",
+            quote: "30/11/2026",
+            message_id: "PC01",
+            received_at: "2026-11-15T03:00:00Z",
+          },
+        ],
+        read_at: "2026-11-15T03:05:00Z",
+        prompt_ref: "sales.pc_dates@1.0.0",
+      },
+    });
+
+  it("shows the date as the machine's, and Đúng waits until the mail is opened", async () => {
+    page(proposed());
+    // The glossary's value state, drawn as every machine-read value is.
+    expect(await screen.findByText("Máy đọc")).toBeTruthy();
+    expect(
+      screen.getByText(/30\/11\/2026 · trong thư: “30\/11\/2026”/),
+    ).toBeTruthy();
+    const dung = () =>
+      screen.getByLabelText("Đúng ngày PC cho dòng 1") as HTMLButtonElement;
+    expect(dung().disabled).toBe(true);
+    expect(screen.getByText("Mở thư PC trước khi bấm Đúng.")).toBeTruthy();
+    expect(api.acceptPcReply).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Xem thư PC cho dòng 1"));
+    expect(
+      await screen.findByText("Dòng 1 giao được ngày 30/11/2026."),
+    ).toBeTruthy();
+    expect(api.pcReplyMail).toHaveBeenCalledWith(expect.any(String), "PC01");
+    await waitFor(() => expect(dung().disabled).toBe(false));
+    fireEvent.click(dung());
+    await waitFor(() =>
+      expect(api.acceptPcReply).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        expect.any(Number),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("keeps PC's mail closed, with the reason, to a viewer who cannot prepare", async () => {
+    SCOPES = ["sales.case.read"];
+    page(proposed());
+    const open = (await screen.findByLabelText(
+      "Xem thư PC cho dòng 1",
+    )) as HTMLButtonElement;
+    expect(open.disabled).toBe(true);
+    fireEvent.click(open);
+    expect(api.pcReplyMail).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByText(/cần vai Sales phụ trách/).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("opens Sửa as the answer form filled with DW1's reading", async () => {
+    page(proposed());
+    fireEvent.click(await screen.findByLabelText("Sửa ngày PC cho dòng 1"));
+    expect(await screen.findByText("Ngày PC trả lời cho dòng 1")).toBeTruthy();
+    expect(screen.getByDisplayValue("30/11/2026")).toBeTruthy();
+  });
+
+  it("shows no reading where DW1 read none", async () => {
+    page(order({ status: "in_review" }));
+    await screen.findByText("Hỏi PC ngày giao");
+    expect(screen.queryByText("Máy đọc")).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ from dw_worker.consumers.sales_rule_drafts import (
     build_rule_draft_handler,
     build_rule_draft_sweep_consumer,
 )
+from dw_worker.consumers.scope_failures import ScopesFailedError
 
 pytestmark = pytest.mark.unit
 
@@ -89,5 +90,7 @@ class _Sweep:
 async def test_the_sweep_lane_sweeps_every_workspace_due_past_one_that_fails() -> None:
     first, broken, last = _scope(), _scope(), _scope()
     sweep = _Sweep([first, broken, last], failing=broken)
-    await build_rule_draft_sweep_consumer(sweep)()
+    # The last is still swept; then the lane says one failed (ticket 84).
+    with pytest.raises(ScopesFailedError):
+        await build_rule_draft_sweep_consumer(sweep)()
     assert sweep.swept == [first, last]

@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
@@ -28,24 +28,38 @@ from zoneinfo import ZoneInfo
 import pytest
 from gateway_fakes import SIGNER, TENANT, VERIFIER, WORKSPACE, FakeLedger, FakeRights, FakeSwitches
 
-from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
-from dw_bravo.layout import Layout, read_layout
+from dw_bravo.contract import (
+    WRITE_KINDS,
+    CancelLine,
+    LineRef,
+    SetConfirmedDate,
+    SetQuantity,
+    SplitLine,
+    SplitPart,
+)
+from dw_bravo.expression import UNKNOWN
+from dw_bravo.layout import Layout, merge_windows, read_layout, read_window, with_window
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.testing import sql_trace
 from dw_bravo.testing.replay import SaveState, ScreenReplay, group_saves, so_screen_replay
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
 from dw_bravo_gateway.ports import Batch, BravoUser, StoredDocument
-from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 LAYOUTS = os.environ.get("DW_BRAVO_LAYOUTS")
 TRACE = os.environ.get("DW_BRAVO_TRACE")
 SO_LAYOUT = "layout_8212_EDIT_BizDocSO__Xml"
+# The screen's window and Proterial's one `B00LayoutDataEdit` copy of it:
+# the live adapter attaches both to every layout it reads (ticket 72), so
+# the replay runs what production runs.
+SO_WINDOW = "layout_8213_EDIT_BizDocSO__Xml"
+SO_WINDOW_COPY = "layout_edit_8213___Xml"
 
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.skipif(
         not LAYOUTS
-        or not (Path(LAYOUTS) / SO_LAYOUT).is_file()
+        or not all((Path(LAYOUTS) / f).is_file() for f in (SO_LAYOUT, SO_WINDOW, SO_WINDOW_COPY))
         or not TRACE
         or not Path(TRACE).is_file(),
         reason="Proterial's layouts and UAT trace are not on this machine",
@@ -62,6 +76,23 @@ def _column_order(write: sql_trace.Write) -> list[str]:
     sql = write.statement.sql
     declared = sql[sql.find(",N'@_") + 3 : sql.find("',@_", sql.find(",N'@_") + 3)]
     return [n for n in _DECLARED.findall(declared + " ") if not n.startswith("Original_")]
+
+
+def _so_layout() -> Layout:
+    """The SO screen's layout as `SqlServerBravo.layout` hands it over: the
+    DataSource with its window, merged with the user's copy."""
+    folder = Path(LAYOUTS or "")
+
+    def text(name: str) -> str:
+        return (folder / name).read_text(encoding="utf-8")
+
+    window = merge_windows(
+        read_window(text(SO_WINDOW), "EDIT_BizDocSO"),
+        [read_window(text(SO_WINDOW_COPY), "EDIT_BizDocSO")],
+        "a user's or role's own window binds it differently (B00LayoutDataEdit)",
+    )
+    layout = read_layout(text(SO_LAYOUT), "EDIT_BizDocSO", missing_template="BizDocEditor")
+    return with_window(layout, window)
 
 
 def _rowversion(value: object) -> str:
@@ -95,8 +126,20 @@ class TraceBravo:
     async def layout(self, screen: str) -> Layout:
         return self.screen_layout
 
+    # Procedures answered with the save's own recorded call whatever the
+    # parameters: set only where the save differs from the client's in a way
+    # the test names (the cancel test's header totals).
+    as_recorded: frozenset[str] = frozenset()
+    # Procedures whose result is in no trace (an XE trace records the call,
+    # not its result set) and in no written column: answered UNKNOWN, so a
+    # rule or a check that reads one is undecided, never passed.
+    unrecorded: frozenset[str] = frozenset()
+
     def procedures(self) -> ProcedurePort:
-        return self.replay.procedures(self.state)
+        inner = self.replay.procedures(self.state)
+        if not self.as_recorded and not self.unrecorded:
+            return inner
+        return _AsRecorded(inner, self.state.window, self.as_recorded, self.unrecorded)
 
     def references(self) -> ReferencePort:
         from dw_bravo.testing.replay import _NoReferences
@@ -105,6 +148,34 @@ class TraceBravo:
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
         return self.replay.session_for(self.state.save)
+
+    # The view's columns: what the client declared for a line's statement.
+    view: list[str] = field(default_factory=list)
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        return self.view
+
+
+@dataclass
+class _AsRecorded:
+    """Answers the named procedures with the window's recorded call, whatever
+    parameters the gateway's plan passes; every other call as recorded."""
+
+    inner: ProcedurePort
+    window: list[sql_trace.ProcedureCall]
+    names: frozenset[str]
+    unrecorded: frozenset[str] = frozenset()
+
+    def call(
+        self, command: str, parameters: Mapping[str, object], outputs: Sequence[str]
+    ) -> Mapping[str, object]:
+        if command in self.unrecorded:
+            assert any(c.command == command for c in self.window), command  # it was called
+            return dict.fromkeys(outputs, UNKNOWN)
+        if command in self.names:
+            recorded = next(c for c in self.window if c.command == command)
+            parameters = recorded.parameters
+        return self.inner.call(command, parameters, outputs)
 
 
 def _fixed(at: datetime) -> Callable[[], datetime]:
@@ -152,20 +223,26 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
     traced_context = _CONTEXT.search(saves[0].writes[0].statement.sql)
     assert traced_context is not None
     _, user_id, _, branch, _ = traced_context.group(1).split("@")
-    event = traced_context.group(1).split("@")[0].strip().split("|")[1]
-    layout = read_layout(
-        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
-        "EDIT_BizDocSO",
-        missing_template="BizDocEditor",
-    )
+    layout = _so_layout()
     replay = so_screen_replay(layout, int(user_id), branch)
-    # The trace's session saved with `<screen>|<event>`; the shipped table
-    # measures none for an existing SO, so the replay names the traced one.
-    screens = {"EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": event})}
     user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
 
     covered, skipped, refusals = 0, [], set()
+    edits = 0
     for state in replay.states(saves, calls):
+        # Each save carries its window's word: `Edit` for an SO opened from
+        # the list, the gateway's only case, rendered by the shipped table
+        # as is (ticket 70); `New` for one created in the same window, which
+        # the gateway never updates, so the replay names it to compare.
+        saved_context = _CONTEXT.search(state.save.writes[0].statement.sql)
+        assert saved_context is not None
+        event = saved_context.group(1).split("@")[0].strip().split("|")[1]
+        if event == "Edit":
+            screens = dict(SCREENS)
+        else:
+            screens = {
+                "EDIT_BizDocSO": replace(SCREENS["EDIT_BizDocSO"], context_event={"update": event})
+            }
         result = replay._replay_update(state.save, state.header, state.lines, state.window)
         roots = [(label, cols) for label, cols in result.roots.items()]
         before_h, before_l, _, after_l, written = replay.before_after(state)
@@ -205,6 +282,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
             writer=bravo,
             now=_fixed(at),
             tenant_id=TENANT,
+            target="uat",
             screens=screens,
             pace=WritePace(),
         )
@@ -215,6 +293,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
             command=command,
             bravo_user_id=user.id,
             employee_code="NV-TRACE",
+            target="uat",
             now=at,
         )
 
@@ -242,20 +321,137 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
                 if name.startswith(("_Original_", "_Id")):
                     continue
                 assert _equal(value, theirs.values.get(name[1:])), (state.save.at, name)
+        _assert_the_clients_process_step(batch.steps, calls, state.save.at)
         covered += 1
+        edits += event == "Edit"
 
-    # Three of the six saved UPDATEs are a gateway command (a quantity, two
-    # confirmed dates). The others: a header's PO number (not a command), a
-    # split's first half (`Divide`; its new line waits on script 03c), and a
-    # cancel being cleared (IsCancel, CancelPrice, CancelQuantity set to
-    # NULL), which is not a cancel; a real one is ticket 52's to trace.
-    assert covered == 3, skipped
-    assert sorted(map(tuple, skipped)) == [
-        ("Divide",),
-        ("IsCancel", "CancelPrice", "CancelQuantity"),
-        ("POCustomer",),
+    # The 11-20 trace: three of its six saved UPDATEs are a gateway command (a
+    # quantity, two confirmed dates), all in a `New` window. The others: a
+    # header's PO number (not a command), a split's first half (`Divide`),
+    # and a cancel being cleared (IsCancel, CancelPrice, CancelQuantity set
+    # to NULL). A later trace file holds those rows and more, so these are
+    # floors; an `Edit` save (11-25 on) must be covered by the shipped table.
+    assert covered >= 3, skipped
+    assert {("Divide",), ("IsCancel", "CancelPrice", "CancelQuantity"), ("POCustomer",)} <= set(
+        map(tuple, skipped)
+    )
+    print(f"covered {covered} ({edits} Edit), skipped {skipped}; held back:", sorted(refusals))
+
+
+async def test_a_traced_cancel_is_the_clients_own_statement() -> None:
+    """Ticket 71: the 11-25 17:31:50 save cancelled two lines of a test SO.
+    The gateway cancels one line per command; for the line outside a split
+    group it must send the client's UPDATE, value for value. The header's
+    totals differ (the client cancelled both lines in one save), so only the
+    header's columns are compared."""
+    statements = sql_trace.read(Path(TRACE or ""))
+    saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
+    cancels = [
+        s
+        for s in saves
+        if any(w.values.get("IsCancel") == "Cancel" for w in s.writes if w.kind == "update")
     ]
-    print("held back:", sorted(refusals))
+    if not cancels:
+        pytest.skip("this trace holds no cancel (the 11-25 trace on does)")
+    calls = [
+        c for c in sql_trace.procedure_calls(statements) if c.statement.screen == "EDIT_BizDocSO"
+    ]
+    context = _CONTEXT.search(cancels[0].writes[0].statement.sql)
+    assert context is not None
+    _, user_id, _, branch, _ = context.group(1).split("@")
+    layout = _so_layout()
+    replay = so_screen_replay(layout, int(user_id), branch)
+    user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
+    state = next(st for st in replay.states(saves, calls) if st.save is cancels[0])
+    before_h, before_l, _, _, written = replay.before_after(state)
+    before = _stored(before_h, before_l, written, replay)
+    checked = 0
+    for label, theirs in written.items():
+        if label == "Parent" or theirs.values.get("IsCancel") != "Cancel":
+            continue
+        index = next(
+            i
+            for i, line in enumerate(before.lines)
+            if Decimal(str(line["BuiltinOrder"])) == Decimal(str(theirs.values["BuiltinOrder"]))
+        )
+        line = before.lines[index]
+        if line.get("Divide") not in (None, "", Decimal(0)):
+            continue  # a split group's line: refused as unmeasured (its own test)
+        command = CancelLine(
+            line=LineRef(
+                so_id=int(Decimal(str(before.header["Id"]))),
+                line_id=int(Decimal(str(line["Id"]))),
+                line_rowversion=str(line["timestamp"]),
+            ),
+            reason=str(theirs.values["CancelRemark"]),
+        )
+        at = state.save.at.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        bravo = TraceBravo(layout, replay, state, user, before, before)
+        # One line's cancel leaves the header's total where the client's
+        # two-line save did not; the process group the header's rule looks
+        # up for that total is not what this test measures (ticket 50 runs
+        # it live), so it is answered as recorded.
+        bravo.as_recorded = frozenset({"usp_B20BizProcessGroup"})
+        pipeline = WritePipeline(
+            verifier=VERIFIER,
+            switches=FakeSwitches(),
+            ledger=FakeLedger(),
+            directory=bravo,
+            rights=FakeRights(),
+            documents=bravo,
+            engine=bravo,
+            writer=bravo,
+            now=_fixed(at),
+            tenant_id=TENANT,
+            target="uat",
+            screens=dict(SCREENS),
+            pace=WritePace(),
+        )
+        token = SIGNER.sign(
+            approval_id=uuid.uuid4(),
+            tenant_id=TENANT,
+            workspace_id=WORKSPACE,
+            command=command,
+            bravo_user_id=user.id,
+            employee_code="NV-TRACE",
+            target="uat",
+            now=at,
+        )
+
+        preview = await pipeline.preview(command, token)
+
+        batch = preview.batch
+        assert batch is not None, preview
+        assert batch.context == context.group(1)
+        ours = next(s for s in batch.statements if s.table == theirs.table)
+        client_update = _UPDATE.search(theirs.statement.sql)
+        assert client_update is not None
+        assert _assignments(ours.sql) == _assignments(client_update.group(0))
+        for name, value in ours.parameters.items():
+            if name.startswith(("_Original_", "_Id")):
+                continue
+            assert _equal(value, theirs.values.get(name[1:])), name
+        header = next(s for s in batch.statements if s.table == written["Parent"].table)
+        client_header = _UPDATE.search(written["Parent"].statement.sql)
+        assert client_header is not None
+        assert _assignments(header.sql) == _assignments(client_header.group(0))
+        _assert_the_clients_process_step(batch.steps, calls, state.save.at)
+        checked += 1
+    assert checked >= 1
+
+
+def _assert_the_clients_process_step(
+    steps: Sequence[object], calls: list[sql_trace.ProcedureCall], at: datetime
+) -> None:
+    """Ticket 74: the save's process step is the client's, argument for
+    argument, where the trace records one at the save's second."""
+    traced = [c for c in calls if c.command == PROCESS_PROCEDURE and c.statement.at == at]
+    if not traced:
+        return  # the 11-20 trace's first sessions did not record it
+    [step] = steps
+    assert step.name == PROCESS_PROCEDURE  # type: ignore[attr-defined]
+    ours = {k[1:]: v for k, v in step.parameters.items()}  # type: ignore[attr-defined]
+    assert ours == dict(traced[-1].parameters), (at, ours)
 
 
 _SET = re.compile(r"^(UPDATE TOP \(1\) \w+ SET )(.*?)( WHERE .*)$")
@@ -279,3 +475,130 @@ def _equal(ours: object, theirs: object) -> bool:
     if isinstance(ours, Decimal | int) and isinstance(theirs, Decimal | int):
         return Decimal(ours) == Decimal(theirs)
     return ours == theirs
+
+
+@pytest.mark.parametrize("at", ["2026-11-20 10:30:07", "2026-11-25 17:28:58"])
+async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: str) -> None:
+    """Ticket 73: the two splits the UAT traces hold, run through every check
+    with the split's statements built. 10:30:07 split a saved 12200 m into
+    6100 + 6100 (a cable item, a `New` window, label 'A'); 17:28:58 split
+    250 Pc into 135 + 115 inside a mixed save that also deleted an empty
+    line, which is dropped here after the trace says it is the one DELETE.
+
+    Neither replays to the client's statement yet, and this test says why
+    rather than comparing. With the window attached as the live adapter
+    attaches it, copying the head's `ItemCode` onto the new line binds the
+    item lookup, which Proterial's own copy of 8213 (`B00LayoutDataEdit`)
+    binds otherwise: which copy a user opens is not measured, so the runner
+    refuses. Two reasons wait behind it: the item's row is in no trace (a
+    lookup's result is not), and `Eval_Detail_B20ItemCustomerDescription
+    _Convert_ItemCode` holds only when `ISNULL(GroupDivi,0) = 0`, a text
+    label compared with a number, which is not measured either. When all
+    three are measured this test fails, and becomes the column-for-column
+    replay."""
+    statements = sql_trace.read(Path(TRACE or ""))
+    saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
+    save = next((s for s in saves if s.at == datetime.fromisoformat(at)), None)
+    if save is None:
+        pytest.skip(f"this trace holds no save at {at}")
+    calls = [
+        c for c in sql_trace.procedure_calls(statements) if c.statement.screen == "EDIT_BizDocSO"
+    ]
+    context = _CONTEXT.search(save.writes[0].statement.sql)
+    assert context is not None
+    head_text, user_id, _, branch, _ = context.group(1).split("@")
+    event = head_text.strip().split("|")[1]
+    layout = _so_layout()
+    replay = so_screen_replay(layout, int(user_id), branch)
+    user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
+    state = next(st for st in replay.states(saves, calls, with_inserts=True) if st.save is save)
+    [insert] = state.inserted
+    before_h, before_l, _, _, written = replay.before_after(state)
+    deleted = [d for d in sql_trace.deletes(statements) if d.statement.at == save.at]
+    # The line the save deleted was inserted at 16:56:07 and never saved
+    # again; the replay knows lines by their order (`BuiltinOrder`), and the
+    # new line took its place: the one line the save neither updates nor
+    # keeps, for the one DELETE at this second.
+    updated = {w.values.get("BuiltinOrder") for w in written.values() if w.table != "B30BizDoc"}
+    gone = [
+        line
+        for line in before_l
+        if line.get("BuiltinOrder") == insert.values["BuiltinOrder"]
+        and line.get("BuiltinOrder") not in updated
+    ]
+    assert len(deleted) == len(gone) <= 1, (deleted, gone)
+    before_l = [line for line in before_l if not any(line is g for g in gone)]
+    before = _stored(before_h, before_l, written, replay)
+    before.generated = {"B30BizDocDetailSO": frozenset({"id", "timestamp"})}
+    head = next(w for w in written.values() if w.values.get("Divide") == Decimal(1))
+    line = next(x for x in before.lines if x["BuiltinOrder"] == head.values["BuiltinOrder"])
+    command = SplitLine(
+        line=LineRef(
+            so_id=int(Decimal(str(before.header["Id"]))),
+            line_id=int(Decimal(str(line["Id"]))),
+            line_rowversion=str(line["timestamp"]),
+        ),
+        parts=(
+            SplitPart(Decimal(str(head.values["Quantity9"]))),
+            SplitPart(Decimal(str(insert.values["Quantity9"]))),
+        ),
+    )
+    when = save.at.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    bravo = TraceBravo(layout, replay, state, user, before, before)
+    bravo.view = _column_order(insert)  # the client declares its row's columns
+    # The export-control check a new line runs (`RowAdded`): its result is in
+    # no trace and in no written column.
+    bravo.unrecorded = frozenset({"usp_B20ExportControlList_GetData_HCV_2"})
+    screens = {
+        "EDIT_BizDocSO": replace(
+            SCREENS["EDIT_BizDocSO"], context_event={"update": event, "insert": event}
+        )
+    }
+    pipeline = WritePipeline(
+        verifier=VERIFIER,
+        switches=FakeSwitches(),
+        ledger=FakeLedger(),
+        directory=bravo,
+        rights=FakeRights(),
+        documents=bravo,
+        engine=bravo,
+        writer=bravo,
+        now=_fixed(when),
+        tenant_id=TENANT,
+        target="uat",
+        screens=screens,
+        pace=WritePace(),
+    )
+    token = SIGNER.sign(
+        approval_id=uuid.uuid4(),
+        tenant_id=TENANT,
+        workspace_id=WORKSPACE,
+        command=command,
+        bravo_user_id=user.id,
+        employee_code="NV-TRACE",
+        target="uat",
+        now=when,
+    )
+    key = "so.line.split@1"
+    shipped = WRITE_KINDS[key]
+    WRITE_KINDS[key] = replace(shipped, pending=None)  # past the kind check
+    try:
+        preview = await pipeline.preview(command, token)
+    finally:
+        WRITE_KINDS[key] = shipped
+
+    assert preview.check == "rules" and preview.batch is None, preview
+    assert preview.reason is not None
+    assert preview.reason == (
+        "rules_could_not_decide: Eval_Detail_Divi_GetData: Detail.ItemCode:"
+        " a user's or role's own window binds it differently (B00LayoutDataEdit)"
+    )
+    assert bravo.batches == []
+    # The client's new line carries `QuantityBox`. Layout 8212's only rule
+    # setting it writes 1, when `CartonSize` (copied from the head) is '-':
+    # the 10:30:07 cable line's 1. The 17:28:58 roller line's 0 is no rule of
+    # this layout's: the grid layout 8213's item binding (ticket 72).
+    setters = [r for r in layout.rules.values() if "QuantityBox" in r.data_members()]
+    assert [r.setting("Value") for r in setters] == ["1"]
+    if insert.values["QuantityBox"] == Decimal(0):
+        assert "QuantityBox" in insert.columns

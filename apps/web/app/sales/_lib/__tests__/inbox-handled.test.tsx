@@ -123,6 +123,30 @@ describe("a routed message marked handled (2026-10-27)", () => {
   );
 
   it(
+    "the PIC may say what the mail was in one optional click (ticket 67)",
+    async () => {
+      inbox = [routed("M11", "an.nguyen@alpha.local")];
+      page();
+      const kind = await screen.findByRole("combobox", {
+        name: /Thư này là/,
+      });
+      fireEvent.mouseDown(kind);
+      fireEvent.click(await screen.findByText("Đổi lịch giao"));
+      fireEvent.click(
+        screen.getByRole("button", { name: /Đánh dấu thư M11 đã xử lý/ }),
+      );
+      await waitFor(() => expect(api.markHandled).toHaveBeenCalledTimes(1));
+      const call = api.markHandled.mock.calls[0]! as unknown[];
+      expect([call[0], call[1], call[3]]).toEqual([
+        "M11",
+        null,
+        "delivery_change",
+      ]);
+    },
+    SLOW,
+  );
+
+  it(
     "a handled one says who and when, and offers to reopen it",
     async () => {
       inbox = [

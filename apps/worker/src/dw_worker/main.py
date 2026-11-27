@@ -23,6 +23,7 @@ import contextlib
 import json
 import logging
 import signal
+import time
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
@@ -56,6 +57,7 @@ from dw_knowledge.retention import SqlKnowledgeRetention, SqlSupersededVersionRe
 from dw_memory.policy import MemoryWritePolicy
 from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
+from dw_observability.metrics import DW_LANE_INTERVAL_SECONDS, DW_LANE_LAST_OK_TIMESTAMP_SECONDS
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import ValkeyCache
@@ -145,14 +147,17 @@ from dw_sales.adapters.assembly import (
     build_followup_lane,
     build_layout_settlement,
     build_prompt_settlement,
+    build_quote_manager_settlement,
     build_rule_settlement,
     build_skill_settlement,
     build_threshold_lane,
+    refuse_orphaned_stage_pins,
 )
 from dw_sales.adapters.bravo_gateway_client import BravoGatewayClient
 from dw_sales.adapters.bravo_watch_lane import GatewayFingerprints, WatchAnnouncer
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.persistence.bravo_ledger_health import SqlBravoLedgerHealth
 from dw_sales.adapters.persistence.bravo_mirror import SqlBravoMirror
 from dw_sales.adapters.persistence.bravo_watch import SqlBravoWatch
 from dw_sales.adapters.persistence.labelled_cases import RETENTION_KEY as LABELLED_CASES_KEY
@@ -171,23 +176,27 @@ from dw_sales.application.autonomy import AUTO_APPLY_LANE
 from dw_sales.application.bravo_exports import BRAVO_EXPORT_UPLOADED, YCBG_EXPORT_UPLOADED_BEFORE
 from dw_sales.application.bravo_line_writes import BRAVO_WRITE_DECIDED
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
+from dw_sales.application.cross_check_on_match import CROSS_CHECK_ON_MATCH_LANE
+from dw_sales.application.decisions import QUOTE_MANAGER_DECIDED
 from dw_sales.application.examples import EXAMPLES_LANE
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.mail_drop import MAIL_DROP_LANE
 from dw_sales.application.outbound_mail import SALES_OUTBOUND_LANE
+from dw_sales.application.pc_replies import SALES_PC_REPLIES_LANE
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.prompt_optimiser import OPTIMISER_LANE, SecurityCase, security_cases
 from dw_sales.application.prompt_versions import PROMPTS_DECIDED
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
-from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED
+from dw_sales.application.salesorder_learning import EXAMPLE_REQUESTED, PAIR_ADDED
 from dw_sales.application.salesorder_pairs import (
     SALESORDER_PAIRS_RETENTION_LANE,
     SALESORDER_SKILL_REPLAY_LANE,
 )
+from dw_sales.application.shadow import SHADOW_RETENTION_LANE
 from dw_sales.application.skill_replay import SKILL_REPLAY_LANE
 from dw_sales.application.skills import SKILLS_DECIDED
 from dw_worker.composition import (
@@ -202,6 +211,13 @@ from dw_worker.composition import (
     release_manifest_ref,
 )
 from dw_worker.consumers import ConsumerRegistry
+from dw_worker.consumers.bravo_ledger_health import (
+    BRAVO_LEDGER_HEALTH_LANE,
+    build_bravo_ledger_health_consumer,
+)
+from dw_worker.consumers.bravo_ledger_health import (
+    INTERVAL_SECONDS as BRAVO_LEDGER_HEALTH_INTERVAL_SECONDS,
+)
 from dw_worker.consumers.bravo_sync import (
     BRAVO_SYNC_INTERVAL_SECONDS,
     build_bravo_sync_consumer,
@@ -249,6 +265,12 @@ from dw_worker.consumers.sales_auto_apply import (
 from dw_worker.consumers.sales_auto_apply import build_sales_auto_apply_consumer
 from dw_worker.consumers.sales_bravo_exports import build_bravo_export_handler
 from dw_worker.consumers.sales_catalog import build_catalog_import_handler
+from dw_worker.consumers.sales_cross_check_on_match import (
+    INTERVAL_SECONDS as SALES_CROSS_CHECK_ON_MATCH_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_cross_check_on_match import (
+    build_sales_cross_check_on_match_consumer,
+)
 from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_followups import (
     INTERVAL_SECONDS as SALES_FOLLOWUPS_INTERVAL_SECONDS,
@@ -267,6 +289,10 @@ from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
 from dw_worker.consumers.sales_outbound import INTERVAL_SECONDS as SALES_OUTBOUND_INTERVAL_SECONDS
 from dw_worker.consumers.sales_outbound import build_sales_outbound_consumer
 from dw_worker.consumers.sales_pairs_retention import build_sales_pairs_retention_consumer
+from dw_worker.consumers.sales_pc_replies import (
+    INTERVAL_SECONDS as SALES_PC_REPLIES_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_pc_replies import build_sales_pc_replies_consumer
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -277,10 +303,12 @@ from dw_worker.consumers.sales_rule_drafts import (
     build_rule_draft_sweep_consumer,
 )
 from dw_worker.consumers.sales_salesorder_examples import build_example_handler
+from dw_worker.consumers.sales_salesorder_skill_drafts import build_pair_added_handler
 from dw_worker.consumers.sales_skill_replay import (
     INTERVAL_SECONDS as SALES_SKILL_REPLAY_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_skill_replay import build_sales_skill_replay_consumer
+from dw_worker.consumers.web_push_delivery import build_web_push_delivery_consumer
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -583,6 +611,15 @@ def build_sales(
         # proposed prompt version must pass (ticket 43).
         examples=examples,
         security=_description_security(),
+        # The orders whose rules let a matching read-back pass their
+        # cross-check, read back from Bravo (ticket 81): only with a gateway.
+        cross_check_gateway=(
+            BravoGatewayClient(
+                httpx.AsyncClient(), settings.bravo_gateway_url, settings.bravo_tenant_id
+            )
+            if settings.bravo_gateway_url and settings.bravo_tenant_id is not None
+            else None
+        ),
     )
     return mount, scope
 
@@ -814,14 +851,20 @@ def web_push(
     )
 
 
-def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
-    """Wire the lanes this process hosts, skipping any whose infra is absent."""
+def build_registry(
+    settings: WorkerSettings, telemetry: TelemetryPort | None = None
+) -> ConsumerRegistry:
+    """Wire the lanes this process hosts, skipping any whose infra is absent.
+
+    ``telemetry``: the one `main` also hands `run_worker`; built here when a
+    caller (a test) has none."""
     registry = ConsumerRegistry()
     clock = SystemClock()
     # Uuid7: a memory id that sorts by when it was learned makes the
     # keyset page over `created_at` stable without a second column.
     ids = Uuid7Generator()
-    telemetry = _build_worker_telemetry(settings)
+    if telemetry is None:
+        telemetry = _build_worker_telemetry(settings)
 
     # Every queue this process wired, with the window its jobs deserve. A queue
     # this host did not wire stays absent rather than being reaped with a
@@ -877,6 +920,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # (ADR 0006-provider-neutral-channel-delivery-outbox): a database and a bot token, polled or
     # webhooked alike.
     channel_delivery_consumer: Callable[[], Awaitable[None]] | None = None
+    web_push_delivery_consumer: Callable[[], Awaitable[None]] | None = None
     # Channel deliveries: 90 days, never a pending one, the database's constant.
     channel_deliveries_retention: RetentionPrunePort | None = None
     # Ops hardening Phase 4. Needs object storage too, not just a database -
@@ -896,6 +940,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
     sales_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     sales_outbound_consumer: Callable[[], Awaitable[None]] | None = None
+    # PC's mail read while an order waits on PC (Sales ticket 77): only where
+    # this process reaches a model server; it reads nothing while the
+    # tenant's switch is off.
+    sales_pc_replies_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_cross_check_on_match_consumer: Callable[[], Awaitable[None]] | None = None
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
@@ -917,6 +966,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # A customer's SalesOrder skill replayed on its worked pairs (ticket 41).
     sales_salesorder_skill_replay_consumer: Callable[[], Awaitable[None]] | None = None
     sales_pairs_retention_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_shadow_retention_consumer: Callable[[], Awaitable[None]] | None = None
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
@@ -970,6 +1020,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # signed, sent with the stored command to the gateway. Wired always:
         # with no gateway configured the write is refused with that reason,
         # never left waiting.
+        # No lane runs while an open case is pinned to a stage version this
+        # deployment does not serve (Sales ticket 61).
+        registry.check_at_start(lambda: refuse_orphaned_stage_pins(sessions))
         handlers[BRAVO_WRITE_DECIDED] = build_bravo_write_handler(
             build_bravo_write_settlement(
                 session_factory=sessions,
@@ -986,6 +1039,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 clock=clock,
                 ids=ids,
             )
+        )
+        # A Manager's approval of a quotation with an order (Sales ticket 39,
+        # WIV-03-023 section 4): run-less, opened by the first level's check.
+        handlers[QUOTE_MANAGER_DECIDED] = build_decided_handler(
+            build_quote_manager_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                notifications=SqlNotificationRepository(sessions),
+                clock=clock,
+                ids=ids,
+            ),
+            applied="quote manager decision applied",
         )
         handlers[LAYOUT_DECIDED] = build_decided_handler(
             build_layout_settlement(
@@ -1153,6 +1219,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             session_factory=sessions,
             pending_expiry=timedelta(days=retention_policy.channel_deliveries.pending_expiry_days),
         )
+        if (pusher := web_push(settings, sessions)) is not None:
+            web_push_delivery_consumer = build_web_push_delivery_consumer(
+                SqlChannelOutbox(sessions), pusher, telemetry=telemetry
+            )
         if settings.zalo_send_enabled:
             channel_delivery_consumer = build_channel_delivery_consumer(
                 SqlChannelOutbox(sessions),
@@ -1160,6 +1230,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 address_of=SqlZaloLink(sessions).zalo_id_for,
                 sender=ZaloBotClient(bot_token=settings.zalo_bot_token.get_secret_value()),
                 web_url=settings.public_web_url,
+                telemetry=telemetry,
             )
         # One bot, one reader (ADR 0008): poll mode polls, webhook mode drains
         # what the API's webhook queued. Both feed the same inbound entry.
@@ -1225,6 +1296,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     sales_outbound_consumer = build_sales_outbound_consumer(
                         mount.outbound, _fake_flow(settings)
                     )
+                if mount.pc_replies is not None:
+                    sales_pc_replies_consumer = build_sales_pc_replies_consumer(mount.pc_replies)
                 if mount.mail_drop is not None:
                     sales_mail_drop_consumer = build_sales_mail_drop_consumer(
                         mount.mail_drop, mailbox
@@ -1237,7 +1310,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                     ids=ids,
                     holders=SqlScopeHolders(sessions),
-                    notifications=SqlNotificationRepository(sessions),
+                    # The follow-ups push their reminders themselves, batched
+                    # per tick (ticket 48): the outbox queues no second push.
+                    notifications=SqlNotificationRepository(sessions, push=False),
                     writer=mount.brief_writer,
                     # Web push to the people told (ticket 48), where it is on.
                     push=web_push(settings, sessions),
@@ -1255,6 +1330,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_auto_apply_consumer = build_sales_auto_apply_consumer(
                     thresholds, threshold_scopes
                 )
+                if mount.cross_check_on_match is not None:
+                    # An order's cross-check passed on Bravo's matching
+                    # read-back where its rules say so (ticket 81).
+                    sales_cross_check_on_match_consumer = build_sales_cross_check_on_match_consumer(
+                        mount.cross_check_on_match, threshold_scopes
+                    )
                 if mount.examples is not None:
                     sales_examples_consumer = build_sales_examples_consumer(
                         mount.examples,
@@ -1281,6 +1362,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     sales_pairs_retention_consumer = build_sales_pairs_retention_consumer(
                         mount.salesorder_pairs_retention, threshold_scopes
                     )
+                if mount.shadow_retention is not None:
+                    sales_shadow_retention_consumer = build_sales_pairs_retention_consumer(
+                        mount.shadow_retention, threshold_scopes, SHADOW_RETENTION_LANE
+                    )
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
@@ -1301,6 +1386,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # the same condition.
                 if mount.salesorder_learning is not None:
                     handlers[EXAMPLE_REQUESTED] = build_example_handler(mount.salesorder_learning)
+                # A kept pair asks for the customer's skill to be drafted
+                # (ticket 66), where the one-call door is.
+                if mount.salesorder_skill_draft is not None:
+                    handlers[PAIR_ADDED] = build_pair_added_handler(mount.salesorder_skill_draft)
                 # A Bravo export (a YCBG for Design's results, ticket 16; a
                 # sales order read back, ticket 03), on the same condition.
                 # Ticket 16's own event type, which an upload made before the
@@ -1350,6 +1439,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     )
                 ),
                 interval_seconds=BRAVO_WATCH_INTERVAL_SECONDS,
+            )
+        # The gateway's writes waiting for a person, for the operator's
+        # alerts (sales ticket 84): wherever a gateway writes the ledger.
+        if settings.bravo_gateway_url:
+            registry.register(
+                BRAVO_LEDGER_HEALTH_LANE,
+                build_bravo_ledger_health_consumer(SqlBravoLedgerHealth(sessions), telemetry),
+                interval_seconds=BRAVO_LEDGER_HEALTH_INTERVAL_SECONDS,
             )
         # Bravo's facts copied into DW by rowversion (sales ticket 50): the
         # gateway's one tenant, its copy under that tenant's row security.
@@ -1443,6 +1540,21 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             sales_outbound_consumer,
             interval_seconds=SALES_OUTBOUND_INTERVAL_SECONDS,
         )
+    if sales_pc_replies_consumer is not None:
+        registry.register(
+            SALES_PC_REPLIES_LANE,
+            sales_pc_replies_consumer,
+            interval_seconds=SALES_PC_REPLIES_INTERVAL_SECONDS,
+        )
+    # And the cross-check passed on Bravo's matching read-back (ticket 81),
+    # which writes a case only through its own versioned save, so no
+    # ReapTarget.
+    if sales_cross_check_on_match_consumer is not None:
+        registry.register(
+            CROSS_CHECK_ON_MATCH_LANE,
+            sales_cross_check_on_match_consumer,
+            interval_seconds=SALES_CROSS_CHECK_ON_MATCH_INTERVAL_SECONDS,
+        )
     # And its follow-ups and morning brief (ticket 42), which only notify, so
     # no ReapTarget either.
     if sales_followups_consumer is not None:
@@ -1509,6 +1621,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
 
+    # And readings made in shadow no person decided, past their term
+    # (ticket 67), hourly, each workspace in its own scope.
+    if sales_shadow_retention_consumer is not None:
+        registry.register(
+            SHADOW_RETENTION_LANE,
+            sales_shadow_retention_consumer,
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+
     # And the months of its labelled cases past their term (ticket 43).
     if sales_labelled_cases_retention is not None:
         registry.register(
@@ -1549,6 +1670,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             interval_seconds=ZALO_WEBHOOK_INTERVAL_SECONDS,
         )
         logger.info("zalo webhook drain registered")
+    # In-app notifications out to the devices people turned push on from
+    # (Sales ticket 78), where this deployment has a VAPID key. Claims as the
+    # chat lane does, so it needs no ReapTarget either.
+    if web_push_delivery_consumer is not None:
+        registry.register(
+            "web_push_delivery",
+            web_push_delivery_consumer,
+            interval_seconds=settings.channel_delivery_interval_seconds,
+        )
     # In-app notifications out through linked chats. Claims rows with
     # SKIP LOCKED and holds no lease, so it needs no ReapTarget: a row a dead
     # worker held is pending again the moment its transaction ends.
@@ -1693,8 +1823,11 @@ async def run_worker(
     settings: WorkerSettings,
     registry: ConsumerRegistry,
     shutdown_event: asyncio.Event,
+    *,
+    telemetry: TelemetryPort,
 ) -> None:
     logger.info("worker starting, consumers=%s", sorted(registry.all()))
+    await registry.run_start_checks()
 
     async def heartbeat_loop() -> None:
         while not shutdown_event.is_set():
@@ -1707,6 +1840,13 @@ async def run_worker(
     async def consumer_loop(name: str) -> None:
         consumer = registry.all()[name]
         interval = registry.interval_for(name, settings.poll_interval_seconds)
+        lane = {"lane": name}
+        # Lane health (Sales ticket 84): the start time first, so a lane that
+        # never once succeeds goes stale instead of being absent; then the
+        # time of each clean tick. A tick that raises or never returns leaves
+        # it where it was, and `DwLaneStale` compares it with the interval.
+        telemetry.set_gauge(DW_LANE_INTERVAL_SECONDS, interval, lane)
+        telemetry.set_gauge(DW_LANE_LAST_OK_TIMESTAMP_SECONDS, time.time(), lane)
         while not shutdown_event.is_set():
             try:
                 await consumer()
@@ -1714,6 +1854,8 @@ async def run_worker(
                 # Broad on purpose: one lane's bad tick must not take the
                 # process down and stop every other lane with it.
                 logger.exception("consumer %s failed; backing off", name)
+            else:
+                telemetry.set_gauge(DW_LANE_LAST_OK_TIMESTAMP_SECONDS, time.time(), lane)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(shutdown_event.wait(), timeout=interval)
 
@@ -1741,7 +1883,8 @@ def main() -> None:
     from prometheus_client import start_http_server
 
     start_http_server(settings.metrics_port)
-    registry = build_registry(settings)
+    telemetry = _build_worker_telemetry(settings)
+    registry = build_registry(settings, telemetry)
     shutdown_event = asyncio.Event()
 
     async def runner() -> None:
@@ -1749,7 +1892,7 @@ def main() -> None:
         for sig in (signal.SIGINT, signal.SIGTERM):
             with contextlib.suppress(NotImplementedError):  # Windows lacks add_signal_handler
                 loop.add_signal_handler(sig, shutdown_event.set)
-        await run_worker(settings, registry, shutdown_event)
+        await run_worker(settings, registry, shutdown_event, telemetry=telemetry)
 
     asyncio.run(runner())
 

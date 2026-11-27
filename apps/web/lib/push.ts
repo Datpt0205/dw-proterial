@@ -108,14 +108,61 @@ export async function turnOn(): Promise<TurnOnResult> {
   return "on";
 }
 
-/** Unsubscribes this device, here and on the server. */
+/**
+ * The server's copy of a subscription forgotten; a failure is not this
+ * device's to fix (the row dies at its next push's 410, or the 90-day prune).
+ */
+function forget(endpoint: string): Promise<unknown> {
+  return apiClient()
+    .deletePushSubscription(endpoint)
+    .catch(() => undefined);
+}
+
+/**
+ * Unsubscribes this device, here and on the server. The device first: once
+ * it is unsubscribed no push reaches it, whatever the server answers.
+ */
 export async function turnOff(): Promise<void> {
   const subscription = await current();
   if (!subscription) return;
-  await apiClient()
-    .deletePushSubscription(subscription.endpoint)
-    .catch(() => undefined);
-  await subscription.unsubscribe();
+  const { endpoint } = subscription;
+  try {
+    await subscription.unsubscribe();
+  } finally {
+    await forget(endpoint);
+  }
+}
+
+/** How long signing out waits for the server to forget the subscription. */
+export const SIGN_OUT_WAIT_MS = 2000;
+
+/**
+ * Signing out ends this device's pushes (Sales ticket 78): the next person
+ * on a shared device must not get the last one's notices. Unsubscribed in
+ * the browser before anything leaves it, so a page that unloads first is
+ * off all the same; the server is then asked to forget it, waited for at
+ * most ``waitMs``, so a dead network never holds the sign-out. Reads the
+ * existing registration only (no worker fetched), and never throws.
+ */
+export async function endPushOnSignOut(
+  waitMs: number = SIGN_OUT_WAIT_MS,
+): Promise<void> {
+  if (pushSupport() !== "ready") return;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("/");
+    const subscription = await registration?.pushManager.getSubscription();
+    if (subscription) {
+      const { endpoint } = subscription;
+      await subscription.unsubscribe().catch(() => false);
+      await Promise.race([
+        forget(endpoint),
+        new Promise<void>((done) => setTimeout(done, waitMs)),
+      ]);
+    }
+  } catch {
+    // No worker, no subscription to end.
+  }
+  showBadge(0);
 }
 
 /**

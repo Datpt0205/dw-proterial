@@ -99,7 +99,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import context_from
 from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.ports import AuditRepositoryPort
-from dw_platform.domain.audit import AuditEvent, lane_audit_event
+from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
@@ -147,6 +147,9 @@ _RESOURCE: Final = "sales_salesorder_example"
 
 EXAMPLE_REQUESTED: Final = "sales.salesorder_example.requested"
 EXAMPLE_EVENT_SCHEMA: Final = "1.0.0"
+# Written with every worked pair kept (ticket 66): the worker drafts the
+# customer's SalesOrder skill where the one in force does not reproduce it.
+PAIR_ADDED: Final = "sales.salesorder_pair.added"
 # The worker's lane name for its audit rows (ADR 0011-a-background-lane-audits-as-itself).
 EXAMPLE_LANE: Final = "sales_salesorder_examples"
 # What learning needs, and so all a context it builds carries: the files
@@ -1097,6 +1100,19 @@ class SalesOrderLearning:
                 return "example changed meanwhile"
             if pair is not None:
                 await work.pairs.add(pair)
+                await work.outbox.add(
+                    OutboxEvent(
+                        id=self.ids.new_uuid(),
+                        tenant_id=TenantId(scope.tenant_id.value),
+                        workspace_id=WorkspaceId(scope.workspace_id.value),
+                        event_type=PAIR_ADDED,
+                        schema_version=EXAMPLE_EVENT_SCHEMA,
+                        aggregate_id=pair.pair_id,
+                        occurred_at=self.clock.now(),
+                        payload={"customer_code": pair.customer_code, "pair_id": str(pair.pair_id)},
+                        actor_id=system_actor(EXAMPLE_LANE).value,
+                    )
+                )
             await work.audit.append(
                 lane_audit_event(
                     lane=EXAMPLE_LANE,

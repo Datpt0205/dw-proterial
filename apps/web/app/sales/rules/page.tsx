@@ -10,6 +10,7 @@ import { salesApi } from "../_lib/api";
 import { usePeople } from "../_lib/people";
 import {
   ADVANCED_RULES,
+  appliesAtOnceFor,
   LEARNED_RULES,
   keyRows,
   RULE_ABOUT,
@@ -28,6 +29,7 @@ import {
   usePhoneTable,
 } from "../_components/list-parts";
 import { GuardedButton } from "../_components/guarded-button";
+import { BravoTargetCard } from "../_components/bravo-target";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -87,8 +89,19 @@ function Rules() {
     useCallback(() => salesApi().rules(), []),
   );
   const [proposing, setProposing] = useState<Proposing | null>(null);
+  // Which Bravo DW1 reads and writes, as the gateway answers (ticket 85).
+  const targets = useResource(
+    "sales/bravo/targets",
+    useCallback(() => salesApi().bravoTargets(), []),
+  );
 
   const keys = rules.data ? keyRows(rules.data) : [];
+  const atOnce = (key: RuleKey) =>
+    rules.data ? appliesAtOnceFor(rules.data, key, appliesAtOnce) : false;
+  // The keys whose version a second person decides, the head's included.
+  const bySecond = keys.filter(
+    (k) => rules.data?.decided_by_a_second.includes(k.key) ?? false,
+  );
   const main = keys.filter((k) => !ADVANCED_RULES.has(k.key));
   const advanced = keys.filter((k) => ADVANCED_RULES.has(k.key));
 
@@ -141,7 +154,7 @@ function Rules() {
             render: (_, k) => k.waiting,
           },
           {
-            title: appliesAtOnce ? "Sửa" : "Đề xuất",
+            title: "Thao tác",
             key: "propose",
             fixed: "right",
             render: (_, k) => (
@@ -150,9 +163,9 @@ function Rules() {
                 reason={LEARNED_RULES[k.key] ?? null}
                 inlineReason={false}
                 onClick={() => setProposing({ key: k.key })}
-                aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
+                aria-label={`${atOnce(k.key) ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
               >
-                {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
+                {atOnce(k.key) ? "Sửa quy tắc" : "Đề xuất bản mới"}
               </GuardedButton>
             ),
           },
@@ -177,10 +190,10 @@ function Rules() {
             ) : null}
           </Space>
         }
-        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? " · Bản bạn sửa được áp dụng ngay" : ""}`}
+        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? ` · Bản bạn sửa được áp dụng ngay${bySecond.length ? `, trừ ${bySecond.length} quy tắc cần người khác duyệt` : ""}` : ""}`}
         help={
           appliesAtOnce
-            ? "Bản người khác đề xuất chờ bạn duyệt trên trang Duyệt."
+            ? `Bản người khác đề xuất chờ bạn duyệt trên trang Duyệt.${bySecond.length ? ` ${bySecond.map((k) => `“${RULE_KEY[k.key]}”`).join(", ")}: một người duyệt khác quyết, kể cả bản của bạn.` : ""}`
             : `Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "Trưởng bộ phận Sales quyết từng phiên bản."}`
         }
       />
@@ -189,6 +202,14 @@ function Rules() {
       ) : (
         <>
           {keyTable(main, rules.loading)}
+          <BravoTargetCard
+            targets={targets.data ?? null}
+            loading={targets.loading}
+            error={targets.error}
+            onRetry={targets.reload}
+            mayPropose={hasScope(SCOPE.rulesPropose)}
+            onSwitch={() => setProposing({ key: "sales_bravo_writes" })}
+          />
           <Collapse
             items={[
               {

@@ -22,8 +22,8 @@ Three rules shape these ports:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from types import TracebackType
 from typing import TYPE_CHECKING, Final, Literal, Protocol, Self
@@ -34,6 +34,7 @@ from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.stages import current_stages
 from dw_sales.domain.change_requests import ChangeRequest
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
@@ -43,10 +44,12 @@ from dw_sales.domain.reply_intent import ReplyReading
 
 if TYPE_CHECKING:
     from dw_sales.application.activity_ports import StepActivityLogPort
+    from dw_sales.application.cross_check_on_match import CrossCheckRoutesPort
     from dw_sales.application.followups import FollowupStorePort
     from dw_sales.application.labelled_cases import LabelledCaseLogPort
     from dw_sales.application.overview_ports import OverviewReadPort
     from dw_sales.application.rules import RuleVersionStorePort
+    from dw_sales.application.shadow import ShadowReadingRepositoryPort
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -129,11 +132,14 @@ class CaseOrigin:
 
     ``assigned_to`` is the user the customer's Sales PIC resolved to then, or
     None when no user matched, until the head reassigns the case (ticket 17,
-    `assign`); ``release_manifest_ref`` the release the case was opened under.
+    `assign`); ``release_manifest_ref`` the release the case was opened under;
+    ``stage_versions`` the version of each stage it runs on to its end
+    (`stages`, ticket 61), the defaults of the day it opened.
     """
 
     assigned_to: uuid.UUID | None
     release_manifest_ref: str | None
+    stage_versions: Mapping[str, str] = field(default_factory=current_stages)
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,6 +384,17 @@ class OrderCaseStorePort(Protocol):
 
     async def list_all(self) -> Sequence[Stored[OrderCase]]:
         """Every case of the workspace, newest first."""
+        ...
+
+    async def waiting_on_pc(self) -> Sequence[Stored[OrderCase]]:
+        """The workspace's cases waiting on PC (`OrderCase.pc_request`), newest
+        first: what the reader of PC's mail looks at (ticket 77)."""
+        ...
+
+    async def awaiting_on_match(self) -> Sequence[Stored[OrderCase]]:
+        """The workspace's orders in Bravo whose rules stamped
+        `cross_check_on_match`: what the cross-check lane reads back (ticket
+        81). The verdict, not this list, decides."""
         ...
 
     async def add(self, case: OrderCase, origin: CaseOrigin, event: CaseEvent) -> None:
@@ -714,6 +731,16 @@ class SalesUnitOfWork(Protocol):
     # decision it records.
     @property
     def labelled_cases(self) -> LabelledCaseLogPort: ...
+
+    # What a step read in shadow (ticket 67), taken with the decision that
+    # labels it.
+    @property
+    def shadow_readings(self) -> ShadowReadingRepositoryPort: ...
+
+    # What the cross-check lane did with each order version, and what a
+    # person then decided (ticket 81), written with the decision.
+    @property
+    def cross_check_routes(self) -> CrossCheckRoutesPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

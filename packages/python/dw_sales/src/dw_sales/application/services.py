@@ -36,9 +36,12 @@ from dw_sales.application.bravo_line_writes import (
     BravoCommandsPort,
     BravoLineWrites,
     BravoOrdersPort,
+    BravoTargets,
+    BravoTargetsPort,
     BravoWriteDecisions,
     BravoWriteWorkFactory,
     CaseBravoWrites,
+    write_bravo_versions,
 )
 from dw_sales.application.bravo_sales_orders import (
     BravoCustomerPoPort,
@@ -57,6 +60,7 @@ from dw_sales.application.change_reading import ChangeReader
 from dw_sales.application.change_requests import ChangeRequests
 from dw_sales.application.confirmations import Confirmations
 from dw_sales.application.convert_gaps import ConvertGapService, ConvertGapsPort
+from dw_sales.application.cross_check_on_match import CrossCheckReopening
 from dw_sales.application.customer_notations import CustomerNotations, NotationLedgerPort
 from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
@@ -201,6 +205,8 @@ class SalesServices:
     internal_changes: InternalChanges
     # The confirmation sent, then the customer's agreement (ticket 28).
     confirmations: Confirmations
+    # A cross-check DW passed on Bravo's read-back, taken back (ticket 81).
+    cross_check_reopening: CrossCheckReopening
     # DW1's skills, and a version of one proposed for the head (ticket 40).
     skills: SkillsService
     # The description reading's prompt versions the optimiser proposed, for
@@ -217,6 +223,8 @@ class SalesServices:
     bravo_facts: BravoFactsService
     # An SO line's change proposed for writing into Bravo (ticket 53).
     bravo_writes: BravoLineWrites
+    # Which Bravo the gateway reads and writes now, and which it can (ticket 85).
+    bravo_targets: BravoTargets
     gate: Gate
 
 
@@ -256,6 +264,8 @@ def assemble(
     # An SO in Bravo, read through the gateway, and the unit of work that
     # holds a proposed write with its approval (ticket 53).
     bravo_orders: BravoOrdersPort,
+    # Which Bravo the gateway reaches for the tenant (ticket 85).
+    bravo_targets: BravoTargetsPort,
     bravo_commands: BravoCommandsPort,
     bravo_writes_uow: BravoWriteWorkFactory,
     # A customer's PO as Bravo holds it, for the read-back (ticket 51); None:
@@ -369,7 +379,10 @@ def assemble(
         # What the chat stated on a flag, labelled with its decision (ticket 57).
         chat=CaseChatStatements(assistant),
     )
-    line_writes = BravoLineWrites(bravo_writes_uow, gate, bravo_orders, bravo_commands, clock, ids)
+    line_writes = BravoLineWrites(
+        bravo_writes_uow, gate, bravo_orders, write_bravo_versions(bravo_commands), clock, ids
+    )
+    assignment = AssignmentService(uow, gate, clock, ids, holders, directory, notifications)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
@@ -416,7 +429,7 @@ def assemble(
         master_data=MasterDataService(gate, catalog),
         customer_notations=CustomerNotations(gate, notations, catalog, clock, ids),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory, book),
-        assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
+        assignment=assignment,
         routed_mail=RoutedMailService(uow, gate, directory, clock, ids, catalog),
         layouts=LayoutService(
             uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks, intake
@@ -452,9 +465,18 @@ def assemble(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
         ),
         pc_dates=PcDateReplies(
-            uow, gate, one_call, clock, ids, worker_id, worker_version, inbox, catalog
+            uow,
+            gate,
+            one_call,
+            clock,
+            ids,
+            worker_id,
+            worker_version,
+            inbox,
+            catalog,
+            rules=intake.rules,
         ),
-        pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book),
+        pc_requests=PcRequests(uow, gate, clock, ids, intake, book, book, inbox),
         design_requests=DesignRequests(uow, gate, clock, ids, catalog, book, book, inbox),
         update_loops=UpdateLoops(uow, gate, clock, ids, intake, book, book),
         internal_changes=InternalChanges(
@@ -471,6 +493,7 @@ def assemble(
             worker_version,
         ),
         confirmations=Confirmations(uow, gate, clock, ids, intake, pending, threads, directory),
+        cross_check_reopening=CrossCheckReopening(uow, gate, clock, ids),
         change_requests=ChangeRequests(
             uow,
             gate,
@@ -531,9 +554,20 @@ def assemble(
             bravo_writes=line_writes,
             # Whether the chat states either: `model_assist.case_chat` (ticket 57).
             rules=intake.rules,
+            # A case given in its conversation is "Giao lại" itself (ticket 79).
+            assignment=assignment,
         ),
         outbound=OutboundMailService(
-            uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
+            uow,
+            gate,
+            catalog,
+            directory,
+            artifact_bytes,
+            clock,
+            ids,
+            outbox_enabled,
+            design=book,
+            pc=book,
         ),
         skills=SkillsService(uow, gate, skills, clock, ids, directory, skill_replays, catalog),
         prompts=PromptVersionsService(uow, gate, prompts),
@@ -542,6 +576,7 @@ def assemble(
         bravo_watch=BravoWatchService(bravo_watch_store, authorization, clock, ids),
         bravo_facts=BravoFactsService(bravo_facts_store, gate, clock),
         bravo_writes=line_writes,
+        bravo_targets=BravoTargets(gate, bravo_targets),
         gate=gate,
     )
     decisions = CaseDecisions(

@@ -646,9 +646,22 @@ def fill_inputs(
     instructions: str,
 ) -> dict[str, str]:
     """What one call is shown, as code-built JSON beside the skill's words:
-    the layout's columns (letter, header, what the layout reads; PC's dates
-    left out), the rows' values at their anchors, and the calls."""
-    columns = [
+    the layout's columns (`shown_columns`), the rows' values at their
+    anchors, and the calls."""
+    return {
+        "skill": instructions,
+        "columns": json.dumps(shown_columns(layout), ensure_ascii=False),
+        "po_rows": json.dumps(
+            [{"row": r.row, "values": r.anchors()} for r in rows], ensure_ascii=False
+        ),
+        "calls": json.dumps([c.model_dump(mode="json") for c in calls], ensure_ascii=False),
+    }
+
+
+def shown_columns(layout: BravoUploadLayout) -> list[dict[str, object]]:
+    """The layout's columns as a model is shown them: letter, header, what
+    the layout reads, and whether it is a price; PC's dates left out."""
+    return [
         {
             "column": column_letter(i),
             "header": c.header,
@@ -666,14 +679,6 @@ def fill_inputs(
         for i, c in enumerate(layout.columns)
         if c.field not in CASE_ONLY_FIELDS
     ]
-    return {
-        "skill": instructions,
-        "columns": json.dumps(columns, ensure_ascii=False),
-        "po_rows": json.dumps(
-            [{"row": r.row, "values": r.anchors()} for r in rows], ensure_ascii=False
-        ),
-        "calls": json.dumps([c.model_dump(mode="json") for c in calls], ensure_ascii=False),
-    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -819,6 +824,7 @@ __all__ = [
     "check_against",
     "po_rows",
     "prepared_calls",
+    "shown_columns",
     "skill_constants",
     "trace",
 ]

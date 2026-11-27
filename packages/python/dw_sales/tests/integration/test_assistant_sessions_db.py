@@ -27,6 +27,7 @@ from dw_sales.domain.assistant import (
     QuestionKind,
     Session,
     Turn,
+    WriteField,
 )
 from dw_sales.domain.dispositions import CaseKind
 
@@ -297,12 +298,22 @@ async def test_a_stated_decision_is_kept_with_its_turn_and_only_on_a_decision(
             await store.add(wrong)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("confirmed_date", "2026-12-08"), ("cancel", "khách bỏ dòng")],
+    ids=["date", "cancel"],
+)
 async def test_a_stated_bravo_write_is_kept_with_its_turn_and_reads_back_as_one(
-    world: World, migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession]
+    world: World,
+    migrator: AsyncEngine,
+    app_sessions: async_sessionmaker[AsyncSession],
+    field: WriteField,
+    value: str,
 ) -> None:
     """Ticket 56 over 53 (migration b5c316f405cd): a Bravo write a turn stated
     reads back as a write, whole, so its hash is the one the PIC was shown;
-    on a turn of another kind the table refuses it."""
+    on a turn of another kind the table refuses it. A cancel (ticket 71)
+    reads back with its reason."""
     an = await _person(migrator)
     stores = SqlAssistantStoreFactory(app_sessions)
     session = _session(an)
@@ -311,8 +322,8 @@ async def test_a_stated_bravo_write_is_kept_with_its_turn_and_reads_back_as_one(
         case_id=CASE,
         case_version=3,
         line_no=2,
-        field="confirmed_date",
-        value="2026-12-08",
+        field=field,
+        value=value,
     )
     stated = replace(
         _turn(session), kind=QuestionKind.PROPOSE_BRAVO_WRITE, reference=None, proposal=proposal

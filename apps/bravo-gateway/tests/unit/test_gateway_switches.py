@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from dw_bravo_gateway.adapters.postgres import SqlSwitches, switched_on
+from dw_bravo_gateway.adapters.postgres import SqlSwitches, switched_on, target_of
 from dw_sales.domain.bravo_writes import BravoWrites, BravoWriteSwitch
 
 pytestmark = pytest.mark.unit
@@ -60,6 +60,7 @@ class _Pauses:
 @dataclass
 class _Version:
     document: dict[str, Any]
+    applied_directly: bool = False
 
 
 @dataclass
@@ -109,3 +110,74 @@ async def test_a_kind_the_watch_paused_reads_paused_even_when_switched_on() -> N
     )
 
     assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1") == "paused"
+
+
+# ------------------------------------------------------------ target (85)
+
+
+async def test_no_approved_version_is_uat() -> None:
+    lookup = _Lookup(None, [])
+
+    assert await SqlSwitches(lookup, _Pauses()).target(uuid.uuid4()) == "uat"  # type: ignore[arg-type]
+    assert lookup.asked == ["sales_bravo_writes"]
+
+
+def test_production_as_the_schema_writes_it_reads_as_production() -> None:
+    document = BravoWrites(
+        schema_version="1.0",
+        policy_id="sales_bravo_writes",
+        policy_version="1.1.0",
+        kinds={},
+        target="production",
+        target_uat_proof="UAT 2026-12-01 run 3",
+    ).model_dump(mode="json")
+
+    assert target_of(document) == "production"
+
+
+def test_a_version_from_before_the_target_is_uat() -> None:
+    assert target_of(_document()) == "uat"
+    assert target_of({"kinds": {}}) == "uat"
+
+
+@pytest.mark.parametrize(
+    ("document", "target"),
+    [
+        ({"target": "production", "target_uat_proof": "UAT run 3"}, "production"),
+        ({"target": "production"}, None),
+        ({"target": "production", "target_uat_proof": "  "}, None),
+        ({"target": "Production", "target_uat_proof": "run"}, None),
+        ({"target": None}, None),
+        ({"target": ["production"]}, None),
+    ],
+    ids=["with_proof", "no_proof", "blank_proof", "another_spelling", "null", "a_list"],
+)
+def test_production_reads_only_as_the_schema_writes_it(document: object, target: object) -> None:
+    assert target_of(document) == target  # type: ignore[arg-type]
+
+
+async def test_the_target_is_read_from_the_approved_version() -> None:
+    document = {"target": "production", "target_uat_proof": "UAT run 3", "kinds": {}}
+    switches = SqlSwitches(_Lookup(_Version(document), []), _Pauses())  # type: ignore[arg-type]
+
+    assert await switches.target(uuid.uuid4()) == "production"
+
+
+# ---------------------------------------- decided by a second person (85 review)
+
+
+async def test_a_version_its_proposer_applied_alone_switches_nothing_on() -> None:
+    document = _document(
+        so__line__set_quantity_at_1=BravoWriteSwitch(enabled=True, uat_proof="UAT run 1")
+    )
+    switches = SqlSwitches(_Lookup(_Version(document, applied_directly=True), []), _Pauses())  # type: ignore[arg-type]
+
+    assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1") == "off"
+
+
+async def test_a_version_its_proposer_applied_alone_names_no_production() -> None:
+    document = {"target": "production", "target_uat_proof": "UAT run 3", "kinds": {}}
+    switches = SqlSwitches(_Lookup(_Version(document, applied_directly=True), []), _Pauses())  # type: ignore[arg-type]
+
+    # The platform's file: UAT, as with no version at all.
+    assert await switches.target(uuid.uuid4()) == "uat"

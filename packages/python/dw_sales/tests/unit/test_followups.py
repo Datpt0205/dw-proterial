@@ -17,6 +17,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from dw_platform.application.rule_versions import read_over
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.application.followups import LOADED, reminder_text
 from dw_sales.application.overview_service import WHOSE_TURN
@@ -24,6 +25,7 @@ from dw_sales.application.rules import OVERRIDABLE, RuleKey
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
     WATCHED,
+    Due,
     Followup,
     SalesFollowups,
     Stage,
@@ -33,6 +35,7 @@ from dw_sales.domain.followups import (
     owed,
     pc_reminder_at,
 )
+from dw_sales.domain.orders import export_acknowledgeable_statuses
 from dw_sales.testing.followups import platform_reminder_copy
 
 pytestmark = pytest.mark.unit
@@ -45,8 +48,9 @@ PC_FILE = REPO / "configs" / "policies" / "sales_followups@1.3.0.yaml"
 # And the implied acceptance's (ticket 28), 1.4.0's.
 IMPLIED_FILE = REPO / "configs" / "policies" / "sales_followups@1.4.0.yaml"
 # And the waits on Design's new code and on a linked quote (tickets 06, 09),
-# and on the GM's price for a pcs quote (ticket 05).
-WAITS_FILE = REPO / "configs" / "policies" / "sales_followups@1.7.0.yaml"
+# on the GM's price for a pcs quote (ticket 05), and the export-control hold
+# (ticket 78).
+WAITS_FILE = REPO / "configs" / "policies" / "sales_followups@1.8.0.yaml"
 # Monday 19 October 2026, 08:00 in Ho Chi Minh City (UTC+7).
 MONDAY_8 = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -60,7 +64,12 @@ def _document() -> dict[str, Any]:
     implied = yaml.safe_load(IMPLIED_FILE.read_bytes())["implied_acceptance"]
     loaded.setdefault("implied_acceptance", implied)
     waits = yaml.safe_load(WAITS_FILE.read_bytes())
-    for name in ("waiting_design_code", "waiting_quote", "waiting_pcs_price"):
+    for name in (
+        "waiting_design_code",
+        "waiting_quote",
+        "waiting_pcs_price",
+        "export_control_hold",
+    ):
         loaded.setdefault(name, waits[name])
     return loaded
 
@@ -119,7 +128,7 @@ def test_the_shipped_default_is_open_every_day_at_any_hour() -> None:
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.7.0"
+    assert policy.ref == "sales_followups@1.8.0"
     # 1.6.0 (tickets 06 and 09): one reminder to the PIC after a day of
     # waiting on Design's new code, or on a quote opened from the order.
     # 1.7.0 (ticket 05): the same after a day of waiting on the GM's price.
@@ -131,6 +140,10 @@ def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     # turns it off.
     assert policy.push.case_number
     assert policy.implied_acceptance.enabled
+    # 1.8.0 states what ticket 82 made the default: DW1 records the silence.
+    assert policy.implied_acceptance.record
+    # 1.8.0 (ticket 78): an NOC/ESF hold is told at once.
+    assert policy.export_control_hold.enabled
     assert policy.waiting_pc.enabled
     assert policy.waiting_pc.remind.after_hours == 24
     assert policy.waiting_pc.remind.notify == ("pic",)
@@ -372,6 +385,7 @@ def test_followups_name_the_stage_they_are_owed_at() -> None:
         "waiting_design_code",
         "waiting_quote",
         "waiting_pcs_price",
+        "export_control_hold",
     }
 
 
@@ -490,3 +504,55 @@ def test_due_soon_is_the_policys_days_and_nothing_else(due: date, within: int, s
     )
 
     assert due_soon(due, date(2026, 10, 5), policy) is soon
+
+
+# ----------------------------------------- the export-control hold (78) --
+
+
+def _held(status: str = "in_review", *, held: bool = True) -> WaitingCase:
+    # Entered its status (a save, a move) after the revision arrived.
+    return replace(_case(status=status, since=MONDAY_8 + 2 * HOUR), export_held=held)
+
+
+def _holds(case: WaitingCase, policy: SalesFollowups = PLATFORM) -> list[Due]:
+    return [
+        d
+        for d in owed(policy, [case], MONDAY_8 + MINUTE)
+        if d.followup is Followup.EXPORT_CONTROL_HOLD
+    ]
+
+
+def test_an_nocesf_hold_tells_the_export_control_pic_once_per_revision() -> None:
+    """Told at once, to the export-control PIC (an audience no rule may
+    name), as the current revision's wait: its arrival, not the finding's
+    row, which every save rewrites."""
+    [due] = _holds(_held())
+    assert (due.stage, due.since, due.notify) == (Stage.NOTIFY, MONDAY_8, ("export_control",))
+
+
+def test_no_hold_tells_nobody_and_a_tenant_may_switch_it_off() -> None:
+    assert _holds(_held(held=False)) == []
+    assert _holds(_held(), _policy(export_control_hold={"enabled": False})) == []
+    # A quote has no export-control finding to wait on.
+    assert _holds(replace(_case(CaseKind.QUOTE, "received"), export_held=True)) == []
+
+
+def test_every_status_a_hold_waits_in_is_one_the_lane_loads() -> None:
+    """The store loads by `LOADED` and does not filter on the hold, so a
+    status the hold may wait in that `LOADED` dropped would never be told."""
+    loaded = LOADED[CaseKind.ORDER]
+    assert {s.value for s in export_acknowledgeable_statuses()} <= loaded
+
+
+def test_a_tenant_version_before_the_hold_reads_it_as_the_platforms() -> None:
+    """A version written before 1.8.0 has no `export_control_hold`: it reads
+    the platform's (`read_over`), so the hold is told there too."""
+    older = yaml.safe_load(
+        (REPO / "configs" / "policies" / "sales_followups@1.7.0.yaml").read_bytes()
+    )
+    current = load_sales_policies(
+        REPO / "configs" / "policies", REPO / "configs" / "copy"
+    ).followups
+    assert "export_control_hold" not in older
+    read = read_over(SalesFollowups, older, current)
+    assert read.export_control_hold.enabled

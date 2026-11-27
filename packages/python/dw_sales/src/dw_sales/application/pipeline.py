@@ -175,7 +175,7 @@ class PipelineService:
         for stored in orders:
             order = stored.case
             w = found.get((CaseKind.ORDER, order.case_id))
-            if w is None or not seen_by(context, CaseKind.ORDER, stored):
+            if w is None or not seen_by(context, CaseKind.ORDER, stored, export_control=True):
                 continue  # written after the read above, or not the caller's
             open_findings = [f for f in order.findings if f.is_open]
             due = order.due
@@ -257,7 +257,7 @@ class PipelineService:
         async with self.uow(sales_scope(context)) as work:
             # A case of another workspace is not found, never an empty history.
             if kind is CaseKind.ORDER:
-                await stored_order(work, case_id, viewer=context)
+                await stored_order(work, case_id, viewer=context, export_control=True)
             else:
                 await stored_quote(work, case_id, viewer=context)
             events = await work.overview.history(kind, case_id)

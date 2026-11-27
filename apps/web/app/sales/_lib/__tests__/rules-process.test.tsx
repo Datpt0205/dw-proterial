@@ -144,6 +144,7 @@ const RULES: RulesView = {
   ],
   versions: [KPI_VERSION],
   draftable: [],
+  decided_by_a_second: ["sales_bravo_writes"],
 };
 
 const PLATFORM: Record<string, PlatformDocument[]> = {
@@ -197,6 +198,13 @@ const api = {
   })),
   rulePlatformDocuments: vi.fn(async (key: string) => PLATFORM[key] ?? []),
   proposeRule: vi.fn(async (...args: unknown[]) => (void args, KPI_VERSION)),
+  // The rules page reads which Bravo DW1 uses (ticket 85).
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat" as const,
+    uat: true,
+    production: false,
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 // Whether the canvas's module was ever loaded: a narrow screen must not.

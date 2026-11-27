@@ -44,6 +44,7 @@ const SCOPE_LABELS: Record<string, string> = {
   "sales.order.resend_cross_check": "Gửi kiểm chéo lại",
   "sales.quote.prepare": "Làm báo giá",
   "sales.quote.approve": "Duyệt báo giá",
+  "sales.quote.manager_approve": "Manager duyệt báo giá kèm đơn",
   "sales.compliance.ack": "Xác nhận kiểm soát xuất khẩu",
   "sales.worker.pause": "Tạm dừng DW1",
   "sales.worker.resume": "Chạy lại DW1",
@@ -52,6 +53,10 @@ const SCOPE_LABELS: Record<string, string> = {
   "sales.rules.approve": "Duyệt quy tắc",
   "sales.master_data.import": "Nhập dữ liệu chủ",
   "sales.master_data.approve": "Duyệt dữ liệu chủ",
+  "sales.bravo.watch.read": "Xem theo dõi thay đổi Bravo",
+  "sales.bravo.watch.accept": "Chấp nhận thay đổi Bravo",
+  "sales.identity.link": "Liên kết người với mã nhân viên",
+  "sales.bravo.write": "Đề xuất và duyệt ghi Bravo",
 };
 
 /** Label for a scope; one this table does not name shows as its code. */
