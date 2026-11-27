@@ -113,6 +113,31 @@ afterEach(() => {
 
 describe("an order held for export control (contract acceptance row 3)", () => {
   it(
+    "says what the hold compared in Vietnamese, not the server's English",
+    async () => {
+      shown = crossChecked({
+        expected: "NOC confirmed, ESF FY2026, denial-list check within 90 days",
+        actual: "NOC confirmed, ESF FY2026, no denial-list check",
+      });
+      page();
+      expect(
+        await screen.findByText(
+          "NOC đã xác nhận, ESF năm tài chính 2026, kiểm danh sách cấm trong 90 ngày",
+          undefined,
+          { timeout: 5000 },
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "NOC đã xác nhận, ESF năm tài chính 2026, chưa kiểm danh sách cấm",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText(/denial-list/)).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
     "says in words, as a status, that it is held and cannot be confirmed yet",
     async () => {
       page();

@@ -54,3 +54,23 @@ Category: deployment
   procedure's steps. Tests in `case-activity.test.tsx` and
   `case-replies.test.tsx`, red under each mutation (no procedure filter, the
   kind line always drawn, the old reply wording).
+- **Flag values in machine words and English.** "Mong đợi: lme_band ·
+  Thực tế: fixed", "<= 0.65" beside "0,705 USD", "floor" with factor
+  names, "official"/"temporary", and the NOC/ESF hold's English sentence.
+  The server's values stay as stored: `orders._carried` keeps a decision
+  only while `expected`/`actual` are unchanged, so rewording them on the
+  server would reopen every decided flag (an acknowledged NOC/ESF hold
+  among them) on the next re-check. `findingValueWords` (web,
+  `_lib/finding-values.ts`) puts them into words at display, by finding
+  code, for the shapes `order_checks._compliance_finding`,
+  `quotes._basis_mismatch`, `quotes._unknown_floor_factors` and the two
+  price comparisons write; any other shape shows as written. Tests:
+  `finding-values.test.ts` (server strings copied from
+  `test_order_intake.py`), the order page (`export-control-hold.test.tsx`)
+  and the quote page (`case-audit.test.tsx`), red with the code dropped at
+  each of the three call sites and with the price-only number rule removed.
+  Not done: the pricing form still starts a line on "Cố định" and does not
+  show the prescribed band, because the quote view carries neither the
+  quote rules' `copper_basis` nor the month's band; that needs a view field.
+  English values of other order flags (`customer_unknown`,
+  `revision_without_base`, `duplicate_po`) are left as written.

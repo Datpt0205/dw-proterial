@@ -484,12 +484,14 @@ function QuoteDetail() {
                     {
                       key: "e",
                       label: "Mong đợi",
-                      children: <FindingWords value={f.expected} />,
+                      children: (
+                        <FindingWords code={f.code} value={f.expected} />
+                      ),
                     },
                     {
                       key: "a",
                       label: "Thực tế",
-                      children: <FindingWords value={f.actual} />,
+                      children: <FindingWords code={f.code} value={f.actual} />,
                     },
                   ]}
                 />
