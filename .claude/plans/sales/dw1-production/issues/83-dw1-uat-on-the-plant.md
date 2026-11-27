@@ -188,3 +188,12 @@ Category: deployment
   regenerated). Tests: the inbox tests hold the new sentences;
   `test_sales_policies.py` reads every copy DW1 runs for "trưởng nhóm" and
   the head's name, red with the pin back on 1.6.0.
+- **Mẫu PO had no way in for a PIC, and opened a 403 for tenant IT.** The
+  list is now under "Quản lý" beside "Dữ liệu chủ" (`sales.case.read`, as
+  its page). In "Quy trình DW1", "Dữ liệu bước này dùng" links the lists and
+  the layouts only for a viewer holding `sales.case.read`; tenant IT with
+  `sales_rules_editor` alone reads their names and one line saying why.
+  "Chưa có vai trò hay bộ quyền nào…" gets its verb. Tests: `nav.test.ts`
+  and `app-frame.test.tsx` (red with the entry removed);
+  `rules-process.test.tsx` (red with the links always on, and with the old
+  sentence).

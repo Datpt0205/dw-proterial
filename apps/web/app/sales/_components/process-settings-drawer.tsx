@@ -32,6 +32,7 @@ import { parseLoc } from "../_lib/rule-schema";
 import type { Resource } from "../_lib/use-resource";
 import { StepTags } from "./process-map";
 import { AiStateTag } from "./tags";
+import { SCOPE } from "./sales-frame";
 import {
   ProposeDrawer,
   useConfirmDiscard,
@@ -380,9 +381,20 @@ function ModelSection({ models }: { models: StepModel[] }) {
   );
 }
 
-/** "Dữ liệu bước này dùng": the master-data lists and the PO layouts. */
+/** Why the lists and layouts are names, not links, for this viewer. */
+export const NO_CASE_READ = "Mở danh mục và mẫu PO cần quyền xem hồ sơ Sales.";
+
+/**
+ * "Dữ liệu bước này dùng": the master-data lists and the PO layouts. Their
+ * pages read with `sales.case.read`, which tenant IT holding only
+ * `sales_rules_editor` lacks: for them each is a name, not a link to a 403.
+ */
 function UsesSection({ uses }: { uses: Uses }) {
+  const { hasScope } = useAuth();
+  const opens = hasScope(SCOPE.caseRead);
   const none = !uses.lists.length && !uses.layouts;
+  const item = (href: string, name: string) =>
+    opens ? <Link href={href}>{name}</Link> : name;
   return (
     <Card size="small" title="Dữ liệu bước này dùng">
       {none ? (
@@ -390,20 +402,24 @@ function UsesSection({ uses }: { uses: Uses }) {
           Bước ở đây không đọc danh mục hay mẫu PO nào.
         </Typography.Text>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0">
-          {uses.lists.map((list) => (
-            <li key={list}>
-              <Link href={`/sales/master-data?tab=${TAB_OF[list]}`}>
-                {LIST_NAME[list] ?? list}
-              </Link>
-            </li>
-          ))}
-          {uses.layouts ? (
-            <li>
-              <Link href="/sales/layouts">Mẫu PO</Link>
-            </li>
-          ) : null}
-        </ul>
+        <>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {uses.lists.map((list) => (
+              <li key={list}>
+                {item(
+                  `/sales/master-data?tab=${TAB_OF[list]}`,
+                  LIST_NAME[list] ?? list,
+                )}
+              </li>
+            ))}
+            {uses.layouts ? <li>{item("/sales/layouts", "Mẫu PO")}</li> : null}
+          </ul>
+          {opens ? null : (
+            <Typography.Text type="secondary" role="note">
+              {NO_CASE_READ}
+            </Typography.Text>
+          )}
+        </>
       )}
     </Card>
   );
@@ -434,7 +450,7 @@ function ActorsSection({ actors }: { actors: Actor[] }) {
         </ul>
       ) : (
         <Typography.Text>
-          Chưa vai trò hay bộ quyền nào giữ quyền của bước này.
+          Chưa có vai trò hay bộ quyền nào giữ quyền của bước này.
         </Typography.Text>
       )}
       {hasScope(MEMBERS_WRITE) ? (
