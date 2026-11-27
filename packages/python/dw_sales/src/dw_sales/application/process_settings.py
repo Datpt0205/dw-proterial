@@ -206,7 +206,8 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                 _in(_FOLLOWUPS, "waiting_design_code"),
             ),
             # Enter the PO: a new layout's first POs and a PO written in the
-            # mail, read value by value.
+            # mail, read value by value; a file opened with a password
+            # (ticket 80).
             _step(
                 StepId.O3,
                 _in(
@@ -214,6 +215,7 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                     "layout_onboarding.uncertain_first_pos",
                     "model_assist.layout_proposal",
                     "model_assist.po_body_extraction",
+                    "password_file",
                 ),
                 _severities("value_uncertain", "line_total_mismatch", "files_disagree"),
             ),

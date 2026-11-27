@@ -571,6 +571,12 @@ export const DERIVATION = {
   ocr: "Đọc bằng OCR",
 } as const;
 
+/** How a file opened with a password waits for a person (ticket 80). */
+export const PASSWORD_FILE = {
+  every_value: "mọi giá trị chờ xác nhận",
+  failed_checks_only: "chỉ giá trị kiểm không đạt chờ xác nhận",
+} as const;
+
 /** Flags a reader raises on a value it does not take on trust. */
 export const REGION_FLAG = {
   hidden_sheet: "Sheet ẩn",

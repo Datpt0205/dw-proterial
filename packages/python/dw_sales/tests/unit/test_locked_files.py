@@ -28,6 +28,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+import yaml
 from msoffcrypto.format.ooxml import OOXMLFile
 from pydantic import ValidationError
 from pypdf import PdfReader, PdfWriter
@@ -439,3 +440,77 @@ async def test_the_password_travels_in_the_reader_request_only(tmp_path: Path) -
     assert all(r.args.passwords == () for r in spy.requests if r not in carrying)
     assert [r for r in spy.requests if PASSWORD in repr(r)] == []
     assert [r for r in spy.replies if PASSWORD in r.model_dump_json()] == []
+
+
+def _values_left_to_their_checks(sample: SampleSet) -> SampleSet:
+    """``sample`` with the tenant's own order rules saying a password file's
+    values wait only on a check they fail (ticket 80)."""
+    (own,) = (sample.data_dir / "policies").glob("sales_order_rules@*.yaml")
+    rules = yaml.safe_load(own.read_text(encoding="utf-8"))
+    own.unlink()
+    rules |= {"policy_version": "1.5.80", "password_file": "failed_checks_only"}
+    (sample.data_dir / "policies" / "sales_order_rules@1.5.80.yaml").write_text(
+        yaml.safe_dump(rules, allow_unicode=True), encoding="utf-8"
+    )
+    return sample
+
+
+async def test_under_rules_that_say_so_a_password_file_waits_only_on_its_failed_checks(
+    tmp_path: Path,
+) -> None:
+    """Ticket 80 (off by default): the file is read as any file of its
+    layout, the same findings as the same file sent without a password,
+    and still named, on the PO and in the audit, as opened with one."""
+    plain = open_world(REPO, SampleSet(DATA_DIR, ATTACHMENTS_DIR), CALLERS)
+    as_sent = await plain.process_each(AN, ["M01", "M03"])
+    locked = _values_left_to_their_checks(_sample(tmp_path, f"Mật khẩu mở file: {PASSWORD}"))
+    world = open_world(REPO, locked, CALLERS)
+
+    processed = await world.process_each(AN, ["M01", "M03"])
+
+    for message_id, (_, case) in processed.items():
+        assert isinstance(case, OrderCase)
+        document = case.document
+        assert (document.opened_with_password, document.password_values_as_read) == (True, True)
+        password = RegionFlag.OPENED_WITH_PASSWORD
+        flags = [*document.header.flags, *(f for line in document.lines for f in line.flags)]
+        assert [f for f in flags if f.flag is password] == []
+        sent = as_sent[message_id][1]
+        assert isinstance(sent, OrderCase)
+
+        def found(c: OrderCase) -> list[tuple[str, int | None, str | None]]:
+            return sorted((f.code.value, f.line_no or 0, f.actual) for f in c.findings)
+
+        # Only the rules' version differs between the two tenants' findings.
+        assert found(case) == found(sent)
+        assert not any("opened_with_password" in (f.actual or "") for f in case.findings)
+        (row,) = [e for e in world.audit(ALPHA) if e.resource_id == message_id]
+        assert str(row.details["encrypted_file"]).startswith(f"{message_id}-A1: encrypted")
+
+
+async def test_a_po_taken_as_read_keeps_no_password_flag(tmp_path: Path) -> None:
+    """The stamp says the flags were taken off: one left on a value would be
+    a value the screen calls read as any file and the checks call uncertain."""
+    world = open_world(REPO, _sample(tmp_path, f"Mật khẩu mở file: {PASSWORD}"), CALLERS)
+    (_, case) = (await world.process_each(AN, ["M01"]))["M01"]
+    assert isinstance(case, OrderCase)
+    read = case.document
+    assert not read.password_values_as_read
+
+    taken = read.with_password_values_as_read()
+
+    assert (taken.opened_with_password, taken.password_values_as_read) == (True, True)
+    assert taken.with_password_values_as_read() is taken
+    assert [line.flags for line in taken.lines] == [() for _ in taken.lines]
+    dumped = taken.model_dump()
+    dumped["lines"][0]["flags"] = [{"field": "quantity", "flag": "opened_with_password"}]
+    with pytest.raises(ValidationError, match="carry no password flag"):
+        type(taken).model_validate(dumped)
+    # A PO opened without a password has nothing to take off.
+    plain = (
+        await open_world(REPO, SampleSet(DATA_DIR, ATTACHMENTS_DIR), CALLERS).process_each(
+            AN, ["M01"]
+        )
+    )["M01"][1]
+    assert isinstance(plain, OrderCase)
+    assert plain.document.with_password_values_as_read() is plain.document

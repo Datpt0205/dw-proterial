@@ -2545,6 +2545,15 @@
       "model_assist": {
         "$ref": "#/$defs/ModelAssist"
       },
+      "password_file": {
+        "default": "every_value",
+        "enum": [
+          "every_value",
+          "failed_checks_only"
+        ],
+        "title": "Password File",
+        "type": "string"
+      },
       "pc_mailboxes": {
         "default": [],
         "items": {

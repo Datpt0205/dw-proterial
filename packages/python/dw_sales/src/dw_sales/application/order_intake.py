@@ -1571,6 +1571,9 @@ class OrderIntake:
         run: RunContext | None,
     ) -> IntakeOutcome:
         document = _named_revision(message, document, rules.revision_marks)
+        if rules.password_file == "failed_checks_only":
+            # Ticket 80: each value waits on its own checks, as in any file.
+            document = document.with_password_values_as_read()
         header = document.header
         earlier = await self.cases.cases_for_po(scope, customer.code, header.po_no)
         seen = {

@@ -13623,6 +13623,21 @@
             "title": "Parser Version",
             "type": "string"
           },
+          "password_file": {
+            "anyOf": [
+              {
+                "enum": [
+                  "every_value",
+                  "failed_checks_only"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password File"
+          },
           "pc_reply": {
             "anyOf": [
               {

@@ -372,6 +372,9 @@ class LayoutOnboarding(BaseModel):
     uncertain_first_pos: int = Field(ge=0, le=100)
 
 
+PasswordFileValues = Literal["every_value", "failed_checks_only"]
+
+
 class OrderRules(BaseModel):
     """`sales_order_rules`: the fine print of the order checks, versioned.
 
@@ -431,6 +434,13 @@ class OrderRules(BaseModel):
     # that is not the customer's, with its sender shown: a person still picks
     # it, and nothing is recorded until they confirm each line.
     pc_mailboxes: tuple[str, ...] = Field(default=(), max_length=20)
+    # A PO read from a file the reader sandbox opened with a password its mail
+    # carries (ticket 17): ``every_value`` waits for a person on each value
+    # read (Đạt, 11-13), as every version before 1.17.0 reads;
+    # ``failed_checks_only`` reads it as any other file of its layout, each
+    # value waiting only on a check it failed, the file still named as opened
+    # with a password (ticket 80; off until Đạt says the unscanned bytes may).
+    password_file: PasswordFileValues = "every_value"
 
     @model_validator(mode="before")
     @classmethod

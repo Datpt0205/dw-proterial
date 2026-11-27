@@ -159,3 +159,36 @@ handled (a choice that routes nothing). Then (2026-11-25, Đạt's choice)
 reading is kept under its customer and PO number and labelled value by value
 when an order case of the same PO is prepared by a person, from the file
 that arrives later.
+
+## Addendum 2026-11-27: a password file's values, by exception (ticket 80)
+
+Status of this addendum: **Proposed**. Built behind a tenant switch that is
+off (decided 2026-11-26 by recommendation: tickets 80 and 81 only behind a
+switch off by default, so ui-quality section 7 and maker != checker hold
+until Đạt says otherwise).
+
+The `opened_with_password` flag (ticket 17) is not about how well the file
+was read: the reader sandbox opens it in memory and reads it with the same
+layout as any file of its form. It exists because ClamAV cannot scan inside
+an encrypted file, and on 11-13 Đạt asked that every value read from one
+still wait for a person. A measured gate (this ADR's method) would measure
+reading accuracy, which is not what the flag guards, so it is not used here.
+
+Decided in code, off:
+
+1. `sales_order_rules.password_file` (1.17.0): `every_value`, the platform's
+   value and what every earlier version reads, keeps the 11-13 rule.
+   `failed_checks_only` takes the flag off every value when the case is
+   opened (`PoDocument.with_password_values_as_read`), stamps the PO
+   `password_values_as_read`, and so each value waits on a person only for a
+   check it fails or another flag (`model_read`, `new_layout`, `ocr`, ...),
+   exactly as the same file sent without a password.
+2. Nothing is confirmed in bulk and no value is recorded as a person's check:
+   the ticket's "Xác nhận phần còn lại" is not built. The lines that pass are
+   machine-read values, as in any file; the file is still named, on the case
+   ("Tệp có mật khẩu") and in the audit (`encrypted_file`), as opened with a
+   password.
+
+Owed before a tenant switches it on: Đạt's word that the unscanned decrypted
+bytes may be read without a person on each value (or a scan of the decrypted
+bytes before reading, which would be a reader-sandbox change).

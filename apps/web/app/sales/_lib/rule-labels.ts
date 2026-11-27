@@ -218,6 +218,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Địa chỉ PC dùng để trả lời ngày giao. Khi có danh sách, DW1 chỉ đưa thư từ các địa chỉ này ra để đọc ngày PC trả lời; để trống thì đưa mọi thư đã xác thực có nêu số PO, kèm người gửi. Bạn vẫn xác nhận từng dòng.",
       item: "Địa chỉ",
     },
+    password_file: {
+      label: "PO trong tệp có mật khẩu",
+      help: "Tệp có mật khẩu được mở bằng mật khẩu ghi trong chính thư, nên ClamAV không quét được bên trong. Mặc định mọi giá trị đọc được chờ bạn xác nhận. Chọn chỉ chờ giá trị kiểm không đạt: tệp được đọc như mọi tệp cùng mẫu, PO vẫn ghi là mở bằng mật khẩu.",
+    },
     implied_acceptance: {
       label: "Khách im lặng được coi là đồng ý",
       help: "Theo từng khách: sau số ngày này mà khách không trả lời xác nhận đơn, DW1 báo Sales phụ trách để ghi khách đồng ý ngầm. Khách không có trong danh sách thì không bao giờ đồng ý ngầm.",
@@ -1224,6 +1228,8 @@ const VALUES: Record<string, string> = {
   warning: "Cảnh báo",
   warn: "Giữ xác nhận cho tới khi PIC kiểm soát xuất khẩu chấp nhận",
   block_confirmation: "Chặn xác nhận",
+  every_value: "Mọi giá trị chờ xác nhận",
+  failed_checks_only: "Chỉ giá trị kiểm không đạt chờ xác nhận",
   received_date: "Ngày nhận PO",
   item_standard: "Lead time chuẩn của mã hàng",
   quotation: "Lead time trong báo giá",

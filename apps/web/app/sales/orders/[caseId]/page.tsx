@@ -24,6 +24,7 @@ import {
   ACTION,
   CLOSE_REASON,
   DERIVATION,
+  PASSWORD_FILE,
   FIELD,
   FINDING_CODE,
   label,
@@ -583,6 +584,15 @@ function OrderDetail() {
                           children: data.derivation.derived_sha256
                             ? `${data.derivation.tool} · bản chuyển ${data.derivation.derived_sha256.slice(0, 16)}…`
                             : data.derivation.tool,
+                        },
+                      ]
+                    : []),
+                  ...(data.password_file
+                    ? [
+                        {
+                          key: "password",
+                          label: "Tệp có mật khẩu",
+                          children: `Mở bằng mật khẩu trong thư · ${PASSWORD_FILE[data.password_file]}`,
                         },
                       ]
                     : []),

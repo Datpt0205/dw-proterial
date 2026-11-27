@@ -82,6 +82,7 @@ from dw_sales.domain.followups import SalesFollowups, due_soon
 from dw_sales.domain.handoffs import Handoff, HandoffTeam
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
+from dw_sales.domain.order_checks import PasswordFileValues
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     AMOUNT_FIELDS,
@@ -1226,6 +1227,10 @@ class OrderCaseView(BaseModel):
     # How the bytes the PO was read from were made from the attachment (ticket
     # 27): a converted copy, or an OCR reading; None: read as it was sent.
     derivation: Derivation | None = None
+    # Read from a file opened with a password its mail carries (ticket 17):
+    # every value waits for a person, or, under rules that say so (ticket 80),
+    # only a value whose check failed. None: not opened with a password.
+    password_file: PasswordFileValues | None = None
     catalog_as_of: datetime | None
     release_manifest_ref: str | None
     cross_check_required: bool | None
@@ -1552,6 +1557,14 @@ def _seen_anchors(
     return {field: a for field, a in anchors if prices.amounts or field not in AMOUNT_FIELDS}
 
 
+def _password_file(document: PoDocument) -> PasswordFileValues | None:
+    """How the values of a file opened with a password wait for a person
+    (`OrderView.password_file`); None for a file opened without one."""
+    if not document.opened_with_password:
+        return None
+    return "failed_checks_only" if document.password_values_as_read else "every_value"
+
+
 def _legacy_anchor(document: PoDocument, prices: PriceView) -> SourceAnchor | None:
     """Where the first legacy text the viewer may see is: an anchor can quote
     the printed words, so a price typed in a legacy font is passed over for a
@@ -1660,6 +1673,7 @@ def order_case(
         rules_version=case.rules_version,
         parser_version=document.parser_version,
         derivation=document.derivation,
+        password_file=_password_file(document),
         catalog_as_of=case.catalog_as_of,
         release_manifest_ref=release_manifest_ref,
         cross_check_required=case.cross_check_required,

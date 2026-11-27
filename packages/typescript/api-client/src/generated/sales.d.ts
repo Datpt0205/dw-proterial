@@ -6216,6 +6216,8 @@ export interface components {
             name_revision?: string | null;
             /** Parser Version */
             parser_version: string;
+            /** Password File */
+            password_file?: ("every_value" | "failed_checks_only") | null;
             pc_reply?: components["schemas"]["PcReplyView"] | null;
             pc_request?: components["schemas"]["PcRequestStateView"] | null;
             /**

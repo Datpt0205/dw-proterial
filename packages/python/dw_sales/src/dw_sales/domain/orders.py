@@ -936,6 +936,12 @@ class PoDocument(BaseModel):
     # the printed revision, which, with the lines, still decides
     # (`check_history`). None: the name suggests none.
     name_revision: str | None = Field(default=None, pattern=r"^[A-Z0-9]{1,8}$")
+    # Read from a file opened with a password (ticket 17) under rules that
+    # leave its values to their own checks (`OrderRules.password_file`,
+    # ticket 80): the reader's `opened_with_password` flags were taken off
+    # every value, and this says the file was opened so. False: the flags,
+    # if any, are on the values.
+    password_values_as_read: bool = False
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -967,7 +973,38 @@ class PoDocument(BaseModel):
                 raise ValueError("an anchor points outside the message's text")
         if self.print_copy is not None and self.print_copy.attachment_id == self.attachment_id:
             raise ValueError("a PO's print is another attachment than the PO")
+        if self.password_values_as_read and (
+            self.attachment_id is None or any(self._password_flags())
+        ):
+            raise ValueError("a file's values taken as read carry no password flag")
         return self
+
+    def _password_flags(self) -> Iterable[FlaggedValue]:
+        """Every `opened_with_password` flag on a value of the PO."""
+        flags = [*self.header.flags, *(f for line in self.lines for f in line.flags)]
+        if self.total is not None:
+            flags += self.total.flags
+        return (f for f in flags if f.flag is RegionFlag.OPENED_WITH_PASSWORD)
+
+    def with_password_values_as_read(self) -> PoDocument:
+        """The PO with the `opened_with_password` flag taken off every value,
+        and the file named as opened so (`password_values_as_read`): each
+        value then waits on a person only for a check it fails or another
+        flag, as a file opened without a password does (ticket 80). The PO
+        unchanged when it was not opened with a password."""
+        if not self.opened_with_password or self.password_values_as_read:
+            return self
+
+        def kept(flags: Sequence[FlaggedValue]) -> list[dict[str, object]]:
+            return [f.model_dump() for f in flags if f.flag is not RegionFlag.OPENED_WITH_PASSWORD]
+
+        dumped = self.model_dump()
+        dumped["header"]["flags"] = kept(self.header.flags)
+        for line, read in zip(dumped["lines"], self.lines, strict=True):
+            line["flags"] = kept(read.flags)
+        if self.total is not None:
+            dumped["total"]["flags"] = kept(self.total.flags)
+        return PoDocument.model_validate({**dumped, "password_values_as_read": True})
 
     @property
     def from_message(self) -> bool:
@@ -977,8 +1014,11 @@ class PoDocument(BaseModel):
     @property
     def opened_with_password(self) -> bool:
         """Whether it was read from a file the reader sandbox opened with a
-        password its mail carries (ticket 17), as its values are flagged."""
-        return any(f.flag is RegionFlag.OPENED_WITH_PASSWORD for f in self.header.flags)
+        password its mail carries (ticket 17): its values are flagged, or
+        were taken as read under the case's rules (ticket 80)."""
+        return self.password_values_as_read or any(
+            f.flag is RegionFlag.OPENED_WITH_PASSWORD for f in self.header.flags
+        )
 
     def legacy_texts(self) -> list[tuple[str, SourceAnchor, LegacyEncoding]]:
         """Each value read from text typed in a TCVN3 or VNI font, in reading
