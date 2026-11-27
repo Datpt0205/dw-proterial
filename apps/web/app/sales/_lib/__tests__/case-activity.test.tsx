@@ -119,11 +119,11 @@ import { CaseActivity } from "../../_components/case-activity";
 
 const onOpenSource = vi.fn();
 
-function renderSection() {
+function renderSection(kind: "order" | "quote" = "order") {
   render(
     <UiProvider>
       <CaseActivity
-        kind="order"
+        kind={kind}
         caseId={CASE}
         version={3}
         onOpenSource={onOpenSource}
@@ -164,7 +164,15 @@ describe("DW1 đã làm gì on a case (slice 3)", () => {
     );
     expect(refused!.textContent).toContain("Người tiếp nhận: An (bạn)");
 
-    expect(unanswered!.textContent).toContain("Model không trả lời");
+    // In Vietnamese, said once (full review, 2026-11-27: "Model không trả
+    // lời" beside "Mô hình không trả lời").
+    expect(
+      unanswered!.textContent!.split("Mô hình không trả lời"),
+    ).toHaveLength(2);
+    expect(unanswered!.textContent).not.toContain("Model");
+    // An order names its own procedure's steps only.
+    expect(unanswered!.textContent).toContain("O1");
+    expect(unanswered!.textContent).not.toContain("Q1");
     expect(unanswered!.textContent).toContain(
       "Người tiếp nhận: chưa ai tiếp nhận",
     );
@@ -174,6 +182,17 @@ describe("DW1 đã làm gì on a case (slice 3)", () => {
     expect(request!.textContent).toContain(
       "DW1 bỏ qua: Mô tả: không tìm thấy trong thư chữ mô hình chỉ ra (2)",
     );
+  });
+
+  it("names a quote's own procedure steps, never an order's", async () => {
+    // A reply reader serves O1 only: on a quote it is at no step of WIV-03-023.
+    renderSection("quote");
+    await screen.findAllByText("Đã chấp nhận");
+    const [read, , unanswered, request] = items() as HTMLElement[];
+    expect(within(read!).queryByText("O2")).toBeNull();
+    expect(within(unanswered!).queryByText("O1")).toBeNull();
+    expect(within(unanswered!).getByText("Q1")).toBeTruthy();
+    expect(within(request!).getByText("Q1")).toBeTruthy();
   });
 
   it("opens the case's source at the place a value was read, once per place", async () => {

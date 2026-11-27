@@ -428,6 +428,11 @@
             },
             "title": "Quotes",
             "type": "array"
+          },
+          "recorded_by_dw": {
+            "default": false,
+            "title": "Recorded By Dw",
+            "type": "boolean"
           }
         },
         "required": [

@@ -198,6 +198,8 @@ class CrossCheckOnMatchLane:
 
     async def tick(self, scope: SalesScope) -> OnMatchTick:
         context = lane_context(scope)
+        # Every waiting order of the workspace, whoever owns it: record
+        # visibility is a reader's rule, not a lane's (`visibility`).
         async with self.uow(scope) as work:
             waiting = [s.case for s in await work.orders.awaiting_on_match()]
             unread = [

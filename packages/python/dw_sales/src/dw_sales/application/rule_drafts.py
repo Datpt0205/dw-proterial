@@ -116,6 +116,7 @@ from dw_sales.application.template_reading import (
     repeated_values,
     verify,
 )
+from dw_sales.domain.order_checks import IntakeCaps, OrderRules
 
 logger = logging.getLogger("dw_sales.rule_drafts")
 
@@ -296,9 +297,9 @@ class TemplateSheetsPort(Protocol):
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None: ...
 
-    async def sheet_names(self, data: bytes) -> list[str]: ...
+    async def sheet_names(self, data: bytes, caps: IntakeCaps) -> list[str]: ...
 
-    async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None: ...
+    async def sheet_grid(self, data: bytes, sheet: str, caps: IntakeCaps) -> SheetGrid | None: ...
 
 
 class RuleDraftScopesPort(Protocol):
@@ -544,7 +545,7 @@ class RuleDrafting:
         if self.sheets.kind(content) != "xlsx":
             return _failed(draft, "tệp không phải bảng tính Excel")
         try:
-            read = await self._header_row(content)
+            read = await self._header_row(scope, content)
         except DomainError as refused:
             return _failed(draft, _unopened(refused))
         if read is None:
@@ -667,12 +668,16 @@ class RuleDrafting:
         return context
 
     async def _header_row(
-        self, content: bytes
+        self, scope: SalesScope, content: bytes
     ) -> tuple[TemplateRow, dict[int, TemplateHeader]] | None:
         """The first sheet's header row, with the value each column repeats
-        on every filled row below it (`repeated_values`)."""
-        for name in (await self.sheets.sheet_names(content))[:MAX_SHEETS]:
-            grid = await self.sheets.sheet_grid(content, name)
+        on every filled row below it (`repeated_values`), opened under the
+        tenant's intake caps."""
+        order_rules = (await self.rules.current(scope, RuleKey.ORDER_RULES)).policy
+        assert isinstance(order_rules, OrderRules)
+        caps = order_rules.intake
+        for name in (await self.sheets.sheet_names(content, caps))[:MAX_SHEETS]:
+            grid = await self.sheets.sheet_grid(content, name, caps)
             row = None if grid is None else header_row(grid)
             if grid is not None and row is not None:
                 return row, repeated_values(grid, row)

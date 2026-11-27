@@ -29,12 +29,19 @@ import {
 } from "../../lib/dates";
 import { compareVi, matches } from "../../lib/search";
 import { useNow } from "../../lib/use-now";
-import { approvalInbox } from "../../lib/approvals/registry";
+import { approvalInbox, findHost } from "../../lib/approvals/registry";
+import { salesApprovalHost, salesBravoWriteHost } from "./_meta/approvals";
 import { showBadge } from "../../lib/push";
 import { apiClient } from "../../lib/session";
 import { salesApi } from "./_lib/api";
 import { useCustomerName } from "./_lib/customers";
-import { ACTION, label, ROUTING_REASON } from "./_lib/labels";
+import {
+  ACTION,
+  APPROVAL_KIND,
+  APPROVAL_ON_THE_CASE,
+  label,
+  ROUTING_REASON,
+} from "./_lib/labels";
 import { quoteTitle } from "./_lib/quote-actions";
 import { usePeople } from "./_lib/people";
 import { bySla, itemKey } from "./_lib/sla";
@@ -73,6 +80,8 @@ type Today = SalesSchemas["TodayView"];
 
 const TABS = ["all", "order", "quote", "message"] as const;
 const SORTS = ["api", "age", "customer"] as const;
+/** The approval hosts that are Sales' own (`lib/approvals/registry.ts`). */
+const SALES_HOSTS = [salesApprovalHost, salesBravoWriteHost];
 
 /**
  * Việc cần làm (G22), the one place for a person's work (tickets 47, 48):
@@ -309,16 +318,31 @@ function MyWork() {
       text: "DW1 không đọc được hạn báo giá trên yêu cầu; hạn chưa rõ, không phải không có hạn.",
       href: "/sales?tab=quote",
     });
+  // Sales' own approvals only (another context's are on its own page), and
+  // not those the list below already carries as a case's step.
   const toDecide = (approvals.data?.items ?? []).filter(
-    (a) => a.status === "pending" && a.can_decide,
+    (a) =>
+      a.status === "pending" &&
+      a.can_decide &&
+      findHost(SALES_HOSTS, a.approval_type) !== undefined &&
+      !APPROVAL_ON_THE_CASE.has(a.approval_type),
   );
   if (toDecide[0]) {
     const inbox = approvalInbox(toDecide[0]);
+    const kinds = [
+      ...new Set(
+        toDecide.map(
+          (a) =>
+            (APPROVAL_KIND as Record<string, string>)[a.approval_type] ??
+            "Yêu cầu khác",
+        ),
+      ),
+    ];
     priority.push({
       key: "approvals",
       tone: "pri",
       lead: `${toDecide.length}${approvals.data?.next_cursor ? "+" : ""} yêu cầu chờ bạn duyệt`,
-      text: "Phiên bản quy tắc, mẫu PO hoặc dữ liệu chủ",
+      text: kinds.join(" · "),
       href: inbox?.kind === "link" ? inbox.href : "/approvals",
     });
   }

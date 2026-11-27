@@ -10,6 +10,14 @@ const steps = [
     states: ["received"],
     cases: 0,
   },
+  // As `WIV_STEPS` has it: O3 and O7 both hold `uploaded_to_bravo`.
+  {
+    step_id: "O3",
+    procedure: "WIV-03-012",
+    coverage: "yes",
+    states: ["uploaded_to_bravo"],
+    cases: 1,
+  },
   {
     step_id: "O4",
     procedure: "WIV-03-012",
@@ -60,5 +68,9 @@ describe("a case's place in its procedure (2026-10-27)", () => {
     const active = list.querySelectorAll(".ant-steps-item-active");
     expect(active).toHaveLength(1);
     expect(active[0]!.textContent).toContain("Đã nhập Bravo");
+    // Two steps hold its state: the later is where it is, the earlier passed
+    // (full review, 2026-11-27: both read "Hồ sơ đang ở bước này").
+    expect(active[0]!.textContent).toContain("O7");
+    expect(within(list).getByText("O3 · Đã qua bước này")).toBeTruthy();
   });
 });

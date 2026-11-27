@@ -246,7 +246,7 @@ API and the plan use the English terms. The spec is
   another (tickets 32, 24, 27).
 - **Thread intent** (Ý định của thư): what a message in a thread does, from
   one closed set: `sends_po` (gửi PO), `requests_change` (xin điều chỉnh),
-  `cancels` (huỷ), `accepts` (đồng ý), `rejects` (không đồng ý), `asks`
+  `cancels` (hủy), `accepts` (đồng ý), `rejects` (không đồng ý), `asks`
   (hỏi), `adds_info` (bổ sung thông tin), `sends_rfq` (gửi RFQ), `unclear`
   (chưa rõ). A message may carry several, each standing on sentences of it
   that code located; one whose sentences were not located is `unclear`. One
@@ -364,7 +364,7 @@ API and the plan use the English terms. The spec is
   entry, the cross-check and the confirmation again. The notice to the
   customer is a draft a person sends ("Thư báo khách thay đổi nội bộ"); it
   states no price (ticket 10). A line's deliveries never add up to more
-  than the customer ordered. A **cancelled line** (PC huỷ cả dòng, W07
+  than the customer ordered. A **cancelled line** (PC hủy cả dòng, W07
   "cancel all") is one PC's answer gives no delivery: it keeps what the
   customer ordered, its row in the Bravo update file holds nothing
   (quantity 0, no date), the notice says it is cancelled, the confirmation

@@ -29,6 +29,11 @@ type Entry = SalesSchemas["ActivityEntry"];
 type Anchor = SalesSchemas["AnchorRef"];
 
 const TITLE = "DW1 đã làm gì";
+/**
+ * A model step may serve steps of both procedures (`PROCESS_STEPS`): a case
+ * names only its own procedure's, so a quote never shows an order step.
+ */
+const PROCEDURE_PREFIX = { order: "O", quote: "Q" } as const;
 const NO_MODEL_STEP =
   "Hồ sơ này không có bước nào DW1 dùng AI. Việc DW1 đọc và kiểm tra theo quy tắc nằm ở Hành trình hồ sơ.";
 
@@ -116,6 +121,7 @@ export function CaseActivity({
             content: (
               <EntryView
                 entry={entry}
+                procedure={PROCEDURE_PREFIX[kind]}
                 timing={timingOf(entry)}
                 onOpenSource={onOpenSource}
               />
@@ -154,10 +160,13 @@ function anchorName(anchor: Anchor): string {
 
 function EntryView({
   entry,
+  procedure,
   timing,
   onOpenSource,
 }: {
   entry: Entry;
+  /** The case's procedure, by the prefix of its steps' ids. */
+  procedure: string;
   timing: Timing | null;
   onOpenSource: (field: string, lineNo: number | null) => void;
 }) {
@@ -175,17 +184,26 @@ function EntryView({
     <div className="flex flex-col items-start gap-1" data-activity={entry.step}>
       <span className="flex flex-wrap items-center gap-2">
         <Typography.Text strong>{modelStepLabel(entry.step)}</Typography.Text>
-        {entry.process_steps.map((s) => (
-          <Tag key={s} className="me-0">
-            {s}
-          </Tag>
-        ))}
+        {entry.process_steps
+          .filter((s) => s.startsWith(procedure))
+          .map((s) => (
+            <Tag key={s} className="me-0">
+              {s}
+            </Tag>
+          ))}
         <ActivityResultTag result={result} />
       </span>
-      <span>
-        {ACTIVITY_KIND[entry.kind]}
-        {entry.line_no ? ` · dòng ${entry.line_no}` : ""}
-      </span>
+      {/* No answer: the result tag already says so, in the same words. */}
+      {entry.kind === "model_unavailable" ? (
+        entry.line_no ? (
+          <span>Dòng {entry.line_no}</span>
+        ) : null
+      ) : (
+        <span>
+          {ACTIVITY_KIND[entry.kind]}
+          {entry.line_no ? ` · dòng ${entry.line_no}` : ""}
+        </span>
+      )}
       {reason ? <span>Lý do: {reason}</span> : null}
       {refusals.length ? (
         <span>

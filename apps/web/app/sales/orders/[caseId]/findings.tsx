@@ -334,11 +334,11 @@ function FindingCard({
         <Typography.Text type="secondary">
           Mong đợi{" "}
           <Typography.Text>
-            <FindingWords value={finding.expected} />
+            <FindingWords code={finding.code} value={finding.expected} />
           </Typography.Text>{" "}
           · trên PO{" "}
           <Typography.Text>
-            <FindingWords value={finding.actual} />
+            <FindingWords code={finding.code} value={finding.actual} />
           </Typography.Text>
         </Typography.Text>
         <FindingExplanation caseId={order.case_id} findingKey={finding.key} />

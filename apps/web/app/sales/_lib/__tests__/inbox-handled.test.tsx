@@ -181,7 +181,7 @@ describe("a routed message marked handled (2026-10-27)", () => {
       expect((button as HTMLButtonElement).disabled).toBe(true);
       expect(
         screen.getByText(
-          "Thư này giao cho người khác: người phụ trách hoặc trưởng nhóm đánh dấu.",
+          "Thư này giao cho người khác: người phụ trách hoặc Trưởng bộ phận Sales đánh dấu.",
         ),
       ).toBeTruthy();
     },

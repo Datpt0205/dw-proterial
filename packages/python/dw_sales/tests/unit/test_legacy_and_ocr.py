@@ -283,19 +283,18 @@ async def test_in_process_with_no_libreoffice_a_legacy_po_is_unreadable_with_the
 async def test_a_legacy_workbook_is_shown_as_its_copy_and_a_failure_is_refused() -> None:
     made = m01_as("VLX-PO-2610-0021")
     shown = ClientSourceView(
-        InProcessReaderTransport(tools=ReaderTools(ScriptedConverter(made), ocr=None)), CAPS
+        InProcessReaderTransport(tools=ReaderTools(ScriptedConverter(made), ocr=None))
     )
     refused = ClientSourceView(
-        InProcessReaderTransport(tools=ReaderTools(ScriptedConverter(error="exited 81"), ocr=None)),
-        CAPS,
+        InProcessReaderTransport(tools=ReaderTools(ScriptedConverter(error="exited 81"), ocr=None))
     )
 
     assert shown.kind(XLS) == "xlsx"
-    assert await shown.sheet_names(XLS) == ["PO"]
-    grid = await shown.sheet_grid(XLS, "PO")
+    assert await shown.sheet_names(XLS, CAPS) == ["PO"]
+    grid = await shown.sheet_grid(XLS, "PO", CAPS)
     assert grid is not None and any(c.text == "VLX-PO-2610-0021" for c in grid.cells)
     with pytest.raises(DomainError):
-        await refused.sheet_names(XLS)
+        await refused.sheet_names(XLS, CAPS)
 
 
 # ------------------------------------------------------------------- OCR --

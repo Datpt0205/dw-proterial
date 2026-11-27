@@ -31,6 +31,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_platform.domain.audit import system_actor
 from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import PriceView
 from dw_sales.application.autonomy import applied_by
@@ -745,6 +746,9 @@ class AgreementView(BaseModel):
     at: datetime
     message_id: str | None
     quotes: list[str]
+    # DW1 recorded the silence itself (ticket 82): ``by`` is the follow-up
+    # lane's system actor, which no roster names (DW1 review, ui).
+    recorded_by_dw: bool = False
 
 
 class ConfirmationCopyView(BaseModel):
@@ -780,6 +784,10 @@ def confirmation_view(case: OrderCase) -> ConfirmationView | None:
 
 
 def agreement_view(case: OrderCase) -> AgreementView | None:
+    # Here, not at the top: followups reaches this module through
+    # overview_service and routed_mail.
+    from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
+
     agreed = case.agreement
     if agreed is None:
         return None
@@ -789,6 +797,7 @@ def agreement_view(case: OrderCase) -> AgreementView | None:
         at=agreed.at,
         message_id=agreed.message_id,
         quotes=list(agreed.quotes),
+        recorded_by_dw=agreed.by == system_actor(SALES_FOLLOWUPS_LANE).value,
     )
 
 

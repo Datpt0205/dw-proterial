@@ -51,10 +51,12 @@ from dw_sales.application.case_store import (
     ServedSource,
     SourceRegion,
 )
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import CorrectedBySales, OrderCase, PoDocument
 from dw_sales.domain.quotes import ExportSnapshot, QuoteCase, QuoteFindingCode, Sourced
 
@@ -144,7 +146,8 @@ class _CachedPage(BaseModel):
 class SourceViewPort(Protocol):
     """Opens a source file for viewing: one PDF page, or one sheet's grid.
 
-    Parsing only, bounded by the caps the order rules set (spec decision 13).
+    Parsing only, bounded by ``caps``: the tenant's order rules, the caps
+    the same file was read under (spec decision 13).
     """
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None: ...
@@ -152,12 +155,16 @@ class SourceViewPort(Protocol):
     # The file as the scanned mailbox handed it over: a locked one is opened
     # with the passwords its own mail carries (ticket 17).
 
-    async def pdf_page(self, data: AttachmentContent, page: int) -> tuple[bytes, int] | None:
+    async def pdf_page(
+        self, data: AttachmentContent, page: int, caps: IntakeCaps
+    ) -> tuple[bytes, int] | None:
         """That page as a one-page PDF, and how many pages the file has; None
         when the file has no such page."""
         ...
 
-    async def sheet_grid(self, data: AttachmentContent, sheet: str) -> SheetGrid | None:
+    async def sheet_grid(
+        self, data: AttachmentContent, sheet: str, caps: IntakeCaps
+    ) -> SheetGrid | None:
         """The sheet's cells with their flags; None when there is no such sheet."""
         ...
 
@@ -651,6 +658,9 @@ class SourceService:
     inbox: InboxPort
     files: SourceViewPort
     cache: SourceCachePort
+    # The tenant's order rules: a file is opened under the caps it was read
+    # under, never the platform file's alone.
+    rules: OrderRulesPort
 
     async def order_source(
         self,
@@ -958,7 +968,7 @@ class SourceService:
                 return cached.pdf_base64, cached.page_count
             except ValidationError:
                 pass  # an entry from another version: read the file
-        opened = await self.files.pdf_page(content, page)
+        opened = await self.files.pdf_page(content, page, await self._caps(scope))
         if opened is None:
             return None
         pdf, count = opened
@@ -975,10 +985,13 @@ class SourceService:
                 return SheetGrid.model_validate_json(held)
             except ValidationError:
                 pass
-        grid = await self.files.sheet_grid(content, sheet)
+        grid = await self.files.sheet_grid(content, sheet, await self._caps(scope))
         if grid is not None:
             await self._keep(key, grid.model_dump_json())
         return grid
+
+    async def _caps(self, scope: SalesScope) -> IntakeCaps:
+        return (await self.rules.rules(scope)).intake
 
     async def _keep(self, key: str, value: str) -> None:
         if len(value) <= SOURCE_CACHE_MAX_CHARS:

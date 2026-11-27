@@ -21,7 +21,7 @@ import {
 } from "@ant-design/icons";
 import type { SourceRegion } from "@dw/api-client";
 import { InfoTip, PageHeader, StatusTag, RegionState } from "@dw/ui";
-import { LoadError } from "../../../../components/load-error";
+import { CaseLoadError } from "../../_components/case-load-error";
 import {
   dayDeadline,
   daysSince,
@@ -139,7 +139,13 @@ function QuoteDetail() {
 
   if (quote.loading) return <RegionState kind="loading" />;
   if (quote.error || !data)
-    return <LoadError error={quote.error} onRetry={quote.reload} />;
+    return (
+      <CaseLoadError
+        error={quote.error}
+        onRetry={quote.reload}
+        shown={data !== null}
+      />
+    );
 
   const currency = data.currency as Currency;
   const customer = customers.data?.items.find(
@@ -478,12 +484,14 @@ function QuoteDetail() {
                     {
                       key: "e",
                       label: "Mong đợi",
-                      children: <FindingWords value={f.expected} />,
+                      children: (
+                        <FindingWords code={f.code} value={f.expected} />
+                      ),
                     },
                     {
                       key: "a",
                       label: "Thực tế",
-                      children: <FindingWords value={f.actual} />,
+                      children: <FindingWords code={f.code} value={f.actual} />,
                     },
                   ]}
                 />

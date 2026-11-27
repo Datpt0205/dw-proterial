@@ -3845,7 +3845,7 @@ class OrderCase(BaseModel):
         cancelled |= {x.line_no for x in loop_lines if x.pc_answer and not x.pc_answer.deliveries}
         if cancelled == held.keys():
             raise ConflictError(
-                "PC huỷ mọi dòng là huỷ cả đơn, không phải thay đổi nội bộ",
+                "PC hủy mọi dòng là hủy cả đơn, không phải thay đổi nội bộ",
                 details={**details, "rule": "every_line_cancelled"},
             )
         return UpdateLoop(
@@ -4530,7 +4530,7 @@ def _require_not_cancelled(line: OrderLine, details: Mapping[str, object]) -> No
     either side makes by itself."""
     if line.cancelled:
         raise ConflictError(
-            "dòng này đã huỷ", details={**details, "line": line.line_no, "rule": "line_cancelled"}
+            "dòng này đã hủy", details={**details, "line": line.line_no, "rule": "line_cancelled"}
         )
 
 

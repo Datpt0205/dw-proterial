@@ -211,7 +211,7 @@ describe("a line PC cancelled whole (ticket 10)", () => {
       lines: [line, { ...line, line_no: 2, cancelled: true }],
     } as ReturnType<typeof order>;
     renderLines(crossed);
-    expect(screen.getByText("PC đã huỷ cả dòng")).toBeTruthy();
+    expect(screen.getByText("PC đã hủy cả dòng")).toBeTruthy();
     cleanup();
     render(
       <UiProvider>

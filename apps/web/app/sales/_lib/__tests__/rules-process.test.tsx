@@ -16,6 +16,7 @@ import { AN, GIANG } from "./fixtures";
 import { PROCESS } from "./process-fixture";
 import { EDGE_ACTION, EDGE_GUARD } from "../labels";
 import { layoutLane, type Lane } from "../process-graph";
+import { NO_CASE_READ } from "../../_components/process-settings-drawer";
 import { laneGeometry, pathOf } from "../process-geometry";
 import { RULE_KEY, type PlatformDocument, type RuleVersion } from "../rules";
 
@@ -453,6 +454,12 @@ describe("the DW1 process page (2026-10-22)", () => {
       expect(canvas.querySelectorAll(".react-flow__minimap-node").length).toBe(
         PROCESS.lanes[0]!.nodes.length,
       );
+      // React Flow's attribution shows (hiding it is for Pro), bottom
+      // centre, between the controls (left) and the minimap (right).
+      const attribution = canvas.querySelector(".react-flow__attribution");
+      expect(attribution?.textContent).toBe("React Flow");
+      expect(attribution?.classList.contains("bottom")).toBe(true);
+      expect(attribution?.classList.contains("center")).toBe(true);
       // The controls speak Vietnamese.
       for (const name of ["Phóng to", "Thu nhỏ", "Xem cả quy trình"])
         expect(
@@ -1243,6 +1250,37 @@ describe("a step's drawer: its AI, the data it reads, who acts (2026-10-23)", ()
       expect(people.textContent).toContain("Quyền: sales.inbox.process");
       // Who may change the members is pointed to them; nobody else is.
       expect(within(people).queryByRole("link")).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "names the lists and layouts without links for tenant IT, who cannot open them (DW1 review, ui)",
+    async () => {
+      // `sales_rules_editor` alone: both pages are behind `sales.case.read`.
+      scopes = ["sales.rules.propose", "sales.price.read"];
+      const open = await openReceived();
+      const uses = section(open, "Dữ liệu bước này dùng");
+      expect(within(uses).queryByRole("link")).toBeNull();
+      expect(uses.textContent).toContain("Khách hàng");
+      expect(uses.textContent).toContain("Mẫu PO");
+      expect(within(uses).getByText(NO_CASE_READ)).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "says when no role or permission set holds the step's scopes",
+    async () => {
+      const open = await openReceived({
+        ...PROCESS,
+        steps: PROCESS.steps.map((step) => ({ ...step, actors: [] })),
+      });
+      expect(
+        within(section(open, "Ai làm, ai duyệt")).getByText(
+          "Chưa có vai trò hay bộ quyền nào giữ quyền của bước này.",
+        ),
+      ).toBeTruthy();
     },
     SLOW,
   );

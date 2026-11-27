@@ -4,7 +4,12 @@ mailbox, DW1 running, and the personas seeded.
 What it removes, in the tenants the personas belong to (and nowhere else):
 every order and quote case with its revisions, lines and findings, the case
 events, the message log, the processing queue, the sources served, the
-artifact records and the pause switch; the personas' conversations with DW1
+artifact records and the pause switch; the stored mailbox (`mailbox_messages`
+with its attachments: mail a drop folder or a test once stored, and the POs a
+rehearsal uploaded), which the cleared message log would otherwise hand DW1
+as unread on every run (8 test mails of 10-27 were replayed until 11-28), and
+the log of Sales' own mails DW1 read (`sent_messages`), the message log's
+twin; the personas' conversations with DW1
 (their answers cite the cases removed); the in-app notices Sales sent (every
 `source_key` starts `sales.`), which would otherwise pile up across
 rehearsals and link to cases that are gone; and DW1's runs, their
@@ -13,6 +18,10 @@ decisions, so the approvals inbox starts empty and
 a rehearsal does not spend the next one's daily runs. It writes nothing to
 the audit log, which is append-only: the trail of earlier rehearsals stays,
 as it would in a real tenant.
+
+The drop lane's ledger of the files it handled (`mailbox_files`) is kept:
+it is what stops the lane reading a drop folder's history again, so clearing
+it would bring those mails back on the lane's next tick.
 
 Artifact bytes already in object storage are not deleted. Their records are
 gone, so nothing serves them; tenant offboarding purges them by prefix.
@@ -82,6 +91,14 @@ _CLEARED = (
     # And the mails a rehearsal asked DW1 to send.
     tables.outbound_mails,
     tables.worker_state,
+    # The stored mailbox (ticket 43) and the POs a rehearsal uploaded: with
+    # the message log gone, a kept mail is unread again on every run (Đạt,
+    # 2026-11-27). Not `mailbox_files`, the drop lane's ledger: without it
+    # the lane would read the folder's old files back in.
+    tables.mailbox_messages,
+    tables.mailbox_attachments,
+    # Sales' own mails DW1 read (ticket 25): the message log's twin.
+    tables.sent_messages,
     # The personas' conversations with DW1 (ADR 0007), their turns by
     # cascade: a rehearsal's answers cite cases the reset deletes, so a kept
     # one links to "không tìm thấy" (found on the 2026-11-26 run).

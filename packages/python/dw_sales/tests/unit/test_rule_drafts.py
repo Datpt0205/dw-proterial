@@ -690,7 +690,7 @@ def test_a_reader_of_another_version_fails_the_draft_with_why_and_is_not_retried
     requested = asyncio.run(
         bench.service().request(AN.context(), RuleKey.BRAVO_UPLOAD, "m.xlsx", template_xlsx(GOLDEN))
     )
-    sheets = ClientSourceView(_OlderReader(), bench.drafting().sheets.caps)  # type: ignore[attr-defined]
+    sheets = ClientSourceView(_OlderReader())
     drafting = replace(bench.drafting(), sheets=sheets)
 
     assert asyncio.run(drafting.draft(ALPHA, requested.draft_id)) == "draft failed"
@@ -700,6 +700,38 @@ def test_a_reader_of_another_version_fails_the_draft_with_why_and_is_not_retried
     assert view.error is not None
     assert view.error.startswith("không mở được tệp mẫu: trình đọc tệp trả lời không khớp")
     assert view.document is None
+
+
+def test_a_template_is_opened_under_the_company_s_intake_caps() -> None:
+    """DW1 review, config (2026-11-27): a template's sheets are opened under
+    the company's order rules, as its POs are read, never the platform
+    file's caps bound when the process started."""
+    from dw_sales.application.rules import Resolved
+    from dw_sales.domain.order_checks import OrderRules
+
+    bench = Bench.of(REPO, Recorded(raw=gold(GOLDEN)), (AN,))
+    requested = asyncio.run(
+        bench.service().request(AN.context(), RuleKey.BRAVO_UPLOAD, "m.xlsx", template_xlsx(GOLDEN))
+    )
+    drafting = bench.drafting()
+    platform = drafting.rules
+
+    class Company:
+        async def current(self, scope: Any, key: RuleKey) -> Resolved:
+            resolved = await platform.current(scope, key)
+            if key is not RuleKey.ORDER_RULES:
+                return resolved
+            rules = resolved.policy
+            assert isinstance(rules, OrderRules)
+            caps = rules.intake.model_copy(update={"max_unpacked_bytes": 1})
+            return Resolved(rules.model_copy(update={"intake": caps}), "tenant")
+
+    company = replace(drafting, rules=Company())
+    assert asyncio.run(company.draft(ALPHA, requested.draft_id)) == "draft failed"
+
+    view = asyncio.run(bench.service().get(AN.context(), requested.draft_id))
+    assert view.status == "failed"
+    assert view.error is not None and view.error.startswith("không mở được tệp mẫu")
 
 
 def test_another_tenant_or_workspace_does_not_find_a_draft() -> None:

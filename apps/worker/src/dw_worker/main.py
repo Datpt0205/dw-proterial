@@ -747,7 +747,7 @@ def build_purchasing_master_import(
     ).order_rules.intake
     lane = master_import_lane(
         reader=PurchasingWorkbookReader(
-            ClientSourceView(transport, caps), ClientTableReader(transport, caps)
+            ClientSourceView(transport), ClientTableReader(transport, caps), caps
         ),
         scanner=malware_scanner(
             settings.sales_malware_scan,

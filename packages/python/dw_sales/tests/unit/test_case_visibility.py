@@ -394,3 +394,41 @@ async def test_the_held_orders_chat_states_no_write_or_assignment_to_its_export_
     reader = (await world.services.assistant.ask(READER.context(), "làm giúp", key)).turn
     assert turn.proposal is None
     assert turn.answer == reader.answer
+
+
+async def test_a_lane_changes_another_pics_case_that_a_reader_still_cannot_see() -> None:
+    """Đạt, 2026-11-27 (kept): record visibility is a reader's rule, not a
+    lane's. In a restricted tenant, PC's reply to Diệu's order is proposed
+    on it by the `sales_pc_replies` lane, which acts for no person; An, who
+    may not see Diệu's cases, still reads it as not found afterwards, and
+    Diệu and the head read the change."""
+    from .test_pc_replies import _lines, _mail, _rig
+
+    rig = await _rig([_mail()])
+    try:
+        world, case_id = rig.world, rig.case_id
+        await world.services.assignment.reassign(
+            GIANG.context(),
+            CaseKind.ORDER,
+            case_id,
+            assignee=DIEU.user_id,
+            case_version=world.order(case_id).case_version,
+        )
+        an = _restricted(AN)
+        services = world.services
+        with pytest.raises(NotFoundError):
+            await services.orders.get(an, case_id)
+
+        tick = await rig.lane.tick()
+
+        assert (tick.read, tick.proposed) == (1, 1)
+        assert _lines(world.order(case_id))  # the lane changed Diệu's order
+        with pytest.raises(NotFoundError):
+            await services.orders.get(an, case_id)
+        with pytest.raises(NotFoundError):
+            await services.pipeline.history(an, CaseKind.ORDER, case_id)
+        assert case_id not in {s.case_id for s in await services.orders.summaries(an)}
+        for reader in (_restricted(DIEU), _restricted(GIANG, AN, DIEU)):
+            assert (await services.orders.get(reader, case_id)).pc_reply is not None
+    finally:
+        rig.sample.__exit__(None, None, None)

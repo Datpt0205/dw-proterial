@@ -43,6 +43,10 @@ const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
   superseded: "unk",
 };
 
+/** The versions table, empty, for someone the price-bearing rules are hidden from. */
+const NO_OWN_VERSION_SEEN =
+  "Chưa có phiên bản riêng nào trong các quy tắc bạn được xem. Quy tắc có giá chỉ người xem được giá mới thấy.";
+
 /**
  * Quy tắc (tickets 19, 38, 36, 40): what applies to the company per key, the
  * platform's or its own, and every version it proposed. A holder of
@@ -80,6 +84,10 @@ function Rules() {
   const seesApprovals = hasScope("approvals.read");
   // The head's own version applies at once (2026-10-28); the server decides.
   const appliesAtOnce = hasScope(SCOPE.rulesApprove);
+  // The server leaves out the rules that hold prices for whoever reads no
+  // price (`rules._readable`): what this page counts is then only part of
+  // the company's rules, and it says so.
+  const seesPrices = hasScope(SCOPE.price);
   const name = usePeople();
   const phone = usePhoneColumns();
   const table = usePhoneTable();
@@ -190,7 +198,7 @@ function Rules() {
             ) : null}
           </Space>
         }
-        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? ` · Bản bạn sửa được áp dụng ngay${bySecond.length ? `, trừ ${bySecond.length} quy tắc cần người khác duyệt` : ""}` : ""}`}
+        subtitle={`${own}/${keys.length} quy tắc${seesPrices ? "" : " bạn được xem"} đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? ` · Bản bạn sửa được áp dụng ngay${bySecond.length ? `, trừ ${bySecond.length} quy tắc cần người khác duyệt` : ""}` : ""}`}
         help={
           appliesAtOnce
             ? `Bản người khác đề xuất chờ bạn duyệt trên trang Duyệt.${bySecond.length ? ` ${bySecond.map((k) => `“${RULE_KEY[k.key]}”`).join(", ")}: một người duyệt khác quyết, kể cả bản của bạn.` : ""}`
@@ -233,7 +241,9 @@ function Rules() {
             locale={{
               emptyText: rules.loading
                 ? " "
-                : "Công ty chưa có phiên bản riêng nào: mọi quy tắc đang theo bản của nền tảng.",
+                : seesPrices
+                  ? "Công ty chưa có phiên bản riêng nào: mọi quy tắc đang theo bản của nền tảng."
+                  : NO_OWN_VERSION_SEEN,
             }}
             footer={() => `${versions.length} phiên bản`}
             expandable={{

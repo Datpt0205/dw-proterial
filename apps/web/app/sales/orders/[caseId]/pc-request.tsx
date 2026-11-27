@@ -534,7 +534,7 @@ export function PcAnswerDialog({
       width={640}
       title={`Ngày PC trả lời cho dòng ${lineNo}`}
       okText="Ghi ngày PC"
-      cancelText="Huỷ"
+      cancelText="Hủy"
       confirmLoading={pending === id}
       onOk={() => form.submit()}
       onCancel={onClose}

@@ -658,4 +658,46 @@ describe("the rules page for a proposer who reads no price (2026-10-21)", () => 
     },
     SLOW,
   );
+
+  it(
+    "never says the company has no version of its own when it sees only part (full review, 2026-11-27)",
+    async () => {
+      // Tâm saw "Công ty chưa có phiên bản riêng nào" while the company's
+      // own order rules were in force, hidden from her for their prices.
+      const none = {
+        ...VIEW,
+        in_force: { sales_kpi: "sales_kpi@1.0.0" },
+        layers: { sales_kpi: "platform" as const },
+        platform: VIEW.platform.filter((p) => p.key === "sales_kpi"),
+        versions: [],
+      };
+      scopes = ["sales.rules.propose"];
+      api.rules.mockResolvedValueOnce(none);
+      renderPage();
+      expect(
+        await screen.findByText(
+          /^Chưa có phiên bản riêng nào trong các quy tắc bạn được xem/,
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText(/^Công ty chưa có phiên bản riêng/)).toBeNull();
+      expect(
+        screen.getByText(
+          /^0\/1 quy tắc bạn được xem đang dùng phiên bản riêng/,
+        ),
+      ).toBeTruthy();
+      cleanup();
+
+      // Who reads prices sees every rule: there it is the company's state.
+      scopes = ["sales.rules.propose", "sales.price.read"];
+      api.rules.mockResolvedValueOnce(none);
+      renderPage();
+      expect(
+        await screen.findByText(/^Công ty chưa có phiên bản riêng nào/),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/^0\/1 quy tắc đang dùng phiên bản riêng/),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
 });

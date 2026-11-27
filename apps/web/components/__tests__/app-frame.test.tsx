@@ -158,6 +158,7 @@ describe("the shell's navbar", () => {
       ["Báo giá", "/sales/quotes"],
       ["Kiểm chéo & duyệt", "/sales/review"],
       ["Dữ liệu chủ", "/sales/master-data"],
+      ["Mẫu PO", "/sales/layouts"],
       ["Tổng quan quy trình", "/sales/overview"],
     ];
     for (const [name, href] of pages) {

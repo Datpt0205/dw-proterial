@@ -100,3 +100,22 @@ def test_a_policy_file_named_for_another_version_is_refused(tmp_path: Path) -> N
 
     with pytest.raises(ValueError, match=r"holds sales_kpi@1\.0\.0"):
         load_policy(misnamed, SalesKpi)
+
+
+def test_the_copy_dw1_runs_names_the_head_as_the_role_table_does() -> None:
+    # DW1 review (ui): the head is "Trưởng bộ phận Sales" (the role catalog,
+    # migration 68305ebe4a83, and the web's SALES_ROLE), never "trưởng nhóm".
+    from dw_sales.adapters.policy_files import load_sales_policies
+
+    policies = load_sales_policies(POLICIES, POLICIES.parent / "copy")
+    copies = (
+        policies.emails,
+        policies.documents,
+        policies.handoff_copy,
+        policies.reminders,
+        policies.assistant,
+    )
+
+    assert "Trưởng bộ phận Sales" in policies.assistant.words.assign_not_yours
+    for copy in copies:
+        assert "trưởng nhóm" not in copy.model_dump_json().lower()

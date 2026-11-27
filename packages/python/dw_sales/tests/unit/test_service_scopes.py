@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -24,8 +24,11 @@ from dw_sales.application.access import Gate
 from dw_sales.application.activity_ports import CaseListActivity
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
+from dw_sales.application.change_requests import ChangeRequests, TypedChange
+from dw_sales.application.confirmations import Confirmations
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.master_data_service import MasterDataService
+from dw_sales.application.order_quotes import OrderQuotes
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.processing import ProcessingService
@@ -33,6 +36,7 @@ from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.routed_mail import CardDecisionRequest, RoutedMailService
 from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import NoSourceCache, SourceService
+from dw_sales.application.update_loop import UpdateLoops
 from dw_sales.application.worker_service import WorkerService
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CloseReason
@@ -81,7 +85,7 @@ dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
 processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
 steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, MemoryBravoExportStore())
 RUN = uuid.UUID(int=10)
-sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache())
+sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache(), STORE)
 artifacts = ArtifactService(
     STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE, STORE
 )
@@ -90,6 +94,14 @@ overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE, STORE
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
 assignment = AssignmentService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 routed_mail = RoutedMailService(STORE, GATE, STORE, CLOCK, IDS, STORE)
+# The outbound lane records a sent mail through these as the person who
+# pressed: there no route checks first, and the service is the only check.
+confirmations = Confirmations(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE)
+order_quotes = OrderQuotes(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, None)
+changes = ChangeRequests(
+    STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, STORE, None, None, "sales", "1.0.0"
+)
+update_loops = UpdateLoops(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 
 type Call = Callable[[AccessContext], Awaitable[object]]
 
@@ -220,6 +232,52 @@ CALLS: dict[str, tuple[str, Call]] = {
     "master.quotations": ("sales.case.read", master.quotations),
     "overview": ("sales.overview.read", overview.overview),
     "worker.resume": ("sales.worker.resume", lambda c: worker.resume(c, "đã kiểm tra")),
+    "worker.pause": ("sales.worker.pause", lambda c: worker.pause(c, None)),
+    "artifacts.upload_signed_quote": (
+        "sales.case.read",
+        lambda c: artifacts.upload_signed_quote(c, CASE, case_version=1, data=b"%PDF-1.7"),
+    ),
+    "order_quotes.recheck": (
+        "sales.order.prepare",
+        lambda c: order_quotes.recheck(c, CASE, case_version=1),
+    ),
+    "confirmations.sent": (
+        "sales.order.prepare",
+        lambda c: confirmations.sent(
+            c, CASE, case_version=1, delivery_dates={1: [date(2026, 12, 5)]}
+        ),
+    ),
+    "confirmations.implied_undone": (
+        "sales.order.prepare",
+        lambda c: confirmations.implied_undone(c, CASE, case_version=1),
+    ),
+    "changes.add_line": (
+        "sales.order.prepare",
+        lambda c: changes.add_line(
+            c,
+            CASE,
+            uuid.UUID(int=11),
+            TypedChange(line_no=1, field="quantity", value="6100"),
+            case_version=1,
+        ),
+    ),
+    "update_loops.pc_answer": (
+        "sales.order.prepare",
+        lambda c: update_loops.pc_answer(c, CASE, 1, case_version=1, deliveries=[]),
+    ),
+    "update_loops.answer_sent": (
+        "sales.order.prepare",
+        lambda c: update_loops.answer_sent(c, CASE, case_version=1),
+    ),
+    "quotes.master_list": (
+        "sales.quote.prepare",
+        lambda c: quote_commands.master_list(c, CASE, case_version=1),
+    ),
+    "quotes.sent": ("sales.quote.prepare", lambda c: quote_commands.sent(c, CASE, case_version=1)),
+    "quotes.design_sent": (
+        "sales.quote.prepare",
+        lambda c: quote_commands.design_sent(c, CASE, case_version=1),
+    ),
 }
 
 
@@ -267,6 +325,10 @@ async def test_the_source_of_a_case_needs_the_price_scope_besides_reading_it() -
         ),
         (
             lambda c: artifacts.render_quote(c, CASE, kind="ycbg_draft", case_version=1),
+            "sales.quote.prepare",
+        ),
+        (
+            lambda c: artifacts.upload_signed_quote(c, CASE, case_version=1, data=b"%PDF-1.7"),
             "sales.quote.prepare",
         ),
     ],

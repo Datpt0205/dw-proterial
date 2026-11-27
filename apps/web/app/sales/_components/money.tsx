@@ -4,6 +4,7 @@ import type { Amount, Hidden, Words } from "@dw/api-client";
 import { MaskedValue } from "@dw/ui";
 import { formatMoney, formatQuantity, type Currency } from "../../../lib/money";
 import { UNKNOWN_TIME } from "../../../lib/dates";
+import { findingValueWords } from "../_lib/finding-values";
 import { label, SALES_ROLE } from "../_lib/labels";
 
 /**
@@ -58,12 +59,20 @@ export function UsdPerTonne({ value }: { value: Amount | null | undefined }) {
 /**
  * A finding's expected or actual value: words, or the lock for a
  * price-bearing code the viewer may not read (spec "price-bearing codes").
+ * With the finding's `code`, its machine words and numbers are put into
+ * Vietnamese (`findingValueWords`).
  */
-export function FindingWords({ value }: { value: Words | null | undefined }) {
+export function FindingWords({
+  value,
+  code,
+}: {
+  value: Words | null | undefined;
+  code?: string;
+}) {
   if (isHidden(value)) return <MaskedValue sentence={PRICE_SENTENCE} />;
   if (value === null || value === undefined || value === "")
     return <span>Không có</span>;
-  return <span>{value}</span>;
+  return <span>{code ? findingValueWords(code, value) : value}</span>;
 }
 
 export function Quantity({

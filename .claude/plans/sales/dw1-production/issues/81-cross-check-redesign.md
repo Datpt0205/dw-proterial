@@ -131,3 +131,18 @@ page and the trail say it); the process map draws the
 Seen, not mine: `test_cross_check_recovery.py`'s two My Work tests fail
 on the current tree (`acknowledge_export` where `cross_check`/`confirm` is
 expected), not touched here; likely since 4bb0b346 (NOC/ESF hold listed as the export PIC's work), not bisected.
+
+### 2026-11-27 — full review (functions): the checker's page after their own decision
+
+Diệu's "Ghi kiểm chéo đạt" (and Khoa's "Duyệt báo giá") takes the case out
+of what they see (`visibility.sees_case`: a checker sees a case only while
+it waits on them), so the page read again got a 404 and drew "Không tìm
+thấy" over the server's English "no such order case". The order and quote
+pages now draw a not-found read themselves (`CaseLoadError`): when the case
+was on screen before, "Hồ sơ đã rời khỏi việc của bạn" with why; opened from
+a link it cannot read, a sentence that does not say whether it exists (Beta
+opening an Alpha id); both lead back to "Việc cần làm". The server's
+sentence is unchanged (other callers read it). Test
+`case-left-view.test.tsx` (the cross-check pressed on the page, a quote id
+that reads as not found, a 500 drawn as before): red with the pages back on
+`LoadError`, and the first red with `shown` wired false.

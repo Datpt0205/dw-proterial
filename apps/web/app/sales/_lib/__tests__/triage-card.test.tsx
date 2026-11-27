@@ -27,7 +27,7 @@ vi.mock("../api", () => ({
   salesApi: () => ({ decideTriageCard, skills }),
 }));
 
-import { TriageCardPanel } from "../../inbox/triage-card";
+import { NO_TEACH, TriageCardPanel } from "../../inbox/triage-card";
 
 const CARD: Card = {
   kind: "reply_to_case",
@@ -124,7 +124,7 @@ describe("Thẻ gợi ý: a mail routed 'Khác' (ticket 33)", () => {
     expect(decideTriageCard).not.toHaveBeenCalled();
     expect(
       screen.getByText(
-        "Thư này giao cho người khác: người phụ trách hoặc trưởng nhóm quyết.",
+        "Thư này giao cho người khác: người phụ trách hoặc Trưởng bộ phận Sales quyết.",
       ),
     ).toBeTruthy();
   });
@@ -146,16 +146,26 @@ describe("Thẻ gợi ý: a mail routed 'Khác' (ticket 33)", () => {
     expect(screen.queryByRole("button", { name: "Bỏ qua gợi ý" })).toBeNull();
   });
 
-  it("offers teaching the kind only to whoever proposes rules (ticket 34)", () => {
+  it("shows teaching the kind to a PIC disabled, with who can (ticket 34, ui-quality §5)", () => {
     renderIt(message(CARD));
-    expect(
-      screen.queryByRole("button", { name: "Dạy DW1 loại thư này" }),
-    ).toBeNull();
+    const teach = screen.getByRole("button", {
+      name: "Dạy DW1 loại thư này",
+    }) as HTMLButtonElement;
+    expect(teach.disabled).toBe(true);
+    // The reason sits in the button's tooltip only: a line under every
+    // card would repeat it down the inbox.
+    expect(NO_TEACH).toBe(
+      "Chỉ Trưởng bộ phận Sales hoặc Người đề xuất quy tắc dạy được DW1 loại thư.",
+    );
     cleanup();
     scopes = [...scopes, "sales.rules.propose"];
     renderIt(message(CARD));
     expect(
-      screen.getByRole("button", { name: "Dạy DW1 loại thư này" }),
-    ).toBeTruthy();
+      (
+        screen.getByRole("button", {
+          name: "Dạy DW1 loại thư này",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   });
 });

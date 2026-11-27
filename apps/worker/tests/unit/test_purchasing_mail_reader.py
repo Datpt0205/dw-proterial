@@ -83,7 +83,7 @@ def _reader() -> PurchasingWorkbookReader:
     caps = load_sales_policies(configs / "policies", configs / "copy").order_rules.intake
     transport = InProcessReaderTransport()
     return PurchasingWorkbookReader(
-        ClientSourceView(transport, caps), ClientTableReader(transport, caps)
+        ClientSourceView(transport), ClientTableReader(transport, caps), caps
     )
 
 
@@ -130,7 +130,7 @@ async def test_a_sheet_longer_than_the_reader_reads_is_refused_never_cut_short()
     from dw_sales.domain.master_data import ImportedTable, TableRow
 
     class Names:
-        async def sheet_names(self, data: bytes) -> list[str]:
+        async def sheet_names(self, data: bytes, caps: object) -> list[str]:
             return ["Hướng dẫn", "vat tu"]
 
     class Tables:
@@ -141,7 +141,7 @@ async def test_a_sheet_longer_than_the_reader_reads_is_refused_never_cut_short()
             return ImportedTable(sheet=sheet, rows=[TableRow(row=1, cells=["a"])], truncated=True)
 
     with pytest.raises(WorkbookUnreadableError, match="quá nhiều dòng"):
-        await PurchasingWorkbookReader(Names(), Tables()).sheets(b"x", ["Vật tư"])
+        await PurchasingWorkbookReader(Names(), Tables(), _reader().caps).sheets(b"x", ["Vật tư"])
 
 
 # ---------------------------------------------------------------- document --

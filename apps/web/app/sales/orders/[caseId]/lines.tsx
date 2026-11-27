@@ -403,7 +403,7 @@ export function LinesTable({
                 {line.cancelled ? (
                   // PC cancelled the whole line (ticket 10): never delivered.
                   <StatusTag tone="err" icon={<StopOutlined aria-hidden />}>
-                    PC đã huỷ cả dòng
+                    PC đã hủy cả dòng
                   </StatusTag>
                 ) : null}
                 {line.confirmed_delivery_date ? (

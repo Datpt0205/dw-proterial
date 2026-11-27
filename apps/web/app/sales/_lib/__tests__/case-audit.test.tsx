@@ -49,6 +49,13 @@ const api = {
   order: vi.fn(async () => order),
   // Nothing read back from Bravo yet (ticket 03).
   bravoWrites: vi.fn(async () => []),
+  // The Bravo the write panel names (ticket 85).
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat" as const,
+    uat: true,
+    production: false,
+  })),
   bravoReadBack: vi.fn(async () => ({
     read_back: null,
     stale: false,
@@ -398,6 +405,53 @@ describe("a value that waits on its source (gap 2)", () => {
       await openAndClose();
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(api.quote).toHaveBeenCalledTimes(1);
+    },
+    SLOW,
+  );
+});
+
+describe("a quote's flag values (full review, 2026-11-27)", () => {
+  it(
+    "reads in Vietnamese, not as the server's machine words",
+    async () => {
+      const flag = (
+        key: string,
+        code: string,
+        expected: string,
+        actual: string,
+      ) => ({
+        key,
+        code,
+        blocking: true,
+        line_no: 1,
+        expected,
+        actual,
+        disposition: { kind: "open" },
+        confirmed: [],
+        flagged: [],
+        missing: [],
+        rule_versions: ["sales_pricing@1.0.0"],
+        source_not_served: [],
+      });
+      quote = {
+        ...pendingQuote(),
+        findings: [
+          flag("b:1", "price_basis_mismatch", "lme_band", "fixed"),
+          flag("t:1", "above_target_price", "<= 0.65", "0.7050"),
+        ],
+      } as Quote;
+      show("quote");
+      // On the page's flags and, while it waits, in the approval panel.
+      expect(
+        (
+          await screen.findAllByText("Theo dải LME", undefined, {
+            timeout: 5000,
+          })
+        ).length,
+      ).toBeGreaterThan(0);
+      for (const words of ["Cố định", "≤ 0,65", "0,705"])
+        expect(screen.getAllByText(words).length, words).toBeGreaterThan(0);
+      expect(screen.queryByText("lme_band")).toBeNull();
     },
     SLOW,
   );

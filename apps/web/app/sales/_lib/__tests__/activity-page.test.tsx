@@ -553,7 +553,7 @@ describe("a case list opened from a count", () => {
       );
       expect(
         await screen.findByText(
-          "Lọc theo hoạt động DW1: Đọc yêu cầu báo giá không theo mẫu · Model không trả lời · 17/10/2026 – 23/10/2026",
+          "Lọc theo hoạt động DW1: Đọc yêu cầu báo giá không theo mẫu · Mô hình không trả lời · 17/10/2026 – 23/10/2026",
         ),
       ).toBeTruthy();
       cleanup();

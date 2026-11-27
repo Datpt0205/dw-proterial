@@ -7,6 +7,7 @@ import {
   FileTextOutlined,
   FolderOpenOutlined,
   InboxOutlined,
+  ProfileOutlined,
   ProjectOutlined,
   RobotOutlined,
   ScheduleOutlined,
@@ -37,7 +38,7 @@ import { SALES_BADGE } from "./badge-keys";
  * keys, so the shell names their Sales role from the role catalogue. The two
  * counts come from `badges.ts` beside this file.
  *
- * Nine pages do not fit one 56px row at `lg` (sales ticket 39, Đạt chose a
+ * Ten pages do not fit one 56px row at `lg` (sales ticket 39, Đạt chose a
  * submenu): the daily pages, which carry the counts, stay on the bar, and
  * the rest sit under two submenus by the work they serve — the cases
  * ("Hồ sơ") and running the process ("Quản lý"). A count never goes inside a
@@ -128,6 +129,13 @@ export const salesNav: NavEntry[] = [
             label: "Dữ liệu chủ",
             hint: "Khách hàng, mã hàng, quy đổi mã, báo giá và LME",
             icon: DatabaseOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/layouts",
+            label: "Mẫu PO",
+            hint: "Mẫu PO của từng khách: đã ánh xạ, chờ duyệt hay đã duyệt",
+            icon: ProfileOutlined,
             scope: "sales.case.read",
           },
           {

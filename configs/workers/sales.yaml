@@ -40,7 +40,17 @@ default_model_profile: onprem
 # Where a run may start: `web` for a person on the portal, `sales_inbox` for
 # the mailbox lane (`InboxLane.channel_of`). The runner refuses any other.
 supported_channels: [web, sales_inbox]
-# A person makes every decision: the quotation approval and the cross-check
-# pause the run whatever the level (the graph interrupts unconditionally), and
-# auto-confirmation (A3) is out of this slice.
+# The level the runner holds DW1's runs to (`langgraph_runner`): at A1 a tool
+# call goes ahead only when it has no side effect (`dw_agent_runtime.autonomy`),
+# and every DW1 tool is `none`. It bounds nothing else. The graph's pauses (the
+# quotation approval, the cross-check) do not read it, and the lanes that apply
+# a step by themselves run outside the runner: `sales_auto_apply` (ADR 0015,
+# ticket 44), `sales_cross_check_on_match` (ticket 81, off unless the tenant's
+# order rules turn `cross_check_on_match` on) and the follow-ups' implied
+# acceptance (ticket 82). Each is bounded by code and the tenant's rules
+# instead, never by this field: auto-apply by the tier code gives each step
+# (`dw_sales.domain.autonomy.STEP_TIERS`) and the error and audit share in
+# `sales_order_rules.autonomy`, the cross-check on match by the hand-off error
+# and audit share there, implied acceptance by `sales_followups`'
+# `implied_acceptance.record`.
 autonomy_level: A1

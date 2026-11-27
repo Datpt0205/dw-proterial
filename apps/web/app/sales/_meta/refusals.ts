@@ -18,7 +18,7 @@ export const SALES_REFUSALS: Readonly<Record<string, string>> = {
   layout_decided: "Mẫu PO vừa được quyết định: tải lại để xem kết quả.",
   message_already_processed: "Thư này đã được xử lý vào một hồ sơ.",
   assignee_not_eligible:
-    "Người được chọn không làm loại hồ sơ này ở workspace này: chọn người khác.",
+    "Người được chọn không làm loại hồ sơ này ở không gian làm việc này: chọn người khác.",
   case_closed: "Hồ sơ đã đóng nên không giao lại được.",
   rules_version_gone:
     "Hồ sơ được mở theo một phiên bản quy tắc báo giá không còn nữa, nên bước này chưa làm được.",

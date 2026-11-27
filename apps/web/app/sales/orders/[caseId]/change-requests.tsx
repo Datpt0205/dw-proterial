@@ -414,7 +414,7 @@ function RejectDialog({
       open
       title={`Từ chối thay đổi dòng ${line.line_no}`}
       okText="Từ chối"
-      cancelText="Huỷ"
+      cancelText="Hủy"
       confirmLoading={pending === id}
       onOk={() => form.submit()}
       onCancel={onClose}
@@ -571,7 +571,7 @@ function OpenDialog({
       width={720}
       title="Ghi yêu cầu thay đổi"
       okText="Ghi yêu cầu"
-      cancelText="Huỷ"
+      cancelText="Hủy"
       confirmLoading={pending === `change:${order.case_id}:open`}
       onOk={() => form.submit()}
       onCancel={onClose}
@@ -658,7 +658,7 @@ function AddLineDialog({
       width={720}
       title="Thêm dòng thay đổi"
       okText="Thêm dòng"
-      cancelText="Huỷ"
+      cancelText="Hủy"
       confirmLoading={pending === id}
       onOk={() => form.submit()}
       onCancel={onClose}

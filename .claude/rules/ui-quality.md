@@ -285,6 +285,9 @@ came from?
   "bạn", don't blame ("Số tiền phải là số nguyên", not "Bạn nhập sai"), and the
   machine never speaks as "tôi". Buttons name the outcome ("Gửi duyệt", not
   "OK").
+- **One tone-mark style, the old one** (Đạt, 2026-11-27): "hủy", "xóa",
+  "khóa", "hòa", "thủy", never "huỷ", "xoá", "khoá"; `apps/web/lib/__tests__/tone-marks.test.ts`
+  fails on the other in the web app and `@dw/ui`.
 
 **Ask:** is this screen still right on a laptop set to UTC+9, and with the
 longest real record name in it?

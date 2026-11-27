@@ -100,14 +100,14 @@ async def test_a_po_read_through_the_wire_is_the_po_the_readers_read() -> None:
 
 async def test_a_text_pdf_and_its_source_view_cross_the_wire() -> None:
     content = _content(M03)
-    view = ClientSourceView(InProcessReaderTransport(), CAPS)
+    view = ClientSourceView(InProcessReaderTransport())
 
     read = await ClientPoReaders(InProcessReaderTransport()).read(content, "BRN", CAPS)
-    page = await view.pdf_page(content.data, 1)
+    page = await view.pdf_page(content.data, 1, CAPS)
 
     assert isinstance(read, PoDocument)
     assert page is not None and page[0].startswith(b"%PDF-") and page[1] >= 1
-    assert await view.pdf_page(content.data, 99) is None
+    assert await view.pdf_page(content.data, 99, CAPS) is None
 
 
 async def test_quotation_forms_cross_the_wire() -> None:
@@ -181,7 +181,7 @@ async def test_the_other_readers_find_nothing_in_a_file_they_gave_up_on() -> Non
     assert await ClientDesignReplyReader(transport).read(_content(M18)) is None
     assert await ClientTexts(transport).text_parts(_content(M09), CAPS) == AttachmentText()
     with pytest.raises(DomainError):
-        await ClientSourceView(transport, CAPS).sheet_names(_content(M01).data)
+        await ClientSourceView(transport).sheet_names(_content(M01).data, CAPS)
 
 
 async def test_an_unreadable_quotation_value_is_raised_with_its_place() -> None:
@@ -324,11 +324,11 @@ async def test_a_result_of_another_version_is_a_worded_refusal(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Sales defect B: it was a ValidationError, so a 500 and a retried draft."""
-    view = ClientSourceView(_Replying(_older_grid()), CAPS)
+    view = ClientSourceView(_Replying(_older_grid()))
 
     with caplog.at_level("ERROR", logger="dw_sales.reader"):
         with pytest.raises(ReaderMismatchError) as refused:
-            await view.sheet_grid(_content(M01).data, "PO")
+            await view.sheet_grid(_content(M01).data, "PO", CAPS)
 
     assert isinstance(refused.value, DomainError)
     assert refused.value.details == {
@@ -343,10 +343,10 @@ async def test_a_result_of_another_version_is_a_worded_refusal(
 async def test_a_refused_result_carries_none_of_the_files_text_into_a_traceback() -> None:
     """A lane that logs the error with its traceback prints the chain of
     causes; pydantic's over the reader's answer quotes the file's cells."""
-    view = ClientSourceView(_Replying(_older_grid()), CAPS)
+    view = ClientSourceView(_Replying(_older_grid()))
 
     with pytest.raises(ReaderMismatchError) as refused:
-        await view.sheet_grid(_content(M01).data, "PO")
+        await view.sheet_grid(_content(M01).data, "PO", CAPS)
 
     printed = "".join(traceback.format_exception(refused.value))
     assert "SECRET-PRICE" not in printed

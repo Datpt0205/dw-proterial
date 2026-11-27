@@ -28,6 +28,7 @@ from dw_purchasing.domain.master_lists import CellValue, SheetRows, fold
 from dw_sales.adapters.reader_wire import DocumentText
 from dw_sales.application import mail_drop as sales
 from dw_sales.domain.master_data import ImportedTable
+from dw_sales.domain.order_checks import IntakeCaps
 
 
 class _SalesMailReader(Protocol):
@@ -49,7 +50,7 @@ class PurchasingMailReader:
 
 
 class _SalesSheetNames(Protocol):
-    async def sheet_names(self, data: bytes) -> list[str]: ...
+    async def sheet_names(self, data: bytes, caps: IntakeCaps) -> list[str]: ...
 
 
 class _SalesTables(Protocol):
@@ -67,11 +68,15 @@ class PurchasingWorkbookReader:
 
     names: _SalesSheetNames
     tables: _SalesTables
+    # What the names are read under: the caps the table reader was built with.
+    caps: IntakeCaps
 
     async def sheets(self, data: bytes, wanted: Sequence[str]) -> SheetRows:
         folded = {fold(name) for name in wanted}
         try:
-            present = [n for n in await self.names.sheet_names(data) if fold(n) in folded]
+            present = [
+                n for n in await self.names.sheet_names(data, self.caps) if fold(n) in folded
+            ]
             read: dict[str, list[tuple[int, Sequence[CellValue]]]] = {}
             for name in present:
                 table = await self.tables.read(data, "workbook.xlsx", sheet=name)

@@ -752,7 +752,7 @@ class BravoWriteStamp:
         asked = asked_of(request)
         if self.signer is None:
             raise ConflictError(
-                "DW chưa có khoá ký phê duyệt ghi Bravo: chưa duyệt được",
+                "DW chưa có khóa ký phê duyệt ghi Bravo: chưa duyệt được",
                 details={"rule": "no_signing_key"},
             )
         commands = self.commands.at(asked.stage_version)
@@ -871,8 +871,10 @@ class BravoWriteSettlement:
             recipients=[decider.principal_id],
             source_key=f"sales.bravo_write:{approval_id}",
             title=_TOLD[done.status],
+            # The reason is the gateway's code: the order page's panel says
+            # it in words (DW1 review, ui), so the notice only points there.
             body=f"SO {done.so_no}, dòng {done.line_no}: {done.after}"
-            + (f" ({done.reason})" if done.reason else ""),
+            + (" Xem lý do trên trang đơn." if done.reason else ""),
             link=f"/sales/orders/{done.case_id}",
         )
         return done.status

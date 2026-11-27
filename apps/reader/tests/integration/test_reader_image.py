@@ -216,6 +216,6 @@ async def test_a_legacy_word_file_is_shown_as_its_pdf(reader: HttpReaderTranspor
     assert made.returncode == 0, made.stderr
     doc = base64.b64decode(made.stdout)
 
-    page = await ClientSourceView(reader, CAPS).pdf_page(doc, 1)
+    page = await ClientSourceView(reader).pdf_page(doc, 1, CAPS)
 
     assert page is not None and page[0].startswith(b"%PDF-")

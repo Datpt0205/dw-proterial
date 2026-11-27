@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-from dw_kernel.errors import ConflictError, NotFoundError
+from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -569,8 +569,9 @@ class OutboundLane:
         back still answers it). A case that already says so since the press
         (asked again by hand, or every line it would ask answered) is left as
         it is (`OrderCase.pc_asked_since`). A case that cannot take it any
-        more (in Bravo meanwhile) is left, and the person is told: the mail
-        went, and the case does not say so."""
+        more (in Bravo meanwhile), or a person who may no longer record it
+        (a scope taken since the press), is left, and the person is told:
+        the mail went, and the case does not say so."""
         access = await self.access.find_linked_access(
             mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
         )
@@ -585,13 +586,14 @@ class OutboundLane:
             await self.pc.ask(
                 context, mail.case_id, case_version=case.case_version, sent_at=mail.queued_at
             )
-        except (ConflictError, NotFoundError) as left:
+        except (ConflictError, NotFoundError, PermissionDeniedError) as left:
             logger.info("sales_outbound: a request to PC was not recorded: %s", type(left).__name__)
             await self._tell(scope, mail, "pc_not_recorded", _PC_NOT_RECORDED)
 
     async def _mark_answer_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
         """ "Ghi đã gửi khách" of a change's answer as the person who pressed;
-        a case that moved on meanwhile (recorded by hand) is left."""
+        a case that moved on meanwhile (recorded by hand), or a person who
+        may no longer record it, is left."""
         access = await self.access.find_linked_access(
             mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
         )
@@ -602,12 +604,13 @@ class OutboundLane:
             async with self.uow(scope) as work:
                 case = (await stored_order(work, mail.case_id, viewer=context)).case
             await self.answers.answer_sent(context, mail.case_id, case_version=case.case_version)
-        except (ConflictError, NotFoundError) as left:
+        except (ConflictError, NotFoundError, PermissionDeniedError) as left:
             logger.info("sales_outbound: a sent answer was not recorded: %s", type(left).__name__)
 
     async def _mark_sent(self, scope: SalesScope, mail: OutboundMail, *, design: bool) -> None:
         """ "Đã gửi KH" as the person who pressed, through the button's own
-        command; a case that moved on meanwhile (marked by hand) is left."""
+        command; a case that moved on meanwhile (marked by hand), or a person
+        who may no longer mark it, is left."""
         access = await self.access.find_linked_access(
             mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _SENT_CEILING
         )
@@ -619,7 +622,7 @@ class OutboundLane:
                 case = (await stored_quote(work, mail.case_id, viewer=context)).case
             record = self.quotes.design_sent if design else self.quotes.sent
             await record(context, mail.case_id, case_version=case.case_version)
-        except (ConflictError, NotFoundError) as left:
+        except (ConflictError, NotFoundError, PermissionDeniedError) as left:
             logger.info("sales_outbound: a sent quotation was not marked: %s", type(left).__name__)
 
     async def _settle(
