@@ -34,3 +34,11 @@ Category: deployment
   happened). `WIV_STEPS` is unchanged: the overview's per-step figures read
   it. `case-timeline.test.tsx`'s fixture now has O3 as the server does (it
   had only O7, so it could not see this); red on the old component.
+- **The rules page for someone who reads no price.** Tâm (IT,
+  `sales_rules_editor` without price scopes) read "Công ty chưa có phiên bản
+  riêng nào: mọi quy tắc đang theo bản của nền tảng" while the company's own
+  `sales_order_rules@1.5.4` was in force, only hidden from her for its
+  prices. Without `sales.price.read` the empty table now says no version is
+  among the rules she may see, and that price rules show only to whoever
+  reads prices; the subtitle reads "quy tắc bạn được xem". Test in
+  `rules.test.tsx` (both personas), red with the scope check forced true.
