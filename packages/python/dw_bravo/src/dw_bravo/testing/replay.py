@@ -402,8 +402,8 @@ class ScreenReplay:
             if rule.home != table:
                 continue
             columns.update(c.lower() for c in rule.data_members())
-            for key in ("bindingMembers", "CopyValues"):
-                columns.update(c.lower() for c in rule.maps.get(key, {}))
+            columns.update(c.lower() for c in rule.maps.get("CopyValues", {}))
+            columns.update(m.target.lower() for m in rule.bindings)
         return frozenset(columns)
 
     def _compare(

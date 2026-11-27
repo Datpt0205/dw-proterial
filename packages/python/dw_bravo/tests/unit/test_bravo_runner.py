@@ -16,7 +16,7 @@ import pytest
 
 from dw_bravo.adapters.recorded import RecordedProcedures, RecordedReferences
 from dw_bravo.expression import RuleRefusedError, UndecidableError, UnsupportedSyntaxError
-from dw_bravo.layout import read_layout
+from dw_bravo.layout import PARENT, read_layout
 from dw_bravo.ports import Session
 from dw_bravo.runner import Document, Row, RuleRunner
 
@@ -440,3 +440,48 @@ def test_a_row_cannot_be_added_where_the_layout_names_no_relation() -> None:
     run.load(doc)
     with pytest.raises(RuleRefusedError, match="ParentKey"):
         run.add_row(doc, "Detail", NEW_LINE, stored=NEW_LINE)
+
+
+# A lookup's `bindingMembers` (ticket 72), in 8212's shapes: a member renamed
+# on the way (`<DocStatus_Ct>DocStatus</DocStatus_Ct>`: the lookup's column,
+# then the row's) and a conditional one (`Eval_DocCode_BindingMembers`'
+# `Ma_Gd_Ct`, which sets `TransCode` only while it is empty).
+BINDING_LAYOUT = """<root><Tables><ParentTable><Name>vDoc_Edit</Name>
+<ColumnChanged><DocCode><Eval_DocCode_Bind /></DocCode></ColumnChanged>
+<Evaluators>
+  <Eval_DocCode_Bind><ClassName>BravoBindingMember</ClassName><DataMember>DocCode</DataMember>
+    <LookupKey>DmCt</LookupKey><bindingMembers><DocStatus_Ct>DocStatus</DocStatus_Ct>
+    <Ma_Gd_Ct><Condition_0><DataMember>TransCode</DataMember><Expr>Empty(TransCode)</Expr></Condition_0></Ma_Gd_Ct>
+    </bindingMembers></Eval_DocCode_Bind>
+</Evaluators>
+</ParentTable></Tables></root>"""
+
+
+def _bound(trans_code: object) -> Row:
+    references = RecordedReferences(
+        rows={("dmct", "SO"): {"DocStatus_Ct": Decimal(4), "Ma_Gd_Ct": "3201"}}
+    )
+    parent = Row({"Id": 1, "DocCode": None, "DocStatus": None, "TransCode": trans_code})
+    doc = Document(parent, {})
+    runner(BINDING_LAYOUT, references=references).edit(doc, PARENT, 0, "DocCode", "SO")
+    return doc.parent
+
+
+def test_a_binding_sets_the_rows_column_from_the_lookups_column() -> None:
+    assert _bound(None).get("DocStatus") == Decimal(4)
+
+
+def test_a_conditional_binding_member_sets_its_column_only_where_its_condition_holds() -> None:
+    assert _bound(None).get("TransCode") == "3201"
+    assert _bound("3101").get("TransCode") == "3101"
+
+
+def test_a_binding_shape_not_read_refuses_when_it_runs_and_not_before() -> None:
+    two = BINDING_LAYOUT.replace(
+        "</Condition_0></Ma_Gd_Ct>",
+        "</Condition_0><Condition_1><DataMember>TransTypeCode</DataMember><Expr>1=1</Expr></Condition_1></Ma_Gd_Ct>",
+    )
+    run = runner(two)  # the layout reads
+    doc = Document(Row({"Id": 1, "DocCode": None, "TransCode": None}), {})
+    with pytest.raises(RuleRefusedError, match="Ma_Gd_Ct"):
+        run.edit(doc, PARENT, 0, "DocCode", "SO")

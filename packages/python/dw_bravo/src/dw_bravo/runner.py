@@ -58,7 +58,15 @@ from dw_bravo.expression import (
     substitute,
     truth,
 )
-from dw_bravo.layout import PARENT, CommandGuard, Invocation, Layout, Rule, Table
+from dw_bravo.layout import (
+    PARENT,
+    BindingMember,
+    CommandGuard,
+    Invocation,
+    Layout,
+    Rule,
+    Table,
+)
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 
 USER = "<user>"
@@ -623,6 +631,8 @@ class RuleRunner:
         lookup = rule.setting("LookupKey")
         if column is None or lookup is None:
             raise RuleRefusedError(f"{rule.name} lacks DataMember or LookupKey")
+        if rule.unread_bindings:
+            raise RuleRefusedError(f"{rule.name}: {'; '.join(rule.unread_bindings)}")
         code = scope.column(column)
         filter_key = rule.setting("FilterKey")
         found = self.references.find(
@@ -630,12 +640,44 @@ class RuleRunner:
         )
         if found is None:
             raise UndecidableError(f"{lookup} {code!r} not found")
-        for target, source in rule.maps.get("bindingMembers", {}).items():
-            if source not in found:
-                raise UndecidableError(f"{lookup}.{source} not in hand")
-            self._assign(
-                doc, table, row, target, found[source], rule.name, trigger, suppress, depth
-            )
+        self._bind(
+            doc, rule.name, lookup, rule.bindings, found, table, row, trigger, suppress, depth
+        )
+
+    def _bind(
+        self,
+        doc: Document,
+        name: str,
+        lookup: str,
+        members: Sequence[BindingMember],
+        found: Mapping[str, object],
+        table: str,
+        row: Row,
+        trigger: str | None,
+        suppress: bool,
+        depth: int,
+    ) -> None:
+        """A looked-up row's columns into ``row``, member by member, in the
+        layout's order; a conditional member only where its condition holds."""
+        looked_up = {k.lower(): v for k, v in found.items()}
+        scope = _RowScope(self, doc, table, row, trigger)
+        # Whether a member's condition is read before any member is set, or
+        # as its turn comes, is not measured: where the two differ, refuse.
+        before = {m: condition(m.condition, scope) for m in members if m.condition}
+        for member in members:
+            if member.condition is not None:
+                holds = condition(member.condition, scope)
+                if holds != before[member]:
+                    raise RuleRefusedError(
+                        f"{name}: {member.target}'s condition changes as the members "
+                        "before it are set"
+                    )
+                if not holds:
+                    continue
+            if member.source.lower() not in looked_up:
+                raise UndecidableError(f"{lookup}.{member.source} not in hand")
+            value = looked_up[member.source.lower()]
+            self._assign(doc, table, row, member.target, value, name, trigger, suppress, depth)
 
     # --------------------------------------------------------- assignment
 

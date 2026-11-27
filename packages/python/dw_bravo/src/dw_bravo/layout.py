@@ -60,7 +60,7 @@ _SETTINGS = frozenset(
         "autoOutputMember",
     }
 )
-_MAPS = ("Parameters", "CopyValues", "DefaultValues", "bindingMembers")
+_MAPS = ("Parameters", "CopyValues", "DefaultValues")
 _ROW_EVENTS = (
     "RowAdded",
     "RowCopied",
@@ -81,6 +81,59 @@ class Invocation:
 
 
 @dataclass(frozen=True)
+class BindingMember:
+    """One of a lookup's `bindingMembers`, `<source>target</source>`: the row's
+    column `target` takes the looked-up row's column `source` (8213's item
+    lookup: `<Name>Description</Name>`, the item's name into the line's
+    description; the client's own lookup SELECT reads `Name`, and its INSERT
+    writes it as `Description`, UAT trace 11-25 16:53:33). A conditional one,
+    `<source><Condition_0><DataMember>target</DataMember><Expr>...</Expr>
+    </Condition_0></source>` (8212's `Eval_DocCode_BindingMembers`), sets
+    `target` only where `condition` holds on the row."""
+
+    source: str
+    target: str
+    condition: str | None = None
+
+
+def _binding_members(element: ET.Element) -> tuple[tuple[BindingMember, ...], tuple[str, ...]]:
+    """A `bindingMembers` block: its members in the layout's order, and what
+    in it is not read (refused when the rule runs, so one shape not yet
+    measured does not stop the whole layout from being read)."""
+    members: list[BindingMember] = []
+    unread: list[str] = []
+    entries = _elements(element)
+    if not entries and _text(element):
+        # The short form `<bindingMembers>A,B</bindingMembers>`: same names.
+        names = [n.strip() for n in (_text(element) or "").split(",") if n.strip()]
+        return tuple(BindingMember(n, n) for n in names), ()
+    for entry in entries:
+        parts = _elements(entry)
+        if not parts:
+            target = _text(entry)
+            if target is None:
+                unread.append(f"{entry.tag} binds to no column")
+            else:
+                members.append(BindingMember(entry.tag, target))
+            continue
+        first, rest = parts[0], parts[1:]
+        settings = {e.tag for e in _elements(first)}
+        target, expr = _text(first.find("DataMember")), _text(first.find("Expr"))
+        if (
+            rest
+            or not first.tag.startswith("Condition_")
+            or settings != {"DataMember", "Expr"}
+            or target is None
+            or expr is None
+        ):
+            # Several conditions on one member (which wins?), or another shape.
+            unread.append(f"{entry.tag}: {[p.tag for p in parts]} is not read")
+            continue
+        members.append(BindingMember(entry.tag, target, expr))
+    return tuple(members), tuple(unread)
+
+
+@dataclass(frozen=True)
 class Rule:
     """A rule definition, an evaluator, a group or a validator."""
 
@@ -92,6 +145,8 @@ class Rule:
     members: tuple[Invocation, ...]  # a group's rules, in order
     message: str | None  # the Vietnamese text a validator shows
     ignored: tuple[str, ...]  # settings switched off by a leading '_' in Bravo
+    bindings: tuple[BindingMember, ...] = ()  # a lookup's bindingMembers, in order
+    unread_bindings: tuple[str, ...] = ()  # what of them is not read: refused when run
 
     def setting(self, key: str) -> str | None:
         return self.settings.get(key)
@@ -194,10 +249,14 @@ class _Reader:
         maps: dict[str, Mapping[str, str]] = {}
         members: list[Invocation] = []
         ignored: list[str] = []
+        bindings: tuple[BindingMember, ...] = ()
+        unread: tuple[str, ...] = ()
         for child in _elements(element):
             tag = child.tag
             if tag.startswith("_"):
                 ignored.append(tag)
+            elif tag == "bindingMembers":
+                bindings, unread = _binding_members(child)
             elif tag in _MAPS:
                 entries = {c.tag: (c.text or "").strip() for c in _elements(child)}
                 if not entries and _text(child):
@@ -222,6 +281,8 @@ class _Reader:
             members=tuple(members),
             message=_message(element.find("Text")),
             ignored=tuple(ignored),
+            bindings=bindings,
+            unread_bindings=unread,
         )
         return rule
 
