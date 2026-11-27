@@ -44,8 +44,15 @@ def _on(case: OrderCase | None = None, **stamps: Any) -> OrderCase:
 
 
 def _matching(case: OrderCase, **facts: Any) -> ReadBackFacts:
+    assert case.bravo_so_no is not None
     return ReadBackFacts(
-        **{"source": "gateway", "case_version": case.case_version, "differences": 0, **facts}
+        **{
+            "source": "gateway",
+            "case_version": case.case_version,
+            "differences": 0,
+            "so_no": case.bravo_so_no,
+            **facts,
+        }
     )
 
 
@@ -68,8 +75,9 @@ def test_a_matching_gateway_read_back_of_an_untouched_order_passes() -> None:
         ({"source": "export"}, E.NOT_FROM_BRAVO),
         ({"case_version": 1}, E.STALE_READ_BACK),
         ({"differences": 1}, E.DIFFERS),
+        ({"so_no": "SO26-9999"}, E.SO_NO_DIFFERS),
     ],
-    ids=["an uploaded export", "another version", "a difference"],
+    ids=["an uploaded export", "another version", "a difference", "another SO number"],
 )
 def test_a_read_back_that_does_not_vouch_for_this_version_goes_to_a_person(
     facts: dict[str, Any], expected: OnMatchException

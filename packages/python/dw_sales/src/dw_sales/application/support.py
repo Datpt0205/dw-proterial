@@ -30,7 +30,7 @@ from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
     CaseEvent,
@@ -147,13 +147,16 @@ def audit_row(
     event: CaseEvent,
     run_id: uuid.UUID | None = None,
     approval_id: uuid.UUID | None = None,
+    lane: str | None = None,
 ) -> AuditEvent:
     """The platform audit row for one case event, in the event's own terms.
 
     ``run_id`` is the DW1 run the event happened in, when it did: a decision
     applied when the run resumed names the run, and through it the approval.
     ``approval_id`` names the approval itself where the run is not enough to
-    find it: a decision that was not applied (ticket 14).
+    find it: a decision that was not applied (ticket 14). ``lane``: a
+    background lane moved the case, and the row is that lane's (ADR 0011),
+    never a person's.
     """
     actor = event.actor
     details: dict[str, object] = {
@@ -171,6 +174,19 @@ def audit_row(
             details[name] = value
     if approval_id is not None:
         details["approval_id"] = str(approval_id)
+    if lane is not None:
+        return lane_audit_event(
+            lane=lane,
+            event_id=ids.new_uuid(),
+            tenant_id=TenantId(context.tenant_id),
+            workspace_id=WorkspaceId(context.workspace_id),
+            action=f"sales.{event.action}",
+            resource_type=f"sales_{case_kind.value}_case",
+            resource_id=str(case_id),
+            run_id=run_id,
+            occurred_at=event.occurred_at,
+            details=details,
+        )
     return AuditEvent(
         id=ids.new_uuid(),
         tenant_id=TenantId(context.tenant_id),
@@ -218,9 +234,11 @@ async def save_order(
     *,
     run_id: uuid.UUID | None = None,
     approval_id: uuid.UUID | None = None,
+    lane: str | None = None,
 ) -> None:
     """The order's next state, its event and its audit row, in the open
-    transaction; the caller commits. A person's move labels what the reply
+    transaction; the caller commits; ``lane``: moved by that background lane
+    (`audit_row`). A person's move labels what the reply
     readers read in shadow (ticket 67), in the same transaction."""
     await work.orders.save(after, expected_version=before.case_version, event=event)
     if run_id is None and before.status is not after.status:
@@ -248,6 +266,7 @@ async def save_order(
             event=event,
             run_id=run_id,
             approval_id=approval_id,
+            lane=lane,
         )
     )
 

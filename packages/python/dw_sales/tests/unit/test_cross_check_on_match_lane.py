@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from dw_kernel.errors import ConflictError
+from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.domain.audit import system_actor
 from dw_sales.application.access import SalesScopes
@@ -60,6 +60,7 @@ class _Bravo:
 
     case: OrderCase | None = None
     quantity: int | None = None
+    so_no: str = "SO26-1001"
     down: bool = False
     asked: int = 0
 
@@ -73,7 +74,7 @@ class _Bravo:
         rows = [
             BravoSoRow(
                 row=n,
-                so_no="SO26-1001",
+                so_no=self.so_no,
                 customer_code=customer_code,
                 po_no=r.po_no,
                 po_line=r.line_no,
@@ -188,8 +189,12 @@ async def test_a_certified_match_passes_by_dw_and_never_reaches_the_cross_checke
     ]
     assert read.actor_id.value == LANE
     assert read.details["actor"] == f"system:{CROSS_CHECK_ON_MATCH_LANE}"
+    # The pass and the approval it withdrew read as the lane too (ADR 0011).
+    label = f"system:{CROSS_CHECK_ON_MATCH_LANE}"
     passed = [e for e in world.audit() if e.details.get("to_status") == "cross_checked"]
-    assert [e.actor_id.value for e in passed] == [LANE]
+    assert [(e.actor_id.value, e.details["actor"]) for e in passed] == [(LANE, label)]
+    withdrawn = [e for e in world.runtime.audit.events if e.action == "approval.withdrawn"]
+    assert [(e.actor_id.value, e.details["actor"]) for e in withdrawn] == [(LANE, label)]
 
 
 async def test_an_uncertified_step_leaves_the_match_to_the_cross_checker_and_learns() -> None:
@@ -222,6 +227,9 @@ async def test_a_sampled_match_goes_to_the_cross_checker(monkeypatch: pytest.Mon
     assert await _pending(world, case_id) is not None
     route = await _route(world, case_id)
     assert route is not None and route.route == "audit"
+    # The sample is unannounced: the cross-checker is not told why it is theirs.
+    view = await world.services.orders.get(GIANG.context(), case_id)
+    assert view.cross_check_on_match_exceptions is None
 
 
 @pytest.mark.usefixtures("unsampled")
@@ -235,6 +243,25 @@ async def test_a_difference_goes_to_the_cross_checker_with_its_reason() -> None:
     assert await _pending(world, case_id) is not None
     route = await _route(world, case_id)
     assert route is not None and route.exceptions == (OnMatchException.DIFFERS,)
+    # The cross-checker reads why on the order (ticket 81 review).
+    view = await world.services.orders.get(GIANG.context(), case_id)
+    assert view.cross_check_on_match_exceptions == [OnMatchException.DIFFERS]
+
+
+@pytest.mark.usefixtures("unsampled")
+async def test_bravo_holding_the_po_under_another_so_number_goes_to_the_cross_checker() -> None:
+    """The SO number the PIC typed is what the confirmation prints: rows that
+    match under another number in Bravo do not vouch for it."""
+    world, case_id = await _uploaded()
+    await _certified(world)
+    assert world.order(case_id).bravo_so_no == "SO26-1001"
+
+    await _lane(world, _Bravo(world.order(case_id), so_no="SO26-9999")).tick(ALPHA)
+
+    assert world.order(case_id).status is OrderStatus.UPLOADED_TO_BRAVO
+    assert await _pending(world, case_id) is not None
+    route = await _route(world, case_id)
+    assert route is not None and route.exceptions == (OnMatchException.SO_NO_DIFFERS,)
 
 
 # ------------------------------------------------------------ what it reads --
@@ -291,6 +318,25 @@ async def test_a_non_maker_takes_the_pass_back_and_it_counts_as_an_error() -> No
     bravo = _Bravo(case)
     await _lane(world, bravo).tick(ALPHA)
     assert bravo.asked == 0
+
+
+@pytest.mark.usefixtures("unsampled")
+async def test_someone_who_may_not_cross_check_does_not_take_the_pass_back() -> None:
+    """Asked of the service itself, not only of the route: a non-maker
+    without `sales.order.cross_check` is refused, and the pass stands."""
+    world, case_id = await _uploaded()
+    await _certified(world)
+    await _lane(world, _Bravo(world.order(case_id))).tick(ALPHA)
+    passed = world.order(case_id)
+    no_scope = replace(GIANG, scopes=GIANG.scopes - {SalesScopes.ORDER_CROSS_CHECK})
+    assert no_scope.user_id not in passed.makers
+
+    with pytest.raises(PermissionDeniedError):
+        await world.services.cross_check_reopening.reopen(
+            no_scope.context(), case_id, case_version=passed.case_version
+        )
+
+    assert world.order(case_id) == passed
 
 
 # ------------------------------------------------- what a pass reads as --

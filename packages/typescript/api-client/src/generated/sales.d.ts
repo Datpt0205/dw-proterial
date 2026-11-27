@@ -6113,6 +6113,13 @@ export interface components {
             /** Written */
             written: string | null;
         };
+        /**
+         * OnMatchException
+         * @description Why an order's cross-check stays a person's. Shown to the
+         *     cross-checker, so they know what to look at; never "sample".
+         * @enum {string}
+         */
+        OnMatchException: "rules_off" | "not_awaiting" | "not_from_bravo" | "stale_read_back" | "differs" | "so_no_differs" | "finding" | "typed_by_a_person" | "applied_by_dw" | "revised";
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -6180,6 +6187,8 @@ export interface components {
             coverage: components["schemas"]["CoverageView"];
             /** Cross Check On Match */
             cross_check_on_match?: boolean | null;
+            /** Cross Check On Match Exceptions */
+            cross_check_on_match_exceptions?: components["schemas"]["OnMatchException"][] | null;
             /** Cross Check Required */
             cross_check_required: boolean | null;
             /** Cross Check Stalled */

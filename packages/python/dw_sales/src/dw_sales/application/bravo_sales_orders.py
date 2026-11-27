@@ -116,7 +116,7 @@ class BravoReadBack(BaseModel):
     @property
     def facts(self) -> ReadBackFacts:
         """What the cross-check's verdict reads of it (ticket 81)."""
-        return ReadBackFacts(self.source, self.case_version, len(self.differences))
+        return ReadBackFacts(self.source, self.case_version, len(self.differences), self.so_no)
 
 
 def require_bravo_agrees(read_back: BravoReadBack | None, case: OrderCase) -> None:

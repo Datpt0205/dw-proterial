@@ -579,6 +579,26 @@ export const PASSWORD_FILE = {
   failed_checks_only: "chỉ giá trị kiểm không đạt chờ xác nhận",
 } as const;
 
+/**
+ * Why DW did not pass an order's cross-check on Bravo's read-back (ticket
+ * 81), as the cross-checker reads it on the order.
+ */
+export const ON_MATCH_EXCEPTION: Record<
+  SalesSchemas["OnMatchException"],
+  string
+> = {
+  rules_off: "Quy tắc không bật tự kiểm chéo",
+  not_awaiting: "Đơn không ở bước chờ kiểm chéo",
+  not_from_bravo: "Đọc lại từ tệp xuất, không từ Bravo",
+  stale_read_back: "Đọc lại ở phiên bản hồ sơ khác",
+  differs: "Bravo khác bản đã duyệt",
+  so_no_differs: "Số SO trong Bravo khác số SO đã ghi",
+  finding: "Có cờ kiểm tra",
+  typed_by_a_person: "Có giá trị người nhập tay",
+  applied_by_dw: "Có giá trị DW tự áp dụng",
+  revised: "PO đã sửa hoặc khách đổi",
+};
+
 /** Flags a reader raises on a value it does not take on trust. */
 export const REGION_FLAG = {
   hidden_sheet: "Sheet ẩn",

@@ -32,13 +32,17 @@ sample, and a measure taken on the people's own cross-checks first.
    directly, never through `makers`): the rules stamped say so; the order
    awaits its cross-check with no decision left unapplied; the read-back is
    Bravo's own (`source = gateway`, never an export a person uploaded), at
-   this case version, with no difference; no finding at all, whatever was
+   this case version, with no difference, under the SO number the PIC
+   recorded (a number typed by a person is what the confirmation prints, so
+   Bravo must hold the PO under that one); no finding at all, whatever was
    decided; nothing a person typed (a value, a PRV code, PC's dates, a
    customer's change); nothing DW applied by itself (a value or a code under
    ADR 0015, or a password file's values under ticket 80, so the two never
    stack into an order nobody looked at); no revision and no update loop.
    The transition (`cross_checked_on_match`) asks again, where the effect
-   happens.
+   happens. What it finds is shown on the order to the cross-checker; an
+   order only the measure or the audit sample left to a person is not told
+   why, so the sample stays unannounced.
 3. **Measured as ADR 0015 measures a step**, carved out of T2 for this one
    approval at T1's target (`autonomy.hand_off_error`, 2%) and audit share:
    `measured_route` over what people decided on the same basis
@@ -50,8 +54,9 @@ sample, and a measure taken on the people's own cross-checks first.
 4. **The lane, not a route** (amends ADR 0004, whose "the steps a run takes
    are given only to the graph" holds for every person's decision): the
    worker's `sales_cross_check_on_match` reads each eligible case version
-   once, as itself (`system:sales_cross_check_on_match`), stores the
-   read-back with its audit row, records the route
+   once, as itself (`system:sales_cross_check_on_match`: the read-back, the
+   pass and the approval it withdraws are each audited as the lane, ADR
+   0011), stores the read-back, records the route
    (`sales.order_cross_check_routes`), and on "applied" withdraws the
    pending approval first, then saves the pass with the case version it
    read. A person deciding meanwhile wins; a failed save leaves the order
@@ -76,8 +81,10 @@ sample, and a measure taken on the people's own cross-checks first.
   exception, and what the cross-checker checks beyond transcription), and
   ticket 51's acceptance on Bravo UAT (a DWTEST PO read back field by field).
 - `compare` covers item code, quantity, unit price, requested date and
-  confirmed date per row. The SO header (currency, delivery term, payment
-  terms, DocDate) is not compared: before a tenant turns this on, either it
-  is compared or the pass names what it covered.
+  confirmed date per row, and the verdict the SO number. The SO header
+  (currency, delivery term, payment terms, DocDate) is not compared; the
+  order page names what a pass covered and that the header was not
+  (2026-11-27). Comparing the header stays owed before a tenant turns this
+  on.
 - The PIC is not yet told of a pass by a notice of its own; the order page
   and the trail say it.

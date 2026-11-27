@@ -32,11 +32,13 @@ ReadBackSource = Literal["export", "gateway"]
 
 class ReadBackFacts(NamedTuple):
     """What the verdict reads of a read-back: where it came from, the case
-    version it was compared against, and how many differences it found."""
+    version it was compared against, how many differences it found, and the
+    sales-order number Bravo holds the PO under."""
 
     source: ReadBackSource
     case_version: int
     differences: int
+    so_no: str
 
 
 class OnMatchException(StrEnum):
@@ -54,6 +56,9 @@ class OnMatchException(StrEnum):
     STALE_READ_BACK = "stale_read_back"
     # Bravo holds something else than the paste sheet.
     DIFFERS = "differs"
+    # Bravo holds the PO under another SO number than the one the PIC
+    # recorded: the recorded one is what the confirmation prints.
+    SO_NO_DIFFERS = "so_no_differs"
     # A check raised something, whatever was decided about it.
     FINDING = "finding"
     # A person typed a value, a PRV code, PC's dates, or took a change.

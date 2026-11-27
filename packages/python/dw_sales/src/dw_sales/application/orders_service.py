@@ -150,6 +150,7 @@ class OrderQueries:
             requests = await work.change_requests.for_case(case_id)
             artifacts = await work.artifacts.for_case(CaseKind.ORDER, case_id)
             quote_links = await quote_link_views(work, context, stored.case)
+            on_match = await work.cross_check_routes.get(case_id, stored.case.case_version)
         thread = await case_thread(
             self.threads,
             scope,
@@ -181,6 +182,7 @@ class OrderQueries:
             quote_links=quote_links,
             # Read through the hold alone: the narrow reading refuses it.
             export_hold_only=not seen_by(context, CaseKind.ORDER, stored),
+            on_match_exceptions=on_match.exceptions if on_match else (),
         )
 
     async def line_trail(

@@ -54,7 +54,7 @@ from dw_platform.domain.approval import (
     DecisionOutcome,
     decided_event_type,
 )
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_platform.domain.outbox import OutboxEvent
 
 DECIDED_EVENT_SCHEMA = "1.0"
@@ -407,7 +407,14 @@ class ApproveAndResumeService:
             subject_ref=subject_ref,
         )
 
-    async def withdraw(self, context: AccessContext, *, worker_id: str, subject_ref: str) -> int:
+    async def withdraw(
+        self,
+        context: AccessContext,
+        *,
+        worker_id: str,
+        subject_ref: str,
+        lane: str | None = None,
+    ) -> int:
         """Cancel what a subject waits on, once it moved on without a decision.
 
         Not a decision, and no scope is asked for here: the context calls this
@@ -416,7 +423,9 @@ class ApproveAndResumeService:
         invite a decision on something that is no longer there. The approval
         is cancelled first, so nobody can decide it, then its run is settled
         as cancelled. One already decided is left to its decision. Returns how
-        many were withdrawn.
+        many were withdrawn. ``lane``: a background lane moved the subject,
+        and the withdrawal is audited as that lane (ADR 0011), never as a
+        person.
         """
         withdrawn = 0
         for waiting in await self.waiting(context, worker_id=worker_id, subject_ref=subject_ref):
@@ -443,9 +452,12 @@ class ApproveAndResumeService:
                     continue
                 request.cancel()
                 await uow.approvals.save(request)
+                event_id = self.id_generator.new_uuid()
+                at = self.clock.now().astimezone(UTC)
+                details: dict[str, object] = {"approval_type": request.approval_type}
                 await uow.audit.append(
                     AuditEvent(
-                        id=self.id_generator.new_uuid(),
+                        id=event_id,
                         tenant_id=TenantId(context.tenant_id),
                         workspace_id=WorkspaceId(context.workspace_id),
                         actor_id=UserId(context.principal_id),
@@ -453,8 +465,21 @@ class ApproveAndResumeService:
                         resource_type="approval_request",
                         resource_id=str(request.id),
                         run_id=waiting.run_id,
-                        details={"approval_type": request.approval_type},
-                        occurred_at=self.clock.now().astimezone(UTC),
+                        details=details,
+                        occurred_at=at,
+                    )
+                    if lane is None
+                    else lane_audit_event(
+                        lane=lane,
+                        event_id=event_id,
+                        tenant_id=TenantId(context.tenant_id),
+                        workspace_id=WorkspaceId(context.workspace_id),
+                        action="approval.withdrawn",
+                        resource_type="approval_request",
+                        resource_id=str(request.id),
+                        run_id=waiting.run_id,
+                        details=details,
+                        occurred_at=at,
                     )
                 )
                 await uow.commit()

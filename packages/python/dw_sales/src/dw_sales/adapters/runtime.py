@@ -34,7 +34,12 @@ class SubjectApprovalsPort(Protocol):
     ) -> list[WaitingRun]: ...
 
     async def withdraw(
-        self, context: AccessContext, *, worker_id: str, subject_ref: str
+        self,
+        context: AccessContext,
+        *,
+        worker_id: str,
+        subject_ref: str,
+        lane: str | None = None,
     ) -> int: ...
 
 
@@ -98,8 +103,12 @@ class RuntimeDw1Runs:
         # and the next submit withdraws it.
         return waiting[-1].approval_request_id if waiting else None
 
-    async def withdraw(self, context: AccessContext, subject_ref: str) -> None:
-        await self.approvals.withdraw(context, worker_id=self.worker_id, subject_ref=subject_ref)
+    async def withdraw(
+        self, context: AccessContext, subject_ref: str, *, lane: str | None = None
+    ) -> None:
+        await self.approvals.withdraw(
+            context, worker_id=self.worker_id, subject_ref=subject_ref, lane=lane
+        )
 
     async def unfinished(self, context: AccessContext, subject_ref: str) -> bool:
         # Running, or paused on its approval: any status that is not terminal.

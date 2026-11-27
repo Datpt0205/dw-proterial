@@ -33,6 +33,7 @@ import { ActionError, findingKeyLabel } from "../../_lib/errors";
 import { CLOSE_REASON, label } from "../../_lib/labels";
 import {
   orderOffers,
+  STALLED_CROSS_CHECK,
   type Offer,
   type OrderAction,
   type Viewer,
@@ -163,7 +164,7 @@ export function OrderActions({
         { v: order.case_version },
         (key) =>
           salesApi().reopenCrossCheck(order.case_id, order.case_version, key),
-        "Đã mở lại kiểm chéo: người nhập Bravo gửi kiểm chéo lại cho người kiểm",
+        `Đã mở lại kiểm chéo. ${STALLED_CROSS_CHECK}`,
       ),
     );
 

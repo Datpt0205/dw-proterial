@@ -58,3 +58,12 @@ addendum "a password file's values, by exception" (Proposed).
 Owed (Đạt): the word that the unscanned decrypted bytes may be read with no
 person on each value, or a scan of the decrypted bytes in the reader
 sandbox first. Until then no tenant version should say `failed_checks_only`.
+
+**2026-11-27, review of 80-81.** The order page's signal for the switch was
+untested at every layer. Now asserted: `OrderView.password_file` reads
+`every_value` for the ticket-17 files, `failed_checks_only` under the tenant
+version, `None` for the same file sent plain (`test_locked_files.py`); the
+"Tệp có mật khẩu" row draws both words and is absent otherwise
+(`cross-check-on-match.test.tsx`). Mutation: `_password_file` returning None,
+its branches swapped, and the page row removed each turned a test red.
+Status unchanged: off, Đạt's word owed.

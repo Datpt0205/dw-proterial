@@ -261,8 +261,11 @@ class PendingDecisionsPort(Protocol):
         """The approval the case's run waits on, or None."""
         ...
 
-    async def withdraw(self, context: AccessContext, subject_ref: str) -> None:
-        """Cancel it: the case moved on without the decision."""
+    async def withdraw(
+        self, context: AccessContext, subject_ref: str, *, lane: str | None = None
+    ) -> None:
+        """Cancel it: the case moved on without the decision; ``lane``: a
+        background lane moved it, and is audited as itself (ADR 0011)."""
         ...
 
     async def unfinished(self, context: AccessContext, subject_ref: str) -> bool:

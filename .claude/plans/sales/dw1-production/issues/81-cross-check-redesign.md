@@ -90,3 +90,44 @@ row); the customer-facing words of `checked_on_read_back` checked by
 Proterial (vi/en/ja drafted). Left: a notice to the PIC of a pass (today the
 page and the trail say it); the process map draws the
 `uploaded_to_bravo -> cross_checked` edge as Sales' only.
+
+**2026-11-27, review findings fixed (8 checked, 8 real).**
+
+- The SO number: the verdict now reads Bravo's SO number
+  (`ReadBackFacts.so_no`) and refuses one other than the PIC recorded
+  (`OnMatchException.SO_NO_DIFFERS`, "Số SO trong Bravo khác số SO đã ghi").
+  Measured before: a Bravo answering SO26-9999 for a case recording
+  SO26-1001 passed; now it stays the cross-checker's. Not added to
+  `TYPED_BY_A_PERSON`: every order's SO number is typed, so that would keep
+  every order a person's; comparing it with Bravo is what checks it.
+  Basis left `cross_check_on_match@1.0.0`: no route has been recorded
+  anywhere (switch off, branch not deployed).
+- Lane audit (ADR 0011): the pass is audited through `save_order(...,
+  lane=)` → `audit_row` → `lane_audit_event`, and the withdrawn approval
+  through `ApproveAndResumeService.withdraw(..., lane=)` (platform: an
+  optional `lane`, `PendingDecisionsPort`/`SubjectApprovalsPort` carry it);
+  both rows read `details.actor = system:sales_cross_check_on_match`.
+- The exceptions are read: `OrderCaseView.cross_check_on_match_exceptions`
+  (this version's route; None when nothing was found, so an audit sample
+  stays unannounced) and an info alert on the order page, "DW không tự kiểm
+  chéo đơn này — Cần xem: …" (labels `ON_MATCH_EXCEPTION`).
+- The DW pass row says what it covered: "khớp số SO và từng dòng (mã hàng,
+  số lượng, đơn giá, ngày); đầu SO (…) chưa đối chiếu" (`DW_PASS_COVERS`).
+  Comparing the header itself stays owed.
+- The reopen toast no longer says the cross-check was sent again: "Đã mở lại
+  kiểm chéo." + `STALLED_CROSS_CHECK` (who must press "Gửi kiểm chéo lại").
+- Tests added: domain (another SO number), lane (SO differs; pass and
+  withdrawal audited as the lane; differs shown on the view, sample not;
+  a non-maker without `sales.order.cross_check` refused by the service),
+  `test_sales_api_cross_check_reopen.py` (Postgres: HA 403, maker 409, beta
+  404, GIANG 200 leaving the order stalled and audited as GIANG; a person's
+  cross-check 409), `cross-check-on-match.test.tsx` (the offer and its two
+  reasons, not offered on a person's check, the toast, the pass row, the
+  exceptions alert). Mutation, each red: the SO-number guard; each `lane=`;
+  the service's scope gate; the view wiring; the reopen maker check (API);
+  the offer's scope and maker reasons; the toast words; the pass words; the
+  alert.
+
+Seen, not mine: `test_cross_check_recovery.py`'s two My Work tests fail
+on the current tree (`acknowledge_export` where `cross_check`/`confirm` is
+expected), not touched here; likely since 4bb0b346 (NOC/ESF hold listed as the export PIC's work), not bisected.

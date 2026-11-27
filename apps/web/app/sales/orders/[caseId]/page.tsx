@@ -29,6 +29,7 @@ import {
   FINDING_CODE,
   label,
   NOT_APPLIED_REASON,
+  ON_MATCH_EXCEPTION,
   ORDER_STATE,
   SALES_ROLE,
 } from "../../_lib/labels";
@@ -38,7 +39,7 @@ import {
   unopenedSources,
   useServedRevision,
 } from "../../_lib/served";
-import { coverageStatement } from "../../_lib/statements";
+import { coverageStatement, DW_PASS_COVERS } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
 import {
   exportControlHold,
@@ -333,6 +334,16 @@ function OrderDetail() {
                 }, nhưng DW1 không áp dụng được lúc ${formatDateTime(data.unapplied_decision.at)}. Lý do: ${label(NOT_APPLIED_REASON, data.unapplied_decision.reason_code)}. `
               : ""
           }Người nhập Bravo hoặc ${label(SALES_ROLE, "sales_head")} bấm “Gửi kiểm chéo lại” để kiểm ở phiên bản ${data.case_version}.`}
+        />
+      ) : null}
+      {data.cross_check_on_match_exceptions?.length ? (
+        <Alert
+          type="info"
+          showIcon
+          title="DW không tự kiểm chéo đơn này"
+          description={`Cần xem: ${data.cross_check_on_match_exceptions
+            .map((e) => ON_MATCH_EXCEPTION[e])
+            .join("; ")}.`}
         />
       ) : null}
 
@@ -635,11 +646,12 @@ function OrderDetail() {
                     key: "check",
                     label: "Kiểm chéo",
                     children: data.cross_checked_on_read_back
-                      ? `DW đối chiếu khớp với Bravo, không có người kiểm · ${formatDateTime(data.cross_checked_at)}`
+                      ? `${DW_PASS_COVERS} · ${formatDateTime(data.cross_checked_at)}`
                       : data.cross_checked_by
                         ? `${name(data.cross_checked_by)} · ${formatDateTime(data.cross_checked_at)}`
                         : "Chưa",
                   },
+
                   {
                     key: "confirm",
                     label: "Xác nhận",

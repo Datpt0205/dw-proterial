@@ -340,6 +340,9 @@ async def test_a_locked_workbook_and_pdf_whose_mail_carries_the_password_are_rea
             assert {f.field for f in line.flags if f.flag is password} == set(COLUMN_FIELDS)
         if document.total is not None:
             assert password in {f.flag for f in document.total.flags}
+        # The order page says every value waits (ticket 80's view, its default).
+        view = await world.services.orders.get(AN.context(), case.case_id)
+        assert view.password_file == "every_value"
         # Every anchor names the customer's file, not the opened bytes.
         message = await world.inbox.get_message(ALPHA, message_id)
         assert message is not None
@@ -477,6 +480,12 @@ async def test_under_rules_that_say_so_a_password_file_waits_only_on_its_failed_
         assert [f for f in flags if f.flag is password] == []
         sent = as_sent[message_id][1]
         assert isinstance(sent, OrderCase)
+        # The order page still names the file as opened with a password, and
+        # says only failed checks wait; the same file sent plain says nothing.
+        view = await world.services.orders.get(AN.context(), case.case_id)
+        assert view.password_file == "failed_checks_only"
+        plain_view = await plain.services.orders.get(AN.context(), sent.case_id)
+        assert plain_view.password_file is None
 
         def found(c: OrderCase) -> list[tuple[str, int | None, str | None]]:
             return sorted((f.code.value, f.line_no or 0, f.actual) for f in c.findings)

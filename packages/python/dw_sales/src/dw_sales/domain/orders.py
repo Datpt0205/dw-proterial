@@ -3202,6 +3202,8 @@ class OrderCase(BaseModel):
             found.add(OnMatchException.STALE_READ_BACK)
         if read_back.differences:
             found.add(OnMatchException.DIFFERS)
+        if read_back.so_no != self.bravo_so_no:
+            found.add(OnMatchException.SO_NO_DIFFERS)
         if self.findings:
             found.add(OnMatchException.FINDING)
         if self.header_corrections or any(

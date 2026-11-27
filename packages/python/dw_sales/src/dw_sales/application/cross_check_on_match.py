@@ -275,7 +275,11 @@ class CrossCheckOnMatchLane:
         if route == "applied":
             assert digest is not None and facts is not None
             # Withdrawn first, so nobody decides it while the case passes.
-            await self.decisions.withdraw(context, subject_of(CaseKind.ORDER, case.case_id))
+            await self.decisions.withdraw(
+                context,
+                subject_of(CaseKind.ORDER, case.case_id),
+                lane=CROSS_CHECK_ON_MATCH_LANE,
+            )
         try:
             async with self.uow(scope) as work:
                 await work.cross_check_routes.add(record)
@@ -291,7 +295,15 @@ class CrossCheckOnMatchLane:
                         reason_code="read_back_matches",
                         occurred_at=now,
                     )
-                    await save_order(work, context, self.ids, case, after, event)
+                    await save_order(
+                        work,
+                        context,
+                        self.ids,
+                        case,
+                        after,
+                        event,
+                        lane=CROSS_CHECK_ON_MATCH_LANE,
+                    )
                 await work.commit()
         except ConflictError:
             logger.info("sales_cross_check_on_match: the case moved on before it was routed")

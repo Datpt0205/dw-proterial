@@ -75,6 +75,7 @@ from dw_sales.domain.change_requests import (
     ChangeRequestState,
     ReadBy,
 )
+from dw_sales.domain.cross_check_on_match import OnMatchException
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
@@ -1237,6 +1238,11 @@ class OrderCaseView(BaseModel):
     # Whether Bravo's matching read-back may pass the cross-check (ticket 81),
     # as stamped; None reads as off.
     cross_check_on_match: bool | None = None
+    # Why DW did not pass this version's cross-check on Bravo's read-back
+    # (ticket 81): what the cross-checker looks at. None: not read at this
+    # version, or nothing found; an order that only the measure or the audit
+    # sample left to a person is not told so (ADR 0015's sample is unannounced).
+    cross_check_on_match_exceptions: list[OnMatchException] | None = None
     export_control_mode: str | None
     duplicate_of_case: uuid.UUID | None
     duplicate_of_so: str | None
@@ -1617,6 +1623,7 @@ def order_case(
     confirmation_copy: InboundMessage | None = None,
     quote_links: Sequence[QuoteLinkView] = (),
     export_hold_only: bool = False,
+    on_match_exceptions: Sequence[OnMatchException] = (),
 ) -> OrderCaseView:
     """The case for one caller. ``servings`` are every region served of it
     (`SourceServedPort.servings`): none by default, so no prepared value
@@ -1684,6 +1691,7 @@ def order_case(
         release_manifest_ref=release_manifest_ref,
         cross_check_required=case.cross_check_required,
         cross_check_on_match=case.cross_check_on_match,
+        cross_check_on_match_exceptions=list(on_match_exceptions) or None,
         export_control_mode=case.export_control_mode,
         duplicate_of_case=case.duplicate_of_case,
         duplicate_of_so=case.duplicate_of_so,
