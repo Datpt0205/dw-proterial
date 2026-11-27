@@ -279,7 +279,7 @@ export const BRAVO_WRITE_FIELD = {
  */
 export const BRAVO_WRITE_CHECK = {
   token: "Phiếu duyệt",
-  target: "Bravo đã đổi từ lúc đề xuất",
+  target: "Bravo đang dùng",
   kind: "Loại ghi chưa chạy",
   switch: "Loại ghi chưa bật cho đơn vị",
   ledger: "Phiếu duyệt đã dùng",
@@ -288,6 +288,21 @@ export const BRAVO_WRITE_CHECK = {
   rules: "Quy tắc màn hình Bravo",
   lock: "Dòng đang khóa trong Bravo",
   write: "Lúc ghi vào Bravo",
+} as const;
+
+/**
+ * Why the gateway refused at its `target` step (ticket 85;
+ * `dw_bravo_gateway.targets`, `pipeline`): the one check covers three
+ * reasons, each with its own way out. Another reason shows as the gateway
+ * said it.
+ */
+export const BRAVO_WRITE_REASON = {
+  target_changed:
+    "Bravo đang dùng đã đổi từ lúc đề xuất: đề xuất lại trên Bravo đang dùng",
+  target_unconfigured:
+    "Gateway chưa có tài khoản của Bravo đang dùng: nhờ quản trị cấp tài khoản",
+  target_unreadable:
+    "Quy tắc chưa chỉ rõ Bravo nào (Bravo thật cần lần chạy UAT): sửa quy tắc “DW1 tự ghi vào Bravo”",
 } as const;
 
 /** Design's result for a line in Bravo (`DesignCheck`). */

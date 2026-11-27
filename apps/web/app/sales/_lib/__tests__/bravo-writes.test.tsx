@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
 import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { AN, orderInBravo } from "./fixtures";
+import { BRAVO_WRITE_REASON } from "../labels";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Write = SalesSchemas["BravoLineWriteView"];
@@ -51,6 +52,7 @@ import {
   NO_SCOPE,
   OPEN_PROPOSAL,
   QUANTITY_DECIMALS,
+  STALE_PROPOSAL,
   quantityOf,
 } from "../../orders/[caseId]/bravo-writes";
 
@@ -230,6 +232,51 @@ describe(
         ).toBeTruthy();
       },
     );
+
+    // A popover opened on top of the table: the slowest render here.
+    it(
+      "words each reason the gateway gives at its target step (ticket 85 review)",
+      { timeout: 60_000 },
+      async () => {
+        WRITES = [
+          write({
+            status: "refused",
+            check: "target",
+            reason: "target_unconfigured",
+          }),
+        ];
+        panel(twoLines());
+        expect(await screen.findByText("Ở bước: Bravo đang dùng")).toBeTruthy();
+        fireEvent.click(
+          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+        );
+        expect(
+          await screen.findByText(
+            `Bravo trả lời: ${BRAVO_WRITE_REASON.target_unconfigured}`,
+          ),
+        ).toBeTruthy();
+      },
+    );
+
+    it("tags a proposal read from a Bravo no longer in use, and says it will be refused", async () => {
+      TARGETS = { ...UAT, current: "production", production: true };
+      WRITES = [write({ status: "proposed", target: "uat" })];
+      panel(twoLines());
+      expect(await screen.findByLabelText("Đọc từ Bravo UAT")).toBeTruthy();
+      await waitFor(() =>
+        expect(screen.getByText(STALE_PROPOSAL)).toBeTruthy(),
+      );
+      expect(screen.queryByText(OPEN_PROPOSAL)).toBeNull();
+      expect(propose(1).disabled).toBe(true);
+    });
+
+    it("tags no row read from the Bravo in use", async () => {
+      WRITES = [write({ status: "proposed", target: "uat" })];
+      panel(twoLines());
+      await screen.findByText(OPEN_PROPOSAL);
+      expect(screen.queryByLabelText("Đọc từ Bravo UAT")).toBeNull();
+      expect(screen.queryByText(STALE_PROPOSAL)).toBeNull();
+    });
 
     it("offers one proposal per line while the line's last one waits", async () => {
       WRITES = [write({ status: "proposed" })];

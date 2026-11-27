@@ -1,6 +1,6 @@
 # 85 — The gateway on Bravo UAT, switched to production from the portal
 
-Status: built 2026-11-27, offline (throwaway SQL Server); running it live waits on the UAT logins and script 10 (needs-info)
+Status: built 2026-11-27 and its review fixed, offline (throwaway SQL Server); running it live waits on the UAT logins and script 10 (needs-info); two review points owed to Đạt (below)
 Blocked by: none for the code; the UAT logins and script 10 (ticket 75) to run it live
 Category: Bravo gateway
 
@@ -152,3 +152,73 @@ red when the exception is removed); the editor and the rules list word it
 exception to the head's direct path for `sales_bravo_writes` (with one head,
 the admin holding `sales_rules_editor` proposes and the head decides).
 
+### 2026-11-27 — review fixed
+
+Ten findings, each checked against the code first; eight fixed, one fixed
+fail-closed pending Đạt's word, one left to Đạt.
+
+- **The old credential set (security).** `DW_BRAVO_GATEWAY_BRAVO_*` was read
+  as UAT's, but before this ticket that set's Bravo was named by
+  `DW_BRAVO_GATEWAY_ENVIRONMENT`, `production` unless set, so a gateway
+  upgraded in place could label the real Bravo "uat". Confirmed with
+  `GatewaySettings().targets()`. Now the old set refuses to start, naming
+  the two prefixes to move it to; compose no longer passes it and
+  `.env.example` says so. `f04b1390d99f`'s note now says the `uat` backfill
+  is a label, not a fact (nothing reads a ledger row's target; an open
+  proposal from before has no target in its approval and is proposed again).
+  Test: `test_the_single_set_before_ticket_85_does_not_start` (alone, with
+  the UAT set, with the production set), red with the refusal removed.
+- **A self-applied version at the gateway.** `SqlSwitches` read any approved
+  `sales_bravo_writes` version. A version its proposer applied alone
+  (`applied_directly`) now reads as no version, the platform's file: every
+  kind off, target UAT. Tests in `test_gateway_switches.py`, both red with
+  the check removed.
+- **The sync after a switch.** `bravo.mirror_cursors.target` (migration
+  `2a03c3efa356`, CHECK `uat|production`, NULL before); a sync page's answer
+  carries the `Bravo-Target` header (`SyncAnswer`; an answer naming none is
+  could-not-read). When another Bravo answers than the cursor's, the lane
+  marks that table's copy gone, forgets the cursor and reads the table whole
+  from the Bravo that answered; a Bravo that changes between pages moves no
+  cursor. Unit (`test_bravo_sync.py`, three tests, each red under its
+  mutation; the client's header check red too) and integration
+  (`test_mirror_db.py`: restart of one tenant only, CHECK on the target).
+- **The rules editor's card.** `GET /sales/bravo/targets` now answers
+  `sales.case.read` or `sales.rules.propose` (the service checks; the route
+  no longer requires case read), so the tenant's IT admin who proposes the
+  switch sees which Bravo is in use. The card draws loading and the
+  region's error state, and "Đổi Bravo…" waits, with its reason, until the
+  target is read. Tests: service (case reader, rules editor, neither), page
+  (rules-only persona sees the tag; a refused read disables the switch),
+  each red under its mutation. The disabled-without-scope state stays only
+  in the card's own test: the page is gated on the same scope.
+- **One owner for "decided by a second person".** The web copy of
+  `DECIDED_BY_A_SECOND` is gone; `RulesInForceView.decided_by_a_second`
+  carries the server's set, and the rules page and editor read it. The
+  page's column, subtitle and help now say which keys wait on another
+  approver; the editor tells the head "bạn không tự duyệt được" for such a
+  key. Tests: server (`test_rules.py`, red with an empty list), page (a list
+  naming KPI makes the head's KPI version "Gửi duyệt"), red with a hard-coded
+  key.
+- **Target refusals in words, and each proposal's Bravo.** The `target`
+  check reads "Bravo đang dùng"; `target_changed`, `target_unconfigured` and
+  `target_unreadable` each have their own sentence (`BRAVO_WRITE_REASON`). A
+  row read from a Bravo other than the one in use carries that Bravo's tag,
+  and a waiting proposal stamped with the old Bravo says it will be refused
+  and how to clear it (`STALE_PROPOSAL`). Tests red under each mutation.
+- `rule-drafts.test.tsx` and `rules-process.test.tsx` failed on this branch
+  since 2de7cb9d (their API mock had no `bravoTargets`); mocked now.
+
+**Not built, owed to Đạt.**
+- The write-kind switches are shared by both Bravos: a kind needs `enabled`
+  and a `uat_proof` to write even on UAT, and every kind switched on for the
+  UAT run is live on production as soon as a version names production. My
+  recommendation: a kind writes on UAT when `enabled`; on production only
+  with its `uat_proof` too (a schema version 1.2.0, the gateway and the
+  domain validator). It loosens what UAT accepts, so it is Đạt's call.
+- One head: only `sales_head` holds `sales.rules.approve`, so in a tenant
+  with one head the head's own `sales_bravo_writes` version can never be
+  decided (the admin holding `sales_rules_editor` proposes and the head
+  decides). The editor now says another approver decides; who that is
+  stays Đạt's decision.
+- Confirm the old credential set refusing to start (rather than being read
+  by its old `environment`).

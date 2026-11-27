@@ -105,17 +105,17 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
 ]);
 
 /**
- * Rules a second person decides, the head's own version included (tickets
- * 63, 85: which Bravo writes DW1 performs, and on which Bravo); the server's
- * `DECIDED_BY_A_SECOND` refuses otherwise, this only words the drawer.
+ * Whether the caller's own version of ``key`` applies without an approval:
+ * the head's does, but for a key a second person decides (tickets 63, 85),
+ * which the server lists (`decided_by_a_second`, the set it decides by).
+ * This only words the drawer; the server decides.
  */
-export const DECIDED_BY_A_SECOND: ReadonlySet<RuleKey> = new Set<RuleKey>([
-  "sales_bravo_writes",
-]);
-
-/** Whether the caller's own version of ``key`` applies without an approval. */
-export function appliesAtOnceFor(key: RuleKey, approves: boolean): boolean {
-  return approves && !DECIDED_BY_A_SECOND.has(key);
+export function appliesAtOnceFor(
+  view: Pick<RulesView, "decided_by_a_second">,
+  key: RuleKey,
+  approves: boolean,
+): boolean {
+  return approves && !view.decided_by_a_second.includes(key);
 }
 
 /**

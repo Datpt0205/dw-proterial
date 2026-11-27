@@ -6,7 +6,7 @@ import {
   BravoTargetCard,
   NO_RULES_SCOPE,
 } from "../../_components/bravo-target";
-import { appliesAtOnceFor } from "../rules";
+import { appliesAtOnceFor, type RuleKey } from "../rules";
 
 type Targets = SalesSchemas["BravoTargetsView"];
 
@@ -77,9 +77,15 @@ describe("the Bravo target switch on the rules page (ticket 85)", () => {
 });
 
 describe("who decides a switch of Bravo (tickets 63, 85)", () => {
-  it("never words the head's own Bravo version as applied at once", () => {
-    expect(appliesAtOnceFor("sales_bravo_writes", true)).toBe(false);
-    expect(appliesAtOnceFor("sales_kpi", true)).toBe(true);
-    expect(appliesAtOnceFor("sales_kpi", false)).toBe(false);
+  it("words a key as applied at once only where the server's list leaves it out", () => {
+    const listed: { decided_by_a_second: RuleKey[] } = {
+      decided_by_a_second: ["sales_bravo_writes"],
+    };
+    expect(appliesAtOnceFor(listed, "sales_bravo_writes", true)).toBe(false);
+    expect(appliesAtOnceFor(listed, "sales_kpi", true)).toBe(true);
+    expect(appliesAtOnceFor(listed, "sales_kpi", false)).toBe(false);
+    expect(
+      appliesAtOnceFor({ decided_by_a_second: [] }, "sales_bravo_writes", true),
+    ).toBe(true);
   });
 });

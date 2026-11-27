@@ -25,8 +25,10 @@ import { salesApi } from "../../_lib/api";
 import { bravoWriteValue } from "../../_lib/bravo-write";
 import { ActionError } from "../../_lib/errors";
 import {
+  BRAVO_TARGET,
   BRAVO_WRITE_CHECK,
   BRAVO_WRITE_FIELD,
+  BRAVO_WRITE_REASON,
   BRAVO_WRITE_STATUS,
   label,
 } from "../../_lib/labels";
@@ -56,6 +58,9 @@ export const QUANTITY_DECIMALS = 4;
 export const NO_SCOPE =
   "Bạn không có quyền đề xuất ghi vào Bravo (cần quyền ghi Bravo).";
 export const OPEN_PROPOSAL = "Đề xuất trước của dòng này đang chờ duyệt.";
+/** An open proposal read from a Bravo that is no longer the one in use. */
+export const STALE_PROPOSAL =
+  "Đề xuất đang chờ của dòng này đọc từ Bravo khác Bravo đang dùng: khi duyệt sẽ bị từ chối. Nhờ người duyệt từ chối phiếu rồi đề xuất lại.";
 
 const TONE: Record<Write["status"], StatusTone> = {
   proposed: "warn",
@@ -71,6 +76,25 @@ export function openFor(writes: readonly Write[], lineNo: number): boolean {
   return writes.some((w) => w.line_no === lineNo && w.status === "proposed");
 }
 
+/**
+ * A proposal still waiting, stamped with a Bravo other than the one in use
+ * now: the gateway refuses it (`target_changed`), so the page says so before
+ * the approver finds out (ticket 85 review).
+ */
+export function staleFor(
+  writes: readonly Write[],
+  lineNo: number,
+  current: Write["target"] | null | undefined,
+): boolean {
+  return (
+    !!current &&
+    writes.some(
+      (w) =>
+        w.line_no === lineNo && w.status === "proposed" && w.target !== current,
+    )
+  );
+}
+
 /** Where the gateway stopped a write that did not go through. */
 const STOPPED = new Set<Write["status"]>(["refused", "in_doubt"]);
 
@@ -78,7 +102,13 @@ const STOPPED = new Set<Write["status"]>(["refused", "in_doubt"]);
  * A line's latest proposal: its state, what it changes, the approval it
  * opened, and, once the gateway answered, where it stopped and what it said.
  */
-function LatestWrite({ write: w }: { write: Write }) {
+function LatestWrite({
+  write: w,
+  current,
+}: {
+  write: Write;
+  current: Write["target"] | null | undefined;
+}) {
   const stoppedAt =
     STOPPED.has(w.status) && w.check
       ? `Ở bước: ${label(BRAVO_WRITE_CHECK, w.check)}`
@@ -93,13 +123,21 @@ function LatestWrite({ write: w }: { write: Write }) {
           {`${label(BRAVO_WRITE_FIELD, w.field)}: ${bravoWriteValue(w.field, w.before)} → ${bravoWriteValue(w.field, w.after)}`}
         </span>
         <Link href={`/approvals/${w.approval_id}`}>Phiếu duyệt</Link>
+        {/* The Bravo it was read from, where it is not the one in use. */}
+        {w.target !== current ? (
+          <span aria-label={`Đọc từ ${BRAVO_TARGET[w.target]}`}>
+            <BravoTargetTag target={w.target} />
+          </span>
+        ) : null}
       </Space>
       {stoppedAt || w.reason || w.warnings.length > 0 ? (
         <Space wrap size={4}>
           {stoppedAt ? <Typography.Text>{stoppedAt}</Typography.Text> : null}
           {w.reason || w.warnings.length > 0 ? (
             <InfoTip label={`Bravo trả lời về dòng ${w.line_no}`}>
-              {w.reason ? <div>Bravo trả lời: {w.reason}</div> : null}
+              {w.reason ? (
+                <div>Bravo trả lời: {label(BRAVO_WRITE_REASON, w.reason)}</div>
+              ) : null}
               {w.warnings.length > 0 ? (
                 <div>Cảnh báo, khác biệt: {w.warnings.join("; ")}</div>
               ) : null}
@@ -214,7 +252,11 @@ function BravoWrites({
                 key: "latest",
                 render: (_: unknown, l: Line) => {
                   const w = latest(l.line_no);
-                  return w ? <LatestWrite write={w} /> : "Chưa có";
+                  return w ? (
+                    <LatestWrite write={w} current={current} />
+                  ) : (
+                    "Chưa có"
+                  );
                 },
               },
               {
@@ -223,9 +265,18 @@ function BravoWrites({
                 fixed: "right",
                 render: (_: unknown, l: Line) => {
                   const open = openFor(listed, l.line_no);
+                  const stale = staleFor(listed, l.line_no, current);
                   return (
                     <GuardedButton
-                      reason={!may ? NO_SCOPE : open ? OPEN_PROPOSAL : null}
+                      reason={
+                        !may
+                          ? NO_SCOPE
+                          : stale
+                            ? STALE_PROPOSAL
+                            : open
+                              ? OPEN_PROPOSAL
+                              : null
+                      }
                       inlineReason={may}
                       aria-label={`Đề xuất ghi dòng ${l.line_no} vào Bravo`}
                       onClick={() => setLine(l)}
