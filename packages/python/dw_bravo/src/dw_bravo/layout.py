@@ -18,7 +18,7 @@ runner does with no code change.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
@@ -201,6 +201,42 @@ class Template:
 
 
 @dataclass(frozen=True)
+class WindowLookup:
+    """A lookup box of the screen's window (its form layout, `IsTemplate` 0:
+    8213 for `EDIT_BizDocSO`) that binds: when ``column`` of ``table`` takes a
+    value, the lookup's row for it is read and its members set on the row.
+    It acts on the data, not only on a person's typing: the client read the
+    unit lookup (`vB20ItemUnit_Lookup`) right after the item lookup set the
+    line's unit through 8212's `Eval_Detail_Unit_DefaultValue` (UAT trace
+    11-25 16:50:01). The client's read applies the `FilterKey` and the
+    `SelectKey` (16:50:38: the customer's `IsGroup=0 AND ISNULL(Property,'')
+    =1 ...`). ``editable`` is the editor's `Expr`, when a person may type
+    the column; ``unread`` what is not read, refused when it binds."""
+
+    name: str
+    table: str  # "Parent" or the grid's DataMember (a child alias)
+    column: str
+    lookup_key: str
+    filter_key: str | None
+    select_key: str | None
+    editable: str | None
+    members: tuple[BindingMember, ...]
+    unread: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Window:
+    """What of a screen's window sets values: its binding lookups, by (table,
+    lower column), and each grid's columns in the window's order."""
+
+    lookups: Mapping[tuple[str, str], WindowLookup]
+    grid_columns: Mapping[str, tuple[str, ...]]
+
+    def lookup(self, table: str, column: str) -> WindowLookup | None:
+        return self.lookups.get((table, column.lower()))
+
+
+@dataclass(frozen=True)
 class Layout:
     form: str
     tables: Mapping[str, Table]
@@ -212,6 +248,11 @@ class Layout:
     missing_template: str | None = None
     # The template, read, once it is in hand (`with_template`).
     template: Template | None = None
+    # The screen's window (`read_window`), once in hand (`with_window`); and
+    # why it is not, when the screen's window was asked for and could not be
+    # read: which columns bind is then unknown, so no plan is complete.
+    window: Window | None = None
+    missing_window: str | None = None
 
     @property
     def parent(self) -> Table:
@@ -437,6 +478,103 @@ def read_template(xml_text: str, name: str) -> Template:
                     )
                 )
     return Template(name, tuple(guards))
+
+
+def _lookup(
+    element: ET.Element, name: str, table: str, column: str, editable: str | None
+) -> WindowLookup:
+    members, unread = _binding_members(element.find("bindingMembers"))  # type: ignore[arg-type]
+    lookup_key = _text(element.find("LookupKey"))
+    if (_text(element.find("ClassName")) or "") != "BravoLookupBox" or lookup_key is None:
+        unread = (*unread, f"{name}: a binding that is not a BravoLookupBox with a LookupKey")
+    return WindowLookup(
+        name=name,
+        table=table,
+        column=column,
+        lookup_key=lookup_key or "",
+        filter_key=_text(element.find("FilterKey")),
+        select_key=_text(element.find("SelectKey")),
+        editable=editable,
+        members=members,
+        unread=unread,
+    )
+
+
+def read_window(xml_text: str, form: str) -> Window:
+    """Read a screen's window (its form layout): every lookup box that binds
+    (`bindingMembers`), on the header (a control naming its `DataMember`) or
+    on a grid's column (`BravoGridContainer`/`Items`/`Item_N`, whose
+    `DataMember` is the child table), and each grid's columns in order.
+    A binding whose column cannot be placed, or two on one column, refuse
+    the window whole: which columns bind would not be known."""
+    root = _parse(xml_text, f"{form} window")
+    if root.find("Tables") is not None:
+        raise UnsupportedSyntaxError(f"{form}: a DataSource, not a window")
+    lookups: dict[tuple[str, str], WindowLookup] = {}
+    grids: dict[str, tuple[str, ...]] = {}
+    placed: set[int] = set()
+
+    def add(lookup: WindowLookup) -> None:
+        key = (lookup.table, lookup.column.lower())
+        if key in lookups:
+            raise UnsupportedSyntaxError(f"{form}: two lookups bind {lookup.table}.{lookup.column}")
+        lookups[key] = lookup
+
+    for container in root.iter():
+        if _text(container.find("ClassName")) != "BravoGridContainer":
+            continue
+        items = container.find("Items")
+        for item in [] if items is None else _elements(items):
+            alias = _text(item.find("DataMember"))
+            cols = item.find("Cols")
+            if alias is None or cols is None:
+                raise UnsupportedSyntaxError(f"{form}: grid {item.tag} names no table or columns")
+            grids[alias] = tuple(c.tag for c in _elements(cols))
+            for col in _elements(cols):
+                editor = col.find("Editor")
+                if editor is None:
+                    continue
+                placed.add(id(editor))
+                if editor.find("bindingMembers") is not None:
+                    add(
+                        _lookup(
+                            editor,
+                            f"{alias}.{col.tag}",
+                            alias,
+                            col.tag,
+                            _text(editor.find("Expr")),
+                        )
+                    )
+    for element in root.iter():
+        if element.find("bindingMembers") is None or id(element) in placed:
+            continue
+        column = _text(element.find("DataMember"))
+        if column is None:
+            raise UnsupportedSyntaxError(f"{form}: {element.tag} binds but names no column")
+        add(_lookup(element, element.tag, PARENT, column, _text(element.find("Expr"))))
+    return Window(MappingProxyType(lookups), MappingProxyType(grids))
+
+
+def merge_windows(base: Window, variants: Sequence[Window], why: str) -> Window:
+    """The window as far as ``base`` and its ``variants`` (a user's or a
+    role's own copy, `B00LayoutDataEdit`) agree: a lookup they bind
+    differently stays, marked unread with ``why``, so it refuses when it
+    binds and nothing else does."""
+    lookups = dict(base.lookups)
+    for variant in variants:
+        for key in base.lookups.keys() | variant.lookups.keys():
+            mine, theirs = base.lookups.get(key), variant.lookups.get(key)
+            if mine == theirs:
+                continue
+            kept = mine or theirs
+            assert kept is not None
+            lookups[key] = replace(lookups.get(key, kept), unread=(*kept.unread, why))
+    return Window(MappingProxyType(lookups), base.grid_columns)
+
+
+def with_window(layout: Layout, window: Window) -> Layout:
+    """``layout`` with its screen's window in hand: its lookups bind."""
+    return replace(layout, window=window, missing_window=None)
 
 
 def with_template(layout: Layout, template: Template) -> Layout:

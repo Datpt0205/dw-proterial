@@ -66,6 +66,7 @@ from dw_bravo.layout import (
     Layout,
     Rule,
     Table,
+    WindowLookup,
 )
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 
@@ -371,6 +372,8 @@ class RuleRunner:
         provisional: tuple[str, ...] = ()
         if self.layout.missing_template:
             provisional = (f"template {self.layout.missing_template} is not in hand (script 03c)",)
+        if self.layout.missing_window:
+            provisional += (f"the screen's window is not in hand: {self.layout.missing_window}",)
         return SavePlan(tuple(self._commands(doc)), guarded, provisional)
 
     def _guards(self, doc: Document, commands: Sequence[str]) -> list[Finding]:
@@ -576,7 +579,7 @@ class RuleRunner:
                     doc, table, target, column, value, rule.name, scope.trigger, True, depth
                 )
             for column in changed:
-                self._column_event(doc, table, target, "ColumnChanged", column, depth)
+                self._changed(doc, table, target, column, depth)
 
     def _money_rule(
         self,
@@ -729,7 +732,59 @@ class RuleRunner:
             Step(rule, table, doc.index(table, row), row.name(column), current, value, trigger)
         )
         if not suppress:
-            self._column_event(doc, table, row, "ColumnChanged", column, depth)
+            self._changed(doc, table, row, column, depth)
+
+    def _changed(self, doc: Document, table: str, row: Row, column: str, depth: int) -> None:
+        """A column's value changed: the layout's `ColumnChanged` rules, then
+        the window's lookup on it, if one binds (UAT trace 11-25 16:50:01:
+        `usp_SalesSpecialNote_GetVale`, a `ColumnChanged` rule of the item
+        code, ran before the client read the item lookup)."""
+        self._column_event(doc, table, row, "ColumnChanged", column, depth)
+        window = self.layout.window
+        lookup = window.lookup(table, column) if window is not None else None
+        if lookup is not None:
+            self._window_lookup(doc, lookup, row, depth + 1)
+
+    def _window_lookup(self, doc: Document, lookup: WindowLookup, row: Row, depth: int) -> None:
+        if depth > self.max_depth:
+            raise RuleRefusedError(f"rules nest deeper than {self.max_depth} at {lookup.name}")
+        if self._loading:
+            # Whether the box binds as a document loads is not measured: what
+            # it would set and Bravo did not store stays UNKNOWN, as a load's
+            # missing results do; a stored column keeps Bravo's value.
+            for member in lookup.members:
+                if member.target.lower() not in row.stored:
+                    row.set(member.target, UNKNOWN)
+                    doc.unknown[member.target] = f"{lookup.name}: not bound at load"
+            return
+        if lookup.unread:
+            raise RuleRefusedError(f"{lookup.name}: {'; '.join(lookup.unread)}")
+        scope = _RowScope(self, doc, lookup.table, row, lookup.column)
+        if lookup.editable is not None and not condition(lookup.editable, scope):
+            # Set where no person could type it: whether the box still binds
+            # is not measured.
+            raise RuleRefusedError(f"{lookup.name}: set while its editor is closed")
+        code = row.get(lookup.column)
+        if code is UNKNOWN or is_empty(code):
+            raise UndecidableError(f"{lookup.name}: what an emptied lookup does is not measured")
+        keys = [substitute(lookup.filter_key, scope) if lookup.filter_key else None]
+        keys.append(lookup.select_key)
+        filter_key = " AND ".join(f"({k})" for k in keys if k) or None
+        found = self.references.find(lookup.lookup_key, code, filter_key)
+        if found is None:
+            raise UndecidableError(f"{lookup.lookup_key} {code!r} not found")
+        self._bind(
+            doc,
+            lookup.name,
+            lookup.lookup_key,
+            lookup.members,
+            found,
+            lookup.table,
+            row,
+            lookup.column,
+            False,
+            depth,
+        )
 
     # --------------------------------------------------------- validators
 
