@@ -175,3 +175,16 @@ Category: deployment
   person's false; each red with the flag forced the other way) and
   `agreement.test.tsx` (red with the card back on `name(by)`). Contracts and
   api types regenerated.
+- **"Dạy DW1 loại thư này" was hidden from every PIC.** Since 40266fbc98bf
+  a PIC holds no `sales.rules.propose`, so a PIC triaging mail never met the
+  control. It is now shown disabled with who can, "Chỉ Trưởng bộ phận Sales
+  hoặc Người đề xuất quy tắc dạy được DW1 loại thư." (names from
+  `SALES_ROLE`), in its tooltip only, not under every card. The server
+  refuses as before. Test in `triage-card.test.tsx`, red with the button
+  hidden again.
+- **The head called "trưởng nhóm".** The two inbox reasons now name the head
+  from `SALES_ROLE`; the assistant's `assign_not_yours` is reworded in copy
+  `sales_assistant@1.7.0` (pinned; 1.6.0 kept; release manifest
+  regenerated). Tests: the inbox tests hold the new sentences;
+  `test_sales_policies.py` reads every copy DW1 runs for "trưởng nhóm" and
+  the head's name, red with the pin back on 1.6.0.

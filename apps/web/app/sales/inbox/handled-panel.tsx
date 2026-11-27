@@ -7,7 +7,7 @@ import { useAuth } from "../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { errorMessage } from "../../../lib/error-message";
-import { INTENT_KIND } from "../_lib/labels";
+import { INTENT_KIND, label, SALES_ROLE } from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
@@ -58,7 +58,7 @@ export function HandledPanel({
     hasScope(SCOPE.assign);
   const reason = allowed
     ? null
-    : "Thư này giao cho người khác: người phụ trách hoặc trưởng nhóm đánh dấu.";
+    : `Thư này giao cho người khác: người phụ trách hoặc ${label(SALES_ROLE, "sales_head")} đánh dấu.`;
   const id = `handled/${message.message_id}`;
 
   const after = (result: { ok: boolean; error?: unknown }) => {

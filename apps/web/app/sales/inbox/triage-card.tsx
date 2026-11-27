@@ -9,7 +9,12 @@ import { useAuth } from "../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
-import { INTENT_KIND, intentKindLabel, label } from "../_lib/labels";
+import {
+  INTENT_KIND,
+  intentKindLabel,
+  label,
+  SALES_ROLE,
+} from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
 import { usePeople } from "../_lib/people";
 import type { Skill, SkillVersion } from "../_lib/skills";
@@ -17,6 +22,9 @@ import { useAction } from "../_lib/use-action";
 import { GuardedButton } from "../_components/guarded-button";
 import { ProposeSkill } from "../_components/propose-skill";
 import { SCOPE } from "../_components/sales-frame";
+
+/** Who may teach DW1 a mail kind: whoever proposes rules (ticket 34). */
+export const NO_TEACH = `Chỉ ${label(SALES_ROLE, "sales_head")} hoặc ${label(SALES_ROLE, "sales_rules_editor")} dạy được DW1 loại thư.`;
 
 type Message = SalesSchemas["InboxMessageView"];
 type Card = NonNullable<SalesSchemas["MessageDispositionView"]["triage"]>;
@@ -75,7 +83,7 @@ export function TriageCardPanel({
     hasScope(SCOPE.assign);
   const reason = allowed
     ? null
-    : "Thư này giao cho người khác: người phụ trách hoặc trưởng nhóm quyết.";
+    : `Thư này giao cho người khác: người phụ trách hoặc ${label(SALES_ROLE, "sales_head")} quyết.`;
   const id = `triage/${message.message_id}`;
   const attach = card.step === "reply_to_case" && Boolean(card.case);
 
@@ -199,18 +207,19 @@ export function TriageCardPanel({
           </GuardedButton>
         </Space>
       )}
-      {hasScope(SCOPE.rulesPropose) ? (
-        <div>
-          <GuardedButton
-            type="link"
-            reason={null}
-            loading={loadingSkill}
-            onClick={() => void teach()}
-          >
-            Dạy DW1 loại thư này
-          </GuardedButton>
-        </div>
-      ) : null}
+      <div>
+        {/* Disabled with who can, not hidden (ui-quality §5): a PIC
+            triaging mail learns the control and whom to ask. */}
+        <GuardedButton
+          type="link"
+          reason={hasScope(SCOPE.rulesPropose) ? null : NO_TEACH}
+          inlineReason={false}
+          loading={loadingSkill}
+          onClick={() => void teach()}
+        >
+          Dạy DW1 loại thư này
+        </GuardedButton>
+      </div>
       <ActionError error={error} />
       {teaching ? (
         <ProposeSkill

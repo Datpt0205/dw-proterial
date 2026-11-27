@@ -147,7 +147,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.2.0.yaml", HandoffCopy),
         followups=load_followups(policies_dir / "sales_followups@1.8.0.yaml"),
         reminders=load_copy(copy_dir / "sales_reminders@1.4.0.yaml", ReminderCopy),
-        assistant=load_copy(copy_dir / "sales_assistant@1.6.0.yaml", AssistantCopy),
+        assistant=load_copy(copy_dir / "sales_assistant@1.7.0.yaml", AssistantCopy),
         salesorder=load_policy(policies_dir / "sales_salesorder_rules@1.0.0.yaml", SalesOrderRules),
         bravo_writes=load_policy(policies_dir / "sales_bravo_writes@1.1.0.yaml", BravoWrites),
         released={},
