@@ -146,12 +146,29 @@ class ModelStep(StrEnum):
     INTERNAL_CHANGE = "internal_change"
     # The case chat's reading of what the PIC states there (ticket 56/57).
     CASE_CHAT = "case_chat"
+    # PC's mail read by DW1 while an order waits on PC (ticket 77).
+    PC_REPLY = "pc_reply"
 
 
 # The steps whose reading can run in shadow (ticket 67): each has the two
 # places a shadow needs, where it reads and where a person decides. A step
 # joins here with them, never before (failure-modes #1).
-SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset({ModelStep.DESCRIPTION_ATTRIBUTES})
+SHADOW_STEPS: Final[frozenset[ModelStep]] = frozenset(
+    {
+        ModelStep.DESCRIPTION_ATTRIBUTES,
+        # A customer's reply on a case, by both readers side by side: the one
+        # call and DW1's agent with skills, labelled by the move the PIC
+        # takes next on the case.
+        ModelStep.REPLY_INTENT,
+        ModelStep.SKILL_INTENTS,
+        # A mail no reader understood, labelled by the kind the person picks
+        # as they mark it handled.
+        ModelStep.MESSAGE_INTENT,
+        # A PO written in a mail going to a person, labelled value by value
+        # when an order case of the same customer and PO number is prepared.
+        ModelStep.PO_BODY_EXTRACTION,
+    }
+)
 
 
 class ModelAssist(BaseModel):
@@ -274,6 +291,13 @@ class ModelAssist(BaseModel):
     # is refused until its live eval passed (`ModelReadiness.unready`). Off:
     # the chat states nothing and points to the case page's controls.
     case_chat: bool = True
+    # A local model reads the mail PC writes from the tenant's `pc_mailboxes`
+    # while an order waits on PC, with no person pressing (ticket 77), as
+    # `pc_dates` reads a mail Sales picks; code keeps a date only where the
+    # mail writes it whole on a line asked, and proposes it. The PIC confirms
+    # each line or corrects it: nothing is recorded by the reading. Off where
+    # a version does not say (Đạt, 2026-11-26, by recommendation).
+    pc_reply: bool = False
     # Every step with a shadow consumer (`SHADOW_STEPS`) reads in shadow
     # while it is not on and passing (ticket 67, dw_sales ADR 0015 decision
     # 4): the model reads where one is configured, its result is stored and
@@ -348,6 +372,9 @@ class LayoutOnboarding(BaseModel):
     uncertain_first_pos: int = Field(ge=0, le=100)
 
 
+PasswordFileValues = Literal["every_value", "failed_checks_only"]
+
+
 class OrderRules(BaseModel):
     """`sales_order_rules`: the fine print of the order checks, versioned.
 
@@ -367,6 +394,13 @@ class OrderRules(BaseModel):
     # WIV-03-012 step 9. False lets an order go from uploaded_to_bravo to
     # confirmed without a second person; stamped on each case when checked.
     cross_check_required: bool
+    # Ticket 81 (dw_sales ADR 0016, Proposed): an order whose sales order DW
+    # reads back from Bravo through the gateway, holding exactly the paste
+    # sheet, with nothing a person decided or typed, passes its cross-check
+    # by DW within the hand-off error and audit share (`autonomy`); every
+    # other order is the second person's. Off, as every version before 1.18.0
+    # reads; on only with `cross_check_required`. Stamped on each case.
+    cross_check_on_match: bool = False
     export_control_mode: ExportControlMode
     export_control: ExportControlRule
     intake: IntakeCaps
@@ -407,6 +441,13 @@ class OrderRules(BaseModel):
     # that is not the customer's, with its sender shown: a person still picks
     # it, and nothing is recorded until they confirm each line.
     pc_mailboxes: tuple[str, ...] = Field(default=(), max_length=20)
+    # A PO read from a file the reader sandbox opened with a password its mail
+    # carries (ticket 17): ``every_value`` waits for a person on each value
+    # read (Đạt, 11-13), as every version before 1.17.0 reads;
+    # ``failed_checks_only`` reads it as any other file of its layout, each
+    # value waiting only on a check it failed, the file still named as opened
+    # with a password (ticket 80; off until Đạt says the unscanned bytes may).
+    password_file: PasswordFileValues = "every_value"
 
     @model_validator(mode="before")
     @classmethod
@@ -447,6 +488,12 @@ class OrderRules(BaseModel):
         if len(set(value)) != len(value):
             raise ValueError("revision_marks repeat")
         return value
+
+    @model_validator(mode="after")
+    def _on_match_only_where_a_cross_check_is(self) -> Self:
+        if self.cross_check_on_match and not self.cross_check_required:
+            raise ValueError("cross_check_on_match needs cross_check_required")
+        return self
 
     @model_validator(mode="after")
     def _every_finding_has_a_severity(self) -> Self:

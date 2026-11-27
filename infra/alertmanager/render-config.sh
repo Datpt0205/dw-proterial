@@ -10,14 +10,15 @@
 set -eu
 
 if [ -z "${ALERTMANAGER_WEBHOOK_URL:-}" ]; then
-  # No webhook configured yet: keep the `webhook` receiver (so
-  # `route.receiver: webhook` still resolves) but drop its one integration.
+  # No webhook configured yet: keep the `webhook` and `webhook-event`
+  # receivers (so the routes still resolve) but drop each one's integration;
+  # the range ends at either `send_resolved:` line, so it closes per receiver.
   # A receiver with zero configured integrations is valid Alertmanager
   # config — "matched, delivered nowhere" — but a `webhook_configs` entry
   # with an empty url is NOT: Alertmanager refuses to start on it
   # ("unsupported scheme \"\" for URL", crash-looping the container) —
   # measured, not assumed, while writing this.
-  sed '/webhook_configs:/,/send_resolved: true/d' /template/alertmanager.yml.template > /out/alertmanager.yml
+  sed '/webhook_configs:/,/send_resolved:/d' /template/alertmanager.yml.template > /out/alertmanager.yml
 else
   # Escape sed's own special replacement characters (the `|` delimiter this
   # script uses, `&` which sed reads as "the matched text", and `\`) so a

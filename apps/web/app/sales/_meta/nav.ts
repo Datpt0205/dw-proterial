@@ -7,7 +7,6 @@ import {
   FileTextOutlined,
   FolderOpenOutlined,
   InboxOutlined,
-  MessageOutlined,
   ProjectOutlined,
   RobotOutlined,
   ScheduleOutlined,
@@ -43,6 +42,8 @@ import { SALES_BADGE } from "./badge-keys";
  * the rest sit under two submenus by the work they serve — the cases
  * ("Hồ sơ") and running the process ("Quản lý"). A count never goes inside a
  * submenu, where a closed bar would hide it. The drawer lists every page.
+ * "Hỏi đáp DW1" is not a page here since 2026-11-26: the conversation is the
+ * "Hỏi DW1" widget on every Sales page (`assistant-widget.tsx`).
  */
 export const salesNav: NavEntry[] = [
   {
@@ -99,13 +100,6 @@ export const salesNav: NavEntry[] = [
             label: "Kiểm chéo & duyệt",
             hint: "Đơn chờ kiểm chéo và báo giá chờ duyệt: người làm không tự kiểm",
             icon: AuditOutlined,
-            scope: "sales.case.read",
-          },
-          {
-            href: "/sales/assistant",
-            label: "Hỏi đáp DW1",
-            hint: "Hỏi DW1 trạng thái PO, báo giá và việc đang chờ",
-            icon: MessageOutlined,
             scope: "sales.case.read",
           },
         ],

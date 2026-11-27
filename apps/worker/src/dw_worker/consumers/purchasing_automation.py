@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Final, Protocol
 
 from dw_purchasing.application.automation_lane import Tick
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.purchasing_automation")
 
@@ -28,6 +29,7 @@ def build_purchasing_automation_consumer(
     lane: AutomationLanePort,
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for tenant_id, workspace_id in await lane.due():
             try:
                 tick = await lane.tick(tenant_id, workspace_id)
@@ -35,8 +37,10 @@ def build_purchasing_automation_consumer(
                 # Broad on purpose, like the loop's own: the next workspace
                 # still gets its tick.
                 logger.exception("purchasing_automation: the tick failed in one workspace")
+                failed += 1
                 continue
             if tick.done:
                 logger.info("purchasing_automation: %s", "; ".join(tick.done))
+        raise_if_failed("purchasing_automation", failed)
 
     return consume

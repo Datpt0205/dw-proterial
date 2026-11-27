@@ -42,7 +42,15 @@ from decimal import Decimal
 from types import TracebackType
 from typing import Annotated, Any, Final, Literal, Protocol, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+)
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
@@ -62,6 +70,7 @@ from dw_sales.application.case_store import (
 from dw_sales.application.ports import NotificationSenderPort, SalesScope
 from dw_sales.application.stages import Stage, StageHandlers
 from dw_sales.application.support import seen_by
+from dw_sales.domain.bravo_writes import BravoTarget
 from dw_sales.domain.dispositions import CaseKind
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -83,6 +92,39 @@ class BravoUnreachableError(Exception):
 # ------------------------------------------------------------------ the change
 
 
+# A cancel's reason is written into Bravo's `CancelRemark`, nvarchar(192)
+# (the 11-19 survey: `sys.columns.max_length` 384 bytes). SQL Server counts
+# UTF-16 code units; the gateway's contract refuses a longer reason by the
+# same count (`dw_bravo.contract.CANCEL_REMARK_UNITS`, which a test holds
+# equal to this one: the application does not import the gateway's contract).
+CANCEL_REASON_CHARS: Final = 192
+# The approval shows a cancel as "Hủy: <reason>".
+CANCEL_SHOWN: Final = "Hủy: "
+
+
+def cancel_reason(text: str) -> str:
+    """A cancel's reason as it is proposed, hashed and written: runs of
+    whitespace as one space, none at either end. Blank is no reason. The one
+    owner of this rule, for the page's body and the assistant's reading."""
+    return " ".join(text.split())
+
+
+def cancel_reason_fits(reason: str) -> bool:
+    """Whether Bravo's `CancelRemark` holds the reason, measured as SQL
+    Server measures it (a character outside the BMP takes two units)."""
+    return len(reason.encode("utf-16-le")) // 2 <= CANCEL_REASON_CHARS
+
+
+def _cancel_reason(value: object) -> object:
+    return cancel_reason(value) if isinstance(value, str) else value
+
+
+def _fits_cancel_remark(reason: str) -> str:
+    if not cancel_reason_fits(reason):
+        raise ValueError(f"longer than Bravo's CancelRemark ({CANCEL_REASON_CHARS})")
+    return reason
+
+
 class ConfirmedDateChange(BaseModel):
     """ "XN giao hàng": the line's confirmed delivery date."""
 
@@ -101,7 +143,26 @@ class QuantityChange(BaseModel):
     value: Decimal = Field(gt=0, max_digits=18, decimal_places=4)
 
 
-LineChange = Annotated[ConfirmedDateChange | QuantityChange, Field(discriminator="field")]
+class CancelChange(BaseModel):
+    """The whole line cancelled in Bravo, with the person's reason (ticket 71:
+    "Order status" Cancel, the quantity to 0, the reason; the layout computes
+    the rest)."""
+
+    model_config = _FROZEN
+
+    field: Literal["cancel"]
+    reason: Annotated[
+        str,
+        BeforeValidator(_cancel_reason),
+        Field(min_length=1, max_length=CANCEL_REASON_CHARS),
+        AfterValidator(_fits_cancel_remark),
+    ]
+
+
+LineChange = Annotated[
+    ConfirmedDateChange | QuantityChange | CancelChange, Field(discriminator="field")
+]
+AnyChange = ConfirmedDateChange | QuantityChange | CancelChange
 
 
 def _text(value: object) -> str | None:
@@ -117,7 +178,8 @@ def _text(value: object) -> str | None:
 @dataclass(frozen=True)
 class BravoSoLine:
     """One row of an SO's lines as Bravo holds it (`B30BizDocDetailSO`):
-    `quantity` is `Quantity9`, `confirmed_date` `EstimatedTimeDelivery`."""
+    `quantity` is `Quantity9`, `confirmed_date` `EstimatedTimeDelivery`,
+    `cancel_state` "Order status" (`IsCancel`) as read: '' on an open line."""
 
     line_id: int
     po_line: int
@@ -125,6 +187,7 @@ class BravoSoLine:
     quantity: Decimal
     confirmed_date: date | None
     rowversion: str
+    cancel_state: str
 
 
 @dataclass(frozen=True)
@@ -132,6 +195,9 @@ class BravoSo:
     so_id: int
     so_no: str
     lines: tuple[BravoSoLine, ...]
+    # The Bravo the gateway read it from (ticket 85): what a proposal made
+    # from it is stamped with, and the only one it may be written to.
+    target: BravoTarget
 
 
 @dataclass(frozen=True)
@@ -158,9 +224,7 @@ class BravoCommandsPort(Protocol):
     through an adapter (import-linter: a context's application never imports
     it)."""
 
-    def prepare(
-        self, change: ConfirmedDateChange | QuantityChange, so: BravoSo, line: BravoSoLine
-    ) -> PreparedWrite: ...
+    def prepare(self, change: AnyChange, so: BravoSo, line: BravoSoLine) -> PreparedWrite: ...
 
     def hash_of(self, kind: str, content: dict[str, Any]) -> str:
         """The content's hash, once it reads back as a command of ``kind``;
@@ -181,13 +245,28 @@ class ApprovalSignerPort(Protocol):
         content: dict[str, Any],
         bravo_user_id: int,
         employee_code: str,
+        target: BravoTarget,
         now: datetime,
     ) -> str: ...
 
 
-def before_value(change: ConfirmedDateChange | QuantityChange, line: BravoSoLine) -> str | None:
-    """Bravo's value the change replaces, as text. Refuses a change Bravo
-    already holds."""
+def before_value(change: AnyChange, line: BravoSoLine) -> str | None:
+    """Bravo's value the change replaces, as text: a cancel replaces the
+    line's quantity. Refuses a change Bravo already holds, and any change of
+    a line that is not open in Bravo: no trace shows a person typing into a
+    cancelled line, and an "Order status" no trace shows is not read as open."""
+    if line.cancel_state == "Cancel":
+        raise ConflictError(
+            "Bravo đã hủy dòng này: không ghi thêm",
+            details={"rule": "line_cancelled_in_bravo"},
+        )
+    if line.cancel_state != "":
+        raise ConflictError(
+            "Bravo giữ dòng này ở trạng thái DW chưa biết: không ghi",
+            details={"rule": "line_state_unknown", "is_cancel": line.cancel_state[:24]},
+        )
+    if isinstance(change, CancelChange):
+        return _text(line.quantity)
     held: object = line.confirmed_date if change.field == "confirmed_date" else line.quantity
     if held == change.value:
         raise ConflictError(
@@ -213,12 +292,15 @@ class BravoWriteAsked(BaseModel):
     line_no: int = Field(ge=1, le=99_999)
     so_no: str = Field(min_length=1, max_length=64)
     item_code: str = Field(max_length=64)
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None = Field(default=None, max_length=64)
-    after: str = Field(max_length=64)
+    after: str = Field(max_length=len(CANCEL_SHOWN) + CANCEL_REASON_CHARS)
     kind: str = Field(max_length=64)
     command: dict[str, Any]
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    # The Bravo the line was read from (ticket 85): the decider sees it, and
+    # the token carries it; an approval opened before has none and is refused.
+    target: BravoTarget
     required_scope: Literal["sales.bravo.write"]
     # The write-Bravo stage version the case runs on (ticket 61): the command
     # set that prepared ``command`` is the one that checks its hash.
@@ -235,12 +317,13 @@ class BravoLineWrite(BaseModel):
     line_no: int = Field(ge=1, le=99_999)
     so_no: str
     item_code: str
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None
     after: str
     kind: str
     command: dict[str, Any]
     content_hash: str
+    target: BravoTarget
     status: WriteStatus = "proposed"
     check: str | None = None
     reason: str | None = Field(default=None, max_length=500)
@@ -265,6 +348,7 @@ class BravoLineWrite(BaseModel):
             kind=self.kind,
             command=self.command,
             content_hash=self.content_hash,
+            target=self.target,
             required_scope=SalesScopes.BRAVO_WRITE.value,
         )
 
@@ -274,10 +358,14 @@ class BravoLineWriteView(BaseModel):
 
     approval_id: uuid.UUID
     line_no: int
-    field: Literal["confirmed_date", "quantity"]
+    field: Literal["confirmed_date", "quantity", "cancel"]
     before: str | None
     after: str
+    target: BravoTarget
     status: WriteStatus
+    # The gateway's step that refused or stopped the write (ticket 63's
+    # order), with its reason and the rules' warnings, as the gateway said.
+    check: str | None
     reason: str | None
     warnings: tuple[str, ...]
     proposed_at: AwareDatetime
@@ -291,7 +379,9 @@ class BravoLineWriteView(BaseModel):
             field=write.field,
             before=write.before,
             after=write.after,
+            target=write.target,
             status=write.status,
+            check=write.check,
             reason=write.reason,
             warnings=write.warnings,
             proposed_at=write.proposed_at,
@@ -381,10 +471,60 @@ class BravoGatewayPort(Protocol):
         ...
 
 
+class BravoTargetsView(BaseModel):
+    """Which Bravo the gateway reads and writes for the tenant now, and
+    which ones it holds logins for (ticket 85), as the gateway answered.
+    `connected` False: no gateway, or none answered; nothing is known."""
+
+    model_config = _FROZEN
+
+    connected: bool
+    current: BravoTarget | None
+    uat: bool
+    production: bool
+
+
+NOT_CONNECTED: Final = BravoTargetsView(connected=False, current=None, uat=False, production=False)
+
+
+class BravoTargetsPort(Protocol):
+    async def targets(self, tenant_id: uuid.UUID) -> BravoTargetsView:
+        """The gateway's answer; `BravoUnreachableError` when none came."""
+        ...
+
+
+@dataclass(frozen=True)
+class BravoTargets:
+    """What the order page's "Ghi vào Bravo" panel and the rules page show
+    beside the target switch: the gateway's own answer (names and booleans
+    only), read by anyone who reads cases or proposes rules. The second is
+    the tenant's rules editor, who may hold no Sales case scope and is the
+    one asked to switch (ticket 85 review)."""
+
+    gate: Gate
+    port: BravoTargetsPort
+
+    async def now(self, context: AccessContext) -> BravoTargetsView:
+        if not self.gate.allows(context, SalesScopes.RULES_PROPOSE):
+            await self.gate.require(
+                context,
+                SalesScopes.CASE_READ,
+                resource_type="workspace",
+                resource_id=str(context.workspace_id),
+            )
+        try:
+            return await self.port.targets(context.tenant_id)
+        except BravoUnreachableError:
+            return NOT_CONNECTED
+
+
 class BravoNotConnected:
     """Every Bravo port, where no gateway is configured: a read could not
     ask (a proposal and a decision are refused), and a decided write is
     refused with that reason, never left waiting."""
+
+    async def targets(self, tenant_id: uuid.UUID) -> BravoTargetsView:
+        raise BravoUnreachableError("no Bravo gateway is configured")
 
     async def sales_order(self, tenant_id: uuid.UUID, so_no: str) -> BravoSo | None:
         raise BravoUnreachableError("no Bravo gateway is configured")
@@ -395,9 +535,7 @@ class BravoNotConnected:
     async def write(self, kind: str, content: dict[str, Any], token: str) -> GatewayAnswer:
         return GatewayAnswer("refused", None, "no_bravo_gateway_configured")
 
-    def prepare(
-        self, change: ConfirmedDateChange | QuantityChange, so: BravoSo, line: BravoSoLine
-    ) -> PreparedWrite:
+    def prepare(self, change: AnyChange, so: BravoSo, line: BravoSoLine) -> PreparedWrite:
         raise ConflictError("Bravo is not connected")
 
     def hash_of(self, kind: str, content: dict[str, Any]) -> str:
@@ -422,10 +560,14 @@ class BravoLineWrites:
         context: AccessContext,
         case_id: uuid.UUID,
         line_no: int,
-        change: ConfirmedDateChange | QuantityChange,
+        change: AnyChange,
         *,
         case_version: int,
+        approval_id: uuid.UUID | None = None,
     ) -> BravoLineWriteView:
+        """``approval_id``: the id a caller binds the proposal to, so one
+        statement proposes once (the case assistant's turn, whose proposal
+        leaves the case's version as it is); a new one when None."""
         await self.gate.require(
             context,
             SalesScopes.CASE_READ,
@@ -436,6 +578,7 @@ class BravoLineWrites:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             stored = await work.orders.get(case_id)
+            spent = approval_id is not None and await work.bravo_writes.get(approval_id) is not None
         # A case the caller may not see (record visibility) is not found, as
         # every read of a case answers.
         if stored is None or not seen_by(context, CaseKind.ORDER, stored):
@@ -445,6 +588,11 @@ class BravoLineWrites:
             raise ConflictError(STALE_CASE_VERSION, details={"rule": "stale_case_version"})
         if line_no not in {line.line_no for line in case.lines}:
             raise NotFoundError("no such line", details={"line_no": line_no})
+        if spent:
+            raise ConflictError(
+                "đề xuất này đã được gửi một lần: muốn đề xuất lại thì hỏi lại DW1",
+                details={"rule": "already_proposed"},
+            )
         if case.bravo_so_no is None:
             raise ConflictError(
                 "đơn chưa có số SO Bravo: chưa ghi được",
@@ -470,7 +618,7 @@ class BravoLineWrites:
                 "loại ghi này chưa chạy được",
                 details={"kind": prepared.kind, "pending": prepared.pending},
             )
-        approval_id, now = self.ids.new_uuid(), self.clock.now()
+        approval_id, now = approval_id or self.ids.new_uuid(), self.clock.now()
         write = BravoLineWrite(
             approval_id=approval_id,
             case_id=case_id,
@@ -479,10 +627,15 @@ class BravoLineWrites:
             item_code=rows[0].item_code,
             field=change.field,
             before=before,
-            after=str(_text(change.value)),
+            after=(
+                f"{CANCEL_SHOWN}{change.reason}"
+                if isinstance(change, CancelChange)
+                else str(_text(change.value))
+            ),
             kind=prepared.kind,
             command=prepared.content,
             content_hash=prepared.content_hash,
+            target=so.target,
             proposed_by=context.principal_id,
             proposed_at=now,
         )
@@ -517,7 +670,7 @@ class BravoLineWrites:
         )
         async with self.uow(sales_scope(context)) as work:
             stored = await work.orders.get(case_id)
-            if stored is None or not seen_by(context, CaseKind.ORDER, stored):
+            if stored is None or not seen_by(context, CaseKind.ORDER, stored, export_control=True):
                 raise NotFoundError("no such order case", details={"case_id": str(case_id)})
             return [BravoLineWriteView.of(w) for w in await work.bravo_writes.of_case(case_id)]
 
@@ -628,6 +781,7 @@ class BravoWriteStamp:
             content=asked.command,
             bravo_user_id=users[0],
             employee_code=code,
+            target=asked.target,
             now=self.clock.now(),
         )
         return {"token": token}
@@ -771,6 +925,7 @@ def _audit(
             "line_no": write.line_no,
             "kind": write.kind,
             "content_hash": write.content_hash,
+            "target": write.target,
             "status": write.status,
             **({"check": write.check} if write.check else {}),
         },
@@ -791,6 +946,9 @@ __all__ = [
     "BravoOrdersPort",
     "BravoSo",
     "BravoSoLine",
+    "BravoTargets",
+    "BravoTargetsPort",
+    "BravoTargetsView",
     "BravoUnreachableError",
     "BravoUsersPort",
     "BravoWriteAsked",

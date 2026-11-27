@@ -4,7 +4,8 @@ ADR 0027 decision 3, ticket 63 check 1. A PIC approves the exact content of
 a write on the portal or in the case chat; the approval decision signs a
 token carrying the approval id, the tenant and workspace, the write kind, the
 content's hash (`dw_bravo.contract.content_hash`), the Bravo user the
-decision resolved, and an expiry. The gateway verifies it before anything
+decision resolved, the Bravo target the proposal was read from (format 2,
+sales ticket 85), and an expiry. The gateway verifies it before anything
 else and takes every one of those values from it, never from the request.
 
 Ed25519, not a shared secret: the approval path holds the private key, the
@@ -32,12 +33,14 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
-from dw_bravo.contract import WRITE_KINDS, content_hash
+from dw_bravo.contract import BRAVO_TARGETS, WRITE_KINDS, BravoTarget, content_hash
 
 # Signed with the payload, so a signature made for anything else under the
 # same key never verifies as an approval.
 _DOMAIN: Final = b"dw-bravo-approval/1\n"
-FORMAT_VERSION: Final = 1
+# 2 since ticket 85 added the target: a format-1 token, which names none, is
+# refused, never read as either Bravo.
+FORMAT_VERSION: Final = 2
 # The longest an approval may wait for its write. Past it the PIC approves
 # again: what they approved may no longer be what Bravo holds.
 MAX_TTL: Final = timedelta(hours=2)
@@ -45,7 +48,7 @@ DEFAULT_TTL: Final = timedelta(minutes=30)
 # Clocks of the signer and the gateway may differ by this much.
 CLOCK_SKEW: Final = timedelta(seconds=60)
 _CLAIMS: Final = frozenset(
-    {"v", "kid", "aid", "tid", "wid", "kind", "hash", "bu", "ec", "iat", "exp"}
+    {"v", "kid", "aid", "tid", "wid", "kind", "hash", "bu", "ec", "tgt", "iat", "exp"}
 )
 
 
@@ -66,6 +69,8 @@ class ApprovalClaims:
     content_hash: str
     bravo_user_id: int
     employee_code: str
+    # The Bravo the proposal was read from: the gateway writes only there.
+    target: BravoTarget
     issued_at: datetime
     expires_at: datetime
     key_id: str
@@ -122,11 +127,14 @@ class ApprovalTokenSigner:
         command: object,
         bravo_user_id: int,
         employee_code: str,
+        target: BravoTarget,
         now: datetime,
     ) -> str:
         kind = f"{type(command).kind}@{type(command).version}"  # type: ignore[attr-defined]
         if kind not in WRITE_KINDS:
             raise ValueError(f"{kind} is not a write the gateway takes")
+        if target not in BRAVO_TARGETS:
+            raise ValueError(f"{target} is not a Bravo target")
         if now.tzinfo is None:
             raise ValueError("now must be timezone-aware")
         payload = {
@@ -139,6 +147,7 @@ class ApprovalTokenSigner:
             "hash": content_hash(command),
             "bu": bravo_user_id,
             "ec": employee_code,
+            "tgt": target,
             "iat": int(now.timestamp()),
             "exp": int((now + self.ttl).timestamp()),
         }
@@ -189,10 +198,12 @@ def _claims(payload: Mapping[str, object]) -> ApprovalClaims:
             raise TokenRefusedError("unknown_format")
         if not (type(iat) is int and type(exp) is int and type(bu) is int and bu > 0):
             raise TokenRefusedError("malformed")
-        kind, digest, code = payload["kind"], payload["hash"], payload["ec"]
+        kind, digest, code, target = payload["kind"], payload["hash"], payload["ec"], payload["tgt"]
         if not (isinstance(kind, str) and isinstance(digest, str) and isinstance(code, str)):
             raise TokenRefusedError("malformed")
         if kind not in WRITE_KINDS or len(digest) != 64 or not code:
+            raise TokenRefusedError("malformed")
+        if target not in BRAVO_TARGETS:
             raise TokenRefusedError("malformed")
         return ApprovalClaims(
             approval_id=uuid.UUID(str(payload["aid"])),
@@ -202,6 +213,7 @@ def _claims(payload: Mapping[str, object]) -> ApprovalClaims:
             content_hash=digest,
             bravo_user_id=bu,
             employee_code=code,
+            target=target,
             issued_at=datetime.fromtimestamp(iat, UTC),
             expires_at=datetime.fromtimestamp(exp, UTC),
             key_id=str(payload["kid"]),

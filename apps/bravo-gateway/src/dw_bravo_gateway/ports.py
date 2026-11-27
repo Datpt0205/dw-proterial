@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Literal, Protocol
 
 from dw_bravo.approval_token import ApprovalClaims
-from dw_bravo.contract import CustomerPoRows, SalesOrderState
+from dw_bravo.contract import BravoTarget, CustomerPoRows, SalesOrderState
 from dw_bravo.layout import Layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.sync import SyncPage, SyncQuery
@@ -35,6 +35,11 @@ class StaleRowError(Exception):
 
 class DocumentNotFoundError(Exception):
     pass
+
+
+class WriteRejectedError(Exception):
+    """Bravo answered, the batch was rolled back, and nothing of it is
+    written: the write is refused, not in doubt."""
 
 
 class AmbiguousDocumentError(Exception):
@@ -108,6 +113,12 @@ class StoredDocument:
     a rule that needs one). `column_order` is each table's column order, in
     which the client lists a statement's columns. `prevent_edit` is
     `ufn_Prevent_Edit` per line `RowId`: 1 when the line sits on a CDO.
+
+    What an INSERT needs of each table, from `sys.columns`: `no_default`, the
+    columns without a default (an INSERT lists them NULL), and `generated`,
+    the identity, rowversion and computed columns no statement writes, both
+    lower case. A table absent from either was not read, and a new row of it
+    is refused.
     """
 
     header: dict[str, object]
@@ -116,6 +127,8 @@ class StoredDocument:
     derived_lines: list[dict[str, object]] = field(default_factory=list)
     column_order: Mapping[str, Sequence[str]] = field(default_factory=dict)
     prevent_edit: Mapping[str, int | None] = field(default_factory=dict)
+    no_default: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    generated: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 class Documents(Protocol):
@@ -133,6 +146,25 @@ class Engine(Protocol):
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session: ...
 
+    async def view_columns(self, view: str) -> Sequence[str]:
+        """The columns of the view a layout loads a table from (its `Name`):
+        what the client's row of that table holds."""
+        ...
+
+
+@dataclass(frozen=True)
+class ReadBack:
+    """A value an earlier INSERT of the same batch reads back: its row's
+    ``column`` as Bravo holds it once written. A new SO's `BizDocId` is
+    written '' and filled by Bravo's trigger; the client's line INSERTs and
+    its process step carry the filled one, read back by the header INSERT's
+    own `SELECT ... WHERE Id=SCOPE_IDENTITY()` (UAT trace 11-25 16:53:33:
+    `@_BizDocId=N''` on the header, `'100000925895SO'` on the line and the
+    process step). The writer resolves it inside the transaction."""
+
+    table: str
+    column: str
+
 
 @dataclass(frozen=True)
 class Statement:
@@ -145,16 +177,31 @@ class Statement:
 
 
 @dataclass(frozen=True)
+class ProcedureStep:
+    """A Bravo procedure the client runs after a save's statements, with the
+    parameter values it passes (`statements.process_step`)."""
+
+    name: str
+    parameters: Mapping[str, object]
+
+
+@dataclass(frozen=True)
 class Batch:
-    """One save: the context line, then its statements, in one transaction."""
+    """One save: the context line, then its statements, then the procedures
+    the client runs after them, in one transaction."""
 
     context: str
     statements: Sequence[Statement]
+    steps: Sequence[ProcedureStep] = ()
 
 
 class Writer(Protocol):
     async def execute(self, batch: Batch) -> None:
-        """All or nothing; `StaleRowError` when any statement touched no row."""
+        """All or nothing; `StaleRowError` when any statement touched no row,
+        `WriteRejectedError` when Bravo answered and nothing was written (an
+        INSERT whose read-back a later value needs found no row). Each
+        `ReadBack` value is resolved from the read-back of the batch's
+        earlier INSERT into its table."""
         ...
 
 
@@ -189,8 +236,14 @@ SwitchState = Literal["enabled", "off", "paused"]
 
 class Switches(Protocol):
     """Whether a tenant's write kind may run: off until a person with the
-    right enables it after UAT (ticket 63 g), paused by the watch (ticket 65)."""
+    right enables it after UAT (ticket 63 g), paused by the watch (ticket 65);
+    and which Bravo the tenant's reads and writes go to (ticket 85)."""
 
     async def state(
         self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str
     ) -> SwitchState: ...
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        """The tenant's target now; None when its rule names none the
+        gateway can read (refused, never read as either)."""
+        ...

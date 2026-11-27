@@ -10,8 +10,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from dw_bravo.contract import WRITE_KINDS
-from dw_sales.domain.bravo_writes import BravoWriteKind, BravoWrites, BravoWriteSwitch
+from dw_bravo.contract import BRAVO_TARGETS, WRITE_KINDS
+from dw_sales.domain.bravo_writes import BravoTarget, BravoWriteKind, BravoWrites, BravoWriteSwitch
 
 pytestmark = pytest.mark.unit
 
@@ -24,13 +24,15 @@ def test_the_kinds_are_the_gateway_contracts_so_kinds() -> None:
     assert set(get_args(BravoWriteKind)) == {k for k in WRITE_KINDS if k.startswith("so.")}
 
 
-def test_the_platform_switches_every_kind_off() -> None:
+@pytest.mark.parametrize("version", ["1.0.0", "1.1.0"])
+def test_the_platform_switches_every_kind_off_on_uat(version: str) -> None:
     policy = BravoWrites.model_validate(
-        yaml.safe_load((PLATFORM / "sales_bravo_writes@1.0.0.yaml").read_bytes())
+        yaml.safe_load((PLATFORM / f"sales_bravo_writes@{version}.yaml").read_bytes())
     )
 
     assert set(policy.kinds) == set(get_args(BravoWriteKind))
     assert not any(policy.enabled(kind) for kind in get_args(BravoWriteKind))
+    assert policy.target == "uat"
 
 
 def test_a_kind_is_switched_on_only_with_its_uat_proof() -> None:
@@ -65,3 +67,41 @@ def test_an_unknown_kind_is_refused() -> None:
                 "kinds": {"so.delete@1": {"enabled": False}},
             }
         )
+
+
+# ------------------------------------------------------------ target (85)
+
+
+def _writes(**over: object) -> BravoWrites:
+    return BravoWrites.model_validate(
+        {
+            "schema_version": "1.0",
+            "policy_id": "sales_bravo_writes",
+            "policy_version": "1.1.0",
+            "kinds": {},
+            **over,
+        }
+    )
+
+
+def test_the_targets_are_the_gateway_contracts() -> None:
+    assert get_args(BravoTarget) == BRAVO_TARGETS
+
+
+def test_the_target_defaults_to_uat() -> None:
+    assert _writes().target == "uat"
+
+
+@pytest.mark.parametrize("proof", [None, "   "], ids=["none", "blank"])
+def test_production_is_named_only_with_its_uat_proof(proof: str | None) -> None:
+    with pytest.raises(ValidationError):
+        _writes(target="production", target_uat_proof=proof)
+
+    assert _writes(target="production", target_uat_proof="UAT 2026-12-01 run 3").target == (
+        "production"
+    )
+
+
+def test_a_target_the_gateway_does_not_know_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        _writes(target="staging")

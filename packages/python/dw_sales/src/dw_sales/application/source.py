@@ -664,7 +664,7 @@ class SourceService:
         await self._authorize(context, "sales_order_case", case_id)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_order(work, case_id, viewer=context)).case
+            case = (await stored_order(work, case_id, viewer=context, export_control=True)).case
         revisions = [(case.message_id, case.document)] + [
             (old.message_id, old.document) for old in case.superseded
         ]
@@ -720,7 +720,7 @@ class SourceService:
         `cross-check` require of it (`require_served`)."""
         await self._authorize(context, "sales_order_case", case_id)
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_order(work, case_id, viewer=context)).case
+            case = (await stored_order(work, case_id, viewer=context, export_control=True)).case
             return await self._message_text(
                 work, context, CaseKind.ORDER, case_id, case.case_version, case.document.body
             )

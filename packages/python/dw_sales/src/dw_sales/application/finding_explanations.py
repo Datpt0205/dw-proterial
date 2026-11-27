@@ -185,7 +185,7 @@ class FindingExplanations:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_order(work, case_id, viewer=context)).case
+            case = (await stored_order(work, case_id, viewer=context, export_control=True)).case
         finding = next((f for f in case.findings if f.key == finding_key), None)
         if finding is None:
             raise NotFoundError("no such finding", details={"finding_key": finding_key})

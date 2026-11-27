@@ -30,7 +30,7 @@ from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
     CaseEvent,
@@ -38,6 +38,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     Stored,
 )
+from dw_sales.application.shadow import label_po_settled, label_reply_move
 from dw_sales.application.visibility import sees_case
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
@@ -54,7 +55,11 @@ DW1_WORKER_VERSION = "1.0.0"
 
 
 async def stored_order(
-    work: SalesUnitOfWork, case_id: uuid.UUID, *, viewer: AccessContext | None
+    work: SalesUnitOfWork,
+    case_id: uuid.UUID,
+    *,
+    viewer: AccessContext | None,
+    export_control: bool = False,
 ) -> Stored[OrderCase]:
     """The case, in the caller's workspace only: another tenant's or another
     workspace's id reads as not found, never as forbidden.
@@ -62,9 +67,14 @@ async def stored_order(
     ``viewer``: the person reading, who sees only what `sees_case` lets them
     (a case outside it reads as not found too); None for DW1's own lanes and
     a settlement, which act for the whole workspace. Required, so every
-    caller says which it is."""
+    caller says which it is.
+
+    ``export_control``: True only for a read and for the NOC/ESF hold's own
+    acknowledgement, the two things a hold lets the export-control PIC do
+    on an order that is not theirs (ticket 78). Every other step leaves it
+    False, so a hold opens no close, no self-check, no Bravo write."""
     stored = await work.orders.get(case_id)
-    if stored is None or not seen_by(viewer, CaseKind.ORDER, stored):
+    if stored is None or not seen_by(viewer, CaseKind.ORDER, stored, export_control=export_control):
         raise NotFoundError("no such order case", details={"case_id": str(case_id)})
     return stored
 
@@ -79,10 +89,21 @@ async def stored_quote(
 
 
 def seen_by(
-    viewer: AccessContext | None, kind: CaseKind, stored: Stored[OrderCase] | Stored[QuoteCase]
+    viewer: AccessContext | None,
+    kind: CaseKind,
+    stored: Stored[OrderCase] | Stored[QuoteCase],
+    *,
+    export_control: bool = False,
 ) -> bool:
+    """``export_control``: as `stored_order`'s, True only where the caller
+    reads (a list, a page) or acknowledges the hold."""
+    case = stored.case
     return viewer is None or sees_case(
-        viewer, kind, stored.case.status.value, stored.origin.assigned_to
+        viewer,
+        kind,
+        case.status.value,
+        stored.origin.assigned_to,
+        export_held=export_control and isinstance(case, OrderCase) and case.awaits_export_control,
     )
 
 
@@ -126,13 +147,16 @@ def audit_row(
     event: CaseEvent,
     run_id: uuid.UUID | None = None,
     approval_id: uuid.UUID | None = None,
+    lane: str | None = None,
 ) -> AuditEvent:
     """The platform audit row for one case event, in the event's own terms.
 
     ``run_id`` is the DW1 run the event happened in, when it did: a decision
     applied when the run resumed names the run, and through it the approval.
     ``approval_id`` names the approval itself where the run is not enough to
-    find it: a decision that was not applied (ticket 14).
+    find it: a decision that was not applied (ticket 14). ``lane``: a
+    background lane moved the case, and the row is that lane's (ADR 0011),
+    never a person's.
     """
     actor = event.actor
     details: dict[str, object] = {
@@ -150,6 +174,19 @@ def audit_row(
             details[name] = value
     if approval_id is not None:
         details["approval_id"] = str(approval_id)
+    if lane is not None:
+        return lane_audit_event(
+            lane=lane,
+            event_id=ids.new_uuid(),
+            tenant_id=TenantId(context.tenant_id),
+            workspace_id=WorkspaceId(context.workspace_id),
+            action=f"sales.{event.action}",
+            resource_type=f"sales_{case_kind.value}_case",
+            resource_id=str(case_id),
+            run_id=run_id,
+            occurred_at=event.occurred_at,
+            details=details,
+        )
     return AuditEvent(
         id=ids.new_uuid(),
         tenant_id=TenantId(context.tenant_id),
@@ -197,10 +234,26 @@ async def save_order(
     *,
     run_id: uuid.UUID | None = None,
     approval_id: uuid.UUID | None = None,
+    lane: str | None = None,
 ) -> None:
     """The order's next state, its event and its audit row, in the open
-    transaction; the caller commits."""
+    transaction; the caller commits; ``lane``: moved by that background lane
+    (`audit_row`). A person's move labels what the reply
+    readers read in shadow (ticket 67), in the same transaction."""
     await work.orders.save(after, expected_version=before.case_version, event=event)
+    if run_id is None and before.status is not after.status:
+        await label_reply_move(
+            work,
+            context,
+            ids,
+            case_kind=CaseKind.ORDER,
+            case_id=after.case_id,
+            customer_code=after.customer_code,
+            from_status=before.status.value,
+            to_status=after.status.value,
+            at=event.occurred_at,
+        )
+        await label_po_settled(work, context, ids, before=before, after=after, at=event.occurred_at)
     await work.audit.append(
         audit_row(
             context,
@@ -213,6 +266,7 @@ async def save_order(
             event=event,
             run_id=run_id,
             approval_id=approval_id,
+            lane=lane,
         )
     )
 
@@ -228,6 +282,18 @@ async def save_quote(
     run_id: uuid.UUID | None = None,
 ) -> None:
     await work.quotes.save(after, expected_version=before.case_version, event=event)
+    if run_id is None and before.status is not after.status:
+        await label_reply_move(
+            work,
+            context,
+            ids,
+            case_kind=CaseKind.QUOTE,
+            case_id=after.case_id,
+            customer_code=after.customer_code,
+            from_status=before.status.value,
+            to_status=after.status.value,
+            at=event.occurred_at,
+        )
     await work.audit.append(
         audit_row(
             context,

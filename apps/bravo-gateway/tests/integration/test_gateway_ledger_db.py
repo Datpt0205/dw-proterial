@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -81,6 +82,7 @@ def claims(tenant: uuid.UUID = TENANT_A, workspace: uuid.UUID = WORKSPACE_A) -> 
         content_hash="a" * 64,
         bravo_user_id=2413,
         employee_code="NV001",
+        target="uat",
         issued_at=NOW,
         expires_at=NOW + timedelta(minutes=30),
         key_id="k1",
@@ -135,6 +137,28 @@ async def test_a_row_for_another_tenant_cannot_be_written_from_this_scope(
                 ),
                 {"t": TENANT_B, "w": WORKSPACE_B, "a": uuid.uuid4(), "h": "b" * 64},
             )
+
+
+async def test_the_ledger_records_the_target_and_admits_only_the_two(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    # Ticket 85: each row carries the Bravo the gateway acted on.
+    production = replace(claims(), target="production")
+    await SqlLedger(sessions).claim(production)
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "SELECT set_config('app.tenant_id', :t, true), set_config('app.workspace_id', :w, true)"
+            ),
+            {"t": str(TENANT_A), "w": str(WORKSPACE_A)},
+        )
+        stored = await session.scalar(
+            sa.text("SELECT target FROM bravo.write_ledger WHERE approval_id = :a"),
+            {"a": production.approval_id},
+        )
+    assert stored == "production"
+    with pytest.raises(DBAPIError, match="ck_write_ledger_target"):
+        await SqlLedger(sessions).claim(replace(claims(), target="staging"))  # type: ignore[arg-type]
 
 
 async def test_a_spent_approval_cannot_be_deleted(

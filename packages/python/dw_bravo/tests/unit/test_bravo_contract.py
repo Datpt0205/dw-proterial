@@ -76,7 +76,7 @@ def test_any_field_changed_changes_the_hash(changed: SetConfirmedDate) -> None:
 def test_two_kinds_with_one_content_hash_differently() -> None:
     # A cancel and a confirmed date on the same line must never share an
     # approval: the kind is inside the hash.
-    assert content_hash(CancelLine(line=LINE)) != content_hash(
+    assert content_hash(CancelLine(line=LINE, reason="x")) != content_hash(
         SetConfirmedDate(line=LINE, confirmed_date=date(2026, 12, 1))
     )
 
@@ -124,14 +124,14 @@ def test_every_kind_is_keyed_by_its_name_and_version() -> None:
         "so.create@1",
     }
     assert all(k.screen == "EDIT_BizDocSO" for k in WRITE_KINDS.values())
-    assert {k for k, w in WRITE_KINDS.items() if w.operation == "insert"} == {
-        "so.line.split@1",
-        "so.create@1",
-    }
-    # Only what the 11-20 trace shows a PIC saving may run.
+    # A split saves a stored SO (`EDIT_BizDocSO|Edit`, 11-25 17:28:58): its
+    # new lines are INSERTs inside an update, so only creation is an insert.
+    assert {k for k, w in WRITE_KINDS.items() if w.operation == "insert"} == {"so.create@1"}
+    # Only what a UAT trace shows a PIC saving may run (11-20; the cancel 11-25).
     assert {k for k, w in WRITE_KINDS.items() if w.pending is None} == {
         "so.line.set_confirmed_date@1",
         "so.line.set_quantity@1",
+        "so.line.cancel@1",
     }
     assert set(READ_KINDS) == {
         "customer.get@1",

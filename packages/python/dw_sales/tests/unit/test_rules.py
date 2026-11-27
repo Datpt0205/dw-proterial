@@ -185,10 +185,34 @@ async def test_the_heads_own_version_applies_at_once_and_is_audited_as_theirs() 
     assert applied.approval_id is None
     listed = await world.services.rules.list(GIANG.context())
     assert listed.in_force[RuleKey.ORDER_RULES] == "sales_order_rules@9.0.2"
+    # The page words the key "Áp dụng ngay" from this list (85 review).
+    assert RuleKey.ORDER_RULES not in listed.decided_by_a_second
     assert {v.version_id: v.status for v in listed.versions}[first] == "superseded"
     assert (await world.services.layouts.rules.rules(ALPHA)).cross_check_required
     actions = [e.action for e in world.audit() if e.resource_id == str(applied.version_id)]
     assert actions == ["sales.rules.applied"]
+
+
+async def test_the_heads_switch_to_bravo_production_waits_on_a_second_person() -> None:
+    """Tickets 63 g and 85: which Bravo DW1 writes, and what it writes there,
+    is never applied at its proposer's word, the head's included."""
+    world = _world()
+    document = world.policies.bravo_writes.model_dump(mode="json")
+    document.update(
+        policy_version="1.1.1", target="production", target_uat_proof="UAT 2026-12-01 run 3"
+    )
+
+    proposed = await world.services.rules.propose(GIANG.context(), RuleKey.BRAVO_WRITES, document)
+
+    assert (proposed.status, proposed.applied_directly) == ("proposed", False)
+    assert proposed.approval_id is not None
+    listed = await world.services.rules.list(GIANG.context())
+    assert listed.in_force.get(RuleKey.BRAVO_WRITES) != "sales_bravo_writes@1.1.1"
+    # The page words it "Gửi duyệt" from the list the server decides by.
+    assert RuleKey.BRAVO_WRITES in listed.decided_by_a_second
+    with pytest.raises(ConflictError) as refused:
+        await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
+    assert refused.value.details["rule"] == "maker_checker"
 
 
 async def test_a_pic_without_the_editor_set_proposes_nothing() -> None:

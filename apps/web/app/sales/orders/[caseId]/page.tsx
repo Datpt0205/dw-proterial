@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -20,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
-import type { ReplyKind, SalesSchemas } from "@dw/api-client";
+import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
@@ -30,24 +24,28 @@ import {
   ACTION,
   CLOSE_REASON,
   DERIVATION,
+  PASSWORD_FILE,
   FIELD,
   FINDING_CODE,
   label,
   NOT_APPLIED_REASON,
+  ON_MATCH_EXCEPTION,
   ORDER_STATE,
   SALES_ROLE,
 } from "../../_lib/labels";
 import { usePeople } from "../../_lib/people";
 import {
   anchorRegion,
-  mailRange,
-  markMailServed,
   unopenedSources,
   useServedRevision,
 } from "../../_lib/served";
-import { coverageStatement } from "../../_lib/statements";
+import { coverageStatement, DW_PASS_COVERS } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
-import { exportControlHold, isOpen } from "../../_lib/order-actions";
+import {
+  exportControlHold,
+  isOpen,
+  onHeldOrder,
+} from "../../_lib/order-actions";
 import { useSalesViewer } from "../../_lib/viewer";
 import {
   ArtifactsPanel,
@@ -60,7 +58,9 @@ import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
-import { AgentReply, AGENT_KINDS } from "./agent-reply";
+import { AgentReply } from "./agent-reply";
+import { agentDraft, useOrderChatOffers, waitsOnCustomer } from "./chat-offers";
+import { useOrderSource } from "./order-source";
 import { AgreementPanel } from "./agreement";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -71,16 +71,7 @@ import {
   useCaseChatDecided,
   WithCaseChat,
   useCaseChatOffers,
-  type CaseOffers,
 } from "../../_components/case-chat";
-import {
-  SourceDrawer,
-  type SourceTarget,
-} from "../../_components/source-drawer";
-import {
-  MailTextDrawer,
-  type MailTarget,
-} from "../../_components/mail-text-drawer";
 import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
 import { ChangeRequestsPanel } from "./change-requests";
@@ -89,6 +80,7 @@ import { QuoteLinksPanel } from "./quote-link";
 import { InternalChangePanel } from "./internal-change";
 import { UpdateLoopPanel } from "./update-loop";
 import { BravoReadBackPanel } from "./bravo-read-back";
+import { BravoWritesPanel } from "./bravo-writes";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
@@ -96,7 +88,6 @@ import { PrintCopyNotice } from "./print-copy";
 import { UnopenedValues } from "./unopened-values";
 
 type Order = SalesSchemas["OrderCaseView"];
-type Anchor = SalesSchemas["SourceAnchor"];
 
 export default function OrderPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -108,48 +99,6 @@ export default function OrderPage() {
       </WithCaseChat>
     </ScopeGate>
   );
-}
-
-/** "Bản AI soạn" beside a template draft the model may word (ticket 32),
- * or null: one answer for the files panel and the case's conversation. */
-function agentDraft(caseId: string, kind: string): ReactNode {
-  return AGENT_KINDS.has(kind) ? (
-    <AgentReply key={kind} caseId={caseId} kind={kind as ReplyKind} />
-  ) : null;
-}
-
-/** The order waits on the customer's corrected PO: a reminder may be drafted. */
-function waitsOnCustomer(status: Order["status"]): boolean {
-  return status === "correction_requested";
-}
-
-/** Where a value of the order was read: a header field, or a line's field. */
-function anchorOf(
-  order: Order,
-  field: string,
-  lineNo: number | null,
-): Anchor | null {
-  // `print:<n>`: where the PDF print shows a value differently (ticket 34).
-  const printed = /^print:(\d+)$/.exec(field);
-  if (printed)
-    return order.print_copy?.differences[Number(printed[1])]?.anchor ?? null;
-  if (lineNo === null)
-    return (
-      order.header_anchors[field] ??
-      (field === "total"
-        ? order.total_anchor
-        : field === "buyer"
-          ? order.buyer_anchor
-          : field === "legacy_text"
-            ? order.legacy_text_anchor
-            : null) ??
-      null
-    );
-  const line = order.lines.find((l) => l.line_no === lineNo);
-  // `schedule:<n>`: one delivery schedule of a split line (ticket 21).
-  const schedule = /^schedule:(\d+)$/.exec(field);
-  if (schedule) return line?.schedules[Number(schedule[1])]?.anchor ?? null;
-  return line?.anchors[field] ?? line?.anchors.description ?? null;
 }
 
 function OrderDetail() {
@@ -169,8 +118,6 @@ function OrderDetail() {
     "sales/master-data/customers",
     useCallback(() => salesApi().customers(), []),
   );
-  const [source, setSource] = useState<SourceTarget | null>(null);
-  const [mail, setMail] = useState<MailTarget | null>(null);
   const [picking, setPicking] = useState<number | null>(null);
 
   const data = order.data;
@@ -179,47 +126,30 @@ function OrderDetail() {
     if (data) document.title = `PO ${data.po_no} · Đơn hàng · Sales`;
   }, [data]);
 
-  const viewer = useSalesViewer();
+  const signedIn = useSalesViewer();
   const reload = useCallback(() => {
     order.reload();
     work.reload();
   }, [order, work]);
   // A flag decided in the case's conversation (ticket 56) shows at once.
   useCaseChatDecided(reload);
-  const loadMail = useCallback(
-    () => salesApi().orderMessageText(caseId),
-    [caseId],
-  );
-  const mailServed = useCallback(
-    (version: number) => markMailServed(caseId, version),
-    [caseId],
-  );
+  const source = useOrderSource(data ?? null);
   // The page's own controls for a step asked in its conversation (ticket
   // 46), under the same conditions the page draws them with below.
-  const status = data?.status;
-  const available = artifacts.data?.available;
-  const offers = useMemo<CaseOffers>(() => {
-    if (status === undefined) return {};
-    const drafts = (available ?? [])
-      .map((k) => agentDraft(caseId, k))
-      .filter((node) => node !== null);
-    return {
-      thread_summary: <ThreadSummary kind="order" caseId={caseId} />,
-      ...(waitsOnCustomer(status)
-        ? {
-            customer_reminder: (
-              <CustomerReminder kind="order" caseId={caseId} />
-            ),
-          }
-        : {}),
-      ...(drafts.length ? { reply_draft: <>{drafts}</> } : {}),
-    };
-  }, [caseId, status, available]);
+  const offers = useOrderChatOffers(
+    caseId,
+    data?.status,
+    artifacts.data?.available,
+  );
   useCaseChatOffers(offers);
 
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
     return <LoadError error={order.error} onRetry={order.reload} />;
+
+  // Seen only through its NOC/ESF hold (ticket 78): the hold is the one
+  // control the server lets this person press on someone else's order.
+  const viewer = data.export_hold_only ? onHeldOrder(signedIn) : signedIn;
 
   // A PO written in the mail (AI item 4): its one source is the mail's text.
   const fromMail = data.attachment_id === null;
@@ -243,17 +173,7 @@ function OrderDetail() {
                 ? `Đến lượt ${name(data.assigned_to)}.`
                 : "Hồ sơ chưa giao cho ai.";
 
-  const openSource = (field: string, lineNo: number | null) => {
-    const anchor = anchorOf(data, field, lineNo);
-    if (fromMail) {
-      const range = mailRange(anchor) ?? mailRange(data.header_anchors.po_no);
-      if (range) setMail({ field, lineNo, ...range });
-      return;
-    }
-    const region =
-      anchorRegion(anchor) ?? anchorRegion(data.header_anchors.po_no);
-    if (region) setSource({ region, field, lineNo });
-  };
+  const openSource = source.open;
   const primary = anchorRegion(data.header_anchors.po_no);
   const customer = customers.data?.items.find(
     (c) => c.code === data.customer_code,
@@ -333,6 +253,14 @@ function OrderDetail() {
           description="Chưa thể gửi xác nhận cho khách."
         />
       ) : null}
+      {data.export_hold_only ? (
+        <Alert
+          type="info"
+          showIcon
+          role="note"
+          title="Bạn mở đơn này để xác nhận NOC/ESF; các bước khác do người phụ trách đơn làm."
+        />
+      ) : null}
       {data.superseded_by_case ? (
         <Alert
           type="warning"
@@ -408,6 +336,16 @@ function OrderDetail() {
           }Người nhập Bravo hoặc ${label(SALES_ROLE, "sales_head")} bấm “Gửi kiểm chéo lại” để kiểm ở phiên bản ${data.case_version}.`}
         />
       ) : null}
+      {data.cross_check_on_match_exceptions?.length ? (
+        <Alert
+          type="info"
+          showIcon
+          title="DW không tự kiểm chéo đơn này"
+          description={`Cần xem: ${data.cross_check_on_match_exceptions
+            .map((e) => ON_MATCH_EXCEPTION[e])
+            .join("; ")}.`}
+        />
+      ) : null}
 
       <CaseSummary
         cells={[
@@ -465,11 +403,7 @@ function OrderDetail() {
                 onClick={() =>
                   fromMail
                     ? openSource("po_no", null)
-                    : setSource({
-                        region: missingRegions[0]!,
-                        field: "po_no",
-                        lineNo: null,
-                      })
+                    : source.openRegion(missingRegions[0]!)
                 }
               >
                 Mở nguồn
@@ -521,6 +455,8 @@ function OrderDetail() {
       ) ? (
         <BravoReadBackPanel caseId={caseId} />
       ) : null}
+
+      <BravoWritesPanel order={data} viewer={viewer} onChanged={reload} />
 
       <UpdateLoopPanel
         order={data}
@@ -618,6 +554,9 @@ function OrderDetail() {
         sent={data.thread_sent}
         before={data.thread_before}
         answer={(reply) =>
+          // Seen through the hold alone: the draft reads the order as the
+          // assignee's and would be refused (ticket 79 review).
+          !data.export_hold_only &&
           reply.intents.some((i) => i.intent === "asks") ? (
             <AgentReply
               caseId={data.case_id}
@@ -659,6 +598,15 @@ function OrderDetail() {
                         },
                       ]
                     : []),
+                  ...(data.password_file
+                    ? [
+                        {
+                          key: "password",
+                          label: "Tệp có mật khẩu",
+                          children: `Mở bằng mật khẩu trong thư · ${PASSWORD_FILE[data.password_file]}`,
+                        },
+                      ]
+                    : []),
                   {
                     key: "asof",
                     label: "Dữ liệu đến ngày",
@@ -697,10 +645,13 @@ function OrderDetail() {
                   {
                     key: "check",
                     label: "Kiểm chéo",
-                    children: data.cross_checked_by
-                      ? `${name(data.cross_checked_by)} · ${formatDateTime(data.cross_checked_at)}`
-                      : "Chưa",
+                    children: data.cross_checked_on_read_back
+                      ? `${DW_PASS_COVERS} · ${formatDateTime(data.cross_checked_at)}`
+                      : data.cross_checked_by
+                        ? `${name(data.cross_checked_by)} · ${formatDateTime(data.cross_checked_at)}`
+                        : "Chưa",
                   },
+
                   {
                     key: "confirm",
                     label: "Xác nhận",
@@ -752,25 +703,7 @@ function OrderDetail() {
         ]}
       />
 
-      {data.attachment_id !== null ? (
-        <SourceDrawer
-          kind="order"
-          caseId={data.case_id}
-          caseVersion={data.case_version}
-          attachmentId={data.attachment_id}
-          target={source}
-          onClose={() => setSource(null)}
-        />
-      ) : (
-        <MailTextDrawer
-          resourceKey={`sales/order/${data.case_id}/${data.case_version}/message-text`}
-          load={loadMail}
-          target={mail}
-          mayRead={viewer.hasScope("sales.price.read")}
-          onClose={() => setMail(null)}
-          onServed={mailServed}
-        />
-      )}
+      {source.drawers(viewer)}
       {picking !== null ? (
         <CandidatePicker
           order={data}

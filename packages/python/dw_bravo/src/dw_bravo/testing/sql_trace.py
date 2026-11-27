@@ -12,7 +12,9 @@ Two statement shapes are read:
 - the client's writes, `sp_executesql` of `INSERT INTO <table> (...)` or
   `UPDATE TOP (1) <table> SET [Col]=@_Col,... WHERE Id=...`, with every
   parameter's value (the whole row, not only what changed);
-- a procedure or function a rule ran: `exec dbo.<name> @_P=...`.
+- a procedure or function a rule ran: `exec dbo.<name> @_P=...`;
+- a row the client deleted in a save: `DELETE TOP (1) FROM <table> WHERE
+  Id=@_Original_Id AND timestamp=@_Original_timestamp` (11-25 17:28:58).
 """
 
 from __future__ import annotations
@@ -25,11 +27,12 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-_PARAM = re.compile(r"@_(\w+)=(N'(?:[^']|'')*'|'(?:[^']|'')*'|DEFAULT|NULL|@\w+ output|[^,]*)")
+_PARAM = re.compile(r"@_(\w+)=(N'(?:[^']|'')*'|'(?:[^']|'')*'|DEFAULT|NULL|@\w+ output|@\w+|[^,]*)")
 _WRITE = re.compile(
     r"(INSERT INTO (\w+) \((.*?)\) VALUES|UPDATE TOP \(1\) (\w+) SET (.*?) WHERE)", re.S
 )
 _EXEC = re.compile(r"exec (?:dbo\.)?\[?(\w+)\]? (@_.*)$", re.S)
+_DELETE = re.compile(r"DELETE TOP \(1\) FROM (\w+) WHERE Id=@_Original_Id")
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,13 @@ class Write:
     @property
     def row_id(self) -> object:
         return self.values.get("Id")
+
+
+@dataclass(frozen=True)
+class Delete:
+    statement: Statement
+    table: str
+    row_id: object  # the deleted row's Id
 
 
 @dataclass(frozen=True)
@@ -115,8 +125,8 @@ def _values(sql: str) -> dict[str, object]:
     out: dict[str, object] = {}
     for match in _PARAM.finditer(sql[start + 2 :]):
         name, raw = match.group(1), match.group(2)
-        if raw.endswith(" output"):
-            continue
+        if raw.endswith(" output") or raw.startswith("@"):
+            continue  # bound to a variable the batch declared: no literal value
         out[name] = literal(raw)
     return out
 
@@ -137,6 +147,15 @@ def writes(statements: list[Statement]) -> Iterator[Write]:
             yield Write(statement, "update", match.group(4), columns, values)
 
 
+def deletes(statements: list[Statement]) -> Iterator[Delete]:
+    for statement in statements:
+        if "sp_executesql" not in statement.sql:
+            continue
+        match = _DELETE.search(statement.sql)
+        if match is not None:
+            yield Delete(statement, match.group(1), _values(statement.sql).get("Original_Id"))
+
+
 def procedure_calls(statements: list[Statement]) -> Iterator[ProcedureCall]:
     for statement in statements:
         sql = statement.sql.strip()
@@ -148,7 +167,7 @@ def procedure_calls(statements: list[Statement]) -> Iterator[ProcedureCall]:
         parameters: dict[str, object] = {}
         for param in _PARAM.finditer(match.group(2)):
             raw = param.group(2)
-            if raw.endswith(" output") or raw == "default":
+            if raw.endswith(" output") or raw == "default" or raw.startswith("@"):
                 continue
             parameters[param.group(1)] = literal(raw)
         yield ProcedureCall(statement, match.group(1), parameters)

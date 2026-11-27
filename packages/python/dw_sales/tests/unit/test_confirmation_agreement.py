@@ -12,6 +12,7 @@ version with NRV's.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -639,3 +640,61 @@ async def test_a_reply_on_another_order_does_not_accept_this_one() -> None:
             await _agree(world, other, "accepted", message_id="R1")
 
     assert _version(world, other) == version
+
+
+async def test_dw1_records_the_silence_itself_and_the_pic_undoes_it_with_one_press() -> None:
+    """Ticket 82 (dw_sales ADR 0011 amendment): once the customer's days of
+    silence pass, the follow-up lane records the agreement as itself, tells
+    the PIC so, and the PIC takes it back with one press."""
+    from dw_platform.domain.audit import system_actor
+    from dw_sales.application.confirmations import SilenceRecorder
+    from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
+
+    with SampleWith([]) as sample:
+        world = _world(_with_days(sample, days=3))
+        case_id = await _sent_to_customer(world)
+        due = datetime(2026, 10, 9, 0, 0, tzinfo=HANOI)
+        lane = replace(
+            _lane(world, due),
+            agreements=SilenceRecorder(world.store, FixedClock(due), Uuid4Generator()),
+        )
+        early = replace(
+            _lane(world, due - timedelta(hours=1)),
+            agreements=SilenceRecorder(
+                world.store, FixedClock(due - timedelta(hours=1)), Uuid4Generator()
+            ),
+        )
+        await early.tick(ALPHA)
+        assert world.order(case_id).status is OrderStatus.CONFIRMATION_SENT
+
+        await lane.tick(ALPHA)
+
+        case = world.order(case_id)
+        assert case.status is OrderStatus.CONFIRMED and case.agreement is not None
+        lane_id = system_actor(SALES_FOLLOWUPS_LANE).value
+        assert (case.agreement.how, case.agreement.by) == ("implied", lane_id)
+        (audited,) = [e for e in world.audit() if e.action == "sales.order.customer_agreed"]
+        assert audited.details["actor_kind"] == "worker"
+        told = [n for n in world.notifications.sent if "DW1 đã ghi" in n.title]
+        assert told and "Hoàn tác" in told[0].body
+
+        world.store.clock.advance_to(due)
+        await world.services.confirmations.implied_undone(
+            AN.context(), case_id, case_version=_version(world, case_id)
+        )
+
+    undone = world.order(case_id)
+    assert undone.status is OrderStatus.CONFIRMATION_SENT and undone.agreement is None
+    assert "sales.order.implied_undone" in [e.action for e in world.audit()]
+
+
+async def test_only_a_silence_is_undone_never_a_customers_words() -> None:
+    with SampleWith([]) as sample:
+        world = _world(_with_days(sample, days=3))
+        case_id = await _sent_to_customer(world)
+        await _agree(world, case_id, "accepted")
+        with pytest.raises(ConflictError) as refused:
+            await world.services.confirmations.implied_undone(
+                AN.context(), case_id, case_version=_version(world, case_id)
+            )
+    assert refused.value.details["rule"] == "not_implied"

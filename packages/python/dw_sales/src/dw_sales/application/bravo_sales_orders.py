@@ -46,7 +46,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.ports import AuditRepositoryPort
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.bravo_exports import ExportOutcome
 from dw_sales.application.bravo_line_writes import BravoUnreachableError
@@ -63,6 +63,7 @@ from dw_sales.domain.bravo_sales_orders import (
     SoDifference,
     compare,
 )
+from dw_sales.domain.cross_check_on_match import ReadBackFacts, ReadBackSource
 from dw_sales.domain.master_data import RejectedRow, read_date, read_decimal
 from dw_sales.domain.orders import OrderCase, OrderStatus
 
@@ -104,10 +105,18 @@ class BravoReadBack(BaseModel):
     file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     read_by: uuid.UUID
     read_at: AwareDatetime
+    # Where it was read (ticket 81): an export a person uploaded, or Bravo
+    # through the gateway. A read-back stored before it says reads "export".
+    source: ReadBackSource = "export"
 
     @property
     def equal(self) -> bool:
         return not self.differences
+
+    @property
+    def facts(self) -> ReadBackFacts:
+        """What the cross-check's verdict reads of it (ticket 81)."""
+        return ReadBackFacts(self.source, self.case_version, len(self.differences), self.so_no)
 
 
 def require_bravo_agrees(read_back: BravoReadBack | None, case: OrderCase) -> None:
@@ -376,10 +385,15 @@ async def store_read_back(
     order: BravoSalesOrder,
     differences: tuple[SoDifference, ...],
     source_sha256: str,
+    *,
+    source: ReadBackSource = "export",
+    lane: str | None = None,
 ) -> BravoReadBack:
     """The case's read-back, replacing the one before, with its audit row in
     the same transaction. ``source_sha256``: the export file's, or the
-    gateway's answer's (`read_from_bravo`)."""
+    gateway's answer's (`read_from_bravo`), ``source`` saying which. Read by
+    a background ``lane`` (ticket 81), it is audited as that lane (ADR
+    0011), never as a person, and ``context`` is the lane's."""
     assert order.so_no is not None  # compared only under one SO
     now = clock.now()
     read_back = BravoReadBack(
@@ -392,29 +406,46 @@ async def store_read_back(
         file_sha256=source_sha256,
         read_by=context.principal_id,
         read_at=now,
+        source=source,
     )
     scope = sales_scope(context)
+    details: dict[str, object] = {
+        "case_id": str(case.case_id),
+        "case_version": case.case_version,
+        "differences": len(differences),
+        "rows_read": len(order.rows),
+        "file_sha256": source_sha256,
+        "source": source,
+    }
+    tenant, workspace = TenantId(context.tenant_id), WorkspaceId(context.workspace_id)
+    event = (
+        AuditEvent(
+            id=ids.new_uuid(),
+            tenant_id=tenant,
+            workspace_id=workspace,
+            actor_id=UserId(context.principal_id),
+            action="sales.order.bravo_read_back",
+            resource_type=_RESOURCE,
+            resource_id=str(case.case_id),
+            occurred_at=now,
+            details=details,
+        )
+        if lane is None
+        else lane_audit_event(
+            lane=lane,
+            event_id=ids.new_uuid(),
+            tenant_id=tenant,
+            workspace_id=workspace,
+            action="sales.order.bravo_read_back",
+            resource_type=_RESOURCE,
+            resource_id=str(case.case_id),
+            occurred_at=now,
+            details=details,
+        )
+    )
     async with uow(scope) as work:
         await work.read_backs.put(read_back)
-        await work.audit.append(
-            AuditEvent(
-                id=ids.new_uuid(),
-                tenant_id=TenantId(context.tenant_id),
-                workspace_id=WorkspaceId(context.workspace_id),
-                actor_id=UserId(context.principal_id),
-                action="sales.order.bravo_read_back",
-                resource_type=_RESOURCE,
-                resource_id=str(case.case_id),
-                occurred_at=now,
-                details={
-                    "case_id": str(case.case_id),
-                    "case_version": case.case_version,
-                    "differences": len(differences),
-                    "rows_read": len(order.rows),
-                    "file_sha256": source_sha256,
-                },
-            )
-        )
+        await work.audit.append(event)
         await work.commit()
     return read_back
 
@@ -469,7 +500,7 @@ class ReadBackService:
         )
         scope = sales_scope(context)
         async with self.sales(scope) as work:
-            stored = await stored_order(work, case_id, viewer=context)
+            stored = await stored_order(work, case_id, viewer=context, export_control=True)
         async with self.uow(scope) as work:
             found = await work.read_backs.get(case_id)
         if found is None:
@@ -526,6 +557,14 @@ class ReadBackService:
             )
         differences = compare(prepared_rows(case), order, confirmed_dates=True)
         await store_read_back(
-            self.uow, self.ids, self.clock, context, case, order, differences, digest
+            self.uow,
+            self.ids,
+            self.clock,
+            context,
+            case,
+            order,
+            differences,
+            digest,
+            source="gateway",
         )
         return await self.latest(context, case_id)

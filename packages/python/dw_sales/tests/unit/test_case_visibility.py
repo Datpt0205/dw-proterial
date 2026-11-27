@@ -7,29 +7,45 @@ found, on every path a person reads a case through."""
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from dw_kernel.errors import NotFoundError
 from dw_platform.application.access_context import AccessContext
+from dw_sales.application.access import SalesScopes
+from dw_sales.application.chat_prompts import QUESTION_INTENT
 from dw_sales.application.inbox_service import _shown
 from dw_sales.application.visibility import sees_case
+from dw_sales.domain.assistant import CaseKey
 from dw_sales.domain.dispositions import (
     CaseKind,
     DispositionKind,
     MessageDisposition,
     RoutingReason,
 )
+from dw_sales.domain.orders import CloseReason, OrderCase
 from dw_sales.domain.quotes import QuoteCase
-from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG
+from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA, READER
+from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 OTHER = uuid.UUID(int=0xFEED)
+# Holds the "PIC kiểm soát xuất khẩu" permission set and reads cases, and
+# prepares no order: the acknowledgement asks both (`_decide`), so the hold
+# is not theirs to decide and not theirs to see (ticket 78 review).
+ACK_ONLY = Caller(
+    uuid.UUID(int=0xAC),
+    "Trần Kiểm Soát",
+    "kiem.soat@alpha.local",
+    frozenset({SalesScopes.CASE_READ, SalesScopes.COMPLIANCE_ACK}),
+)
 
 
 def _restricted(caller: Caller, *reports: Caller) -> AccessContext:
@@ -114,6 +130,122 @@ async def test_another_pics_quote_is_not_found_on_any_read() -> None:
     assert "M10" in {m.message_id for m in await services.inbox.messages(head)}
 
 
+@pytest.mark.parametrize(
+    ("caller", "export_held", "seen"),
+    [
+        (AN, True, True),  # holds sales.compliance.ack: the hold is theirs to decide
+        (AN, False, False),  # acknowledged, or never held: the assignee's again
+        (KHOA, True, False),  # prepares orders, acknowledges nothing
+        (ACK_ONLY, True, False),  # acknowledges, prepares nothing: may not decide it
+    ],
+)
+def test_the_export_control_pic_sees_an_order_only_while_it_holds_on_them(
+    caller: Caller, export_held: bool, seen: bool
+) -> None:
+    """Sales ticket 78: the export-control PIC is told of an NOC/ESF hold on
+    an order that is not theirs, so they may open it while it holds."""
+    assert (
+        sees_case(_restricted(caller), CaseKind.ORDER, "in_review", OTHER, export_held=export_held)
+        is seen
+    )
+
+
+async def _held_order_of_dieu(world: World) -> OrderCase:
+    """M03 (no NOC/ESF on file) processed, then given to Diệu by the head."""
+    ((_, case),) = (await world.process_each(AN, ["M03"])).values()
+    assert isinstance(case, OrderCase) and case.awaits_export_control, case
+    await world.services.assignment.reassign(
+        GIANG.context(),
+        CaseKind.ORDER,
+        case.case_id,
+        assignee=DIEU.user_id,
+        case_version=case.case_version,
+    )
+    return world.order(case.case_id)
+
+
+async def test_the_export_control_pic_opens_and_decides_a_hold_on_anothers_order() -> None:
+    """In a restricted tenant An (the export-control PIC) reads Diệu's held
+    order and acknowledges the hold; once acknowledged it reads as not found
+    to An again. Khoa, who prepares orders but acknowledges nothing, never
+    reads it."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    services = world.services
+    an, khoa = _restricted(AN), _restricted(KHOA)
+
+    with pytest.raises(NotFoundError):
+        await services.orders.get(khoa, held.case_id)
+    assert held.case_id not in {s.case_id for s in await services.orders.summaries(khoa)}
+
+    assert (await services.orders.get(an, held.case_id)).case_id == held.case_id
+    assert held.case_id in {s.case_id for s in await services.orders.summaries(an)}
+    await services.order_commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert not world.order(held.case_id).awaits_export_control
+    with pytest.raises(NotFoundError):
+        await services.orders.get(an, held.case_id)
+
+
+async def test_the_hold_lets_the_export_control_pic_read_and_acknowledge_and_nothing_else() -> None:
+    """Ticket 78 review: seeing a held order is not owning it. While the hold
+    waits on An, An may read Diệu's order and decide the hold, and every
+    other step on it reads as not found, as it would without the hold: a
+    close, the self-check, a value correction. Diệu's order is untouched."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    commands, an = world.services.order_commands, _restricted(AN)
+
+    with pytest.raises(NotFoundError):
+        await commands.close(
+            an,
+            held.case_id,
+            case_version=held.case_version,
+            reason=CloseReason.NOT_AN_ORDER,
+            superseded_by=None,
+        )
+    with pytest.raises(NotFoundError):
+        await commands.prepare(an, held.case_id, case_version=held.case_version)
+    with pytest.raises(NotFoundError):
+        await commands.resume_review(an, held.case_id, case_version=held.case_version)
+    assert world.order(held.case_id) == held
+
+    # The reads the order's page makes, and the acknowledgement, stay open;
+    # the page is told the order is An's for the hold alone, and offers no
+    # other control. Diệu, whose order it is, is told nothing of the kind.
+    seen = await world.services.orders.get(an, held.case_id)
+    assert seen.case_id == held.case_id and seen.export_hold_only
+    assert not (await world.services.orders.get(_restricted(DIEU), held.case_id)).export_hold_only
+    assert (await world.services.artifacts.order_artifacts(an, held.case_id)) is not None
+    await commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert not world.order(held.case_id).awaits_export_control
+
+
+async def test_a_holder_of_the_acknowledging_set_alone_never_reads_the_held_order() -> None:
+    """The set "PIC kiểm soát xuất khẩu" without `sales.order.prepare`: the
+    acknowledgement would be refused, so the held order is not shown either
+    (one answer to who the export-control PIC is: `EXPORT_CONTROL_SCOPES`)."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    ack_only = _restricted(ACK_ONLY)
+    with pytest.raises(NotFoundError):
+        await world.services.orders.get(ack_only, held.case_id)
+    assert held.case_id not in {s.case_id for s in await world.services.orders.summaries(ack_only)}
+
+
 async def test_a_mail_routed_to_a_named_pic_is_theirs_and_their_heads_alone() -> None:
     """M11 (a delivery change) is routed to the customer's Sales PIC, whom
     master data knows by address. Until 2026-11-12 the inbox read that owner
@@ -153,3 +285,112 @@ def test_a_routed_mail_whose_pic_is_no_member_is_every_pics_to_pick_up() -> None
     theirs = gone.model_copy(update={"owner": AN.member().email})
     assert not _shown(_restricted(DIEU), theirs, set(), members)
     assert _shown(_restricted(AN), theirs, set(), members)
+
+
+async def _work(world: World, viewer: AccessContext, case_id: uuid.UUID) -> set[str]:
+    items = (await world.services.overview.my_work(viewer)).items
+    return {i.action for i in items if i.id == str(case_id)}
+
+
+async def test_the_held_order_is_in_the_export_control_pics_work_until_acknowledged() -> None:
+    """Ticket 78 review: the hold is listed in "Việc của tôi" for whoever may
+    acknowledge it, not only told once: a notice dismissed or aged out of
+    the feed left it nowhere. Diệu, whose order it is, keeps her self-check;
+    Khoa (prepares, acknowledges nothing) and the set alone are not given
+    it. Acknowledged, it leaves An's list."""
+    world = _world()
+    held = await _held_order_of_dieu(world)
+    an = _restricted(AN)
+
+    assert await _work(world, an, held.case_id) == {"acknowledge_export"}
+    assert await _work(world, AN.context(), held.case_id) == {"acknowledge_export"}
+    assert await _work(world, _restricted(DIEU), held.case_id) == {"self_check"}
+    assert await _work(world, _restricted(KHOA), held.case_id) == set()
+    assert await _work(world, _restricted(ACK_ONLY), held.case_id) == set()
+
+    await world.services.order_commands.dispose(
+        an,
+        held.case_id,
+        "missing_noc_esf:-",
+        case_version=held.case_version,
+        disposition="accepted",
+        reason="Đã nhận NOC và ESF năm nay",
+    )
+    assert await _work(world, an, held.case_id) == set()
+    assert await _work(world, _restricted(DIEU), held.case_id) == {"self_check"}
+
+
+class _Reader(Recorded):
+    """Reads every question in a case's conversation as ``reading``."""
+
+    def __init__(self, reading: dict[str, Any]) -> None:
+        super().__init__(raw={})
+        self.reading = reading
+        self.flags: list[Any] = []
+
+    async def interpret(self, prompt: Any, inputs: Any, schema: Any, **kwargs: Any) -> Any:
+        if prompt == QUESTION_INTENT:
+            self.flags.append(json.loads(inputs["flags"]))
+            return schema.model_validate(self.reading)
+        return schema.model_validate({"answer": "x"})
+
+
+@pytest.mark.parametrize(
+    ("code", "stated"),
+    [("quotation_missing", False), ("missing_noc_esf", True)],
+)
+async def test_the_held_orders_chat_states_only_the_hold_to_its_export_control_pic(
+    code: str, stated: bool
+) -> None:
+    """Ticket 79 review: in the conversation of Diệu's held order, An is
+    stated the hold's decision to confirm, the one flag the page's command
+    lets An decide there; another flag is not stated (its confirmation
+    would read as not found), and the model is shown the hold alone."""
+    model = _Reader(
+        {"kind": "decide_finding", "finding_code": code, "decision": "accepted", "reason": "ok"}
+    )
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=model, measured=False)
+    held = await _held_order_of_dieu(world)
+    assert {f.code.value for f in held.findings if f.is_open} >= {code}
+    key = CaseKey(CaseKind.ORDER, held.case_id)
+
+    turn = (await world.services.assistant.ask(_restricted(AN), "chấp nhận cờ", key)).turn
+    assert (turn.proposal is not None) is stated
+    assert [f["code"] for f in model.flags[-1]] == ["missing_noc_esf"]
+    if stated:
+        assert turn.proposal is not None
+        await world.services.assistant.confirm(
+            _restricted(AN), key, turn.seq, turn.proposal.content_hash
+        )
+        assert not world.order(held.case_id).awaits_export_control
+
+
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"kind": "propose_bravo_write", "line_no": 1, "field": "quantity", "new_value": "5"},
+        {"kind": "assign_case", "assignee": "Khoa"},
+    ],
+)
+async def test_the_held_orders_chat_states_no_write_or_assignment_to_its_export_control_pic(
+    reading: dict[str, Any],
+) -> None:
+    """Ticket 79 review: An, here also holding the scopes that write into
+    Bravo and give cases, reads Diệu's order through its hold alone. Both
+    services read the order narrowly and refuse it, so the conversation
+    answers An as it answers someone without those scopes."""
+    model = _Reader(reading)
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=model, measured=False)
+    held = await _held_order_of_dieu(world)
+    key = CaseKey(CaseKind.ORDER, held.case_id)
+    scoped = _restricted(AN)
+    wider = scoped.model_copy(
+        update={
+            "scopes": scoped.scopes | {SalesScopes.BRAVO_WRITE.value, SalesScopes.CASE_ASSIGN.value}
+        }
+    )
+
+    turn = (await world.services.assistant.ask(wider, "làm giúp", key)).turn
+    reader = (await world.services.assistant.ask(READER.context(), "làm giúp", key)).turn
+    assert turn.proposal is None
+    assert turn.answer == reader.answer

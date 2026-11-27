@@ -151,6 +151,52 @@ Decided:
 4. **Bounded**: a reading no one decides is dropped after `SHADOW_KEPT_FOR`
    (60 days) by the `sales_shadow_retention` lane.
 
-First step: `description_attributes`. Next: reply reading (two readers on
-the same message, labelled by the step Sales takes), `message_intent`,
-`po_body_extraction`.
+First step: `description_attributes`. Then (same day) both reply readers,
+labelled by the move the PIC takes on the case, and `message_intent`,
+labelled by the kind the person picks, optionally, as they mark the mail
+handled (a choice that routes nothing). Then (2026-11-25, Đạt's choice)
+`po_body_extraction`: with it off a PO in the mail becomes no case, so its
+reading is kept under its customer and PO number and labelled value by value
+when an order case of the same PO is prepared by a person, from the file
+that arrives later.
+
+## Addendum 2026-11-27: a password file's values, by exception (ticket 80)
+
+Status of this addendum: **Proposed**. Built behind a tenant switch that is
+off (decided 2026-11-26 by recommendation: tickets 80 and 81 only behind a
+switch off by default, so ui-quality section 7 and maker != checker hold
+until Đạt says otherwise).
+
+The `opened_with_password` flag (ticket 17) is not about how well the file
+was read: the reader sandbox opens it in memory and reads it with the same
+layout as any file of its form. It exists because ClamAV cannot scan inside
+an encrypted file, and on 11-13 Đạt asked that every value read from one
+still wait for a person. A measured gate (this ADR's method) would measure
+reading accuracy, which is not what the flag guards, so it is not used here.
+
+Decided in code, off:
+
+1. `sales_order_rules.password_file` (1.17.0): `every_value`, the platform's
+   value and what every earlier version reads, keeps the 11-13 rule.
+   `failed_checks_only` takes the flag off every value when the case is
+   opened (`PoDocument.with_password_values_as_read`), stamps the PO
+   `password_values_as_read`, and so each value waits on a person only for a
+   check it fails or another flag (`model_read`, `new_layout`, `ocr`, ...),
+   exactly as the same file sent without a password.
+2. Nothing is confirmed in bulk and no value is recorded as a person's check:
+   the ticket's "Xác nhận phần còn lại" is not built. The lines that pass are
+   machine-read values, as in any file; the file is still named, on the case
+   ("Tệp có mật khẩu") and in the audit (`encrypted_file`), as opened with a
+   password.
+
+Owed before a tenant switches it on: Đạt's word that the unscanned decrypted
+bytes may be read without a person on each value (or a scan of the decrypted
+bytes before reading, which would be a reader-sandbox change).
+
+## Addendum 2026-11-27: one approval carved out of T2 (ticket 81)
+
+Status of this addendum: **Proposed**, off by default. The order's
+cross-check (WIV-03-012 step 9) may pass by DW on a matching read-back from
+Bravo at T1's target and audit share, by this ADR's method with a measure
+over the people's cross-checks instead of a model's confidence
+(`measured_route`). Every other approval stays T2. See ADR 0016.

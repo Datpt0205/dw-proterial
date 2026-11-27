@@ -45,7 +45,7 @@ from pydantic import BaseModel, ConfigDict
 from dw_kernel.pagination import Page, PageQuery, page_request
 from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.access import EXPORT_CONTROL_SCOPES, Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import LoggedMessage, SalesUnitOfWorkFactory, Stored
 from dw_sales.application.local_time import LocalZonePort, local_day
 from dw_sales.application.next_steps import DECIDED_ON_THE_CASE, ORDER_NEXT, QUOTE_NEXT
@@ -280,6 +280,9 @@ WHOSE_TURN: Final[Mapping[CaseKind, Mapping[str, Literal["pic", "head"]]]] = {
 _SlaOf = Callable[[CaseKind, str, datetime, date | None], Sla | None]
 # The page a work list is cut into when the caller names none.
 WORK_PAGE: Final = 50
+# A work item's action for an order held on an open NOC/ESF, the
+# export-control PIC's whoever is assigned (ticket 78).
+ACKNOWLEDGE_EXPORT: Final = "acknowledge_export"
 
 
 class KpiPort(LocalZonePort, Protocol):
@@ -438,8 +441,14 @@ class OverviewService:
             cross_checks=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK)
             or self.gate.allows(context, SalesScopes.ORDER_PREPARE),
             approvals=self.gate.allows(context, SalesScopes.QUOTE_APPROVE),
+            export_holds=self._export_control(context),
             message_owners=owners,
         )
+
+    def _export_control(self, context: AccessContext) -> bool:
+        """May acknowledge an NOC/ESF hold: every one of the scopes the
+        decision asks (`EXPORT_CONTROL_SCOPES`)."""
+        return all(self.gate.allows(context, scope) for scope in EXPORT_CONTROL_SCOPES)
 
     def _eligible(
         self, context: AccessContext, scope: SalesScopes, assigned_to: uuid.UUID | None
@@ -456,6 +465,35 @@ class OverviewService:
         soon: Callable[[date | None], bool],
         sla: _SlaOf,
     ) -> WorkItem | None:
+        # The hold is the export-control PIC's turn whoever is assigned
+        # (ticket 78), and nothing moves the order to the customer before
+        # it: it is their item until acknowledged.
+        action = (
+            ACKNOWLEDGE_EXPORT
+            if row.export_held and self._export_control(context)
+            else await self._order_action(context, row, stored)
+        )
+        if action is None:
+            return None
+        timed = sla(CaseKind.ORDER, row.status.value, row.received_at, row.due)
+        return WorkItem(
+            kind="order",
+            id=str(row.case_id),
+            status=row.status.value,
+            action=action,
+            customer_code=row.customer_code,
+            received_at=row.received_at,
+            due=row.due,
+            due_soon=soon(row.due),
+            assigned_to=row.assigned_to,
+            sla_warn_at=timed.warn_at if timed else None,
+            sla_due_at=timed.due_at if timed else None,
+        )
+
+    async def _order_action(
+        self, context: AccessContext, row: OpenOrder, stored: Stored[OrderCase] | None
+    ) -> str | None:
+        """The order's next step, when it is the caller's; None otherwise."""
         step = ORDER_NEXT.get(row.status)
         if step is None:
             return None
@@ -488,20 +526,7 @@ class OverviewService:
                 return None
         elif not self._eligible(context, scope, row.assigned_to):
             return None
-        timed = sla(CaseKind.ORDER, row.status.value, row.received_at, row.due)
-        return WorkItem(
-            kind="order",
-            id=str(row.case_id),
-            status=row.status.value,
-            action=action,
-            customer_code=row.customer_code,
-            received_at=row.received_at,
-            due=row.due,
-            due_soon=soon(row.due),
-            assigned_to=row.assigned_to,
-            sla_warn_at=timed.warn_at if timed else None,
-            sla_due_at=timed.due_at if timed else None,
-        )
+        return action
 
     def _quote_item(
         self,

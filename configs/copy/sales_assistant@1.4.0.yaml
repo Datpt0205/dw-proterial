@@ -1,0 +1,94 @@
+schema_version: "1.0"
+copy_id: sales_assistant
+version: "1.4.0"
+
+# The words DW1's assistant says in its own sentences (ticket 42 family 6;
+# dw_sales ADR 0007). Validated by
+# `dw_sales.application.assistant_copy.AssistantCopy`. What the assistant
+# answers and from which case is code's (`QuestionKind`); this file only says
+# it, where code answers without the model or replaces a wording that did not
+# pass its check.
+#
+# 1.4.0 (ticket 79): a case given in its conversation, said back for the
+# head to confirm (`assign_*`).
+#
+# 1.3.0 (ticket 56 over 53): an SO line's confirmed date or quantity the PIC
+# asks DW1 to write into Bravo, said back and proposed for approval only once
+# the PIC confirms; nothing else changed.
+# 1.2.0 (ticket 56): a decision on one of a case's open flags, said back
+# word for word for the PIC to confirm, and what DW1 asks when it cannot.
+#
+# 1.1.0 (ticket 46): the three steps of a case a person may ask for, said above
+# the case page's own control in its conversation; the case's catalog names them.
+#
+# Platform layer. A tenant's own wording arrives as its own version of this
+# file (/sales/rules), never as an edit to this one.
+#
+# Code fills each placeholder from what it looked up: a case's number, its
+# customer code, status words, dates (dd/mm/yyyy, local) and counts. Never an
+# amount. A sentence may name only its own placeholders, written {name}.
+# Parts of one answer are joined with a space; work items with a new line.
+words:
+  catalog: "DW1 trả lời được: trạng thái một PO (ghi số PO), trạng thái một yêu cầu báo giá (ghi số yêu cầu), việc đang chờ bạn, và việc đã quá hạn."
+  case_catalog: "Ở đây DW1 trả lời về hồ sơ này: trạng thái, các mốc ngày và cờ đang mở; nhờ soạn thư cho khách, nhắc khách hoặc tóm tắt chuỗi thư thì DW1 đưa nút của hồ sơ; đổi ngày XN giao hàng hoặc số lượng của một dòng SO thì DW1 nhắc lại để bạn xác nhận rồi gửi người duyệt."
+  elsewhere: "Hỏi hồ sơ khác hoặc việc của bạn ở trang Hỏi đáp DW1."
+  not_understood: "DW1 chưa hiểu câu hỏi lúc này."
+  out_of_scope: "Câu này ngoài những gì DW1 trả lời."
+  out_of_scope_case: "Câu này ngoài những gì DW1 trả lời ở đây."
+  which_order: "Bạn hỏi PO nào? Hãy ghi số PO."
+  which_quote: "Bạn hỏi yêu cầu báo giá nào? Hãy ghi số yêu cầu."
+  not_found: "Không tìm thấy {what} {reference} trong các hồ sơ bạn được xem. Kiểm tra lại số, hoặc hồ sơ thuộc người khác."
+  order_word: "PO"
+  quote_word: "yêu cầu báo giá"
+  only_this_case: "Cuộc trò chuyện này chỉ về {case}."
+  linked: "{case}: hỏi trong cuộc trò chuyện của hồ sơ này."
+  order_status: "PO {po_no} (rev {revision}) của khách {customer}: {status}. Nhận ngày {received_on}."
+  order_flags: "Còn {open_flags} cờ đang mở, {blocking_flags} cờ chặn."
+  order_cross_check: "Đang chờ kiểm chéo."
+  quote_status: "Yêu cầu báo giá {request_no} của khách {customer}: {status}. Nhận ngày {received_on}."
+  no_number: "(chưa số)"
+  quote_due: "Hạn báo giá {due}."
+  quote_late: "Hạn báo giá {due} (đã quá hạn)."
+  quote_ycbg: "Số YCBG {ycbg_no}."
+  quote_flags: "Còn {open_flags} cờ đang mở."
+  no_work: "Bạn không có việc nào đang chờ."
+  no_overdue: "Bạn không có việc nào quá hạn."
+  work_head: "Bạn có {count} việc đang chờ:"
+  overdue_head: "Bạn có {count} việc quá hạn:"
+  work_item: "- {what} (khách {customer}): {next_step}"
+  work_item_due: "- {what} (khách {customer}): {next_step}, hạn {due}"
+  unknown_customer: "chưa rõ"
+  work_more: "- và {more} việc khác trong Việc cần làm."
+  mail_work: "Thư cần xử lý"
+  mail_step: "Xử lý thư"
+  offer_reply: "Bấm nút dưới đây để DW1 soạn thư cho khách; DW1 không gửi gì, bạn mở thư bằng chương trình thư của mình."
+  offer_reminder: "Bấm nút dưới đây để DW1 soạn thư nhắc khách; DW1 không gửi gì."
+  offer_thread: "Bấm nút dưới đây để DW1 tóm tắt chuỗi thư của hồ sơ này; mỗi ý dẫn tới thư của nó."
+  act_in_case: "Việc này làm trong hồ sơ: mở hồ sơ rồi nhờ DW1 ở đó. Hãy ghi số PO hoặc số yêu cầu để DW1 đưa đường dẫn."
+  case_word: "hồ sơ"
+  step_read: "Đang đọc câu hỏi"
+  step_look: "Đang tra trong phạm vi bạn được xem"
+  decide_confirm: "DW1 sẽ ghi cho cờ {flag}: {decision}{reason}. Bấm Xác nhận để ghi; DW1 không ghi gì khi chưa xác nhận."
+  decide_accept_word: "chấp nhận"
+  decide_ask_word: "yêu cầu khách sửa PO"
+  decide_reason: " (lý do: {reason})"
+  decide_which_flag: "Bạn muốn quyết định cờ nào? Các cờ đang mở: {flags}."
+  decide_which_way: "Bạn muốn chấp nhận cờ {flag} hay yêu cầu khách sửa PO?"
+  decide_need_reason: "Chấp nhận cờ {flag} cần một lý do. Bạn ghi lý do giúp DW1."
+  decide_no_flag: "Hồ sơ này không còn cờ nào đang mở để quyết định."
+  decide_orders_only: "Ở yêu cầu báo giá, cờ được trả lời trên trang hồ sơ; DW1 chưa ghi từ đây."
+  decide_done: "Đã ghi cho cờ {flag}: {decision}."
+  write_confirm: "DW1 sẽ đề xuất ghi vào Bravo, SO {so}, dòng {line}: {field} = {value}. Bấm Xác nhận để gửi đề xuất cho người duyệt; Bravo không đổi gì khi chưa duyệt."
+  write_date_word: "ngày XN giao hàng"
+  write_quantity_word: "số lượng"
+  write_which_line: "Bạn muốn ghi cho dòng nào của PO? Các dòng: {lines}."
+  write_which_field: "Bạn muốn ghi ngày XN giao hàng hay số lượng của dòng {line}?"
+  write_which_value: "DW1 chưa đọc được giá trị mới cho {field} của dòng {line}. Bạn ghi lại giúp, ví dụ 08/12/2026 hoặc 500."
+  write_no_so: "Đơn này chưa có số SO trên Bravo, nên chưa ghi được gì vào Bravo."
+  write_orders_only: "Chỉ đơn hàng có SO mới ghi vào Bravo từ đây."
+  assign_confirm: "Giao hồ sơ {case} cho {person}? Bấm Xác nhận để giao; người nhận được báo ngay."
+  assign_which: "Giao cho ai? Hồ sơ này giao được cho: {people}."
+  assign_nobody: "Chưa có ai trong nhóm nhận được hồ sơ này."
+  assign_not_yours: "Chỉ người có quyền giao việc mới giao hồ sơ từ đây; bạn có thể hỏi trưởng nhóm."
+  assign_done: "Đã giao hồ sơ {case} cho {person}."
+  write_done: "Đã gửi đề xuất ghi {field} cho dòng {line} vào Bravo; người duyệt sẽ ghi bằng user Bravo của mình."

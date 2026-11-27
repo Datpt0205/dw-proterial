@@ -141,7 +141,84 @@ async def _rows(migrator: AsyncEngine, key: str) -> list[sa.Row[tuple[uuid.UUID,
         )
 
 
+async def _subscribe(migrator: AsyncEngine, place: _Place, user_id: uuid.UUID) -> None:
+    """A device the person turned push on from, in that workspace."""
+    async with migrator.begin() as conn:
+        await conn.execute(
+            sa.insert(tables.push_subscriptions).values(
+                id=uuid.uuid4(),
+                tenant_id=place.tenant_id,
+                workspace_id=place.workspace_id,
+                user_id=user_id,
+                endpoint=f"https://web.push.apple.com/{uuid.uuid4()}",
+                p256dh="B" * 87,
+                auth="A" * 22,
+            )
+        )
+
+
+async def _channels(migrator: AsyncEngine, key: str) -> list[tuple[uuid.UUID, str]]:
+    async with migrator.connect() as conn:
+        rows = (
+            await conn.execute(
+                sa.select(_d.c.recipient_user_id, _d.c.channel).where(_d.c.source_key == key)
+            )
+        ).all()
+    return sorted((r.recipient_user_id, r.channel) for r in rows)
+
+
 # ---- the one door -----------------------------------------------------------------
+
+
+async def test_a_recipient_with_push_on_is_queued_a_push_and_another_is_not(
+    app: AsyncEngine, migrator: AsyncEngine
+) -> None:
+    # Sales ticket 78 (19a366484422): the subscription is the opt-in.
+    (place,) = await _tenant(migrator)
+    subscribed, plain = await _person(migrator, place), await _person(migrator, place)
+    await _subscribe(migrator, place, subscribed)
+    key = f"test:{uuid.uuid4()}"
+
+    await _notify(app, place, subscribed, plain, key=key)
+    await _notify(app, place, subscribed, plain, key=key)  # a repeat queues nothing more
+
+    assert await _channels(migrator, key) == [(subscribed, "web_push")]
+
+
+async def test_a_push_on_in_another_workspace_queues_no_push_here(
+    app: AsyncEngine, migrator: AsyncEngine
+) -> None:
+    here, there = await _tenant(migrator, workspaces=2)
+    person = await _person(migrator, here, there)
+    await _subscribe(migrator, there, person)
+    key = f"test:{uuid.uuid4()}"
+
+    await _notify(app, here, person, key=key)
+
+    assert await _channels(migrator, key) == []
+
+
+async def test_a_sender_that_pushes_itself_queues_no_push(
+    app: AsyncEngine, migrator: AsyncEngine
+) -> None:
+    (place,) = await _tenant(migrator)
+    person = await _person(migrator, place, zalo=f"z-{uuid.uuid4()}")
+    await _subscribe(migrator, place, person)
+    key = f"test:{uuid.uuid4()}"
+
+    await SqlNotificationRepository(
+        async_sessionmaker(app, expire_on_commit=False), push=False
+    ).deliver(
+        place.sender(),
+        recipients=[person],
+        source_key=key,
+        title="Nhắc việc",
+        body="",
+        link="/sales",
+    )
+
+    # The chat link still carries it; only the push is the sender's own.
+    assert await _channels(migrator, key) == [(person, "zalo")]
 
 
 async def test_a_linked_recipient_is_queued_and_an_unlinked_one_is_not(

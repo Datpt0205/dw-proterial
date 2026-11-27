@@ -169,3 +169,52 @@ What the 11-19/20 survey measured (details in `docs/proterial/`, outside git):
 
     Đạt decided to build on the assumption that they hold. A failed
     measurement changes only the gateway's adapter or grants, never a context.
+
+## Addendum 2026-11-25: DW enters everything Sales entered (Đạt)
+
+Đạt, 2026-11-25: "giờ scope không còn là sale tự nhập nữa mà là DW nhập cho
+họ, chỉ duyệt trước khi nhập thôi". DW1 performs every Bravo entry Sales
+made by hand, each after the PIC approves it on the portal, under the PIC's
+Bravo user, through the gateway as decided above. The paste sheet and the
+YCBG draft stay only as the fallback while a write kind is off.
+
+The write kinds, per screen Sales entered (`docs/proterial/bravo`):
+
+- **YCBG** (`EDIT_BizDocRQ`, `B30BizDoc` + `B30BizDocDetailRQ`): create, and
+  edit a line before Design answers.
+- **Quotation** (`EDIT_BizDocSQ`, `B30BizDocDetailSQ`): create after Design's
+  QUOTE, and edit; the price stays Bravo's, computed by the screen's own
+  rules the runner executes (ticket 59, dw_sales ADR 0008), never DW's.
+- **SO** (`EDIT_BizDocSO`, `B30BizDocDetailSO`): create (typed or by Import),
+  a line's confirmed date and quantity, a split, a cancel (the 5 kinds
+  already defined).
+
+Each kind stays off until a UAT save of it was traced (the columns it
+writes, the context's event word, the rights it checks, what the client
+sets that no layout holds), the gateway's write login is granted exactly
+those columns (`docs/proterial/sql/08`), and its UAT acceptance passed
+(decision 7). No approval workflow exists in Bravo for SO or quotations
+(script 05, 2026-11-25): the approval is DW's, before the entry.
+
+## Amendment 2026-11-26: the write runs Bravo's process step (ticket 74)
+
+Decided by recommendation on Đạt's instruction of 2026-11-26 ("làm theo
+khuyến nghị").
+
+Every save in the three UAT traces (11-20, 11-25, 11-26) ends with
+`exec dbo.usp_B30BizDocProcess_CreateProcess @_BizDocId, @_BizProcessGroupUnique=NULL,
+@_BranchCode, @_DocCode` on the saving session. A write that skipped it would
+leave Bravo's business-process rows for the document behind what a person's
+save leaves. So the gateway runs that one procedure after its statements, in
+the same transaction and under the same context, with the client's
+arguments; a failure takes the whole write back (shown on SQL Server 2017).
+
+- Still nothing of DW's is created in Bravo's database. The write login gains
+  `EXECUTE` on this one Bravo procedure (`docs/proterial/sql/08`), and the
+  read login `VIEW DEFINITION` on it, so the change watch (ticket 65) sees a
+  change to it and pauses the writes that depend on it.
+- The adapter runs only that procedure (`bind_step` refuses any other name),
+  bound by position, never with text built from a request.
+- Through ownership chaining the procedure writes its own tables without
+  grants of the login: that is Bravo's own code doing what it does for every
+  person's save, and the reason the procedure is watched.

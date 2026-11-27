@@ -133,7 +133,7 @@ class ThreadSummaries:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             if kind is CaseKind.ORDER:
-                await stored_order(work, case_id, viewer=context)
+                await stored_order(work, case_id, viewer=context, export_control=True)
             else:
                 await stored_quote(work, case_id, viewer=context)
             logged = [

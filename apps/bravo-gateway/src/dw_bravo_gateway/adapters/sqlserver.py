@@ -30,7 +30,7 @@ import re
 import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Final, Literal, TypeVar
@@ -44,9 +44,18 @@ from dw_bravo.contract import (
     SalesOrderState,
     SoLineState,
 )
-from dw_bravo.expression import RuleRefusedError, UndecidableError
+from dw_bravo.expression import RuleRefusedError, UndecidableError, UnsupportedSyntaxError
 from dw_bravo.import_template import read_import_template
-from dw_bravo.layout import Layout, read_layout
+from dw_bravo.layout import (
+    Layout,
+    Window,
+    merge_windows,
+    read_layout,
+    read_template,
+    read_window,
+    with_template,
+    with_window,
+)
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.sync import SYNC_TABLES, SyncPage, SyncQuery, SyncRow, as_text
 from dw_bravo.watch import Component, Fingerprint
@@ -58,13 +67,31 @@ from dw_bravo_gateway.ports import (
     ColumnRight,
     CommandRight,
     DocumentNotFoundError,
+    ProcedureStep,
+    ReadBack,
     StaleRowError,
     Statement,
     StoredDocument,
+    WriteRejectedError,
 )
-from dw_bravo_gateway.statements import SCREENS
+from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 T = TypeVar("T")
+
+# What makes a stored layout unreadable: refused syntax, XML that does not
+# parse, an archive that is not one.
+_UNREADABLE: Final = (
+    UndecidableError,
+    UnsupportedSyntaxError,
+    SyntaxError,
+    ValueError,
+    zipfile.BadZipFile,
+)
+
+# `B00Layout.IsTemplate` of a screen's two layouts (script 03a, 2026-11-19;
+# script 06): 3 the `<DataSource>`, 0 the form. A shared template is 1 or 2.
+DATA_SOURCE: Final = 3
+FORM: Final = 0
 
 
 @dataclass(frozen=True)
@@ -109,11 +136,11 @@ class SqlServerBravo:
     # inside one the driver already opened (measured): reads connect in
     # autocommit, the write does not.
     connect: Callable[[str, bool], Any] = lambda cs, auto: mssql_python.connect(cs, autocommit=auto)
-    # The shared template each screen's layout leans on and DW does not hold
-    # yet (script 03c): a plan made without it is provisional and never writes.
-    missing_templates: Mapping[str, str] = field(
-        default_factory=lambda: {"EDIT_BizDocSO": "BizDocEditor"}
-    )
+    # The shared template each screen loads beside its own layout
+    # (`B00Command`'s TemplateName; script 03c, 2026-11-25): read from
+    # `B00Layout` with the layout, its guards applied at every save. Not
+    # found, or not readable, the plan stays provisional and never writes.
+    templates: Mapping[str, str] = field(default_factory=lambda: {"EDIT_BizDocSO": "BizDocEditor"})
 
     # ----------------------------------------------------------- plumbing
 
@@ -181,7 +208,7 @@ class SqlServerBravo:
                 raise AmbiguousDocumentError(so_no)
             [header] = headers
             rows = self._rows(
-                "SELECT Id, POLine, ItemCode, Quantity9, EstimatedTimeDelivery, timestamp"
+                "SELECT Id, POLine, ItemCode, Quantity9, EstimatedTimeDelivery, timestamp, IsCancel"
                 " FROM dbo.B30BizDocDetailSO WHERE BizDocId = ? ORDER BY BuiltinOrder",
                 (header["BizDocId"],),
             )
@@ -252,7 +279,21 @@ class SqlServerBravo:
     async def command_right(
         self, user_id: int, command_key: str, operation: Literal["update", "insert"]
     ) -> CommandRight:
-        return "unknown"
+        keys = COMMAND_KEYS.get(command_key)
+        if keys is None:
+            return "unknown"  # which Bravo commands carry this screen's rights: not measured
+        rows = await self._in_thread(
+            lambda: self._rows(
+                "SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit, '1' AS Kind"
+                " FROM dbo.ufn_B00Permission_Getdata(?, NULL, '1')"
+                " UNION ALL SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit,"
+                " '2' FROM dbo.ufn_B00Permission_Getdata(?, NULL, '2')"
+                " UNION ALL SELECT CommandKey, SubCommandKey, NoOpen, NoDisplay, NoAddNew, NoEdit,"
+                " '3' FROM dbo.ufn_B00Permission_Getdata(?, NULL, '3')",
+                (user_id, user_id, user_id),
+            )
+        )
+        return decide_command_right(rows, keys, operation)
 
     # ---------------------------------------------------------- documents
 
@@ -264,12 +305,39 @@ class SqlServerBravo:
         )
         return [str(r["name"]) for r in rows]
 
+    def _column_facts(self, table: str) -> tuple[list[str], frozenset[str], frozenset[str]]:
+        """A table's columns in order; those with no default (an INSERT lists
+        them NULL); those it generates (identity, rowversion, computed)."""
+        rows = self._rows(
+            "SELECT c.name, c.is_identity, c.is_computed, c.default_object_id,"
+            " TYPE_NAME(c.system_type_id) AS system_type"
+            " FROM sys.columns c WHERE c.object_id = OBJECT_ID(?) ORDER BY c.column_id",
+            (f"dbo.{table}",),
+        )
+        generated = frozenset(
+            str(r["name"]).lower()
+            for r in rows
+            if r["is_identity"] or r["is_computed"] or r["system_type"] == "timestamp"
+        )
+        no_default = frozenset(
+            str(r["name"]).lower()
+            for r in rows
+            if not r["default_object_id"] and str(r["name"]).lower() not in generated
+        )
+        return [str(r["name"]) for r in rows], no_default, generated
+
+    async def view_columns(self, view: str) -> Sequence[str]:
+        if not view.replace("_", "").isalnum():
+            raise UndecidableError(f"{view!r} is not a view name the layout gives")
+        return await self._in_thread(lambda: self._columns(view))
+
     async def load(self, screen: str, doc_id: int) -> StoredDocument:
         tables = SCREENS[screen]
         [line_table] = tables.lines.values()
 
         def work() -> StoredDocument:
-            order = {t: self._columns(t) for t in (tables.header, line_table)}
+            facts = {t: self._column_facts(t) for t in (tables.header, line_table)}
+            order = {t: f[0] for t, f in facts.items()}
             headers = self._rows(f"SELECT * FROM dbo.{tables.header} WHERE Id = ?", (doc_id,))
             if len(headers) != 1:
                 raise DocumentNotFoundError(doc_id)
@@ -290,29 +358,90 @@ class SqlServerBravo:
                 value = answer["locked"]
                 locks[str(line["RowId"])] = int(value) if value is not None else None  # type: ignore[call-overload]
             return StoredDocument(
-                header=header, lines=lines, column_order=order, prevent_edit=locks
+                header=header,
+                lines=lines,
+                column_order=order,
+                prevent_edit=locks,
+                no_default={t: f[1] for t, f in facts.items()},
+                generated={t: f[2] for t, f in facts.items()},
             )
 
         return await self._in_thread(work)
 
     # ------------------------------------------------------------- engine
 
-    async def layout(self, screen: str) -> Layout:
-        rows = await self._in_thread(
-            lambda: self._rows(
-                "SELECT l.Id, d.LayoutData FROM dbo.B00Layout l"
-                " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
-                " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) = 0",
-                (screen,),
-            )
+    def _screen_layouts(self, screen: str, columns: str = "") -> list[dict[str, object]]:
+        """A screen's active rows in `B00Layout`: its `<DataSource>` (the
+        tables and rules, `IsTemplate` 3) and its form (the window's
+        controls, `IsTemplate` 0). Every `EDIT_*` screen of script 03a's
+        survey (2026-11-19) and script 06's has one of each: 8212 and 8213
+        for `EDIT_BizDocSO`."""
+        return self._rows(
+            f"SELECT l.Id, l.IsTemplate{columns}, d.LayoutData FROM dbo.B00Layout l"
+            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
+            " WHERE l.FormName = ? AND l.IsActive = 1"
+            f" AND l.IsTemplate IN ({DATA_SOURCE}, {FORM}) ORDER BY l.Id",
+            (screen,),
         )
-        if len(rows) != 1:
+
+    async def layout(self, screen: str) -> Layout:
+        rows = await self._in_thread(lambda: self._screen_layouts(screen))
+        sources = [r for r in rows if r["IsTemplate"] == DATA_SOURCE]
+        if len(sources) != 1:
             # Which of several the client opens is not measured.
-            raise UndecidableError(f"{len(rows)} active layouts for {screen}")
-        return read_layout(
-            layout_xml(rows[0]["LayoutData"]),
-            screen,
-            missing_template=self.missing_templates.get(screen),
+            raise UndecidableError(f"{len(sources)} active DataSource layouts for {screen}")
+        name = self.templates.get(screen)
+        layout = read_layout(layout_xml(sources[0]["LayoutData"]), screen, missing_template=name)
+        forms = [r for r in rows if r["IsTemplate"] == FORM]
+        window, why = await self._in_thread(lambda: self._window(screen, forms))
+        layout = (
+            replace(layout, missing_window=why) if window is None else with_window(layout, window)
+        )
+        if name is None:
+            return layout
+        template = await self._in_thread(lambda: self._template_rows(name))
+        if len(template) != 1:
+            # Absent or ambiguous: the plan stays provisional, never a write.
+            return layout
+        try:
+            return with_template(layout, read_template(layout_xml(template[0]["LayoutData"]), name))
+        except (UnsupportedSyntaxError, ValueError):
+            return layout
+
+    def _window(
+        self, screen: str, forms: Sequence[Mapping[str, object]]
+    ) -> tuple[Window | None, str]:
+        """The screen's window: its one form layout, as far as every user's
+        or role's own copy of it (`B00LayoutDataEdit`, which the client
+        loads by `UserId`/`RoleId`) binds the same; which copy a user opens
+        is not measured, so a lookup the copies bind differently refuses
+        when it binds. Not readable: none, and why."""
+        if len(forms) != 1:
+            return None, f"{len(forms)} active form layouts"
+        try:
+            base = read_window(layout_xml(forms[0]["LayoutData"]), screen)
+            edits = self._window_edits(forms[0]["Id"])
+            variants = [read_window(layout_xml(e["LayoutData"]), screen) for e in edits]
+        except _UNREADABLE as refused:
+            return None, f"{type(refused).__name__}: {str(refused)[:160]}"
+        except Exception as failed:  # the driver's own errors: no answer, so none
+            return None, f"could not read: {type(failed).__name__}"
+        why = "a user's or role's own window binds it differently (B00LayoutDataEdit)"
+        return merge_windows(base, variants, why), ""
+
+    def _window_edits(self, layout_id: object) -> list[dict[str, object]]:
+        return self._rows(
+            "SELECT Id, UserId, RoleId, LayoutData FROM dbo.B00LayoutDataEdit"
+            " WHERE Id = ? ORDER BY UserId, RoleId",
+            (layout_id,),
+        )
+
+    def _template_rows(self, name: str) -> list[dict[str, object]]:
+        return self._rows(
+            "SELECT l.Id, d.LayoutData FROM dbo.B00Layout l"
+            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
+            " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) > 0",
+            (name,),
         )
 
     def procedures(self) -> ProcedurePort:
@@ -322,7 +451,29 @@ class SqlServerBravo:
         return _NotYetCalled()
 
     async def session(self, user: BravoUser, branch: str, now: datetime) -> Session:
-        return Session(user={"Id": Decimal(user.id)}, branch=branch, now=now.replace(tzinfo=None))
+        """The session a plan runs in; the branch's own attributes from
+        `B00Branch` (what `BRANCH('IsGroup')` reads). A branch not found, or
+        not readable, has none: a guard that reads one is undecided and
+        blocks."""
+
+        def branch_info() -> dict[str, object]:
+            try:
+                rows = self._rows(
+                    "SELECT IsGroup FROM dbo.B00Branch WHERE BranchCode = ? AND IsActive = 1",
+                    (branch,),
+                )
+            except Exception:  # the driver's own errors: no answer, so none
+                return {}
+            if len(rows) != 1 or rows[0]["IsGroup"] is None:
+                return {}
+            return {"IsGroup": Decimal(int(bool(rows[0]["IsGroup"])))}
+
+        return Session(
+            user={"Id": Decimal(user.id)},
+            branch=branch,
+            now=now.replace(tzinfo=None),
+            branch_info=await self._in_thread(branch_info),
+        )
 
     # -------------------------------------------------------- fingerprint
 
@@ -340,12 +491,16 @@ class SqlServerBravo:
             for screen in screens:
                 components.extend(self._layout_components(screen))
                 components.append(self._template_component(screen))
+                # The shared template rides on the screen's command: either
+                # changing pauses the screen's writes.
+                name = self.templates.get(screen)
+                shared = [] if name is None else self._template_rows(name)
                 for row in self._rows(
                     "SELECT CommandKey, DLLName, ClassName, CtorArgs, MethodName, InvokeArgs"
                     " FROM dbo.B00Command WHERE CommandKey = ?",
                     (screen,),
                 ):
-                    components.append(Component("command", screen, _digest(row)))
+                    components.append(Component("command", screen, _digest([row, shared])))
             for table in tables:
                 columns = self._rows(
                     "SELECT c.name, TYPE_NAME(c.user_type_id) AS type, c.max_length,"
@@ -408,31 +563,56 @@ class SqlServerBravo:
         )
 
     def _layout_components(self, screen: str) -> list[Component]:
-        rows = self._rows(
-            "SELECT l.Id, l.ModifiedAt, l.ModifiedBy, d.LayoutData FROM dbo.B00Layout l"
-            " JOIN dbo.B00LayoutData d ON d.Id = l.Id"
-            " WHERE l.FormName = ? AND l.IsActive = 1 AND ISNULL(l.IsTemplate, 0) = 0",
-            (screen,),
-        )
-        found = []
-        for row in rows:
-            unknown: tuple[str, ...] = ()
+        """The screen's layout as one component named for the screen (what
+        the watch keys a screen's writes on): its DataSource and its form,
+        either changed changes it. A DataSource the runner cannot read, or
+        not exactly one, is named in `unknown`."""
+        rows = self._screen_layouts(screen, ", l.ModifiedAt, l.ModifiedBy")
+        if not rows:
+            return []
+        sources = [r for r in rows if r["IsTemplate"] == DATA_SOURCE]
+        forms = [r for r in rows if r["IsTemplate"] == FORM]
+        unknown: list[str] = []
+        if len(sources) != 1:
+            unknown.append(f"{len(sources)} active DataSource layouts")
+        for row in sources:
             try:
                 read_layout(layout_xml(row["LayoutData"]), screen, missing_template=None)
             except (UndecidableError, RuleRefusedError, ValueError) as refused:
-                unknown = (str(refused)[:200],)
-            data = row["LayoutData"]
-            found.append(
-                Component(
-                    "layout",
-                    screen if len(rows) == 1 else f"{screen}#{row['Id']}",
-                    _digest(bytes(data) if isinstance(data, bytes | bytearray) else data),
-                    modified_at=str(row["ModifiedAt"]),
-                    modified_by=str(row["ModifiedBy"]),
-                    unknown=unknown,
-                )
+                unknown.append(str(refused)[:200])
+        window, why = self._window(screen, forms)
+        if window is None:
+            unknown.append(f"the window: {why}")
+        unread: list[tuple[object, ...]] = []
+        try:
+            edits = [e for form in forms for e in self._window_edits(form["Id"])]
+        except Exception as failed:  # the driver's own errors: the copies not checked
+            # `_window` read the same copies and is None already, so the
+            # window is named in `unknown`; the digest says they went unread
+            # rather than reading as a screen with no copies.
+            edits = []
+            unread.append(("B00LayoutDataEdit", f"not read: {type(failed).__name__}"))
+        latest = max(rows, key=lambda r: str(r["ModifiedAt"]))
+
+        def data(row: Mapping[str, object]) -> object:
+            value = row["LayoutData"]
+            return bytes(value) if isinstance(value, bytes | bytearray) else value
+
+        shapes: list[tuple[object, ...]] = [
+            (r["Id"], r["IsTemplate"], _digest(data(r))) for r in rows
+        ]
+        shapes += [(e["Id"], e["UserId"], e["RoleId"], _digest(data(e))) for e in edits]
+        shapes += unread
+        return [
+            Component(
+                "layout",
+                screen,
+                _digest(repr(shapes)),
+                modified_at=str(latest["ModifiedAt"]),
+                modified_by=str(latest["ModifiedBy"]),
+                unknown=tuple(unknown),
             )
-        return found
+        ]
 
     # ------------------------------------------------------------- writer
 
@@ -447,11 +627,21 @@ class SqlServerBravo:
                         " SET CONTEXT_INFO @context_info;",
                         (batch.context.encode("ascii"),),
                     )
+                    needed = _read_back_tables(batch)
+                    read: dict[str, Mapping[str, object]] = {}
                     for statement in batch.statements:
-                        sql, values = bind(statement)
+                        keep = statement.row_id is None and statement.table.lower() in needed
+                        sql, values = bind(statement, read, keep_read_back=keep)
                         cursor.execute(sql, values)
-                        if cursor.rowcount != 1:
+                        if keep:
+                            row = _read_back_row(cursor)
+                            if row is None:
+                                raise WriteRejectedError(f"{statement.table}: no row read back")
+                            read[statement.table.lower()] = row
+                        elif cursor.rowcount != 1:
                             raise StaleRowError(statement.table)
+                    for step in batch.steps:
+                        cursor.execute(*bind_step(step, read))
                     connection.commit()
                 except BaseException:
                     connection.rollback()
@@ -466,19 +656,129 @@ class SqlServerBravo:
 _NAMED = re.compile(r"@(_\w+)")
 
 
-def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
-    """The client's UPDATE with its named parameters bound by position.
+def bind(
+    statement: Statement,
+    read: Mapping[str, Mapping[str, object]] | None = None,
+    *,
+    keep_read_back: bool = False,
+) -> tuple[str, tuple[object, ...]]:
+    """The client's UPDATE or INSERT with its named parameters bound by
+    position, each `ReadBack` resolved from ``read`` (the rows the batch's
+    earlier INSERTs read back, by lower-case table).
 
-    The read-back SELECT is left out: the pipeline reads the document back
-    whole (`WritePipeline._reconcile`), and the UPDATE's own row count is
-    what says whether the rowversion still held.
+    The read-back SELECT is left out unless ``keep_read_back``: the pipeline
+    reads the document back whole (`WritePipeline._reconcile`), and the
+    statement's own row count is what says whether the rowversion still held
+    (an INSERT's is 1: measured with a trigger in Bravo's `SET NOCOUNT ON`
+    shape, ticket 73). An INSERT whose read-back a later value needs keeps
+    it, in the same batch: `SCOPE_IDENTITY()` answers only in the INSERT's
+    own scope.
     """
-    update = statement.sql.split(";SELECT TOP (1)")[0] + ";"
+    text = statement.sql if keep_read_back else statement.sql.split(";SELECT TOP (1)")[0] + ";"
     values: list[object] = []
-    for name in _NAMED.findall(update):
-        value = statement.parameters[name]
+    for name in _NAMED.findall(text):
+        value = _resolved(statement.parameters[name], read or {})
         values.append(_binary(str(value)) if name == "_Original_timestamp" else value)
-    return _NAMED.sub("?", update), tuple(values)
+    return _NAMED.sub("?", text), tuple(values)
+
+
+def _resolved(value: object, read: Mapping[str, Mapping[str, object]]) -> object:
+    if not isinstance(value, ReadBack):
+        return value
+    row = read.get(value.table.lower())
+    lowered = {k.lower(): v for k, v in (row or {}).items()}
+    if row is None or value.column.lower() not in lowered:
+        raise WriteRejectedError(f"{value.table}.{value.column} was not read back")
+    found = lowered[value.column.lower()]
+    if found is None or found == "":
+        # Bravo's trigger did not fill it: a line keyed '' belongs to no SO.
+        raise WriteRejectedError(f"{value.table}.{value.column} read back empty")
+    return found
+
+
+def _read_back_tables(batch: Batch) -> set[str]:
+    values = [v for s in batch.statements for v in s.parameters.values()]
+    values += [v for step in batch.steps for v in step.parameters.values()]
+    return {v.table.lower() for v in values if isinstance(v, ReadBack)}
+
+
+def _read_back_row(cursor: Any) -> dict[str, object] | None:
+    """The one row of a statement's read-back SELECT, past whatever counts
+    the statement and its triggers report first; none, or several, is None."""
+    while cursor.description is None:
+        if not cursor.nextset():
+            return None
+    names = [d[0] for d in cursor.description]
+    rows = cursor.fetchall()
+    if len(rows) != 1:
+        return None
+    return dict(zip(names, rows[0], strict=True))
+
+
+@dataclass(frozen=True)
+class CommandKeys:
+    """Where Bravo keeps a screen's rights (`B00PermissionData`): the list
+    command that opens it, the sub-commands an operation uses there, and the
+    editing form's own key for its operations."""
+
+    explorer: str
+    editor: str
+    sub_commands: Mapping[str, tuple[str, ...]]  # operation -> SubCommandKeys
+
+
+# Which Bravo commands carry a screen's rights. Empty until script 10 (ticket
+# 75) has shown, for users whose Bravo behaviour is known, that these keys
+# reproduce what the client lets each of them do: until then the answer is
+# "unknown" and every live write is refused, as before.
+COMMAND_KEYS: Final[Mapping[str, CommandKeys]] = {}
+
+
+def decide_command_right(
+    rows: Sequence[Mapping[str, object]],
+    keys: CommandKeys,
+    operation: Literal["update", "insert"],
+) -> CommandRight:
+    """What `ufn_B00Permission_Getdata` (Bravo's own function, which folds a
+    user's rows, their groups' and their roles' with `NoInherit`) says of an
+    operation: by command (type 1), by sub-command (type 2), by the editing
+    form's operation (type 3). Bravo's rights are deny-lists: a row with a
+    flag set denies; no row allows."""
+
+    def flag(row: Mapping[str, object], name: str) -> bool:
+        return str(row.get(name) or 0) not in ("0", "")
+
+    subs = {s.lower() for s in keys.sub_commands.get(operation, ())}
+    if not subs:
+        return "unknown"
+    for row in rows:
+        kind, command = str(row.get("Kind")), str(row.get("CommandKey") or "").lower()
+        sub = str(row.get("SubCommandKey") or "").lower()
+        if kind == "1" and command in (keys.explorer.lower(), keys.editor.lower()):
+            if flag(row, "NoOpen"):
+                return "denied"
+        elif kind == "2" and command == keys.explorer.lower() and sub in subs:
+            if flag(row, "NoOpen") or flag(row, "NoDisplay"):
+                return "denied"
+        elif kind == "3" and command == keys.editor.lower():
+            barred = "NoEdit" if operation == "update" else "NoAddNew"
+            if flag(row, barred) or flag(row, "NoOpen"):
+                return "denied"
+    return "allowed"
+
+
+def bind_step(
+    step: ProcedureStep, read: Mapping[str, Mapping[str, object]] | None = None
+) -> tuple[str, tuple[object, ...]]:
+    """`EXEC dbo.<procedure> @_P=?, ...` for one of the procedures a save runs
+    (`statements.PROCESS_PROCEDURE` only), its arguments bound by position,
+    a `ReadBack` resolved as `bind` does."""
+    if step.name != PROCESS_PROCEDURE:
+        raise ValueError(f"{step.name!r} is not a procedure a save runs")
+    names = list(step.parameters)
+    if not all(n.startswith("_") and n[1:].isalnum() for n in names):
+        raise ValueError("a procedure's parameters are Bravo's own names")
+    sql = f"EXEC dbo.{step.name} " + ",".join(f"@{n}=?" for n in names) + ";"
+    return sql, tuple(_resolved(step.parameters[n], read or {}) for n in names)
 
 
 # The routines every write depends on, by what they are to the watch: the
@@ -487,6 +787,7 @@ def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
 ROUTINES: Final[Mapping[str, Literal["routine", "context_parser"]]] = {
     "ufn_sys_GetUserIdFromContext_Info": "context_parser",
     "usp_sys_GetControlPermission": "routine",
+    PROCESS_PROCEDURE: "routine",
     "ufn_B00Permission_Getdata": "routine",
     "ufn_sys_GetPermissionUserListTable": "routine",
     "ufn_Prevent_Edit": "routine",
@@ -507,6 +808,7 @@ def _line_state(row: Mapping[str, object]) -> SoLineState:
         quantity=Decimal(str(row["Quantity9"])),
         confirmed_date=when.date() if isinstance(when, datetime) else None,
         rowversion=str(rowversion(row["timestamp"])),
+        cancel_state=str(row["IsCancel"]),
     )
 
 

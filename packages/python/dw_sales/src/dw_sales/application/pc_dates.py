@@ -3,10 +3,10 @@
 
 DW1 proposes each line's date from the lead time; when the date has to come
 from production control (PC), Sales asks PC by mail and types PC's answer
-into the confirmation, line by line. PC's mail is internal, and internal
-mail does not reach DW1's mailbox, so Sales pastes it into the confirmation
-and the model reads, per line (and per delivery of a split line), the date
-PC gives, copied as the mail writes it.
+into the confirmation, line by line. Sales pastes PC's mail, or picks it
+from the stored mailbox (every mail is stored since 11-02), and the model
+reads, per line (and per delivery of a split line), the date PC gives,
+copied as the mail writes it.
 
 - **Code checks** each date: the words are in the pasted text as written,
   whole (not inside a longer date),
@@ -26,6 +26,9 @@ PC gives, copied as the mail writes it.
   answer is code's list and Sales' choice, never the model's; who sent it
   is shown. Once the order rules name PC's mailboxes
   (`pc_mailboxes`, 1.16.0), only theirs is listed.
+- **Or by itself** (ticket 77, `pc_replies`): where the tenant turns
+  `model_assist.pc_reply` on, the worker reads PC's own mail while an order
+  waits on PC through the same `reading`, and proposes the dates.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from typing import Final, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field
 
 from dw_agent_runtime.context import caller_run
+from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
@@ -322,38 +326,52 @@ class PcDateReplies:
         same_version(case_id, case.case_version, case_version)
         if self.model is None:
             return PcDatesView(status="unavailable")
-        pasted = text
-        stamp = {"prompt_ref": str(PC_DATES), "model_profile": self.model.model_profile}
-        if (
-            len(pasted) > MAX_TEXT
-            or estimated_tokens(pasted) > self.model.max_input_tokens - PROMPT_TOKENS
-        ):
-            return PcDatesView(**stamp, status="unavailable")
-        try:
-            answer = await self.model.interpret(
-                PC_DATES,
-                {
-                    "lines": json.dumps(_facts(case), ensure_ascii=False, indent=1),
-                    "mail": pasted,
-                },
-                ModelPcDates,
-                run=caller_run(
-                    context,
-                    run_id=self.ids.new_uuid(),
-                    worker_id=self.worker_id,
-                    worker_version=self.worker_version,
-                    trace="sales-pc-dates",
-                    subject_ref=f"{_ORDER}:{case_id}",
-                ),
-                max_output_tokens=_OUTPUT_TOKENS,
-            )
-        except (ModelUnavailableError, QuotaExceededError):
-            return PcDatesView(**stamp, status="unavailable")
-        dates, dropped, left_open = checked(answer, pasted, case)
-        return PcDatesView(
-            **stamp,
-            status="read" if dates else "nothing",
-            dates=dates,
-            dropped=dropped,
-            unsettled=left_open,
+        run = caller_run(
+            context,
+            run_id=self.ids.new_uuid(),
+            worker_id=self.worker_id,
+            worker_version=self.worker_version,
+            trace="sales-pc-dates",
+            subject_ref=f"{_ORDER}:{case_id}",
         )
+        return await reading(self.model, case, text, run)
+
+
+def fits(model: InterpretationPort, text: str) -> bool:
+    """Whether ``text`` is short enough to be read at all: a longer one is
+    never cut (a cut date is a wrong date), and reads as unavailable."""
+    return (
+        len(text) <= MAX_TEXT and estimated_tokens(text) <= model.max_input_tokens - PROMPT_TOKENS
+    )
+
+
+async def reading(
+    model: InterpretationPort, case: OrderCase, text: str, run: RunContext
+) -> PcDatesView:
+    """PC's dates in ``text`` for ``case``'s lines, kept as code checks them
+    (`checked`), with no gate of its own: the caller is the gate, a person's
+    press (`PcDateReplies.read`) or the tenant's switch (`PcReplyLane`)."""
+    stamp = {"prompt_ref": str(PC_DATES), "model_profile": model.model_profile}
+    if not fits(model, text):
+        return PcDatesView(**stamp, status="unavailable")
+    try:
+        answer = await model.interpret(
+            PC_DATES,
+            {
+                "lines": json.dumps(_facts(case), ensure_ascii=False, indent=1),
+                "mail": text,
+            },
+            ModelPcDates,
+            run=run,
+            max_output_tokens=_OUTPUT_TOKENS,
+        )
+    except (ModelUnavailableError, QuotaExceededError):
+        return PcDatesView(**stamp, status="unavailable")
+    dates, dropped, left_open = checked(answer, text, case)
+    return PcDatesView(
+        **stamp,
+        status="read" if dates else "nothing",
+        dates=dates,
+        dropped=dropped,
+        unsettled=left_open,
+    )

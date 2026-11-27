@@ -44,6 +44,7 @@ from dw_sales.domain.reply_intent import ReplyReading
 
 if TYPE_CHECKING:
     from dw_sales.application.activity_ports import StepActivityLogPort
+    from dw_sales.application.cross_check_on_match import CrossCheckRoutesPort
     from dw_sales.application.followups import FollowupStorePort
     from dw_sales.application.labelled_cases import LabelledCaseLogPort
     from dw_sales.application.overview_ports import OverviewReadPort
@@ -385,6 +386,17 @@ class OrderCaseStorePort(Protocol):
         """Every case of the workspace, newest first."""
         ...
 
+    async def waiting_on_pc(self) -> Sequence[Stored[OrderCase]]:
+        """The workspace's cases waiting on PC (`OrderCase.pc_request`), newest
+        first: what the reader of PC's mail looks at (ticket 77)."""
+        ...
+
+    async def awaiting_on_match(self) -> Sequence[Stored[OrderCase]]:
+        """The workspace's orders in Bravo whose rules stamped
+        `cross_check_on_match`: what the cross-check lane reads back (ticket
+        81). The verdict, not this list, decides."""
+        ...
+
     async def add(self, case: OrderCase, origin: CaseOrigin, event: CaseEvent) -> None:
         """A case just opened. Refused with a conflict when the case, its
         message, or (for an original) its PO number is already stored."""
@@ -724,6 +736,11 @@ class SalesUnitOfWork(Protocol):
     # labels it.
     @property
     def shadow_readings(self) -> ShadowReadingRepositoryPort: ...
+
+    # What the cross-check lane did with each order version, and what a
+    # person then decided (ticket 81), written with the decision.
+    @property
+    def cross_check_routes(self) -> CrossCheckRoutesPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

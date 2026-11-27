@@ -11,27 +11,22 @@ import { useResource } from "../_lib/use-resource";
 import {
   AssistantConversation,
   caseHref,
+  GENERAL_CATALOG,
+  GENERAL_EXAMPLES,
 } from "../_components/assistant-conversation";
+import { useHideAssistantWidget } from "../_components/assistant-widget";
 import { salesCrumbs } from "../_components/crumbs";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
-
-/** Questions to start from; a follow-up ("PO đó…") reads as the PO just asked. */
-const EXAMPLES = [
-  "Tôi còn việc gì?",
-  "Có việc nào quá hạn không?",
-  "PO NRV-PO-26-0457 tới đâu rồi?",
-];
-
-/** What the general conversation answers (ADR 0007, ticket 46), said before anyone asks. */
-const CATALOG =
-  "Hỏi việc đang chờ bạn, việc quá hạn, hoặc tìm một PO, một yêu cầu báo giá. Câu trả lời không có số tiền.";
 
 /**
  * Hỏi đáp DW1 (dw_sales ADR 0007; the contract's DW01 criterion 6): the
  * person's one general conversation, and the cases they talked about most
  * recently (ticket 46). A case's own questions are asked on the case's page,
  * where its conversation is; a case named here is answered with a link to it.
+ * Since 2026-11-26 the same conversation opens from the "Hỏi DW1" widget on
+ * every Sales page, which links here for the recent cases; this page is out
+ * of the nav and hides the widget, the conversation being already on it.
  */
 export default function AssistantPage() {
   return (
@@ -42,6 +37,7 @@ export default function AssistantPage() {
 }
 
 function Assistant() {
+  useHideAssistantWidget();
   const recent = useResource(
     "assistant-cases",
     useCallback(() => salesApi().assistantCases(), []),
@@ -52,14 +48,14 @@ function Assistant() {
       <PageHeader
         title="Hỏi đáp DW1"
         breadcrumb={salesCrumbs("Hỏi đáp DW1")}
-        subtitle={CATALOG}
+        subtitle={GENERAL_CATALOG}
         help="DW1 trả lời từ dữ liệu đang có trong hệ thống, trong phạm vi hồ sơ bạn được xem. Câu hỏi về một hồ sơ được hỏi ngay trên trang của hồ sơ đó."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px]">
         <Card size="small" title="Trò chuyện chung">
           <AssistantConversation
             onCase={null}
-            examples={EXAMPLES}
+            examples={GENERAL_EXAMPLES}
             onAnswered={recent.reload}
           />
         </Card>

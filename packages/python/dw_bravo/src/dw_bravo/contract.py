@@ -41,6 +41,17 @@ _ROWVERSION: Final = re.compile(r"^0x[0-9A-F]{16}$")
 _CODE: Final = re.compile(r"^[^\x00-\x1f]{1,64}$")
 _CONTROL: Final = re.compile(r"[\x00-\x1f]")
 _TEXT_LIMIT: Final = 512
+# `B30BizDocDetailSO.CancelRemark` is nvarchar(192): the 11-19 survey reads its
+# `sys.columns.max_length` as 384 bytes (`01-ket-qua-khao-sat.rpt`). SQL Server
+# counts UTF-16 code units, so a character outside the BMP takes two.
+CANCEL_REMARK_UNITS: Final = 192
+SPLIT_PARTS_LIMIT: Final = 10
+
+
+def utf16_units(text: str) -> int:
+    """The length SQL Server's nvarchar measures: UTF-16 code units."""
+    return len(text.encode("utf-16-le")) // 2
+
 
 # pydantic reads this on a stdlib dataclass: the gateway refuses a field the
 # contract does not name instead of dropping it.
@@ -123,7 +134,10 @@ class SplitPart:
 class SplitLine:
     """A line split into parts with Bravo's group fields (`QuantityGroup`,
     `GroupDivi`, `Divide`); the first part stays on the line, each further
-    part is a new line. The parts' total is the layout's validator to check."""
+    part is a new line (UAT trace 11-25 17:28:58, ticket 73). The parts'
+    total is the layout's validator to check (`CheckDivide`). At most ten
+    parts, each a new line in one transaction; the bound was added while
+    this version was still pending, before any approval named it."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
     kind: ClassVar[str] = "so.line.split"
@@ -135,6 +149,8 @@ class SplitLine:
     def __post_init__(self) -> None:
         if len(self.parts) < 2:
             raise ContractError("a split has at least two parts")
+        if len(self.parts) > SPLIT_PARTS_LIMIT:
+            raise ContractError("a split has at most ten parts")
 
 
 @dataclass(frozen=True)
@@ -154,16 +170,29 @@ class SetQuantity:
 
 @dataclass(frozen=True)
 class CancelLine:
-    """The whole line cancelled (`IsCancel`); a partial cancel is a split,
-    then this on the part that goes (ticket 53). What the client writes for a
-    cancel is not yet traced (the 11-20 trace holds only a cancel cleared), so
-    the gateway refuses this kind until it is (`WriteKind.pending`)."""
+    """The whole line cancelled, as a person does it on the SO screen (UAT
+    trace 11-25 17:31:50, ticket 71): "Order status" (`IsCancel`) set to
+    `Cancel`, the remaining quantity (`Quantity9`) typed as 0, and the reason
+    (`CancelRemark`); the layout computes the rest (cancelled date, quantity,
+    price and amount, the zeroed price and amounts). The reason was added
+    while this version was still pending, before any approval named it: no
+    stored token, switch or tenant rule version carries a cancel without it.
+    The reason is as long as `CancelRemark` holds (`CANCEL_REMARK_UNITS`);
+    no approval named a longer one before this bound replaced the generic
+    512 (DW proposed at most 58 characters until then)."""
 
     __pydantic_config__: ClassVar[dict[str, object]] = _STRICT
     kind: ClassVar[str] = "so.line.cancel"
     version: ClassVar[int] = 1
 
     line: LineRef
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason.strip():
+            raise ContractError("a cancel needs its reason")
+        if utf16_units(self.reason) > CANCEL_REMARK_UNITS:
+            raise ContractError(f"reason is longer than CancelRemark's {CANCEL_REMARK_UNITS}")
 
 
 @dataclass(frozen=True)
@@ -258,31 +287,51 @@ WRITE_KINDS: Final[dict[str, WriteKind]] = {
         # and the layout computed the rest of what the client wrote.
         WriteKind(SetConfirmedDate, "EDIT_BizDocSO", _SO_TABLES, "update"),
         WriteKind(SetQuantity, "EDIT_BizDocSO", _SO_TABLES, "update"),
-        WriteKind(
-            CancelLine,
-            "EDIT_BizDocSO",
-            _SO_TABLES,
-            "update",
-            pending="a real cancel's save is not traced (ticket 52 item 2)",
-        ),
-        # A split's further parts are new lines, and creation is an INSERT:
-        # both wait on the shared template before their columns are known.
+        # Traced 11-25 17:31:50: IsCancel, the quantity typed to 0 and the
+        # reason; the layout computed the rest (ticket 71).
+        WriteKind(CancelLine, "EDIT_BizDocSO", _SO_TABLES, "update"),
+        # A split is a save of a stored SO (`EDIT_BizDocSO|Edit`, 11-25
+        # 17:28:58) whose further parts are new lines (ticket 73). Its
+        # statements are built; the clean UAT split (ticket 52) is not traced
+        # yet, so the client's own new line is not proven column for column.
         WriteKind(
             SplitLine,
             "EDIT_BizDocSO",
             _SO_TABLES,
-            "insert",
-            pending="a new line's columns wait on the shared template (script 03c)",
+            "update",
+            pending="a split's new line waits on a clean UAT split traced (ticket 52)",
         ),
         WriteKind(
             CreateSalesOrder,
             "EDIT_BizDocSO",
             _SO_TABLES,
             "insert",
-            pending="a new SO's columns wait on the shared template (script 03c)",
+            # Ticket 72: the window's bindings, the new header and the
+            # create's statements are built; what a person types for a
+            # create, the screen's procedures and lookups read live (ticket
+            # 50) and a DW create traced in UAT beside a PIC's (ticket 52)
+            # are not.
+            pending=(
+                "a create waits on its typed order, Bravo's procedures and lookups read "
+                "live (ticket 50) and a UAT create (ticket 52)"
+            ),
         ),
     )
 }
+
+
+# -------------------------------------------------------------------- targets
+
+# Which Bravo the gateway reaches for a tenant (sales ticket 85): its UAT
+# database or the one the company runs on. The tenant's approved
+# `sales_bravo_writes` version names it; the approval token carries the one a
+# proposal was read from, and the gateway refuses a write whose stamp is not
+# the tenant's target now.
+BravoTarget = Literal["uat", "production"]
+BRAVO_TARGETS: Final[tuple[BravoTarget, ...]] = ("uat", "production")
+# The response header a read's answer names its target in: what a proposal
+# made from that read is stamped with.
+TARGET_HEADER: Final = "Bravo-Target"
 
 
 # ---------------------------------------------------------------------- reads
@@ -479,6 +528,10 @@ class SoLineState:
     quantity: Decimal  # Quantity9
     confirmed_date: date | None  # EstimatedTimeDelivery
     rowversion: str  # timestamp
+    # "Order status" (`IsCancel`, NOT NULL, default ''): '' on an open line,
+    # 'Cancel' once cancelled (UAT trace 11-25 17:31:50). Carried as read, so
+    # a value no trace shows is the caller's to refuse, never read as open.
+    cancel_state: str  # IsCancel
 
     def __post_init__(self) -> None:
         _rowversion("rowversion", self.rowversion)

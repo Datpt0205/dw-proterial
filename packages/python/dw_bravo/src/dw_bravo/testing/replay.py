@@ -51,6 +51,9 @@ class SaveState:
     header: dict[str, object]  # the header before the save
     lines: dict[object, dict[str, object]]  # BuiltinOrder -> the line before the save
     window: list[ProcedureCall]
+    # The save's INSERTs of new lines (`states(with_inserts=True)`), kept out
+    # of `before_after`: a new line has no "before".
+    inserted: list[Write] = field(default_factory=list)
 
 
 @dataclass
@@ -104,15 +107,22 @@ class _ReplayProcedures:
                 f"the client did not call {command}{dict(parameters)} before this save"
             )
         rows = self._rows_for(command, parameters)
-        if len(rows) != 1:
+        answers: list[dict[str, object]] = []
+        for row in rows:
+            values = {k.lower(): v for k, v in row.items()}
+            missing = [o for o in outputs if o.lower() not in values]
+            if missing:
+                raise UndecidableError(f"{command}: {', '.join(missing)} is not a written column")
+            answer = {o: values[o.lower()] for o in outputs}
+            if not any(_params_equal(answer, a) for a in answers):
+                answers.append(answer)
+        # Several rows may fit one call (a split's lines share an item and a
+        # customer): their written values answer it only when they agree.
+        if len(answers) != 1:
             raise UndecidableError(
                 f"{command}: {len(rows)} rows fit its parameters, its result is not in hand"
             )
-        values = {k.lower(): v for k, v in rows[0].items()}
-        missing = [o for o in outputs if o.lower() not in values]
-        if missing:
-            raise UndecidableError(f"{command}: {', '.join(missing)} is not a written column")
-        return {o: values[o.lower()] for o in outputs}
+        return answers[0]
 
     def _rows_for(self, command: str, parameters: Mapping[str, object]) -> list[dict[str, object]]:
         rules = [
@@ -184,10 +194,18 @@ class ScreenReplay:
             for state in self.states(saves, calls)
         ]
 
-    def states(self, saves: Sequence[SaveGroup], calls: Sequence[ProcedureCall]) -> list[SaveState]:
+    def states(
+        self,
+        saves: Sequence[SaveGroup],
+        calls: Sequence[ProcedureCall],
+        *,
+        with_inserts: bool = False,
+    ) -> list[SaveState]:
         """Each UPDATE save with the document as it stood before it and the
         procedure calls the client made since the previous save: what the
-        Bravo gateway's replay (ticket 63) runs its own commands against."""
+        Bravo gateway's replay (ticket 63) runs its own commands against.
+        `with_inserts` also gives a save of a stored document that added
+        lines (a split, ticket 73), its INSERTs on `SaveState.inserted`."""
         header: dict[str, object] | None = None
         lines: dict[object, dict[str, object]] = {}  # BuiltinOrder -> values
         states: list[SaveState] = []
@@ -200,9 +218,16 @@ class ScreenReplay:
                 and c.statement.at <= save.at
             ]
             inserts = [w for w in save.writes if w.kind == "insert"]
-            if not inserts and header is not None:
+            new_document = any(w.table == self.header_table for w in inserts)
+            if header is not None and (not inserts or (with_inserts and not new_document)):
                 states.append(
-                    SaveState(save, dict(header), {k: dict(v) for k, v in lines.items()}, window)
+                    SaveState(
+                        save,
+                        dict(header),
+                        {k: dict(v) for k, v in lines.items()},
+                        window,
+                        inserts,
+                    )
                 )
             for write in save.writes:
                 values = dict(write.values)
@@ -229,8 +254,9 @@ class ScreenReplay:
     def procedures(self, state: SaveState) -> ProcedurePort:
         """Answers only the calls the client made before this save."""
         _, _, after_h, after_l, _ = self.before_after(state)
+        new_lines = [dict(w.values) for w in state.inserted]
         return _ReplayProcedures(
-            self.layout, state.window, {PARENT: [after_h], self.detail_key: after_l}
+            self.layout, state.window, {PARENT: [after_h], self.detail_key: after_l + new_lines}
         )
 
     def _reloaded(self, insert: Write, later: Sequence[SaveGroup]) -> dict[str, object]:
@@ -265,6 +291,8 @@ class ScreenReplay:
         after_lines = {k: dict(v) for k, v in lines.items()}
         before_lines = {k: dict(v) for k, v in lines.items()}
         for write in save.writes:
+            if write.kind == "insert":
+                continue  # a new line: no before (`SaveState.inserted`)
             if write.table == self.header_table:
                 previous = header
                 after_header = dict(write.values)
@@ -374,8 +402,8 @@ class ScreenReplay:
             if rule.home != table:
                 continue
             columns.update(c.lower() for c in rule.data_members())
-            for key in ("bindingMembers", "CopyValues"):
-                columns.update(c.lower() for c in rule.maps.get(key, {}))
+            columns.update(c.lower() for c in rule.maps.get("CopyValues", {}))
+            columns.update(m.target.lower() for m in rule.bindings)
         return frozenset(columns)
 
     def _compare(

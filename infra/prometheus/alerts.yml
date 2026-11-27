@@ -109,3 +109,93 @@ groups:
         annotations:
           summary: "{{ $labels.job }} is down: logs or traces are not being kept"
           description: "Prometheus has not been able to scrape {{ $labels.job }} for 5 minutes."
+
+      - alert: DwLaneStale
+        # Sales ticket 84. A worker lane that has not finished a clean tick
+        # for three of its own intervals, and never less than 30 minutes: one
+        # that fails every tick, fails in one workspace every tick (the scope
+        # loops raise after the last scope), hangs, or never once succeeded.
+        # The interval is the worker's own (`dw_lane_interval_seconds`, from
+        # `ConsumerRegistry.interval_for`), so no lane's cadence is copied
+        # here. The 30-minute floor keeps a fast queue lane with one slow model
+        # call from paging; it is a starting point, not a measurement.
+        expr: >
+          (time() - dw_lane_last_ok_timestamp_seconds)
+            > clamp_min(3 * dw_lane_interval_seconds, 1800)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker lane {{ $labels.lane }} has not finished a clean tick"
+          description: >
+            {{ $labels.lane }} last finished a tick without an error
+            {{ $value | humanizeDuration }} ago. Its log in dw-worker says why
+            ("consumer {{ $labels.lane }} failed").
+
+      - alert: DwOutboxEventStuck
+        # Sales ticket 84. The gauge was emitted and read by no rule. An event
+        # pending half an hour is one lane not draining (a handler that keeps
+        # failing retries until its attempts are spent; a spent one is told to
+        # the tenant's administrators by `outbox_alarms`). 1800 s is a
+        # starting point until the plant's traffic measures it.
+        expr: dw_outbox_oldest_pending_age_seconds > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An outbox event has waited more than 30 minutes"
+          description: >
+            The oldest pending outbox event dw-worker handles is
+            {{ $value | humanizeDuration }} old.
+
+      - alert: DwDeliveryExhausted
+        # Sales ticket 84. A notification a channel gave up on after every
+        # retry: the chat provider or the push service kept failing. Only
+        # this end is counted; a person who unlinked or whose phone dropped
+        # the subscription is not the system failing. The counter starts at
+        # 0 per channel, so the first one counts.
+        expr: increase(dw_channel_delivery_exhausted_total[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.channel }}: a notification was given up on after every retry"
+          description: >
+            {{ $labels.channel }} gave up on {{ $value | humanize }} notification(s)
+            in the last hour; the inbox still holds each one.
+
+      - alert: DwBravoWriteNeedsAPerson
+        # Sales ticket 84. A Bravo write the gateway could not settle cleanly:
+        # sent with no answer, written with a read-back that differs, or
+        # claimed and left 15 minutes. The count never goes back down by
+        # itself (a stale claim that settles later stays counted, migration
+        # 5895c4d8683e), so a rise is a new one; the rule fires on it and
+        # clears after 30 minutes. The PIC sees each one on its case.
+        #
+        # `notice: event`: clearing fixes nothing, the write is still in
+        # doubt. Alertmanager sends no resolved notice for it and the host's
+        # watchdog mails no "OK again" (alertmanager.yml.template,
+        # host-watchdog.ps1 section 5d).
+        expr: delta(dw_bravo_writes_needing_a_person[30m]) > 0
+        labels:
+          severity: warning
+          notice: event
+        annotations:
+          summary: "A Bravo write needs a person to check Bravo"
+          description: >
+            The gateway's ledger now holds {{ with query "dw_bravo_writes_needing_a_person" }}{{ . | first | value }}{{ end }}
+            write(s) a person was asked to check. Open the case and
+            read the SO in Bravo before anything else is written to it.
+            This alert clears by itself; the write does not.
+
+      - alert: Watchdog
+        # Sales ticket 84. Always firing, on purpose: the host's relay reads
+        # Alertmanager every few minutes and treats this one missing as the
+        # alert pipeline down (Prometheus, its rules, or Alertmanager), which
+        # an empty list of alerts could not tell apart from "all is well".
+        # Alertmanager routes it to no receiver.
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "The alert pipeline is running"
+          description: "Always firing; its absence means alerts cannot reach anyone."

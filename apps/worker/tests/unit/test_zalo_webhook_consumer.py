@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from test_worker import bare_settings
 
+from dw_worker.consumers.scope_failures import ScopesFailedError
 from dw_worker.consumers.zalo_webhook import BATCH, build_zalo_webhook_consumer
 from dw_worker.main import build_registry
 
@@ -73,7 +74,10 @@ async def test_one_tick_hands_each_update_unchanged_and_a_failure_spares_the_res
     inbound = RecordingInbound(fail_on="b")
     queue = FakeQueue(list(updates))
 
-    await build_zalo_webhook_consumer(queue, inbound)()
+    # The failure is counted and raised after the rest (ticket 84), so the
+    # tick is not recorded as clean.
+    with pytest.raises(ScopesFailedError, match="zalo_webhook_drain: 1 update"):
+        await build_zalo_webhook_consumer(queue, inbound)()
 
     assert queue.asked == [("zalo", BATCH)]
     assert inbound.handled == [{"id": "a"}, {"id": "c"}]

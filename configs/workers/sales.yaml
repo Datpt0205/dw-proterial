@@ -17,8 +17,10 @@ graph_version: "1.0.0"
 # tenant's decided lines most like it (ticket 43); 1.5.0 its 1.2.0, which
 # shows a decided line's confirmed reading as the answer it was; 1.6.0
 # sales.po_body_extraction@1.2.0, shown the customer's decided mail-PO values;
-# 1.7.0 sales.question_intent@1.4.0, a decision's flag from earlier turns.
-prompt_bundle_version: "1.7.0"
+# 1.7.0 sales.question_intent@1.4.0, a decision's flag from earlier turns;
+# 1.8.0 its 1.5.0, a case given to a colleague named in its conversation;
+# 1.9.0 its 1.6.0, an SO line's cancel asked for in a case's conversation.
+prompt_bundle_version: "1.9.0"
 # Read-only tools for the thread agent's turn only (dw_sales ADR 0012, the
 # amendment of ADR 0005 decision 5): every tool `none`, bound by code to the
 # thread's customer, and no tool that writes, sends or approves, which is how

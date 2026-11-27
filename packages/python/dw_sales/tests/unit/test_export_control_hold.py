@@ -21,18 +21,21 @@ from pathlib import Path
 import pytest
 
 from dw_kernel.errors import ConflictError
+from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.policy_files import load_sales_policies
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     DispositionKind,
     FindingCode,
     OrderCase,
+    OrderStatus,
     Severity,
 )
-from dw_sales.evals.graders import AN, CALLERS, DIEU, readme_claims
-from dw_sales.evals.world import SampleSet, World, open_world
+from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA, readme_claims
+from dw_sales.evals.world import Caller, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -157,6 +160,8 @@ async def test_an_order_failing_export_control_is_held_until_the_export_control_
         True,
         True,
     )
+    # Ticket 78: the hold is the export-control PIC's turn while it is open.
+    assert crossed.awaits_export_control
 
     with pytest.raises(ConflictError, match="missing_noc_esf"):
         await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
@@ -171,6 +176,62 @@ async def test_an_order_failing_export_control_is_held_until_the_export_control_
         disposition="accepted",
         reason="Đã nhận NOC và ESF năm nay",
     )
-    assert (
-        await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
-    ).status.value == "confirmation_sent"
+    assert not world.order(crossed.case_id).awaits_export_control
+    confirmed = await world.confirm(AN, crossed.case_id, CONFIRMED_ON)
+    assert confirmed.status.value == "confirmation_sent"
+    assert not world.order(crossed.case_id).awaits_export_control
+
+
+async def test_an_order_with_no_export_control_finding_awaits_nobody_for_it() -> None:
+    world = _world()
+    ((_, case),) = (await world.process_each(AN, ["M01"])).values()
+    assert isinstance(case, OrderCase)
+    assert not any(f.code is FindingCode.MISSING_NOC_ESF for f in case.findings)
+    assert not case.awaits_export_control
+
+
+async def test_an_open_hold_awaits_the_export_control_pic_only_where_they_may_decide_it() -> None:
+    """`dispose`'s statuses, no other: before review and once the case is
+    done, nobody is told or shown it for the hold."""
+    world = _world()
+    ((_, case),) = (await world.process_each(AN, [HELD[0]])).values()
+    assert isinstance(case, OrderCase) and case.finding(NOC).is_open
+    acknowledgeable = {
+        "in_review",
+        "prepared",
+        "uploaded_to_bravo",
+        "cross_checked",
+        "change_review",
+    }
+    for status in OrderStatus:
+        moved = case.model_copy(update={"status": status})
+        assert moved.awaits_export_control is (status.value in acknowledgeable), status
+
+
+def _restricted(caller: Caller) -> AccessContext:
+    """The caller in a tenant that narrows record reads to their own."""
+    return caller.context().model_copy(
+        update={"record_visibility": "restricted", "visible_owners": frozenset({caller.user_id})}
+    )
+
+
+async def test_a_held_only_order_offers_its_export_control_pic_nothing_to_draw() -> None:
+    """Ticket 79 review: the files the page and the item's chat offer to
+    draw ("Bản AI soạn" among them) are drawn under the narrow reading,
+    which refuses a held order that is not the caller's, so none is listed
+    to An, who reads Khoa's order through its hold alone. Khoa is offered
+    what the status opens."""
+    world = _world()
+    crossed = await _cross_checked(world, HELD[0])
+    await world.services.assignment.reassign(
+        GIANG.context(),
+        CaseKind.ORDER,
+        crossed.case_id,
+        assignee=KHOA.user_id,
+        case_version=crossed.case_version,
+    )
+    artifacts, an = world.services.artifacts, _restricted(AN)
+    assert (await world.services.orders.get(an, crossed.case_id)).export_hold_only
+
+    assert (await artifacts.order_artifacts(an, crossed.case_id)).available == []
+    assert (await artifacts.order_artifacts(_restricted(KHOA), crossed.case_id)).available

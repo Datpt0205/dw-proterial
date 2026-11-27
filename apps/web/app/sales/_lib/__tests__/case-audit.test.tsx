@@ -48,6 +48,7 @@ const api = {
   pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => order),
   // Nothing read back from Bravo yet (ticket 03).
+  bravoWrites: vi.fn(async () => []),
   bravoReadBack: vi.fn(async () => ({
     read_back: null,
     stale: false,

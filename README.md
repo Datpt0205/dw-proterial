@@ -44,6 +44,12 @@ make dev              # api + worker + web, with reload
 
 Everything is also runnable as containers: `make docker-up`.
 
+The full walk-through for a new developer (Windows, ports, sign-in personas,
+the model, tests, common pitfalls) is `docs/dev/huong-dan-moi-truong-dev.md`;
+what DW1 and DW2 share, and what is left there, is `docs/dev/viec-chung-dw1-dw2.md`.
+How DW1's steps should run for its users, and what is left before UAT and
+production, is `docs/sales/dw1-luong-va-viec-con-lai.md`.
+
 ---
 
 ## Adding a bounded context

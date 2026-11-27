@@ -67,7 +67,11 @@ from dw_sales.application.assistant import (
 )
 from dw_sales.application.bravo_exports import BravoExport, BravoScreen
 from dw_sales.application.bravo_facts import TableStateView
-from dw_sales.application.bravo_line_writes import BravoLineWriteView, LineChange
+from dw_sales.application.bravo_line_writes import (
+    BravoLineWriteView,
+    BravoTargetsView,
+    LineChange,
+)
 from dw_sales.application.bravo_sales_orders import ReadBackView
 from dw_sales.application.bravo_watch import BaselineAcceptedView, WatchStateView
 from dw_sales.application.catalog_imports import (
@@ -89,7 +93,7 @@ from dw_sales.application.order_quotes import OrderQuoteView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pc_dates import MAX_TEXT, PcDatesView, PcMailsView
-from dw_sales.application.pc_requests import PcRequestView
+from dw_sales.application.pc_requests import PcReplyMailView, PcRequestView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.po_uploads import MAX_UPLOAD_FILES, PoUploadView, UploadedFile
 from dw_sales.application.process_settings import ProcessSettingsView
@@ -954,6 +958,41 @@ def build_router(
         )
         return await idem.record(change)
 
+    # PC's mail DW1 read while the order waits on PC (ticket 77): the mail a
+    # proposal was read from, opened (and recorded served) by the PIC, and
+    # "Đúng" on one line, which records its dates as the PIC's answer.
+    @router.get(
+        "/orders/{case_id}/pc-reply/mail",
+        response_model=PcReplyMailView,
+        dependencies=prepare_scope,
+    )
+    async def pc_reply_mail(
+        case_id: uuid.UUID,
+        # A query value: a message id may hold "/", which a path cannot.
+        message_id: Annotated[str, Query(min_length=1, max_length=998)],
+        context: Ctx,
+        svc: Svc,
+    ) -> PcReplyMailView:
+        return await svc.pc_requests.reply_mail(context, case_id, message_id)
+
+    @router.post(
+        "/orders/{case_id}/lines/{line_no}/pc-reply/accept",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def pc_reply_accept(
+        case_id: uuid.UUID,
+        line_no: Annotated[int, PathParam(ge=1, le=9999)],
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.pc_requests.accept_reply(
+            context, case_id, line_no, case_version=body.case_version
+        )
+        return await idem.record(change)
+
     # An SO line's change written into Bravo under the approver's own Bravo
     # user (ticket 53): proposed here, decided on the platform's approval,
     # carried out by the worker through the gateway.
@@ -1414,7 +1453,7 @@ def build_router(
     async def handled(
         message_id: _MessageId, body: HandledRequest, context: Ctx, svc: Svc, idem: Idem
     ) -> HandledView:
-        view = await svc.routed_mail.handle(context, message_id, body.note)
+        view = await svc.routed_mail.handle(context, message_id, body.note, body.kind)
         return await idem.record(view)
 
     # Whose mail an unknown sender's is (AI item 5): the model suggests from
@@ -1890,6 +1929,35 @@ def build_router(
             case_version=body.case_version,
             how=body.how,
             message_id=body.message_id,
+        )
+        return await idem.record(change)
+
+    # An agreement by silence taken back, whoever recorded it (ticket 82).
+    @router.post(
+        "/orders/{case_id}/agreement/undo",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def undo_implied_agreement(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.confirmations.implied_undone(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    # A cross-check DW passed on Bravo's read-back, taken back by a non-maker
+    # (ticket 81); the case refuses a maker (409).
+    @router.post(
+        "/orders/{case_id}/cross-check/reopen",
+        response_model=CaseChangeView,
+        dependencies=[scopes(SalesScopes.ORDER_CROSS_CHECK)],
+    )
+    async def reopen_cross_check(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.cross_check_reopening.reopen(
+            context, case_id, case_version=body.case_version
         )
         return await idem.record(change)
 
@@ -2525,6 +2593,14 @@ def build_router(
     )
     async def bravo_watch(context: Ctx, svc: Svc) -> WatchStateView:
         return WatchStateView.of(await svc.bravo_watch.state(context))
+
+    # Which Bravo the gateway reads and writes now, and which ones it holds
+    # logins for (ticket 85): the tag on the order page's "Ghi vào Bravo"
+    # panel and the gateway's answer beside the switch on the rules page.
+    # `sales.case.read` or `sales.rules.propose`, which the service checks.
+    @router.get("/bravo/targets", response_model=BravoTargetsView)
+    async def bravo_targets(context: Ctx, svc: Svc) -> BravoTargetsView:
+        return await svc.bravo_targets.now(context)
 
     # When DW last read each of Bravo's fact tables (ticket 50): pages read
     # DW's copy and say how fresh it is.

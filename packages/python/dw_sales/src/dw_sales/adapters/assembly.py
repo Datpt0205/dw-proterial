@@ -121,10 +121,12 @@ from dw_sales.application.bravo_line_writes import (
     BravoWriteStamp,
     write_bravo_versions,
 )
-from dw_sales.application.bravo_sales_orders import SalesOrderScreen
+from dw_sales.application.bravo_sales_orders import BravoCustomerPoPort, SalesOrderScreen
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.column_mapping import ColumnMatcher
+from dw_sales.application.confirmations import SilenceRecorder
+from dw_sales.application.cross_check_on_match import CrossCheckOnMatchLane
 from dw_sales.application.customer_notations import NotationRecordPort
 from dw_sales.application.decisions import QuoteManagerSettlement
 from dw_sales.application.document_forms import DocumentFormReader, DocumentFormReplay
@@ -143,6 +145,7 @@ from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_intake import CustomerPoReading, OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.outbound_mail import OutboundLane
+from dw_sales.application.pc_replies import PcReplyLane
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import (
     ArtifactBytesPort,
@@ -267,6 +270,10 @@ class Dw1Mount:
     # "Gửi cho khách": the lane writing jobs to the outbox share and reading
     # its receipts; built with the drain, given the share.
     outbound: OutboundLane | None = None
+    # What reads PC's mail while an order waits on PC and proposes its dates
+    # (ticket 77): built where a model is wired; reads only where the
+    # tenant's `model_assist.pc_reply` is on and its live eval passed.
+    pc_replies: PcReplyLane | None = None
     # What fills the examples index from the decided lines (ticket 43): built
     # where an index is given.
     examples: ExampleIndexLane | None = None
@@ -291,6 +298,10 @@ class Dw1Mount:
     # What drops readings made in shadow no person decided past their term
     # (ticket 67): built wherever DW1 is.
     shadow_retention: ShadowRetention | None = None
+    # What reads an order in Bravo back and passes its cross-check where the
+    # tenant's rules say so and it matches (ticket 81): built for a worker
+    # given the gateway; nothing passes without it.
+    cross_check_on_match: CrossCheckOnMatchLane | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -348,6 +359,9 @@ def build_dw1(
     # signed with: none, and Bravo is not connected (a proposal and a
     # decision are refused, never guessed).
     bravo_gateway: BravoGatewayClient | None = None,
+    # Bravo as the worker's cross-check lane reads it back (ticket 81): only
+    # a worker passes it, and without it the lane is not built.
+    cross_check_gateway: BravoCustomerPoPort | None = None,
     bravo_signer: ApprovalTokenSigner | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
@@ -612,6 +626,7 @@ def build_dw1(
         bravo_watch_store=SqlBravoWatch(session_factory, audit),
         bravo_facts_store=SqlBravoMirror(session_factory),
         bravo_orders=bravo,
+        bravo_targets=bravo,
         bravo_commands=BravoContract(),
         bravo_po=bravo_gateway,
         bravo_writes_uow=uow,
@@ -794,7 +809,37 @@ def build_dw1(
         ),
         activity=activity,
         mail_drop=dropped,
+        pc_replies=(
+            None
+            if interpretation is None
+            else PcReplyLane(
+                uow=uow,
+                scopes=SqlFollowupScopes(session_factory),
+                inbox=inbox,
+                rules=tenant_rules,
+                steps=readiness,
+                model=interpretation,
+                notifications=notifications,
+                clock=clock,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+            )
+        ),
         examples=indexing,
+        cross_check_on_match=(
+            None
+            if cross_check_gateway is None
+            else CrossCheckOnMatchLane(
+                uow=uow,
+                read_backs=catalog_uow,
+                bravo=cross_check_gateway,
+                decisions=runs,
+                rules=tenant_rules,
+                clock=clock,
+                ids=ids,
+            )
+        ),
         skill_replay=(
             None
             if dw1_agent is None or agent_turns is None
@@ -917,6 +962,8 @@ def build_dw1(
                 outbox=FolderOutbox(outbox_dir),
                 artifact_bytes=artifact_bytes,
                 quotes=assembly.services.quote_commands,
+                answers=assembly.services.update_loops,
+                pc=assembly.services.pc_requests,
                 access=requester_access,
                 notifications=notifications,
                 clock=clock,
@@ -1099,7 +1146,18 @@ def build_followup_lane(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     policies = load_sales_policies(configs / "policies", configs / "copy")
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
-    lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer, push)
+    lane = FollowupLane(
+        uow,
+        book,
+        holders,
+        notifications,
+        clock,
+        ids,
+        writer,
+        push,
+        # DW1 records a customer's silence as agreement itself (ticket 82).
+        agreements=SilenceRecorder(uow, clock, ids),
+    )
     return lane, SqlFollowupScopes(session_factory)
 
 

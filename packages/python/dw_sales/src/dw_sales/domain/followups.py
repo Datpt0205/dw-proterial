@@ -44,6 +44,12 @@ on a case changes because a reminder went out. The person decides.
 - ``waiting_pcs_price``: a quote case marked pcs without the GM/BC Manager's
   price recorded (ticket 05), from when it was marked, while it is not yet
   sent. Sales may not price it meanwhile; DW1 never mails the GM.
+- ``export_control_hold``: an order held on an open `missing_noc_esf` where
+  the export-control PIC may acknowledge it (`OrderCase.awaits_export_control`,
+  ticket 78), told once to them as the current PO revision's wait (its
+  arrival: the finding is raised when a revision is checked). A finding, not
+  a status, so "your turn" cannot see it. Who they are is the lane's to
+  resolve (``export_control``, never a tenant's to name on another rule).
 
 ``quote_waiting_design`` stops once Design's result was read from Bravo's
 YCBG export (`QuoteCase.design_check`, ticket 16): the status stays
@@ -89,6 +95,9 @@ Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 WEEKDAYS: Final[tuple[Weekday, ...]] = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 # Who is told: the case's assigned Sales PIC, or the head of Sales.
 Audience = Literal["pic", "head"]
+# Whom a due stage tells: a tenant's audience, or the export-control PIC,
+# whom only the export-control hold tells (no rule may name them).
+Told = Audience | Literal["export_control"]
 _CLOCK = r"^([01]\d|2[0-3]):[0-5]\d$"
 _HOURS_LIMIT: Final = 24 * 60  # sixty days
 
@@ -113,6 +122,9 @@ class Followup(StrEnum):
     WAITING_QUOTE = "waiting_quote"
     # A pcs quote case waits for the GM/BC Manager's price (ticket 05).
     WAITING_PCS_PRICE = "waiting_pcs_price"
+    # An order held on an open NOC/ESF finding waits for the export-control
+    # PIC (ticket 78).
+    EXPORT_CONTROL_HOLD = "export_control_hold"
 
 
 class Stage(StrEnum):
@@ -292,10 +304,25 @@ class WaitingPcsPriceRule(BaseModel):
     )
 
 
+class ExportControlHoldRule(BaseModel):
+    """An order held on an open NOC/ESF finding: tell the export-control PIC
+    at once, the holders of the scope that acknowledges it (ticket 78)."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(
+        description=(
+            "Bật hoặc tắt báo ngay cho người phụ trách kiểm soát xuất khẩu khi đơn hàng thiếu "
+            "NOC/ESF chờ họ xác nhận (chưa ai được giao quyền này thì báo Trưởng bộ phận)."
+        )
+    )
+
+
 class ImpliedAcceptanceRule(BaseModel):
     """A customer's days of silence after the confirmation have passed (the
-    days are the customer's, in the order rules): tell the PIC once, who
-    records the agreement. DW1 never records it."""
+    days are the customer's, in the order rules): DW1 records the agreement
+    itself and tells the PIC once, who may undo it with one press (ticket 82,
+    dw_sales ADR 0011 amendment); with ``record`` off, the PIC records it."""
 
     model_config = _FROZEN
 
@@ -304,6 +331,15 @@ class ImpliedAcceptanceRule(BaseModel):
             "Bật hoặc tắt báo cho Sales phụ trách khi khách im lặng quá số ngày được coi là "
             "đồng ý (số ngày của từng khách đặt trong quy tắc kiểm tra PO)."
         )
+    )
+    # True: DW1 records the silence as agreement (internal, undone by one
+    # press); a version written before ticket 82 reads as the platform's.
+    record: bool = Field(
+        default=True,
+        description=(
+            "DW1 tự ghi khách đồng ý ngầm khi quá số ngày im lặng, rồi báo Sales phụ trách; "
+            "Sales hoàn tác được bằng một nút."
+        ),
     )
 
 
@@ -471,6 +507,11 @@ class SalesFollowups(BaseModel):
     waiting_pcs_price: WaitingPcsPriceRule = Field(
         description="Báo giá hàng pcs đang chờ giá GM/BC Manager."
     )
+    # 1.8.0 (ticket 78): a version written before it reads it as the
+    # platform's current version has it (`read_over`).
+    export_control_hold: ExportControlHoldRule = Field(
+        description="Đơn hàng thiếu NOC/ESF chờ người phụ trách kiểm soát xuất khẩu."
+    )
     # 1.5.0 (ticket 48): a version written before the field shows the number,
     # as every push before it would have.
     push: PushRule = Field(
@@ -532,6 +573,9 @@ class WaitingCase:
     # When a quote case was marked pcs, while its GM price is not recorded
     # (`QuoteCase.waits_on_pcs_price`, ticket 05); None otherwise.
     pcs_price_asked_at: datetime | None = None
+    # The order awaits the export-control PIC (`OrderCase.awaits_export_control`,
+    # ticket 78); its wait is the current revision's, from ``received_at``.
+    export_held: bool = False
 
 
 # The statuses each follow-up watches.
@@ -593,7 +637,7 @@ class Due:
     stage: Stage
     # When the wait began: the episode the stage is owed for.
     since: datetime
-    notify: tuple[Audience, ...]
+    notify: tuple[Told, ...]
 
 
 def due_soon(due: date, today: date, policy: SalesFollowups) -> bool:
@@ -719,6 +763,18 @@ def owed(
             found.append(
                 Due(case, Followup.IMPLIED_ACCEPTANCE, Stage.NOTIFY, case.implied_from, ("pic",))
             )
+        if policy.export_control_hold.enabled and order and case.export_held:
+            # Told once per PO revision: a save rewrites the findings, never
+            # the revision's arrival.
+            found.append(
+                Due(
+                    case,
+                    Followup.EXPORT_CONTROL_HOLD,
+                    Stage.NOTIFY,
+                    case.received_at,
+                    ("export_control",),
+                )
+            )
         if orders.enabled and order and case.status in _ORDER_UNCONFIRMED:
             found += _after(
                 case,
@@ -780,6 +836,9 @@ def owed(
                 now,
             )
         pc = policy.waiting_pc
+        # Dates DW1 read from PC's mail (ticket 77) do not end it: until the
+        # PIC records them the date is not recorded, which is what it says,
+        # and a line PC's mail did not answer is still waiting.
         if pc.enabled and order and case.pc_asked_at is not None:
             found += _after(
                 case, Followup.WAITING_PC, ((Stage.REMIND, pc.remind),), case.pc_asked_at, now

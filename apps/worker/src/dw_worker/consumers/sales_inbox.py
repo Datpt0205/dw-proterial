@@ -15,6 +15,7 @@ from typing import Protocol
 
 from dw_sales.application.inbox_lane import LaneTick
 from dw_sales.application.ports import SalesScope
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_inbox")
 
@@ -33,6 +34,7 @@ def build_sales_inbox_consumer(
     lane: MailboxLane, scopes: Sequence[SalesScope]
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in scopes:
             try:
                 tick = await lane.tick(scope)
@@ -40,10 +42,12 @@ def build_sales_inbox_consumer(
                 # Broad on purpose, like the loop's own: the next workspace
                 # still gets its tick.
                 logger.exception("sales_inbox: the tick failed in one workspace")
+                failed += 1
                 continue
             if tick.queued:
                 logger.info("sales_inbox: DW1 queued %d message(s)", len(tick.queued))
             if tick.stopped is not None:
                 logger.info("sales_inbox: stopped early in a workspace: %s", tick.stopped)
+        raise_if_failed("sales_inbox", failed)
 
     return consume

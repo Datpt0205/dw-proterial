@@ -20,6 +20,7 @@ import {
   setActiveWorkspace,
 } from "../session";
 import { useSupportGrant } from "../support/session";
+import { endPushOnSignOut } from "../push";
 import {
   markSessionAlive,
   markSessionEnded,
@@ -314,14 +315,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void getKeycloak().register({ redirectUri: window.location.origin });
   }, []);
 
+  // Sales ticket 78: signing out ends this device's pushes first, while the
+  // workspace and the token the call needs are still stored; a second press
+  // during that wait does nothing.
+  const signingOut = useRef(false);
   const logout = useCallback(() => {
-    clearActiveWorkspace();
-    if (AUTH_MODE === "dev") {
-      clearDevToken();
-      window.location.href = "/dev-login";
-      return;
-    }
-    void getKeycloak().logout({ redirectUri: window.location.origin });
+    if (signingOut.current) return;
+    signingOut.current = true;
+    void (async () => {
+      try {
+        await endPushOnSignOut();
+        clearActiveWorkspace();
+        if (AUTH_MODE === "dev") {
+          clearDevToken();
+          window.location.href = "/dev-login";
+          return;
+        }
+        await getKeycloak().logout({ redirectUri: window.location.origin });
+      } catch {
+        // Still signed in: the button works again.
+        signingOut.current = false;
+      }
+    })();
   }, []);
 
   const selectWorkspace = useCallback(

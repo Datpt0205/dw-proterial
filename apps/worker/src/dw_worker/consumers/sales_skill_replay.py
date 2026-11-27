@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol
 
 from dw_sales.application.ports import SalesScope
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_skill_replay")
 
@@ -41,6 +42,7 @@ def build_sales_skill_replay_consumer(
     lane: ReplayLane, scopes: ScopesPort
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 replayed = await lane.tick(scope)
@@ -48,8 +50,10 @@ def build_sales_skill_replay_consumer(
                 # Broad on purpose: a proposal not replayed waits for the next
                 # tick, and the head cannot approve it meanwhile.
                 logger.exception("sales_skill_replay: the tick failed in one workspace")
+                failed += 1
                 continue
             if replayed:
                 logger.info("sales_skill_replay: replayed %d proposal(s)", replayed)
+        raise_if_failed("sales_skill_replay", failed)
 
     return consume

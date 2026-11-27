@@ -1,8 +1,11 @@
 import asyncio
+import time
 from pathlib import Path
 
 import pytest
 
+from dw_observability.metrics import DW_LANE_INTERVAL_SECONDS, DW_LANE_LAST_OK_TIMESTAMP_SECONDS
+from dw_observability.telemetry import NullTelemetry, RecordingTelemetry
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.health import beat, is_alive
 from dw_worker.main import build_registry, run_worker
@@ -46,7 +49,9 @@ async def test_worker_runs_consumers_and_shuts_down(tmp_path: Path) -> None:
     registry.register("counter", counting_consumer)
     shutdown = asyncio.Event()
 
-    worker_task = asyncio.create_task(run_worker(settings, registry, shutdown))
+    worker_task = asyncio.create_task(
+        run_worker(settings, registry, shutdown, telemetry=NullTelemetry())
+    )
     await asyncio.sleep(0.3)
     shutdown.set()
     await asyncio.wait_for(worker_task, timeout=2)
@@ -68,11 +73,72 @@ async def test_failing_consumer_does_not_kill_worker(tmp_path: Path) -> None:
 
     registry.register("broken", broken_consumer)
     shutdown = asyncio.Event()
-    worker_task = asyncio.create_task(run_worker(settings, registry, shutdown))
+    worker_task = asyncio.create_task(
+        run_worker(settings, registry, shutdown, telemetry=NullTelemetry())
+    )
     await asyncio.sleep(0.3)
     assert not worker_task.done(), "worker must survive consumer failures"
     shutdown.set()
     await asyncio.wait_for(worker_task, timeout=2)
+
+
+async def _run_briefly(registry: ConsumerRegistry, tmp_path: Path) -> RecordingTelemetry:
+    settings = WorkerSettings(
+        heartbeat_file=tmp_path / "hb",
+        heartbeat_interval_seconds=0.05,
+        poll_interval_seconds=0.05,
+    )
+    telemetry = RecordingTelemetry()
+    shutdown = asyncio.Event()
+    task = asyncio.create_task(run_worker(settings, registry, shutdown, telemetry=telemetry))
+    await asyncio.sleep(0.3)
+    shutdown.set()
+    await asyncio.wait_for(task, timeout=2)
+    return telemetry
+
+
+def _last_ok(telemetry: RecordingTelemetry, lane: str) -> list[float]:
+    return [
+        float(value)
+        for name, value, labels in telemetry.gauges
+        if name == DW_LANE_LAST_OK_TIMESTAMP_SECONDS and labels == {"lane": lane}
+    ]
+
+
+async def test_a_clean_tick_moves_the_lanes_last_ok_and_a_failing_one_does_not(
+    tmp_path: Path,
+) -> None:
+    """Sales ticket 84: the gauge `DwLaneStale` reads. A lane is seeded with
+    the start time once, then moved only by a tick that returned cleanly."""
+    registry = ConsumerRegistry()
+
+    async def fine() -> None: ...
+
+    async def broken() -> None:
+        raise RuntimeError("boom")
+
+    registry.register("fine", fine)
+    registry.register("broken", broken, interval_seconds=0.05)
+    started = time.time()
+    telemetry = await _run_briefly(registry, tmp_path)
+
+    fine_ticks = _last_ok(telemetry, "fine")
+    assert len(fine_ticks) >= 3, "seeded once, then once per clean tick"
+    assert fine_ticks == sorted(fine_ticks) and fine_ticks[0] >= started
+    assert len(_last_ok(telemetry, "broken")) == 1, "only the seed: no tick was clean"
+    assert (DW_LANE_INTERVAL_SECONDS, 0.05, {"lane": "broken"}) in telemetry.gauges
+
+
+async def test_a_tick_that_never_returns_leaves_the_lane_at_its_seed(tmp_path: Path) -> None:
+    """A hung lane (a stalled share under the drop folder) records nothing."""
+    registry = ConsumerRegistry()
+
+    async def hung() -> None:
+        await asyncio.Event().wait()
+
+    registry.register("hung", hung)
+    telemetry = await _run_briefly(registry, tmp_path)
+    assert len(_last_ok(telemetry, "hung")) == 1
 
 
 def bare_settings(**overrides: object) -> WorkerSettings:
@@ -361,6 +427,30 @@ def test_dw1s_decided_lines_are_indexed_wherever_dw1_runs_and_optimised_only_wit
     assert lanes.isdisjoint(build_registry(deployed).all())
 
 
+def test_pcs_mail_is_read_only_where_dw1_reaches_a_model_every_five_minutes() -> None:
+    """Sales ticket 77: PC's mail is read while an order waits on PC only by
+    a process that reaches a model server, every five minutes; not on a
+    database alone, and not with no model (the tenant's switch decides the
+    rest, per tick)."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_pc_replies" not in build_registry(bare_settings(database_url=db)).all()
+    no_model = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    assert "sales_pc_replies" not in build_registry(no_model).all()
+
+    with_model = bare_settings(
+        database_url=db,
+        s3_endpoint_url=s3,
+        sales_inbox_lane=False,
+        model_provider="onprem",
+        onprem_model_base_url="http://model:11434/v1",
+        outbound_allowed_hosts=["model"],
+    )
+    registry = build_registry(with_model)
+    assert "sales_pc_replies" in registry.all()
+    assert registry.interval_for("sales_pc_replies", 1.0) == 300.0
+
+
 def test_dw1s_rule_drafts_are_swept_wherever_dw1_drafts_them() -> None:
     """ "Tạo từ tệp mẫu": a draft its event lost, or one nobody asks after for
     30 days, is dealt with by a lane of its own, under the name the drafting
@@ -534,3 +624,15 @@ def test_dw1_is_built_where_deployed_on_the_stored_mailbox_only(
         catalog = mount[0].services.master_data.catalog
         assert isinstance(catalog, SnapshotSalesCatalog)
         assert (catalog.fallback is None) is settings.is_deployed
+
+
+def test_the_bravo_ledger_health_lane_runs_wherever_a_gateway_writes() -> None:
+    """Ticket 84: a deployment with a gateway counts its writes that wait for a
+    person; one without a gateway has no ledger to count."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    assert "bravo_ledger_health" not in build_registry(bare_settings(database_url=db)).all()
+    registry = build_registry(
+        bare_settings(database_url=db, bravo_gateway_url="http://bravo-gateway:8080")
+    )
+    assert "bravo_ledger_health" in registry.all()
+    assert registry.interval_for("bravo_ledger_health", 5.0) == 300.0

@@ -200,6 +200,7 @@ export function ProposeDrawer({
       options={options}
       initialStart={initialStart}
       draftable={view.draftable.includes(ruleKey)}
+      decidedByASecond={view.decided_by_a_second.includes(ruleKey)}
       title={title}
       scope={scope}
       held={held}
@@ -249,6 +250,7 @@ function Editor({
   options: versions,
   initialStart,
   draftable,
+  decidedByASecond,
   title,
   scope,
   held,
@@ -263,6 +265,8 @@ function Editor({
   initialStart?: string;
   /** Whether a version of this key may be drafted from the company's file. */
   draftable: boolean;
+  /** A second person decides this key's versions, the head's own included. */
+  decidedByASecond: boolean;
   title: string;
   scope?: StepScope;
   /** A version of the key waits on its approval: nothing is sent until it is decided. */
@@ -274,8 +278,12 @@ function Editor({
 }) {
   const { message } = App.useApp();
   const { hasScope } = useAuth();
-  // The head's own version applies at once (2026-10-28); the server decides.
-  const appliesAtOnce = hasScope(SCOPE.rulesApprove);
+  // The head's own version applies at once (2026-10-28), but for a key a
+  // second person decides (ticket 85); the server decides.
+  const approves = hasScope(SCOPE.rulesApprove);
+  const appliesAtOnce = approves && !decidedByASecond;
+  // The head, on a key another approver decides: nobody approves their own.
+  const anotherDecides = approves && decidedByASecond;
   const discard = useConfirmDiscard();
   const { run, pending } = useAction();
   const [form] = Form.useForm();
@@ -501,7 +509,7 @@ function Editor({
       (key) => salesApi().proposeRule(ruleKey, body, key),
       appliesAtOnce
         ? `Đã áp dụng phiên bản mới của "${RULE_KEY[ruleKey]}".`
-        : `Đã gửi duyệt phiên bản mới của "${RULE_KEY[ruleKey]}". Trưởng bộ phận duyệt trên trang Duyệt.`,
+        : `Đã gửi duyệt phiên bản mới của "${RULE_KEY[ruleKey]}". ${anotherDecides ? "Một người duyệt khác" : "Trưởng bộ phận"} duyệt trên trang Duyệt.`,
     );
     if (result.ok) return onProposed();
     setError(result.error);
@@ -561,7 +569,9 @@ function Editor({
           lại toàn bộ tài liệu, và từ chối số phiên bản đã dùng.
           {appliesAtOnce
             ? " Bạn là Trưởng bộ phận nên phiên bản áp dụng ngay, không qua bước duyệt; lịch sử vẫn ghi lại."
-            : ""}
+            : anotherDecides
+              ? " Quy tắc này do một người duyệt khác quyết, kể cả phiên bản của Trưởng bộ phận: bạn không tự duyệt được."
+              : ""}
         </Typography.Paragraph>
         {scope ? (
           <Alert

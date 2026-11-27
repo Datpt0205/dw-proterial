@@ -1,5 +1,6 @@
-"""Ticket 07 against real Postgres (migration 91f83937dbf1): the wait on PC
-(`sales.order_cases.pc_request`) and PC's answer per line
+"""Tickets 07 and 77 against real Postgres (migrations 91f83937dbf1 and
+79418de5ab48): the wait on PC (`sales.order_cases.pc_request`), PC's mail
+read by DW1 (`sales.order_cases.pc_reply`) and PC's answer per line
 (`sales.order_lines.pc_answer`).
 
 A case asked of PC and a line PC split read back as the domain left them; the
@@ -132,8 +133,45 @@ async def test_a_waiting_pc_delivery_is_a_record_the_check_admits(
         await work.commit()
 
 
+async def test_pc_s_mail_read_by_dw1_reads_back_in_its_own_tenant_only(
+    small_run: OrderRun, uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    """Ticket 77 (migration 79418de5ab48): the proposal read from PC's mail
+    is stored with the case and read back as the domain left it; another
+    workspace or tenant reads no such case."""
+    case = _m01(small_run)
+    reviewing = case.start_review()
+    asked = reviewing.ask_pc(Actor(user_id=AN_ID), T0)
+    read = asked.read_pc_reply(
+        "<pc-01@proterial.example>",
+        T0 + timedelta(minutes=5),
+        [(1, 1, DEC_12, "12/12/2026")],
+        at=T0 + timedelta(minutes=6),
+        prompt_ref="sales.pc_dates@1.0.0",
+        model_profile="test",
+    )
+    await _save(uow, small_run, case, reviewing, asked, read)
+
+    async with uow(world.alpha) as work:
+        stored = await work.orders.get(case.case_id)
+        waiting = [s.case.case_id for s in await work.orders.waiting_on_pc()]
+        followed = {c.case_id: c for c in await work.followups.cases(LOADED, received_since=T0)}
+    assert stored is not None and stored.case == read
+    # Read, not recorded: the wait is still the reminder's (ticket 77).
+    assert followed[case.case_id].pc_asked_at == T0
+    assert stored.case.pc_reply is not None and stored.case.line(1).pc_answer is None
+    # What the reader of PC's mail looks at (`sales_pc_replies`): this case,
+    # in its own workspace only.
+    assert case.case_id in waiting
+    for other in (world.alpha_other, world.beta):
+        async with uow(other) as work:
+            assert await work.orders.get(case.case_id) is None
+            assert case.case_id not in {s.case.case_id for s in await work.orders.waiting_on_pc()}
+
+
 @pytest.mark.parametrize(
-    ("table", "column"), [("order_cases", "pc_request"), ("order_lines", "pc_answer")]
+    ("table", "column"),
+    [("order_cases", "pc_request"), ("order_lines", "pc_answer"), ("order_cases", "pc_reply")],
 )
 async def test_a_request_or_an_answer_that_is_not_an_object_is_refused(
     migrator: AsyncEngine, small_run: OrderRun, table: str, column: str
@@ -141,3 +179,61 @@ async def test_a_request_or_an_answer_that_is_not_an_object_is_refused(
     with pytest.raises(IntegrityError):
         async with migrator.begin() as connection:
             await connection.execute(sa.text(f"UPDATE sales.{table} SET {column} = '[]'::jsonb"))
+
+
+async def test_pc_s_mail_opened_and_a_press_on_its_dates_are_records_postgres_admits(
+    small_run: OrderRun,
+    uow: SqlSalesUnitOfWorkFactory,
+    app_sessions: async_sessionmaker[AsyncSession],
+    world: World,
+) -> None:
+    """Ticket 77: PC's mail served to the PIC is a region of its own in
+    `source_served`, read back for that person and version only; the
+    labelled case of their press holds step `pc_reply`."""
+    from datetime import datetime
+
+    from dw_sales.application.case_store import ServedSource
+    from dw_sales.application.pc_requests import pc_mail_region
+    from dw_sales.domain.dispositions import CaseKind
+    from dw_sales.domain.labelled_cases import pc_reply_label
+
+    case = _m01(small_run)
+    reviewing = case.start_review()
+    asked = reviewing.ask_pc(Actor(user_id=AN_ID), T0)
+    read = asked.read_pc_reply(
+        "<pc-02@proterial.example>",
+        T0 + timedelta(minutes=5),
+        [(1, 1, DEC_12, "12/12/2026")],
+        at=T0 + timedelta(minutes=6),
+        prompt_ref="sales.pc_dates@1.0.0",
+        model_profile="onprem",
+    )
+    await _save(uow, small_run, case, reviewing, asked, read)
+    region = pc_mail_region("<pc-02@proterial.example>")
+    assert region.attachment_id is not None and region.page is not None
+    intake = _intake(small_run, app_sessions)
+    whole = read.line(1).effective.quantity
+    answered = await intake.take_pc_answer(
+        small_run.scope, read, 1, [(whole, DEC_12)], Actor(user_id=AN_ID), T0
+    )
+    label = pc_reply_label(read, answered, 1, new_id=uuid.uuid4, at=T0, by=AN_ID)
+    assert label is not None and label.verdict == "confirmed"
+    async with uow(world.alpha) as work:
+        await work.served.record(
+            ServedSource(
+                principal_id=AN_ID,
+                case_kind=CaseKind.ORDER,
+                case_id=case.case_id,
+                case_version=read.case_version,
+                attachment_id=region.attachment_id,
+                attachment_sha256="0" * 64,
+                page=region.page,
+                served_at=datetime.now(T0.tzinfo),
+            )
+        )
+        await work.labelled_cases.append([label])
+        await work.commit()
+    async with uow(world.alpha) as work:
+        served = await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, read.case_version)
+        older = await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, asked.case_version)
+    assert region in served and region not in older

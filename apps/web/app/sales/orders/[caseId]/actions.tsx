@@ -33,6 +33,7 @@ import { ActionError, findingKeyLabel } from "../../_lib/errors";
 import { CLOSE_REASON, label } from "../../_lib/labels";
 import {
   orderOffers,
+  STALLED_CROSS_CHECK,
   type Offer,
   type OrderAction,
   type Viewer,
@@ -68,6 +69,7 @@ const BUTTON: Record<OrderAction, string> = {
   crossCheck: "Kiểm chéo đạt",
   returnOrder: "Trả lại",
   resendCrossCheck: "Gửi kiểm chéo lại",
+  reopenCrossCheck: "Mở lại kiểm chéo",
   confirm: "Đã gửi xác nhận",
   close: "Đóng hồ sơ",
 };
@@ -155,6 +157,17 @@ export function OrderActions({
       ),
     );
 
+  const reopenCrossCheck = async () =>
+    done(
+      await run(
+        "reopenCrossCheck",
+        { v: order.case_version },
+        (key) =>
+          salesApi().reopenCrossCheck(order.case_id, order.case_version, key),
+        `Đã mở lại kiểm chéo. ${STALLED_CROSS_CHECK}`,
+      ),
+    );
+
   if (entries.length === 0)
     return (
       <Typography.Text>
@@ -181,9 +194,11 @@ export function OrderActions({
                   ? prepare()
                   : action === "resendCrossCheck"
                     ? resendCrossCheck()
-                    : action === "resumeReview"
-                      ? resumeReview()
-                      : setDialog(action as Dialog)
+                    : action === "reopenCrossCheck"
+                      ? reopenCrossCheck()
+                      : action === "resumeReview"
+                        ? resumeReview()
+                        : setDialog(action as Dialog)
               }
             >
               {BUTTON[action]}

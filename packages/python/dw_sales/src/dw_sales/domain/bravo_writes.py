@@ -14,6 +14,12 @@ approved version before each write and refuses a kind not switched on in it
 said. The kinds are the gateway contract's (`dw_bravo.contract.WRITE_KINDS`,
 the `so.` ones); this module may not import it (contexts reach Bravo through
 their adapters), so `test_bravo_writes.py` holds the two lists equal.
+
+Since 1.1.0 it also names the Bravo DW1 reads and writes (ticket 85):
+`target`, UAT unless a version names production with the UAT run that
+proved the gateway end to end (`target_uat_proof`). The gateway reads it
+before each read and write; a proposal is stamped with the target it was
+read from, and a write whose stamp is not the target now is refused.
 """
 
 from __future__ import annotations
@@ -33,6 +39,8 @@ BravoWriteKind = Literal[
     "so.create@1",
 ]
 UAT_PROOF_LIMIT: Final = 200
+# The gateway contract's `dw_bravo.contract.BravoTarget`, held equal by test.
+BravoTarget = Literal["uat", "production"]
 
 
 class BravoWriteSwitch(BaseModel):
@@ -62,6 +70,16 @@ class BravoWrites(BaseModel):
     policy_id: Literal["sales_bravo_writes"]
     policy_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     kinds: Mapping[BravoWriteKind, BravoWriteSwitch]
+    target: BravoTarget = "uat"
+    target_uat_proof: str | None = Field(default=None, min_length=1, max_length=UAT_PROOF_LIMIT)
+
+    @model_validator(mode="after")
+    def _production_only_with_a_proof(self) -> Self:
+        if self.target == "production" and not (self.target_uat_proof or "").strip():
+            raise ValueError(
+                "Bravo production is named only with the UAT run that proved the gateway"
+            )
+        return self
 
     def enabled(self, kind: str) -> bool:
         """Off for a kind the document does not name (fail closed)."""

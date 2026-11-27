@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol
 
 from dw_sales.application.ports import SalesScope
+from dw_worker.consumers.scope_failures import raise_if_failed
 
 logger = logging.getLogger("dw_worker.sales_pairs_retention")
 
@@ -42,6 +43,7 @@ def build_sales_pairs_retention_consumer(
     the log (the shadow readings' too, ticket 67)."""
 
     async def consume() -> None:
+        failed = 0
         for scope in await scopes.scopes():
             try:
                 dropped = await lane.tick(scope)
@@ -49,8 +51,10 @@ def build_sales_pairs_retention_consumer(
                 # Broad on purpose: a row kept an hour longer is retried next
                 # tick, and the other workspaces still get theirs.
                 logger.exception("%s: one workspace failed", name)
+                failed += 1
                 continue
             if dropped:
                 logger.info("%s: dropped %d row(s)", name, dropped)
+        raise_if_failed(name, failed)
 
     return consume

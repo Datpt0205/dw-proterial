@@ -49,6 +49,11 @@ from dw_sales.domain.catalog import (
     PrvCode,
     Uom,
 )
+from dw_sales.domain.cross_check_on_match import (
+    EXCEPTION_ORDER,
+    OnMatchException,
+    ReadBackFacts,
+)
 from dw_sales.domain.description_reading import DescriptionReading, GateRoute
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.legacy_fonts import LegacyEncoding
@@ -264,10 +269,60 @@ class PcRequest(BaseModel):
 
     def answered(self, lines: Iterable[OrderLine]) -> bool:
         """Whether every line asked has PC's answer since the request."""
-        found = {line.line_no: line.pc_answer for line in lines}
-        return all(
-            (answer := found.get(no)) is not None and answer.at >= self.at for no in self.lines
+        return _pc_answered_since(self.lines, lines, self.at)
+
+
+def _pc_answered_since(asked: Iterable[int], lines: Iterable[OrderLine], at: datetime) -> bool:
+    """Whether every line of ``asked`` has PC's answer recorded at or after ``at``."""
+    found = {line.line_no: line.pc_answer for line in lines}
+    return all((answer := found.get(no)) is not None and answer.at >= at for no in asked)
+
+
+class PcReplyDate(BaseModel):
+    """One date PC's mail gives one delivery of a line asked (ticket 77), the
+    words it rests on, and the mail it was read from."""
+
+    model_config = _FROZEN
+
+    line_no: int = Field(ge=1)
+    delivery: int = Field(ge=1)
+    date: date
+    quote: str = Field(min_length=1, max_length=40)
+    message_id: str = Field(min_length=1, max_length=998)
+    received_at: AwareDatetime
+
+
+class PcReply(BaseModel):
+    """PC's mail read by DW1 while the case waits on PC (ticket 77): the dates
+    it gives, a proposal the PIC confirms line by line ("Đúng") or corrects
+    through the answer form; nothing of the case's values changes until they
+    do. ``messages``: every mail read for this wait, a date or none, so none
+    is read twice."""
+
+    model_config = _FROZEN
+
+    dates: tuple[PcReplyDate, ...] = ()
+    messages: tuple[str, ...] = Field(min_length=1)
+    read_at: AwareDatetime
+    prompt_ref: str = Field(min_length=1, max_length=120)
+    model_profile: str = Field(min_length=1, max_length=120)
+
+    def of(self, line_no: int) -> tuple[PcReplyDate, ...]:
+        """The line's dates, by delivery."""
+        return tuple(
+            sorted((d for d in self.dates if d.line_no == line_no), key=lambda d: d.delivery)
         )
+
+    def keeping(self, lines: Iterable[int]) -> PcReply:
+        """The proposal for ``lines`` only."""
+        kept = set(lines)
+        return self.model_copy(update={"dates": tuple(d for d in self.dates if d.line_no in kept)})
+
+    def since(self, at: datetime) -> PcReply | None:
+        """What mail received at or after ``at`` proposed, which answers a
+        request made then; None when none did. Every mail stays read."""
+        dates = tuple(d for d in self.dates if d.received_at >= at)
+        return self.model_copy(update={"dates": dates}) if dates else None
 
 
 class DesignRequest(BaseModel):
@@ -886,6 +941,12 @@ class PoDocument(BaseModel):
     # the printed revision, which, with the lines, still decides
     # (`check_history`). None: the name suggests none.
     name_revision: str | None = Field(default=None, pattern=r"^[A-Z0-9]{1,8}$")
+    # Read from a file opened with a password (ticket 17) under rules that
+    # leave its values to their own checks (`OrderRules.password_file`,
+    # ticket 80): the reader's `opened_with_password` flags were taken off
+    # every value, and this says the file was opened so. False: the flags,
+    # if any, are on the values.
+    password_values_as_read: bool = False
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -917,7 +978,38 @@ class PoDocument(BaseModel):
                 raise ValueError("an anchor points outside the message's text")
         if self.print_copy is not None and self.print_copy.attachment_id == self.attachment_id:
             raise ValueError("a PO's print is another attachment than the PO")
+        if self.password_values_as_read and (
+            self.attachment_id is None or any(self._password_flags())
+        ):
+            raise ValueError("a file's values taken as read carry no password flag")
         return self
+
+    def _password_flags(self) -> Iterable[FlaggedValue]:
+        """Every `opened_with_password` flag on a value of the PO."""
+        flags = [*self.header.flags, *(f for line in self.lines for f in line.flags)]
+        if self.total is not None:
+            flags += self.total.flags
+        return (f for f in flags if f.flag is RegionFlag.OPENED_WITH_PASSWORD)
+
+    def with_password_values_as_read(self) -> PoDocument:
+        """The PO with the `opened_with_password` flag taken off every value,
+        and the file named as opened so (`password_values_as_read`): each
+        value then waits on a person only for a check it fails or another
+        flag, as a file opened without a password does (ticket 80). The PO
+        unchanged when it was not opened with a password."""
+        if not self.opened_with_password or self.password_values_as_read:
+            return self
+
+        def kept(flags: Sequence[FlaggedValue]) -> list[dict[str, object]]:
+            return [f.model_dump() for f in flags if f.flag is not RegionFlag.OPENED_WITH_PASSWORD]
+
+        dumped = self.model_dump()
+        dumped["header"]["flags"] = kept(self.header.flags)
+        for line, read in zip(dumped["lines"], self.lines, strict=True):
+            line["flags"] = kept(read.flags)
+        if self.total is not None:
+            dumped["total"]["flags"] = kept(self.total.flags)
+        return PoDocument.model_validate({**dumped, "password_values_as_read": True})
 
     @property
     def from_message(self) -> bool:
@@ -927,8 +1019,11 @@ class PoDocument(BaseModel):
     @property
     def opened_with_password(self) -> bool:
         """Whether it was read from a file the reader sandbox opened with a
-        password its mail carries (ticket 17), as its values are flagged."""
-        return any(f.flag is RegionFlag.OPENED_WITH_PASSWORD for f in self.header.flags)
+        password its mail carries (ticket 17): its values are flagged, or
+        were taken as read under the case's rules (ticket 80)."""
+        return self.password_values_as_read or any(
+            f.flag is RegionFlag.OPENED_WITH_PASSWORD for f in self.header.flags
+        )
 
     def legacy_texts(self) -> list[tuple[str, SourceAnchor, LegacyEncoding]]:
         """Each value read from text typed in a TCVN3 or VNI font, in reading
@@ -1956,11 +2051,17 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
                 _S.CHANGE_REVIEW,
             }
         ),
-        _S.CROSS_CHECKED: frozenset({_S.CROSS_CHECKED, _S.CONFIRMATION_SENT, _S.CHANGE_REVIEW}),
+        # -> uploaded_to_bravo: a cross-check DW passed on a matching
+        # read-back, taken back before the confirmation left (ticket 81).
+        _S.CROSS_CHECKED: frozenset(
+            {_S.CROSS_CHECKED, _S.CONFIRMATION_SENT, _S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO}
+        ),
         # -> confirmed: the customer agreed (ADR 0011); -> change_review: they
         # declined it, or a revision or an accepted change arrived.
         _S.CONFIRMATION_SENT: frozenset({_S.CONFIRMED, _S.CHANGE_REVIEW}),
-        _S.CONFIRMED: frozenset({_S.CHANGE_REVIEW}),
+        # Back to waiting on the customer: an agreement by silence undone
+        # (ticket 82, dw_sales ADR 0011 amendment).
+        _S.CONFIRMED: frozenset({_S.CHANGE_REVIEW, _S.CONFIRMATION_SENT}),
         _S.CHANGE_REVIEW: frozenset({_S.CHANGE_REVIEW, _S.UPLOADED_TO_BRAVO}),
         _S.CLOSED: frozenset(),
     }
@@ -1994,6 +2095,13 @@ def design_wait_statuses() -> frozenset[OrderStatus]:
     """Where an order may wait on Design for a new PRV code (ticket 06): where
     mappings are decided. Outside them `_next` ends every wait, read-only."""
     return _EDITABLE
+
+
+def export_acknowledgeable_statuses() -> frozenset[OrderStatus]:
+    """Where the export-control PIC may acknowledge `missing_noc_esf`
+    (`dispose`), read-only: what `OrderCase.awaits_export_control` reads, and
+    the follow-ups' SQL with it (ticket 78)."""
+    return _ACKNOWLEDGEABLE
 
 
 def quote_wait_statuses() -> frozenset[OrderStatus]:
@@ -2110,6 +2218,11 @@ class OrderCase(BaseModel):
     catalog_as_of: AwareDatetime | None = None
     cross_check_required: bool | None = None
     export_control_mode: ExportControlMode | None = None
+    # Whether a matching read-back from Bravo may pass the cross-check
+    # (ticket 81, `OrderRules.cross_check_on_match`), stamped when checked;
+    # None, as on a case checked before the rule existed, is off. False once
+    # an automatic pass was taken back: that order's check is a person's.
+    cross_check_on_match: bool | None = None
     # Earlier revisions, oldest first, and what the current one changed.
     superseded: tuple[SupersededRevision, ...] = ()
     changes: tuple[LineChange, ...] = ()
@@ -2130,6 +2243,9 @@ class OrderCase(BaseModel):
     # Step 9.
     cross_checked_by: ActorId | None = None
     cross_checked_at: AwareDatetime | None = None
+    # The read-back the cross-check passed on, when DW passed it (ticket 81):
+    # the gateway answer's sha256. None: a person cross-checked it.
+    cross_checked_on_read_back: Sha256Hex | None = None
     # The last "trả lại" from the cross-check, kept with its reason.
     returned_reason: Note | None = None
     returned_by: ActorId | None = None
@@ -2164,6 +2280,9 @@ class OrderCase(BaseModel):
     # Sales asked PC for the delivery dates and waits (ticket 07): only where
     # PC's answer is recorded, and cleared once every line asked has it.
     pc_request: PcRequest | None = None
+    # PC's mail DW1 read while the case waits on PC (ticket 77): a proposal
+    # per line, only for lines asked and unchanged since; ends with the wait.
+    pc_reply: PcReply | None = None
     # Sales asked Design for a new PRV code, line by line (ticket 06): only
     # where mappings are decided, each for a line still without a code.
     design_requests: tuple[DesignRequest, ...] = ()
@@ -2226,6 +2345,11 @@ class OrderCase(BaseModel):
                 raise ValueError(f"a {self.status} case does not wait on PC")
             if not set(self.pc_request.lines) <= line_numbers:
                 raise ValueError("PC is asked about a line the case lacks")
+        if self.pc_reply is not None:
+            if self.pc_request is None:
+                raise ValueError("PC's mail is read only while the case waits on PC")
+            if not {d.line_no for d in self.pc_reply.dates} <= set(self.pc_request.lines):
+                raise ValueError("PC's mail is proposed only for the lines asked")
         if self.design_requests:
             asked = [request.line_no for request in self.design_requests]
             if len(asked) != len(set(asked)):
@@ -2246,6 +2370,10 @@ class OrderCase(BaseModel):
         if self.header_corrections:
             self.effective_document  # noqa: B018 -- validates the typed values
         self._stamps_fit_the_status()
+        if self.cross_check_on_match and self.cross_check_required is not True:
+            raise ValueError("a read-back passes only a cross-check the rules require")
+        if self.cross_checked_on_read_back is not None and self.cross_checked_by is None:
+            raise ValueError("a read-back passed a cross-check only with its checker")
         if self.cross_checked_by is not None and (
             self.cross_checked_by in (self.prepared_by, self.bravo_recorded_by)
             or self.cross_checked_by in self.earlier_makers
@@ -2300,6 +2428,16 @@ class OrderCase(BaseModel):
         the narrow reading (failure-modes #7). `confirm`, `awaiting()` and the
         order list read this, so no two screens disagree about one order."""
         return self.status is _S.UPLOADED_TO_BRAVO and self.cross_check_required is not False
+
+    @property
+    def awaits_export_control(self) -> bool:
+        """Held on an open `missing_noc_esf` where the export-control PIC may
+        acknowledge it (`dispose`'s statuses): their turn, though the status
+        is the PIC's (ticket 78). The follow-ups tell them and the case is
+        theirs to see while it holds (`visibility.sees_case`)."""
+        return self.status in _ACKNOWLEDGEABLE and any(
+            f.is_open and f.code is FindingCode.MISSING_NOC_ESF for f in self.findings
+        )
 
     @property
     def awaits_confirmation(self) -> bool:
@@ -2492,6 +2630,7 @@ class OrderCase(BaseModel):
         catalog_as_of: datetime,
         cross_check_required: bool,
         export_control_mode: ExportControlMode,
+        cross_check_on_match: bool | None = None,
         duplicate_of_case: uuid.UUID | None = None,
         duplicate_of_so: str | None = None,
         base_so_no: str | None = None,
@@ -2504,6 +2643,7 @@ class OrderCase(BaseModel):
             catalog_as_of=catalog_as_of,
             cross_check_required=cross_check_required,
             export_control_mode=export_control_mode,
+            cross_check_on_match=cross_check_on_match,
             duplicate_of_case=duplicate_of_case,
             duplicate_of_so=duplicate_of_so,
             base_so_no=base_so_no,
@@ -3046,6 +3186,89 @@ class OrderCase(BaseModel):
         self._require_not_a_maker(actor)
         return self._next(status, cross_checked_by=actor.user_id, cross_checked_at=at)
 
+    def on_match_exceptions(self, read_back: ReadBackFacts) -> tuple[OnMatchException, ...]:
+        """Why this order's cross-check may not pass on ``read_back`` (ticket
+        81): empty when it may. Each fact is read directly, never through
+        `makers`, which cannot tell a preparer who typed a value from one who
+        did not."""
+        found: set[OnMatchException] = set()
+        if not self.cross_check_on_match:
+            found.add(OnMatchException.RULES_OFF)
+        if not self.awaits_cross_check or self.unapplied_decision is not None:
+            found.add(OnMatchException.NOT_AWAITING)
+        if read_back.source != "gateway":
+            found.add(OnMatchException.NOT_FROM_BRAVO)
+        if read_back.case_version != self.case_version:
+            found.add(OnMatchException.STALE_READ_BACK)
+        if read_back.differences:
+            found.add(OnMatchException.DIFFERS)
+        if read_back.so_no != self.bravo_so_no:
+            found.add(OnMatchException.SO_NO_DIFFERS)
+        if self.findings:
+            found.add(OnMatchException.FINDING)
+        if self.header_corrections or any(
+            line.corrections
+            or line.changes
+            or line.mapping.hand_entered
+            or line.pc_answer is not None
+            for line in self.lines
+        ):
+            found.add(OnMatchException.TYPED_BY_A_PERSON)
+        flags = [*self.document.header.flags, *(f for x in self.lines for f in x.po_line.flags)]
+        if (
+            self.document.opened_with_password
+            or any(f.gate == "applied" for f in flags)
+            or any(
+                x.basis.description_reading is not None
+                and x.basis.description_reading.gate == "applied"
+                for x in self.lines
+            )
+        ):
+            found.add(OnMatchException.APPLIED_BY_DW)
+        if self.superseded or self.update_loop is not None:
+            found.add(OnMatchException.REVISED)
+        return tuple(e for e in EXCEPTION_ORDER if e in found)
+
+    def cross_checked_on_match(
+        self, read_back: ReadBackFacts, digest: str, actor: Actor, at: datetime
+    ) -> OrderCase:
+        """uploaded_to_bravo -> cross_checked by DW, on a read-back from Bravo
+        that holds exactly the paste sheet (ticket 81): refused (409, naming
+        why) for anything `on_match_exceptions` finds, here where the effect
+        happens, whoever asked. ``actor`` is the lane's system actor, never a
+        maker; ``digest`` the gateway answer's sha256."""
+        if exceptions := self.on_match_exceptions(read_back):
+            raise ConflictError(
+                "the cross-check stays a person's",
+                details={
+                    "case_id": str(self.case_id),
+                    "rule": "cross_check_on_match",
+                    "exceptions": [e.value for e in exceptions],
+                },
+            )
+        passed = self.cross_check(actor, at)
+        return passed._next(passed.status, cross_checked_on_read_back=digest)
+
+    def reopen_cross_check(self, actor: Actor) -> OrderCase:
+        """cross_checked -> uploaded_to_bravo: a cross-check DW passed on a
+        matching read-back, taken back before the confirmation left (ticket
+        81), by someone who made none of the order. Its stamps are cleared,
+        and its check is a person's from then on (`cross_check_on_match`
+        False); the caller raises it again."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        if self.status is not _S.CROSS_CHECKED or self.cross_checked_on_read_back is None:
+            raise ConflictError(
+                "only a cross-check DW passed on Bravo's read-back is taken back",
+                details={**details, "rule": "not_passed_on_read_back"},
+            )
+        self._require_not_a_maker(actor)
+        return self._next(
+            transition(self.status, _S.UPLOADED_TO_BRAVO),
+            cross_checked_by=None,
+            cross_checked_at=None,
+            cross_check_on_match=False,
+        )
+
     def return_from_cross_check(self, reason: str, actor: Actor, at: datetime) -> OrderCase:
         """uploaded_to_bravo -> in_review: "trả lại", with the reason.
 
@@ -3160,7 +3383,85 @@ class OrderCase(BaseModel):
                 },
             )
         request = PcRequest(lines=self.pc_lines(), by=actor.user_id, at=at)
-        return self._next(self.status, pc_request=request)
+        # A new wait: what PC wrote before it answers the old one; what DW1
+        # read from mail received since ``at`` (a request recorded from its
+        # outbox receipt, ticket 77) answers this one.
+        reply = self.pc_reply.since(at) if self.pc_reply is not None else None
+        return self._next(self.status, pc_request=request, pc_reply=reply)
+
+    def pc_asked_since(self, at: datetime) -> bool:
+        """Whether a request to PC made at ``at`` and recorded only later (a
+        mail queued at the press, recorded on its outbox receipt, ticket 77)
+        has nothing left to record: a wait recorded at or after ``at``
+        stands, or PC's answers recorded since cover every line it would
+        ask. Recording it then would reopen a wait PC already answered."""
+        held = self.pc_request
+        if held is not None and held.at >= at:
+            return True
+        return _pc_answered_since(self.pc_lines(), self.lines, at)
+
+    def read_pc_reply(
+        self,
+        message_id: str,
+        received_at: datetime,
+        dates: Sequence[tuple[int, int, date, str]],
+        *,
+        at: datetime,
+        prompt_ref: str,
+        model_profile: str,
+    ) -> OrderCase:
+        """PC's mail ``message_id`` read by DW1 (ticket 77): ``dates`` (line,
+        delivery, date, the words) proposed for the lines asked that have no
+        answer since the request, nothing recorded. Only while the case waits
+        on PC, for a mail received since it was asked, and once per mail. Per
+        line the newer mail's dates stand: PC answering line 1, then line 2,
+        then line 1 again leaves line 1's later dates and line 2's."""
+        details: dict[str, object] = {"case_id": str(self.case_id)}
+        request = self.pc_request
+        if request is None:
+            raise ConflictError(
+                "the case does not wait on PC", details={**details, "rule": "pc_not_waiting"}
+            )
+        if received_at < request.at:
+            raise ConflictError(
+                "the mail was received before PC was asked",
+                details={**details, "rule": "pc_reply_before_request"},
+            )
+        held = self.pc_reply
+        if held is not None and message_id in held.messages:
+            raise ConflictError(
+                "this mail of PC's was read already", details={**details, "rule": "pc_reply_read"}
+            )
+        found = {line.line_no: line.pc_answer for line in self.lines}
+        open_lines = {
+            no
+            for no in request.lines
+            if (answer := found.get(no)) is None or answer.at < request.at
+        }
+        new = [
+            PcReplyDate(
+                line_no=line_no,
+                delivery=delivery,
+                date=day,
+                quote=quote,
+                message_id=message_id,
+                received_at=received_at,
+            )
+            for line_no, delivery, day, quote in dates
+            if line_no in open_lines
+        ]
+        older = held.dates if held is not None else ()
+        newest: dict[int, datetime] = {}
+        for d in (*older, *new):
+            newest[d.line_no] = max(newest.get(d.line_no, d.received_at), d.received_at)
+        reply = PcReply(
+            dates=tuple(d for d in (*older, *new) if d.received_at == newest[d.line_no]),
+            messages=(*(held.messages if held is not None else ()), message_id),
+            read_at=at,
+            prompt_ref=prompt_ref,
+            model_profile=model_profile,
+        )
+        return self._next(self.status, pc_reply=reply)
 
     def pc_answered(
         self,
@@ -3834,6 +4135,20 @@ class OrderCase(BaseModel):
         )
         return self._next(status, agreement=agreement)
 
+    def implied_undone(self) -> OrderCase:
+        """confirmed -> confirmation_sent: an agreement by silence taken back,
+        by DW1's own recording or a person's (ticket 82): the order waits on
+        the customer again, its confirmation as it left. Only silence: a
+        customer's words are not undone here, they are a reply."""
+        agreement = self.agreement
+        if self.status is not _S.CONFIRMED or agreement is None or agreement.how != "implied":
+            raise ConflictError(
+                "chỉ hoàn tác được khi khách đang được ghi đồng ý ngầm",
+                details={"case_id": str(self.case_id), "rule": "not_implied"},
+            )
+        status = transition(self.status, _S.CONFIRMATION_SENT)
+        return self._next(status, agreement=None)
+
     def declined(self) -> OrderCase:
         """confirmation_sent -> change_review: the customer did not agree to
         the confirmation (ADR 0011, as a person records it). The order is
@@ -3894,6 +4209,7 @@ class OrderCase(BaseModel):
             catalog_as_of=revision.catalog_as_of,
             cross_check_required=revision.cross_check_required,
             export_control_mode=revision.export_control_mode,
+            cross_check_on_match=revision.cross_check_on_match,
             superseded=(
                 *self.superseded,
                 SupersededRevision(
@@ -4115,6 +4431,9 @@ class OrderCase(BaseModel):
         return {**_CLEARED_FROM_PREPARED, "earlier_makers": self._retired_makers()}
 
     def _next(self, status: OrderStatus, **changes: object) -> OrderCase:
+        if changes.get("cross_checked_by", self.cross_checked_by) is None:
+            # A cross-check cleared takes the read-back it passed on with it.
+            changes.setdefault("cross_checked_on_read_back", None)
         if status is not self.status:
             # A case that moves on no longer waits on the decision not applied.
             changes.setdefault("unapplied_decision", None)
@@ -4127,6 +4446,22 @@ class OrderCase(BaseModel):
         lines = cast(Sequence[OrderLine], changes.get("lines", self.lines))
         waiting = _waiting_on_design(self.design_requests, status, lines)
         changes.setdefault("design_requests", waiting)
+        # PC's mail read by DW1 (ticket 77) ends with the wait, and holds a
+        # line only while the line is as it was when the dates answered it:
+        # an answer recorded, a correction or a change drops the line's.
+        reply = cast(PcReply | None, changes.get("pc_reply", self.pc_reply))
+        request = cast(PcRequest | None, changes.get("pc_request", self.pc_request))
+        if reply is not None:
+            before = {line.line_no: line for line in self.lines}
+            changes["pc_reply"] = (
+                None
+                if request is None
+                else reply.keeping(
+                    line.line_no
+                    for line in lines
+                    if before.get(line.line_no) == line and line.line_no in request.lines
+                )
+            )
         if status not in CONFIRMATION_LEFT:
             # What left and the customer's answer belong to that confirmation:
             # a revision, a decline or an accepted change clears them.

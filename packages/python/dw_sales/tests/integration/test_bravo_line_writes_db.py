@@ -14,7 +14,11 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ids import UserId
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-from dw_sales.application.bravo_line_writes import BRAVO_WRITE_APPROVAL, BravoLineWrite
+from dw_sales.application.bravo_line_writes import (
+    BRAVO_WRITE_APPROVAL,
+    CANCEL_REASON_CHARS,
+    BravoLineWrite,
+)
 from dw_sales.application.ports import SalesScope
 
 pytestmark = pytest.mark.integration
@@ -30,7 +34,12 @@ def _case_id(small_run: OrderRun) -> uuid.UUID:
 
 
 async def _proposed(
-    uow: SqlSalesUnitOfWorkFactory, scope: SalesScope, case_id: uuid.UUID, line_no: int = 1
+    uow: SqlSalesUnitOfWorkFactory,
+    scope: SalesScope,
+    case_id: uuid.UUID,
+    line_no: int = 1,
+    *,
+    after: str = "2026-12-08",
 ) -> BravoLineWrite:
     approval_id = uuid.uuid4()
     write = BravoLineWrite(
@@ -41,10 +50,11 @@ async def _proposed(
         item_code="PRV-1",
         field="confirmed_date",
         before="2026-12-01",
-        after="2026-12-08",
+        after=after,
         kind="so.line.set_confirmed_date@1",
         command={"line": {"so_id": 10}, "confirmed_date": "2026-12-08"},
         content_hash="a" * 64,
+        target="uat",
         proposed_by=PIC,
         proposed_at=NOW,
     )
@@ -106,6 +116,22 @@ async def test_a_settled_row_names_who_and_when(
     async with uow(world.alpha) as work:
         with pytest.raises(ConflictError):  # settled meanwhile
             await work.bravo_writes.save(_settled(write), expected="proposed")
+
+
+async def test_a_cancel_shown_with_the_longest_reason_bravo_holds_is_stored(
+    small_run: OrderRun, world: World, uow: SqlSalesUnitOfWorkFactory
+) -> None:
+    # "Hủy: " and CancelRemark's 192 (0662b6f0a31c); one more is refused.
+    case_id = _case_id(small_run)
+    longest = "Hủy: " + "ý" * CANCEL_REASON_CHARS
+    await _proposed(uow, world.alpha, case_id, line_no=3, after=longest)
+    async with uow(world.alpha) as work:
+        held = await work.bravo_writes.of_case(case_id)
+    assert [w.after for w in held if w.line_no == 3] == [longest]
+
+    with pytest.raises(ConflictError) as refused:
+        await _proposed(uow, world.alpha, case_id, line_no=4, after=longest + "x")
+    assert refused.value.details["constraint"] == "ck_bravo_line_writes_values"
 
 
 @pytest.mark.parametrize("who", ["other tenant", "other workspace of the same tenant"])

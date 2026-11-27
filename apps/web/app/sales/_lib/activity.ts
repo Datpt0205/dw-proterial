@@ -51,6 +51,7 @@ const MODEL_STEPS: Record<ModelStep, null> = {
   triage_card: null,
   internal_change: null,
   case_chat: null,
+  pc_reply: null,
 };
 export const MODEL_STEP_IDS = Object.keys(MODEL_STEPS) as ModelStep[];
 

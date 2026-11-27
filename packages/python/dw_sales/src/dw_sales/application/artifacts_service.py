@@ -89,6 +89,7 @@ from dw_sales.application.order_artifacts import (
     cross_check_sheet,
     design_code_request,
     internal_change_notice,
+    pc_request_draft,
     portal_checklist,
 )
 from dw_sales.application.ports import (
@@ -114,6 +115,7 @@ from dw_sales.application.support import (
     person_event,
     same_version,
     save_quote,
+    seen_by,
     stored_order,
     stored_quote,
 )
@@ -127,6 +129,7 @@ from dw_sales.domain.orders import (
     MappingStatus,
     OrderCase,
     OrderStatus,
+    changeable_statuses,
 )
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus, SignedCopy
 
@@ -268,6 +271,11 @@ ORDER_GATES: Final[Mapping[str, ArtifactGate[OrderCase]]] = {
         _order(convert_list_proposal),
     ),
     "design_code_request": ArtifactGate(False, _unmapped_without_code, _order(design_code_request)),
+    # The request to PC as a mail (ticket 77): where PC is asked from DW1
+    # (`OrderCase.ask_pc`), before the order is in Bravo.
+    "pc_request_draft": ArtifactGate(
+        False, lambda c, *_: c.status in changeable_statuses(), _order(pc_request_draft)
+    ),
     "cannot_supply_draft": ArtifactGate(
         False,
         lambda c, *_: c.close_reason is CloseReason.CANNOT_SUPPLY,
@@ -411,20 +419,25 @@ class _Cases[CaseT: _Case]:
 
     kind: CaseKind
     gates: Mapping[str, ArtifactGate[CaseT]]
-    load: Callable[[SalesUnitOfWork, uuid.UUID, AccessContext], Awaitable[CaseT]]
+    # The case, as the caller may see it, and whether they may act on it;
+    # the flag is `stored_order`'s ``export_control``: True where the caller
+    # only reads (ticket 78). An order read through its NOC/ESF hold alone
+    # is read and never drawn from: every draw reads it narrowly.
+    load: Callable[[SalesUnitOfWork, uuid.UUID, AccessContext, bool], Awaitable[tuple[CaseT, bool]]]
     write_scope: SalesScopes
 
 
 async def _load_order(
-    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext
-) -> OrderCase:
-    return (await stored_order(work, case_id, viewer=viewer)).case
+    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext, reading: bool
+) -> tuple[OrderCase, bool]:
+    stored = await stored_order(work, case_id, viewer=viewer, export_control=reading)
+    return stored.case, seen_by(viewer, CaseKind.ORDER, stored)
 
 
 async def _load_quote(
-    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext
-) -> QuoteCase:
-    return (await stored_quote(work, case_id, viewer=viewer)).case
+    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext, reading: bool
+) -> tuple[QuoteCase, bool]:
+    return (await stored_quote(work, case_id, viewer=viewer)).case, True
 
 
 _ORDERS: Final = _Cases(CaseKind.ORDER, ORDER_GATES, _load_order, SalesScopes.ORDER_PREPARE)
@@ -517,7 +530,7 @@ class ArtifactService:
         stored: list[ArtifactRecord] = []
         try:
             async with self.uow(scope) as work:
-                case = await _load_quote(work, case_id, context)
+                case, _ = await _load_quote(work, case_id, context, False)
                 same_version(case_id, case.case_version, case_version)
                 record = ArtifactRecord(
                     artifact_id=self.ids.new_uuid(),
@@ -567,7 +580,7 @@ class ArtifactService:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = await cases.load(work, case_id, context)
+            case, acts = await cases.load(work, case_id, context, True)
             records = await work.artifacts.for_case(cases.kind, case_id)
         channel = None
         if any(gate.channel is not None for gate in cases.gates.values()):
@@ -575,7 +588,8 @@ class ArtifactService:
         available = sorted(
             kind
             for kind, gate in cases.gates.items()
-            if gate.compose is not None
+            if acts
+            and gate.compose is not None
             and self._may(context, gate, case)
             and gate.channel in (None, channel)
         )
@@ -621,7 +635,7 @@ class ArtifactService:
         stored: list[ArtifactRecord] = []
         try:
             async with self.uow(scope) as work:
-                case = await cases.load(work, case_id, context)
+                case, _ = await cases.load(work, case_id, context, False)
                 same_version(case_id, case.case_version, case_version)
                 if not gate.open_in(case, context, self.gate):
                     raise _closed(kind, case.status.value)
@@ -693,7 +707,7 @@ class ArtifactService:
         if await self._rendered(cases, sales_scope(context), case_id, kind, case_version):
             return None
         async with self.uow(sales_scope(context)) as work:
-            case = await cases.load(work, case_id, context)
+            case, _ = await cases.load(work, case_id, context, False)
         if not isinstance(case, OrderCase) or case.case_version != case_version:
             return None
         # No model call for a file the draw would refuse anyway.
@@ -757,7 +771,7 @@ class ArtifactService:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = await cases.load(work, case_id, context)
+            case, _ = await cases.load(work, case_id, context, True)
             record = _belongs(
                 await work.artifacts.get(artifact_id), cases.kind, case_id, artifact_id
             )

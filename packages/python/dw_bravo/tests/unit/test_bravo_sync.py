@@ -15,6 +15,7 @@ from dw_bravo.sync import (
     PAGE_LIMIT,
     BravoSync,
     Cursor,
+    SyncAnswer,
     SyncContractError,
     SyncPage,
     SyncQuery,
@@ -43,14 +44,17 @@ class Source:
     rows: list[SyncRow]
     down: bool = False
     asked: list[SyncQuery] = field(default_factory=list)
+    # The Bravo that answers; a list names one per call, in order.
+    target: str | list[str] = "uat"
 
-    async def changes(self, query: SyncQuery) -> SyncPage:
+    async def changes(self, query: SyncQuery) -> SyncAnswer:
         self.asked.append(query)
         if self.down:
             raise SyncUnavailableError("timeout")
         after = int(query.after, 16) if query.after else 0
         found = [r for r in self.rows if int(r.row_version, 16) > after]
-        return SyncPage(tuple(found[: query.limit]))
+        target = self.target if isinstance(self.target, str) else self.target.pop(0)
+        return SyncAnswer(target, SyncPage(tuple(found[: query.limit])))
 
 
 @dataclass
@@ -72,17 +76,23 @@ class Store:
         self,
         table: str,
         *,
+        target: str,
         last_row_version: str | None,
         at: datetime,
         full_pass_seen: frozenset[int] | None,
     ) -> None:
         before = self.cursors.get(table, Cursor())
         self.cursors[table] = Cursor(
-            last_row_version, at if full_pass_seen is not None else before.last_full_at, at
+            last_row_version, at if full_pass_seen is not None else before.last_full_at, at, target
         )
         if full_pass_seen is not None:
             self.gone |= {k for k in self.rows if k[0] == table and k[1] not in full_pass_seen}
         self.errors.pop(table, None)
+
+    async def restart(self, table: str, at: datetime) -> None:
+        self.gone |= {k for k in self.rows if k[0] == table}
+        before = self.cursors.get(table, Cursor())
+        self.cursors[table] = Cursor(None, None, before.last_read_at, None)
 
     async def failed(self, table: str, error: str, at: datetime) -> None:
         self.errors[table] = error
@@ -100,7 +110,7 @@ async def test_the_first_read_is_a_full_pass_in_pages_and_moves_the_cursor() -> 
 
 async def test_by_day_only_what_changed_since_the_cursor_is_read() -> None:
     source = Source([_row(1), _row(2)])
-    store = Store(cursors={"B20LME": Cursor(_rv(1), DAY, DAY)})
+    store = Store(cursors={"B20LME": Cursor(_rv(1), DAY, DAY, "uat")})
 
     await BravoSync(source, store, tables=("B20LME",)).tick(DAY)
 
@@ -121,13 +131,55 @@ async def test_a_row_bravo_deleted_is_marked_gone_by_the_nightly_full_pass_only(
 
 
 async def test_bravo_not_answering_is_said_and_moves_no_cursor() -> None:
-    store = Store(cursors={"B20LME": Cursor(_rv(3), DAY, DAY)})
+    store = Store(cursors={"B20LME": Cursor(_rv(3), DAY, DAY, "uat")})
 
     said = await BravoSync(Source([], down=True), store, tables=("B20LME",)).tick(DAY)
 
     assert said == {"B20LME": "could not read"}
     assert store.cursors["B20LME"].last_row_version == _rv(3)
     assert "did not answer" in store.errors["B20LME"]
+
+
+# ------------------------------------------ the Bravo that answers (85 review)
+
+
+async def test_a_cursor_read_from_another_bravo_restarts_the_table_whole() -> None:
+    # UAT's cursor is past rowversion 5; production's rows count from 1.
+    store = Store(cursors={"B20LME": Cursor(_rv(5), DAY, DAY, "uat")})
+    store.rows[("B20LME", 9)] = _row(9)  # a row only UAT holds
+    source = Source([_row(1), _row(2)], target="production")
+
+    said = await BravoSync(source, store, tables=("B20LME",)).tick(DAY)
+
+    assert [q.after for q in source.asked] == [_rv(5), None]
+    assert said["B20LME"] == "another Bravo answered, read again: full pass, 2 rows"
+    assert set(store.rows) == {("B20LME", 1), ("B20LME", 2), ("B20LME", 9)}
+    assert store.gone == {("B20LME", 9)}
+    assert store.cursors["B20LME"].target == "production"
+    assert store.cursors["B20LME"].last_row_version == _rv(2)
+    assert store.cursors["B20LME"].last_full_at == DAY
+
+
+async def test_a_cursor_from_before_the_target_was_kept_restarts_once() -> None:
+    store = Store(cursors={"B20LME": Cursor(_rv(1), DAY, DAY)})
+    source = Source([_row(1), _row(2)])
+
+    await BravoSync(source, store, tables=("B20LME",)).tick(DAY)
+    await BravoSync(source, store, tables=("B20LME",)).tick(DAY)
+
+    assert [q.after for q in source.asked] == [_rv(1), None, _rv(2)]
+    assert store.cursors["B20LME"].target == "uat"
+
+
+async def test_a_bravo_that_changes_between_pages_moves_no_cursor() -> None:
+    store = Store(cursors={"B20LME": Cursor(_rv(0), DAY, DAY, "uat")})
+    rows = [_row(n) for n in range(1, PAGE_LIMIT + 3)]
+    source = Source(rows, target=["uat", "production"])
+
+    said = await BravoSync(source, store, tables=("B20LME",)).tick(DAY)
+
+    assert said == {"B20LME": "could not read"}
+    assert store.cursors["B20LME"] == Cursor(_rv(0), DAY, DAY, "uat")
 
 
 def test_a_full_pass_is_due_at_night_once_and_whenever_never_taken() -> None:

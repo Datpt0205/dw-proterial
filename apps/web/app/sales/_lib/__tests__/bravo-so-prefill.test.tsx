@@ -53,6 +53,7 @@ const READ: View = {
     read_by: AN,
     rows_read: 1,
     so_no: "SO-2611-0042",
+    source: "export",
   },
   stale: false,
   prices_hidden: false,
@@ -62,6 +63,7 @@ let readBack: View = NOTHING_READ;
 const api = {
   pcRequest: vi.fn(async () => pcRequest()),
   order: vi.fn(async () => prepared),
+  bravoWrites: vi.fn(async () => []),
   bravoReadBack: vi.fn(async () => readBack),
   bravoEntry: vi.fn(async () => ({})),
   myWork: vi.fn(async () => []),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, Space, Tag, Typography } from "antd";
 import type { AssistantCase, SalesSchemas } from "@dw/api-client";
@@ -24,6 +24,19 @@ type CaseRef = SalesSchemas["CaseRefView"];
 /** The longest question the API takes (`QUESTION_CHARS`). */
 const QUESTION_MAX = 500;
 
+/** Questions to start the general conversation from; a follow-up ("PO
+ * đó…") reads as the PO just asked. Shared by the page and the widget. */
+export const GENERAL_EXAMPLES = [
+  "Tôi còn việc gì?",
+  "Có việc nào quá hạn không?",
+  "PO NRV-PO-26-0457 tới đâu rồi?",
+];
+
+/** What the general conversation answers (ADR 0007, ticket 46), said
+ * before anyone asks. */
+export const GENERAL_CATALOG =
+  "Hỏi việc đang chờ bạn, việc quá hạn, hoặc tìm một PO, một yêu cầu báo giá. Câu trả lời không có số tiền.";
+
 export function caseHref(ref: {
   kind: CaseRef["kind"];
   case_id: string;
@@ -44,7 +57,8 @@ const READ_AS: Record<Turn["kind"], string> = {
   explain_thread: "Hiểu là nhờ tóm tắt chuỗi thư",
   decide_finding: "Hiểu là bạn quyết định một cờ của hồ sơ",
   propose_bravo_write:
-    "Hiểu là nhờ ghi ngày XN hoặc số lượng một dòng vào Bravo",
+    "Hiểu là nhờ ghi ngày XN, số lượng hoặc hủy một dòng trong Bravo",
+  assign_case: "Hiểu là nhờ giao hồ sơ cho một người",
   out_of_scope: "Câu này ngoài những gì DW1 trả lời",
 };
 
@@ -100,7 +114,9 @@ function ProposalConfirm({
           disabled={done !== null}
           onClick={() => void confirm()}
         >
-          Xác nhận
+          {proposal.action === "assign" && proposal.assignee_name
+            ? `Giao cho ${proposal.assignee_name}`
+            : "Xác nhận"}
         </Button>
         <Typography.Text>
           Hồ sơ phiên bản {proposal.case_version} · mã{" "}
@@ -181,6 +197,7 @@ export function AssistantConversation({
   onAnswered,
   offers,
   onDecided,
+  prompt,
 }: {
   onCase: AssistantCase | null;
   examples: string[];
@@ -190,6 +207,9 @@ export function AssistantConversation({
   offers?: CaseOffers;
   /** A flag decision recorded from the chat (ticket 56): the page reloads. */
   onDecided?: () => void;
+  /** A question picked outside the frame (the widget's suggestions): asked
+   * once per `at`, or only put in the box while an answer is still coming. */
+  prompt?: { text: string; at: number };
 }) {
   const online = useOnline();
   const keys = useIdempotencyKeys();
@@ -233,6 +253,16 @@ export function AssistantConversation({
       setBusy(false);
     }
   };
+
+  const prompted = useRef(0);
+  useEffect(() => {
+    if (!prompt || prompt.at === prompted.current) return;
+    prompted.current = prompt.at;
+    setQuestion(prompt.text);
+    if (!busy && online) void ask(prompt.text);
+    // Asked once per pick: `ask` and the state it reads are this render's.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt?.at]);
 
   if (loaded.error)
     return <LoadError error={loaded.error} onRetry={loaded.reload} compact />;

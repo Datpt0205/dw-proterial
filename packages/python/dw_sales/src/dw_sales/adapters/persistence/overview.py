@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_sales.adapters.persistence import tables
+from dw_sales.adapters.persistence.followups import export_held
 from dw_sales.adapters.persistence.quotes import stored_quote
 from dw_sales.adapters.persistence.records import logged_message
 from dw_sales.application.case_store import LoggedEvent
@@ -500,6 +501,7 @@ class SqlOverviewReader:
                         sa.literal(wanted.cross_checks),
                         _C.c.status == OrderStatus.UPLOADED_TO_BRAVO.value,
                     ),
+                    sa.and_(sa.literal(wanted.export_holds), export_held()),
                 ),
                 *_after(_ORDER_GROUP, _C.c.received_at, _C.c.id, after),
             )
@@ -590,6 +592,7 @@ class SqlOverviewReader:
                     _C.c.received_at,
                     _C.c.due,
                     _C.c.assigned_to,
+                    export_held().label("export_held"),
                 ).where(_C.c.id.in_(ids["order"]))
             ):
                 found[row.id] = OpenOrder(
@@ -599,6 +602,7 @@ class SqlOverviewReader:
                     received_at=row.received_at,
                     due=date.fromisoformat(row.due) if row.due else None,
                     assigned_to=row.assigned_to,
+                    export_held=bool(row.export_held),
                 )
         if ids["quote"]:
             for quote in (

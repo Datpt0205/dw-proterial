@@ -1,7 +1,10 @@
 import type { ComponentType } from "react";
 import type { ApiClient } from "@dw/api-client";
 import type { Approval } from "@dw/contracts";
-import { salesApprovalHost } from "../../app/sales/_meta/approvals";
+import {
+  salesApprovalHost,
+  salesBravoWriteHost,
+} from "../../app/sales/_meta/approvals";
 import { apiClient } from "../session";
 import type { ApprovalHost, ApprovalInbox } from "./types";
 
@@ -14,7 +17,7 @@ import type { ApprovalHost, ApprovalInbox } from "./types";
  * import plus one entry here. A context hosted by the platform API with no
  * inbox of its own needs no entry.
  */
-const HOSTS: ApprovalHost[] = [salesApprovalHost];
+const HOSTS: ApprovalHost[] = [salesApprovalHost, salesBravoWriteHost];
 
 /** The host whose prefix the approval type carries: one prefix test, here. */
 export function findHost(

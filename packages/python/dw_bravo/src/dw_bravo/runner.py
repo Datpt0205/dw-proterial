@@ -11,6 +11,12 @@ What it does, all of it read from the layout:
 - `edit()` sets a column the way a person typing does: the column's
   `ColumnChanging` rules, the value, then its `ColumnChanged` rules, each
   assignment cascading through the same events;
+- `add_row()` adds a line as a person adds one to the grid: the relation key
+  from the parent, a negative `Id`, then the table's `RowAdded` rules;
+  `new_document()` makes a header as the `New` window does: its
+  `DefaultValues`, then its `RowAdded` rules;
+- the screen's window (`Layout.window`, ticket 72), when in hand: a lookup
+  box that binds runs after its column's `ColumnChanged` rules;
 - `check()` runs the validators and sorts them into blocking, warning and
   undecided;
 - `save()` runs `ServerUpdating` and returns the columns the client would
@@ -29,10 +35,12 @@ What it refuses (`RuleRefusedError`), rather than guess:
 
 Measured against the 2026-11-20 UAT trace (the client's `sp_executesql` writes):
 an `UPDATE` carries only the columns whose value changed, plus `ModifiedBy`;
-the header is updated on every save; an `INSERT` lists only non-NULL columns
-plus `CreatedBy`. An assignment of the value a column already holds raises
-no event. `ModifiedBy` and `CreatedBy` are written only where the row the
-client loaded holds them: the YCBG line's view (`vB30BizDocDetailRQ_Edit`)
+the header is updated on every save; a new row's command carries its
+non-NULL columns plus `CreatedBy` (which NULL columns the client's INSERT
+also lists is the table's: `dw_bravo_gateway.statements.render_insert`).
+An assignment of the value a column already holds raises no event.
+`ModifiedBy` and `CreatedBy` are written only where the row the client
+loaded holds them: the YCBG line's view (`vB30BizDocDetailRQ_Edit`)
 has neither, and the client passes both as parameters and sets neither.
 """
 
@@ -48,6 +56,7 @@ from dw_bravo.expression import (
     RuleRefusedError,
     Scope,
     UndecidableError,
+    UnsupportedSyntaxError,
     condition,
     evaluate,
     is_empty,
@@ -55,7 +64,16 @@ from dw_bravo.expression import (
     substitute,
     truth,
 )
-from dw_bravo.layout import PARENT, Invocation, Layout, Rule, Table
+from dw_bravo.layout import (
+    PARENT,
+    BindingMember,
+    CommandGuard,
+    Invocation,
+    Layout,
+    Rule,
+    Table,
+    WindowLookup,
+)
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 
 USER = "<user>"
@@ -197,6 +215,11 @@ class SavePlan:
         return self.check.may_save and not self.provisional
 
 
+def _guard_finding(guard: CommandGuard, status: Status, reason: str | None = None) -> Finding:
+    """A template guard's finding: on the parent, always blocking."""
+    return Finding(guard.name, PARENT, 0, "block", status, guard.message or guard.name, (), reason)
+
+
 def _same(a: object, b: object) -> bool:
     if a is UNKNOWN or b is UNKNOWN:
         return a is b
@@ -238,7 +261,9 @@ class _RowScope:
         if function == "GETDATE":
             return session.now
         if function == "BRANCH":
-            return session.branch
+            if argument is None:
+                return session.branch
+            return session.branch_info.get(str(argument), UNKNOWN)
         if function == "LANGID":
             return session.lang_id
         source = {"USER": session.user, "CURRENCY": session.currency, "CONFIG": session.config}.get(
@@ -296,6 +321,60 @@ class RuleRunner:
             doc, table, row, column, value, rule=USER, trigger=column, suppress=False, depth=0
         )
 
+    def new_document(self, values: Mapping[str, object], *, stored: Iterable[str]) -> Document:
+        """A document made in the screen's `New` window, as the client makes
+        one: ``values`` is every column its header holds (NULL where nothing
+        is known yet, plus what the client seeds), ``stored`` the ones an
+        INSERT may list. The layout's `DefaultValues` are evaluated into it
+        (8212: `DocCode` 'SO', `BizDocId` '', `BranchCode` `BRANCH()`...);
+        an `Id` below zero, as a new row holds before a save (never written);
+        no lines; then the header's `RowAdded` rules run (8212's DmCt and
+        DmCtInfo bindings, the default number)."""
+        spec = self.layout.parent
+        initial = dict(values)
+        initial["Id"] = Decimal(-1)
+        held = [c for c in stored if c.lower() != "id"]
+        row = Row(initial, stored=held, new=True)
+        doc = Document(row, {table.key: [] for table in self.layout.children()})
+        scope = _RowScope(self, doc, PARENT, row, None)
+        for column, text in spec.default_values.items():
+            row.set(column, evaluate(text, scope))
+        self._event(doc, PARENT, row, "RowAdded")
+        return doc
+
+    def add_row(
+        self,
+        doc: Document,
+        table: str,
+        values: Mapping[str, object],
+        *,
+        stored: Iterable[str],
+    ) -> int:
+        """Add a row to a child table as a person adding a grid line does,
+        and return its index. ``values`` is every column the client's new row
+        holds (NULL where nothing is known yet: a rule reading a column the
+        row does not hold refuses); ``stored`` the ones an INSERT may list.
+        The row then takes the parent's relation key (the layout's
+        ``ParentKey``/``ChildKey``) and an ``Id`` below zero, as the client's
+        rows hold before a save (the layout's ``Id < 0`` rules read it; it is
+        never stored), and the table's ``RowAdded`` rules run."""
+        spec = self.layout.tables.get(table)
+        if table == PARENT or spec is None:
+            raise RuleRefusedError(f"{table} is not a child table of {self.layout.form}")
+        if spec.parent_key is None or spec.child_key is None:
+            raise RuleRefusedError(f"{table} names no ParentKey/ChildKey in {self.layout.form}")
+        if not doc.parent.has(spec.parent_key):
+            raise UndecidableError(f"{PARENT}.{spec.parent_key} is not in hand")
+        rows = doc.rows(table)
+        initial = dict(values)
+        initial[spec.child_key] = doc.parent.get(spec.parent_key)
+        initial["Id"] = Decimal(-(sum(1 for r in rows if r.new) + 1))
+        held = [c for c in stored if c.lower() not in ("id", spec.child_key.lower())]
+        row = Row(initial, stored=[*held, spec.child_key], new=True)
+        rows.append(row)
+        self._event(doc, table, row, "RowAdded")
+        return len(rows) - 1
+
     def check(self, doc: Document) -> Check:
         findings: list[Finding] = []
         for table in self.layout.tables.values():
@@ -305,16 +384,46 @@ class RuleRunner:
                     findings.append(self._validate(doc, table, index, row, rule))
         return Check(tuple(findings))
 
-    def save(self, doc: Document) -> SavePlan:
+    def save(self, doc: Document, *, commands: Sequence[str] = ("Save",)) -> SavePlan:
+        """The save the client would make, checked by the layout's validators
+        and by each guard of the shared template on ``commands`` (the window's
+        own: ``("Edit", "Save")`` for a stored document, ``("New", "Save")``
+        for a new one). A guard that is not true, or cannot be decided,
+        blocks: Bravo refuses the command."""
         self._event(doc, PARENT, doc.parent, "ServerUpdating")
         for table in self.layout.children():
             for row in doc.children.get(table.key, []):
                 self._event(doc, table.key, row, "ServerUpdating")
         check = self.check(doc)
+        guarded = Check(check.findings + tuple(self._guards(doc, commands)))
         provisional: tuple[str, ...] = ()
         if self.layout.missing_template:
             provisional = (f"template {self.layout.missing_template} is not in hand (script 03c)",)
-        return SavePlan(tuple(self._commands(doc)), check, provisional)
+        if self.layout.missing_window:
+            provisional += (f"the screen's window is not in hand: {self.layout.missing_window}",)
+        return SavePlan(tuple(self._commands(doc)), guarded, provisional)
+
+    def _guards(self, doc: Document, commands: Sequence[str]) -> list[Finding]:
+        template = self.layout.template
+        if template is None:
+            return []
+        asked = {c.lower() for c in commands}
+        found: list[Finding] = []
+        for guard in template.guards:
+            if not guard.commands & asked:
+                continue
+            scope = _RowScope(self, doc, PARENT, doc.parent, None)
+            try:
+                allowed = condition(guard.expr, scope)
+            except (UndecidableError, RuleRefusedError, UnsupportedSyntaxError) as exc:
+                found.append(_guard_finding(guard, "undecided", str(exc)[:200]))
+                continue
+            found.append(
+                _guard_finding(guard, "passed")
+                if allowed
+                else _guard_finding(guard, "fired", guard.expr)
+            )
+        return found
 
     # ------------------------------------------------------------- events
 
@@ -475,13 +584,29 @@ class RuleRunner:
                 for r in doc.rows(table)
                 if condition(narrowed, _RowScope(self, doc, table, r, scope.trigger))
             ]
+        members = rule.data_members()
         for target in rows:
             target_scope = _RowScope(self, doc, table, target, scope.trigger)
             value = self._rounded(rule, evaluate(text, target_scope), target_scope)
-            for column in rule.data_members():
+            if len(members) == 1 or suppress:
+                for column in members:
+                    self._assign(
+                        doc, table, target, column, value, rule.name, scope.trigger, suppress, depth
+                    )
+                continue
+            # A rule setting several columns sets them all, then each change
+            # raises its events (UAT trace 11-25 17:31:50: the reset of
+            # `OriginalUnitCost,UnitCost` on a cancel leaves `UnitCost` 0, the
+            # money rule's, which only holds when both are set first).
+            changed = [c for c in members if self._will_change(table, target, c, value)]
+            for column in changed:
+                self._column_event(doc, table, target, "ColumnChanging", column, depth)
+            for column in members:
                 self._assign(
-                    doc, table, target, column, value, rule.name, scope.trigger, suppress, depth
+                    doc, table, target, column, value, rule.name, scope.trigger, True, depth
                 )
+            for column in changed:
+                self._changed(doc, table, target, column, depth)
 
     def _money_rule(
         self,
@@ -509,11 +634,10 @@ class RuleRunner:
             raise RuleRefusedError(f"{rule.name} names no DataMember")
         current = scope.column(column) if row.has(column) else None
         if value is None:
-            # Two readings fit the trace: a NULL operand counts as 0, or the
-            # column is left alone. They agree while the column is empty.
-            if is_empty(current):
-                return
-            raise RuleRefusedError(f"{rule.name}: NULL operand over {column}={current!r}")
+            # A NULL operand counts as 0: on the 11-25 cancel the client wrote
+            # `UnitCost` 0 over `OriginalUnitCost` NULL (UAT trace 17:31:50),
+            # which "left alone" would have kept at 1100 or NULL.
+            value = Decimal(0)
         value = self._rounded(rule, value, scope)
         margin_text = rule.setting("zResultMarginValue")
         if margin_text and not _same(current, value):
@@ -537,6 +661,8 @@ class RuleRunner:
         lookup = rule.setting("LookupKey")
         if column is None or lookup is None:
             raise RuleRefusedError(f"{rule.name} lacks DataMember or LookupKey")
+        if rule.unread_bindings:
+            raise RuleRefusedError(f"{rule.name}: {'; '.join(rule.unread_bindings)}")
         code = scope.column(column)
         filter_key = rule.setting("FilterKey")
         found = self.references.find(
@@ -544,14 +670,62 @@ class RuleRunner:
         )
         if found is None:
             raise UndecidableError(f"{lookup} {code!r} not found")
-        for target, source in rule.maps.get("bindingMembers", {}).items():
-            if source not in found:
-                raise UndecidableError(f"{lookup}.{source} not in hand")
-            self._assign(
-                doc, table, row, target, found[source], rule.name, trigger, suppress, depth
-            )
+        self._bind(
+            doc, rule.name, lookup, rule.bindings, found, table, row, trigger, suppress, depth
+        )
+
+    def _bind(
+        self,
+        doc: Document,
+        name: str,
+        lookup: str,
+        members: Sequence[BindingMember],
+        found: Mapping[str, object],
+        table: str,
+        row: Row,
+        trigger: str | None,
+        suppress: bool,
+        depth: int,
+    ) -> None:
+        """A looked-up row's columns into ``row``, member by member, in the
+        layout's order; a conditional member only where its condition holds."""
+        looked_up = {k.lower(): v for k, v in found.items()}
+        scope = _RowScope(self, doc, table, row, trigger)
+        # Whether a member's condition is read before any member is set, or
+        # as its turn comes, is not measured: where the two differ, refuse.
+        before = {m: condition(m.condition, scope) for m in members if m.condition}
+        for member in members:
+            if member.condition is not None:
+                holds = condition(member.condition, scope)
+                if holds != before[member]:
+                    raise RuleRefusedError(
+                        f"{name}: {member.target}'s condition changes as the members "
+                        "before it are set"
+                    )
+                if not holds:
+                    continue
+            if member.source.lower() not in looked_up:
+                raise UndecidableError(f"{lookup}.{member.source} not in hand")
+            value = looked_up[member.source.lower()]
+            self._assign(doc, table, row, member.target, value, name, trigger, suppress, depth)
 
     # --------------------------------------------------------- assignment
+
+    def _will_change(self, table: str, row: Row, column: str, value: object) -> bool:
+        """Whether setting ``column`` to ``value`` changes it; refuses, as
+        `_assign` does, a column not in hand whose change would fire rules."""
+        current = row.get(column) if row.has(column) else None
+        spec = self.layout.tables[table]
+        handled = any(
+            column.lower() in spec.column_events.get(e, {})
+            for e in ("ColumnChanging", "ColumnChanged")
+        )
+        if current is UNKNOWN and handled:
+            raise UndecidableError(
+                f"{table}.{column} was not in hand, "
+                "so whether setting it fires its rules is not known"
+            )
+        return not _same(current, value)
 
     def _assign(
         self,
@@ -585,7 +759,59 @@ class RuleRunner:
             Step(rule, table, doc.index(table, row), row.name(column), current, value, trigger)
         )
         if not suppress:
-            self._column_event(doc, table, row, "ColumnChanged", column, depth)
+            self._changed(doc, table, row, column, depth)
+
+    def _changed(self, doc: Document, table: str, row: Row, column: str, depth: int) -> None:
+        """A column's value changed: the layout's `ColumnChanged` rules, then
+        the window's lookup on it, if one binds (UAT trace 11-25 16:50:01:
+        `usp_SalesSpecialNote_GetVale`, a `ColumnChanged` rule of the item
+        code, ran before the client read the item lookup)."""
+        self._column_event(doc, table, row, "ColumnChanged", column, depth)
+        window = self.layout.window
+        lookup = window.lookup(table, column) if window is not None else None
+        if lookup is not None:
+            self._window_lookup(doc, lookup, row, depth + 1)
+
+    def _window_lookup(self, doc: Document, lookup: WindowLookup, row: Row, depth: int) -> None:
+        if depth > self.max_depth:
+            raise RuleRefusedError(f"rules nest deeper than {self.max_depth} at {lookup.name}")
+        if self._loading:
+            # Whether the box binds as a document loads is not measured: what
+            # it would set and Bravo did not store stays UNKNOWN, as a load's
+            # missing results do; a stored column keeps Bravo's value.
+            for member in lookup.members:
+                if member.target.lower() not in row.stored:
+                    row.set(member.target, UNKNOWN)
+                    doc.unknown[member.target] = f"{lookup.name}: not bound at load"
+            return
+        if lookup.unread:
+            raise RuleRefusedError(f"{lookup.name}: {'; '.join(lookup.unread)}")
+        scope = _RowScope(self, doc, lookup.table, row, lookup.column)
+        if lookup.editable is not None and not condition(lookup.editable, scope):
+            # Set where no person could type it: whether the box still binds
+            # is not measured.
+            raise RuleRefusedError(f"{lookup.name}: set while its editor is closed")
+        code = row.get(lookup.column)
+        if code is UNKNOWN or is_empty(code):
+            raise UndecidableError(f"{lookup.name}: what an emptied lookup does is not measured")
+        keys = [substitute(lookup.filter_key, scope) if lookup.filter_key else None]
+        keys.append(lookup.select_key)
+        filter_key = " AND ".join(f"({k})" for k in keys if k) or None
+        found = self.references.find(lookup.lookup_key, code, filter_key)
+        if found is None:
+            raise UndecidableError(f"{lookup.lookup_key} {code!r} not found")
+        self._bind(
+            doc,
+            lookup.name,
+            lookup.lookup_key,
+            lookup.members,
+            found,
+            lookup.table,
+            row,
+            lookup.column,
+            False,
+            depth,
+        )
 
     # --------------------------------------------------------- validators
 

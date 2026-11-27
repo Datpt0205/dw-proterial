@@ -257,3 +257,55 @@ describe("A flag decided in the case's conversation (ticket 56)", () => {
     ).toBe(true);
   }, 30_000);
 });
+
+describe("A case given in its conversation (ticket 79)", () => {
+  it("names the person on the button and gives the case only once pressed", async () => {
+    widthOf(1280);
+    const given = {
+      ...STATED,
+      seq: 3,
+      kind: "assign_case",
+      question: "giao cho Diệu nhé",
+      answer:
+        "Giao hồ sơ PO NRV-PO-26-0457 cho Hoàng Thị Diệu? Bấm Xác nhận để giao; người nhận được báo ngay.",
+      proposal: {
+        action: "assign",
+        assignee_name: "Hoàng Thị Diệu",
+        case_version: 4,
+        content_hash: HASH,
+      },
+    };
+    assistantConversation.mockResolvedValue({
+      case: { kind: "order", case_id: CASE, label: "PO NRV-PO-26-0457" },
+      turns: [given],
+    });
+    assistantConfirm.mockResolvedValue({
+      answer: "Đã giao hồ sơ PO NRV-PO-26-0457 cho Hoàng Thị Diệu.",
+      case_version: 5,
+    });
+    render(
+      <UiProvider>
+        <WithCaseChat onCase={ON_CASE}>
+          <Reloading reload={vi.fn()} />
+        </WithCaseChat>
+      </UiProvider>,
+    );
+    const button = await screen.findByRole("button", {
+      name: "Giao cho Hoàng Thị Diệu",
+    });
+    expect(assistantConfirm).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(assistantConfirm.mock.calls[0]!.slice(0, 3)).toEqual([
+        ON_CASE,
+        3,
+        HASH,
+      ]),
+    );
+    expect(
+      await screen.findByText(
+        "Đã giao hồ sơ PO NRV-PO-26-0457 cho Hoàng Thị Diệu.",
+      ),
+    ).toBeTruthy();
+  }, 30_000);
+});

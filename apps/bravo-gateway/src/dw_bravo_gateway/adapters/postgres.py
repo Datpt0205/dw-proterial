@@ -21,10 +21,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_bravo.approval_token import ApprovalClaims
+from dw_bravo.contract import BravoTarget
 from dw_bravo_gateway.ports import LedgerEntry, LedgerStatus, SwitchState
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
+from dw_platform.application.rule_versions import RuleVersion
 
 _FIND = sa.text(
     "SELECT approval_id, status, kind, content_hash, detail FROM bravo.write_ledger"
@@ -32,10 +34,10 @@ _FIND = sa.text(
 )
 _CLAIM = sa.text(
     "INSERT INTO bravo.write_ledger"
-    " (tenant_id, workspace_id, approval_id, kind, content_hash, bravo_user_id, status,"
-    "  claimed_at)"
+    " (tenant_id, workspace_id, approval_id, kind, content_hash, bravo_user_id, target,"
+    "  status, claimed_at)"
     " VALUES (:tenant_id, :workspace_id, :approval_id, :kind, :content_hash, :bravo_user_id,"
-    "  'claimed', :now)"
+    "  :target, 'claimed', :now)"
     " ON CONFLICT (tenant_id, approval_id) DO NOTHING"
 )
 _SETTLE = sa.text(
@@ -82,6 +84,7 @@ class SqlLedger:
                     "kind": claims.kind,
                     "content_hash": claims.content_hash,
                     "bravo_user_id": claims.bravo_user_id,
+                    "target": claims.target,
                     "now": datetime.now(UTC),
                 },
             )
@@ -129,6 +132,12 @@ class SqlPauses:
 # Which rule key switches a kind on, by the kind's prefix: DW1's SO writes
 # are Sales' (`dw_sales.domain.bravo_writes`). A kind no key covers is off.
 SWITCH_KEYS: Final[Mapping[str, str]] = {"so.": "sales_bravo_writes"}
+# Which rule names the tenant's Bravo target (ticket 85): the same version
+# the switches are read from.
+TARGET_KEY: Final = "sales_bravo_writes"
+# `platform.rule_versions` is narrowed by tenant only (a version applies to
+# the whole tenant): a target read binds no workspace of its own.
+_NO_WORKSPACE: Final = WorkspaceId(uuid.UUID(int=0))
 
 
 @dataclass(frozen=True)
@@ -140,16 +149,31 @@ class _Scope:
 @dataclass
 class SqlSwitches:
     """`Switches` read from the tenant's approved rule version, never cached:
-    a kind switched off applies to the next write.
+    a kind switched off applies to the next write, and only a version a
+    second person decided counts.
 
     The document's schema is `dw_sales.domain.bravo_writes.BravoWrites`; this
-    reads only `kinds.<kind>.enabled` and `uat_proof`, and anything not
-    exactly as that schema writes it reads as off
-    (`test_gateway_switches.py` holds the two together).
+    reads only `kinds.<kind>.enabled` and `uat_proof`, and `target` with its
+    `target_uat_proof`, and anything not exactly as that schema writes it
+    reads as off, or as no target (`test_gateway_switches.py` holds the two
+    together).
     """
 
     lookup: SqlRuleVersionLookup
     pauses: Pauses
+
+    async def _decided(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, key: str
+    ) -> RuleVersion | None:
+        """The approved version, when a second person decided it. One its
+        proposer applied alone (`applied_directly`, the head's direct path)
+        is read as no version, the platform's file: Sales refuses that path
+        for this key, and the rule store still accepts it for any key, so
+        the write's own door checks it (ticket 85 review)."""
+        version = await self.lookup.approved(
+            _Scope(TenantId(tenant_id), WorkspaceId(workspace_id)), key
+        )
+        return None if version is None or version.applied_directly else version
 
     async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         key = next((k for prefix, k in SWITCH_KEYS.items() if kind.startswith(prefix)), None)
@@ -159,12 +183,28 @@ class SqlSwitches:
         # baseline; read before the switch, so a paused kind reads paused.
         if await self.pauses.paused(tenant_id, kind):
             return "paused"
-        version = await self.lookup.approved(
-            _Scope(TenantId(tenant_id), WorkspaceId(workspace_id)), key
-        )
+        version = await self._decided(tenant_id, workspace_id, key)
         if version is None:
             return "off"  # the platform's file: every kind off
         return "enabled" if switched_on(version.document, kind) else "off"
+
+    async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
+        version = await self._decided(tenant_id, _NO_WORKSPACE.value, TARGET_KEY)
+        if version is None:
+            return "uat"  # the platform's file: UAT
+        return target_of(version.document)
+
+
+def target_of(document: Mapping[str, object]) -> BravoTarget | None:
+    """UAT unless the version names production with the UAT run that proved
+    the gateway there; a version from before the field (1.0.0) is UAT."""
+    target = document.get("target", "uat")
+    if target == "uat":
+        return "uat"
+    proof = document.get("target_uat_proof")
+    if target == "production" and isinstance(proof, str) and proof.strip():
+        return "production"
+    return None
 
 
 def switched_on(document: Mapping[str, object], kind: str) -> bool:

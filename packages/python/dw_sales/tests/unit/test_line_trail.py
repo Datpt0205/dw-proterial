@@ -163,6 +163,7 @@ def _written(case: OrderCase, no: int) -> BravoLineWrite:
         kind="so.line.set_confirmed_date@1",
         command={},
         content_hash="0" * 64,
+        target="uat",
         status="written",
         proposed_by=PERSON,
         proposed_at=AT,

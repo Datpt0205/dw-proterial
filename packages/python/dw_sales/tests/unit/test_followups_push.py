@@ -29,7 +29,7 @@ from dw_sales.application.followups import (
 )
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.followups import Audience, Due, Followup, SalesFollowups, Stage, WaitingCase
+from dw_sales.domain.followups import Due, Followup, SalesFollowups, Stage, Told, WaitingCase
 from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, _Followups, open_world
 from dw_sales.evals.world import Directory as Holders
@@ -208,7 +208,7 @@ async def test_the_tenant_may_keep_the_number_off_the_lock_screen() -> None:
 # ------------------------------------------------------- what a push says --
 
 # Every stage `owed` can produce, per follow-up, and who it may go to.
-_STAGES: tuple[tuple[Followup, Stage, tuple[Audience, ...]], ...] = (
+_STAGES: tuple[tuple[Followup, Stage, tuple[Told, ...]], ...] = (
     (Followup.YOUR_TURN, Stage.NOTIFY, ("pic",)),
     (Followup.YOUR_TURN, Stage.NOTIFY, ("head",)),
     (Followup.ORDER_UNCONFIRMED, Stage.REMIND, ("pic",)),
@@ -221,11 +221,12 @@ _STAGES: tuple[tuple[Followup, Stage, tuple[Audience, ...]], ...] = (
     (Followup.WAITING_DESIGN_CODE, Stage.REMIND, ("pic",)),
     (Followup.WAITING_QUOTE, Stage.REMIND, ("pic",)),
     (Followup.WAITING_PCS_PRICE, Stage.REMIND, ("pic",)),
+    (Followup.EXPORT_CONTROL_HOLD, Stage.NOTIFY, ("export_control",)),
 )
 T0 = datetime(2026, 9, 21, 1, 12, tzinfo=UTC)
 
 
-def _due(followup: Followup, stage: Stage, notify: tuple[Audience, ...], *, ref: str) -> Due:
+def _due(followup: Followup, stage: Stage, notify: tuple[Told, ...], *, ref: str) -> Due:
     kind = (
         CaseKind.QUOTE
         if followup
@@ -253,7 +254,7 @@ def test_every_followup_has_its_push() -> None:
 @pytest.mark.parametrize(("followup", "stage", "notify"), _STAGES)
 @pytest.mark.parametrize("case_number", [True, False])
 def test_no_push_carries_a_price_an_amount_or_the_customers_text(
-    followup: Followup, stage: Stage, notify: tuple[Audience, ...], case_number: bool
+    followup: Followup, stage: Stage, notify: tuple[Told, ...], case_number: bool
 ) -> None:
     """Acceptance 2, over every push kind: five fields, the kind of work in
     words and the number at most. A reference that is the customer's words

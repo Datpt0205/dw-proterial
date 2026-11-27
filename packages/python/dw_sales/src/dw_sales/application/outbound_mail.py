@@ -1,5 +1,7 @@
 """ "Gửi cho khách": a case's send draft sent from the mailbox of the person who
-pressed, through an outbox folder and their own Power Automate flow.
+pressed, through an outbox folder and their own Power Automate flow; and,
+the same way, a request to Design or PC addressed only to the tenant's own
+mailboxes for them (ticket 77).
 
 Đạt, 2026-10-29: no Graph API, and never a shared mailbox on the server. The
 way mail reaches DW1 (ticket 43: each PIC's flow exports their Inbox into a
@@ -8,7 +10,9 @@ folder the plant syncs) is run the other way:
 1. **The API** (`OutboundMailService.send`): the caller may prepare the case
    (`sales.quote.prepare` / `sales.order.prepare`); the artifact is the
    case's send draft at its current version, still downloadable; every
-   recipient is one of the customer's contacts in the master data; the
+   recipient is one of the customer's contacts in the master data, or, for
+   a request to Design or PC, one of that team's mailboxes in the tenant's
+   rules (`INTERNAL_SENDABLE`); the
    mailbox is the caller's own sign-in address, resolved by the server. Then
    one `queued` row and its audit event, in one transaction. One active mail
    per draft: a second press sends nothing more.
@@ -19,10 +23,13 @@ folder the plant syncs) is run the other way:
    rollout, everyone), and the person is told.
 3. **Their flow** sends it from their Outlook (it lands in their Sent Items,
    replies come back to them) and writes a receipt.
-4. **The worker** reads the receipt: `sent`, and a quotation is marked "Đã
-   gửi KH" as the person who pressed (resolved again, cut to the prepare
-   scope, through the same command the button uses); or `failed`, and they
-   are told. A mail written and not receipted within `RECEIPT_WITHIN` is
+4. **The worker** reads the receipt: `sent`, and where the sending is itself
+   the case's step it is recorded as the person who pressed (resolved again,
+   cut to the prepare scope, through the same command the button uses): a
+   quotation "Đã gửi KH" or "Đã gửi Design", a change's answer "Ghi đã gửi
+   khách", an order's request to PC "Ghi đã hỏi PC" (from when they pressed;
+   where the case cannot take it any more they are told); or `failed`, and
+   they are told. A mail written and not receipted within `RECEIPT_WITHIN` is
    `stalled`, and they are told to send the `.eml` themselves.
 
 Nothing is sent without a person pressing, and nothing a model wrote decides
@@ -39,7 +46,7 @@ from datetime import datetime, timedelta
 from email import message_from_bytes, policy
 from email.message import EmailMessage
 from email.utils import getaddresses
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -72,16 +79,52 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
 if TYPE_CHECKING:
+    from dw_sales.application.design_requests import DesignMailboxesPort
     from dw_sales.application.processing import RequesterAccessPort
+    from dw_sales.domain.order_checks import OrderRules
 
 logger = logging.getLogger("dw_sales.outbound_mail")
 
 SALES_OUTBOUND_LANE: Final = "sales_outbound"
-# The send drafts each lane may send, by artifact kind.
+# The drafts a person may send to the customer from DW1, by artifact kind:
+# every mail DW1 drafts to the customer (`Drafting.customer_email`, ticket
+# 76); a request to Design or PC is `INTERNAL_SENDABLE`. Each opens only
+# where its own gate does (artifacts_service).
 SENDABLE: Final[Mapping[CaseKind, frozenset[str]]] = {
-    CaseKind.QUOTE: frozenset({"send_draft"}),
-    CaseKind.ORDER: frozenset({"confirmation_draft"}),
+    CaseKind.QUOTE: frozenset({"send_draft", "spec_discussion_draft", "decline_draft"}),
+    CaseKind.ORDER: frozenset(
+        {
+            "confirmation_draft",
+            "correction_request",
+            "change_can_do_draft",
+            "change_options_draft",
+            "internal_change_notice",
+            "cannot_supply_draft",
+        }
+    ),
 }
+type Team = Literal["design", "pc"]
+# The drafts a person may send to another team (ticket 77), and to which:
+# addressed only to that team's mailboxes in the tenant's rules (Design's
+# `QuoteRules.design_mailboxes`, PC's `OrderRules.pc_mailboxes`, the one
+# setting that names each), never to a customer, and a customer draft never
+# to them.
+INTERNAL_SENDABLE: Final[Mapping[CaseKind, Mapping[str, Team]]] = {
+    CaseKind.QUOTE: {"design_request_draft": "design"},
+    CaseKind.ORDER: {"design_code_request": "design", "pc_request_draft": "pc"},
+}
+# Why a request to a team is refused: a recipient the team's setting does
+# not name (moved since the draft was drawn, or never configured).
+_NOT_TEAM: Final[Mapping[Team, tuple[str, str]]] = {
+    "design": ("người nhận không phải hộp thư Design trong cấu hình", "recipient_not_design"),
+    "pc": ("người nhận không phải hộp thư PC trong cấu hình", "recipient_not_pc"),
+}
+# The drafts whose sending is itself a step of the case, recorded on the
+# receipt as the person who pressed, through the step's own button command.
+# The others were recorded before the draft opened (a correction requested,
+# a quotation declined), and the confirmation names each line's dates, which
+# its own "Ghi đã gửi xác nhận" asks for.
+_ANSWERS: Final = frozenset({"change_can_do_draft", "change_options_draft"})
 # Who may send: whoever prepares the case.
 _SEND_SCOPE: Final[Mapping[CaseKind, SalesScopes]] = {
     CaseKind.QUOTE: SalesScopes.QUOTE_PREPARE,
@@ -203,6 +246,10 @@ class OutboundMailService:
     # Whether the deployment names an outbox share: until then nothing is
     # queued, and the page says so.
     enabled: bool
+    # The tenant's Design and PC mailboxes, the only recipients of a draft to
+    # that team; None, or none configured, refuses every such draft.
+    design: DesignMailboxesPort | None = None
+    pc: PcMailboxesPort | None = None
 
     async def mails(
         self, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
@@ -245,7 +292,7 @@ class OutboundMailService:
                 record is None
                 or record.case_kind is not kind
                 or record.case_id != case_id
-                or record.kind not in SENDABLE[kind]
+                or record.kind not in SENDABLE[kind] | INTERNAL_SENDABLE[kind].keys()
             ):
                 raise NotFoundError("no such send draft", details={"artifact_id": str(artifact_id)})
             gates = QUOTE_GATES if kind is CaseKind.QUOTE else ORDER_GATES
@@ -259,14 +306,21 @@ class OutboundMailService:
                     details={"rule": "draft_not_current", "case_version": case.case_version},
                 )
             data = await self.artifact_bytes.get_object(record.object_key(scope))
-            customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
-            contacts = {c.address.lower() for c in customer.contacts} if customer else set()
             to = recipients(data)
-            if not to or not set(to) <= contacts:
-                raise ConflictError(
-                    "người nhận không nằm trong danh bạ khách ở dữ liệu chủ",
-                    details={"rule": "recipient_not_a_contact"},
-                )
+            team = INTERNAL_SENDABLE[kind].get(record.kind)
+            if team is not None:
+                mailboxes = {a.lower() for a in await self._team_mailboxes(scope, team)}
+                if not to or not set(to) <= mailboxes:
+                    words, rule = _NOT_TEAM[team]
+                    raise ConflictError(words, details={"rule": rule})
+            else:
+                customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
+                contacts = {c.address.lower() for c in customer.contacts} if customer else set()
+                if not to or not set(to) <= contacts:
+                    raise ConflictError(
+                        "người nhận không nằm trong danh bạ khách ở dữ liệu chủ",
+                        details={"rule": "recipient_not_a_contact"},
+                    )
             mailbox = await self._mailbox(context)
             now = self.clock.now()
             mail = OutboundMail(
@@ -302,6 +356,16 @@ class OutboundMailService:
                 await work.commit()
         return mail_view(held)
 
+    async def _team_mailboxes(self, scope: SalesScope, team: Team) -> tuple[str, ...]:
+        """The team's mailboxes in the tenant's rules in force now."""
+        if team == "design":
+            if self.design is None:
+                return ()
+            return (await self.design.quote_rules(scope)).design_mailboxes
+        if self.pc is None:
+            return ()
+        return (await self.pc.order_rules(scope)).pc_mailboxes
+
     async def _case(
         self, work: SalesUnitOfWork, context: AccessContext, kind: CaseKind, case_id: uuid.UUID
     ) -> OrderCase | QuoteCase:
@@ -321,6 +385,13 @@ class OutboundMailService:
         return address
 
 
+class PcMailboxesPort(Protocol):
+    """Where PC is reached: the tenant's order rules in force, whose
+    ``pc_mailboxes`` name the addresses PC is asked at and answers from."""
+
+    async def order_rules(self, scope: SalesScope) -> OrderRules: ...
+
+
 # -------------------------------------------------------- the worker side --
 
 
@@ -329,37 +400,72 @@ class OutboundScopesPort(Protocol):
 
 
 class QuoteSentPort(Protocol):
-    """ "Đã gửi KH", as the person who pressed (`QuoteCommands.sent`)."""
+    """ "Đã gửi KH" and "Đã gửi Design", as the person who pressed
+    (`QuoteCommands.sent`, `QuoteCommands.design_sent`)."""
 
     async def sent(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
     ) -> object: ...
 
+    async def design_sent(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> object: ...
 
-# The person's access when their quotation is marked sent: nothing more.
+
+class AnswerSentPort(Protocol):
+    """ "Ghi đã gửi khách" of a change's answer (`UpdateLoops.answer_sent`)."""
+
+    async def answer_sent(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> object: ...
+
+
+class PcAskedPort(Protocol):
+    """ "Ghi đã hỏi PC" as the person who pressed, from when they pressed
+    (`PcRequests.ask`)."""
+
+    async def ask(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        *,
+        case_version: int,
+        sent_at: datetime | None = None,
+    ) -> object: ...
+
+
+# The person's access when their case's step is recorded: nothing more.
 _SENT_CEILING: Final = frozenset({SalesScopes.QUOTE_PREPARE.value, SalesScopes.CASE_READ.value})
+_ANSWER_CEILING: Final = frozenset({SalesScopes.ORDER_PREPARE.value, SalesScopes.CASE_READ.value})
 
+# Said of any mail DW1 sends: to the customer, Design or PC alike.
 _TOLD: Final[Mapping[str, tuple[str, str]]] = {
     "not_connected": (
-        "Chưa gửi được thư cho khách",
-        "Hộp thư của bạn chưa được nối để DW1 gửi thư. Tải tệp .eml trong hồ sơ và gửi từ "
-        'Outlook, rồi bấm "Đã gửi KH".',
+        "Chưa gửi được thư",
+        "Hộp thư của bạn chưa được nối để DW1 gửi thư. Tải tệp .eml trong hồ sơ, gửi từ "
+        "Outlook, rồi ghi đã gửi trong hồ sơ.",
     ),
     "write_failed": (
-        "Chưa gửi được thư cho khách",
+        "Chưa gửi được thư",
         "DW1 không ghi được thư vào thư mục gửi. Thử lại, hoặc gửi tệp .eml từ Outlook.",
     ),
     "flow_failed": (
-        "Thư cho khách bị báo lỗi khi gửi",
+        "Thư bị báo lỗi khi gửi",
         "Luồng gửi thư của bạn báo lỗi. Kiểm tra kết nối Power Automate, hoặc gửi tệp .eml "
         "từ Outlook.",
     ),
     "no_receipt": (
-        "Thư cho khách chưa có xác nhận đã gửi",
+        "Thư chưa có xác nhận đã gửi",
         "Sau 30 phút luồng gửi thư chưa xác nhận. Xem mục Thư đã gửi trong Outlook; nếu "
-        'không có, gửi tệp .eml rồi bấm "Đã gửi KH".',
+        "không có, gửi tệp .eml rồi ghi đã gửi trong hồ sơ.",
     ),
 }
+# Said when the request went to PC and the case could not record it asked.
+_PC_NOT_RECORDED: Final = (
+    "Thư hỏi PC đã gửi nhưng chưa ghi được",
+    'Thư đã đi nhưng hồ sơ đã đổi nên DW1 chưa ghi "đã hỏi PC". Mở hồ sơ và bấm '
+    '"Ghi đã hỏi PC" nếu đơn còn chờ PC.',
+)
 
 
 def _lane_context(scope: SalesScope) -> AccessContext:
@@ -388,6 +494,8 @@ class OutboundLane:
     outbox: OutboxFolderPort
     artifact_bytes: ArtifactBytesPort
     quotes: QuoteSentPort
+    answers: AnswerSentPort
+    pc: PcAskedPort
     access: RequesterAccessPort
     notifications: NotificationSenderPort
     clock: UtcClock
@@ -442,11 +550,62 @@ class OutboundLane:
         if receipt.status == "failed":
             return await self._settle(scope, mail, "failed", "flow_failed")
         done = await self._settle(scope, mail, "sent", None)
-        if done and mail.case_kind is CaseKind.QUOTE:
-            await self._mark_sent(scope, mail)
+        if not done:
+            return done
+        async with self.uow(scope) as work:
+            record = await work.artifacts.get(mail.artifact_id)
+        kind = None if record is None else record.kind
+        if mail.case_kind is CaseKind.QUOTE and kind in ("send_draft", "design_request_draft"):
+            await self._mark_sent(scope, mail, design=kind == "design_request_draft")
+        elif mail.case_kind is CaseKind.ORDER and kind in _ANSWERS:
+            await self._mark_answer_sent(scope, mail)
+        elif mail.case_kind is CaseKind.ORDER and kind == "pc_request_draft":
+            await self._mark_pc_asked(scope, mail)
         return done
 
-    async def _mark_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
+    async def _mark_pc_asked(self, scope: SalesScope, mail: OutboundMail) -> None:
+        """ "Ghi đã hỏi PC" as the person who pressed, from when they pressed
+        (the mail's `queued_at`, so a reply PC wrote before the receipt came
+        back still answers it). A case that already says so since the press
+        (asked again by hand, or every line it would ask answered) is left as
+        it is (`OrderCase.pc_asked_since`). A case that cannot take it any
+        more (in Bravo meanwhile) is left, and the person is told: the mail
+        went, and the case does not say so."""
+        access = await self.access.find_linked_access(
+            mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
+        )
+        if access is None:
+            return
+        context = context_from(access)
+        try:
+            async with self.uow(scope) as work:
+                case = (await stored_order(work, mail.case_id, viewer=context)).case
+            if case.pc_asked_since(mail.queued_at):
+                return
+            await self.pc.ask(
+                context, mail.case_id, case_version=case.case_version, sent_at=mail.queued_at
+            )
+        except (ConflictError, NotFoundError) as left:
+            logger.info("sales_outbound: a request to PC was not recorded: %s", type(left).__name__)
+            await self._tell(scope, mail, "pc_not_recorded", _PC_NOT_RECORDED)
+
+    async def _mark_answer_sent(self, scope: SalesScope, mail: OutboundMail) -> None:
+        """ "Ghi đã gửi khách" of a change's answer as the person who pressed;
+        a case that moved on meanwhile (recorded by hand) is left."""
+        access = await self.access.find_linked_access(
+            mail.requested_by, scope.tenant_id.value, scope.workspace_id.value, _ANSWER_CEILING
+        )
+        if access is None:
+            return
+        context = context_from(access)
+        try:
+            async with self.uow(scope) as work:
+                case = (await stored_order(work, mail.case_id, viewer=context)).case
+            await self.answers.answer_sent(context, mail.case_id, case_version=case.case_version)
+        except (ConflictError, NotFoundError) as left:
+            logger.info("sales_outbound: a sent answer was not recorded: %s", type(left).__name__)
+
+    async def _mark_sent(self, scope: SalesScope, mail: OutboundMail, *, design: bool) -> None:
         """ "Đã gửi KH" as the person who pressed, through the button's own
         command; a case that moved on meanwhile (marked by hand) is left."""
         access = await self.access.find_linked_access(
@@ -458,7 +617,8 @@ class OutboundLane:
         try:
             async with self.uow(scope) as work:
                 case = (await stored_quote(work, mail.case_id, viewer=context)).case
-            await self.quotes.sent(context, mail.case_id, case_version=case.case_version)
+            record = self.quotes.design_sent if design else self.quotes.sent
+            await record(context, mail.case_id, case_version=case.case_version)
         except (ConflictError, NotFoundError) as left:
             logger.info("sales_outbound: a sent quotation was not marked: %s", type(left).__name__)
 
@@ -488,16 +648,21 @@ class OutboundLane:
             )
             await work.commit()
         if error is not None and error in _TOLD:
-            title, body = _TOLD[error]
-            try:
-                await self.notifications.deliver(
-                    _lane_context(scope),
-                    recipients=[mail.requested_by],
-                    source_key=f"{SALES_OUTBOUND_LANE}:{mail.mail_id}:{status}",
-                    title=title,
-                    body=body,
-                    link=f"/sales/{mail.case_kind.value}s/{mail.case_id}",
-                )
-            except Exception:
-                logger.exception("sales_outbound: the person was not told")
+            await self._tell(scope, mail, status, _TOLD[error])
         return 1
+
+    async def _tell(
+        self, scope: SalesScope, mail: OutboundMail, what: str, words: tuple[str, str]
+    ) -> None:
+        title, body = words
+        try:
+            await self.notifications.deliver(
+                _lane_context(scope),
+                recipients=[mail.requested_by],
+                source_key=f"{SALES_OUTBOUND_LANE}:{mail.mail_id}:{what}",
+                title=title,
+                body=body,
+                link=f"/sales/{mail.case_kind.value}s/{mail.case_id}",
+            )
+        except Exception:
+            logger.exception("sales_outbound: the person was not told")

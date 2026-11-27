@@ -169,6 +169,16 @@ _CAPABILITIES: Final[Mapping[Capability, SalesScopes]] = MappingProxyType(
 )
 
 
+# Who the export-control PIC is (ticket 78): every scope acknowledging an
+# NOC/ESF hold asks of one person, the capability's (the case checks it, read
+# from the table above) and `sales.order.prepare` (`orders_service._decide`
+# asks it of every decision on a finding). Who is told of a hold and who sees
+# the held order read this, so neither can name someone the decision refuses.
+EXPORT_CONTROL_SCOPES: Final = frozenset(
+    {_CAPABILITIES[Capability.ACKNOWLEDGE_EXPORT_CONTROL], SalesScopes.ORDER_PREPARE}
+)
+
+
 def order_actor(context: AccessContext, gate: Gate) -> Actor:
     """The caller as an order case knows them: their principal id, and each
     capability whose scope (`_CAPABILITIES`) their verified context holds."""

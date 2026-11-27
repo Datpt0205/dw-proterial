@@ -1,0 +1,137 @@
+schema_version: "1.0"
+copy_id: sales_reminders
+version: "1.3.0"
+
+# The words of DW1's reminders, morning brief and phone pushes to Sales staff
+# (ticket 42 family 6). Validated by
+# `dw_sales.application.reminder_copy.ReminderCopy`. When a reminder is owed,
+# to whom and after how long is the follow-ups policy's
+# (`configs/policies/sales_followups@<v>.yaml`); this file only says it.
+# A reminder reaches a member of the workspace in DW1: DW1 never mails a
+# customer, PC or Design.
+#
+# Platform layer. A tenant's own wording arrives as its own version of this
+# file (/sales/rules), never as an edit to this one. A tenant version written
+# before a template existed reads it as this file has it.
+#
+# Code fills each placeholder: {ref} the case's number (PO or quote request),
+# {customer} its customer code, {since} when the wait began (HH:MM dd/mm/yyyy,
+# local time), {hours} the tenant's threshold, {due} the quote's due date,
+# {next_step} one of `next_steps`. Never an amount. A template may name only
+# its own reminder's placeholders.
+#
+# 1.3.0 (ticket 78): `export_control_hold`, an NOC/ESF hold told to the
+# export-control PIC, and `export_control_unheld`, told to the head while
+# nobody may acknowledge one; `your_turn_order` writes "PO", not "po".
+#
+# 1.2.0 (ticket 82): `implied_recorded`, the silence DW1 recorded itself.
+#
+# 1.0.0: the words the lane wrote in code until now, unchanged, and the two
+# new reminders of tickets 06 and 09.
+
+reminders:
+  your_turn_order_head:
+    title: "PO {ref} chờ kiểm chéo"
+    body: "PO {ref} của khách {customer} chờ kiểm chéo từ {since}. Mở hồ sơ để giao hoặc tự xử lý."
+  your_turn_quote_head:
+    title: "Báo giá {ref} chờ duyệt"
+    body: "Báo giá {ref} của khách {customer} chờ duyệt từ {since}. Mở hồ sơ để giao hoặc tự xử lý."
+  your_turn_order:
+    title: "Đến lượt bạn: PO {ref}"
+    body: "DW1 đã xong phần của mình; PO {ref} của khách {customer} chờ bạn từ {since}. {next_step}"
+  your_turn_quote:
+    title: "Đến lượt bạn: Báo giá {ref}"
+    body: "DW1 đã xong phần của mình; báo giá {ref} của khách {customer} chờ bạn từ {since}. {next_step}"
+  order_unconfirmed_remind:
+    title: "Nhắc: PO {ref} chưa xác nhận"
+    body: "PO {ref} của khách {customer} đến lúc {since}, đã hơn {hours} giờ mà chưa xác nhận. Mở hồ sơ để xử lý."
+  order_unconfirmed_escalate:
+    title: "PO {ref} quá {hours} giờ chưa xác nhận"
+    body: "PO {ref} của khách {customer} đến lúc {since}, đã hơn {hours} giờ mà Sales chưa xác nhận."
+  quote_waiting_design:
+    title: "Nhắc: báo giá {ref} đang chờ Design"
+    body: "Yêu cầu báo giá {ref} của khách {customer} chờ Design (mã BP, spec) từ {since}, đã hơn {hours} giờ. DW1 không gửi thư cho Design: bạn quyết định có nhắc Design hay không."
+  quote_deadline_soon:
+    title: "Sắp đến hạn báo giá {ref}: {due}"
+    body: "Báo giá {ref} của khách {customer} đến hạn ngày {due} mà chưa gửi khách."
+  quote_deadline_late:
+    title: "Quá hạn báo giá {ref}: {due}"
+    body: "Báo giá {ref} của khách {customer} đã quá hạn ngày {due} mà chưa gửi khách."
+  waiting_pc:
+    title: "Nhắc: PO {ref} đang chờ PC trả ngày giao"
+    body: "Đã hỏi PC ngày giao cho PO {ref} của khách {customer} từ {since}, hơn {hours} giờ chưa ghi được ngày PC trả lời. DW1 không gửi thư cho PC: bạn quyết định có nhắc PC hay không."
+  implied_acceptance:
+    title: "PO {ref}: khách im lặng quá hạn"
+    body: "Khách {customer} chưa trả lời xác nhận PO {ref}, đã quá số ngày được coi là đồng ý (từ {since}). DW1 không tự ghi: mở hồ sơ để ghi khách đồng ý ngầm, hoặc hỏi lại khách."
+  implied_recorded:
+    title: "PO {ref}: DW1 đã ghi khách đồng ý ngầm"
+    body: "Khách {customer} không trả lời xác nhận PO {ref} quá số ngày được coi là đồng ý (từ {since}), nên DW1 đã ghi khách đồng ý ngầm. Nếu chưa đúng, mở hồ sơ và bấm Hoàn tác."
+  waiting_customer_change:
+    title: "Nhắc: PO {ref} đang chờ khách trả lời về thay đổi"
+    body: "Đã gửi khách {customer} trả lời về thay đổi PO {ref} từ {since}, hơn {hours} giờ chưa ghi được khách quyết định. DW1 không gửi thư cho khách: bạn quyết định có nhắc khách hay không."
+  waiting_customer_correction:
+    title: "Nhắc: PO {ref} đang chờ khách sửa"
+    body: "Đã yêu cầu khách {customer} sửa PO {ref} từ {since}, hơn {hours} giờ chưa có PO sửa. DW1 không gửi thư cho khách: bạn quyết định có nhắc khách hay không."
+  waiting_customer_spec:
+    title: "Nhắc: báo giá {ref} đang chờ khách thống nhất spec"
+    body: "Báo giá {ref} của khách {customer} chờ khách thống nhất spec từ {since}, hơn {hours} giờ. DW1 không gửi thư cho khách: bạn quyết định có nhắc khách hay không."
+  waiting_design_code:
+    title: "Nhắc: PO {ref} đang chờ Design tạo mã"
+    body: "Đã đề nghị Design tạo mã PRV cho PO {ref} của khách {customer} từ {since}, hơn {hours} giờ dòng vẫn chưa có mã. DW1 không gửi thư cho Design: bạn quyết định có nhắc Design hay không."
+  waiting_quote:
+    title: "Nhắc: PO {ref} đang chờ báo giá"
+    body: "PO {ref} của khách {customer} chờ báo giá mở từ đơn từ {since}, hơn {hours} giờ báo giá chưa được duyệt. Đơn chưa chuẩn bị được cho đến khi báo giá được duyệt hoặc từ chối."
+  waiting_pcs_price:
+    title: "Nhắc: báo giá {ref} hàng pcs đang chờ giá GM"
+    body: "Báo giá {ref} của khách {customer} là hàng pcs, chờ giá GM/BC Manager từ {since}, hơn {hours} giờ chưa ghi giá GM. Chưa định giá được cho đến khi ghi giá GM. DW1 không gửi thư cho GM: bạn quyết định có nhắc GM hay không."
+  export_control_hold:
+    title: "PO {ref} chờ xác nhận NOC/ESF"
+    body: "PO {ref} của khách {customer} chưa có NOC/ESF, chờ người phụ trách kiểm soát xuất khẩu xác nhận từ {since}. Chưa xác nhận thì chưa gửi xác nhận đơn cho khách được. Mở hồ sơ để xem và xác nhận."
+  export_control_unheld:
+    title: "PO {ref} thiếu NOC/ESF: chưa ai có quyền xác nhận"
+    body: "PO {ref} của khách {customer} chưa có NOC/ESF từ {since}, nhưng chưa ai trong bộ phận có quyền xác nhận kiểm soát xuất khẩu. Nhờ quản trị viên giao nhóm quyền \"PIC kiểm soát xuất khẩu\" cho người phụ trách; đến khi đó chưa gửi xác nhận đơn cho khách được."
+
+next_steps:
+  ycbg_drafted: "DW1 đã soạn YCBG: nhập vào Bravo rồi ghi số YCBG để gửi Design."
+  design_replied: "Design đã trả lời: quyết định giá, DW1 đã gợi ý giá kèm căn cứ."
+  other: "Mở hồ sơ để xem việc cần làm."
+
+# {day} dd/mm, {since} HH:MM dd/mm of the previous brief, {whose} `workspace`
+# or `mine`, {waiting} "Sales 2 · Design 1" from `waits_on` (else `nothing`);
+# every other placeholder is a count.
+brief:
+  title: "Tóm tắt sáng {day}: {new} hồ sơ mới ({whose})"
+  new_line: "Từ {since}: {new} hồ sơ mới ({new_orders} đơn hàng, {new_quotes} báo giá); đang chờ: {waiting}."
+  due_line: "Sắp đến hạn: {soon_orders} đơn hàng, {soon_quotes} báo giá; quá hạn: {late_orders} đơn hàng, {late_quotes} báo giá."
+  waiting_line: "Đang chờ: {waiting}."
+  workspace: "bộ phận Sales"
+  mine: "hồ sơ của bạn"
+  nothing: "không có"
+  waits_on:
+    dw: "DW1"
+    sales: "Sales"
+    design: "Design"
+    approver: "Người duyệt"
+    customer: "Khách"
+
+# A push names the kind of work, and the case's number after `order` or
+# `quote` where the follow-ups policy allows it; never a customer or a price.
+push:
+  your_turn: "Đến lượt bạn"
+  head_order: "Chờ bạn kiểm chéo"
+  head_quote: "Chờ bạn duyệt"
+  order_unconfirmed_remind: "Sắp quá hạn xác nhận"
+  order_unconfirmed_escalate: "Quá hạn xác nhận"
+  quote_waiting_design: "Chờ Design quá lâu"
+  quote_deadline: "Sắp đến hạn báo giá"
+  waiting_customer: "Chờ khách quá lâu"
+  waiting_pc: "Chờ PC quá lâu"
+  implied_acceptance: "Khách im lặng quá hạn"
+  waiting_design_code: "Chờ Design tạo mã quá lâu"
+  waiting_quote: "Chờ báo giá quá lâu"
+  waiting_pcs_price: "Chờ giá GM quá lâu"
+  export_control_hold: "Chờ xác nhận NOC/ESF"
+  batch_title: "{count} việc mới"
+  batch_body: "Mở DW1 để xem và quyết định."
+  order: "PO"
+  quote: "Báo giá"

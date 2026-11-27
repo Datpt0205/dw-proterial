@@ -402,6 +402,14 @@ class CaseDecisions:
                 if write:
                     event = person_event(action, decider, now)
                     await save_order(work, decider, self.ids, order, ordered, event, run_id=run_id)
+                    # What the cross-check lane routed at this version is
+                    # measured by this decision (ticket 81).
+                    await work.cross_check_routes.decide(
+                        order.case_id,
+                        order.case_version,
+                        "kept" if decision.approve else "returned",
+                        now,
+                    )
             if write:
                 await work.commit()
         if write and quoted is not None and action == "quote.approved":

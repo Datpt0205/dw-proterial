@@ -14,6 +14,8 @@ redelivered update act once.
 Registered only in ``ZALO_UPDATES_MODE=webhook``, where the poll lane is not:
 one bot, one reader. Taking deletes, so like ``getUpdates`` an update that fails
 is not handed out again; the router records it as failed and tells the person.
+What raises past the router is counted, and the lane raises after the batch so
+its tick is not recorded as clean (`zalo_poll`, Sales ticket 84).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from dw_connectors.adapters.zalo_inbound import CHANNEL
+from dw_worker.consumers.scope_failures import raise_if_failed
 from dw_worker.consumers.zalo_poll import ZaloUpdateHandler
 
 logger = logging.getLogger("dw_worker.zalo_webhook")
@@ -45,6 +48,7 @@ def build_zalo_webhook_consumer(
     queue: ZaloUpdateQueuePort, inbound: ZaloUpdateHandler
 ) -> Callable[[], Awaitable[None]]:
     async def consume() -> None:
+        failed = 0
         for update in await queue.take(CHANNEL, BATCH):
             try:
                 await inbound.handle(update)
@@ -53,5 +57,7 @@ def build_zalo_webhook_consumer(
                 # the lane. Logged without the update: it carries a chat id
                 # and the person's words.
                 logger.exception("zalo webhook: failed to handle an update")
+                failed += 1
+        raise_if_failed("zalo_webhook_drain", failed, "update")
 
     return consume

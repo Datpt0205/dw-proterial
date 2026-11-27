@@ -20,7 +20,7 @@ from dw_bravo.approval_token import (
     load_private_key,
     load_public_key,
 )
-from dw_bravo.contract import LineRef, SetConfirmedDate, content_hash
+from dw_bravo.contract import BravoTarget, LineRef, SetConfirmedDate, content_hash
 
 pytestmark = pytest.mark.unit
 
@@ -37,7 +37,13 @@ COMMAND = SetConfirmedDate(
 KEY = Ed25519PrivateKey.generate()
 
 
-def _sign(key: Ed25519PrivateKey = KEY, *, kid: str = "k1", ttl: timedelta = MAX_TTL) -> str:
+def _sign(
+    key: Ed25519PrivateKey = KEY,
+    *,
+    kid: str = "k1",
+    ttl: timedelta = MAX_TTL,
+    target: BravoTarget = "uat",
+) -> str:
     return ApprovalTokenSigner(key, kid, ttl).sign(
         approval_id=APPROVAL,
         tenant_id=TENANT,
@@ -45,6 +51,7 @@ def _sign(key: Ed25519PrivateKey = KEY, *, kid: str = "k1", ttl: timedelta = MAX
         command=COMMAND,
         bravo_user_id=2413,
         employee_code="NV001",
+        target=target,
         now=NOW,
     )
 
@@ -66,6 +73,8 @@ def test_a_signed_token_carries_what_the_approval_decided() -> None:
     assert claims.kind == "so.line.set_confirmed_date@1"
     assert claims.content_hash == content_hash(COMMAND)
     assert (claims.bravo_user_id, claims.employee_code) == (2413, "NV001")
+    assert claims.target == "uat"
+    assert VERIFIER.verify(_sign(target="production"), now=NOW).target == "production"
 
 
 def test_a_payload_changed_after_signing_is_a_bad_signature() -> None:
@@ -107,6 +116,7 @@ def test_a_lifetime_past_the_limit_is_refused_even_when_signed() -> None:
         command=COMMAND,
         bravo_user_id=2413,
         employee_code="NV001",
+        target="uat",
         now=NOW,
     )
 
@@ -127,3 +137,38 @@ def test_keys_round_trip_through_pem() -> None:
     assert ApprovalTokenVerifier({"k1": verifier_key}).verify(token, now=NOW).bravo_user_id == 2413
     with pytest.raises(ValueError):
         load_public_key(private_pem)
+
+
+def _resigned(change: dict[str, object]) -> str:
+    """A token whose payload is changed and signed again with our key: what
+    the verifier reads past the signature."""
+    body = _sign().split(".")[0]
+    payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    payload.update(change)
+    for name in [k for k, v in change.items() if v is None]:
+        del payload[name]
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    signature = KEY.sign(b"dw-bravo-approval/1\n" + raw)
+
+    def b64(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    return f"{b64(raw)}.{b64(signature)}"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"tgt": None}, {"tgt": "staging"}, {"tgt": ["uat"]}],
+    ids=["no_target", "a_target_not_known", "not_a_name"],
+)
+def test_a_token_without_a_known_target_is_refused(change: dict[str, object]) -> None:
+    assert _refused(_resigned(change)) == "malformed"
+
+
+def test_a_format_1_token_naming_no_target_is_refused() -> None:
+    assert _refused(_resigned({"tgt": None, "v": 1})) in {"malformed", "unknown_format"}
+
+
+def test_the_signer_refuses_a_target_not_known() -> None:
+    with pytest.raises(ValueError):
+        _sign(target="staging")  # type: ignore[arg-type]

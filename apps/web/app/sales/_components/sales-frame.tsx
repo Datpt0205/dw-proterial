@@ -60,6 +60,7 @@ export const SCOPE = {
   layoutApprove: "sales.layout.approve",
   rulesPropose: "sales.rules.propose",
   rulesApprove: "sales.rules.approve",
+  bravoWrite: "sales.bravo.write",
 } as const;
 
 interface SalesFrame {

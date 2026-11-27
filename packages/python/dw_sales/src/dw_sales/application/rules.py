@@ -28,7 +28,9 @@ tenant's layer is a version a person proposed and a second person approved.
 - **Applied directly** when the proposer is the head (holds
   `sales.rules.approve`; Đạt, 2026-10-28): no approval is opened, the version
   is in force at once, decided by its proposer, `applied_directly`, audited
-  `sales.rules.applied`. A proposal waiting on the key is decided first.
+  `sales.rules.applied`. A proposal waiting on the key is decided first. Not
+  for `DECIDED_BY_A_SECOND` (the Bravo writes and their target, tickets 63 g
+  and 85): the head's version waits on another approver like anyone's.
 - **Approved or rejected** on that approval by a holder of the stamp (the
   head), never by its proposer: `sales.` is strict, `RuleDecisions.check` (the
   decision guard) refuses what the version would refuse before it is
@@ -227,6 +229,11 @@ DRAFTABLE: Final = frozenset({RuleKey.BRAVO_UPLOAD})
 # replay matched (`salesorder_learning`, dw_sales ADR 0013): never typed in
 # the rules editor, and never applied by its proposer, the head included.
 LEARNED_ONLY: Final = frozenset({RuleKey.SALESORDER_RULES})
+# The keys a second person decides, the head's own version included: which
+# Bravo writes DW1 performs, and on which Bravo (tickets 63 g and 85). A
+# switch to production or a kind switched on writes the company's books; it
+# never applies at its proposer's word.
+DECIDED_BY_A_SECOND: Final = frozenset({RuleKey.BRAVO_WRITES})
 # The keys whose documents hold prices or price policy: the pricing inputs
 # (copper adders, the floor, freight), the quote rules (the reference price
 # band, the copper basis) and the order rules (`price.relative_tolerance`, the
@@ -242,7 +249,7 @@ PRICE_BEARING: Final = frozenset(
     {RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, RuleKey.PRICING, RuleKey.SALESORDER_RULES}
 )
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
-_ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
+_ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD, RuleKey.HANDOFFS)
 
 
 def _sales_schemas() -> dict[Any, type[BaseModel]]:
@@ -319,7 +326,8 @@ class TenantRuleBook(RuleBook):
         name (the template refs of the files already drawn at the case's
         version, the first that names that copy), else the tenant's current
         one; Design's mailboxes from the tenant's current quote rules, which
-        the reply check reads too. A stamp this process no longer holds is
+        the reply check reads too, and PC's from its current order rules,
+        which the reading of PC's mail reads too. A stamp this process no longer holds is
         refused: a file drawn again must be the file drawn before."""
         found: dict[RuleKey, Policy] = {}
         named = [_copy_ref(stamp) for stamp in stamps]
@@ -335,15 +343,18 @@ class TenantRuleBook(RuleBook):
                     details={"copy": stamped, "reason": "template_version_gone"},
                 )
             found[key] = policy
-        emails, documents, upload = (found[key] for key in _ARTIFACT_COPY)
+        emails, documents, upload, handoffs = (found[key] for key in _ARTIFACT_COPY)
         assert isinstance(emails, SalesEmailCopy)
         assert isinstance(documents, SalesDocumentCopy)
         assert isinstance(upload, BravoUploadLayout)
+        assert isinstance(handoffs, HandoffCopy)
         return ArtifactCopy(
             emails=emails,
             documents=documents,
             upload=upload,
+            handoffs=handoffs,
             design_mailboxes=(await self.quote_rules(scope)).design_mailboxes,
+            pc_mailboxes=(await self.order_rules(scope)).pc_mailboxes,
             zone=await self.time_zone(scope),
             salesorder=await self.salesorder_rules(scope),
         )
@@ -416,6 +427,10 @@ class RulesInForceView(BaseModel):
     versions: list[RuleVersionView]
     # The keys a version may be drafted for from the company's own file.
     draftable: list[RuleKey]
+    # The keys whose new version a second person decides, the head's own
+    # included (`DECIDED_BY_A_SECOND`): the page words them "Gửi duyệt" from
+    # this list, never from a copy of it (ticket 85 review).
+    decided_by_a_second: list[RuleKey]
 
 
 class RuleSchemaView(BaseModel):
@@ -601,6 +616,7 @@ class SalesRulesService:
             platform=[PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in keys],
             versions=[_view(v) for v in versions],
             draftable=sorted(DRAFTABLE),
+            decided_by_a_second=sorted(DECIDED_BY_A_SECOND),
         )
 
     async def schema(self, context: AccessContext, key: str) -> RuleSchemaView:
@@ -647,7 +663,8 @@ class SalesRulesService:
             context,
             key,
             document,
-            applies_directly=self.gate.allows(context, SalesScopes.RULES_APPROVE),
+            applies_directly=key not in DECIDED_BY_A_SECOND
+            and self.gate.allows(context, SalesScopes.RULES_APPROVE),
         )
         return _view(version)
 

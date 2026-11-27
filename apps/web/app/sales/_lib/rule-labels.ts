@@ -177,6 +177,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Bắt buộc kiểm chéo trước khi xác nhận",
       help: "Tắt: đơn đã nhập Bravo được xác nhận ngay, không cần người thứ hai kiểm.",
     },
+    cross_check_on_match: {
+      label: "Cho qua kiểm chéo khi Bravo khớp",
+      help: "Bật (cần bật kiểm chéo): đơn mà DW đọc lại từ Bravo khớp từng dòng với bản đã duyệt, không có cờ nào và không ai nhập tay giá trị, mã hay ngày, được DW cho qua kiểm chéo, trong mức sai và tỷ lệ kiểm mẫu đã đặt. Đơn khác, đơn lệch và đơn được chọn kiểm mẫu vẫn chờ người kiểm chéo.",
+    },
     export_control_mode: {
       label: "Cờ thiếu NOC/ESF",
       help: "Giữ xác nhận: đơn không được xác nhận với khách cho tới khi PIC kiểm soát xuất khẩu chấp nhận cờ, kèm lý do. Chặn xác nhận: không xác nhận được kể cả khi đã chấp nhận.",
@@ -217,6 +221,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Hộp thư của PC",
       help: "Địa chỉ PC dùng để trả lời ngày giao. Khi có danh sách, DW1 chỉ đưa thư từ các địa chỉ này ra để đọc ngày PC trả lời; để trống thì đưa mọi thư đã xác thực có nêu số PO, kèm người gửi. Bạn vẫn xác nhận từng dòng.",
       item: "Địa chỉ",
+    },
+    password_file: {
+      label: "PO trong tệp có mật khẩu",
+      help: "Tệp có mật khẩu được mở bằng mật khẩu ghi trong chính thư, nên ClamAV không quét được bên trong. Mặc định mọi giá trị đọc được chờ bạn xác nhận. Chọn chỉ chờ giá trị kiểm không đạt: tệp được đọc như mọi tệp cùng mẫu, PO vẫn ghi là mở bằng mật khẩu.",
     },
     implied_acceptance: {
       label: "Khách im lặng được coi là đồng ý",
@@ -363,6 +371,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "model_assist.case_chat": {
       label: "Chat của hồ sơ nêu quyết định để PIC xác nhận",
       help: "PIC nói trong chat của hồ sơ (chấp nhận cờ, đổi ngày XN hoặc số lượng một dòng SO); DW1 nhắc lại đúng điều sẽ ghi và chỉ ghi khi PIC bấm Xác nhận. Tắt: chat không nêu gì, PIC dùng nút trên trang. Bật lại cần lần đo đạt ngưỡng.",
+    },
+    "model_assist.pc_reply": {
+      label: "Tự đọc thư PC trả ngày giao",
+      help: "Khi đơn đang chờ PC, DW1 tự đọc thư từ hộp thư PC trong cấu hình và đề xuất ngày cho từng dòng; PIC bấm Đúng hoặc Sửa từng dòng, không dòng nào được ghi khi chưa bấm. Bật cần lần đo đạt ngưỡng.",
     },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
@@ -687,11 +699,20 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       unit: "giờ",
     },
     "waiting_pcs_price.remind.notify": { label: "Nhắc ai" },
+    export_control_hold: {
+      label: "Đơn thiếu NOC/ESF chờ xác nhận",
+      help: "Báo ngay cho người phụ trách kiểm soát xuất khẩu (vai Sales phụ trách và nhóm quyền PIC kiểm soát xuất khẩu), mỗi bản PO một lần. Chưa ai có đủ cả hai thì báo Trưởng bộ phận để giao quyền.",
+    },
+    "export_control_hold.enabled": { label: "Bật báo đơn thiếu NOC/ESF" },
     implied_acceptance: {
       label: "Khách im lặng quá hạn xác nhận",
-      help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 báo một lần cho Sales phụ trách. DW1 không tự ghi đồng ý ngầm.",
+      help: "Khi khách quá số ngày được coi là đồng ý (đặt cho từng khách trong quy tắc kiểm tra PO), DW1 tự ghi đồng ý ngầm (nếu bật) và báo một lần cho Sales phụ trách; Sales hoàn tác được bằng một nút.",
     },
     "implied_acceptance.enabled": { label: "Bật báo khách im lặng quá hạn" },
+    "implied_acceptance.record": {
+      label: "DW1 tự ghi đồng ý ngầm",
+      help: "Tắt thì DW1 chỉ báo, Sales tự bấm ghi.",
+    },
     morning_brief: {
       label: "Bản tin buổi sáng",
       help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
@@ -852,6 +873,17 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Nội dung",
       help: REMINDER_HELP,
     },
+    "reminders.implied_recorded": {
+      label: "DW1 đã ghi khách đồng ý ngầm",
+    },
+    "reminders.implied_recorded.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.implied_recorded.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
     "reminders.waiting_customer_change": {
       label: "Chờ khách quyết định về thay đổi",
     },
@@ -902,6 +934,28 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Nội dung",
       help: REMINDER_HELP,
     },
+    "reminders.export_control_hold": {
+      label: "Đơn thiếu NOC/ESF chờ xác nhận",
+    },
+    "reminders.export_control_hold.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_hold.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_unheld": {
+      label: "Đơn thiếu NOC/ESF mà chưa ai có quyền xác nhận",
+    },
+    "reminders.export_control_unheld.title": {
+      label: "Tiêu đề",
+      help: REMINDER_HELP,
+    },
+    "reminders.export_control_unheld.body": {
+      label: "Nội dung",
+      help: REMINDER_HELP,
+    },
     next_steps: {
       label: "Việc cần làm tiếp",
       help: "Câu nói Sales làm gì tiếp khi đến lượt, ghi trong lời nhắc và bản tin.",
@@ -945,6 +999,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "push.waiting_design_code": { label: "Chờ Design tạo mã quá lâu" },
     "push.waiting_quote": { label: "Chờ báo giá quá lâu" },
     "push.waiting_pcs_price": { label: "Chờ giá GM quá lâu" },
+    "push.export_control_hold": { label: "Chờ xác nhận NOC/ESF" },
     "push.batch_title": {
       label: "Tiêu đề khi có nhiều việc cùng lúc",
       help: REMINDER_HELP,
@@ -1023,7 +1078,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: ASSISTANT_HELP,
     },
     "words.write_which_field": {
-      label: "Hỏi lại ghi ngày hay số lượng",
+      label: "Hỏi lại đổi ngày, số lượng hay hủy dòng",
       help: ASSISTANT_HELP,
     },
     "words.write_which_value": {
@@ -1032,9 +1087,39 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     "words.write_no_so": { label: "Đơn chưa có số SO trên Bravo" },
     "words.write_orders_only": { label: "Chỉ ghi Bravo từ đơn hàng có SO" },
+    "words.assign_confirm": {
+      label: "Hỏi lại trước khi giao hồ sơ",
+      help: "{case}: hồ sơ, {person}: người nhận.",
+    },
+    "words.assign_which": {
+      label: "Hỏi giao cho ai",
+      help: "{people}: những người giao được.",
+    },
+    "words.assign_nobody": { label: "Không có ai nhận được hồ sơ" },
+    "words.assign_not_yours": { label: "Người hỏi không có quyền giao việc" },
+    "words.assign_done": {
+      label: "Đã giao hồ sơ",
+      help: "{case}: hồ sơ, {person}: người nhận.",
+    },
     "words.write_done": {
       label: "Đã gửi đề xuất ghi Bravo",
       help: ASSISTANT_HELP,
+    },
+    "words.write_cancel_confirm": {
+      label: "Nói lại đề xuất hủy dòng trước khi xác nhận",
+      help: "{so}: số SO, {line}: dòng, {reason}: lý do hủy.",
+    },
+    "words.write_which_reason": {
+      label: "Hỏi lý do hủy dòng",
+      help: "{line}: dòng.",
+    },
+    "words.write_reason_too_long": {
+      label: "Lý do hủy dài quá",
+      help: "{limit}: số ký tự tối đa.",
+    },
+    "words.write_cancel_done": {
+      label: "Đã gửi đề xuất hủy dòng",
+      help: "{line}: dòng.",
     },
     "words.work_head": {
       label: "Mở đầu danh sách việc đang chờ",
@@ -1092,6 +1177,14 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Bằng chứng trên UAT",
       help: "Lần chạy trên Bravo UAT đã khớp từng cột với lần PIC lưu tay; bắt buộc khi bật.",
     },
+    target: {
+      label: "Ghi vào Bravo nào",
+      help: "Bravo UAT để chạy thử; Bravo thật khi dùng thật. Đổi sang Bravo khác thì mọi đề xuất đọc từ Bravo cũ bị từ chối khi ghi, cần đề xuất lại.",
+    },
+    target_uat_proof: {
+      label: "Bằng chứng chạy trên UAT",
+      help: "Lần chạy trên Bravo UAT đã ghi đúng từ đầu đến cuối; bắt buộc khi chọn Bravo thật.",
+    },
   },
 };
 
@@ -1134,6 +1227,9 @@ const VALUES: Record<string, string> = {
   "so.line.cancel@1": "Huỷ một dòng SO",
   "so.line.split@1": "Tách một dòng SO",
   "so.create@1": "Tạo SO mới",
+  // Which Bravo DW1 reads and writes (`sales_bravo_writes.target`, ticket 85).
+  uat: "Bravo UAT (chạy thử)",
+  production: "Bravo thật",
   pic: "Sales phụ trách",
   head: "Trưởng bộ phận",
   mon: "Thứ Hai",
@@ -1147,6 +1243,8 @@ const VALUES: Record<string, string> = {
   warning: "Cảnh báo",
   warn: "Giữ xác nhận cho tới khi PIC kiểm soát xuất khẩu chấp nhận",
   block_confirmation: "Chặn xác nhận",
+  every_value: "Mọi giá trị chờ xác nhận",
+  failed_checks_only: "Chỉ giá trị kiểm không đạt chờ xác nhận",
   received_date: "Ngày nhận PO",
   item_standard: "Lead time chuẩn của mã hàng",
   quotation: "Lead time trong báo giá",

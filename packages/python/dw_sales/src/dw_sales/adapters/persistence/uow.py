@@ -26,6 +26,7 @@ from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.activity import SqlStepActivityLog
 from dw_sales.adapters.persistence.bravo_line_writes import SqlBravoLineWrites
 from dw_sales.adapters.persistence.change_requests import SqlChangeRequests
+from dw_sales.adapters.persistence.cross_check_routes import SqlCrossCheckRoutes
 from dw_sales.adapters.persistence.followups import SqlFollowupStore
 from dw_sales.adapters.persistence.labelled_cases import SqlLabelledCaseLog
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
@@ -75,6 +76,8 @@ class SqlSalesUnitOfWork:
     shadow_readings: SqlShadowReadings
     # An SO line's change written into Bravo (ticket 53): `BravoLineWriteStorePort`.
     bravo_writes: SqlBravoLineWrites
+    # What the cross-check lane did per order version (ticket 81).
+    cross_check_routes: SqlCrossCheckRoutes
     audit: AuditRepositoryPort
 
     def __init__(
@@ -125,6 +128,7 @@ class SqlSalesUnitOfWork:
         self.labelled_cases = SqlLabelledCaseLog(session, scope)
         self.shadow_readings = SqlShadowReadings(session, scope)
         self.bravo_writes = SqlBravoLineWrites(session, scope)
+        self.cross_check_routes = SqlCrossCheckRoutes(session, scope)
         self.audit = self._audit(session)
         return self
 
