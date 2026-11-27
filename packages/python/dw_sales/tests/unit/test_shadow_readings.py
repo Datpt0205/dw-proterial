@@ -42,6 +42,7 @@ from dw_sales.application.shadow import (
     label_reply_move,
 )
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.message_intent import IntentKind
 from dw_sales.domain.order_checks import SHADOW_STEPS, ModelStep, OrderRules
 from dw_sales.domain.orders import MappingStatus, OrderCase, OrderStatus
 from dw_sales.domain.reply_intent import ProposedStep
@@ -519,7 +520,7 @@ def _kind_labels(world: World) -> list[Any]:
     ("picked", "verdict"), [("delivery_change", "confirmed"), ("complaint", "corrected")]
 )
 async def test_the_kind_picked_as_a_mail_is_marked_handled_labels_its_shadow_reading(
-    picked: str, verdict: str
+    picked: IntentKind, verdict: str
 ) -> None:
     world = await _unread_mail("delivery_change")
     (held,) = world.store.state(ALPHA).shadow_readings.values()
