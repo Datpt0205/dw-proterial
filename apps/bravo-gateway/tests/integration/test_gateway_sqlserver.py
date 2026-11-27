@@ -626,13 +626,27 @@ async def test_the_screens_window_binds_and_a_users_own_copy_that_differs_holds_
 async def test_a_window_the_read_login_cannot_read_leaves_every_plan_provisional(
     logins: tuple[Login, Login],
 ) -> None:
+    """The watch still takes its fingerprint, as Proterial's read login
+    (no SELECT on the copies until script 08 is rerun) would have it: the
+    screen's layout is named as not checked, and nothing else is lost."""
+    bravo = SqlServerBravo(*logins, templates={})
+    before = await bravo.fingerprint("production")
     _run(DB, "DENY SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
     try:
-        layout = await SqlServerBravo(*logins, templates={}).layout("EDIT_BizDocSO")
+        layout = await bravo.layout("EDIT_BizDocSO")
+        after = await bravo.fingerprint("production")
     finally:
         _run(DB, "REVOKE SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
         _run(DB, "GRANT SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
     assert layout.window is None and (layout.missing_window or "").startswith("could not read")
+
+    from dw_bravo.watch import diff, react
+
+    assert {c.key for c in after.components} == {c.key for c in before.components}
+    [changed] = diff(before, after)
+    assert changed.kind == "layout" and changed.after is not None
+    assert changed.after.unknown == ("the window: could not read: ProgrammingError",)
+    assert "so.create@1" in react(diff(before, after), {}).paused
 
 
 async def test_the_screens_data_source_is_its_layout_and_its_form_is_watched_with_it(

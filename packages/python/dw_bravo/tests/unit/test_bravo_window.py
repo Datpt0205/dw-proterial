@@ -182,15 +182,8 @@ def test_a_plan_whose_window_could_not_be_read_never_writes() -> None:
     assert not plan.may_write and "window" in plan.provisional[0]
 
 
-def test_the_grid_columns_are_read_in_the_windows_order() -> None:
+def test_every_binding_lookup_is_read_on_the_header_and_on_a_grids_column() -> None:
     window = read_window(WINDOW, "EDIT_Test")
-    assert window.grid_columns["Detail"] == (
-        "POLine",
-        "ItemCode",
-        "Description",
-        "Unit",
-        "Quantity9",
-    )
     assert set(window.lookups) == {
         ("Parent", "customercode"),
         ("Detail", "itemcode"),
@@ -288,3 +281,128 @@ def test_a_rule_setting_several_columns_binds_each_it_changed() -> None:
     index = run.add_row(doc, "Detail", {**LINE, "POLine": None, "Note": None}, stored=LINE)
     run.edit(doc, "Detail", index, "POLine", "1")
     assert doc.children["Detail"][index].get("QuantityBox") == Decimal(1)
+
+
+def test_an_emptied_lookup_refuses() -> None:
+    run, doc = _runner(_lookups()), _document()
+    index = run.add_row(doc, "Detail", LINE, stored=LINE)
+    run.edit(doc, "Detail", index, "ItemCode", "I-BOX")
+    with pytest.raises(UndecidableError, match="emptied lookup"):
+        run.edit(doc, "Detail", index, "ItemCode", None)
+
+
+class _NotFound(Lookups):
+    def find(
+        self, lookup_key: str, code: object, filter_key: str | None
+    ) -> Mapping[str, object] | None:
+        self.reads.append((lookup_key, code, filter_key))
+        return None
+
+
+def test_a_lookup_whose_row_is_not_found_refuses() -> None:
+    run, doc = _runner(_NotFound()), _document()
+    index = run.add_row(doc, "Detail", LINE, stored=LINE)
+    with pytest.raises(UndecidableError, match="Item 'I-GONE' not found"):
+        run.edit(doc, "Detail", index, "ItemCode", "I-GONE")
+
+
+def test_a_conditional_member_whose_condition_the_members_before_it_change_refuses() -> None:
+    """Whether a member's condition is read before the lookup sets anything,
+    or as its turn comes, is not measured: here the currency the first
+    member sets decides whether the name is set."""
+    window = WINDOW.replace(
+        "<Name>CustomerName</Name><CustomerCurrencyCode>CurrencyCode</CustomerCurrencyCode>",
+        "<CustomerCurrencyCode>CurrencyCode</CustomerCurrencyCode><Name><Condition_0>"
+        "<DataMember>CustomerName</DataMember><Expr>Empty(CurrencyCode)</Expr></Condition_0></Name>",
+    )
+    run = _runner(_lookups(), window)
+    doc = Document(
+        Row({"Id": Decimal(-1), "CustomerCode": None, "CustomerName": None, "CurrencyCode": None}),
+        {},
+    )
+    with pytest.raises(RuleRefusedError, match="CustomerName's condition changes"):
+        run.edit(doc, "Parent", 0, "CustomerCode", "C1")
+
+
+def test_lookups_that_bind_each_other_round_and_round_refuse() -> None:
+    """The customer's lookup sets `Agent`, whose lookup sets the customer
+    back, and so on: the runner stops at its depth, as it does for rules."""
+    window = WINDOW.replace(
+        "<Name>CustomerName</Name><CustomerCurrencyCode>CurrencyCode</CustomerCurrencyCode>",
+        "<Agent>Agent</Agent>",
+    ).replace(
+        "</Controls></General>",
+        "<lookupAgent><bindingMembers><Customer>CustomerCode</Customer></bindingMembers>"
+        "<ClassName>BravoLookupBox</ClassName><DataMember>Agent</DataMember><LookupKey>Agent</LookupKey>"
+        "</lookupAgent></Controls></General>",
+    )
+    lookups = Lookups(
+        {
+            ("Customer", "C1"): {"Agent": "A1"},
+            ("Agent", "A1"): {"Customer": "C2"},
+            ("Customer", "C2"): {"Agent": "A2"},
+            ("Agent", "A2"): {"Customer": "C1"},
+        }
+    )
+    run = _runner(lookups, window)
+    doc = Document(Row({"Id": Decimal(-1), "CustomerCode": None, "Agent": None}), {})
+    with pytest.raises(RuleRefusedError, match="rules nest deeper than 64 at lookup"):
+        run.edit(doc, "Parent", 0, "CustomerCode", "C1")
+
+
+def test_a_binding_box_that_is_not_a_lookup_with_a_key_refuses_when_it_binds() -> None:
+    """Read, not refused whole: the window still reads; the box refuses
+    when its column is set, never reading a lookup with no key."""
+    for unread in (
+        WINDOW.replace("<LookupKey>ItemUnit</LookupKey>", ""),
+        WINDOW.replace(
+            "<ClassName>BravoLookupBox</ClassName>\n    <LookupKey>ItemUnit</LookupKey>",
+            "<ClassName>zLookupSource</ClassName>\n    <LookupKey>ItemUnit</LookupKey>",
+        ),
+    ):
+        assert unread != WINDOW
+        lookups = _lookups()
+        run, doc = _runner(lookups, unread), _document()
+        index = run.add_row(doc, "Detail", LINE, stored=LINE)
+        with pytest.raises(RuleRefusedError, match="not a BravoLookupBox with a LookupKey"):
+            run.edit(doc, "Detail", index, "ItemCode", "I-BOX")
+        assert [key for key, _, _ in lookups.reads] == ["Item"]
+
+
+def test_a_member_that_binds_to_no_column_refuses_when_it_binds() -> None:
+    window = WINDOW.replace("<ConvertRate>ConvertRate9</ConvertRate>", "<ConvertRate />")
+    run, doc = _runner(_lookups(), window), _document()
+    index = run.add_row(doc, "Detail", LINE, stored=LINE)
+    with pytest.raises(RuleRefusedError, match="ConvertRate binds to no column"):
+        run.edit(doc, "Detail", index, "ItemCode", "I-BOX")
+
+
+def test_the_short_form_binds_each_column_to_its_own_name() -> None:
+    window = WINDOW.replace(
+        "<bindingMembers><Name>CustomerName</Name><CustomerCurrencyCode>CurrencyCode"
+        "</CustomerCurrencyCode></bindingMembers>",
+        "<bindingMembers>Name, CustomerCurrencyCode</bindingMembers>",
+    )
+    lookup = read_window(window, "EDIT_Test").lookup("Parent", "CustomerCode")
+    assert lookup is not None and not lookup.unread
+    assert [(m.source, m.target) for m in lookup.members] == [
+        ("Name", "Name"),
+        ("CustomerCurrencyCode", "CustomerCurrencyCode"),
+    ]
+
+
+def test_a_window_that_cannot_say_which_columns_bind_is_refused_whole() -> None:
+    twice = WINDOW.replace(
+        "</Controls></General>",
+        "<lookupAgain><bindingMembers><Name>CustomerName</Name></bindingMembers>"
+        "<ClassName>BravoLookupBox</ClassName><DataMember>CustomerCode</DataMember>"
+        "<LookupKey>Customer</LookupKey></lookupAgain></Controls></General>",
+    )
+    with pytest.raises(UnsupportedSyntaxError, match=r"two lookups bind Parent\.CustomerCode"):
+        read_window(twice, "EDIT_Test")
+    for broken in (
+        WINDOW.replace("<DataMember>Detail</DataMember>", ""),
+        WINDOW.replace("<Cols>", "<Kols>").replace("</Cols>", "</Kols>"),
+    ):
+        with pytest.raises(UnsupportedSyntaxError, match="grid Item_0 names no table or columns"):
+            read_window(broken, "EDIT_Test")

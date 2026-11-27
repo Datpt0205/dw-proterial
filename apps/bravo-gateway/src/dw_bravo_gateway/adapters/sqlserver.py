@@ -583,7 +583,15 @@ class SqlServerBravo:
         window, why = self._window(screen, forms)
         if window is None:
             unknown.append(f"the window: {why}")
-        edits = [e for form in forms for e in self._window_edits(form["Id"])]
+        unread: list[tuple[object, ...]] = []
+        try:
+            edits = [e for form in forms for e in self._window_edits(form["Id"])]
+        except Exception as failed:  # the driver's own errors: the copies not checked
+            # `_window` read the same copies and is None already, so the
+            # window is named in `unknown`; the digest says they went unread
+            # rather than reading as a screen with no copies.
+            edits = []
+            unread.append(("B00LayoutDataEdit", f"not read: {type(failed).__name__}"))
         latest = max(rows, key=lambda r: str(r["ModifiedAt"]))
 
         def data(row: Mapping[str, object]) -> object:
@@ -594,6 +602,7 @@ class SqlServerBravo:
             (r["Id"], r["IsTemplate"], _digest(data(r))) for r in rows
         ]
         shapes += [(e["Id"], e["UserId"], e["RoleId"], _digest(data(e))) for e in edits]
+        shapes += unread
         return [
             Component(
                 "layout",

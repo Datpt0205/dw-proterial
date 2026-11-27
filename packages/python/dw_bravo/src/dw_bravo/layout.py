@@ -227,10 +227,9 @@ class WindowLookup:
 @dataclass(frozen=True)
 class Window:
     """What of a screen's window sets values: its binding lookups, by (table,
-    lower column), and each grid's columns in the window's order."""
+    lower column)."""
 
     lookups: Mapping[tuple[str, str], WindowLookup]
-    grid_columns: Mapping[str, tuple[str, ...]]
 
     def lookup(self, table: str, column: str) -> WindowLookup | None:
         return self.lookups.get((table, column.lower()))
@@ -504,14 +503,13 @@ def read_window(xml_text: str, form: str) -> Window:
     """Read a screen's window (its form layout): every lookup box that binds
     (`bindingMembers`), on the header (a control naming its `DataMember`) or
     on a grid's column (`BravoGridContainer`/`Items`/`Item_N`, whose
-    `DataMember` is the child table), and each grid's columns in order.
+    `DataMember` is the child table).
     A binding whose column cannot be placed, or two on one column, refuse
     the window whole: which columns bind would not be known."""
     root = _parse(xml_text, f"{form} window")
     if root.find("Tables") is not None:
         raise UnsupportedSyntaxError(f"{form}: a DataSource, not a window")
     lookups: dict[tuple[str, str], WindowLookup] = {}
-    grids: dict[str, tuple[str, ...]] = {}
     placed: set[int] = set()
 
     def add(lookup: WindowLookup) -> None:
@@ -529,7 +527,6 @@ def read_window(xml_text: str, form: str) -> Window:
             cols = item.find("Cols")
             if alias is None or cols is None:
                 raise UnsupportedSyntaxError(f"{form}: grid {item.tag} names no table or columns")
-            grids[alias] = tuple(c.tag for c in _elements(cols))
             for col in _elements(cols):
                 editor = col.find("Editor")
                 if editor is None:
@@ -552,7 +549,7 @@ def read_window(xml_text: str, form: str) -> Window:
         if column is None:
             raise UnsupportedSyntaxError(f"{form}: {element.tag} binds but names no column")
         add(_lookup(element, element.tag, PARENT, column, _text(element.find("Expr"))))
-    return Window(MappingProxyType(lookups), MappingProxyType(grids))
+    return Window(MappingProxyType(lookups))
 
 
 def merge_windows(base: Window, variants: Sequence[Window], why: str) -> Window:
@@ -569,7 +566,7 @@ def merge_windows(base: Window, variants: Sequence[Window], why: str) -> Window:
             kept = mine or theirs
             assert kept is not None
             lookups[key] = replace(lookups.get(key, kept), unread=(*kept.unread, why))
-    return Window(MappingProxyType(lookups), base.grid_columns)
+    return Window(MappingProxyType(lookups))
 
 
 def with_window(layout: Layout, window: Window) -> Layout:

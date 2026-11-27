@@ -38,7 +38,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from decimal import Decimal
 from typing import Final
 
 from dw_bravo.runner import WriteCommand
@@ -69,10 +68,6 @@ class ScreenTables:
     # NULL: its key column '' in every traced INSERT, filled by Bravo's
     # trigger (`DML_B30BizDocDetailSO_InsertUpdate_RowId`).
     new_line: Mapping[str, object] = field(default_factory=dict)
-    # What the client's new header holds beyond NULL and the layout's
-    # DefaultValues: in both traced SO creates (11-20 10:26:40, 11-25
-    # 16:53:33) `ParentId` -1 and `IsActive` 1, which no rule of 8212 sets.
-    new_header: Mapping[str, object] = field(default_factory=dict)
     # Each line table's column holding its header's key: a new header's
     # lines carry the key its INSERT reads back (the layout's
     # `ParentKey`/`ChildKey`, `BizDocId`).
@@ -100,7 +95,6 @@ SCREENS: Final[Mapping[str, ScreenTables]] = {
         context_event={"update": "Edit", "insert": "New"},
         doc_code="SO",
         new_line={"RowId": ""},
-        new_header={"ParentId": Decimal(-1), "IsActive": True},
         relation={"B30BizDocDetailSO": "BizDocId"},
     ),
 }

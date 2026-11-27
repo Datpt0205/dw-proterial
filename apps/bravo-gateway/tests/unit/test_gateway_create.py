@@ -9,14 +9,15 @@ writer's contract directly, never past the kind check."""
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from decimal import Decimal
 
 import pytest
 from gateway_fakes import SET_DATE, gateway, token
 
 from dw_bravo.runner import WriteCommand
-from dw_bravo_gateway.adapters.sqlserver import bind, bind_step
-from dw_bravo_gateway.ports import ReadBack, Statement, WriteRejectedError
+from dw_bravo_gateway.adapters.sqlserver import Login, SqlServerBravo, bind, bind_step
+from dw_bravo_gateway.ports import Batch, ReadBack, Statement, WriteRejectedError
 from dw_bravo_gateway.statements import UnmeasuredError, process_step, render_save
 
 pytestmark = pytest.mark.unit
@@ -25,7 +26,9 @@ HEADER_COLUMNS = ["BizDocId", "DocCode", "DocNo", "BranchCode", "ParentId", "IsA
 LINE_COLUMNS = ["BizDocId", "RowId", "BuiltinOrder", "ItemCode", "Quantity9", "CreatedBy"]
 
 
-def _create(*, line_columns: dict[str, object] | None = None) -> list[Statement]:
+def _create(
+    *, line_columns: dict[str, object] | None = None, stored_line: bool = False
+) -> list[Statement]:
     commands = [
         WriteCommand(
             "Parent",
@@ -56,11 +59,13 @@ def _create(*, line_columns: dict[str, object] | None = None) -> list[Statement]
             },
         ),
     ]
+    if stored_line:
+        commands.append(WriteCommand("Detail", 1, "update", {"Quantity9": Decimal(5)}))
     batch = render_save(
         "EDIT_BizDocSO",
         commands,
-        {},
-        {},
+        {("Detail", 1): (11, "0x00000000000007D1")},
+        {"B30BizDocDetailSO": LINE_COLUMNS},
         context="EDIT_BizDocSO|New",
         insertable={"B30BizDoc": HEADER_COLUMNS, "B30BizDocDetailSO": LINE_COLUMNS},
         no_default={"B30BizDoc": frozenset(), "B30BizDocDetailSO": frozenset({"quantity9"})},
@@ -130,3 +135,96 @@ async def test_a_write_bravo_rejected_and_rolled_back_is_refused_not_in_doubt() 
         "rejected_and_rolled_back",
     )
     assert gw.ledger.entries[approval].status == "refused"
+
+
+def test_a_stored_row_in_a_new_documents_save_is_refused() -> None:
+    """A create writes its own rows only: an UPDATE of a stored row beside
+    the new header's INSERT is a save no trace holds."""
+    with pytest.raises(UnmeasuredError, match="stored row written in a new document's save"):
+        _create(stored_line=True)
+
+
+# The header INSERT's read-back as the driver hands it over: each result set
+# the statement produced, None for a row count (its trigger's, without SET
+# NOCOUNT ON), else its rows.
+READ_BACK = ("Id", "BizDocId", "CreatedAt", "ModifiedAt", "timestamp")
+ROW = (9, "100000925895SO", None, None, bytes(8))
+
+
+class _Cursor:
+    def __init__(self, header_sets: Sequence[Sequence[tuple[object, ...]] | None]) -> None:
+        self.header_sets = header_sets
+        self.sets: list[Sequence[tuple[object, ...]] | None] = []
+        self.executed: list[tuple[str, tuple[object, ...]]] = []
+        self.rowcount = 1
+
+    def execute(self, sql: str, values: tuple[object, ...] = ()) -> None:
+        self.executed.append((sql, values))
+        self.sets = list(self.header_sets) if sql.startswith("INSERT INTO B30BizDoc ") else [None]
+
+    @property
+    def description(self) -> list[tuple[str]] | None:
+        rows = self.sets[0] if self.sets else None
+        return None if rows is None else [(n,) for n in READ_BACK]
+
+    def nextset(self) -> bool:
+        if self.sets:
+            self.sets.pop(0)
+        return bool(self.sets)
+
+    def fetchall(self) -> Sequence[tuple[object, ...]]:
+        rows = self.sets[0]
+        assert rows is not None
+        return rows
+
+
+class _Connection:
+    def __init__(self, cursor: _Cursor) -> None:
+        self.the_cursor = cursor
+        self.events: list[str] = []
+
+    def cursor(self) -> _Cursor:
+        return self.the_cursor
+
+    def commit(self) -> None:
+        self.events.append("commit")
+
+    def rollback(self) -> None:
+        self.events.append("rollback")
+
+    def close(self) -> None:
+        self.events.append("close")
+
+
+def _writer(header_sets: Sequence[Sequence[tuple[object, ...]] | None]) -> _Connection:
+    return _Connection(_Cursor(header_sets))
+
+
+async def _execute(connection: _Connection) -> None:
+    login = Login("db", 1433, "bravo", "dw", "secret")
+    bravo = SqlServerBravo(login, login, connect=lambda _cs, _auto: connection)
+    await bravo.execute(Batch(context="EDIT_BizDocSO|New", statements=_create()))
+
+
+async def test_the_writer_keys_a_new_line_by_the_one_row_its_header_reads_back() -> None:
+    connection = _writer([None, [ROW]])  # the trigger's count, then the SELECT
+    await _execute(connection)
+    inserts = [v for sql, v in connection.the_cursor.executed if sql.startswith("INSERT")]
+    assert inserts[1][0] == "100000925895SO"
+    assert connection.events[0] == "commit"
+
+
+@pytest.mark.parametrize(
+    "header_sets",
+    [[None], [None, []], [[ROW, (10, "100000925896SO", None, None, bytes(8))]]],
+    ids=["no_select", "no_row", "two_rows"],
+)
+async def test_a_header_insert_that_reads_back_no_one_row_is_rejected_and_rolled_back(
+    header_sets: Sequence[Sequence[tuple[object, ...]] | None],
+) -> None:
+    connection = _writer(header_sets)
+    with pytest.raises(WriteRejectedError, match="B30BizDoc: no row read back"):
+        await _execute(connection)
+    executed = [sql for sql, _ in connection.the_cursor.executed]
+    assert not any(sql.startswith("INSERT INTO B30BizDocDetailSO") for sql in executed)
+    assert connection.events[0] == "rollback"

@@ -84,9 +84,11 @@ Built, each in its own commit:
   keeps that INSERT's `SCOPE_IDENTITY()` SELECT in the same batch, steps
   past trigger counts (`nextset`) and resolves each ReadBack; no row or an
   empty key is `WriteRejectedError`, settled as refused, not in doubt. The
-  SO screen carries the two creates' header seeds (`ParentId` -1,
-  `IsActive` 1; no rule of 8212 sets them, and PR's create has `IsActive`
-  NULL, so they are per screen) and the line table's relation column.
+  SO screen carries the line table's relation column. The two creates'
+  header seeds (`ParentId` -1, `IsActive` 1; no rule of 8212 sets them, and
+  PR's create has `IsActive` NULL, so they are per screen) were declared
+  here too, read by nothing; dropped in review (below), they go in with the
+  create's pipeline path.
   `so.create@1`'s pending reason is rewritten; the schema is unchanged
   (regenerated: line endings only).
 
@@ -115,7 +117,8 @@ create `New`); a second "pending refuses" test (`test_gateway_checks` has
 it).
 
 Left, and why:
-- The create's pipeline path: typed edits in a fixed header order
+- The create's pipeline path, and the header seeds with it (`ParentId` -1,
+  `IsActive` 1 on the SO screen's new header, measured above): typed edits in a fixed header order
   (`CustomerCode` first, so its binding does not overwrite the approved
   currency or delivery terms), lines `ItemCode` before quantity; a check
   that each typed value survives to the INSERT; the duplicate guard by
@@ -157,3 +160,56 @@ Owed by Đạt / Proterial:
   column the listing rule does not explain in the traced creates.
 - Proterial IT: `DocNo` has no unique index. Does Bravo guard two creates
   numbered in the same instant (a person and DW)?
+
+**2026-11-27, review findings checked and fixed (unattended).** Eight
+findings from the ticket's code review; each verified against the code
+before it was taken.
+
+Fixed, each with a test that goes red without the fix (mutated, red,
+restored):
+- The fingerprint lost whole when the read login cannot SELECT
+  `B00LayoutDataEdit` (Proterial's cannot, until script 08 is rerun):
+  `_layout_components` re-read the copies outside any handler, so the raw
+  driver error left `fingerprint()` and `/v1/fingerprint` answered 500.
+  Now the copies not read are a marker in the layout's digest and the
+  window is named in `unknown` (`_window` already reads it as not
+  readable), so the watch keeps every other component and pauses the
+  screen's writes on the change. `test_a_window_the_read_login_cannot_read_
+  leaves_every_plan_provisional` now takes the fingerprint under the DENY
+  too (SQL Server 2017: the driver raises `ProgrammingError`). Mutations:
+  the handler removed (red: `ProgrammingError`), the marker removed (red:
+  the digest did not change, so the watch would never have seen it).
+- Declared and read by nothing (failure-modes #1): `ScreenTables.new_header`
+  dropped (the seeds are recorded above, for the create's path), and
+  `Window.grid_columns` dropped (`merge_windows` also kept only the base's,
+  ignoring a user's copy); the test that read it now checks the lookups only.
+- The gateway's trace replay ran without the window the live adapter
+  always attaches: `_so_layout()` now hands every replay 8212 with 8213
+  merged with Proterial's `B00LayoutDataEdit` copy, as
+  `SqlServerBravo.layout` does. Date, quantity and cancel still replay to
+  the client's statements. Both traced splits are still held back, now for
+  the reason live gives first: the item lookup that `Eval_Detail_Divi_
+  GetData`'s `ItemCode` copy binds is bound otherwise by the user's copy;
+  the item row not in the trace and the `GroupDivi` comparison wait behind
+  it. Mutation: the window not attached (red: the reason is `GroupDivi`'s).
+- Untested refusals, each now tested: the writer's read-back with no SELECT,
+  no row or two rows (a fake cursor: rejected, rolled back, the line never
+  sent; and the one-row path after a trigger's count keys the line); a
+  stored row's UPDATE in a new document's save; an emptied window lookup; a
+  lookup row not found; a conditional member whose condition the members
+  before it change; two lookups binding each other round and round (the
+  window lookup's depth guard; without it, Python's `RecursionError`); a
+  binding box that is not a `BravoLookupBox` with a `LookupKey` and a member
+  binding to no column (both refuse when they bind, never reading a lookup
+  with no key); the short form `<bindingMembers>A,B</bindingMembers>` (no
+  local layout uses it; it is the `Parameters` short form's shape); two
+  lookups on one column and a grid item naming no table or columns (the
+  window refused whole). 13 mutations, each red.
+
+Rejected: none. Finding 4 repeats finding 2 (`new_header`); taken once.
+
+Measured: dw_bravo and gateway unit suites with the local trace and layouts,
+349 passed, 2 failed (the two known 11-20-count failures,
+`test_bravo_so_layout`, `test_bravo_rq_layout`). On a throwaway SQL Server
+2017, `test_gateway_sqlserver.py` 25 of 26 (the known `IsCancel` fixture
+gap). ruff and mypy clean on the changed files.

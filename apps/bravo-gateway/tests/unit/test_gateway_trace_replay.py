@@ -38,7 +38,7 @@ from dw_bravo.contract import (
     SplitPart,
 )
 from dw_bravo.expression import UNKNOWN
-from dw_bravo.layout import Layout, read_layout
+from dw_bravo.layout import Layout, merge_windows, read_layout, read_window, with_window
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.testing import sql_trace
 from dw_bravo.testing.replay import SaveState, ScreenReplay, group_saves, so_screen_replay
@@ -49,12 +49,17 @@ from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 LAYOUTS = os.environ.get("DW_BRAVO_LAYOUTS")
 TRACE = os.environ.get("DW_BRAVO_TRACE")
 SO_LAYOUT = "layout_8212_EDIT_BizDocSO__Xml"
+# The screen's window and Proterial's one `B00LayoutDataEdit` copy of it:
+# the live adapter attaches both to every layout it reads (ticket 72), so
+# the replay runs what production runs.
+SO_WINDOW = "layout_8213_EDIT_BizDocSO__Xml"
+SO_WINDOW_COPY = "layout_edit_8213___Xml"
 
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.skipif(
         not LAYOUTS
-        or not (Path(LAYOUTS) / SO_LAYOUT).is_file()
+        or not all((Path(LAYOUTS) / f).is_file() for f in (SO_LAYOUT, SO_WINDOW, SO_WINDOW_COPY))
         or not TRACE
         or not Path(TRACE).is_file(),
         reason="Proterial's layouts and UAT trace are not on this machine",
@@ -71,6 +76,23 @@ def _column_order(write: sql_trace.Write) -> list[str]:
     sql = write.statement.sql
     declared = sql[sql.find(",N'@_") + 3 : sql.find("',@_", sql.find(",N'@_") + 3)]
     return [n for n in _DECLARED.findall(declared + " ") if not n.startswith("Original_")]
+
+
+def _so_layout() -> Layout:
+    """The SO screen's layout as `SqlServerBravo.layout` hands it over: the
+    DataSource with its window, merged with the user's copy."""
+    folder = Path(LAYOUTS or "")
+
+    def text(name: str) -> str:
+        return (folder / name).read_text(encoding="utf-8")
+
+    window = merge_windows(
+        read_window(text(SO_WINDOW), "EDIT_BizDocSO"),
+        [read_window(text(SO_WINDOW_COPY), "EDIT_BizDocSO")],
+        "a user's or role's own window binds it differently (B00LayoutDataEdit)",
+    )
+    layout = read_layout(text(SO_LAYOUT), "EDIT_BizDocSO", missing_template="BizDocEditor")
+    return with_window(layout, window)
 
 
 def _rowversion(value: object) -> str:
@@ -201,11 +223,7 @@ async def test_every_traced_so_update_a_command_covers_is_the_clients_own_statem
     traced_context = _CONTEXT.search(saves[0].writes[0].statement.sql)
     assert traced_context is not None
     _, user_id, _, branch, _ = traced_context.group(1).split("@")
-    layout = read_layout(
-        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
-        "EDIT_BizDocSO",
-        missing_template="BizDocEditor",
-    )
+    layout = _so_layout()
     replay = so_screen_replay(layout, int(user_id), branch)
     user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
 
@@ -339,11 +357,7 @@ async def test_a_traced_cancel_is_the_clients_own_statement() -> None:
     context = _CONTEXT.search(cancels[0].writes[0].statement.sql)
     assert context is not None
     _, user_id, _, branch, _ = context.group(1).split("@")
-    layout = read_layout(
-        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
-        "EDIT_BizDocSO",
-        missing_template="BizDocEditor",
-    )
+    layout = _so_layout()
     replay = so_screen_replay(layout, int(user_id), branch)
     user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
     state = next(st for st in replay.states(saves, calls) if st.save is cancels[0])
@@ -468,16 +482,16 @@ async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: 
     line, which is dropped here after the trace says it is the one DELETE.
 
     Neither replays to the client's statement yet, and this test says why
-    rather than comparing: copying the head onto the new line changes its
-    `CustomerDescription`, whose rule `Eval_Detail_B20ItemCustomerDescription
+    rather than comparing. With the window attached as the live adapter
+    attaches it, copying the head's `ItemCode` onto the new line binds the
+    item lookup, which Proterial's own copy of 8213 (`B00LayoutDataEdit`)
+    binds otherwise: which copy a user opens is not measured, so the runner
+    refuses. Two reasons wait behind it: the item's row is in no trace (a
+    lookup's result is not), and `Eval_Detail_B20ItemCustomerDescription
     _Convert_ItemCode` holds only when `ISNULL(GroupDivi,0) = 0`, a text
-    label compared with a number. How Bravo's client compares '1' or 'A' with
-    0 is not measured, so the runner refuses, and the gateway holds the split
-    back. A second reason waits behind it: on 17:28:58 the client's new line
-    carries `QuantityBox` 0, which layout 8212 never writes (its one rule
-    writes 1, for a '-' carton): the grid layout 8213's item binding (ticket
-    72). When either is measured this test fails, and becomes the
-    column-for-column replay."""
+    label compared with a number, which is not measured either. When all
+    three are measured this test fails, and becomes the column-for-column
+    replay."""
     statements = sql_trace.read(Path(TRACE or ""))
     saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
     save = next((s for s in saves if s.at == datetime.fromisoformat(at)), None)
@@ -490,11 +504,7 @@ async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: 
     assert context is not None
     head_text, user_id, _, branch, _ = context.group(1).split("@")
     event = head_text.strip().split("|")[1]
-    layout = read_layout(
-        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
-        "EDIT_BizDocSO",
-        missing_template="BizDocEditor",
-    )
+    layout = _so_layout()
     replay = so_screen_replay(layout, int(user_id), branch)
     user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
     state = next(st for st in replay.states(saves, calls, with_inserts=True) if st.save is save)
@@ -573,8 +583,10 @@ async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: 
 
     assert preview.check == "rules" and preview.batch is None, preview
     assert preview.reason is not None
-    assert preview.reason.startswith("rules_could_not_decide: Eval_Detail_Divi_GetData: ")
-    assert "ISNULL(GroupDivi,0) = 0" in preview.reason and "is not a number" in preview.reason
+    assert preview.reason == (
+        "rules_could_not_decide: Eval_Detail_Divi_GetData: Detail.ItemCode:"
+        " a user's or role's own window binds it differently (B00LayoutDataEdit)"
+    )
     assert bravo.batches == []
     # The client's new line carries `QuantityBox`. Layout 8212's only rule
     # setting it writes 1, when `CartonSize` (copied from the head) is '-':
