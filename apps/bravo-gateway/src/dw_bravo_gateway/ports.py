@@ -37,6 +37,11 @@ class DocumentNotFoundError(Exception):
     pass
 
 
+class WriteRejectedError(Exception):
+    """Bravo answered, the batch was rolled back, and nothing of it is
+    written: the write is refused, not in doubt."""
+
+
 class AmbiguousDocumentError(Exception):
     """More than one document answers to a number: none is chosen."""
 
@@ -148,6 +153,20 @@ class Engine(Protocol):
 
 
 @dataclass(frozen=True)
+class ReadBack:
+    """A value an earlier INSERT of the same batch reads back: its row's
+    ``column`` as Bravo holds it once written. A new SO's `BizDocId` is
+    written '' and filled by Bravo's trigger; the client's line INSERTs and
+    its process step carry the filled one, read back by the header INSERT's
+    own `SELECT ... WHERE Id=SCOPE_IDENTITY()` (UAT trace 11-25 16:53:33:
+    `@_BizDocId=N''` on the header, `'100000925895SO'` on the line and the
+    process step). The writer resolves it inside the transaction."""
+
+    table: str
+    column: str
+
+
+@dataclass(frozen=True)
 class Statement:
     """One statement the client would send, and its parameter values."""
 
@@ -178,7 +197,11 @@ class Batch:
 
 class Writer(Protocol):
     async def execute(self, batch: Batch) -> None:
-        """All or nothing; `StaleRowError` when any statement touched no row."""
+        """All or nothing; `StaleRowError` when any statement touched no row,
+        `WriteRejectedError` when Bravo answered and nothing was written (an
+        INSERT whose read-back a later value needs found no row). Each
+        `ReadBack` value is resolved from the read-back of the batch's
+        earlier INSERT into its table."""
         ...
 
 

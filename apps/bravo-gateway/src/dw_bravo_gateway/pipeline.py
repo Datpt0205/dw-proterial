@@ -61,6 +61,7 @@ from dw_bravo_gateway.ports import (
     StoredDocument,
     Switches,
     Writer,
+    WriteRejectedError,
 )
 from dw_bravo_gateway.statements import (
     SCREENS,
@@ -340,6 +341,10 @@ class WritePipeline:
         except StaleRowError:
             await self.ledger.settle(claims, "refused", {"reason": "stale_row"})
             raise _RefusedError("write", "row_changed_before_write", warnings) from None
+        except WriteRejectedError as rejected:
+            # Bravo answered and the batch was rolled back: nothing is written.
+            await self.ledger.settle(claims, "refused", {"reason": str(rejected)[:200]})
+            raise _RefusedError("write", "rejected_and_rolled_back", warnings) from None
         except Exception as failed:
             # Sent, and no answer: whether Bravo holds it is unknown. The
             # approval id stays spent until a person reads Bravo.

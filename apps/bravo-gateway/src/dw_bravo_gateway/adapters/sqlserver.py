@@ -68,9 +68,11 @@ from dw_bravo_gateway.ports import (
     CommandRight,
     DocumentNotFoundError,
     ProcedureStep,
+    ReadBack,
     StaleRowError,
     Statement,
     StoredDocument,
+    WriteRejectedError,
 )
 from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
@@ -616,13 +618,21 @@ class SqlServerBravo:
                         " SET CONTEXT_INFO @context_info;",
                         (batch.context.encode("ascii"),),
                     )
+                    needed = _read_back_tables(batch)
+                    read: dict[str, Mapping[str, object]] = {}
                     for statement in batch.statements:
-                        sql, values = bind(statement)
+                        keep = statement.row_id is None and statement.table.lower() in needed
+                        sql, values = bind(statement, read, keep_read_back=keep)
                         cursor.execute(sql, values)
-                        if cursor.rowcount != 1:
+                        if keep:
+                            row = _read_back_row(cursor)
+                            if row is None:
+                                raise WriteRejectedError(f"{statement.table}: no row read back")
+                            read[statement.table.lower()] = row
+                        elif cursor.rowcount != 1:
                             raise StaleRowError(statement.table)
                     for step in batch.steps:
-                        cursor.execute(*bind_step(step))
+                        cursor.execute(*bind_step(step, read))
                     connection.commit()
                 except BaseException:
                     connection.rollback()
@@ -637,21 +647,63 @@ class SqlServerBravo:
 _NAMED = re.compile(r"@(_\w+)")
 
 
-def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
+def bind(
+    statement: Statement,
+    read: Mapping[str, Mapping[str, object]] | None = None,
+    *,
+    keep_read_back: bool = False,
+) -> tuple[str, tuple[object, ...]]:
     """The client's UPDATE or INSERT with its named parameters bound by
-    position.
+    position, each `ReadBack` resolved from ``read`` (the rows the batch's
+    earlier INSERTs read back, by lower-case table).
 
-    The read-back SELECT is left out: the pipeline reads the document back
-    whole (`WritePipeline._reconcile`), and the statement's own row count is
-    what says whether the rowversion still held (an INSERT's is 1: measured
-    with a trigger in Bravo's `SET NOCOUNT ON` shape, ticket 73).
+    The read-back SELECT is left out unless ``keep_read_back``: the pipeline
+    reads the document back whole (`WritePipeline._reconcile`), and the
+    statement's own row count is what says whether the rowversion still held
+    (an INSERT's is 1: measured with a trigger in Bravo's `SET NOCOUNT ON`
+    shape, ticket 73). An INSERT whose read-back a later value needs keeps
+    it, in the same batch: `SCOPE_IDENTITY()` answers only in the INSERT's
+    own scope.
     """
-    update = statement.sql.split(";SELECT TOP (1)")[0] + ";"
+    text = statement.sql if keep_read_back else statement.sql.split(";SELECT TOP (1)")[0] + ";"
     values: list[object] = []
-    for name in _NAMED.findall(update):
-        value = statement.parameters[name]
+    for name in _NAMED.findall(text):
+        value = _resolved(statement.parameters[name], read or {})
         values.append(_binary(str(value)) if name == "_Original_timestamp" else value)
-    return _NAMED.sub("?", update), tuple(values)
+    return _NAMED.sub("?", text), tuple(values)
+
+
+def _resolved(value: object, read: Mapping[str, Mapping[str, object]]) -> object:
+    if not isinstance(value, ReadBack):
+        return value
+    row = read.get(value.table.lower())
+    lowered = {k.lower(): v for k, v in (row or {}).items()}
+    if row is None or value.column.lower() not in lowered:
+        raise WriteRejectedError(f"{value.table}.{value.column} was not read back")
+    found = lowered[value.column.lower()]
+    if found is None or found == "":
+        # Bravo's trigger did not fill it: a line keyed '' belongs to no SO.
+        raise WriteRejectedError(f"{value.table}.{value.column} read back empty")
+    return found
+
+
+def _read_back_tables(batch: Batch) -> set[str]:
+    values = [v for s in batch.statements for v in s.parameters.values()]
+    values += [v for step in batch.steps for v in step.parameters.values()]
+    return {v.table.lower() for v in values if isinstance(v, ReadBack)}
+
+
+def _read_back_row(cursor: Any) -> dict[str, object] | None:
+    """The one row of a statement's read-back SELECT, past whatever counts
+    the statement and its triggers report first; none, or several, is None."""
+    while cursor.description is None:
+        if not cursor.nextset():
+            return None
+    names = [d[0] for d in cursor.description]
+    rows = cursor.fetchall()
+    if len(rows) != 1:
+        return None
+    return dict(zip(names, rows[0], strict=True))
 
 
 @dataclass(frozen=True)
@@ -705,16 +757,19 @@ def decide_command_right(
     return "allowed"
 
 
-def bind_step(step: ProcedureStep) -> tuple[str, tuple[object, ...]]:
+def bind_step(
+    step: ProcedureStep, read: Mapping[str, Mapping[str, object]] | None = None
+) -> tuple[str, tuple[object, ...]]:
     """`EXEC dbo.<procedure> @_P=?, ...` for one of the procedures a save runs
-    (`statements.PROCESS_PROCEDURE` only), its arguments bound by position."""
+    (`statements.PROCESS_PROCEDURE` only), its arguments bound by position,
+    a `ReadBack` resolved as `bind` does."""
     if step.name != PROCESS_PROCEDURE:
         raise ValueError(f"{step.name!r} is not a procedure a save runs")
     names = list(step.parameters)
     if not all(n.startswith("_") and n[1:].isalnum() for n in names):
         raise ValueError("a procedure's parameters are Bravo's own names")
     sql = f"EXEC dbo.{step.name} " + ",".join(f"@{n}=?" for n in names) + ";"
-    return sql, tuple(step.parameters[n] for n in names)
+    return sql, tuple(_resolved(step.parameters[n], read or {}) for n in names)
 
 
 # The routines every write depends on, by what they are to the watch: the

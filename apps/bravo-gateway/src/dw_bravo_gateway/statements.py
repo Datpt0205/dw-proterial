@@ -38,10 +38,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Final
 
 from dw_bravo.runner import WriteCommand
-from dw_bravo_gateway.ports import Batch, ProcedureStep, Statement
+from dw_bravo_gateway.ports import Batch, ProcedureStep, ReadBack, Statement
 
 _CONTEXT_WIDTH: Final = 50
 _CONTEXT_LIMIT: Final = 128  # varbinary(128)
@@ -68,6 +69,14 @@ class ScreenTables:
     # NULL: its key column '' in every traced INSERT, filled by Bravo's
     # trigger (`DML_B30BizDocDetailSO_InsertUpdate_RowId`).
     new_line: Mapping[str, object] = field(default_factory=dict)
+    # What the client's new header holds beyond NULL and the layout's
+    # DefaultValues: in both traced SO creates (11-20 10:26:40, 11-25
+    # 16:53:33) `ParentId` -1 and `IsActive` 1, which no rule of 8212 sets.
+    new_header: Mapping[str, object] = field(default_factory=dict)
+    # Each line table's column holding its header's key: a new header's
+    # lines carry the key its INSERT reads back (the layout's
+    # `ParentKey`/`ChildKey`, `BizDocId`).
+    relation: Mapping[str, str] = field(default_factory=dict)
 
     def table_for(self, layout_key: str) -> str:
         if layout_key == "Parent":
@@ -91,6 +100,8 @@ SCREENS: Final[Mapping[str, ScreenTables]] = {
         context_event={"update": "Edit", "insert": "New"},
         doc_code="SO",
         new_line={"RowId": ""},
+        new_header={"ParentId": Decimal(-1), "IsActive": True},
+        relation={"B30BizDocDetailSO": "BizDocId"},
     ),
 }
 
@@ -113,7 +124,8 @@ def process_step(screen: str, header: Mapping[str, object]) -> ProcedureStep:
     return ProcedureStep(
         name=PROCESS_PROCEDURE,
         parameters={
-            "_BizDocId": str(biz_doc_id),
+            # A new document's is the one its INSERT reads back.
+            "_BizDocId": biz_doc_id if isinstance(biz_doc_id, ReadBack) else str(biz_doc_id),
             "_BizProcessGroupUnique": None,
             "_BranchCode": str(branch),
             "_DocCode": SCREENS[screen].doc_code,
@@ -227,29 +239,42 @@ def render_save(
     """A plan's commands as one batch, in the client's order: the header,
     the new rows, the stored rows. `rows` gives each stored (layout table,
     row index) its `Id` and the rowversion the write must hold; a new row
-    has neither, and its columns are checked against `insertable`."""
+    has neither, and its columns are checked against `insertable`. A new
+    header (a create) is INSERTed first, and its lines carry the key it
+    reads back (`ReadBack`), never the '' the client's row held."""
     tables = SCREENS[screen]
     rank = {"header": 0, "insert": 1, "update": 2}
     ordered = sorted(
         commands,
         key=lambda c: rank["header" if c.table == "Parent" else c.kind],
     )
+    new_header = any(c.table == "Parent" and c.kind == "insert" for c in commands)
+    header_key = ReadBack(tables.header, tables.read_back_key[tables.header])
     statements: list[Statement] = []
     for command in ordered:
         table = tables.table_for(command.table)
         if command.kind == "insert":
-            if command.table == "Parent":
-                raise UnmeasuredError("a new document's statements (ticket 72)")
+            columns = dict(command.columns)
+            if new_header and command.table != "Parent":
+                relation = tables.relation.get(table)
+                if relation is None or relation.lower() not in {c.lower() for c in columns}:
+                    raise UnmeasuredError(f"which column of {table} holds its new header's key")
+                columns = {
+                    c: header_key if c.lower() == relation.lower() else v
+                    for c, v in columns.items()
+                }
             statements.append(
                 render_insert(
                     table,
-                    command.columns,
+                    columns,
                     (insertable or {}).get(table, ()),
                     (no_default or {}).get(table, frozenset()),
                     read_back_key=tables.read_back_key[table],
                 )
             )
             continue
+        if new_header:
+            raise UnmeasuredError("a stored row written in a new document's save")
         row_id, rowversion = rows[(command.table, command.row)]
         statements.append(
             render_update(

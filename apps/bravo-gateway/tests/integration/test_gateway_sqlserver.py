@@ -43,8 +43,9 @@ from dw_bravo_gateway.ports import (
     Batch,
     CommandRight,
     DocumentNotFoundError,
+    ReadBack,
 )
-from dw_bravo_gateway.statements import context_line, render_insert
+from dw_bravo_gateway.statements import context_line, process_step, render_insert, render_save
 
 SERVER = os.environ.get("DW_BRAVO_TEST_MSSQL")
 
@@ -844,3 +845,96 @@ async def test_a_new_line_is_inserted_with_the_views_columns_and_bravos_trigger_
     with pytest.raises(Exception, match="permission was denied"):
         cursor.execute("INSERT INTO dbo.B30BizDoc (BizDocId) VALUES ('X1')")
     connection.close()
+
+
+def _new_so(item_code: str) -> Batch:
+    """A create's batch (ticket 72), rendered as the gateway renders one: the
+    header's INSERT read back, a line and the process step keyed by it."""
+    from dw_bravo.runner import WriteCommand
+
+    commands = [
+        WriteCommand(
+            "Parent",
+            0,
+            "insert",
+            {"BizDocId": "", "DocNo": "SO-NEW", "BranchCode": "A01", "IsActive": True},
+        ),
+        WriteCommand(
+            "Detail",
+            0,
+            "insert",
+            {"BizDocId": "", "RowId": "", "BuiltinOrder": 1, "ItemCode": item_code, "Quantity9": 7},
+        ),
+    ]
+    batch = render_save(
+        "EDIT_BizDocSO",
+        commands,
+        {},
+        {},
+        context=context_line("EDIT_BizDocSO", "New", 2413, "A01", NOW.year),
+        insertable={
+            "B30BizDoc": ["BizDocId", "DocNo", "BranchCode", "IsActive"],
+            "B30BizDocDetailSO": ["BizDocId", "RowId", "BuiltinOrder", "ItemCode", "Quantity9"],
+        },
+        no_default={"B30BizDoc": frozenset(), "B30BizDocDetailSO": frozenset()},
+    )
+    header = {"BizDocId": ReadBack("B30BizDoc", "BizDocId"), "BranchCode": "A01"}
+    return replace(batch, steps=(process_step("EDIT_BizDocSO", header),))
+
+
+async def test_a_new_so_is_read_back_by_scope_identity_and_its_line_and_step_carry_its_key(
+    logins: tuple[Login, Login],
+) -> None:
+    """Ticket 72 on SQL Server 2017: the header's INSERT and its read-back
+    SELECT in one batch, under a trigger that fills `BizDocId` and writes a
+    change log row of its own (an identity: SCOPE_IDENTITY must still name
+    the header) without SET NOCOUNT ON (extra counts before the SELECT's
+    rows); the line INSERT and the process step carry the filled key. A line
+    that fails takes the header back with it."""
+    _run(
+        DB,
+        "ALTER TABLE dbo.B30BizDoc ADD CreatedAt datetime NOT NULL DEFAULT GETDATE()",
+        "CREATE TRIGGER dbo.DML_B30BizDoc_InsertUpdate_BizDocId ON dbo.B30BizDoc AFTER INSERT AS"
+        " BEGIN UPDATE d SET BizDocId = 'H' + CAST(d.Id AS varchar(12)) FROM dbo.B30BizDoc d"
+        " JOIN inserted i ON i.Id = d.Id WHERE ISNULL(i.BizDocId, '') = '';"
+        " INSERT INTO dbo.ChangeLog (RowId, UserId) SELECT Id,"
+        " dbo.ufn_sys_GetUserIdFromContext_Info(CONTEXT_INFO()) FROM inserted END",
+        "GRANT INSERT ON dbo.B30BizDoc TO dw_test_write",
+        "GRANT INSERT ON dbo.B30BizDocDetailSO TO dw_test_write",
+        "GRANT SELECT ON dbo.B30BizDoc (Id, BizDocId, CreatedAt, ModifiedAt, timestamp) TO dw_test_write",
+    )
+    bravo = SqlServerBravo(*logins)
+    try:
+        await bravo.execute(_new_so("PRV-NEW"))
+        connection = _sa(DB)
+        cursor = connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("SELECT Id, BizDocId FROM dbo.B30BizDoc WHERE DocNo = 'SO-NEW'")
+        [(header_id, biz_doc_id)] = cursor.fetchall()
+        cursor.execute("SELECT BizDocId FROM dbo.B30BizDocDetailSO WHERE ItemCode = 'PRV-NEW'")
+        lines = [r[0] for r in cursor.fetchall()]
+        cursor.execute("SELECT TOP (1) BizDocId, UserId FROM dbo.ProcessLog ORDER BY Id DESC")
+        step = tuple(cursor.fetchone())
+        connection.close()  # type: ignore[attr-defined]
+        assert biz_doc_id == f"H{header_id}"
+        assert lines == [biz_doc_id] and step == (biz_doc_id, 2413)
+
+        with pytest.raises(Exception, match="truncated"):
+            await bravo.execute(_new_so("X" * 40))  # longer than ItemCode holds
+        connection = _sa(DB)
+        cursor = connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("SELECT COUNT(*) FROM dbo.B30BizDoc WHERE DocNo = 'SO-NEW'")
+        assert cursor.fetchone()[0] == 1  # the second header went back with its line
+        connection.close()  # type: ignore[attr-defined]
+    finally:
+        _run(
+            DB,
+            "DELETE FROM dbo.B30BizDocDetailSO WHERE ItemCode = 'PRV-NEW'",
+            "DELETE FROM dbo.B30BizDoc WHERE DocNo = 'SO-NEW'",
+            "DROP TRIGGER dbo.DML_B30BizDoc_InsertUpdate_BizDocId",
+            "REVOKE INSERT ON dbo.B30BizDoc TO dw_test_write",
+            "REVOKE SELECT ON dbo.B30BizDoc (BizDocId, CreatedAt, ModifiedAt) TO dw_test_write",
+            "DECLARE @c sysname = (SELECT d.name FROM sys.default_constraints d JOIN sys.columns c"
+            " ON c.default_object_id = d.object_id WHERE c.object_id = OBJECT_ID('dbo.B30BizDoc')"
+            " AND c.name = 'CreatedAt'); EXEC('ALTER TABLE dbo.B30BizDoc DROP CONSTRAINT ' + @c)",
+            "ALTER TABLE dbo.B30BizDoc DROP COLUMN CreatedAt",
+        )

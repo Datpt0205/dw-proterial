@@ -306,7 +306,15 @@ WRITE_KINDS: Final[dict[str, WriteKind]] = {
             "EDIT_BizDocSO",
             _SO_TABLES,
             "insert",
-            pending="a new SO's columns wait on the shared template (script 03c)",
+            # Ticket 72: the window's bindings, the new header and the
+            # create's statements are built; what a person types for a
+            # create, the screen's procedures and lookups read live (ticket
+            # 50) and a DW create traced in UAT beside a PIC's (ticket 52)
+            # are not.
+            pending=(
+                "a create waits on its typed order, Bravo's procedures and lookups read "
+                "live (ticket 50) and a UAT create (ticket 52)"
+            ),
         ),
     )
 }
