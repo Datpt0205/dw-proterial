@@ -163,3 +163,16 @@ flag, and answers a write and an assignment as it answers a reader), web
 `case-replies` +1. Mutations, each red then restored: `acts` forced true;
 the flag filter dropped (both cases red); the write guard dropped; the
 assignment guard dropped; the page's `export_hold_only` check dropped.
+
+### 2026-11-27 — full review (functions): the approvals card on "Việc cần làm"
+
+The card counted every pending approval the viewer may decide, DW2's
+included (Giang: "4 yêu cầu" of which 3 were `purchasing.request`), plus
+the cross-check and quotation approvals the list below already carries on
+their case, and always said "Phiên bản quy tắc, mẫu PO hoặc dữ liệu chủ".
+It now counts Sales' own approvals only (the Sales approval hosts' prefixes)
+less those the list carries as a case's step (`APPROVAL_ON_THE_CASE`:
+`sales.quote`, `sales.order.cross_check`; a Manager's `sales.quote.manager`
+is not in my-work and stays), and names the kinds present from
+`APPROVAL_KIND` in `labels.ts`. Test in `my-work-owner.test.tsx`, red under
+each of three mutations (no host filter, no case filter, the fixed text).

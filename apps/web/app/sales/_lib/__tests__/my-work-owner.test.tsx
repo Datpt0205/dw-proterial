@@ -156,6 +156,31 @@ describe("a routed mail on Việc cần làm (2026-10-27)", () => {
     expect(line.closest("a")?.getAttribute("href")).toBe("/approvals");
   }, 20_000);
 
+  it("counts and names only Sales' approvals the list does not already carry", async () => {
+    // Giang's page during the full review (2026-11-27): DW2's requests, and
+    // a cross-check my-work lists on its order, were counted here as rules.
+    scopes = ["sales.case.read", "approvals.read", "approvals.decide"];
+    const of = (id: string, type: string) => ({
+      ...approval(id, true),
+      approval_type: type,
+    });
+    listApprovals.mockResolvedValueOnce({
+      items: [
+        of("p-1", "purchasing.request"),
+        of("p-2", "purchasing.request"),
+        of("c-1", "sales.order.cross_check"),
+        of("q-1", "sales.quote"),
+        of("r-1", "sales.rules"),
+        of("l-1", "sales.layout"),
+        of("r-2", "sales.rules"),
+      ],
+      next_cursor: null,
+    });
+    page();
+    expect(await screen.findByText("3 yêu cầu chờ bạn duyệt")).toBeTruthy();
+    expect(screen.getByText("Phiên bản quy tắc · Mẫu PO")).toBeTruthy();
+  }, 20_000);
+
   it("asks for no approvals of someone who may not decide them", async () => {
     page();
     await screen.findByText(/Không có việc nào đang chờ bạn/);

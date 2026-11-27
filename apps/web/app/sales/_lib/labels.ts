@@ -508,6 +508,30 @@ export const ACTION = {
 } as const;
 
 /**
+ * A Sales approval decided away from the case lists, as the approvals card
+ * on "Việc cần làm" names it. A type not listed is "yêu cầu khác".
+ */
+export const APPROVAL_KIND = {
+  "sales.rules": "Phiên bản quy tắc",
+  "sales.prompts": "Lời nhắc DW1 học",
+  "sales.skills": "Kỹ năng của DW1",
+  "sales.catalog": "Dữ liệu chủ",
+  "sales.layout": "Mẫu PO",
+  "sales.quote.manager": "Báo giá kèm đơn chờ Manager",
+  "bravo_write.sales_order": "Ghi vào Bravo",
+} as const;
+
+/**
+ * Sales approvals "Việc cần làm" already lists as a case's own step
+ * (`next_steps.DECIDED_ON_THE_CASE`): its approvals card leaves them out so
+ * they are not counted twice.
+ */
+export const APPROVAL_ON_THE_CASE: ReadonlySet<string> = new Set([
+  "sales.quote",
+  "sales.order.cross_check",
+]);
+
+/**
  * What an event on a case's history did (`CaseEvent.action`, the actions
  * `case_store.py` writes). An action not listed shows as its code.
  */
