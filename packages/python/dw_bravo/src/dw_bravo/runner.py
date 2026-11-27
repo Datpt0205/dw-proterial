@@ -13,6 +13,10 @@ What it does, all of it read from the layout:
   assignment cascading through the same events;
 - `add_row()` adds a line as a person adds one to the grid: the relation key
   from the parent, a negative `Id`, then the table's `RowAdded` rules;
+  `new_document()` makes a header as the `New` window does: its
+  `DefaultValues`, then its `RowAdded` rules;
+- the screen's window (`Layout.window`, ticket 72), when in hand: a lookup
+  box that binds runs after its column's `ColumnChanged` rules;
 - `check()` runs the validators and sorts them into blocking, warning and
   undecided;
 - `save()` runs `ServerUpdating` and returns the columns the client would
@@ -31,10 +35,12 @@ What it refuses (`RuleRefusedError`), rather than guess:
 
 Measured against the 2026-11-20 UAT trace (the client's `sp_executesql` writes):
 an `UPDATE` carries only the columns whose value changed, plus `ModifiedBy`;
-the header is updated on every save; an `INSERT` lists only non-NULL columns
-plus `CreatedBy`. An assignment of the value a column already holds raises
-no event. `ModifiedBy` and `CreatedBy` are written only where the row the
-client loaded holds them: the YCBG line's view (`vB30BizDocDetailRQ_Edit`)
+the header is updated on every save; a new row's command carries its
+non-NULL columns plus `CreatedBy` (which NULL columns the client's INSERT
+also lists is the table's: `dw_bravo_gateway.statements.render_insert`).
+An assignment of the value a column already holds raises no event.
+`ModifiedBy` and `CreatedBy` are written only where the row the client
+loaded holds them: the YCBG line's view (`vB30BizDocDetailRQ_Edit`)
 has neither, and the client passes both as parameters and sets neither.
 """
 
@@ -314,6 +320,27 @@ class RuleRunner:
         self._assign(
             doc, table, row, column, value, rule=USER, trigger=column, suppress=False, depth=0
         )
+
+    def new_document(self, values: Mapping[str, object], *, stored: Iterable[str]) -> Document:
+        """A document made in the screen's `New` window, as the client makes
+        one: ``values`` is every column its header holds (NULL where nothing
+        is known yet, plus what the client seeds), ``stored`` the ones an
+        INSERT may list. The layout's `DefaultValues` are evaluated into it
+        (8212: `DocCode` 'SO', `BizDocId` '', `BranchCode` `BRANCH()`...);
+        an `Id` below zero, as a new row holds before a save (never written);
+        no lines; then the header's `RowAdded` rules run (8212's DmCt and
+        DmCtInfo bindings, the default number)."""
+        spec = self.layout.parent
+        initial = dict(values)
+        initial["Id"] = Decimal(-1)
+        held = [c for c in stored if c.lower() != "id"]
+        row = Row(initial, stored=held, new=True)
+        doc = Document(row, {table.key: [] for table in self.layout.children()})
+        scope = _RowScope(self, doc, PARENT, row, None)
+        for column, text in spec.default_values.items():
+            row.set(column, evaluate(text, scope))
+        self._event(doc, PARENT, row, "RowAdded")
+        return doc
 
     def add_row(
         self,

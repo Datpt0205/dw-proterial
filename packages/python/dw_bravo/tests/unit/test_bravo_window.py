@@ -238,6 +238,44 @@ def test_a_lookup_set_as_the_document_loads_leaves_what_it_would_bind_unknown() 
     assert line.get("Description") is UNKNOWN and "Description" in doc.unknown
 
 
+NEW_DOC = DATA_SOURCE.replace(
+    "<ParentTable><Name>vDoc_Edit</Name></ParentTable>",
+    """<ParentTable><Name>vDoc_Edit</Name>
+  <DefaultValues><DocCode>'SO'</DocCode><BranchCode>BRANCH()</BranchCode><BizDocId>''</BizDocId></DefaultValues>
+  <RowAdded><Eval_DocCode_Bind /></RowAdded>
+  <Evaluators><Eval_DocCode_Bind><ClassName>BravoBindingMember</ClassName><DataMember>DocCode</DataMember>
+    <LookupKey>DmCt</LookupKey><bindingMembers><DocStatus_Ct>DocStatus</DocStatus_Ct>
+    <Ma_Gd_Ct><Condition_0><DataMember>TransCode</DataMember><Expr>Empty(TransCode)</Expr></Condition_0></Ma_Gd_Ct>
+    </bindingMembers></Eval_DocCode_Bind></Evaluators>
+</ParentTable>""",
+)
+HEADER: dict[str, object] = dict.fromkeys(
+    ["DocCode", "BranchCode", "BizDocId", "DocStatus", "TransCode", "DocKey", "CreatedBy"]
+)
+
+
+def test_a_new_document_takes_its_default_values_then_its_row_added_rules() -> None:
+    """A document made in the `New` window (ticket 72): 8212's shapes, the
+    `DefaultValues` and the DmCt binding its `RowAdded` runs."""
+    lookups = _lookups()
+    lookups.rows[("DmCt", "SO")] = {"DocStatus_Ct": Decimal(4), "Ma_Gd_Ct": "3201"}
+    run = RuleRunner(read_layout(NEW_DOC, "EDIT_Test"), RecordedProcedures(), lookups, SESSION)
+    doc = run.new_document({**HEADER, "ParentId": Decimal(-1)}, stored=[*HEADER, "ParentId"])
+
+    parent = doc.parent
+    assert (parent.get("DocCode"), parent.get("BranchCode"), parent.get("BizDocId")) == (
+        "SO",
+        "B1",
+        "",
+    )
+    assert (parent.get("DocStatus"), parent.get("TransCode")) == (Decimal(4), "3201")
+    assert parent.get("Id") == Decimal(-1) and doc.children == {"Detail": []}
+    [insert] = run.save(doc).commands
+    assert insert.kind == "insert" and insert.columns["CreatedBy"] == Decimal(7)
+    assert "Id" not in insert.columns and insert.columns["ParentId"] == Decimal(-1)
+    assert insert.columns["TransCode"] == "3201"
+
+
 def test_a_rule_setting_several_columns_binds_each_it_changed() -> None:
     picking = DATA_SOURCE.replace(
         "<ColumnChanged>", "<ColumnChanged><POLine><Eval_Pick /></POLine>"
