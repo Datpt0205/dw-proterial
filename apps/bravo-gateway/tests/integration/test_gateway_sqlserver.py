@@ -89,7 +89,13 @@ TEMPLATE = (
 
 
 # A form layout's shape (8213): the window's controls, no <Tables>.
-FORM_LAYOUT = "<root><menuStrip1 /><panelEditor><Controls /></panelEditor></root>"
+FORM_LAYOUT = (
+    "<root><menuStrip1 /><panelEditor><Controls><BravoGridContainer>"
+    "<ClassName>BravoGridContainer</ClassName><Items><Item_0><DataMember>Detail</DataMember><Cols>"
+    "<ItemCode><Editor><bindingMembers><Name>Description</Name><CartonSize>CartonSize</CartonSize>"
+    "</bindingMembers><ClassName>BravoLookupBox</ClassName><LookupKey>Item</LookupKey></Editor></ItemCode>"
+    "<Quantity9 /></Cols></Item_0></Items></BravoGridContainer></Controls></panelEditor></root>"
+)
 
 
 def _zipped(text: str) -> bytes:
@@ -141,6 +147,9 @@ def logins() -> tuple[Login, Login]:
         "CREATE TABLE dbo.B00Layout (Id int PRIMARY KEY, IsTemplate tinyint, FormName varchar(64), ModifiedBy int DEFAULT 1, ModifiedAt smalldatetime DEFAULT GETDATE(),"
         " IsActive bit)",
         "CREATE TABLE dbo.B00LayoutData (Id int PRIMARY KEY, LayoutData varbinary(max))",
+        # A user's or role's own copy of a layout (script 03b's columns).
+        "CREATE TABLE dbo.B00LayoutDataEdit (Id int, UserId int NULL, RoleId int NULL,"
+        " LayoutData varbinary(max))",
         # One of ticket 50's tables, with a column the sync does not read.
         "CREATE TABLE dbo.B20LME (Id int IDENTITY PRIMARY KEY, IsGroup bit DEFAULT 0,"
         " BranchCode nvarchar(3) DEFAULT 'A01', Code varchar(24), Name nvarchar(64),"
@@ -206,6 +215,7 @@ def logins() -> tuple[Login, Login]:
         "GRANT SELECT ON dbo.B00Layout TO dw_test_read",
         "GRANT SELECT ON dbo.B00Branch (BranchCode, IsGroup, IsActive) TO dw_test_read",
         "GRANT SELECT ON dbo.B00LayoutData TO dw_test_read",
+        "GRANT SELECT ON dbo.B00LayoutDataEdit TO dw_test_read",
         "GRANT SELECT ON dbo.B20LME (Id, timestamp, IsGroup, BranchCode, Code, Name, DocDate,"
         " LMEActual, LMECenter, IsActive) TO dw_test_read",
         "GRANT SELECT ON dbo.B00ImportSetting (Id, CommandKey, IsActive, LayoutData) TO dw_test_read",
@@ -581,6 +591,47 @@ async def test_the_fingerprint_sees_a_trigger_and_a_column_change(
         ("trigger", "DML_B30BizDocDetailSO_ChangeLog"),
     }
     assert react(diff(before, after), {}).paused  # the dependent kinds pause
+
+
+async def test_the_screens_window_binds_and_a_users_own_copy_that_differs_holds_that_lookup(
+    logins: tuple[Login, Login],
+) -> None:
+    """The window (IsTemplate 0) is read with the layout and its lookups bind;
+    a user's own copy in B00LayoutDataEdit that binds the item lookup
+    otherwise leaves that lookup refusing, and changes the fingerprint."""
+    bravo = SqlServerBravo(*logins, templates={})
+    layout = await bravo.layout("EDIT_BizDocSO")
+    assert layout.window is not None and layout.missing_window is None
+    item = layout.window.lookup("Detail", "ItemCode")
+    assert item is not None and item.unread == ()
+    before = await bravo.fingerprint("production")
+
+    edited = FORM_LAYOUT.replace("<CartonSize>CartonSize</CartonSize>", "")
+    _run(DB, f"INSERT INTO dbo.B00LayoutDataEdit VALUES (3, 2413, NULL, 0x{_zipped(edited).hex()})")
+    try:
+        layout = await bravo.layout("EDIT_BizDocSO")
+        after = await bravo.fingerprint("production")
+    finally:
+        _run(DB, "DELETE FROM dbo.B00LayoutDataEdit")
+    assert layout.window is not None
+    item = layout.window.lookup("Detail", "ItemCode")
+    assert item is not None and "B00LayoutDataEdit" in item.unread[0]
+
+    from dw_bravo.watch import diff
+
+    assert {(c.kind, c.name) for c in diff(before, after)} == {("layout", "EDIT_BizDocSO")}
+
+
+async def test_a_window_the_read_login_cannot_read_leaves_every_plan_provisional(
+    logins: tuple[Login, Login],
+) -> None:
+    _run(DB, "DENY SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
+    try:
+        layout = await SqlServerBravo(*logins, templates={}).layout("EDIT_BizDocSO")
+    finally:
+        _run(DB, "REVOKE SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
+        _run(DB, "GRANT SELECT ON dbo.B00LayoutDataEdit TO dw_test_read")
+    assert layout.window is None and (layout.missing_window or "").startswith("could not read")
 
 
 async def test_the_screens_data_source_is_its_layout_and_its_form_is_watched_with_it(

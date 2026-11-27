@@ -30,7 +30,7 @@ import re
 import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Final, Literal, TypeVar
@@ -46,7 +46,16 @@ from dw_bravo.contract import (
 )
 from dw_bravo.expression import RuleRefusedError, UndecidableError, UnsupportedSyntaxError
 from dw_bravo.import_template import read_import_template
-from dw_bravo.layout import Layout, read_layout, read_template, with_template
+from dw_bravo.layout import (
+    Layout,
+    Window,
+    merge_windows,
+    read_layout,
+    read_template,
+    read_window,
+    with_template,
+    with_window,
+)
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.sync import SYNC_TABLES, SyncPage, SyncQuery, SyncRow, as_text
 from dw_bravo.watch import Component, Fingerprint
@@ -66,6 +75,16 @@ from dw_bravo_gateway.ports import (
 from dw_bravo_gateway.statements import PROCESS_PROCEDURE, SCREENS
 
 T = TypeVar("T")
+
+# What makes a stored layout unreadable: refused syntax, XML that does not
+# parse, an archive that is not one.
+_UNREADABLE: Final = (
+    UndecidableError,
+    UnsupportedSyntaxError,
+    SyntaxError,
+    ValueError,
+    zipfile.BadZipFile,
+)
 
 # `B00Layout.IsTemplate` of a screen's two layouts (script 03a, 2026-11-19;
 # script 06): 3 the `<DataSource>`, 0 the form. A shared template is 1 or 2.
@@ -364,16 +383,18 @@ class SqlServerBravo:
         )
 
     async def layout(self, screen: str) -> Layout:
-        rows = [
-            r
-            for r in await self._in_thread(lambda: self._screen_layouts(screen))
-            if r["IsTemplate"] == DATA_SOURCE
-        ]
-        if len(rows) != 1:
+        rows = await self._in_thread(lambda: self._screen_layouts(screen))
+        sources = [r for r in rows if r["IsTemplate"] == DATA_SOURCE]
+        if len(sources) != 1:
             # Which of several the client opens is not measured.
-            raise UndecidableError(f"{len(rows)} active DataSource layouts for {screen}")
+            raise UndecidableError(f"{len(sources)} active DataSource layouts for {screen}")
         name = self.templates.get(screen)
-        layout = read_layout(layout_xml(rows[0]["LayoutData"]), screen, missing_template=name)
+        layout = read_layout(layout_xml(sources[0]["LayoutData"]), screen, missing_template=name)
+        forms = [r for r in rows if r["IsTemplate"] == FORM]
+        window, why = await self._in_thread(lambda: self._window(screen, forms))
+        layout = (
+            replace(layout, missing_window=why) if window is None else with_window(layout, window)
+        )
         if name is None:
             return layout
         template = await self._in_thread(lambda: self._template_rows(name))
@@ -384,6 +405,34 @@ class SqlServerBravo:
             return with_template(layout, read_template(layout_xml(template[0]["LayoutData"]), name))
         except (UnsupportedSyntaxError, ValueError):
             return layout
+
+    def _window(
+        self, screen: str, forms: Sequence[Mapping[str, object]]
+    ) -> tuple[Window | None, str]:
+        """The screen's window: its one form layout, as far as every user's
+        or role's own copy of it (`B00LayoutDataEdit`, which the client
+        loads by `UserId`/`RoleId`) binds the same; which copy a user opens
+        is not measured, so a lookup the copies bind differently refuses
+        when it binds. Not readable: none, and why."""
+        if len(forms) != 1:
+            return None, f"{len(forms)} active form layouts"
+        try:
+            base = read_window(layout_xml(forms[0]["LayoutData"]), screen)
+            edits = self._window_edits(forms[0]["Id"])
+            variants = [read_window(layout_xml(e["LayoutData"]), screen) for e in edits]
+        except _UNREADABLE as refused:
+            return None, f"{type(refused).__name__}: {str(refused)[:160]}"
+        except Exception as failed:  # the driver's own errors: no answer, so none
+            return None, f"could not read: {type(failed).__name__}"
+        why = "a user's or role's own window binds it differently (B00LayoutDataEdit)"
+        return merge_windows(base, variants, why), ""
+
+    def _window_edits(self, layout_id: object) -> list[dict[str, object]]:
+        return self._rows(
+            "SELECT Id, UserId, RoleId, LayoutData FROM dbo.B00LayoutDataEdit"
+            " WHERE Id = ? ORDER BY UserId, RoleId",
+            (layout_id,),
+        )
 
     def _template_rows(self, name: str) -> list[dict[str, object]]:
         return self._rows(
@@ -520,6 +569,7 @@ class SqlServerBravo:
         if not rows:
             return []
         sources = [r for r in rows if r["IsTemplate"] == DATA_SOURCE]
+        forms = [r for r in rows if r["IsTemplate"] == FORM]
         unknown: list[str] = []
         if len(sources) != 1:
             unknown.append(f"{len(sources)} active DataSource layouts")
@@ -528,17 +578,25 @@ class SqlServerBravo:
                 read_layout(layout_xml(row["LayoutData"]), screen, missing_template=None)
             except (UndecidableError, RuleRefusedError, ValueError) as refused:
                 unknown.append(str(refused)[:200])
+        window, why = self._window(screen, forms)
+        if window is None:
+            unknown.append(f"the window: {why}")
+        edits = [e for form in forms for e in self._window_edits(form["Id"])]
         latest = max(rows, key=lambda r: str(r["ModifiedAt"]))
 
         def data(row: Mapping[str, object]) -> object:
             value = row["LayoutData"]
             return bytes(value) if isinstance(value, bytes | bytearray) else value
 
+        shapes: list[tuple[object, ...]] = [
+            (r["Id"], r["IsTemplate"], _digest(data(r))) for r in rows
+        ]
+        shapes += [(e["Id"], e["UserId"], e["RoleId"], _digest(data(e))) for e in edits]
         return [
             Component(
                 "layout",
                 screen,
-                _digest(repr([(r["Id"], r["IsTemplate"], _digest(data(r))) for r in rows])),
+                _digest(repr(shapes)),
                 modified_at=str(latest["ModifiedAt"]),
                 modified_by=str(latest["ModifiedBy"]),
                 unknown=tuple(unknown),
