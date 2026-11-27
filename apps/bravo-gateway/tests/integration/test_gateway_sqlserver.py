@@ -38,7 +38,13 @@ from gateway_fakes import (
 from dw_bravo.contract import LineRef, SetConfirmedDate, SetQuantity
 from dw_bravo_gateway.adapters.sqlserver import Login, SqlServerBravo
 from dw_bravo_gateway.pipeline import WritePace, WritePipeline
-from dw_bravo_gateway.ports import AmbiguousDocumentError, CommandRight, DocumentNotFoundError
+from dw_bravo_gateway.ports import (
+    AmbiguousDocumentError,
+    Batch,
+    CommandRight,
+    DocumentNotFoundError,
+)
+from dw_bravo_gateway.statements import context_line, render_insert
 
 SERVER = os.environ.get("DW_BRAVO_TEST_MSSQL")
 
@@ -663,3 +669,87 @@ async def test_a_template_not_found_leaves_the_plan_provisional(
     result = await _pipeline(bravo).execute(command, token(command))
 
     assert result.check == "rules" and (result.reason or "").startswith("provisional")
+
+
+async def test_a_new_line_is_inserted_with_the_views_columns_and_bravos_trigger_keys_it(
+    logins: tuple[Login, Login],
+) -> None:
+    """Ticket 73: a split's new line. The read login reads what an INSERT
+    needs from `sys.columns` (each column's default, what the table
+    generates) and the load view's columns; the write login, granted INSERT
+    on the line table only (SQL Server has no column INSERT grant), inserts
+    the client's statement; a trigger in Bravo's shape (`SET NOCOUNT ON`, the
+    key filled from the new Id) leaves the row count the write checks at 1."""
+    _run(
+        DB,
+        "CREATE VIEW dbo.vB30BizDocDetailSO_Edit AS SELECT Id, BizDocId, RowId, BuiltinOrder,"
+        " POLine, ItemCode, Quantity9, ModifiedBy, timestamp,"
+        " CAST(N'joined' AS nvarchar(8)) AS ItemName FROM dbo.B30BizDocDetailSO",
+        "CREATE TRIGGER dbo.DML_B30BizDocDetailSO_InsertUpdate_RowId ON dbo.B30BizDocDetailSO"
+        " AFTER INSERT AS BEGIN SET NOCOUNT ON; UPDATE d SET RowId = 'N' + CAST(d.Id AS varchar(12))"
+        " FROM dbo.B30BizDocDetailSO d JOIN inserted i ON i.Id = d.Id WHERE ISNULL(i.RowId, '') = '' END",
+        "GRANT VIEW DEFINITION ON dbo.vB30BizDocDetailSO_Edit TO dw_test_read",
+        "GRANT INSERT ON dbo.B30BizDocDetailSO TO dw_test_write",
+        "INSERT INTO dbo.B30BizDoc (BizDocId, DocNo, BranchCode, DocDate, TotalQuantity, ModifiedBy)"
+        f" VALUES ('D9', 'SO-9', 'A01', '{NOW.year}-11-20', 5, 1)",
+        "INSERT INTO dbo.B30BizDocDetailSO (BizDocId, RowId, BuiltinOrder, POLine, ItemCode,"
+        " Quantity9, OriginalUnitCost, Amount9, Made, ModifiedBy) VALUES"
+        " ('D9', 'R9', 1, 4, 'PRV-9', 5, 1, 5, 0, 1)",
+    )
+    connection = _sa(DB)
+    cursor = connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("SELECT Id FROM dbo.B30BizDoc WHERE BizDocId = 'D9'")
+    doc_id = int(cursor.fetchone()[0])
+    connection.close()  # type: ignore[attr-defined]
+    bravo = SqlServerBravo(*logins)
+
+    stored = await bravo.load("EDIT_BizDocSO", doc_id)
+    view = await bravo.view_columns("vB30BizDocDetailSO_Edit")
+
+    assert stored.generated["B30BizDocDetailSO"] == {"id", "timestamp"}
+    no_default = stored.no_default["B30BizDocDetailSO"]
+    assert {"quantity9", "porequestdate", "bizdocid"} <= no_default
+    assert not {"poline", "itemcode", "id", "timestamp", "modifiedat"} & no_default
+    assert "ItemName" in view and "Made" not in view
+    viewed = {c.lower() for c in view}
+    insertable = [
+        c
+        for c in stored.column_order["B30BizDocDetailSO"]
+        if c.lower() in viewed and c.lower() not in stored.generated["B30BizDocDetailSO"]
+    ]
+    assert insertable == [
+        "BizDocId",
+        "RowId",
+        "BuiltinOrder",
+        "POLine",
+        "ItemCode",
+        "Quantity9",
+        "ModifiedBy",
+    ]
+    statement = render_insert(
+        "B30BizDocDetailSO",
+        {"BizDocId": "D9", "RowId": "", "BuiltinOrder": 2, "POLine": Decimal(4), "Quantity9": 2},
+        insertable,
+        no_default,
+        read_back_key="RowId",
+    )
+    context = context_line("EDIT_BizDocSO", "Edit", 2413, "A01", NOW.year)
+
+    await bravo.execute(Batch(context=context, statements=[statement]))
+
+    after = await bravo.load("EDIT_BizDocSO", doc_id)
+    new = after.lines[-1]
+    assert (new["BuiltinOrder"], new["POLine"], new["ItemCode"], new["Quantity9"]) == (
+        2,
+        4,
+        "",  # not listed: the table's default
+        2,
+    )
+    assert new["RowId"] == f"N{new['Id']}"  # Bravo's trigger keyed it
+    # INSERT is the line table's only: the header refuses it.
+    _, write = logins
+    connection = mssql_python.connect(write.connection_string(), autocommit=True)
+    cursor = connection.cursor()
+    with pytest.raises(Exception, match="permission was denied"):
+        cursor.execute("INSERT INTO dbo.B30BizDoc (BizDocId) VALUES ('X1')")
+    connection.close()

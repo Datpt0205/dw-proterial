@@ -557,11 +557,13 @@ _NAMED = re.compile(r"@(_\w+)")
 
 
 def bind(statement: Statement) -> tuple[str, tuple[object, ...]]:
-    """The client's UPDATE with its named parameters bound by position.
+    """The client's UPDATE or INSERT with its named parameters bound by
+    position.
 
     The read-back SELECT is left out: the pipeline reads the document back
-    whole (`WritePipeline._reconcile`), and the UPDATE's own row count is
-    what says whether the rowversion still held.
+    whole (`WritePipeline._reconcile`), and the statement's own row count is
+    what says whether the rowversion still held (an INSERT's is 1: measured
+    with a trigger in Bravo's `SET NOCOUNT ON` shape, ticket 73).
     """
     update = statement.sql.split(";SELECT TOP (1)")[0] + ";"
     values: list[object] = []
