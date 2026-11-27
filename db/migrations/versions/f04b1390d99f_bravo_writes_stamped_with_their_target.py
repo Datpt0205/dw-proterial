@@ -14,10 +14,14 @@ stamped with the one it was read from:
 - **`bravo.write_ledger.target`**: the Bravo the gateway acted on, from the
   verified token.
 
-Both `uat` or `production` (`ck_*_target`). Every row already stored was
-read from and written to the one Bravo the gateway held before ticket 85,
-which its settings now read as UAT's: backfilled `uat`. The default goes
-once the backfill is done, so a new row states its target or is refused.
+Both `uat` or `production` (`ck_*_target`). Which Bravo a row stored
+before ticket 85 used is not recorded: the gateway held one set, named by an
+`environment` that defaulted to `production`. Those rows are backfilled
+`uat` as a label, not a fact: nothing reads a ledger row's target, and a
+proposal still open has no target in its approval, so its decision signs no
+write token and it is proposed again. The old set itself now refuses to
+start (ticket 85 review). The default goes once the backfill is done, so a
+new row states its target or is refused.
 
 No grant changes: both tables are granted whole to `dw_app` (af89f3f5d27d,
 2c32bc10b019), and the ledger's REVOKE of DELETE stands.

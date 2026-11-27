@@ -26,6 +26,7 @@ from dw_bravo_gateway.ports import LedgerEntry, LedgerStatus, SwitchState
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
+from dw_platform.application.rule_versions import RuleVersion
 
 _FIND = sa.text(
     "SELECT approval_id, status, kind, content_hash, detail FROM bravo.write_ledger"
@@ -148,7 +149,8 @@ class _Scope:
 @dataclass
 class SqlSwitches:
     """`Switches` read from the tenant's approved rule version, never cached:
-    a kind switched off applies to the next write.
+    a kind switched off applies to the next write, and only a version a
+    second person decided counts.
 
     The document's schema is `dw_sales.domain.bravo_writes.BravoWrites`; this
     reads only `kinds.<kind>.enabled` and `uat_proof`, and `target` with its
@@ -160,6 +162,19 @@ class SqlSwitches:
     lookup: SqlRuleVersionLookup
     pauses: Pauses
 
+    async def _decided(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, key: str
+    ) -> RuleVersion | None:
+        """The approved version, when a second person decided it. One its
+        proposer applied alone (`applied_directly`, the head's direct path)
+        is read as no version, the platform's file: Sales refuses that path
+        for this key, and the rule store still accepts it for any key, so
+        the write's own door checks it (ticket 85 review)."""
+        version = await self.lookup.approved(
+            _Scope(TenantId(tenant_id), WorkspaceId(workspace_id)), key
+        )
+        return None if version is None or version.applied_directly else version
+
     async def state(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> SwitchState:
         key = next((k for prefix, k in SWITCH_KEYS.items() if kind.startswith(prefix)), None)
         if key is None:
@@ -168,15 +183,13 @@ class SqlSwitches:
         # baseline; read before the switch, so a paused kind reads paused.
         if await self.pauses.paused(tenant_id, kind):
             return "paused"
-        version = await self.lookup.approved(
-            _Scope(TenantId(tenant_id), WorkspaceId(workspace_id)), key
-        )
+        version = await self._decided(tenant_id, workspace_id, key)
         if version is None:
             return "off"  # the platform's file: every kind off
         return "enabled" if switched_on(version.document, kind) else "off"
 
     async def target(self, tenant_id: uuid.UUID) -> BravoTarget | None:
-        version = await self.lookup.approved(_Scope(TenantId(tenant_id), _NO_WORKSPACE), TARGET_KEY)
+        version = await self._decided(tenant_id, _NO_WORKSPACE.value, TARGET_KEY)
         if version is None:
             return "uat"  # the platform's file: UAT
         return target_of(version.document)

@@ -9,8 +9,14 @@ Two Bravos, one credential set each (ticket 85): `DW_BRAVO_GATEWAY_UAT_*`
 and `DW_BRAVO_GATEWAY_PRODUCTION_*`. Which one a write goes to is the
 tenant's rule, not this file; a target with no credentials here is absent,
 and the gateway refuses every read and write while the tenant's rule names
-it, never falling back to the other. The single set before ticket 85
-(`DW_BRAVO_GATEWAY_BRAVO_*`) is read as UAT's for one release.
+it, never falling back to the other.
+
+The single set before ticket 85 (`DW_BRAVO_GATEWAY_BRAVO_*`) refuses to
+start. Its Bravo was named by `DW_BRAVO_GATEWAY_ENVIRONMENT`, `production`
+unless set, so it may hold the company's real Bravo: read as either target
+it could be labelled the wrong one, and the target guard compares labels.
+Whoever holds it moves it to the prefix of the Bravo it names (ticket 85
+review).
 """
 
 from __future__ import annotations
@@ -85,7 +91,8 @@ class GatewaySettings(BaseSettings):
     production_read_password: SecretStr = SecretStr("")
     production_write_user: str = ""
     production_write_password: SecretStr = SecretStr("")
-    # Before ticket 85: one set, read as UAT's for one release.
+    # Before ticket 85: one set, named by an `environment` that defaulted to
+    # production. Read only to refuse it (`targets`).
     bravo_host: str = ""
     bravo_port: int = 1433
     bravo_database: str = ""
@@ -130,17 +137,16 @@ class GatewaySettings(BaseSettings):
 
     def _sets(self) -> dict[BravoTarget, tuple[str, dict[str, object]]]:
         """Each target's fields and the variable prefix they came from."""
-        legacy, uat = self._set("bravo"), self._set("uat")
-        if _has_credentials(legacy):
-            if _has_credentials(uat):
-                raise SettingsError(
-                    "both DW_BRAVO_GATEWAY_UAT_* and DW_BRAVO_GATEWAY_BRAVO_* are set:"
-                    " keep the UAT ones only"
-                )
-            uat_set = ("BRAVO", legacy)
-        else:
-            uat_set = ("UAT", uat)
-        return {"uat": uat_set, "production": ("PRODUCTION", self._set("production"))}
+        if _has_credentials(self._set("bravo")):
+            raise SettingsError(
+                "DW_BRAVO_GATEWAY_BRAVO_* is the single set before ticket 85, whose Bravo"
+                " DW_BRAVO_GATEWAY_ENVIRONMENT named (production unless set): move it to"
+                " DW_BRAVO_GATEWAY_UAT_* or DW_BRAVO_GATEWAY_PRODUCTION_*, the one it names"
+            )
+        return {
+            "uat": ("UAT", self._set("uat")),
+            "production": ("PRODUCTION", self._set("production")),
+        }
 
     def targets(self) -> dict[BravoTarget, TargetLogins]:
         """Every target with credentials; one half-configured refuses."""

@@ -136,18 +136,17 @@ def test_no_target_at_all_does_not_start() -> None:
 _LEGACY = {k.replace("uat_", "bravo_"): v for k, v in _COMPLETE.items()}
 
 
-def test_the_single_set_before_ticket_85_is_read_as_uat() -> None:
-    settings = GatewaySettings(profile="local", **_LEGACY)
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"uat_host": "other", "uat_read_user": "x"}, _PRODUCTION],
+    ids=["alone", "with the uat set", "with the production set"],
+)
+def test_the_single_set_before_ticket_85_does_not_start(extra: dict[str, Any]) -> None:
+    # Its Bravo was named by `environment`, production unless set: read as
+    # either target it could carry the wrong label (ticket 85 review).
+    settings = GatewaySettings(profile="local", **_LEGACY, **extra)
 
-    settings.check_startable()
-    assert set(settings.targets()) == {"uat"}
-    assert settings.targets()["uat"].host == "bravo"
-
-
-def test_the_old_set_and_the_uat_set_together_do_not_start() -> None:
-    settings = GatewaySettings(profile="local", **_LEGACY, uat_host="other", uat_read_user="x")
-
-    with pytest.raises(SettingsError, match="keep the UAT ones only"):
+    with pytest.raises(SettingsError, match="DW_BRAVO_GATEWAY_BRAVO_"):
         settings.check_startable()
 
 

@@ -60,6 +60,7 @@ class _Pauses:
 @dataclass
 class _Version:
     document: dict[str, Any]
+    applied_directly: bool = False
 
 
 @dataclass
@@ -160,3 +161,23 @@ async def test_the_target_is_read_from_the_approved_version() -> None:
     switches = SqlSwitches(_Lookup(_Version(document), []), _Pauses())  # type: ignore[arg-type]
 
     assert await switches.target(uuid.uuid4()) == "production"
+
+
+# ---------------------------------------- decided by a second person (85 review)
+
+
+async def test_a_version_its_proposer_applied_alone_switches_nothing_on() -> None:
+    document = _document(
+        so__line__set_quantity_at_1=BravoWriteSwitch(enabled=True, uat_proof="UAT run 1")
+    )
+    switches = SqlSwitches(_Lookup(_Version(document, applied_directly=True), []), _Pauses())  # type: ignore[arg-type]
+
+    assert await switches.state(uuid.uuid4(), uuid.uuid4(), "so.line.set_quantity@1") == "off"
+
+
+async def test_a_version_its_proposer_applied_alone_names_no_production() -> None:
+    document = {"target": "production", "target_uat_proof": "UAT run 3", "kinds": {}}
+    switches = SqlSwitches(_Lookup(_Version(document, applied_directly=True), []), _Pauses())  # type: ignore[arg-type]
+
+    # The platform's file: UAT, as with no version at all.
+    assert await switches.target(uuid.uuid4()) == "uat"
