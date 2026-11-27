@@ -12,7 +12,9 @@ Two statement shapes are read:
 - the client's writes, `sp_executesql` of `INSERT INTO <table> (...)` or
   `UPDATE TOP (1) <table> SET [Col]=@_Col,... WHERE Id=...`, with every
   parameter's value (the whole row, not only what changed);
-- a procedure or function a rule ran: `exec dbo.<name> @_P=...`.
+- a procedure or function a rule ran: `exec dbo.<name> @_P=...`;
+- a row the client deleted in a save: `DELETE TOP (1) FROM <table> WHERE
+  Id=@_Original_Id AND timestamp=@_Original_timestamp` (11-25 17:28:58).
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ _WRITE = re.compile(
     r"(INSERT INTO (\w+) \((.*?)\) VALUES|UPDATE TOP \(1\) (\w+) SET (.*?) WHERE)", re.S
 )
 _EXEC = re.compile(r"exec (?:dbo\.)?\[?(\w+)\]? (@_.*)$", re.S)
+_DELETE = re.compile(r"DELETE TOP \(1\) FROM (\w+) WHERE Id=@_Original_Id")
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,13 @@ class Write:
     @property
     def row_id(self) -> object:
         return self.values.get("Id")
+
+
+@dataclass(frozen=True)
+class Delete:
+    statement: Statement
+    table: str
+    row_id: object  # the deleted row's Id
 
 
 @dataclass(frozen=True)
@@ -135,6 +145,15 @@ def writes(statements: list[Statement]) -> Iterator[Write]:
         else:
             columns = tuple(re.findall(r"\[(\w+)\]=", match.group(5)))
             yield Write(statement, "update", match.group(4), columns, values)
+
+
+def deletes(statements: list[Statement]) -> Iterator[Delete]:
+    for statement in statements:
+        if "sp_executesql" not in statement.sql:
+            continue
+        match = _DELETE.search(statement.sql)
+        if match is not None:
+            yield Delete(statement, match.group(1), _values(statement.sql).get("Original_Id"))
 
 
 def procedure_calls(statements: list[Statement]) -> Iterator[ProcedureCall]:

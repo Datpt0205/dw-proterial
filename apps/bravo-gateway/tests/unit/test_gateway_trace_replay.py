@@ -28,7 +28,16 @@ from zoneinfo import ZoneInfo
 import pytest
 from gateway_fakes import SIGNER, TENANT, VERIFIER, WORKSPACE, FakeLedger, FakeRights, FakeSwitches
 
-from dw_bravo.contract import CancelLine, LineRef, SetConfirmedDate, SetQuantity
+from dw_bravo.contract import (
+    WRITE_KINDS,
+    CancelLine,
+    LineRef,
+    SetConfirmedDate,
+    SetQuantity,
+    SplitLine,
+    SplitPart,
+)
+from dw_bravo.expression import UNKNOWN
 from dw_bravo.layout import Layout, read_layout
 from dw_bravo.ports import ProcedurePort, ReferencePort, Session
 from dw_bravo.testing import sql_trace
@@ -99,12 +108,16 @@ class TraceBravo:
     # parameters: set only where the save differs from the client's in a way
     # the test names (the cancel test's header totals).
     as_recorded: frozenset[str] = frozenset()
+    # Procedures whose result is in no trace (an XE trace records the call,
+    # not its result set) and in no written column: answered UNKNOWN, so a
+    # rule or a check that reads one is undecided, never passed.
+    unrecorded: frozenset[str] = frozenset()
 
     def procedures(self) -> ProcedurePort:
         inner = self.replay.procedures(self.state)
-        if not self.as_recorded:
+        if not self.as_recorded and not self.unrecorded:
             return inner
-        return _AsRecorded(inner, self.state.window, self.as_recorded)
+        return _AsRecorded(inner, self.state.window, self.as_recorded, self.unrecorded)
 
     def references(self) -> ReferencePort:
         from dw_bravo.testing.replay import _NoReferences
@@ -129,10 +142,14 @@ class _AsRecorded:
     inner: ProcedurePort
     window: list[sql_trace.ProcedureCall]
     names: frozenset[str]
+    unrecorded: frozenset[str] = frozenset()
 
     def call(
         self, command: str, parameters: Mapping[str, object], outputs: Sequence[str]
     ) -> Mapping[str, object]:
+        if command in self.unrecorded:
+            assert any(c.command == command for c in self.window), command  # it was called
+            return dict.fromkeys(outputs, UNKNOWN)
         if command in self.names:
             recorded = next(c for c in self.window if c.command == command)
             parameters = recorded.parameters
@@ -440,3 +457,130 @@ def _equal(ours: object, theirs: object) -> bool:
     if isinstance(ours, Decimal | int) and isinstance(theirs, Decimal | int):
         return Decimal(ours) == Decimal(theirs)
     return ours == theirs
+
+
+@pytest.mark.parametrize("at", ["2026-11-20 10:30:07", "2026-11-25 17:28:58"])
+async def test_a_traced_split_is_held_back_where_the_layout_is_not_measured(at: str) -> None:
+    """Ticket 73: the two splits the UAT traces hold, run through every check
+    with the split's statements built. 10:30:07 split a saved 12200 m into
+    6100 + 6100 (a cable item, a `New` window, label 'A'); 17:28:58 split
+    250 Pc into 135 + 115 inside a mixed save that also deleted an empty
+    line, which is dropped here after the trace says it is the one DELETE.
+
+    Neither replays to the client's statement yet, and this test says why
+    rather than comparing: copying the head onto the new line changes its
+    `CustomerDescription`, whose rule `Eval_Detail_B20ItemCustomerDescription
+    _Convert_ItemCode` holds only when `ISNULL(GroupDivi,0) = 0`, a text
+    label compared with a number. How Bravo's client compares '1' or 'A' with
+    0 is not measured, so the runner refuses, and the gateway holds the split
+    back. A second reason waits behind it: on 17:28:58 the client's new line
+    carries `QuantityBox` 0, which layout 8212 never writes (its one rule
+    writes 1, for a '-' carton): the grid layout 8213's item binding (ticket
+    72). When either is measured this test fails, and becomes the
+    column-for-column replay."""
+    statements = sql_trace.read(Path(TRACE or ""))
+    saves = group_saves(sql_trace.writes(statements), "EDIT_BizDocSO")
+    save = next((s for s in saves if s.at == datetime.fromisoformat(at)), None)
+    if save is None:
+        pytest.skip(f"this trace holds no save at {at}")
+    calls = [
+        c for c in sql_trace.procedure_calls(statements) if c.statement.screen == "EDIT_BizDocSO"
+    ]
+    context = _CONTEXT.search(save.writes[0].statement.sql)
+    assert context is not None
+    head_text, user_id, _, branch, _ = context.group(1).split("@")
+    event = head_text.strip().split("|")[1]
+    layout = read_layout(
+        (Path(LAYOUTS or "") / SO_LAYOUT).read_text(encoding="utf-8"),
+        "EDIT_BizDocSO",
+        missing_template="BizDocEditor",
+    )
+    replay = so_screen_replay(layout, int(user_id), branch)
+    user = BravoUser(id=int(user_id), user_name="pic", employee_code="NV-TRACE", active=True)
+    state = next(st for st in replay.states(saves, calls, with_inserts=True) if st.save is save)
+    [insert] = state.inserted
+    before_h, before_l, _, _, written = replay.before_after(state)
+    deleted = [d for d in sql_trace.deletes(statements) if d.statement.at == save.at]
+    # The line the save deleted was inserted at 16:56:07 and never saved
+    # again; the replay knows lines by their order (`BuiltinOrder`), and the
+    # new line took its place: the one line the save neither updates nor
+    # keeps, for the one DELETE at this second.
+    updated = {w.values.get("BuiltinOrder") for w in written.values() if w.table != "B30BizDoc"}
+    gone = [
+        line
+        for line in before_l
+        if line.get("BuiltinOrder") == insert.values["BuiltinOrder"]
+        and line.get("BuiltinOrder") not in updated
+    ]
+    assert len(deleted) == len(gone) <= 1, (deleted, gone)
+    before_l = [line for line in before_l if not any(line is g for g in gone)]
+    before = _stored(before_h, before_l, written, replay)
+    before.generated = {"B30BizDocDetailSO": frozenset({"id", "timestamp"})}
+    head = next(w for w in written.values() if w.values.get("Divide") == Decimal(1))
+    line = next(x for x in before.lines if x["BuiltinOrder"] == head.values["BuiltinOrder"])
+    command = SplitLine(
+        line=LineRef(
+            so_id=int(Decimal(str(before.header["Id"]))),
+            line_id=int(Decimal(str(line["Id"]))),
+            line_rowversion=str(line["timestamp"]),
+        ),
+        parts=(
+            SplitPart(Decimal(str(head.values["Quantity9"]))),
+            SplitPart(Decimal(str(insert.values["Quantity9"]))),
+        ),
+    )
+    when = save.at.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    bravo = TraceBravo(layout, replay, state, user, before, before)
+    bravo.view = _column_order(insert)  # the client declares its row's columns
+    # The export-control check a new line runs (`RowAdded`): its result is in
+    # no trace and in no written column.
+    bravo.unrecorded = frozenset({"usp_B20ExportControlList_GetData_HCV_2"})
+    screens = {
+        "EDIT_BizDocSO": replace(
+            SCREENS["EDIT_BizDocSO"], context_event={"update": event, "insert": event}
+        )
+    }
+    pipeline = WritePipeline(
+        verifier=VERIFIER,
+        switches=FakeSwitches(),
+        ledger=FakeLedger(),
+        directory=bravo,
+        rights=FakeRights(),
+        documents=bravo,
+        engine=bravo,
+        writer=bravo,
+        now=_fixed(when),
+        tenant_id=TENANT,
+        screens=screens,
+        pace=WritePace(),
+    )
+    token = SIGNER.sign(
+        approval_id=uuid.uuid4(),
+        tenant_id=TENANT,
+        workspace_id=WORKSPACE,
+        command=command,
+        bravo_user_id=user.id,
+        employee_code="NV-TRACE",
+        now=when,
+    )
+    key = "so.line.split@1"
+    shipped = WRITE_KINDS[key]
+    WRITE_KINDS[key] = replace(shipped, pending=None)  # past the kind check
+    try:
+        preview = await pipeline.preview(command, token)
+    finally:
+        WRITE_KINDS[key] = shipped
+
+    assert preview.check == "rules" and preview.batch is None, preview
+    assert preview.reason is not None
+    assert preview.reason.startswith("rules_could_not_decide: Eval_Detail_Divi_GetData: ")
+    assert "ISNULL(GroupDivi,0) = 0" in preview.reason and "is not a number" in preview.reason
+    assert bravo.batches == []
+    # The client's new line carries `QuantityBox`. Layout 8212's only rule
+    # setting it writes 1, when `CartonSize` (copied from the head) is '-':
+    # the 10:30:07 cable line's 1. The 17:28:58 roller line's 0 is no rule of
+    # this layout's: the grid layout 8213's item binding (ticket 72).
+    setters = [r for r in layout.rules.values() if "QuantityBox" in r.data_members()]
+    assert [r.setting("Value") for r in setters] == ["1"]
+    if insert.values["QuantityBox"] == Decimal(0):
+        assert "QuantityBox" in insert.columns
