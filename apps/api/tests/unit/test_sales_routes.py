@@ -60,10 +60,15 @@ def test_every_sales_route_depends_on_the_verified_access_context(route: APIRout
     assert get_access_context in set(_calls(route.dependant))
 
 
+# Every method that is not a read: a PUT or a DELETE is a mutation as much
+# as a POST is, and a filter naming POST alone could not see them.
+_READS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 @pytest.mark.parametrize(
     "route",
-    [r for r in _routes() if "POST" in r.methods],
-    ids=lambda r: r.path,
+    [r for r in _routes() if r.methods - _READS],
+    ids=lambda r: f"{sorted(r.methods)[0]} {r.path}",
 )
 def test_every_mutation_checks_its_scope_before_it_claims_the_key(route: APIRoute) -> None:
     top = [sub.call for sub in route.dependant.dependencies]
