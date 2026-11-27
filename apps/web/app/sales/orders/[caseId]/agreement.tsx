@@ -154,7 +154,8 @@ function AgreementCard({
             <>
               <StatusTag tone="ok">{HOW[agreed.how]}</StatusTag>
               <Typography.Text>
-                {name(agreed.by)} ghi lúc {formatDateTime(agreed.at)}
+                {agreed.recorded_by_dw ? "DW1" : name(agreed.by)} ghi lúc{" "}
+                {formatDateTime(agreed.at)}
               </Typography.Text>
               {agreed.message_id ? <MailLink id={agreed.message_id} /> : null}
               {order.status === "confirmed" && agreed.how === "implied" ? (

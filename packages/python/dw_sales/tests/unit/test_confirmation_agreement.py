@@ -649,6 +649,7 @@ async def test_dw1_records_the_silence_itself_and_the_pic_undoes_it_with_one_pre
     from dw_platform.domain.audit import system_actor
     from dw_sales.application.confirmations import SilenceRecorder
     from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
+    from dw_sales.application.views import agreement_view
 
     with SampleWith([]) as sample:
         world = _world(_with_days(sample, days=3))
@@ -673,6 +674,9 @@ async def test_dw1_records_the_silence_itself_and_the_pic_undoes_it_with_one_pre
         assert case.status is OrderStatus.CONFIRMED and case.agreement is not None
         lane_id = system_actor(SALES_FOLLOWUPS_LANE).value
         assert (case.agreement.how, case.agreement.by) == ("implied", lane_id)
+        # The card names DW1, not the lane's id (DW1 review, ui).
+        seen = agreement_view(case)
+        assert seen is not None and seen.recorded_by_dw
         (audited,) = [e for e in world.audit() if e.action == "sales.order.customer_agreed"]
         assert audited.details["actor_kind"] == "worker"
         told = [n for n in world.notifications.sent if "DW1 đã ghi" in n.title]
@@ -689,10 +693,14 @@ async def test_dw1_records_the_silence_itself_and_the_pic_undoes_it_with_one_pre
 
 
 async def test_only_a_silence_is_undone_never_a_customers_words() -> None:
+    from dw_sales.application.views import agreement_view
+
     with SampleWith([]) as sample:
         world = _world(_with_days(sample, days=3))
         case_id = await _sent_to_customer(world)
         await _agree(world, case_id, "accepted")
+        seen = agreement_view(world.order(case_id))
+        assert seen is not None and not seen.recorded_by_dw
         with pytest.raises(ConflictError) as refused:
             await world.services.confirmations.implied_undone(
                 AN.context(), case_id, case_version=_version(world, case_id)

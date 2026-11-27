@@ -211,11 +211,32 @@ describe("Khách xác nhận đơn (ticket 28)", () => {
           at: "2026-11-06T03:00:00Z",
           message_id: null,
           quotes: [],
+          recorded_by_dw: false,
         },
       }),
     );
     expect(screen.getByText("Khách im lặng quá hạn: đồng ý ngầm")).toBeTruthy();
     expect(screen.queryByText("Khách từ chối")).toBeNull();
+  });
+
+  it("names DW1 when it recorded the silence itself (ticket 82, DW1 review ui)", () => {
+    page(
+      order({
+        status: "confirmed",
+        confirmation: SENT,
+        agreement: {
+          how: "implied",
+          // The follow-up lane's system actor: a uuid5 no roster holds.
+          by: "1a2b3c4d-5e6f-5a7b-8c9d-0e1f2a3b4c5d",
+          at: "2026-11-06T03:00:00Z",
+          message_id: null,
+          quotes: [],
+          recorded_by_dw: true,
+        },
+      }),
+    );
+    expect(screen.getByText(/^DW1 ghi lúc/)).toBeTruthy();
+    expect(screen.queryByText(/Người dùng 1a2b3c4d/)).toBeNull();
   });
 
   it("takes an agreement by silence back with one confirmed press (ticket 82)", async () => {
@@ -229,6 +250,7 @@ describe("Khách xác nhận đơn (ticket 28)", () => {
           at: "2026-11-06T03:00:00Z",
           message_id: null,
           quotes: [],
+          recorded_by_dw: false,
         },
       }),
     );
@@ -257,6 +279,7 @@ describe("Khách xác nhận đơn (ticket 28)", () => {
           at: "2026-11-06T03:00:00Z",
           message_id: null,
           quotes: [],
+          recorded_by_dw: false,
         },
       }),
     );

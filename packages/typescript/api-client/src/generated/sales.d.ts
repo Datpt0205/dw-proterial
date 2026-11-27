@@ -2887,6 +2887,11 @@ export interface components {
             message_id: string | null;
             /** Quotes */
             quotes: string[];
+            /**
+             * Recorded By Dw
+             * @default false
+             */
+            recorded_by_dw: boolean;
         };
         Amount: string | components["schemas"]["Hidden"];
         /**

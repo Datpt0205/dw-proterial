@@ -164,3 +164,14 @@ Category: deployment
   without words goes red (red with one entry removed);
   `bravo-writes.test.tsx` red with the panel back on the raw reason;
   `test_bravo_line_writes.py` red with the code back in the notice.
+- **DW1's own implied agreement read "Người dùng 1a2b3c4d".** The lane
+  stamps the agreement with its system actor (a uuid5 no roster holds), and
+  `usePeople` knows DW1 only by a `dw1|worker|service:` prefix. Telling a
+  lane's id by its uuid version on the web was rejected: the demo seed's
+  people are uuid5 too. `AgreementView.recorded_by_dw` now says it (the
+  view compares `by` with `system_actor(SALES_FOLLOWUPS_LANE)`, as
+  `applied_by_dw` does for a code), and the card reads "DW1 ghi lúc …".
+  Tests: `test_confirmation_agreement.py` (the lane's agreement true, a
+  person's false; each red with the flag forced the other way) and
+  `agreement.test.tsx` (red with the card back on `name(by)`). Contracts and
+  api types regenerated.
