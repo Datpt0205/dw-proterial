@@ -293,7 +293,8 @@ class SilenceRecorder:
     async def record_implied(self, context: AccessContext, case_id: uuid.UUID) -> bool:
         """DW1 records the customer's silence as agreement itself (ticket 82,
         dw_sales ADR 0011 amendment): ``context`` is the follow-up lane's own
-        (its system actor, no scope), the case read for the whole workspace.
+        (its system actor, no scope), the case read for the whole workspace
+        (record visibility is a reader's rule, not a lane's: `visibility`).
         The domain's own fences hold: a term stamped on the confirmation and
         run out, nothing running in the update loop. False, and nothing
         written, where the case moved on or the term does not let it."""

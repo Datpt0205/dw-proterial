@@ -22,6 +22,21 @@ it to a case, whose owner is its assignee:
 
 A case outside these reads as not found, never as forbidden: a 403 would
 confirm the case exists.
+
+**A reader's rule, not a lane's** (Đạt, 2026-11-27, kept by recommendation).
+A step driven by a mail or a file changes a case whoever owns it: the
+processing of a customer's mail revising an order (`inbox_lane`, then
+`inbox_service`), PC's reply proposed on the case (`pc_replies`), a matching
+read-back passing the cross-check (`cross_check_on_match`), the customer's
+silence recorded as agreement (`followups`, `confirmations.record_implied`).
+Each acts for no person: it audits as its own system actor
+(`lane_audit_event`, ADR 0011) and loads the workspace's cases with no viewer
+(`support.stored_order(viewer=None)`, or the store directly), so this module
+is never asked. Narrowing a lane to one person's records would leave
+another PIC's order unprocessed, which is a lost mail, not a kept secret.
+What it changes is still read only through this rule: the person who may
+not see the case does not see the change either
+(`test_case_visibility.py`).
 """
 
 from __future__ import annotations

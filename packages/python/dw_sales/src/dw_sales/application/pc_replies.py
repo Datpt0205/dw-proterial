@@ -157,6 +157,8 @@ class PcReplyLane:
         pc = frozenset(a.lower() for a in rules.pc_mailboxes)
         if not pc or not await self.steps.allows(scope, rules, ModelStep.PC_REPLY):
             return PcReplyTick()
+        # Every waiting order of the workspace, whoever owns it: record
+        # visibility is a reader's rule, not a lane's (`visibility`).
         async with self.uow(scope) as work:
             waiting = {s.case.case_id: s for s in await work.orders.waiting_on_pc()}
         if not waiting:

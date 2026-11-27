@@ -515,7 +515,9 @@ class InboxProcessing:
             await require_running(work)
             # Every case of the message in this one transaction, with the
             # disposition that is the message's idempotency key: a mail
-            # processed twice opens no second set (ticket 19).
+            # processed twice opens no second set (ticket 19). A case the
+            # mail revises is read whoever owns it: record visibility is a
+            # reader's rule, not the mail's (`visibility`).
             for case in outcome.cases:
                 stored = await work.orders.get(case.case_id)
                 if stored is None:
