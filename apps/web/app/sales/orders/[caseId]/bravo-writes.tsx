@@ -22,13 +22,16 @@ import { fromPickerDay, toPickerDay } from "../../../../lib/dates";
 import { errorCode } from "../../../../lib/error-message";
 import { formatQuantity, parseAmountInput } from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
-import { bravoWriteValue } from "../../_lib/bravo-write";
+import {
+  bravoWriteReason,
+  bravoWriteValue,
+  bravoWriteWarning,
+} from "../../_lib/bravo-write";
 import { ActionError } from "../../_lib/errors";
 import {
   BRAVO_TARGET,
   BRAVO_WRITE_CHECK,
   BRAVO_WRITE_FIELD,
-  BRAVO_WRITE_REASON,
   BRAVO_WRITE_STATUS,
   label,
 } from "../../_lib/labels";
@@ -134,12 +137,10 @@ function LatestWrite({
         <Space wrap size={4}>
           {stoppedAt ? <Typography.Text>{stoppedAt}</Typography.Text> : null}
           {w.reason || w.warnings.length > 0 ? (
-            <InfoTip label={`Bravo trả lời về dòng ${w.line_no}`}>
-              {w.reason ? (
-                <div>Bravo trả lời: {label(BRAVO_WRITE_REASON, w.reason)}</div>
-              ) : null}
+            <InfoTip label={`Lý do và cảnh báo của dòng ${w.line_no}`}>
+              {w.reason ? <div>Lý do: {bravoWriteReason(w.reason)}</div> : null}
               {w.warnings.length > 0 ? (
-                <div>Cảnh báo, khác biệt: {w.warnings.join("; ")}</div>
+                <div>{`Cảnh báo, khác biệt: ${w.warnings.map(bravoWriteWarning).join("; ")}`}</div>
               ) : null}
             </InfoTip>
           ) : null}

@@ -281,28 +281,118 @@ export const BRAVO_WRITE_CHECK = {
   token: "Phiếu duyệt",
   target: "Bravo đang dùng",
   kind: "Loại ghi chưa chạy",
-  switch: "Loại ghi chưa bật cho đơn vị",
+  switch: "Loại ghi chưa được bật",
   ledger: "Phiếu duyệt đã dùng",
   identity: "User Bravo của người duyệt",
   right: "Quyền trong Bravo",
   rules: "Quy tắc màn hình Bravo",
   lock: "Dòng đang khóa trong Bravo",
   write: "Lúc ghi vào Bravo",
+  // DW's own client, before the gateway ran a check (`bravo_gateway_client`).
+  contract: "Lúc gửi lệnh ghi",
 } as const;
 
 /**
- * Why the gateway refused at its `target` step (ticket 85;
- * `dw_bravo_gateway.targets`, `pipeline`): the one check covers three
- * reasons, each with its own way out. Another reason shows as the gateway
- * said it.
+ * Why a Bravo write was refused or stopped, by the code the gateway answers
+ * with (`dw_bravo_gateway.pipeline`, the token's `approval_token`, the
+ * targets' `targets`) or DW itself settles on (`bravo_line_writes`): the
+ * code before any ": <detail>". `bravoWriteReason` (`bravo-write.ts`) reads
+ * it; a code this table does not name shows as a sentence for IT with the
+ * code, never the code alone (ui-quality §4).
  */
 export const BRAVO_WRITE_REASON = {
+  // The approval's signed token.
+  no_token_on_the_decision: "Lần duyệt không có phiếu ký để ghi: duyệt lại",
+  malformed: "Phiếu duyệt hỏng: duyệt lại",
+  unknown_key: "Phiếu duyệt ký bằng khóa lạ: báo quản trị",
+  bad_signature: "Chữ ký của phiếu duyệt không đúng: báo quản trị",
+  lifetime_too_long: "Phiếu duyệt có hạn dài quá mức cho phép: báo quản trị",
+  not_yet_valid: "Phiếu duyệt chưa đến giờ hiệu lực: báo quản trị",
+  expired: "Phiếu duyệt đã hết hạn trước khi ghi: đề xuất lại",
+  unknown_format: "Phiếu duyệt có dạng lạ: báo quản trị",
+  another_tenants_approval: "Phiếu duyệt không thuộc công ty này",
+  kind_not_approved: "Phiếu duyệt không phải cho loại ghi này",
+  content_changed_since_approval:
+    "Nội dung ghi khác nội dung đã duyệt: đề xuất lại",
+  // Which Bravo (ticket 85).
   target_changed:
     "Bravo đang dùng đã đổi từ lúc đề xuất: đề xuất lại trên Bravo đang dùng",
   target_unconfigured:
-    "Gateway chưa có tài khoản của Bravo đang dùng: nhờ quản trị cấp tài khoản",
+    "DW1 chưa có tài khoản kết nối Bravo đang dùng: nhờ quản trị cấp tài khoản",
   target_unreadable:
     "Quy tắc chưa chỉ rõ Bravo nào (Bravo thật cần lần chạy UAT): sửa quy tắc “DW1 tự ghi vào Bravo”",
+  // The kind of write and its switch.
+  pending: "DW1 chưa ghi được loại thay đổi này: sửa trực tiếp trong Bravo",
+  write_kind_off:
+    "Việc ghi loại này đang tắt (mở sau lần chạy thử UAT): sửa trực tiếp trong Bravo",
+  write_kind_paused:
+    "Việc ghi loại này đang tạm dừng: sửa trực tiếp trong Bravo hoặc chờ mở lại",
+  // The approval's one write.
+  approval_already_claimed:
+    "Phiếu duyệt này đang được dùng cho một lần ghi khác",
+  approval_already_written: "Phiếu duyệt này đã dùng để ghi rồi",
+  approval_already_refused: "Phiếu duyệt này đã bị từ chối ghi lần trước",
+  approval_already_in_doubt:
+    "Phiếu duyệt này đã gửi một lần chưa rõ kết quả: kiểm tra trong Bravo",
+  approval_already_reconcile_failed:
+    "Phiếu duyệt này đã ghi một lần, đọc lại thấy khác: kiểm tra trong Bravo",
+  // The decider's own Bravo user.
+  no_active_bravo_user_for_employee_code:
+    "Mã nhân viên của người duyệt không có user Bravo nào đang hoạt động",
+  several_active_bravo_users_for_employee_code:
+    "Mã nhân viên của người duyệt có nhiều user Bravo đang hoạt động",
+  bravo_user_changed_since_approval:
+    "User Bravo của người duyệt đã đổi từ lúc duyệt: duyệt lại",
+  // Bravo's own rights.
+  command_right_denied:
+    "User Bravo của người duyệt không có quyền sửa SO trên màn hình này",
+  command_right_unknown:
+    "Chưa đọc được quyền của user Bravo người duyệt trên màn hình này",
+  no_right_on: "User Bravo của người duyệt không có quyền sửa cột",
+  // The SO and Bravo's screen rules.
+  document_not_found: "Không còn SO này trong Bravo",
+  line_not_in_document: "Không còn dòng này trong SO",
+  line_changed_since_approval:
+    "Dòng SO đã đổi trong Bravo từ lúc đề xuất: đề xuất lại",
+  layout_could_not_be_read: "Chưa đọc được màn hình SO của Bravo",
+  rules_could_not_decide:
+    "Quy tắc màn hình Bravo không quyết được thay đổi này",
+  blocked: "Quy tắc màn hình Bravo chặn thay đổi này",
+  undecided: "Chưa kiểm được quy tắc màn hình Bravo",
+  provisional: "DW1 chưa có đủ mẫu màn hình Bravo để kiểm quy tắc nên chưa ghi",
+  unmeasured:
+    "Trường hợp này DW1 chưa đo được cách Bravo xử lý nên không ghi: sửa trực tiếp trong Bravo",
+  line_locked_or_could_not_check:
+    "Dòng đang khóa trong Bravo (hoặc chưa kiểm được khóa)",
+  // The write itself.
+  row_changed_before_write:
+    "Dòng SO vừa đổi trong Bravo ngay trước khi ghi: không ghi gì, đề xuất lại",
+  rejected_and_rolled_back:
+    "Bravo không nhận lần ghi: đã hoàn lại, không đổi gì",
+  no_answer_after_send:
+    "Đã gửi nhưng Bravo không trả lời: kiểm tra trong Bravo",
+  bravo_unreachable_could_not_check:
+    "Không kết nối được Bravo để kiểm: chưa ghi gì",
+  gateway: "Lệnh ghi không đúng dạng nên không gửi được: chưa ghi gì",
+} as const;
+
+/**
+ * The cases the gateway has not measured Bravo on (`unmeasured: <case>`), in
+ * words; one this table does not name reads as `unmeasured` does.
+ */
+export const BRAVO_WRITE_UNMEASURED = {
+  "a write on a line Bravo holds cancelled":
+    "Dòng này Bravo đang giữ ở trạng thái hủy: sửa trực tiếp trong Bravo",
+  "a cancel of a split line":
+    "Hủy một dòng đã tách chưa được đo: hủy trực tiếp trong Bravo",
+  "a split of a line already in a split group":
+    "Tách một dòng đã nằm trong nhóm tách chưa được đo: tách trực tiếp trong Bravo",
+  "a split of a line other lines follow":
+    "Tách một dòng không phải dòng cuối chưa được đo: tách trực tiếp trong Bravo",
+  "a confirmed date on a split part":
+    "Ghi ngày XN giao cho phần tách chưa được đo: sửa trực tiếp trong Bravo",
+  "the context's year for a document of another year":
+    "SO lập từ năm trước: sửa trực tiếp trong Bravo",
 } as const;
 
 /** Design's result for a line in Bravo (`DesignCheck`). */

@@ -188,22 +188,27 @@ describe(
       async () => {
         WRITES = [
           write({
-            status: "refused",
+            status: "in_doubt",
             check: "switch",
-            reason: "write_kind_disabled",
+            // DW sent again after a lost answer: the suffix is DW's own.
+            reason: "write_kind_off after a lost answer",
             warnings: ["SO_W12"],
           }),
         ];
         panel(twoLines());
         expect(
-          await screen.findByText("Ở bước: Loại ghi chưa bật cho đơn vị"),
+          await screen.findByText("Ở bước: Loại ghi chưa được bật"),
         ).toBeTruthy();
         fireEvent.click(
-          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+          screen.getByRole("button", { name: "Lý do và cảnh báo của dòng 1" }),
         );
+        // The gateway's code in words, never the code (DW1 review, ui).
         expect(
-          await screen.findByText("Bravo trả lời: write_kind_disabled"),
+          await screen.findByText(
+            `Lý do: ${BRAVO_WRITE_REASON.write_kind_off} (sau một lần gửi mất câu trả lời: có thể Bravo đã ghi, kiểm tra trong Bravo)`,
+          ),
         ).toBeTruthy();
+        expect(screen.queryByText(/write_kind_off/)).toBeNull();
         expect(screen.getByText("Cảnh báo, khác biệt: SO_W12")).toBeTruthy();
       },
     );
@@ -217,7 +222,7 @@ describe(
           write({
             status: "written_with_differences",
             check: "write",
-            warnings: ["Quantity9"],
+            warnings: ["Detail#0.Quantity9"],
           }),
         ];
         panel(twoLines());
@@ -225,10 +230,12 @@ describe(
         // It was written: no "stopped at" for it.
         expect(screen.queryByText(/Ở bước/)).toBeNull();
         fireEvent.click(
-          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+          screen.getByRole("button", { name: "Lý do và cảnh báo của dòng 1" }),
         );
         expect(
-          await screen.findByText("Cảnh báo, khác biệt: Quantity9"),
+          await screen.findByText(
+            "Cảnh báo, khác biệt: Detail#0, cột Quantity9: Bravo lưu khác giá trị đã ghi",
+          ),
         ).toBeTruthy();
       },
     );
@@ -248,11 +255,11 @@ describe(
         panel(twoLines());
         expect(await screen.findByText("Ở bước: Bravo đang dùng")).toBeTruthy();
         fireEvent.click(
-          screen.getByRole("button", { name: "Bravo trả lời về dòng 1" }),
+          screen.getByRole("button", { name: "Lý do và cảnh báo của dòng 1" }),
         );
         expect(
           await screen.findByText(
-            `Bravo trả lời: ${BRAVO_WRITE_REASON.target_unconfigured}`,
+            `Lý do: ${BRAVO_WRITE_REASON.target_unconfigured}`,
           ),
         ).toBeTruthy();
       },

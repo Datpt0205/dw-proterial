@@ -142,3 +142,25 @@ Category: deployment
   The three PUT and two DELETE Sales routes were outside it (all correct
   today). It now takes every method that is not a read; red when a PUT or
   a DELETE route claims the key before its guard.
+
+### 2026-11-27 — full review (ui)
+
+- **A Bravo write's reason in machine words.** "Ghi vào Bravo" showed the
+  gateway's codes as "Bravo trả lời: write_kind_off", which every approved
+  write gets until UAT; only the three target reasons had words. The
+  reason is kept as the gateway answers it (the audit and the ledger read
+  it); `bravoWriteReason` (`_lib/bravo-write.ts`) puts every code the
+  gateway, its token and target checks and DW's settlement answer with into
+  words (`BRAVO_WRITE_REASON`, the f-string families by their Literals, the
+  unmeasured cases, DW's "after a lost answer" suffix), and an unknown code
+  reads as a sentence for IT with the code. `bravoWriteWarning` words the
+  read-back differences; a screen rule's warning keeps the rule's own name.
+  The line reads "Lý do:", not "Bravo trả lời" (the gateway refuses, not
+  Bravo); the switch step reads "Loại ghi chưa được bật" (not "cho đơn vị",
+  which on this panel reads as a unit of measure); the decider's notice
+  says to see the reason on the order instead of the code. Tests:
+  `bravo-write-words.test.ts` reads the reason literals from the gateway's,
+  the token's, the targets' and the settlement's source, so a new code
+  without words goes red (red with one entry removed);
+  `bravo-writes.test.tsx` red with the panel back on the raw reason;
+  `test_bravo_line_writes.py` red with the code back in the notice.

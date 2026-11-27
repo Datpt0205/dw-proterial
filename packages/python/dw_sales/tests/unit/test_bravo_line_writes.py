@@ -733,6 +733,20 @@ async def test_the_gateways_refusal_is_kept_with_its_reason() -> None:
     assert (row.status, row.check, row.reason) == ("refused", "switch", "write_kind_off")
 
 
+async def test_the_deciders_notice_points_to_the_reason_and_never_shows_its_code() -> None:
+    # DW1 review (ui): the reason is the gateway's code; the order page says
+    # it in words, the notice only that there is one.
+    world, notices = World(), Notices()
+    gateway = Gateway([GatewayAnswer("refused", "switch", "write_kind_off")])
+    request, token = await _decided(world)
+
+    await _settlement(world, gateway, notices).settle(request.id, PIC_CONTEXT, token)
+
+    [told] = notices.told
+    assert "write_kind_off" not in told["body"]
+    assert told["body"].endswith("Xem lý do trên trang đơn.")
+
+
 async def test_a_refusal_after_a_lost_answer_is_in_doubt_not_refused() -> None:
     world = World()
     gateway = Gateway(
