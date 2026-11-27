@@ -28,7 +28,11 @@ _INSERT = sa.text(
 
 
 async def _ledger_row(
-    migrator: AsyncEngine, scope: SalesScope, status: str, claimed_ago: timedelta
+    migrator: AsyncEngine,
+    scope: SalesScope,
+    status: str,
+    claimed_ago: timedelta,
+    settled_after: timedelta = timedelta(0),
 ) -> None:
     claimed = datetime.now(UTC) - claimed_ago
     async with migrator.begin() as conn:
@@ -41,7 +45,7 @@ async def _ledger_row(
                 "h": "a" * 64,
                 "status": status,
                 "claimed": claimed,
-                "settled": None if status == "claimed" else claimed,
+                "settled": None if status == "claimed" else claimed + settled_after,
             },
         )
 
@@ -67,6 +71,23 @@ async def test_rows_waiting_for_a_person_in_every_tenant_are_counted_and_nothing
     async with app_sessions() as session:
         visible = await session.scalar(sa.text("SELECT count(*) FROM bravo.write_ledger"))
     assert visible == 0, "dw_app with no tenant bound reads no row itself"
+
+
+async def test_a_claim_that_went_stale_stays_counted_once_it_settles(
+    migrator: AsyncEngine, app_sessions: async_sessionmaker[AsyncSession], world: World
+) -> None:
+    """Migration 5895c4d8683e: the alert fires on a rise, so a stale claim
+    settling late must not lower the count and cancel a new one's rise."""
+    health = SqlBravoLedgerHealth(app_sessions)
+    before = await health.needing_a_person()
+
+    hour = timedelta(hours=1)
+    # Hung on Bravo for 20 minutes, then written: it was told, it stays told.
+    await _ledger_row(migrator, world.alpha, "written", hour, timedelta(minutes=20))
+    # Written 2 minutes after the claim: never stale, never counted.
+    await _ledger_row(migrator, world.alpha, "written", hour, timedelta(minutes=2))
+
+    assert await health.needing_a_person() == before + 1
 
 
 async def test_only_dw_app_may_ask_and_the_function_runs_as_its_owner(

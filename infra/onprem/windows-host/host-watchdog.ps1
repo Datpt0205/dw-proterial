@@ -245,6 +245,9 @@ if (Test-Path $bs) {
 # always-firing Watchdog: an empty list cannot tell "all well" from
 # Prometheus or Alertmanager being down. Until the relay is installed (no
 # file seen yet) there is nothing to judge; once seen, a missing file fails.
+# An alert labelled `notice: event` (a Bravo write in doubt) clears by itself
+# while the thing it told of still stands: its clearing resets the check
+# without an "OK again" mail, which would read as fixed.
 $af = 'B:\DW-Backup\status\alerts.json'
 if ((Test-Path $af) -or $state['alert-relay.seen']) {
     $state['alert-relay.seen'] = $true
@@ -262,11 +265,17 @@ if ((Test-Path $af) -or $state['alert-relay.seen']) {
         foreach ($a in $alerts | Where-Object { $_.name -ne 'Watchdog' }) {
             $key = if ($a.which) { "alert-$($a.name)-$($a.which)" } else { "alert-$($a.name)" }
             $firing[$key] = $true
-            [void](Report $key $false "$($a.summary) ($($a.name), $($a.severity)). Grafana and the dw-worker log say more.")
+            $isEvent = $a.notice -eq 'event'
+            $state["$key.event"] = $isEvent
+            $tail = if ($isEvent) { ' This alert clears by itself after 30 minutes; what it tells of does not, so no "OK again" follows.' } else { '' }
+            [void](Report $key $false "$($a.summary) ($($a.name), $($a.severity)). Grafana and the dw-worker log say more.$tail")
         }
         foreach ($k in @($state.Keys | Where-Object { $_ -like 'alert-*.status' -and $_ -ne 'alert-relay.status' })) {
             $name = $k -replace '\.status$', ''
-            if (-not $firing.ContainsKey($name) -and $state[$k] -eq 'failing') { [void](Report $name $true '') }
+            if (-not $firing.ContainsKey($name) -and $state[$k] -eq 'failing') {
+                if ($state["$name.event"]) { $state[$k] = 'ok'; $state["$name.count"] = 0; Log "cleared (an event, nothing fixed): $name" }
+                else { [void](Report $name $true '') }
+            }
         }
     }
 }

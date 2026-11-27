@@ -95,14 +95,16 @@ tests:
       - eval_time: 25m
         alertname: DwBravoWriteNeedsAPerson
         exp_alerts:
-          - exp_labels: { job: dw-worker, severity: warning }
+          - exp_labels: { job: dw-worker, severity: warning, notice: event }
             exp_annotations:
               summary: "A Bravo write needs a person to check Bravo"
               description: >
                 The gateway's ledger now holds 3
-                write(s) in doubt or written with differences. Open the case and
+                write(s) a person was asked to check. Open the case and
                 read the SO in Bravo before anything else is written to it.
-      # 30 minutes on with no new one, the rule clears.
+                This alert clears by itself; the write does not.
+      # 30 minutes on with no new one, the rule clears: its `notice: event`
+      # keeps that from being told as fixed.
       - eval_time: 1h
         alertname: DwBravoWriteNeedsAPerson
         exp_alerts: []

@@ -1,8 +1,9 @@
 """How many of the gateway's Bravo writes wait for a person (ticket 84).
 
 One number across every tenant, from `bravo.writes_needing_a_person()`
-(migration fc8d358317fe): ledger rows `in_doubt`, `reconcile_failed`, or
-still `claimed` 15 minutes on. The function is SECURITY DEFINER and answers a
+(migrations fc8d358317fe, 5895c4d8683e): ledger rows `in_doubt`,
+`reconcile_failed`, or ever `claimed` 15 minutes (still, or settled later),
+so the count never falls when a stale claim settles. The function is SECURITY DEFINER and answers a
 count only, so this reads it without binding a tenant: no id, tenant or
 content of any write leaves the database through it.
 """

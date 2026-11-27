@@ -166,18 +166,26 @@ groups:
       - alert: DwBravoWriteNeedsAPerson
         # Sales ticket 84. A Bravo write the gateway could not settle cleanly:
         # sent with no answer, written with a read-back that differs, or
-        # claimed and never settled. Those ledger states are final, so the
-        # count never goes back down by itself; the rule fires when it rises
-        # and clears after 30 minutes. The PIC sees each one on its case.
+        # claimed and left 15 minutes. The count never goes back down by
+        # itself (a stale claim that settles later stays counted, migration
+        # 5895c4d8683e), so a rise is a new one; the rule fires on it and
+        # clears after 30 minutes. The PIC sees each one on its case.
+        #
+        # `notice: event`: clearing fixes nothing, the write is still in
+        # doubt. Alertmanager sends no resolved notice for it and the host's
+        # watchdog mails no "OK again" (alertmanager.yml.template,
+        # host-watchdog.ps1 section 5d).
         expr: delta(dw_bravo_writes_needing_a_person[30m]) > 0
         labels:
           severity: warning
+          notice: event
         annotations:
           summary: "A Bravo write needs a person to check Bravo"
           description: >
             The gateway's ledger now holds {{ with query "dw_bravo_writes_needing_a_person" }}{{ . | first | value }}{{ end }}
-            write(s) in doubt or written with differences. Open the case and
+            write(s) a person was asked to check. Open the case and
             read the SO in Bravo before anything else is written to it.
+            This alert clears by itself; the write does not.
 
       - alert: Watchdog
         # Sales ticket 84. Always firing, on purpose: the host's relay reads

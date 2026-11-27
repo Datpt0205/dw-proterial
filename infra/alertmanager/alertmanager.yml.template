@@ -17,6 +17,11 @@ route:
     # host's relay as proof the pipeline runs, and sent to nobody.
     - matchers: ['alertname="Watchdog"']
       receiver: blackhole
+    # An alert that tells of an event (`notice: event`, DwBravoWriteNeedsAPerson)
+    # clears by itself while what it told of still stands, so its clearing is
+    # sent to nobody: a "resolved" would read as fixed.
+    - matchers: ['notice="event"']
+      receiver: webhook-event
 
 receivers:
   - name: blackhole
@@ -24,3 +29,7 @@ receivers:
     webhook_configs:
       - url: "__ALERTMANAGER_WEBHOOK_URL__"
         send_resolved: true
+  - name: webhook-event
+    webhook_configs:
+      - url: "__ALERTMANAGER_WEBHOOK_URL__"
+        send_resolved: false

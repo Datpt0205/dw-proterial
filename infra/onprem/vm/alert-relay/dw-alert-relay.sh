@@ -19,11 +19,14 @@ mountpoint -q "$DEST" || { echo "backup share not mounted at $DEST" >&2; exit 1;
 
 answer="$(curl -fsS --max-time 20 "$URL")"
 # One entry per alert: its name, the label that says which one (lane,
-# channel, queue or job), and its summary. Nothing else leaves the VM.
+# channel, queue or job), its summary, and `notice` ("event" for an alert
+# whose clearing fixes nothing, which the host then does not mail as "OK
+# again"). Nothing else leaves the VM.
 alerts="$(jq -c '[.[] | {
     name: .labels.alertname,
     which: (.labels.lane // .labels.channel // .labels.queue // .labels.job // ""),
     severity: (.labels.severity // ""),
+    notice: (.labels.notice // ""),
     summary: (.annotations.summary // "")
   }]' <<<"$answer")"
 

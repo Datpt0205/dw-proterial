@@ -1,6 +1,6 @@
 # 84 — Production readiness for DW1
 
-Status: needs-info (codeable parts built 2026-11-27; Đạt's mailbox term and keep rule owed; the drills wait for 83)
+Status: needs-info (codeable parts built 2026-11-27, review fixes the same day; Đạt's mailbox term and keep rule owed; the drills wait for 83)
 Blocked by: 83
 Category: operations
 
@@ -111,3 +111,64 @@ behaviour.
 - Plant: read the new metrics on the live worker's `:9464/metrics`; measure
   the thresholds on real traffic.
 
+### 2026-11-27, review findings checked and fixed (unattended workflow)
+
+Five findings from the review of `821ce89e`..`4901f0b3`. Each was read
+against the code before anything changed; all five held, one in part.
+
+- **`sales_pc_replies` swallowed a workspace's failure.** True: its
+  per-scope loop is in `PcReplyLane.tick` (application layer), which the
+  `consumers/*` sweep missed. `PcReplyTick.failed` counts the workspaces
+  that raised; the consumer calls `raise_if_failed` after the tick. The
+  application layer still imports nothing of the worker.
+- **The Zalo lanes recorded nothing.** True, and the comment above
+  ("zalo ... record per-item failures") was wrong. The router records a
+  *command's* failure; what raises past it (the database, the link store)
+  was only logged. Both lanes now count those and raise after the batch.
+  Pacing is unchanged: `run_worker` waits the interval either way.
+  `raise_if_failed` takes `what` so the log says "update", not "scope".
+- **`DwBravoWriteNeedsAPerson` told the operator "OK again".** True. It
+  now carries `notice: event`. Alertmanager routes `notice="event"` to
+  `webhook-event` (`send_resolved: false`). The relay passes `notice`.
+  The host watchdog clears such a check without a mail, and its PROBLEM
+  mail says no "OK again" follows. `render-config.sh`'s no-webhook range
+  now closes at either `send_resolved:` line, so each receiver loses its
+  integration whatever the order.
+- **A drop hid a rise.** True in part. A drop only hides a rise when both
+  land in one 5-minute sample; otherwise the rule fires until the drop.
+  But a Bravo hang that recovers is exactly when the two coincide, so
+  migration `5895c4d8683e` keeps a claim that went stale counted after it
+  settles. The count now falls only when a tenant's ledger is deleted
+  with the tenant (offboarding): that residual is accepted, the PIC still
+  sees each write on its case.
+- **Two tests that could not fail.** True. Web push had no commit-failure
+  test: added. The delivery lanes' raise-after-the-others guard ran with
+  one workspace: both now have a second workspace behind the failing one.
+  `sales.md` had ticked the web push row on a test that did not exist.
+
+**Measured, 2026-11-27.** Each guard has a mutation that turns its test red:
+
+- PC lane count removed: red.
+- PC consumer raise removed: red.
+- Each Zalo raise removed: red.
+- Web push counter moved inside the claim: red.
+- Raise moved into the `except`, web push and channel: red.
+- New migration clause removed: red on Postgres.
+- `notice: event` dropped: promtool red.
+- Pre-fix watchdog: 3 of 9 harness cases red.
+
+Other runs:
+
+- Worker unit suite: green.
+- `test_pc_replies.py`: green.
+- `test_alert_rules_read_emitted_metrics.py`: green.
+- import-linter: 17 kept.
+- `verify_invariants.py`: ok.
+- promtool: SUCCESS.
+- `amtool check-config`: SUCCESS, with and without a webhook.
+- `amtool config routes test`: each alert reaches its receiver.
+- Relay `jq` on a sample answer: as expected.
+- Migration down and up on `dw_test_sales`: clean.
+
+**Left.** The relay drill on the plant now also checks that the Bravo alert
+sends no "OK again" (ticket 83).
