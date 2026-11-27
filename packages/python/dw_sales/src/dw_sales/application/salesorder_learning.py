@@ -773,9 +773,9 @@ class SalesOrderSheetsPort(Protocol):
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None: ...
 
-    async def sheet_names(self, data: bytes) -> list[str]: ...
+    async def sheet_names(self, data: bytes, caps: IntakeCaps) -> list[str]: ...
 
-    async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None: ...
+    async def sheet_grid(self, data: bytes, sheet: str, caps: IntakeCaps) -> SheetGrid | None: ...
 
 
 class LearnedProposalPort(Protocol):
@@ -1235,7 +1235,7 @@ class SalesOrderLearning:
                 customer.code,
                 order_rules.intake,
             )
-            grid = await self._grid(salesorder)
+            grid = await self._grid(salesorder, order_rules.intake)
         except DomainError:
             return "không mở được một trong hai tệp"
         if isinstance(document, Unreadable):
@@ -1254,10 +1254,10 @@ class SalesOrderLearning:
         baseline = replay(layout, None, rows, customer, lookups, pic)
         return Pair(layout, customer, lookups, rows, pic, baseline, document)
 
-    async def _grid(self, data: bytes) -> SheetGrid | None:
-        """The first sheet with a header row."""
-        for name in (await self.sheets.sheet_names(data))[:MAX_SHEETS]:
-            grid = await self.sheets.sheet_grid(data, name)
+    async def _grid(self, data: bytes, caps: IntakeCaps) -> SheetGrid | None:
+        """The first sheet with a header row, under the caps its PO was read under."""
+        for name in (await self.sheets.sheet_names(data, caps))[:MAX_SHEETS]:
+            grid = await self.sheets.sheet_grid(data, name, caps)
             if grid is not None and header_row(grid) is not None:
                 return grid
         return None

@@ -81,7 +81,7 @@ dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
 processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
 steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE, MemoryBravoExportStore())
 RUN = uuid.UUID(int=10)
-sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache())
+sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache(), STORE)
 artifacts = ArtifactService(
     STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE, STORE
 )

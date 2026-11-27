@@ -487,3 +487,51 @@ async def test_a_request_is_kept_for_the_worker_with_one_event_and_an_audit_row(
     ]
     assert [e.action for e in lane] == ["sales.salesorder_example.replayed"]
     assert all("HK" not in str(e.details) for e in bench.store.audit.events)
+
+
+async def test_the_salesorder_file_is_opened_under_the_caps_its_po_was_read_under(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DW1 review, config (2026-11-27): both files of a pair are opened under
+    the company's order rules, never the SalesOrder under the platform
+    file's caps bound when the process started."""
+    from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
+    from dw_sales.adapters.readers.operations import InProcessReaderTransport
+    from dw_sales.application.rules import Resolved
+    from dw_sales.domain.order_checks import IntakeCaps, OrderRules
+
+    spec = pair(CASES, "SR01")
+    bench, _ = _bench(spec["gold"])
+    view = await bench.service().request(
+        GIANG.context(ALPHA),
+        spec["customer"],
+        date.fromisoformat(spec["received_on"]),
+        ("po.xlsx", po_bytes(spec)),
+        ("SalesOrder.xlsx", salesorder_bytes(bench.layout, file_cells(spec))),
+    )
+    platform = bench.rules()
+    raised: list[IntakeCaps] = []
+
+    class Company:
+        async def current(self, scope: Any, key: RuleKey) -> Resolved:
+            resolved = await platform.current(scope, key)
+            if key is not RuleKey.ORDER_RULES:
+                return resolved
+            rules = resolved.policy
+            assert isinstance(rules, OrderRules)
+            caps = rules.intake.model_copy(update={"max_cells": rules.intake.max_cells * 2})
+            raised.append(caps)
+            return Resolved(rules.model_copy(update={"intake": caps}), "tenant")
+
+    asked: list[IntakeCaps | None] = []
+    original = InProcessReaderTransport.call
+
+    async def recorded(self: InProcessReaderTransport, request: ReaderRequest) -> ReaderReply:
+        if request.operation in {ReaderOp.SOURCE_SHEET_NAMES, ReaderOp.SOURCE_SHEET_GRID}:
+            asked.append(request.args.caps)
+        return await original(self, request)
+
+    monkeypatch.setattr(InProcessReaderTransport, "call", recorded)
+    await replace(bench.learning(), rules=Company()).learn(ALPHA, view.example_id)
+
+    assert raised and asked and set(asked) == {raised[0]}

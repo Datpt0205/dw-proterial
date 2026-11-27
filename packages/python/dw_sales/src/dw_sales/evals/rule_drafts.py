@@ -73,7 +73,6 @@ from dw_sales.application.rule_drafts import (
     RuleDraftView,
 )
 from dw_sales.application.rules import Policy, Resolved, RuleKey
-from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, Caller, Directory
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
@@ -282,7 +281,7 @@ class Bench:
     def drafting(self) -> RuleDrafting:
         return RuleDrafting(
             uow=self.store,
-            sheets=ClientSourceView(InProcessReaderTransport(), _caps(self.repo_root)),
+            sheets=ClientSourceView(InProcessReaderTransport()),
             scanner=NoMalware(),
             rules=_PlatformRules(_policies(self.repo_root).current()),
             access=Directory(tuple(self.callers)),
@@ -306,10 +305,6 @@ class Bench:
         )
         await self.drafting().draft(scope, requested.draft_id)
         return await self.service().get(asker.context(scope), requested.draft_id)
-
-
-def _caps(repo_root: Path) -> IntakeCaps:
-    return _policies(repo_root).order_rules.intake
 
 
 def model_under_test(ctx: GraderContext, spec: Mapping[str, Any]) -> Any:

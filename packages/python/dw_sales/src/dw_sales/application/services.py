@@ -332,7 +332,7 @@ def assemble(
 ) -> SalesAssembly:
     gate = Gate(authorization)
     queue = ProcessingService(uow, gate, clock, ids, inbox)
-    sources = SourceService(uow, gate, clock, inbox, files, source_cache)
+    sources = SourceService(uow, gate, clock, inbox, files, source_cache, intake.rules)
     rules = SalesRulesService(uow, gate, book, clock, ids, directory, readiness)
     processing = InboxProcessing(
         uow,

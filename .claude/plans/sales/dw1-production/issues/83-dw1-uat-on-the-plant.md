@@ -74,3 +74,28 @@ Category: deployment
   quote rules' `copper_basis` nor the month's band; that needs a view field.
   English values of other order flags (`customer_unknown`,
   `revision_without_base`, `duplicate_po`) are left as written.
+
+### 2026-11-27 — full review (config)
+
+- **The source view opened a PO under the platform's caps.** Reading a PO
+  and the manual upload took the tenant's `intake` caps per call
+  (`order_intake._order`, `po_uploads`); the source view, the rule-draft
+  template and the learned SalesOrder file used the platform file's caps,
+  bound when the process started (`client_readers(reader,
+  policies.order_rules.intake)`). A company that raised `max_pages` got POs
+  read that Sales could not open, so "Xác nhận" stayed off. Now
+  `ClientSourceView` takes the caps per call, and `SourceService`,
+  `RuleDrafting` and `SalesOrderLearning` pass the tenant's
+  (`SourceService.rules` is new). DW2's workbook reader passes its own, as
+  before. Tests: `test_source_caps.py` (the view asks with the company's
+  raised caps; the company's lowered caps refuse a file read earlier),
+  `test_rule_drafts.py` and `test_salesorder_learning.py` (one each); all
+  four red with the platform caps put back in each service.
+  The table reader (a master list or a Bravo screen Sales uploads) keeps the
+  platform file's caps: those are not a sender's file, and changing them
+  would also move DW2's master import. The `bound_at_build` lock now says
+  that in words instead of "may not take effect". Not done: whether staff
+  uploads should follow the company's caps too is Đạt's call. The review
+  also said the lock is not enforced; that is by design: the lock only
+  decides where the field is edited, and a rules version still goes
+  through proposal and approval.

@@ -1198,7 +1198,7 @@ const LOCK_REASON: Record<LockReason, string> = {
   model_bar:
     "Một bước dùng mô hình chỉ bật được khi lần đo thực tế gần nhất của bước đó, trên mô hình và lời nhắc đang dùng, đạt ngưỡng; hệ thống từ chối phiên bản bật bước chưa đạt, và chưa đạt thì DW1 để người làm. Đề xuất ở trang Quy tắc.",
   bound_at_build:
-    "Bộ đọc tệp đang dùng giới hạn của bản nền tảng, nên phiên bản riêng của công ty có thể chưa có tác dụng.",
+    "Tệp khách gửi được đọc và mở xem theo giới hạn của công ty; riêng danh sách dữ liệu chủ và tệp màn hình Bravo tải lên vẫn theo giới hạn của bản nền tảng.",
   trust:
     "Danh sách này quyết định thư của ai được coi là của Design: đây là thiết lập tin cậy.",
   two_owners:

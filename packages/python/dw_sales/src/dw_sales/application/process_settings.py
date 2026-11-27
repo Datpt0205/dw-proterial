@@ -670,8 +670,10 @@ class LockReason(StrEnum):
     # met the bar (ADR 0005, addendum of 2026-10-23). Proposed on /sales/rules;
     # each step's measurement is served beside it (`ProcessStepView.models`).
     MODEL_BAR = "model_bar"
-    # The readers bind the platform file's intake caps when they are built
-    # (adapters/assembly.py), so a tenant's version may not reach them.
+    # Every reader of a sender's file, its source view included, takes the
+    # tenant's version per call; the table reader (a master list or a Bravo
+    # screen Sales uploads) binds the platform file's intake caps when it is
+    # built (`client_readers`, adapters/assembly.py).
     BOUND_AT_BUILD = "bound_at_build"
     # Trust configuration: whose mail is Design's.
     TRUST = "trust"

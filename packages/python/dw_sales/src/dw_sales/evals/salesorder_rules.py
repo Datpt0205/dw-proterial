@@ -326,10 +326,6 @@ class Proposals:
         )
 
 
-def _caps(repo_root: Path) -> IntakeCaps:
-    return _policies(repo_root).order_rules.intake
-
-
 @dataclass
 class Bench:
     """An example requested and learned as the API and the worker would, in
@@ -380,7 +376,7 @@ class Bench:
                 ClientPoReaders(transport),
                 {spec["customer"]: po_mapping(spec) for spec in self.cases["golden"]},
             ),
-            sheets=ClientSourceView(transport, _caps(self.repo_root)),
+            sheets=ClientSourceView(transport),
             scanner=NoMalware(),
             catalog=self.catalog(),
             rules=self.rules(),

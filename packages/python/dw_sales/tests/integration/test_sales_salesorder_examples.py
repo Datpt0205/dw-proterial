@@ -100,7 +100,7 @@ def _learning(uow: SqlCatalogUnitOfWorkFactory, world: World) -> SalesOrderLearn
     return SalesOrderLearning(
         uow=uow,
         po_reading=MappedPoReading(ClientPoReaders(transport), {"KHB": po_mapping(_PAIR)}),
-        sheets=ClientSourceView(transport, _policies(_REPO).order_rules.intake),
+        sheets=ClientSourceView(transport),
         scanner=NoMalware(),
         catalog=_catalog(world),
         rules=_PlatformRules(_policies(_REPO).current()),

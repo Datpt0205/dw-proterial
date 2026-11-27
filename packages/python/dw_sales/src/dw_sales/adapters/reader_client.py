@@ -383,10 +383,10 @@ class ClientDocumentText:
 
 @dataclass(frozen=True)
 class ClientSourceView:
-    """`SourceViewPort` over the reader, bounded by the order rules' caps."""
+    """`SourceViewPort` over the reader, bounded by the caps each caller
+    passes: the tenant's order rules, as the reading of the same file was."""
 
     transport: ReaderTransport
-    caps: IntakeCaps
 
     def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None:
         """What the file is shown as: a legacy one as its converted copy is
@@ -399,24 +399,26 @@ class ClientSourceView:
     # handed it over, which a locked one needs to be opened (ticket 17).
 
     async def pdf_page(
-        self, data: bytes | AttachmentContent, page: int
+        self, data: bytes | AttachmentContent, page: int, caps: IntakeCaps
     ) -> tuple[bytes, int] | None:
         opened: PdfPage | None = await self._open(
-            ReaderOp.SOURCE_PDF_PAGE, data, ReaderArgs(caps=self.caps, page=page)
+            ReaderOp.SOURCE_PDF_PAGE, data, ReaderArgs(caps=caps, page=page)
         )
         if opened is None:
             return None
         return base64.b64decode(opened.pdf_b64), opened.pages
 
-    async def sheet_names(self, data: bytes | AttachmentContent) -> list[str]:
+    async def sheet_names(self, data: bytes | AttachmentContent, caps: IntakeCaps) -> list[str]:
         names: list[str] = await self._open(
-            ReaderOp.SOURCE_SHEET_NAMES, data, ReaderArgs(caps=self.caps)
+            ReaderOp.SOURCE_SHEET_NAMES, data, ReaderArgs(caps=caps)
         )
         return names
 
-    async def sheet_grid(self, data: bytes | AttachmentContent, sheet: str) -> SheetGrid | None:
+    async def sheet_grid(
+        self, data: bytes | AttachmentContent, sheet: str, caps: IntakeCaps
+    ) -> SheetGrid | None:
         grid: SheetGrid | None = await self._open(
-            ReaderOp.SOURCE_SHEET_GRID, data, ReaderArgs(caps=self.caps, sheet=sheet)
+            ReaderOp.SOURCE_SHEET_GRID, data, ReaderArgs(caps=caps, sheet=sheet)
         )
         return grid
 
@@ -516,15 +518,16 @@ class Dw1Readers:
 
 
 def client_readers(transport: ReaderTransport, caps: IntakeCaps) -> Dw1Readers:
-    """DW1's readers over ``transport``; ``caps`` bound what a source view
-    opens (the order rules' intake caps, as the source view always took)."""
+    """DW1's readers over ``transport``; ``caps`` bound what the table reader
+    opens (a master list or a Bravo screen Sales uploads). Every reader of a
+    sender's file, its source view included, takes the tenant's caps per call."""
     return Dw1Readers(
         po=ClientPoReaders(transport),
         forms=ClientQuoteForms(transport),
         rfq=ClientRfqReader(transport),
         design_reply=ClientDesignReplyReader(transport),
         texts=ClientTexts(transport),
-        source=ClientSourceView(transport, caps),
+        source=ClientSourceView(transport),
         tables=ClientTableReader(transport, caps),
         mail=ClientMailReader(transport),
     )

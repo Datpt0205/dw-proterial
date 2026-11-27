@@ -85,7 +85,7 @@ def _drafting(
     policies = load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy")
     return RuleDrafting(
         uow=drafts,
-        sheets=ClientSourceView(InProcessReaderTransport(), policies.order_rules.intake),
+        sheets=ClientSourceView(InProcessReaderTransport()),
         scanner=NoMalware(),
         rules=rule_book(policies, SqlRuleVersionLookup(app_sessions)),
         access=Directory((GIANG,)),
