@@ -71,7 +71,11 @@ describe("the Bravo target switch on the rules page (ticket 85)", () => {
       { connected: false, current: null, uat: false, production: false },
       true,
     );
-    expect(screen.getByText(/Chưa hỏi được gateway Bravo/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Chưa kết nối được tới Bravo: DW1 chưa đọc, chưa ghi Bravo nào.",
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText("Bravo UAT")).toBeNull();
   });
 });

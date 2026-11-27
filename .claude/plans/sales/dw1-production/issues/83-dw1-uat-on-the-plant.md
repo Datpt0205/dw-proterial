@@ -197,3 +197,12 @@ Category: deployment
   and `app-frame.test.tsx` (red with the entry removed);
   `rules-process.test.tsx` (red with the links always on, and with the old
   sentence).
+- **English inside Vietnamese.** The assignee refusal says "không gian làm
+  việc" (Sales' word; other platform pages still say "workspace", left as
+  found), the Bravo target card "Chưa kết nối được tới Bravo", and the
+  target reason "DW1 chưa có tài khoản kết nối…" (slice above). Test in
+  `bravo-write-words.test.ts`: no Sales refusal or Bravo write word says
+  "workspace" or "gateway", red with the old refusal put back.
+- Left as found: the decider's notice still shows `after` as stored (an ISO
+  day, a bare quantity); "Bravo từ chối" as a status label stays (it is
+  what the person sees happen); other platform screens' "workspace".

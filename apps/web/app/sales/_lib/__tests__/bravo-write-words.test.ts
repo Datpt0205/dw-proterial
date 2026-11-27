@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bravoWriteReason, bravoWriteWarning } from "../bravo-write";
+import {
+  BRAVO_WRITE_CHECK,
+  BRAVO_WRITE_REASON,
+  BRAVO_WRITE_UNMEASURED,
+} from "../labels";
+import { SALES_REFUSALS } from "../../_meta/refusals";
 
 const REPO = resolve(__dirname, "../../../../../..");
 const read = (path: string) => readFileSync(resolve(REPO, path), "utf8");
@@ -119,5 +125,19 @@ describe("a Bravo write's warnings in words (DW1 review, ui)", () => {
     ["SO_W12", "SO_W12"],
   ])("%s", (warning, words) => {
     expect(bravoWriteWarning(warning)).toBe(words);
+  });
+});
+
+describe("Sales words a person reads carry no internal English (DW1 review, ui)", () => {
+  // "workspace" is "không gian làm việc" in Sales; the gateway is DW's own
+  // part, which a Sales head reading a refusal does not know by that name.
+  it.each([
+    ["SALES_REFUSALS", SALES_REFUSALS],
+    ["BRAVO_WRITE_CHECK", BRAVO_WRITE_CHECK],
+    ["BRAVO_WRITE_REASON", BRAVO_WRITE_REASON],
+    ["BRAVO_WRITE_UNMEASURED", BRAVO_WRITE_UNMEASURED],
+  ] as const)("%s", (_, table) => {
+    for (const words of Object.values(table))
+      expect(words).not.toMatch(/\b(workspace|gateway)\b/i);
   });
 });

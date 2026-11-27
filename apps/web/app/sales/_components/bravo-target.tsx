@@ -89,7 +89,7 @@ export function BravoTargetCard({
           </Space>
         ) : (
           <Typography.Text role="note">
-            Chưa hỏi được gateway Bravo: DW1 chưa đọc, chưa ghi Bravo nào.
+            Chưa kết nối được tới Bravo: DW1 chưa đọc, chưa ghi Bravo nào.
           </Typography.Text>
         )}
         {error == null && targets?.connected ? (
