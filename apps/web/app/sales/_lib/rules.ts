@@ -105,6 +105,20 @@ export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
 ]);
 
 /**
+ * Rules a second person decides, the head's own version included (tickets
+ * 63, 85: which Bravo writes DW1 performs, and on which Bravo); the server's
+ * `DECIDED_BY_A_SECOND` refuses otherwise, this only words the drawer.
+ */
+export const DECIDED_BY_A_SECOND: ReadonlySet<RuleKey> = new Set<RuleKey>([
+  "sales_bravo_writes",
+]);
+
+/** Whether the caller's own version of ``key`` applies without an approval. */
+export function appliesAtOnceFor(key: RuleKey, approves: boolean): boolean {
+  return approves && !DECIDED_BY_A_SECOND.has(key);
+}
+
+/**
  * Rules learned from a worked example and proven by replay (ticket 38),
  * never written in the editor: the server refuses them there, and the
  * button says where they are learned instead.

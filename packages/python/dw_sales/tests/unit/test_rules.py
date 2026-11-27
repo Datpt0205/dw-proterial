@@ -191,6 +191,26 @@ async def test_the_heads_own_version_applies_at_once_and_is_audited_as_theirs() 
     assert actions == ["sales.rules.applied"]
 
 
+async def test_the_heads_switch_to_bravo_production_waits_on_a_second_person() -> None:
+    """Tickets 63 g and 85: which Bravo DW1 writes, and what it writes there,
+    is never applied at its proposer's word, the head's included."""
+    world = _world()
+    document = world.policies.bravo_writes.model_dump(mode="json")
+    document.update(
+        policy_version="1.1.1", target="production", target_uat_proof="UAT 2026-12-01 run 3"
+    )
+
+    proposed = await world.services.rules.propose(GIANG.context(), RuleKey.BRAVO_WRITES, document)
+
+    assert (proposed.status, proposed.applied_directly) == ("proposed", False)
+    assert proposed.approval_id is not None
+    listed = await world.services.rules.list(GIANG.context())
+    assert listed.in_force.get(RuleKey.BRAVO_WRITES) != "sales_bravo_writes@1.1.1"
+    with pytest.raises(ConflictError) as refused:
+        await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
+    assert refused.value.details["rule"] == "maker_checker"
+
+
 async def test_a_pic_without_the_editor_set_proposes_nothing() -> None:
     """Since 2026-10-28 the PIC role carries no `sales.rules.propose`."""
     world = _world()

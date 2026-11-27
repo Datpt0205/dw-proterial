@@ -33,6 +33,7 @@ import { toBase64 } from "../_lib/catalog";
 import { ActionError, detailList } from "../_lib/errors";
 import { usePeople } from "../_lib/people";
 import {
+  appliesAtOnceFor,
   DRAFT_ACCEPT,
   draftChoices,
   draftSource,
@@ -274,8 +275,9 @@ function Editor({
 }) {
   const { message } = App.useApp();
   const { hasScope } = useAuth();
-  // The head's own version applies at once (2026-10-28); the server decides.
-  const appliesAtOnce = hasScope(SCOPE.rulesApprove);
+  // The head's own version applies at once (2026-10-28), but for a key a
+  // second person decides (ticket 85); the server decides.
+  const appliesAtOnce = appliesAtOnceFor(ruleKey, hasScope(SCOPE.rulesApprove));
   const discard = useConfirmDiscard();
   const { run, pending } = useAction();
   const [form] = Form.useForm();

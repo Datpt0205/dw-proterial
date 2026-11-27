@@ -10,6 +10,7 @@ import { salesApi } from "../_lib/api";
 import { usePeople } from "../_lib/people";
 import {
   ADVANCED_RULES,
+  appliesAtOnceFor,
   LEARNED_RULES,
   keyRows,
   RULE_ABOUT,
@@ -156,9 +157,11 @@ function Rules() {
                 reason={LEARNED_RULES[k.key] ?? null}
                 inlineReason={false}
                 onClick={() => setProposing({ key: k.key })}
-                aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
+                aria-label={`${appliesAtOnceFor(k.key, appliesAtOnce) ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
               >
-                {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
+                {appliesAtOnceFor(k.key, appliesAtOnce)
+                  ? "Sửa quy tắc"
+                  : "Đề xuất bản mới"}
               </GuardedButton>
             ),
           },

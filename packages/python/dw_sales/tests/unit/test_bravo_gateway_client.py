@@ -281,3 +281,24 @@ async def test_the_targets_of_no_gateway_read_as_not_connected() -> None:
         False,
         False,
     )
+
+
+async def test_the_targets_are_refused_to_a_caller_who_may_not_read_cases() -> None:
+    from dw_kernel.errors import PermissionDeniedError
+    from dw_sales.application.bravo_line_writes import BravoTargets
+
+    class _Refuses:
+        async def require(self, *args: object, **kwargs: object) -> None:
+            raise PermissionDeniedError("no sales.case.read")
+
+    class _Port:
+        asked = 0
+
+        async def targets(self, tenant_id: uuid.UUID) -> object:
+            _Port.asked += 1
+            raise AssertionError("asked the gateway for a caller refused")
+
+    caller = SimpleNamespace(tenant_id=TENANT, workspace_id=uuid.UUID(int=0xB))
+    with pytest.raises(PermissionDeniedError):
+        await BravoTargets(_Refuses(), _Port()).now(caller)  # type: ignore[arg-type]
+    assert _Port.asked == 0

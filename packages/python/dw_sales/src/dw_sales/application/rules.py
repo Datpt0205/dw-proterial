@@ -28,7 +28,9 @@ tenant's layer is a version a person proposed and a second person approved.
 - **Applied directly** when the proposer is the head (holds
   `sales.rules.approve`; Đạt, 2026-10-28): no approval is opened, the version
   is in force at once, decided by its proposer, `applied_directly`, audited
-  `sales.rules.applied`. A proposal waiting on the key is decided first.
+  `sales.rules.applied`. A proposal waiting on the key is decided first. Not
+  for `DECIDED_BY_A_SECOND` (the Bravo writes and their target, tickets 63 g
+  and 85): the head's version waits on another approver like anyone's.
 - **Approved or rejected** on that approval by a holder of the stamp (the
   head), never by its proposer: `sales.` is strict, `RuleDecisions.check` (the
   decision guard) refuses what the version would refuse before it is
@@ -227,6 +229,11 @@ DRAFTABLE: Final = frozenset({RuleKey.BRAVO_UPLOAD})
 # replay matched (`salesorder_learning`, dw_sales ADR 0013): never typed in
 # the rules editor, and never applied by its proposer, the head included.
 LEARNED_ONLY: Final = frozenset({RuleKey.SALESORDER_RULES})
+# The keys a second person decides, the head's own version included: which
+# Bravo writes DW1 performs, and on which Bravo (tickets 63 g and 85). A
+# switch to production or a kind switched on writes the company's books; it
+# never applies at its proposer's word.
+DECIDED_BY_A_SECOND: Final = frozenset({RuleKey.BRAVO_WRITES})
 # The keys whose documents hold prices or price policy: the pricing inputs
 # (copper adders, the floor, freight), the quote rules (the reference price
 # band, the copper basis) and the order rules (`price.relative_tolerance`, the
@@ -651,7 +658,8 @@ class SalesRulesService:
             context,
             key,
             document,
-            applies_directly=self.gate.allows(context, SalesScopes.RULES_APPROVE),
+            applies_directly=key not in DECIDED_BY_A_SECOND
+            and self.gate.allows(context, SalesScopes.RULES_APPROVE),
         )
         return _view(version)
 

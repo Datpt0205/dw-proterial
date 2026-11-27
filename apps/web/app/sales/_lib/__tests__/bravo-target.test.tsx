@@ -6,6 +6,7 @@ import {
   BravoTargetCard,
   NO_RULES_SCOPE,
 } from "../../_components/bravo-target";
+import { appliesAtOnceFor } from "../rules";
 
 type Targets = SalesSchemas["BravoTargetsView"];
 
@@ -72,5 +73,13 @@ describe("the Bravo target switch on the rules page (ticket 85)", () => {
     );
     expect(screen.getByText(/Chưa hỏi được gateway Bravo/)).toBeTruthy();
     expect(screen.queryByText("Bravo UAT")).toBeNull();
+  });
+});
+
+describe("who decides a switch of Bravo (tickets 63, 85)", () => {
+  it("never words the head's own Bravo version as applied at once", () => {
+    expect(appliesAtOnceFor("sales_bravo_writes", true)).toBe(false);
+    expect(appliesAtOnceFor("sales_kpi", true)).toBe(true);
+    expect(appliesAtOnceFor("sales_kpi", false)).toBe(false);
   });
 });

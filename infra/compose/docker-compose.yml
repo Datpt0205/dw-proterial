@@ -432,8 +432,9 @@ services:
   # ------------------------------------------------------ bravo gateway --
   # The one process holding Bravo's logins and a SQL Server driver (ADR 0027,
   # sales ticket 63). `bravo` only: it starts where IT has issued the two
-  # logins, and refuses to start without them, or, deployed, without the
-  # approval verifying key. No port: reached on dw-bravo by name.
+  # logins of at least one Bravo (UAT, production: ticket 85), and refuses to
+  # start without them, or, deployed, without the approval verifying key. No
+  # port: reached on dw-bravo by name.
   bravo-gateway:
     logging: *default-logging
     build:
@@ -446,6 +447,23 @@ services:
       DW_BRAVO_GATEWAY_TENANT_ID: ${DW_BRAVO_GATEWAY_TENANT_ID:-}
       DW_BRAVO_GATEWAY_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
       DW_BRAVO_GATEWAY_APPROVAL_PUBLIC_KEYS: ${DW_BRAVO_GATEWAY_APPROVAL_PUBLIC_KEYS:-{}}
+      # Two Bravos, one set each (sales ticket 85): absent until IT issues
+      # the logins; the rule picks the one in use.
+      DW_BRAVO_GATEWAY_UAT_HOST: ${DW_BRAVO_GATEWAY_UAT_HOST:-}
+      DW_BRAVO_GATEWAY_UAT_PORT: ${DW_BRAVO_GATEWAY_UAT_PORT:-1433}
+      DW_BRAVO_GATEWAY_UAT_DATABASE: ${DW_BRAVO_GATEWAY_UAT_DATABASE:-}
+      DW_BRAVO_GATEWAY_UAT_READ_USER: ${DW_BRAVO_GATEWAY_UAT_READ_USER:-}
+      DW_BRAVO_GATEWAY_UAT_READ_PASSWORD: ${DW_BRAVO_GATEWAY_UAT_READ_PASSWORD:-}
+      DW_BRAVO_GATEWAY_UAT_WRITE_USER: ${DW_BRAVO_GATEWAY_UAT_WRITE_USER:-}
+      DW_BRAVO_GATEWAY_UAT_WRITE_PASSWORD: ${DW_BRAVO_GATEWAY_UAT_WRITE_PASSWORD:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_HOST: ${DW_BRAVO_GATEWAY_PRODUCTION_HOST:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_PORT: ${DW_BRAVO_GATEWAY_PRODUCTION_PORT:-1433}
+      DW_BRAVO_GATEWAY_PRODUCTION_DATABASE: ${DW_BRAVO_GATEWAY_PRODUCTION_DATABASE:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_READ_USER: ${DW_BRAVO_GATEWAY_PRODUCTION_READ_USER:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_READ_PASSWORD: ${DW_BRAVO_GATEWAY_PRODUCTION_READ_PASSWORD:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_WRITE_USER: ${DW_BRAVO_GATEWAY_PRODUCTION_WRITE_USER:-}
+      DW_BRAVO_GATEWAY_PRODUCTION_WRITE_PASSWORD: ${DW_BRAVO_GATEWAY_PRODUCTION_WRITE_PASSWORD:-}
+      # Before ticket 85: one set, read as UAT's for one release.
       DW_BRAVO_GATEWAY_BRAVO_HOST: ${DW_BRAVO_GATEWAY_BRAVO_HOST:-}
       DW_BRAVO_GATEWAY_BRAVO_PORT: ${DW_BRAVO_GATEWAY_BRAVO_PORT:-1433}
       DW_BRAVO_GATEWAY_BRAVO_DATABASE: ${DW_BRAVO_GATEWAY_BRAVO_DATABASE:-}
