@@ -16,7 +16,7 @@ import {
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
-import { LoadError } from "../../../../components/load-error";
+import { CaseLoadError } from "../../_components/case-load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
 import { useNow } from "../../../../lib/use-now";
 import { salesApi } from "../../_lib/api";
@@ -145,7 +145,13 @@ function OrderDetail() {
 
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
-    return <LoadError error={order.error} onRetry={order.reload} />;
+    return (
+      <CaseLoadError
+        error={order.error}
+        onRetry={order.reload}
+        shown={data !== null}
+      />
+    );
 
   // Seen only through its NOC/ESF hold (ticket 78): the hold is the one
   // control the server lets this person press on someone else's order.
