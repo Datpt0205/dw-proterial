@@ -459,6 +459,16 @@ export class SalesApi {
     );
   }
 
+  /**
+   * Which Bravo the gateway reads and writes now, UAT or production, and
+   * which ones it holds logins for (ticket 85).
+   */
+  bravoTargets() {
+    return this.get<"/api/v1/sales/bravo/targets">(
+      "/api/v1/sales/bravo/targets",
+    );
+  }
+
   /** The case's SO line changes proposed for Bravo, latest first (ticket 53). */
   bravoWrites(caseId: string) {
     return this.get<"/api/v1/sales/orders/{case_id}/bravo-writes">(

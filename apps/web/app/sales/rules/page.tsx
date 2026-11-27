@@ -28,6 +28,7 @@ import {
   usePhoneTable,
 } from "../_components/list-parts";
 import { GuardedButton } from "../_components/guarded-button";
+import { BravoTargetCard } from "../_components/bravo-target";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -87,6 +88,11 @@ function Rules() {
     useCallback(() => salesApi().rules(), []),
   );
   const [proposing, setProposing] = useState<Proposing | null>(null);
+  // Which Bravo DW1 reads and writes, as the gateway answers (ticket 85).
+  const targets = useResource(
+    "sales/bravo/targets",
+    useCallback(() => salesApi().bravoTargets(), []),
+  );
 
   const keys = rules.data ? keyRows(rules.data) : [];
   const main = keys.filter((k) => !ADVANCED_RULES.has(k.key));
@@ -189,6 +195,11 @@ function Rules() {
       ) : (
         <>
           {keyTable(main, rules.loading)}
+          <BravoTargetCard
+            targets={targets.data ?? null}
+            mayPropose={hasScope(SCOPE.rulesPropose)}
+            onSwitch={() => setProposing({ key: "sales_bravo_writes" })}
+          />
           <Collapse
             items={[
               {

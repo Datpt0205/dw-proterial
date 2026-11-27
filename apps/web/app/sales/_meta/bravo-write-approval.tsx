@@ -5,6 +5,7 @@ import { Alert, Descriptions, Space, Typography } from "antd";
 import type { Approval } from "@dw/contracts";
 import { bravoWriteValue, type BravoWriteField } from "../_lib/bravo-write";
 import { BRAVO_WRITE_FIELD, label } from "../_lib/labels";
+import { BravoTargetTag, isBravoTarget } from "../_components/bravo-target";
 
 const CASE_ID = /^[0-9a-f-]{36}$/i;
 
@@ -46,6 +47,15 @@ export function BravoWriteApprovalChanges({
         bordered
         column={1}
         items={[
+          ...(isBravoTarget(p.target)
+            ? [
+                {
+                  key: "target",
+                  label: "Ghi vào",
+                  children: <BravoTargetTag target={p.target} />,
+                },
+              ]
+            : []),
           { key: "so", label: "SO Bravo", children: String(p.so_no ?? "") },
           { key: "line", label: "Dòng", children: String(p.line_no ?? "") },
           {

@@ -93,4 +93,25 @@ describe("a Bravo write's approval where it is decided (tickets 53, 71)", () => 
     );
     expect(screen.queryByRole("link")).toBeNull();
   });
+
+  it.each([
+    ["uat", "Bravo UAT"],
+    ["production", "Bravo thật"],
+  ])("names the Bravo the write goes to: %s", (target, shown) => {
+    render(
+      <UiProvider>
+        <ApprovalHostDetail approval={asked({ target })} />
+      </UiProvider>,
+    );
+    expect(screen.getByText(shown)).toBeTruthy();
+  });
+
+  it("names no Bravo it does not recognise", () => {
+    render(
+      <UiProvider>
+        <ApprovalHostDetail approval={asked({ target: "staging" })} />
+      </UiProvider>,
+    );
+    expect(screen.queryByText("Ghi vào")).toBeNull();
+  });
 });

@@ -30,8 +30,17 @@ vi.mock("../../../../lib/session", () => ({
 }));
 
 let WRITES: Write[] = [];
+type Targets = SalesSchemas["BravoTargetsView"];
+const UAT: Targets = {
+  connected: true,
+  current: "uat",
+  uat: true,
+  production: false,
+};
+let TARGETS: Targets = UAT;
 const api = {
   bravoWrites: vi.fn(async () => WRITES),
+  bravoTargets: vi.fn(async () => TARGETS),
   proposeBravoWrite: vi.fn(async () => WRITES[0]),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
@@ -62,6 +71,7 @@ function write(overrides: Partial<Write> = {}): Write {
     field: "quantity",
     before: "6100",
     after: "6000",
+    target: "uat",
     status: "proposed",
     check: null,
     reason: null,
@@ -106,6 +116,7 @@ afterEach(() => {
   vi.clearAllMocks();
   SCOPES = ["sales.case.read", "sales.bravo.write"];
   WRITES = [];
+  TARGETS = UAT;
 });
 
 // antd's Table and Modal take seconds to first render in jsdom.
@@ -113,6 +124,31 @@ describe(
   "Ghi vào Bravo on the order page (tickets 53, 71)",
   { timeout: 30_000 },
   () => {
+    it.each([
+      ["uat", "Bravo UAT"],
+      ["production", "Bravo thật"],
+    ] as const)(
+      "tags the panel with the Bravo it reads and writes now: %s",
+      async (current, shown) => {
+        TARGETS = { ...UAT, current, production: true };
+        panel(twoLines());
+        expect(await screen.findByText(shown)).toBeTruthy();
+      },
+    );
+
+    it("tags nothing when the gateway did not say which Bravo", async () => {
+      TARGETS = {
+        connected: false,
+        current: null,
+        uat: false,
+        production: false,
+      };
+      panel(twoLines());
+      await waitFor(() => expect(api.bravoTargets).toHaveBeenCalled());
+      expect(screen.queryByText("Bravo UAT")).toBeNull();
+      expect(screen.queryByText("Bravo thật")).toBeNull();
+    });
+
     it("draws nothing before the order has a Bravo SO", () => {
       panel(twoLines({ bravo_so_no: null }));
       expect(screen.queryByText(/Ghi vào Bravo · SO/)).toBeNull();

@@ -135,6 +135,12 @@ const api = {
     json_schema: SCHEMAS[key]!,
   })),
   rulePlatformDocuments: vi.fn(async () => PLATFORM_KPI),
+  bravoTargets: vi.fn(async () => ({
+    connected: true,
+    current: "uat",
+    uat: true,
+    production: false,
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 

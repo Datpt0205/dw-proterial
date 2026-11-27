@@ -35,6 +35,7 @@ import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { Quantity } from "../../_components/money";
 import { GuardedButton } from "../../_components/guarded-button";
+import { BravoTargetTag } from "../../_components/bravo-target";
 import { SCOPE } from "../../_components/sales-frame";
 
 type Order = SalesSchemas["OrderCaseView"];
@@ -154,6 +155,12 @@ function BravoWrites({
     `sales/order/${caseId}/bravo-writes`,
     useCallback(() => salesApi().bravoWrites(caseId), [caseId]),
   );
+  // Which Bravo a proposal made now reads and writes (ticket 85).
+  const targets = useResource(
+    "sales/bravo/targets",
+    useCallback(() => salesApi().bravoTargets(), []),
+  );
+  const current = targets.data?.current;
   const [line, setLine] = useState<Line | null>(null);
   const may = viewer.hasScope(SCOPE.bravoWrite);
   const listed = writes.data ?? [];
@@ -164,12 +171,17 @@ function BravoWrites({
       size="small"
       title={`Ghi vào Bravo · SO ${soNo}`}
       extra={
-        <InfoTip label="Ghi vào Bravo">
-          Đề xuất đổi ngày XN giao hàng, số lượng hoặc hủy một dòng SO. Bravo
-          không đổi gì trước khi duyệt; người duyệt ghi dưới user Bravo của
-          chính mình. Việc ghi vào Bravo mở sau khi chạy thử UAT: đến lúc đó,
-          lần ghi đã duyệt hiện “Bravo từ chối”.
-        </InfoTip>
+        <Space size={4}>
+          {current ? <BravoTargetTag target={current} /> : null}
+          <InfoTip label="Ghi vào Bravo">
+            Đề xuất đổi ngày XN giao hàng, số lượng hoặc hủy một dòng SO. Bravo
+            không đổi gì trước khi duyệt; người duyệt ghi dưới user Bravo của
+            chính mình. Việc ghi vào Bravo mở sau khi chạy thử UAT: đến lúc đó,
+            lần ghi đã duyệt hiện “Bravo từ chối”. Nhãn bên cạnh cho biết DW1
+            đang đọc và ghi Bravo nào; đề xuất đọc từ Bravo này chỉ ghi vào
+            Bravo này.
+          </InfoTip>
+        </Space>
       }
     >
       {writes.error ? (

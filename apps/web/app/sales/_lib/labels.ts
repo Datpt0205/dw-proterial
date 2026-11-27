@@ -256,6 +256,16 @@ export const BRAVO_WRITE_STATUS = {
   in_doubt: "Chưa rõ đã ghi chưa",
 } as const;
 
+/**
+ * Which Bravo DW1 reads and writes (ticket 85): the tag on every screen
+ * that writes, blue for the trial database, red for the one the company
+ * runs on.
+ */
+export const BRAVO_TARGET = {
+  uat: "Bravo UAT",
+  production: "Bravo thật",
+} as const;
+
 /** What a Bravo write changes on an SO line (tickets 53, 71). */
 export const BRAVO_WRITE_FIELD = {
   confirmed_date: "Ngày XN giao hàng",
@@ -269,6 +279,7 @@ export const BRAVO_WRITE_FIELD = {
  */
 export const BRAVO_WRITE_CHECK = {
   token: "Phiếu duyệt",
+  target: "Bravo đã đổi từ lúc đề xuất",
   kind: "Loại ghi chưa chạy",
   switch: "Loại ghi chưa bật cho đơn vị",
   ledger: "Phiếu duyệt đã dùng",
